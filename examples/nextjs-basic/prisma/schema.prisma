@@ -1,0 +1,83 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = "file:./dev.db"
+}
+
+model User {
+    id                 String               @id @default(cuid())
+    name               String
+    email              String               @unique
+    emailVerified      Boolean              @default(false)
+    password           String?
+    image              String?
+    Session            Session[]
+    Account            Account[]
+    OrganizationMember OrganizationMember[]
+    Passkey            Passkey[]
+}
+
+model Session {
+    id        String   @id
+    userId    String
+    expiresAt DateTime
+    user      User     @relation(fields: [userId], references: [id])
+}
+
+model Account {
+    providerId   String
+    accountId    String
+    refershToken String?
+    userId       String
+    user         User    @relation(fields: [userId], references: [id])
+
+    @@id([providerId, accountId])
+}
+
+model Organization {
+    id                     String                   @id @default(cuid())
+    name                   String
+    slug                   String                   @unique
+    OrganizationMember     OrganizationMember[]
+    OrganizationInvitation OrganizationInvitation[]
+}
+
+model OrganizationMember {
+    id             String       @id @default(cuid())
+    userId         String
+    organizationId String
+    role           String
+    User           User         @relation(fields: [userId], references: [id])
+    Organization   Organization @relation(fields: [organizationId], references: [id])
+
+    @@index([userId, organizationId])
+}
+
+model OrganizationInvitation {
+    id             String   @id
+    email          String
+    organizationId String
+    role           String
+    status         String // PENDING, ACCEPTED, REJECTED, CANCELLED
+    expiresAt      DateTime
+
+    Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Passkey {
+    id           String  @id @default(cuid())
+    publicKey    String
+    credentialID String  @unique
+    userId       String
+    accountId    String
+    counter      Int
+    deviceType   String
+    backedUp     Boolean
+    transports   String?
+    mfOnly       Boolean @default(false) // Multi-factor only
+
+    User User @relation(fields: [userId], references: [id])
+}
