@@ -93,7 +93,7 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 				{
 					user: {
 						...data,
-						["password"]: await hashPassword(data["password"]),
+						["password"]: await hashPassword(data["password"], context.secret),
 						emailVerified: false,
 					},
 					account: {
