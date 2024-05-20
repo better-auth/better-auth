@@ -12,6 +12,7 @@ export default defineConfig({
 		plugins: "./src/plugins/index.ts",
 		actions: "./src/actions/index.ts",
 		//adapters
+		"adapters/memory": "./src/adapters/memory.ts",
 		"adapters/prisma-adapter": "./src/adapters/prisma.ts",
 		"adapters/drizzle-adapter": "./src/adapters/drizzle.ts",
 		"adapters/mongodb-adapter": "./src/adapters/mongodb.ts",

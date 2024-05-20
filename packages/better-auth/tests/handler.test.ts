@@ -2,7 +2,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { describe, expect, it } from "vitest";
 import { betterAuth, toContext } from "../src";
 import { memoryAdapter } from "../src/adapters/memory";
-import { InvalidRequest, InvalidURL } from "../src/errors";
+import { InvalidRequest } from "@better-auth/shared/error";
 import type { BetterAuthOptions } from "../src/options";
 import { getH3Server } from "./utils/server";
 

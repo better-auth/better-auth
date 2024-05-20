@@ -1,28 +1,31 @@
 {
 	"name": "@better-auth/client",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "tsup --watch",
-		"typecheck": "tsc --noEmit"
+		"dev": "tsup src/index.ts --watch --dts",
+		"typecheck": "tsc --noEmit",
+		"build": "tsup build src/index.ts --dts --clean"
 	},
 	"exports": {
 		".": "./dist/index.js",
 		"./package.json": "./package.json"
 	},
 	"devDependencies": {
+		"@better-auth/shared": "workspace:*",
+		"better-auth": "workspace:*",
+		"hono": "^4.3.5",
 		"react": "^18.3.1",
 		"redis": "^4.6.14",
 		"svelte": "^4.2.17",
 		"tsup": "^8.0.2",
-		"zod": "^3.22.5",
 		"typescript": "^5.5.0-dev.20240508",
 		"vitest": "^1.6.0",
-		"better-auth": "workspace:*",
-		"@better-auth/shared": "workspace:*"
+		"zod": "^3.22.5"
 	},
 	"dependencies": {
 		"@better-fetch/fetch": "^0.0.1",
+		"h3": "^1.11.1",
 		"zustand": "^4.5.2"
 	},
 	"files": ["dist"]

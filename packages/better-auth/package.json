@@ -6,7 +6,7 @@
 		"build": "tsup --clean",
 		"prisma:push": "prisma db push --schema ./test/adapters/prisma-adapter/schema.prisma",
 		"dev": "tsup --watch",
-		"test": "vitest",
+		"test": "pnpm prisma:push && vitest -u",
 		"typecheck": "tsc --noEmit"
 	},
 	"exports": {
@@ -21,11 +21,11 @@
 		"./svelte-kit": "./dist/svelte-kit.js",
 		"./plugins": "./dist/plugins.js",
 		"./routes/session": "./dist/routes/session.js",
-		"./adapters/prisma-adapter": "./dist/adapters/prisma-adapter.js",
-		"./adapters/redis-adapter": "./dist/adapters/redis-adapter.js",
-		"./adapters/drizzle-adapter": "./dist/adapters/drizzle-adapter.js",
-		"./adapters/mongodb-adapter": "./dist/adapters/mongodb-adapter.js",
-		"./adapters/mongodb-adapter/orm": "./dist/adapters/mongodb-adapter/orm.js"
+		"./adapters/memory": "./dist/adapters/memory.js",
+		"./adapters/prisma": "./dist/adapters/prisma-adapter.js",
+		"./adapters/redis": "./dist/adapters/redis-adapter.js",
+		"./adapters/drizzle": "./dist/adapters/drizzle-adapter.js",
+		"./adapters/mongodb": "./dist/adapters/mongodb-adapter.js"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.7.3",

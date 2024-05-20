@@ -25,12 +25,12 @@ exports[`to context > should ignore the request url for the baseURL passed in op
   },
   "account": {
     "additionalFields": {},
+    "modelName": "account",
     "selectFields": [
       "userId",
       "providerId",
       "accountId",
     ],
-    "modelName": "account",
   },
   "adapter": {
     "createSession": [Function],
@@ -142,12 +142,12 @@ exports[`to context > should ignore the request url for the baseURL passed in op
   "session": {
     "additionalFields": {},
     "expiresIn": 604800000,
+    "modelName": "session",
     "selectFields": [
       "id",
       "userId",
       "expiresAt",
     ],
-    "modelName": "session",
     "updateAge": 86400000,
   },
   "sessionAdapter": undefined,
@@ -297,6 +297,7 @@ exports[`to context > should ignore the request url for the baseURL passed in op
         },
       },
     },
+    "modelName": "user",
     "selectFields": [
       "id",
       "email",
@@ -306,7 +307,6 @@ exports[`to context > should ignore the request url for the baseURL passed in op
       "image",
       "name",
     ],
-    "modelName": "user",
   },
 }
 `;
@@ -322,12 +322,12 @@ exports[`to context > should ignore the request url for the baseURL passed in pr
   },
   "account": {
     "additionalFields": {},
+    "modelName": "account",
     "selectFields": [
       "userId",
       "providerId",
       "accountId",
     ],
-    "modelName": "account",
   },
   "adapter": {
     "createSession": [Function],
@@ -439,12 +439,12 @@ exports[`to context > should ignore the request url for the baseURL passed in pr
   "session": {
     "additionalFields": {},
     "expiresIn": 604800000,
+    "modelName": "session",
     "selectFields": [
       "id",
       "userId",
       "expiresAt",
     ],
-    "modelName": "session",
     "updateAge": 86400000,
   },
   "sessionAdapter": undefined,
@@ -594,6 +594,7 @@ exports[`to context > should ignore the request url for the baseURL passed in pr
         },
       },
     },
+    "modelName": "user",
     "selectFields": [
       "id",
       "email",
@@ -603,7 +604,6 @@ exports[`to context > should ignore the request url for the baseURL passed in pr
       "image",
       "name",
     ],
-    "modelName": "user",
   },
 }
 `;
@@ -619,12 +619,12 @@ exports[`to context > should return a valid context 1`] = `
   },
   "account": {
     "additionalFields": {},
+    "modelName": "account",
     "selectFields": [
       "userId",
       "providerId",
       "accountId",
     ],
-    "modelName": "account",
   },
   "adapter": {
     "createSession": [Function],
@@ -736,12 +736,12 @@ exports[`to context > should return a valid context 1`] = `
   "session": {
     "additionalFields": {},
     "expiresIn": 604800000,
+    "modelName": "session",
     "selectFields": [
       "id",
       "userId",
       "expiresAt",
     ],
-    "modelName": "session",
     "updateAge": 86400000,
   },
   "sessionAdapter": undefined,
@@ -891,6 +891,7 @@ exports[`to context > should return a valid context 1`] = `
         },
       },
     },
+    "modelName": "user",
     "selectFields": [
       "id",
       "email",
@@ -900,7 +901,6 @@ exports[`to context > should return a valid context 1`] = `
       "image",
       "name",
     ],
-    "modelName": "user",
   },
 }
 `;

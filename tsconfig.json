@@ -16,8 +16,7 @@
 		"moduleResolution": "Bundler",
 		"jsx": "preserve",
 		"incremental": true,
-		"tsBuildInfoFile": ".tsbuildinfo",
-		"types": ["node", "vite/client", "vitest/importMeta"]
+		"types": ["node"]
 	},
 	"exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
 }

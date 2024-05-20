@@ -1,11 +1,11 @@
 import { Browser } from "happy-dom";
 import { describe, expect } from "vitest";
-import { betterAuth } from "../src";
-import { memoryAdapter } from "../src/adapters/memory";
-import type { BetterAuthOptions } from "../src/options";
-import { github } from "../src/providers";
-import { createAuthClient } from "./../src/client/index";
-import { getH3Server } from "./utils/server";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import type { BetterAuthOptions } from "better-auth";
+import { github } from "better-auth/providers";
+import { createAuthClient } from "../src";
+import { getH3Server } from "./server";
 
 describe("client", (it) => {
 	const url = "http://localhost:4005/api/auth";

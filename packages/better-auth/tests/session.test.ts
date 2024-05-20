@@ -101,8 +101,8 @@ describe("signin handler", async (it) => {
 				return res.json() as any;
 			});
 		expect(session.user).toMatchObject({
-			id: db.user[0].id,
-			email: db.user[0].email,
+			id: db.user[0]?.id,
+			email: db.user[0]?.email,
 		});
 		expect(session.user).not.toHaveProperty("lastName");
 	});
