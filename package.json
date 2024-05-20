@@ -8,6 +8,7 @@
 		"dev": "turbo --filter \"./packages/*\" dev",
 		"dev:s": "turbo --filter \"./packages/better-auth\" dev",
 		"dev:c": "turbo --filter \"./packages/client\" dev",
+		"dev:examples": "turbo --filter \"./examples/*\" dev",
 		"format": "biome format . --write",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --apply",

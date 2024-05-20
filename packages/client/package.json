@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "tsup src/index.ts --watch --dts",
 		"typecheck": "tsc --noEmit",
-		"build": "tsup build src/index.ts --dts --clean"
+		"build": "tsup build src/index.ts --format esm --dts --clean"
 	},
 	"exports": {
 		".": "./dist/index.js",
