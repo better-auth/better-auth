@@ -23,12 +23,20 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 		name: "Credential",
 		type: "custom",
 		async signIn(context) {
-			const { identifier, password } = z
+			const {
+				data: { email, password },
+				currentURL,
+				callbackURL,
+			} = z
 				.object({
-					identifier: z.string(),
-					password: z.string(),
+					data: z.object({
+						email: z.string(),
+						password: z.string(),
+					}),
+					currentURL: z.string(),
+					callbackURL: z.string(),
 				})
-				.parse(context.request.body.data);
+				.parse(context.request.body);
 
 			const user = await context._db.findOne<
 				User & { [key in string]: string }
@@ -37,13 +45,16 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 				where: [
 					{
 						field: "email",
-						value: identifier,
+						value: email,
 					},
 				],
 			});
 			if (!user) {
 				return {
 					status: 401,
+					body: {
+						error: "user_not_found",
+					},
 				};
 			}
 			const passwordHash = user["password"];
@@ -52,10 +63,26 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 					"Password field is missing in the user table.",
 				);
 			}
-			const isValid = await validatePassword(password, passwordHash);
-			if (!isValid) {
+			try {
+				const isValid = await validatePassword(
+					password,
+					passwordHash,
+					context.secret,
+				);
+				if (!isValid) {
+					return {
+						status: 401,
+						body: {
+							error: "invalid_password",
+						},
+					};
+				}
+			} catch (e) {
 				return {
 					status: 401,
+					body: {
+						error: "invalid_password",
+					},
 				};
 			}
 			const session = await context.adapter.createSession(user.id, context);
@@ -63,9 +90,8 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 			return {
 				status: 200,
 				body: {
-					sessionToken: session.id,
-					user,
-					redirect: false,
+					redirect: true,
+					url: callbackURL,
 				},
 			};
 		},
@@ -82,9 +108,9 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 			);
 			if (userExist) {
 				return {
-					status: 302,
-					headers: {
-						Location: `${currentURL}?error=user_already_exist`,
+					status: 400,
+					body: {
+						error: "user_already_exist",
 					},
 				};
 			}
@@ -108,9 +134,10 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 				await createSession(user.user.id, context);
 			}
 			return {
-				status: 302,
-				headers: {
-					Location: `${callbackURL}`,
+				status: 200,
+				body: {
+					redirect: true,
+					url: callbackURL,
 				},
 			};
 		},

@@ -5,6 +5,7 @@ import { signInOAuth } from "../oauth2/signin";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context, InternalResponse } from "./types";
+import { parseUser } from "../adapters/utils";
 
 export const bodySchema = z.object({
 	provider: z.string(),
@@ -40,7 +41,8 @@ export const signIn = async (context: SignInContext) => {
 		if (!provider.signIn) {
 			throw new ProviderError("Sign in method not implemented");
 		}
-		return await provider.signIn(context);
+		const response = await provider.signIn(context);
+		return response;
 	}
 	throw new ProviderError("Invalid provider type");
 };

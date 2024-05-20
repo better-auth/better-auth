@@ -1,0 +1,1 @@
+- Should we use zod schema for field attribute or the current format

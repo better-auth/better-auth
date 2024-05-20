@@ -3,7 +3,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "tsup src/index.ts --watch --dts",
+		"dev": "tsup src/index.ts --format esm --watch --dts",
 		"typecheck": "tsc --noEmit",
 		"build": "tsup build src/index.ts --format esm --dts --clean"
 	},

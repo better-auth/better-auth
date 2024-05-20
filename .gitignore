@@ -39,3 +39,7 @@ yarn-error.log*
 next-env.d.ts
 
 .turbo
+
+.next
+
+*.db

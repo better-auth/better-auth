@@ -89,7 +89,6 @@ export const toContext = async (
 		plugins: getPlugins(options),
 		cookies: getCookies(options),
 		disableCSRF: options.advanced?.skipCSRFCheck || false,
-		pages: options.pages,
 		session: {
 			modelName: options.session?.modelName || "session",
 			updateAge:
@@ -107,9 +106,7 @@ export const toContext = async (
 		},
 		user: {
 			modelName: options.user?.modelName || "user",
-			additionalFields: options.user?.fields
-				? toInternalFields(options.user.fields)
-				: {},
+			fields: options.user?.fields ? toInternalFields(options.user.fields) : {},
 			selectFields: getSelectFields(options.user?.fields || {}, "user"),
 		},
 		account: {

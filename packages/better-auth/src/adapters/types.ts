@@ -45,6 +45,10 @@ export type FieldAttributes = {
 	 * @default false
 	 */
 	hashValue?: boolean;
+	/**
+	 * transform the value before storing it.
+	 */
+	transform?: (value: any) => any;
 };
 
 export type BaseModel = {

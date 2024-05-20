@@ -82,17 +82,14 @@ export const mongodbAdapter = ({ db }: MongodbAdapterOptions): Adapter => {
 			if (!result) {
 				return null;
 			}
-			// delete result._id;
 			return result;
 		},
 		async findMany(data) {
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
 			return await db.collection(model).findMany(wheres);
-			//   console.log("data is: ", data);
 		},
 		async update(data) {
-			//   console.log("data is: ", data);
 			const { model, where, update } = data;
 			const wheres = whereConvertor(where);
 
@@ -103,7 +100,6 @@ export const mongodbAdapter = ({ db }: MongodbAdapterOptions): Adapter => {
 				},
 				{ returnDocument: "after" },
 			);
-			// delete res._id;
 			return res;
 		},
 		async delete(data) {

@@ -4,6 +4,7 @@ import { signInOAuth } from "../oauth2/signin";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context } from "./types";
+import { parseUser } from "../adapters/utils";
 
 const signUpSchema = z.object({
 	data: z.record(z.string(), z.any()).optional(),
@@ -17,6 +18,7 @@ export type SignUpContext = Context<z.infer<typeof signUpSchema>>;
 
 export const signUp = async (context: SignUpContext) => {
 	const data = signUpSchema.parse(context.request.body);
+
 	const provider = getProvider(context, data.provider);
 	if (!provider) {
 		throw new ProviderMissing(data.provider);
@@ -24,12 +26,10 @@ export const signUp = async (context: SignUpContext) => {
 	if (provider?.type === "oauth" || provider?.type === "oidc") {
 		// @ts-expect-error - sign up should be added to the request body
 		context.request.body.signUp = context.request.body.data;
-		const url = await signInOAuth(
-			context,
-			provider,
-			data.autoCreateSession,
-			true,
-		);
+		const url = await signInOAuth(context, provider, {
+			autoCreateSession: data.autoCreateSession ?? true,
+			onlySignUp: true,
+		});
 		return {
 			status: 200,
 			body: {

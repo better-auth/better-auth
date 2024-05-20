@@ -22,7 +22,7 @@ import type {
 } from "better-auth/providers";
 import type { SessionResponse } from "better-auth/routes/session";
 import type { UnionToIntersection } from "@better-auth/shared";
-import { ClientError } from "./errors";
+import { BetterAuthClientError as ClientError } from "./errors";
 import { useStore } from "./store";
 
 export interface ClientPlugin<T extends string = string> {
@@ -51,13 +51,22 @@ interface AuthClientOptions {
 
 function formatCbURL(callbackURL?: string) {
 	if (!callbackURL) {
-		return window.location.href;
+		return window.location.origin;
 	}
 	return callbackURL.startsWith("http")
 		? callbackURL
 		: `${window.location.origin}${
 				callbackURL.startsWith("/") ? "" : "/"
 			}${callbackURL}`;
+}
+
+/**
+ * Set error to the URL.
+ */
+function appendError(error: string) {
+	const url = new URL(window.location.href);
+	url.searchParams.set("error", error);
+	history.pushState({}, "", url.toString());
 }
 
 /**
@@ -76,12 +85,27 @@ const getAuthClient = <
 		);
 	}
 
-	const $fetch = createFetch({
+	const $fetch = createFetch<
+		any,
+		any,
+		{
+			error: string;
+		}
+	>({
 		...options.betterFetchOptions,
 		baseURL: options.baseURL,
 	});
 	async function getCSRFToken() {
-		return await $fetch<{ csrfToken: string }>("/csrf");
+		const { data, error } = await $fetch<{ csrfToken: string }>("/csrf");
+		if (error?.status === 404) {
+			throw new ClientError(
+				"CSRF route not found. Make sure the server is running and the base URL is correct and includes the path.",
+			);
+		}
+		if (error) {
+			throw new ClientError(error.message || "Failed to get CSRF token.");
+		}
+		return data.csrfToken;
 	}
 
 	/**
@@ -132,13 +156,7 @@ const getAuthClient = <
 					skipRedirect?: boolean;
 				},
 	) {
-		const { data: csrfToken, error: csrfError } = await getCSRFToken();
-		if (csrfError) {
-			throw new ClientError(
-				"Failed to get CSRF token. Make sure the server is running. And the baseURL is correct.",
-				csrfError.message,
-			);
-		}
+		const csrfToken = await getCSRFToken();
 
 		const { data, error } = await $fetch<
 			| { redirect: true; url: string }
@@ -146,15 +164,19 @@ const getAuthClient = <
 		>("/signin", {
 			body: {
 				...input,
-				csrfToken: csrfToken.csrfToken,
+				csrfToken: csrfToken,
 				currentURL: window.location.href,
 				callbackURL: formatCbURL(input?.callbackURL),
 			},
 		});
 		if (error) {
+			appendError(error.error);
 			return {
 				data: null,
-				error,
+				error: {
+					status: error.status,
+					message: error.error,
+				},
 			};
 		}
 		if (data?.redirect) {
@@ -221,13 +243,7 @@ const getAuthClient = <
 					}
 				: {}),
 	) {
-		const { data: csrfToken, error: csrfError } = await getCSRFToken();
-		if (csrfError) {
-			throw new ClientError(
-				"Failed to get CSRF token. Make sure the server is running. And the baseURL is correct.",
-				csrfError.message,
-			);
-		}
+		const csrfToken = await getCSRFToken();
 
 		const { data, error } = await $fetch<
 			| { redirect: true; url: string }
@@ -235,12 +251,13 @@ const getAuthClient = <
 		>("/signin", {
 			body: {
 				...input,
-				csrfToken: csrfToken.csrfToken,
+				csrfToken: csrfToken,
 				currentURL: window.location.href,
 				callbackURL: formatCbURL(input?.callbackURL),
 			},
 		});
 		if (error) {
+			appendError(error.error);
 			return {
 				data: null,
 				error,
@@ -282,6 +299,11 @@ const getAuthClient = <
 					 * signing up.
 					 */
 					callbackURL?: string;
+					/**
+					 * Skip the redirect. By default, it will redirect
+					 * to the provider's authorization URL.
+					 */
+					skipRedirect?: boolean;
 				}
 			: B["user"] extends {
 						fields: any;
@@ -307,6 +329,11 @@ const getAuthClient = <
 						 * signing up.
 						 */
 						callbackURL?: string;
+						/**
+						 * Skip the redirect. By default, it will redirect
+						 * to the provider's authorization URL.
+						 */
+						skipRedirect?: boolean;
 					}
 				: {
 						provider: P;
@@ -329,15 +356,14 @@ const getAuthClient = <
 						 * signing up.
 						 */
 						callbackURL?: string;
+						/**
+						 * Skip the redirect. By default, it will redirect
+						 * to the provider's authorization URL.
+						 */
+						skipRedirect?: boolean;
 					},
 	) {
-		const { data: csrfToken, error: csrfError } = await getCSRFToken();
-		if (csrfError) {
-			throw new ClientError(
-				"Failed to get CSRF token. Make sure the server is running. And the baseURL is correct.",
-				csrfError.message,
-			);
-		}
+		const csrfToken = await getCSRFToken();
 
 		const { data, error } = await $fetch<
 			| { redirect: true; url: string }
@@ -345,7 +371,7 @@ const getAuthClient = <
 		>("/signup", {
 			body: {
 				...input,
-				csrfToken: csrfToken.csrfToken,
+				csrfToken: csrfToken,
 				currentURL: window.location.href,
 				callbackURL: formatCbURL(input?.callbackURL),
 				autoCreateSession:
@@ -355,13 +381,17 @@ const getAuthClient = <
 			},
 		});
 		if (error) {
+			appendError(error.error);
 			return {
 				data: null,
 				error,
 			};
 		}
 		if (data?.redirect) {
-			window.location.href = data.url;
+			if (!input?.skipRedirect) {
+				window.location.href = data.url;
+			}
+
 			return {
 				data: null,
 				error: null,
@@ -379,13 +409,13 @@ const getAuthClient = <
 	const signOut = async (input?: {
 		callbackURL?: string;
 	}) => {
-		const { data: csrfToken } = await getCSRFToken();
+		const csrfToken = await getCSRFToken();
 		const { data, error } = await $fetch<{
 			url: string;
 			redirect: boolean;
 		}>("/signout", {
 			body: {
-				csrfToken: csrfToken?.csrfToken,
+				csrfToken: csrfToken,
 			},
 		});
 		if (error) {
@@ -412,11 +442,11 @@ const getAuthClient = <
 	 * Get the current session.
 	 */
 	const getSession = async () => {
-		const { data: csrfToken } = await getCSRFToken();
+		const csrfToken = await getCSRFToken();
 		const { data, error } = await $fetch<SessionResponse>("/session", {
 			method: "POST",
 			body: {
-				csrfToken: csrfToken?.csrfToken,
+				csrfToken: csrfToken,
 			},
 		});
 		if (error) {
@@ -428,7 +458,7 @@ const getAuthClient = <
 
 	const react = {
 		/**
-		 * Only use in a react component.
+		 * ❗ Only use in a react component.
 		 */
 		useSession: () => {
 			const session = useAuthStore((selector) => selector.session);

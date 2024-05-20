@@ -3,13 +3,15 @@ import type { BetterAuthOptions } from "../options";
 import { getServerSession } from "../routes/session";
 import { signInHandler } from "../routes/signin";
 import { signOutHandler } from "../routes/signout";
-import type { InferProviderSignin } from "./types";
+import type { InferProviderSignin, InferSession } from "./types";
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function getActions<O extends BetterAuthOptions>(
 	options: O,
 	handlerOptions?: HandlerOptions,
 ) {
-	return {
+	const actions = {
 		/**
 		 * Sign in with a provider. This action will return response object. If
 		 * it's oauth, it will redirect to the provider. If it's custom, it
@@ -61,9 +63,15 @@ export function getActions<O extends BetterAuthOptions>(
 		 * Get the current logged in user session.
 		 */
 		getSession: async (request: Request | Headers) => {
+			/**
+			 * If the request is a Headers object, we'll get the referer or origin from the headers.
+			 * If we fail to get the referer or origin, we'll default to "http://localhost".
+			 */
 			const url =
 				request instanceof Headers
-					? (request.get("referer") as string)
+					? (request.get("referer") as string) ||
+						(request.get("x-forwarded-host") as string) ||
+						"http://localhost"
 					: request.url;
 			const req =
 				request instanceof Request
@@ -76,7 +84,7 @@ export function getActions<O extends BetterAuthOptions>(
 			const context = await toContext(options, req);
 			context.disableCSRF = true;
 			const response = await getServerSession(context);
-			return response;
+			return response as InferSession<O>;
 		},
 		/**
 		 * Signout the current user.
@@ -101,6 +109,7 @@ export function getActions<O extends BetterAuthOptions>(
 			return toResponse(response, context, handlerOptions);
 		},
 	};
+	return actions;
 }
 
 export * from "./types";

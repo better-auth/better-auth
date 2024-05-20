@@ -7,6 +7,7 @@ import { getTokens } from "../oauth2/tokens";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context, InternalResponse } from "./types";
+import { parseUser } from "../adapters/utils";
 
 const callbackQuerySchema = z.object({
 	code: z.string(),
@@ -28,8 +29,7 @@ export const callback = async (context: CallbackContext) => {
 				)}`,
 			);
 		}
-		let { currentURL } = getState(state);
-		currentURL = context.pages?.error || currentURL;
+		const { currentURL } = getState(state);
 		return {
 			status: 302,
 			headers: {
@@ -42,8 +42,7 @@ export const callback = async (context: CallbackContext) => {
 	if (provider?.type === "oauth" || provider?.type === "oidc") {
 		const storedState = context.request.cookies.get(context.cookies.state.name);
 		const state = parsedQuery.data.state;
-		let { currentURL } = getState(state);
-		currentURL = context.pages?.error || currentURL;
+		const { currentURL } = getState(state);
 		if (storedState !== state) {
 			return {
 				status: 302,
@@ -155,7 +154,7 @@ export const callback = async (context: CallbackContext) => {
 				 * If the user wasn't linked we'll create a new user with the signup data
 				 */
 				if (!userData) {
-					const signUpData: Record<string, any> = {};
+					let signUpData: Record<string, any> = {};
 					for (const key in data) {
 						if (typeof data[key] === "string") {
 							const constructedKey = (data[key] as string).split(".");
@@ -168,6 +167,10 @@ export const callback = async (context: CallbackContext) => {
 							signUpData[key] = data[key].value;
 						}
 					}
+					/**
+					 * Parse the user data
+					 */
+					signUpData = parseUser(signUpData, context);
 
 					const accountData: {
 						providerId: string;
@@ -185,16 +188,24 @@ export const callback = async (context: CallbackContext) => {
 							];
 					}
 
-					const { user, account } = await context.adapter.createUser(
-						{
-							user: signUpData,
-							account: accountData,
-						},
-						context,
-					);
-
-					userAccount = account;
-					userData = user;
+					try {
+						const { user, account } = await context.adapter.createUser(
+							{
+								user: signUpData,
+								account: accountData,
+							},
+							context,
+						);
+						userAccount = account;
+						userData = user;
+					} catch (e) {
+						return {
+							status: 302,
+							headers: {
+								Location: `${currentURL}?error=user_already_exist`,
+							},
+						};
+					}
 				}
 			}
 

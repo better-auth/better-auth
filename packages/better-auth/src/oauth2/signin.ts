@@ -9,13 +9,21 @@ import { discoveryRequest } from "./utils";
 export async function signInOAuth(
 	context: SignInContext,
 	provider: OAuthProvider | OIDCProvider,
-	autoCreateSession = true,
-	/**
-	 * If onlySignUp is true, it will only sign up the
-	 * user. If the user exists, it will throw an error
-	 * on the callback.
-	 */
-	onlySignUp = false,
+	{
+		onlySignUp,
+		autoCreateSession,
+	}: {
+		autoCreateSession: boolean;
+		/**
+		 * If onlySignUp is true, it will only sign up the
+		 * user. If the user exists, it will throw an error
+		 * on the callback.
+		 */
+		onlySignUp: boolean;
+	} = {
+		autoCreateSession: true,
+		onlySignUp: false,
+	},
 ) {
 	if (!provider.params.clientId) {
 		throw new ProviderError("clientId is required");
@@ -162,7 +170,7 @@ export function getState(state: string): {
 		currentURL,
 		callbackURL,
 		signUp: {
-			data: signUp?.data || {},
+			data: signUp?.data,
 			autoCreateSession: signUp?.autoCreateSession,
 			onlySignUp: signUp?.onlySignUp,
 		},

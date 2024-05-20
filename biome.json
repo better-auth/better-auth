@@ -16,7 +16,8 @@
 			},
 			"a11y": {
 				"useKeyWithClickEvents": "off",
-				"useButtonType": "off"
+				"useButtonType": "off",
+				"noSvgWithoutTitle": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off"

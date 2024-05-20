@@ -142,24 +142,6 @@ export interface BetterAuthOptions {
 		};
 	};
 	/**
-	 *	Pages for the authentication flow
-	 */
-	pages?: {
-		/**
-		 * The url for the sign in page
-		 */
-		signIn?: string;
-		/**
-		 * The url for the sign up page
-		 */
-		signUp?: string;
-		/**
-		 * The url to redirect to on error
-		 * @default the current url
-		 */
-		error?: string;
-	};
-	/**
 	 * Advanced options. Don't change these unless you know
 	 * what you are doing.
 	 */
@@ -207,7 +189,7 @@ export interface InternalOptions {
 	sessionAdapter?: SessionAdapter;
 	user: {
 		modelName: string;
-		additionalFields?: Record<string, InternalFieldAttributes>;
+		fields: Record<string, InternalFieldAttributes>;
 		selectFields: string[];
 	};
 	account: {
@@ -216,11 +198,6 @@ export interface InternalOptions {
 		selectFields: string[];
 	};
 	baseURL: string;
-	pages?: {
-		signIn?: string;
-		signUp?: string;
-		error?: string;
-	};
 }
 
 export type TypeOrTypeReturning<T, P = void, PR = false> =

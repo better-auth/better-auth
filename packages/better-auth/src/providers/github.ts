@@ -115,6 +115,8 @@ export const github = (options: GitHubOptions) => {
 			return {
 				...profile,
 				id: profile.id,
+				first_name: profile.name.split(" ")[0] || "",
+				last_name: profile.name.split(" ")[1] || "",
 			};
 		},
 	} satisfies Provider<GithubProfile>;
