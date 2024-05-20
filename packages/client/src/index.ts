@@ -6,19 +6,22 @@ import {
 import { useEffect } from "react";
 import type { ZodObject, ZodSchema } from "zod";
 import type { z } from "zod";
-import type { BetterAuth } from "..";
+import type { BetterAuth } from "better-auth";
 import type {
 	InferProviderKeys,
 	InferProviderSignin,
 	InferRegister,
 	InferSession,
-} from "../actions/types";
-import type { User } from "../adapters/types";
-import type { BetterAuthOptions } from "../options";
-import type { Providers } from "../providers";
-import type { CustomProvider, Provider } from "../providers/types";
-import type { SessionResponse } from "../routes/session";
-import type { UnionToIntersection } from "../utils/types";
+} from "better-auth/actions";
+import type { User } from "better-auth/adapters";
+import type { BetterAuthOptions } from "better-auth";
+import type {
+	Providers,
+	CustomProvider,
+	Provider,
+} from "better-auth/providers";
+import type { SessionResponse } from "better-auth/routes/session";
+import type { UnionToIntersection } from "@better-auth/shared";
 import { ClientError } from "./errors";
 import { useStore } from "./store";
 

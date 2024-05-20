@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { User } from "../adapters/types";
 import { setSessionCookie } from "../cookies";
-import { ProviderError } from "../errors";
+import { ProviderError } from "@better-auth/shared/error";
 import { getState } from "../oauth2/signin";
 import { getTokens } from "../oauth2/tokens";
 import { withPlugins } from "../plugins/utils";

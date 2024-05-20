@@ -1,0 +1,8 @@
+{
+	"name": "@better-auth/shared",
+	"module": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./error": "./src/error.ts"
+	}
+}

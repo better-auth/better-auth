@@ -1,6 +1,6 @@
 import { base64url } from "jose";
 import { z } from "zod";
-import { BetterAuthError } from "../errors";
+import { BetterAuthError } from "@better-auth/shared";
 import { createJWT, parseJWT, validateJWT } from "../jwt";
 import type { Context } from "../routes/types";
 import { createSession } from "../utils/session";

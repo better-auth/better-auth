@@ -52,6 +52,9 @@ importers:
         specifier: ^3.22.5
         version: 3.23.8
     devDependencies:
+      '@better-auth/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@biomejs/biome':
         specifier: 1.7.3
         version: 1.7.3
@@ -134,6 +137,12 @@ importers:
         specifier: ^4.5.2
         version: 4.5.2(react@18.3.1)
     devDependencies:
+      '@better-auth/shared':
+        specifier: workspace:*
+        version: link:../shared
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -155,6 +164,8 @@ importers:
       zod:
         specifier: ^3.22.5
         version: 3.23.8
+
+  packages/shared: {}
 
 packages:
 

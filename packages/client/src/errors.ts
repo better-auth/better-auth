@@ -1,4 +1,4 @@
-import { BetterAuthError } from "../errors/index";
+import { BetterAuthError } from "@better-auth/shared/error";
 
 export class ClientError extends BetterAuthError {
 	description?: string;

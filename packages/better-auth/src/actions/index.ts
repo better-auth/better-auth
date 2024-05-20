@@ -102,3 +102,5 @@ export function getActions<O extends BetterAuthOptions>(
 		},
 	};
 }
+
+export * from "./types";

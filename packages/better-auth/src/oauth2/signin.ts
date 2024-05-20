@@ -1,7 +1,7 @@
 import { base64url } from "jose";
 import { generateRandomString } from "../crypto/random";
 import { sha256 } from "../crypto/sha";
-import { ProviderError } from "../errors";
+import { ProviderError } from "@better-auth/shared/error";
 import type { OAuthProvider, OIDCProvider } from "../providers/types";
 import type { SignInContext } from "../routes/signin";
 import { discoveryRequest } from "./utils";

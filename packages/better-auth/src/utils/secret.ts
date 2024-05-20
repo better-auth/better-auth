@@ -1,4 +1,4 @@
-import { MissingSecret } from "../errors";
+import { MissingSecret } from "@better-auth/shared/error";
 
 export const getSecret = (secret?: string) => {
 	const defaultSecret = "better-auth-secret-key-123456789";

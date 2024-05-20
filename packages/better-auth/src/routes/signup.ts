@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ProviderError, ProviderMissing } from "../errors";
+import { ProviderError, ProviderMissing } from "@better-auth/shared/error";
 import { signInOAuth } from "../oauth2/signin";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";

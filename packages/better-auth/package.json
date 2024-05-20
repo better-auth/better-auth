@@ -13,6 +13,7 @@
 		".": "./dist/index.js",
 		"./package.json": "./package.json",
 		"./adapters": "./dist/adapters.js",
+		"./actions": "./dist/actions.js",
 		"./providers": "./dist/providers.js",
 		"./h3": "./dist/h3.js",
 		"./next": "./dist/next.js",
@@ -49,6 +50,7 @@
 		"prisma": "^5.14.0",
 		"redis": "^4.6.14",
 		"tsup": "^8.0.2",
+		"@better-auth/shared": "workspace:*",
 		"typescript": "^5.5.0-dev.20240508",
 		"vitest": "^1.6.0"
 	},
