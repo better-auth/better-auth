@@ -1,0 +1,28 @@
+{
+	"name": "root",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@9.1.1",
+	"scripts": {
+		"build": "turbo --filter \"./packages/*\" build",
+		"dev": "turbo --filter \"./packages/*\" dev",
+		"format": "biome format . --write",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --apply",
+		"release": "bumpp -r",
+		"test": "turbo --filter \"./packages/*\" test",
+		"typecheck": "turbo --filter \"./packages/*\" typecheck"
+	},
+	"dependencies": {
+		"@biomejs/biome": "1.7.3",
+		"bumpp": "^9.4.1",
+		"turbo": "^1.13.3",
+		"typescript": "5.5.0-dev.20240520"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "pnpm run lint && bun run format"
+	},
+	"devDependencies": {
+		"simple-git-hooks": "^2.11.1"
+	}
+}

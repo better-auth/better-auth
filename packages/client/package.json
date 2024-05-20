@@ -1,0 +1,27 @@
+{
+	"name": "@better-auth/client",
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "tsup --watch",
+		"typecheck": "tsc --noEmit"
+	},
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"devDependencies": {
+		"react": "^18.3.1",
+		"redis": "^4.6.14",
+		"svelte": "^4.2.17",
+		"tsup": "^8.0.2",
+		"zod": "^3.22.5",
+		"typescript": "^5.5.0-dev.20240508",
+		"vitest": "^1.6.0"
+	},
+	"dependencies": {
+		"@better-fetch/fetch": "^0.0.1",
+		"zustand": "^4.5.2"
+	},
+	"files": ["dist"]
+}
