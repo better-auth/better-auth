@@ -28,5 +28,5 @@
 	"devDependencies": {
 		"simple-git-hooks": "^2.11.1"
 	},
-	"version": "0.0.2-beta.5"
+	"version": "0.0.2-beta.6"
 }
