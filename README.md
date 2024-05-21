@@ -5,12 +5,12 @@ The Authentication Library for Javascript.
 ## Installation
 
 ```bash
-pnpm install better-auth
+pnpm install better-auth@beta @better-auth/client@beta
 ```
 
 ## Usage
 
-> Start by create a folder called auth in your project somewhere.
+> Start by creating a folder called auth in your project somewhere.
 
 >  Create two files `server.ts` and `client.ts` in the auth folder.
 
@@ -74,12 +74,12 @@ export async function handle({ event, resolve }) {
 }
 ```
 
-1. In the `client.ts` file, create a client betterAuth instance. See the example below.
+> In the `client.ts` file, create a client betterAuth instance. See the example below.
 
 > Make sure to import the `auth` instance from the `server.ts` file as a type and pass it to the `createAuthClient` function. That will be used to infer from your auth config on the server.
 
 ```typescript
-import { createAuthClient } from "better-auth/client"
+import { createAuthClient } from "@better-auth/client"
 import type { auth } from "./server"
 
 export const client = createAuthClient<typeof auth>()({
@@ -87,8 +87,7 @@ export const client = createAuthClient<typeof auth>()({
 })
 ```
 
-
-5. Now you can use the client instance to authenticate users in your client side code. See the example below.
+> Now you can use the client instance to authenticate users in your client side code. See the example below.
 
 ```typescript
 import { client } from "@lib/auth/client"
@@ -108,4 +107,34 @@ const loginWithGithub = async () => {
         callbackUrl: "http://localhost:3000/dashboard" //the url to redirect to after authentication. This is optional.
     })
 }
+```
+>  You can use useSession (on react) or subscribe (on other frameworks) to get the current session.
+
+`React`
+```typescript
+import { client } from "@lib/auth/client"
+
+const User = () => {
+    const session = client.session.use()
+    return (
+        <div>
+            {session && <p>{session.user.email}</p>}
+        </div>
+    )
+}
+```
+
+`Svelte`
+```sv
+<script>
+    import { client } from "$lib/auth/client";
+    let session: typeof client.$inferSession | null = null;
+    client.session.subscribe((value) => {
+        session = value;
+    });
+</script>
+    {#if $session}
+        <p>{$session.user.email}</p>
+    {/if}
+    ```
 ```
