@@ -1,6 +1,6 @@
 {
 	"name": "nextjs",
-	"version": "0.0.2-alpha.3",
+	"version": "0.0.2-beta.4",
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
