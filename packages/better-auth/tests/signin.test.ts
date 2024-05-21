@@ -5,8 +5,8 @@ import { memoryAdapter } from "../src/adapters/memory";
 import { hashPassword } from "../src/crypto/password";
 import { credential } from "../src/providers";
 import { github } from "../src/providers/github";
-import { getH3Server } from "./utils/server";
 import { DEFAULT_SECRET } from "../src/utils/secret";
+import { getH3Server } from "./utils/server";
 
 describe("signin handler", async (it) => {
 	const db = {

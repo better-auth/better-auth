@@ -23,7 +23,7 @@
 		"typescript": "5.5.0-dev.20240520"
 	},
 	"simple-git-hooks": {
-		"pre-commit": "pnpm typecheck && pnpm format && pnpm lint:fix"
+		"pre-commit": "pnpm typecheck &&  pnpm format && pnpm lint:fix"
 	},
 	"devDependencies": {
 		"simple-git-hooks": "^2.11.1"
