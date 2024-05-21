@@ -1,6 +1,6 @@
 {
 	"name": "@better-auth/client",
-	"version": "0.0.2-beta.6",
+	"version": "0.0.2-beta.7",
 	"type": "module",
 	"scripts": {
 		"dev": "tsup src/index.ts --format esm --watch --dts",

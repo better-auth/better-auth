@@ -1,6 +1,6 @@
 {
 	"name": "svelte",
-	"version": "0.0.1",
+	"version": "0.0.2-beta.7",
 	"private": true,
 	"scripts": {
 		"dev": "vite dev",
