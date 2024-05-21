@@ -1,5 +1,5 @@
-import { create } from "zustand";
 import type { SessionResponse } from "better-auth/routes/session";
+import { create } from "zustand";
 
 interface Store {
 	session: SessionResponse | null;

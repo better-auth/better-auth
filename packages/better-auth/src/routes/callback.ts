@@ -1,13 +1,13 @@
+import { ProviderError } from "@better-auth/shared/error";
 import { z } from "zod";
 import type { User } from "../adapters/types";
+import { parseUser } from "../adapters/utils";
 import { setSessionCookie } from "../cookies";
-import { ProviderError } from "@better-auth/shared/error";
 import { getState } from "../oauth2/signin";
 import { getTokens } from "../oauth2/tokens";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context, InternalResponse } from "./types";
-import { parseUser } from "../adapters/utils";
 
 const callbackQuerySchema = z.object({
 	code: z.string(),

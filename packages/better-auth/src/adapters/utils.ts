@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { FieldAttributes, InternalFieldAttributes } from "./types";
 import type { Context } from "../routes/types";
+import type { FieldAttributes, InternalFieldAttributes } from "./types";
 
 export function toInternalFields(fields: Record<string, any>) {
 	const internalFields: Record<string, InternalFieldAttributes> = {};

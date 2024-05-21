@@ -3,6 +3,9 @@
 	"organizeImports": {
 		"enabled": true
 	},
+	"files": {
+		"ignore": ["dist", ".next", "examples"]
+	},
 	"formatter": {
 		"enabled": true
 	},

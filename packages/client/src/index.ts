@@ -1,12 +1,11 @@
+import type { UnionToIntersection } from "@better-auth/shared";
 import {
 	type BetterFetch,
 	type BetterFetchOption,
 	createFetch,
 } from "@better-fetch/fetch";
-import { useEffect } from "react";
-import type { ZodObject, ZodSchema } from "zod";
-import type { z } from "zod";
 import type { BetterAuth } from "better-auth";
+import type { BetterAuthOptions } from "better-auth";
 import type {
 	InferProviderKeys,
 	InferProviderSignin,
@@ -14,14 +13,15 @@ import type {
 	InferSession,
 } from "better-auth/actions";
 import type { User } from "better-auth/adapters";
-import type { BetterAuthOptions } from "better-auth";
 import type {
-	Providers,
 	CustomProvider,
 	Provider,
+	Providers,
 } from "better-auth/providers";
 import type { SessionResponse } from "better-auth/routes/session";
-import type { UnionToIntersection } from "@better-auth/shared";
+import { useEffect } from "react";
+import type { ZodObject, ZodSchema } from "zod";
+import type { z } from "zod";
 import { BetterAuthClientError as ClientError } from "./errors";
 import { useStore } from "./store";
 

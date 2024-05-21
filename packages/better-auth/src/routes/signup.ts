@@ -1,10 +1,10 @@
-import { z } from "zod";
 import { ProviderError, ProviderMissing } from "@better-auth/shared/error";
+import { z } from "zod";
+import { parseUser } from "../adapters/utils";
 import { signInOAuth } from "../oauth2/signin";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context } from "./types";
-import { parseUser } from "../adapters/utils";
 
 const signUpSchema = z.object({
 	data: z.record(z.string(), z.any()).optional(),

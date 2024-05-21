@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { setSessionCookie } from "../cookies";
 import { ProviderError, ProviderMissing } from "@better-auth/shared/error";
+import { z } from "zod";
+import { parseUser } from "../adapters/utils";
+import { setSessionCookie } from "../cookies";
 import { signInOAuth } from "../oauth2/signin";
 import { withPlugins } from "../plugins/utils";
 import { getProvider } from "../providers/utils";
 import type { Context, InternalResponse } from "./types";
-import { parseUser } from "../adapters/utils";
 
 export const bodySchema = z.object({
 	provider: z.string(),

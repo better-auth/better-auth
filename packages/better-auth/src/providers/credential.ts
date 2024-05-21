@@ -1,8 +1,8 @@
+import { BetterAuthError } from "@better-auth/shared/error";
 import { z } from "zod";
 import type { User } from "../adapters/types";
 import { setSessionCookie } from "../cookies";
 import { hashPassword, validatePassword } from "../crypto/password";
-import { BetterAuthError } from "@better-auth/shared/error";
 import { createSession } from "../utils/session";
 import type { Provider } from "./types";
 

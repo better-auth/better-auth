@@ -1,9 +1,9 @@
+import { betterAuth } from "better-auth";
+import type { BetterAuthOptions } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { github } from "better-auth/providers";
 import { Browser } from "happy-dom";
 import { describe, expect } from "vitest";
-import { betterAuth } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import type { BetterAuthOptions } from "better-auth";
-import { github } from "better-auth/providers";
 import { createAuthClient } from "../src";
 import { getH3Server } from "./server";
 

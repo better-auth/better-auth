@@ -1,4 +1,5 @@
 import type { BetterAuthHandler } from "better-auth";
+import { toH3Handler } from "better-auth/h3";
 import {
 	appendCorsHeaders,
 	createApp,
@@ -8,7 +9,6 @@ import {
 } from "h3";
 import { type Listener, listen } from "listhen";
 import { afterAll, beforeAll } from "vitest";
-import { toH3Handler } from "better-auth/h3";
 
 export const getH3Server = async (handler: BetterAuthHandler, port: number) => {
 	let listener: Listener;

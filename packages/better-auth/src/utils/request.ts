@@ -1,6 +1,6 @@
 import { type IncomingHttpHeaders, IncomingMessage } from "node:http";
-import { z } from "zod";
 import { InvalidRequest, InvalidURL } from "@better-auth/shared/error";
+import { z } from "zod";
 import type { BetterAuthOptions } from "../options";
 
 export async function getBody<T>(request: IncomingMessage | Request) {
