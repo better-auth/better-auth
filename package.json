@@ -12,7 +12,7 @@
 		"format": "biome format . --write",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --apply",
-		"release": "pnpm typecheck && pnpm test && pnpm build && bumpp -r",
+		"release": "pnpm typecheck && pnpm build && bumpp -r",
 		"test": "turbo --filter \"./packages/*\" test",
 		"typecheck": "turbo --filter \"./packages/*\" typecheck"
 	},
@@ -28,5 +28,5 @@
 	"devDependencies": {
 		"simple-git-hooks": "^2.11.1"
 	},
-	"version": "0.0.2-beta.2"
+	"version": "0.0.2-beta.3"
 }

@@ -1,6 +1,6 @@
 {
 	"name": "better-auth",
-	"version": "0.0.2-beta.2",
+	"version": "0.0.2-beta.3",
 	"type": "module",
 	"scripts": {
 		"build": "tsup --clean",
@@ -67,5 +67,7 @@
 	"simple-git-hooks": {
 		"pre-commit": "bun run lint && bun run format"
 	},
-	"files": ["dist"]
+	"files": [
+		"dist"
+	]
 }
