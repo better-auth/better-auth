@@ -85,8 +85,7 @@ export const credential = <O extends CredentialOption>(options?: O) => {
 					},
 				};
 			}
-			const session = await context.adapter.createSession(user.id, context);
-			setSessionCookie(context, session.id);
+			await createSession(user.id, context);
 			return {
 				status: 200,
 				body: {

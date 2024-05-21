@@ -75,7 +75,7 @@ describe("Signup", async () => {
 		expect(db.account.length).toBe(1);
 	});
 
-	it("should return error in the query param", async () => {
+	it("should return 400", async () => {
 		const response = await app.request("/api/auth/signup", {
 			method: "POST",
 			body: JSON.stringify({
@@ -89,10 +89,7 @@ describe("Signup", async () => {
 				},
 			}),
 		});
-		const redirectedLocation = response.headers.get("Location");
-		expect(redirectedLocation).eq(
-			"http://localhost:4002?error=user_already_exist",
-		);
+		expect(response.status).toBe(400);
 	});
 
 	it("should return authorization url with valid state", async () => {

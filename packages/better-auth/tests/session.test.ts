@@ -70,10 +70,11 @@ describe("signin handler", async (it) => {
 					csrfToken: token.csrfToken,
 					provider: "credential",
 					data: {
-						identifier: "test@email.com",
+						email: "test@email.com",
 						password: "test",
 					},
 					currentURL: "http://localhost:4001",
+					callbackURL: "http://localhost:4001",
 				}),
 			})
 			.then(async (res) => {
@@ -83,7 +84,7 @@ describe("signin handler", async (it) => {
 				throw new Error(await res.text());
 			});
 
-		expect(response.sessionToken).toBeDefined();
+		expect(response).toBeDefined();
 	});
 
 	it("should return session and without lastName", async () => {

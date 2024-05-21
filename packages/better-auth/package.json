@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsup --clean",
-		"prisma:push": "prisma db push --schema ./test/adapters/prisma-adapter/schema.prisma",
+		"prisma:push": "prisma db push --schema ./tests/adapters/prisma-adapter/schema.prisma",
 		"dev": "tsup --watch",
 		"test": "pnpm prisma:push && vitest -u",
 		"typecheck": "tsc --noEmit"
