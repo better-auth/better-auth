@@ -1,6 +1,6 @@
 {
 	"name": "@better-auth/shared",
-	"version": "0.0.2-beta.4",
+	"version": "0.0.2-beta.5",
 	"private": true,
 	"module": "./src/index.ts",
 	"exports": {
