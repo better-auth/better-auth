@@ -43,6 +43,6 @@ jobs:
           else
           
       - name: Publish to npm
-        run: pnpm publish --access public --tag ${{steps.check_version.outputs.tag}}
+        run: npm publish --access public --tag ${{steps.check_version.outputs.tag}}
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}

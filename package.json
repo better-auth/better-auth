@@ -12,7 +12,7 @@
 		"format": "biome format . --write",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --apply",
-		"release": "bumpp -r",
+		"release": "pnpm typecheck && pnpm test && pnpm build && bumpp -r",
 		"test": "turbo --filter \"./packages/*\" test",
 		"typecheck": "turbo --filter \"./packages/*\" typecheck"
 	},

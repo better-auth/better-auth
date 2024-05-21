@@ -22,7 +22,6 @@ jobs:
                 node-version: 20.x
                 registry-url: 'https://registry.npmjs.org'
                 cache: pnpm
-          
             
             - name: Install
               run: pnpm install
@@ -33,8 +32,8 @@ jobs:
             - name: lint
               run: pnpm lint
             
-            - name: typecheck
-              run: pnpm typecheck
-            
             - name: test
               run: pnpm test
+
+            - name: typecheck
+              run: pnpm typecheck
