@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: 
+      main
 
 jobs: 
   release:
@@ -35,7 +35,7 @@ jobs:
       - name: Check version
         id: check_version
         run: |
-          version=$(node -p "require('./package.json').version")
+          version=$(node -p "require('./packages/better-auth/package.json').version")
           if [[ $version == *"beta"* ]]; then
             echo "::set-output name=tag::beta"
           elif [[ $version == *"alpha"* ]]; then

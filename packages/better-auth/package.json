@@ -67,7 +67,5 @@
 	"simple-git-hooks": {
 		"pre-commit": "bun run lint && bun run format"
 	},
-	"files": [
-		"dist"
-	]
+	"files": ["dist"]
 }
