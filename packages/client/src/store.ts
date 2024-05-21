@@ -1,7 +1,7 @@
 import type { SessionResponse } from "better-auth/routes/session";
 import { create } from "zustand";
 
-interface Store {
+export interface Store {
 	session: SessionResponse | null;
 	setSession: (session: SessionResponse | null) => void;
 }

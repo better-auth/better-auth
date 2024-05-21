@@ -457,9 +457,6 @@ const getAuthClient = <
 	};
 
 	const react = {
-		/**
-		 * ❗ Only use in a react component.
-		 */
 		useSession: () => {
 			const session = useAuthStore((selector) => selector.session);
 			const setSession = useAuthStore((selector) => selector.setSession);
@@ -481,7 +478,6 @@ const getAuthClient = <
 		signInOrSignUp,
 		signUp,
 		signOut,
-		getSession,
 	};
 	const pluginActions = options.plugins?.reduce((acc, plugin) => {
 		return {
@@ -490,11 +486,38 @@ const getAuthClient = <
 			...plugin.getActions($fetch),
 		};
 	}, {}) as Actions extends {} ? Actions : never;
+
+	const session = {
+		/**
+		 * Subscribe to session changes.
+		 */
+		subscribe: (cb: (session: InferSession<B> | null) => void) => {
+			getSession();
+			useAuthStore.subscribe((state) => {
+				cb(state.session as any);
+			});
+		},
+		/**
+		 * Get the current session.
+		 */
+		get: getSession,
+		/**
+		 * Subscribe to session changes using hooks.
+		 *
+		 * ❗ Only use in a react component.
+		 */
+		useSession: react.useSession,
+	};
+
 	return {
 		...baseClient,
-		...react,
 		...pluginActions,
+		session,
 		$invoke: $fetch,
+		/**
+		 * Infer session type
+		 */
+		$inferSession: {} as InferSession<B>,
 	};
 };
 
