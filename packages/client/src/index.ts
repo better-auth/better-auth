@@ -506,7 +506,7 @@ const getAuthClient = <
 		 *
 		 * ❗ Only use in a react component.
 		 */
-		useSession: react.useSession,
+		use: react.useSession,
 	};
 
 	return {
