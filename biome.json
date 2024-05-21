@@ -4,7 +4,7 @@
 		"enabled": true
 	},
 	"files": {
-		"ignore": ["dist", ".next", "examples"]
+		"ignore": ["dist", ".next", "examples", "package.json"]
 	},
 	"formatter": {
 		"enabled": true

@@ -35,12 +35,14 @@ jobs:
       - name: Check version
         id: check_version
         run: |
-          version=$(node -p "require('./packages/better-auth/package.json').version")
-          if [[ $version == *"beta"* ]]; then
+          tag=$(echo ${GITHUB_REF#refs/tags/})
+          if [[ $tag == *"beta"* ]]; then
             echo "::set-output name=tag::beta"
-          elif [[ $version == *"alpha"* ]]; then
+          elif [[ $tag == *"alpha"* ]]; then
             echo "::set-output name=tag::alpha"
           else
+            echo "::set-output name=tag::latest"
+          fi
           
       - name: Publish to npm
         run: pnpm -r publish --access public --no-git-checks --tag ${{steps.check_version.outputs.tag}}
