@@ -54,10 +54,6 @@ describe("to context", async () => {
 	const options: BetterAuthOptions = {
 		providers: [],
 		adapter: memoryAdapter({}),
-		pages: {
-			signIn: "/",
-			signUp: "/",
-		},
 		user: {
 			fields: {
 				email: { type: "string", required: true },

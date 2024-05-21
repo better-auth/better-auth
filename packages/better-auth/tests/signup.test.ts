@@ -130,10 +130,10 @@ describe("Signup", async () => {
 	});
 
 	it("should verify email", async () => {
-		expect(db.user[0].emailVerified).toBe(false);
+		expect(db.user[0]?.emailVerified).toBe(false);
 		const response = await app.request(verifyEmailUrl);
 		const redirectedLocation = response.headers.get("Location");
-		expect(db.user[0].emailVerified).toBe(true);
+		expect(db.user[0]?.emailVerified).toBe(true);
 		expect(response.status).toBe(302);
 		expect(redirectedLocation).toBe("http://localhost:4002");
 	});
