@@ -1,0 +1,35 @@
+{
+    "name": "better-auth",
+    "version": "0.0.2-beta.8",
+    "type": "module",
+    "scripts": {
+        "build": "tsup --clean",
+        "dev": "tsup --watch",
+        "test": "bun test --watch",
+        "typecheck": "tsc --noEmit"
+    },
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.1.6",
+        "bun": "^1.1.22",
+        "h3": "^1.12.0",
+        "hono": "^4.5.4",
+        "listhen": "^1.7.2",
+        "tsup": "^8.0.2",
+        "typescript": "^5.5.0-dev.20240508",
+        "vitest": "^1.6.0"
+    },
+    "dependencies": {
+        "@better-fetch/fetch": "^1.1.4",
+        "arctic": "^1.9.2",
+        "better-call": "0.0.5-beta.14",
+        "oslo": "^1.2.1",
+        "type-fest": "^4.24.0",
+        "zod": "^3.22.5"
+    },
+    "files": [
+        "dist"
+    ]
+}

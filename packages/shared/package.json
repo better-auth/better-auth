@@ -1,0 +1,15 @@
+{
+    "name": "@better-auth/shared",
+    "types": "./src/index.ts",
+    "main": "./src/index.ts",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "dependencies": {
+        "h3": "^1.12.0",
+        "hono": "^4.5.4",
+        "listhen": "^1.7.2",
+        "vitest": "^1.6.0"
+    }
+}

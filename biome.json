@@ -1,0 +1,21 @@
+{
+    "$schema": "https://biomejs.dev/schemas/1.6.3/schema.json",
+    "organizeImports": {
+        "enabled": true
+    },
+    "files": {
+        "ignore": [
+            "dist",
+            ".next",
+            ".svelte-kit",
+            "package.json",
+            ".contentlayer"
+        ]
+    },
+    "formatter": {
+        "enabled": true
+    },
+    "linter": {
+        "enabled": false
+    }
+}
