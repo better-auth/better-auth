@@ -1,7 +1,10 @@
 {
-    "$schema": "https://biomejs.dev/schemas/1.6.3/schema.json",
-    "organizeImports": {
+    "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+    "formatter": {
         "enabled": true
+    },
+    "linter": {
+        "enabled": false
     },
     "files": {
         "ignore": [
@@ -11,11 +14,5 @@
             "package.json",
             ".contentlayer"
         ]
-    },
-    "formatter": {
-        "enabled": true
-    },
-    "linter": {
-        "enabled": false
     }
 }

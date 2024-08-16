@@ -1,8 +1,17 @@
 import { betterAuth } from "better-auth"
 
+
 const auth = betterAuth({
-    basePath: "/auth"
+    basePath: "/auth",
+    organization: {
+        enabled: true
+    }
 })
+
+export type IUser = typeof auth.$inferredTypes.User
+const res = await auth.api.getCurrentSession()
+res.user.orgId
+
 
 const CORS_HEADERS = {
     headers: {
@@ -29,3 +38,5 @@ Bun.serve({
         });
     }
 })
+
+

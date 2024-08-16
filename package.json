@@ -5,10 +5,8 @@
     "version": "0.0.2-beta.8",
     "packageManager": "pnpm@9.1.1",
     "devDependencies": {
+        "@biomejs/biome": "^1.8.3",
         "@types/node": "^20.12.12",
         "turbo": "^2.0.4"
-    },
-    "dependencies": {
-        "biome": "^0.3.3"
     }
 }
