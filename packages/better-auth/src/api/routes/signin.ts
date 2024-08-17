@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { APIError } from "better-call";
-import { providerList } from "../../provider";
+import { providerList } from "../../providers";
 import { generateState } from "../../utils/state";
 
 export const signInOAuth = createAuthEndpoint(

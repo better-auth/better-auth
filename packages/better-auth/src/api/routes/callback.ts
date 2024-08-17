@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { parseState } from "../../utils/state";
-import { parseJWT } from "oslo/jwt";
+import { userSchema } from "../../schema";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -26,17 +26,19 @@ export const callbackOAuth = createAuthEndpoint(
 			c.query.code,
 			c.query.code_verifier || "",
 		);
+		const user = await provider.userInfo.getUserInfo(tokens);
 
-		if (tokens.idToken) {
-			const user = parseJWT(tokens.idToken);
-			console.log({ user });
-		} else {
+		if (!user || userSchema.safeParse(user).success === false) {
+			throw new APIError("BAD_REQUEST");
 		}
+
+		await c.adapter.createUser(user);
 
 		if (!tokens) {
 			c.logger.error("Code verification failed");
 			throw new APIError("UNAUTHORIZED");
 		}
+
 		const { callbackURL } = parseState(c.query.state);
 		if (!callbackURL) {
 			c.logger.error("Callback URL not found");

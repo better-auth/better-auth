@@ -1,13 +1,12 @@
 import { Kysely } from "kysely";
-export const adapter = (db: Kysely<any>) => {
+import { User } from "../schema";
+
+export const getAdapter = (db: Kysely<any>) => {
 	return {
-		createUser: async () => {
-			await db
-				.insertInto("user")
-				.values({
-					id: 1,
-				})
-				.execute();
+		createUser: async (user: User) => {
+			return await db.insertInto("user").values(user).executeTakeFirst();
 		},
 	};
 };
+
+export type InternalAdapter = ReturnType<typeof getAdapter>;

@@ -1,16 +1,14 @@
 import {
 	OAuth2Provider as ArcticOAuth2Provider,
 	OAuth2ProviderWithPKCE,
+	Tokens,
 } from "arctic";
 import { LiteralString } from "../types/helper";
 import { providerList } from ".";
-import { ZodSchema } from "zod";
-import { TokenResponseBody } from "oslo/oauth2";
+import { User } from "../schema";
 
 export type OAuthUserInfo = {
-	endpoint?: string;
-	schema: ZodSchema;
-	getUserInfo?: (token: TokenResponseBody) => Record<string, any>;
+	getUserInfo: (token: Tokens) => Promise<User | null>;
 };
 
 export type OAuthProvider = {

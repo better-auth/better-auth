@@ -7,11 +7,5 @@ describe("client", async () => {
 	const auth = await getTestInstance();
 	it("should infer", async () => {
 		const client = createAuthClient<typeof auth>();
-		const res = await client.signUpOAuth({
-			provider: "google",
-			data: {
-				firstName: "email",
-			},
-		});
 	});
 });

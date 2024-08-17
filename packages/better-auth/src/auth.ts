@@ -1,6 +1,6 @@
 import { router } from "./api";
 import { BetterAuthOptions } from "./types/options";
-import * as endpoints from "./api/endpoints";
+import * as endpoints from "./api/routes";
 import { UnionToIntersection } from "type-fest";
 import { Plugin } from "./types/plugins";
 import { init } from "./init";

@@ -1,6 +1,6 @@
 import { betterAuth } from "../auth";
 import { createFieldAttribute } from "../db/field";
-import { github, google } from "../provider";
+import { github, google } from "../providers";
 import { Server } from "bun";
 import { beforeAll, afterAll } from "bun:test";
 
@@ -22,6 +22,10 @@ export async function getTestInstance() {
 			},
 		},
 		secret: "better-auth.secret",
+		database: {
+			provider: "sqlite",
+			url: ":memory:",
+		},
 	});
 	let server: Server;
 

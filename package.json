@@ -4,9 +4,34 @@
     "type": "module",
     "version": "0.0.2-beta.8",
     "packageManager": "pnpm@9.1.1",
+    "scripts": {
+        "build": "turbo --filter \"./packages/*\" build",
+        "dev": "turbo --filter \"./packages/*\" dev",
+        "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
+        "format": "biome format . --write",
+        "lint": "biome check .",
+        "lint:fix": "biome check . --apply",
+        "release": "turbo --filter \"./packages/*\" typecheck && build && bumpp -r",
+        "test": "turbo --filter \"./packages/*\" test",
+        "typecheck": "turbo --filter \"./packages/*\" typecheck",
+        "knip": "turbo --filter \"./packages/*\" knip"
+    },
+    "dependencies": {
+        "@biomejs/biome": "1.7.3",
+        "bumpp": "^9.4.1"
+    },
     "devDependencies": {
-        "@biomejs/biome": "^1.8.3",
         "@types/node": "^20.12.12",
-        "turbo": "^2.0.4"
+        "simple-git-hooks": "^2.11.1",
+        "turbo": "^2.0.4",
+        "typescript": "5.5.0-dev.20240520"
+    },
+    "pnpm": {
+        "overrides": {
+            "remark-mdx": "3.0.0",
+            "unified": "11.0.4",
+            "remark-parse": "11.0.0",
+            "mdast-util-frontmatter": "2.0.1"
+        }
     }
 }

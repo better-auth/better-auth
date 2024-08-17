@@ -1,5 +1,6 @@
+import { Dialect } from "kysely";
 import { FieldAttribute } from "../db/field";
-import { Provider } from "../provider/types";
+import { Provider } from "../providers/types";
 import { Plugin } from "./plugins";
 
 export interface BetterAuthOptions {
@@ -58,14 +59,12 @@ export interface BetterAuthOptions {
 	 */
 	disableLog?: boolean;
 	/**
-	 * User fields
+	 * Database configuration
 	 */
-	user: {
-		/**
-		 * User fields
-		 */
-		fields: {
-			[key: string]: FieldAttribute;
-		};
-	};
+	database:
+		| {
+				provider: "postgres" | "sqlite" | "mysql";
+				url: string;
+		  }
+		| Dialect;
 }
