@@ -1,6 +1,6 @@
 import { ClientOptions } from "./base";
 import { BetterAuth } from "../auth";
-import { O } from "./type";
+import { InferActions } from "./type";
 import { getProxy } from "./proxy";
 import { ProviderList } from "../providers";
 import { createClient } from "better-call/client";
@@ -12,7 +12,7 @@ const redirectPlugin = {
 	name: "Redirect",
 	hooks: {
 		onSuccess(context) {
-			if (context.data.url && context.data.redirect) {
+			if (context.data?.url && context.data?.redirect) {
 				console.log("redirecting to", context.data.url);
 			}
 		},
@@ -26,8 +26,8 @@ const addCurrentURL = {
 		onRequest(context) {
 			const url = new URL(context.url);
 			url.searchParams.set("currentURL", window.location.href);
-			context.url = url
-			return context
+			context.url = url;
+			return context;
 		},
 	},
 } satisfies BetterFetchPlugin;
@@ -41,7 +41,7 @@ export const csrfPlugin = {
 			const { data, error } = await betterFetch<{
 				csrfToken: string;
 			}>("/csrf", {
-				baseURL: options.baseURL
+				baseURL: options.baseURL,
 			});
 			if (error?.status === 404) {
 				throw new BetterAuthError(
@@ -59,7 +59,6 @@ export const csrfPlugin = {
 		return { url, options };
 	},
 } satisfies BetterFetchPlugin;
-
 
 function inferBaeURL() {
 	const url =
@@ -94,23 +93,28 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	});
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
-		? T extends { id: infer Id }
-		? Id
-		: never
-		: ProviderList[number];
+			? T extends { id: infer Id }
+				? Id
+				: never
+			: ProviderList[number];
 		callbackURL: string;
 	}) => {
 		const res = await client("@post/signin/oauth", {
 			body: data,
 		});
 		if (res.data?.redirect) {
-			window.location.href = res.data.url
+			window.location.href = res.data.url;
 		}
-		return res
+		return res;
+	};
+
+	const signOut = async () => {
+		return await client("@post/signout", {});
 	};
 
 	const actions = {
 		signInOAuth,
+		signOut,
 	};
-	return getProxy(actions, client) as typeof actions & O<Auth>;
+	return getProxy(actions, client) as InferActions<Auth> & typeof actions;
 };

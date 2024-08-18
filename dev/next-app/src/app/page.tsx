@@ -1,5 +1,6 @@
+import { SignOut } from "@/components/signout";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import Image from "next/image";
@@ -17,6 +18,9 @@ export default async function Home() {
             <CardTitle>
               {session.user.name}
             </CardTitle>
+            <CardFooter>
+              <SignOut />
+            </CardFooter>
           </CardHeader>
         </Card> : <Link href="/sign-in">
           <Button>

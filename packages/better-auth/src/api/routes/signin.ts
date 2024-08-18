@@ -11,7 +11,8 @@ export const signInOAuth = createAuthEndpoint(
 		method: "POST",
 		query: z.object({
 			/**
-			 * Redirect to the current URL after the user has signed in.
+			 * Redirect to the current URL after the 
+			 * user has signed in.
 			 */
 			currentURL: z.string().optional(),
 		}).optional(),

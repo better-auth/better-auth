@@ -104,6 +104,18 @@ export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptio
 			});
 			return updatedSession;
 		},
+		deleteSession: async (id: string) => {
+			const session = await adapter.delete<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "id",
+						value: id,
+					},
+				],
+			});
+			return session;
+		},
 		findOAuthUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
