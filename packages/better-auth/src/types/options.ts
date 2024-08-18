@@ -1,6 +1,6 @@
 import { Dialect } from "kysely";
 import { FieldAttribute } from "../db/field";
-import { Provider } from "../providers/types";
+import { Provider } from "./provider";
 import { Plugin } from "./plugins";
 
 export interface BetterAuthOptions {
@@ -33,7 +33,7 @@ export interface BetterAuthOptions {
 	/**
 	 * list of oauth providers
 	 */
-	oAuthProviders?: Provider[];
+	providers: Provider[];
 	/**
 	 * Plugins
 	 */
@@ -62,9 +62,28 @@ export interface BetterAuthOptions {
 	 * Database configuration
 	 */
 	database:
-		| {
-				provider: "postgres" | "sqlite" | "mysql";
-				url: string;
-		  }
-		| Dialect;
+	| {
+		provider: "postgres" | "sqlite" | "mysql";
+		url: string;
+	}
+	| Dialect;
+	/**
+	 * User configuration
+	 */
+	user?: {
+		/**
+		 * The model name for the user. Defaults to "user".
+		 */
+		modelName?: string;
+		/**
+		 * Additional fields to add to the user model
+		 */
+		additionalFields?: Record<string, FieldAttribute>;
+	};
+	session?: {
+		modelName?: string;
+	};
+	account?: {
+		modelName?: string;
+	};
 }

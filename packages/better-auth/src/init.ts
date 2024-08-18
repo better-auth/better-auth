@@ -17,7 +17,7 @@ export const init = (options: BetterAuthOptions) => {
 			disabled: options.disableLog,
 		}),
 		db,
-		adapter: getAdapter(db),
+		adapter: getAdapter(db, options),
 	};
 };
 

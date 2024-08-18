@@ -1,7 +1,7 @@
 import { OAuth2Provider, OAuth2ProviderWithPKCE } from "arctic";
 import { Constructor } from "type-fest";
 import { LiteralString } from "../types/helper";
-import { OAuthUserInfo } from "./types";
+import { OAuthUserInfo } from "../types/provider";
 
 export interface ProviderOptions {
 	clientId: string;

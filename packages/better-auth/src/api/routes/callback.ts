@@ -15,9 +15,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.options.oAuthProviders?.find(
-			(p) => p.id === c.params.id,
-		);
+		const provider = c.options.providers?.find((p) => p.id === c.params.id);
 		if (!provider || provider.type !== "oauth2") {
 			c.logger.error("Oauth provider with id", c.params.id, "not found");
 			throw new APIError("NOT_FOUND");

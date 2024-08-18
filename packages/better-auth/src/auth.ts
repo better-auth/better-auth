@@ -1,6 +1,5 @@
 import { router } from "./api";
 import { BetterAuthOptions } from "./types/options";
-import * as endpoints from "./api/routes";
 import { UnionToIntersection } from "type-fest";
 import { Plugin } from "./types/plugins";
 import { init } from "./init";
@@ -16,6 +15,11 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		{} as Record<string, any>,
 	);
 
+	const authContext = init(options);
+
+	const { handler, endpoints } = router(authContext);
+	type Endpoint = typeof endpoints;
+
 	const api = {
 		...endpoints,
 		...pluginEndpoints,
@@ -28,13 +32,8 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				: {}
 			: {}
 	>;
-
-	type Endpoint = typeof endpoints & PluginEndpoint;
-
-	const authContext = init(options);
-
 	return {
-		handler: router(authContext).handler,
+		handler,
 		api: Object.entries(api).reduce(
 			(acc, [key, value]) => {
 				acc[key] = (ctx: any) => {
@@ -47,13 +46,15 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				return acc;
 			},
 			{} as Record<string, any>,
-		) as Endpoint,
+		) as Endpoint & PluginEndpoint,
 		options,
 	};
 };
 
 export type BetterAuth<
-	Endpoints extends Record<string, any> = typeof endpoints,
+	Endpoints extends Record<string, any> = ReturnType<
+		typeof router
+	>["endpoints"],
 > = {
 	handler: (request: Request) => Promise<Response>;
 	api: Endpoints;

@@ -13,4 +13,4 @@ export const providerList = Object.keys(providers) as [
 
 export * from "./github";
 export * from "./google";
-export * from "./types";
+export * from "../types/provider";

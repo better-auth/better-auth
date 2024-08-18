@@ -21,9 +21,7 @@ export const signInOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.options.oAuthProviders?.find(
-			(p) => p.id === c.body.provider,
-		);
+		const provider = c.options.providers?.find((p) => p.id === c.body.provider);
 		if (!provider) {
 			throw new APIError("NOT_FOUND");
 		}

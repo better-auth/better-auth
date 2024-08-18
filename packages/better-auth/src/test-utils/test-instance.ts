@@ -6,7 +6,7 @@ import { beforeAll, afterAll } from "bun:test";
 
 export async function getTestInstance() {
 	const auth = betterAuth({
-		oAuthProviders: [
+		providers: [
 			github({
 				clientId: "test",
 				clientSecret: "test",
@@ -16,17 +16,13 @@ export async function getTestInstance() {
 				clientSecret: "test",
 			}),
 		],
-		user: {
-			fields: {
-				firstName: createFieldAttribute("string"),
-			},
-		},
 		secret: "better-auth.secret",
 		database: {
 			provider: "sqlite",
 			url: ":memory:",
 		},
 	});
+
 	let server: Server;
 
 	beforeAll(async () => {

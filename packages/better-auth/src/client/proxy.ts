@@ -9,10 +9,7 @@ function fromCamelCase(str: string) {
 	return `/${path}`;
 }
 
-export function getProxy(
-	actions: Record<string, any>,
-	client: ReturnType<typeof createBaseClient>,
-) {
+export function getProxy(actions: Record<string, any>, client: any) {
 	return new Proxy(actions, {
 		get(target, key) {
 			if (key in target) {

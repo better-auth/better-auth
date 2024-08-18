@@ -7,8 +7,10 @@ import {
 } from "kysely";
 import { BetterAuthOptions } from "../types";
 import { createPool } from "mysql2";
-import { Pool } from "pg";
 import Database from "better-sqlite3";
+import pg from "pg";
+
+const { Pool } = pg;
 
 export const getDialect = (config: BetterAuthOptions) => {
 	if (!config.database) {
@@ -53,8 +55,26 @@ export const createKyselyAdapter = (config: BetterAuthOptions) => {
 	if (!dialect) {
 		return null;
 	}
-	const db = new Kysely({
+	const db = new Kysely<any>({
 		dialect,
 	});
 	return db;
+};
+
+export const getDatabaseType = (config: BetterAuthOptions) => {
+	if ("provider" in config.database) {
+		return config.database.provider;
+	}
+	if ("dialect" in config.database) {
+		if (config.database.dialect instanceof PostgresDialect) {
+			return "postgres";
+		}
+		if (config.database.dialect instanceof MysqlDialect) {
+			return "mysql";
+		}
+		if (config.database.dialect instanceof SqliteDialect) {
+			return "sqlite";
+		}
+	}
+	return "sqlite";
 };

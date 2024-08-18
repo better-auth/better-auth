@@ -10,3 +10,7 @@ export const userSchema = z.object({
 });
 
 export type User = z.infer<typeof userSchema>;
+export interface MigrationTable {
+	name: string;
+	timestamp: string;
+}

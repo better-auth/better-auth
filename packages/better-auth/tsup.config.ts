@@ -5,6 +5,7 @@ export default defineConfig({
 		index: "./src/index.ts",
 		provider: "./src/providers/index.ts",
 		client: "./src/client/index.ts",
+		cli: "./src/cli/index.ts",
 	},
 	splitting: false,
 	sourcemap: true,
