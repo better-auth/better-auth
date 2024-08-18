@@ -1,12 +1,12 @@
 import { generateState as generateStateOAuth } from "oslo/oauth2";
 
-export function generateState(callbackURL?: string) {
+export function generateState(callbackURL?: string, currentURL?: string) {
 	const code = generateStateOAuth();
-	const state = `${code}!${callbackURL}`;
+	const state = `${code}!${callbackURL}!${currentURL}`;
 	return { state, code };
 }
 
 export function parseState(state: string) {
-	const [code, callbackURL] = state.split("!");
-	return { code, callbackURL };
+	const [code, callbackURL, currentURL] = state.split("!");
+	return { code, callbackURL, currentURL };
 }

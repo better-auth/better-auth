@@ -19,6 +19,19 @@ const redirectPlugin = {
 	},
 } satisfies BetterFetchPlugin;
 
+const addCurrentURL = {
+	id: "add-current-url",
+	name: "Add current URL",
+	hooks: {
+		onRequest(context) {
+			const url = new URL(context.url);
+			url.searchParams.set("currentURL", window.location.href);
+			context.url = url
+			return context
+		},
+	},
+} satisfies BetterFetchPlugin;
+
 function inferBaeURL() {
 	const url =
 		process.env.AUTH_URL ||
@@ -48,19 +61,23 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	const client = createClient<API>({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
-		plugins: [redirectPlugin],
+		plugins: [redirectPlugin, addCurrentURL],
 	});
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
-			? T extends { id: infer Id }
-				? Id
-				: never
-			: ProviderList[number];
+		? T extends { id: infer Id }
+		? Id
+		: never
+		: ProviderList[number];
 		callbackURL: string;
 	}) => {
-		return await client("@post/signin/oauth", {
+		const res = await client("@post/signin/oauth", {
 			body: data,
 		});
+		if (res.data?.redirect) {
+			window.location.href = res.data.url
+		}
+		return res
 	};
 	const actions = {
 		signInOAuth,

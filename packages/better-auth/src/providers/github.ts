@@ -53,7 +53,7 @@ interface GithubProfile {
 
 export const github = toBetterAuthProvider("github", GitHub, {
 	async getUserInfo(token) {
-		const res = await betterFetch<GithubProfile>(
+		const { data: profile, error } = await betterFetch<GithubProfile>(
 			"https://api.github.com/user",
 			{
 				method: "GET",
@@ -62,14 +62,34 @@ export const github = toBetterAuthProvider("github", GitHub, {
 				},
 			},
 		);
-		if (res.error) {
+		if (error) {
 			return null;
 		}
+		let emailVerified = false;
+		if (!profile.email) {
+			const { data, error } = await betterFetch<{
+				email: string;
+				primary: boolean;
+				verified: boolean;
+				visibility: "public" | "private";
+			}[]>("https://api.github.com/user/emails", {
+				headers: {
+					Authorization: `Bearer ${token.accessToken}`,
+					"User-Agent": "better-auth",
+				},
+			});
+			if (!error) {
+				profile.email = (data.find((e) => e.primary) ?? data[0])
+					?.email as string;
+				emailVerified = data.find(e => e.email === profile.email)?.verified ?? false
+			}
+		}
 		return {
-			id: res.data.id,
-			name: res.data.name,
-			email: res.data.email,
-			image: res.data.avatar_url,
+			id: profile.id,
+			name: profile.name,
+			email: profile.email,
+			image: profile.avatar_url,
+			emailVerified,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};

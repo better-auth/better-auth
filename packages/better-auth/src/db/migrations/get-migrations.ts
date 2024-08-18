@@ -9,15 +9,22 @@ import {
 import { toColumns } from "./to-columns";
 import { BetterAuthOptions } from "../../types";
 import { BetterAuthError } from "../../error/better-auth-error";
-import { MigrationTable } from "../../schema";
-import {
-	createKyselyAdapter,
-	FieldAttribute,
-	getAdapter,
-	getDatabaseType,
-} from "../../db";
-
+import { MigrationTable } from "../../adapters/schema";
+import { createKyselyAdapter, getDatabaseType } from "../../adapters/kysely";
+import { FieldAttribute } from "../field";
+import { migrationTableName } from ".";
+import { getAuthTables } from "../../adapters/get-tables";
 export const BaseModels = ["session", "account", "user"];
+
+
+async function findAllMigrations(db: Kysely<any>) {
+	try {
+		const res = await db.selectFrom(migrationTableName).selectAll().execute();
+		return res as MigrationTable[];
+	} catch (e) {
+		return []
+	}
+}
 
 export const getMigrations = async (
 	option: BetterAuthOptions,
@@ -31,12 +38,10 @@ export const getMigrations = async (
 	const db = createKyselyAdapter(option);
 	if (!db) {
 		throw new BetterAuthError(
-			"Invalid Database Configuration. Make sure your database configuration is a kysley dialect, a mysql or postgres pool or a configuration.",
+			"Invalid Database Configuration. Make sure your database configuration is a kysely dialect, a mysql or postgres pool or a configuration.",
 		);
 	}
-	const adapter = getAdapter(db, option);
-	const migrations = await adapter.findAllMigrations();
-
+	const migrations = await findAllMigrations(db);
 	const pluginsMigrations =
 		option.plugins?.map((plugin) => ({
 			migrations: Object.keys(plugin.schema || {})
@@ -76,6 +81,8 @@ export const getMigrations = async (
 		default: provider.migrations || {},
 	}));
 
+	const baseSchema = getAuthTables(option)
+
 	const migrationsToRun: {
 		prefix: string;
 		migrations: {
@@ -86,71 +93,16 @@ export const getMigrations = async (
 	}[] = [
 			{
 				prefix: "base",
-				migrations: [
-					{
-						tableName: option.user?.modelName || "user",
-						fields: {
-							name: {
-								type: "string"
-							},
-							email: {
-								type: "string"
-							},
-							image: {
-								type: "string",
-							},
-						},
-					},
-					{
-						tableName: option.session?.modelName || "session",
-						fields: {
-							userId: {
-								type: "string",
-								references: {
-									model: "user",
-									field: "id",
-									onDelete: "cascade",
-								},
-							},
-							expiresAt: {
-								type: "date",
-							}
-						},
-					},
-					{
-						tableName: option.account?.modelName || "account",
-						fields: {
-							accountId: {
-								type: "string",
-							},
-							providerId: {
-								type: "string",
-							},
-							userId: {
-								type: "string",
-								references: {
-									model: "user",
-									field: "id",
-									onDelete: "cascade",
-								}
-							},
-							// ...Object.keys(option.account?.additionalFields || {}).reduce(
-							// 	(acc, cur) => {
-							// 		acc = {
-							// 			// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
-							// 			...acc,
-							// 			[cur]: {
-							// 				type: "string",
-							// 				required: false,
-							// 			},
-							// 		};
-							// 		return acc;
-							// 	},
-							// 	{} as Record<string, FieldAttributes>,
-							// ),
-						},
-					},
-				],
+				migrations: [{
+					tableName: baseSchema.user.tableName,
+					fields: baseSchema.user.fields
+				}, {
+					tableName: baseSchema.session.tableName,
+					fields: baseSchema.session.fields
+				}, {
+					tableName: baseSchema.account.tableName,
+					fields: baseSchema.account.fields
+				}],
 				default: {},
 			},
 			...pluginsMigrations,

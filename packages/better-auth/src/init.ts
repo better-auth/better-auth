@@ -1,23 +1,19 @@
-import { getAdapter } from "./db/adapter";
-import { createKyselyAdapter } from "./db/kysely";
-import { BetterAuthError } from "./error/better-auth-error";
+import { getAdapter } from "./adapters/utils";
+import { createInternalAdapter } from "./db";
 import { BetterAuthOptions } from "./types";
 import { getCookies } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
 
 export const init = (options: BetterAuthOptions) => {
-	const db = createKyselyAdapter(options);
-	if (!db) {
-		throw new BetterAuthError("Failed to initialize database");
-	}
+	const adapter = getAdapter(options)
 	return {
 		options,
 		authCookies: getCookies(options),
 		logger: createLogger({
 			disabled: options.disableLog,
 		}),
-		db,
-		adapter: getAdapter(db, options),
+		adapter: adapter,
+		internalAdapter: createInternalAdapter(adapter, options)
 	};
 };
 

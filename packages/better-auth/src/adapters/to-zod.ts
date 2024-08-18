@@ -1,5 +1,5 @@
 import { z, ZodSchema } from "zod";
-import { FieldAttribute } from "../types";
+import { FieldAttribute } from "../db";
 
 export function toZodSchema(fields: Record<string, FieldAttribute>) {
 	const schema = z.object({

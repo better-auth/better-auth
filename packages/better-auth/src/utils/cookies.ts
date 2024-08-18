@@ -6,7 +6,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const secure = !!options.advanced?.useSecureCookies;
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
-	const sessionMaxAge = new TimeSpan(7, "d").milliseconds();
+	const sessionMaxAge = new TimeSpan(7, "d").seconds();
 	return {
 		sessionToken: {
 			name: `${secureCookiePrefix}${cookiePrefix}.session_token`,

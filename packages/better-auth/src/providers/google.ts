@@ -41,6 +41,7 @@ export const google = toBetterAuthProvider("google", Google, {
 			name: user.name,
 			email: user.email,
 			image: user.picture,
+			emailVerified: user.email_verified,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};

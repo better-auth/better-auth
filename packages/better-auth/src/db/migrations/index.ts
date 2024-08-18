@@ -5,8 +5,8 @@ import prompts from "prompts";
 import { type BetterAuthOptions } from "../../types";
 import { logger } from "../../utils/logger";
 import { BetterAuthError } from "../../error/better-auth-error";
-import { getDialect } from "..";
 import { getMigrations } from "./get-migrations";
+import { getDialect } from "../../adapters/kysely";
 
 export const migrationTableName = "better_auth_migrations";
 export const migrationLockTableName = "better_auth_migrations_lock";

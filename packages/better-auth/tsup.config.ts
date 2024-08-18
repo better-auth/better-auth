@@ -11,5 +11,14 @@ export default defineConfig({
 	sourcemap: true,
 	format: ["esm", "cjs"],
 	dts: true,
-	external: ["zod"],
+	external: [
+		"react",
+		"svelte",
+		"$app/environment",
+		"next",
+		"pg",
+		"mysql",
+		"better-sqlite3",
+		"typescript",
+	],
 });

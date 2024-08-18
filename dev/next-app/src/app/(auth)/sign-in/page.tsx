@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { client } from "@/lib/client";
+import { authClient } from "@/lib/client";
 
 export default function Page() {
     return (
@@ -47,11 +47,9 @@ export default function Page() {
                             Login
                         </Button>
                         <Button variant="outline" className="w-full" onClick={async () => {
-                            await client("/sign-in/oauth", {
-                                body: {
-                                    provider: "github",
-                                    callbackURL: "http://localhost:3000/",
-                                }
+                            await authClient.signInOAuth({
+                                provider: "github",
+                                callbackURL: "http://localhost:3000/",
                             })
                         }}>
                             Login with Github

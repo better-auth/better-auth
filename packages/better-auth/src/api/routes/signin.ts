@@ -9,6 +9,12 @@ export const signInOAuth = createAuthEndpoint(
 	"/signin/oauth",
 	{
 		method: "POST",
+		query: z.object({
+			/**
+			 * Redirect to the current URL after the user has signed in.
+			 */
+			currentURL: z.string().optional(),
+		}).optional(),
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user has signed in.
@@ -18,6 +24,7 @@ export const signInOAuth = createAuthEndpoint(
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(providerList),
+
 		}),
 	},
 	async (c) => {
@@ -27,7 +34,7 @@ export const signInOAuth = createAuthEndpoint(
 		}
 		if (provider.type === "oauth2") {
 			const cookie = c.authCookies;
-			const state = generateState(c.body.callbackURL);
+			const state = generateState(c.body.callbackURL, c.query?.currentURL);
 			try {
 				await c.setSignedCookie(
 					cookie.state.name,

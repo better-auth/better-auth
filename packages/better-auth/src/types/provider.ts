@@ -5,7 +5,7 @@ import {
 } from "arctic";
 import { LiteralString } from "./helper";
 import { providerList } from "../providers";
-import { User } from "../schema";
+import { User } from "../adapters/schema";
 import { FieldAttribute } from "../db";
 import { Migration } from "kysely";
 

@@ -11,26 +11,26 @@ import { BetterAuthError } from "../error/better-auth-error";
 
 type InferContext<T> = T extends (ctx: infer Ctx) => any
 	? Ctx extends
-			| {
-					body: infer Body;
-			  }
-			| {
-					params: infer Param;
-			  }
-		? (Body extends undefined
-				? {}
-				: {
-						body: Body;
-					}) &
-				(Param extends undefined
-					? {}
-					: {
-							params: Param;
-						})
-		: never
+	| {
+		body: infer Body;
+	}
+	| {
+		params: infer Param;
+	}
+	? (Body extends undefined
+		? {}
+		: {
+			body: Body;
+		}) &
+	(Param extends undefined
+		? {}
+		: {
+			params: Param;
+		})
+	: never
 	: never;
 
-export interface ClientOptions extends BetterFetchOption {}
+export interface ClientOptions extends BetterFetchOption { }
 
 const redirectPlugin = {
 	id: "redirect",
@@ -80,10 +80,10 @@ export const createBaseClient = <Auth extends BetterAuth = BetterAuth>(
 		[key: string]: infer T;
 	}
 		? T extends Endpoint
-			? {
-					[key in T["path"]]: T;
-				}
-			: {}
+		? {
+			[key in T["path"]]: T;
+		}
+		: {}
 		: {};
 
 	type O = Prettify<UnionToIntersection<Options>>;
@@ -91,18 +91,18 @@ export const createBaseClient = <Auth extends BetterAuth = BetterAuth>(
 		path: K,
 		...options: HasRequiredKeys<InferContext<OPT[K]>> extends true
 			? [
-					BetterFetchOption<
-						InferContext<OPT[K]>["body"],
-						any,
-						InferContext<OPT[K]>["params"]
-					>,
-				]
+				BetterFetchOption<
+					InferContext<OPT[K]>["body"],
+					any,
+					InferContext<OPT[K]>["params"]
+				>,
+			]
 			: [
-					BetterFetchOption<
-						InferContext<OPT[K]>["body"],
-						InferContext<OPT[K]>["params"]
-					>?,
-				]
+				BetterFetchOption<
+					InferContext<OPT[K]>["body"],
+					InferContext<OPT[K]>["params"]
+				>?,
+			]
 	): Promise<
 		BetterFetchResponse<
 			Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>

@@ -2,6 +2,7 @@ import { Dialect } from "kysely";
 import { FieldAttribute } from "../db/field";
 import { Provider } from "./provider";
 import { Plugin } from "./plugins";
+import { Adapter } from "./adapter";
 
 export interface BetterAuthOptions {
 	/**
@@ -66,7 +67,7 @@ export interface BetterAuthOptions {
 		provider: "postgres" | "sqlite" | "mysql";
 		url: string;
 	}
-	| Dialect;
+	| Adapter;
 	/**
 	 * User configuration
 	 */
@@ -82,6 +83,19 @@ export interface BetterAuthOptions {
 	};
 	session?: {
 		modelName?: string;
+		/**
+		 * Expiration time for the session token. The value
+		 * should be in seconds.
+		 * @default 7 days (60 * 60 * 24 * 7)
+		*/
+		expiresIn?: number;
+		/**
+		 * How often the session should be refreshed. The value
+		 * should be in seconds.
+		 * If set 0 the session will be refreshed every time it is used.
+		 * @default 1 day (60 * 60 * 24)
+		 */
+		updateAge?: number;
 	};
 	account?: {
 		modelName?: string;
