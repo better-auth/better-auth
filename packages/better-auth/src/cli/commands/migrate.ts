@@ -40,11 +40,11 @@ export const migrate = new Command()
 				logger.error("No configuration file found.");
 
 				logger.warn(
-					"\nBetter Auth will look for the following configuration files by default:",
+					"\nBetter Auth will look for a configuration file in the following directories:",
 				);
 
 				for (const possiblePath of possiblePaths) {
-					logger.log(`- ${possiblePath}`);
+					logger.log(`📁 ${possiblePath}`);
 				}
 
 				logger.info(

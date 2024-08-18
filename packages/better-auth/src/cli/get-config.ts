@@ -9,7 +9,7 @@ let possiblePaths = [
 ];
 
 possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `lib/${it}`), ...possiblePaths.map((it) => `auth/${it}`)];
-possiblePaths = [...possiblePaths.map((it) => `src/${it}`),]
+possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`),]
 
 export async function getConfig({
 	cwd,
