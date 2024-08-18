@@ -81,7 +81,8 @@ export const migrateAll = async (
 		results?.forEach((it, index) => {
 			if (it.status === "Error") {
 				logger.error(
-					`failed to execute ${it.migrationName.split("_")[1]?.split("_")[0]
+					`failed to execute ${
+						it.migrationName.split("_")[1]?.split("_")[0]
 					} migration`,
 				);
 			}

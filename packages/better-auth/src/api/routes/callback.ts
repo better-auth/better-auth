@@ -34,7 +34,7 @@ export const callbackOAuth = createAuthEndpoint(
 		const data = userSchema.safeParse({
 			...user,
 			id: user?.id.toString(),
-		})
+		});
 		if (!user || data.success === false) {
 			throw new APIError("BAD_REQUEST");
 		}
@@ -44,16 +44,18 @@ export const callbackOAuth = createAuthEndpoint(
 			throw new APIError("FORBIDDEN");
 		}
 		//find user in db
-		const dbUser = await c.internalAdapter.findOAuthUserByEmail(user.email)
-		let userId = dbUser?.user.id
+		const dbUser = await c.internalAdapter.findOAuthUserByEmail(user.email);
+		let userId = dbUser?.user.id;
 		if (dbUser) {
 			//check if user has already linked this provider
-			const hasBeenLinked = dbUser.accounts.find((a) => a.providerId === provider.id)
+			const hasBeenLinked = dbUser.accounts.find(
+				(a) => a.providerId === provider.id,
+			);
 			if (!hasBeenLinked && !user.emailVerified) {
 				c.logger.error("User already exists");
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "user_already_exists");
-				throw c.redirect(url.toString())
+				throw c.redirect(url.toString());
 			}
 
 			if (!hasBeenLinked && user.emailVerified) {
@@ -62,8 +64,8 @@ export const callbackOAuth = createAuthEndpoint(
 					accountId: user.id,
 					id: `${provider.id}:${user.id}`,
 					userId: dbUser.user.id,
-					...tokens
-				})
+					...tokens,
+				});
 			}
 		} else {
 			try {
@@ -73,27 +75,32 @@ export const callbackOAuth = createAuthEndpoint(
 					providerId: provider.id,
 					accountId: user.id,
 					userId: user.id,
-				})
-				userId = user.id
+				});
+				userId = user.id;
 			} catch (e) {
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "unable_to_create_user");
 				c.setHeader("Location", url.toString());
-				throw c.redirect(url.toString())
+				throw c.redirect(url.toString());
 			}
 		}
 		//this should never happen
-		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR")
+		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR");
 
 		//create session
-		const session = await c.internalAdapter.createSession(userId)
+		const session = await c.internalAdapter.createSession(userId);
 		try {
-			await c.setSignedCookie(c.authCookies.sessionToken.name, session.id, c.options.secret, c.authCookies.sessionToken.options)
+			await c.setSignedCookie(
+				c.authCookies.sessionToken.name,
+				session.id,
+				c.options.secret,
+				c.authCookies.sessionToken.options,
+			);
 		} catch (e) {
-			c.logger.error("Unable to set session cookie", e)
+			c.logger.error("Unable to set session cookie", e);
 			const url = new URL(currentURL || callbackURL);
 			url.searchParams.set("error", "unable_to_create_session");
-			throw c.redirect(url.toString())
+			throw c.redirect(url.toString());
 		}
 		throw c.redirect(callbackURL);
 	},

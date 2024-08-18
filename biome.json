@@ -1,18 +1,12 @@
 {
-    "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
-    "formatter": {
-        "enabled": true
-    },
-    "linter": {
-        "enabled": false
-    },
-    "files": {
-        "ignore": [
-            "dist",
-            ".next",
-            ".svelte-kit",
-            "package.json",
-            ".contentlayer"
-        ]
-    }
+	"$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+	"formatter": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": false
+	},
+	"files": {
+		"ignore": ["dist", ".next", ".svelte-kit", "package.json", ".contentlayer"]
+	}
 }

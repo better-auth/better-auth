@@ -67,12 +67,14 @@ export const github = toBetterAuthProvider("github", GitHub, {
 		}
 		let emailVerified = false;
 		if (!profile.email) {
-			const { data, error } = await betterFetch<{
-				email: string;
-				primary: boolean;
-				verified: boolean;
-				visibility: "public" | "private";
-			}[]>("https://api.github.com/user/emails", {
+			const { data, error } = await betterFetch<
+				{
+					email: string;
+					primary: boolean;
+					verified: boolean;
+					visibility: "public" | "private";
+				}[]
+			>("https://api.github.com/user/emails", {
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,
 					"User-Agent": "better-auth",
@@ -81,7 +83,8 @@ export const github = toBetterAuthProvider("github", GitHub, {
 			if (!error) {
 				profile.email = (data.find((e) => e.primary) ?? data[0])
 					?.email as string;
-				emailVerified = data.find(e => e.email === profile.email)?.verified ?? false
+				emailVerified =
+					data.find((e) => e.email === profile.email)?.verified ?? false;
 			}
 		}
 		return {

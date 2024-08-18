@@ -2,8 +2,8 @@ import { createConsola } from "consola";
 
 const consola = createConsola({
 	formatOptions: {
-		date: false
-	}
+		date: false,
+	},
 });
 
 export const createLogger = (options?: {

@@ -3,13 +3,14 @@ import jiti from "jiti";
 import { BetterAuthOptions } from "../types";
 import { logger } from "../utils/logger";
 
-let possiblePaths = [
-	"auth.ts",
-	"auth.config.ts",
-];
+let possiblePaths = ["auth.ts", "auth.config.ts"];
 
-possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `lib/${it}`), ...possiblePaths.map((it) => `auth/${it}`)];
-possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`),]
+possiblePaths = [
+	...possiblePaths,
+	...possiblePaths.map((it) => `lib/${it}`),
+	...possiblePaths.map((it) => `auth/${it}`),
+];
+possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`)];
 
 export async function getConfig({
 	cwd,

@@ -16,13 +16,12 @@ import { migrationTableName } from ".";
 import { getAuthTables } from "../../adapters/get-tables";
 export const BaseModels = ["session", "account", "user"];
 
-
 async function findAllMigrations(db: Kysely<any>) {
 	try {
 		const res = await db.selectFrom(migrationTableName).selectAll().execute();
 		return res as MigrationTable[];
 	} catch (e) {
-		return []
+		return [];
 	}
 }
 
@@ -81,7 +80,7 @@ export const getMigrations = async (
 		default: provider.migrations || {},
 	}));
 
-	const baseSchema = getAuthTables(option)
+	const baseSchema = getAuthTables(option);
 
 	const migrationsToRun: {
 		prefix: string;
@@ -91,23 +90,27 @@ export const getMigrations = async (
 		}[];
 		default: Record<string, Migration>;
 	}[] = [
-			{
-				prefix: "base",
-				migrations: [{
+		{
+			prefix: "base",
+			migrations: [
+				{
 					tableName: baseSchema.user.tableName,
-					fields: baseSchema.user.fields
-				}, {
+					fields: baseSchema.user.fields,
+				},
+				{
 					tableName: baseSchema.session.tableName,
-					fields: baseSchema.session.fields
-				}, {
+					fields: baseSchema.session.fields,
+				},
+				{
 					tableName: baseSchema.account.tableName,
-					fields: baseSchema.account.fields
-				}],
-				default: {},
-			},
-			...pluginsMigrations,
-			...providerMigrations,
-		];
+					fields: baseSchema.account.fields,
+				},
+			],
+			default: {},
+		},
+		...pluginsMigrations,
+		...providerMigrations,
+	];
 
 	let returnedMigration: Record<string, Migration> = {};
 
@@ -171,7 +174,8 @@ export const getMigrations = async (
 function toMigrationKey(fields: Record<string, FieldAttribute>) {
 	return Object.keys(fields).map(
 		(it) =>
-			`${it}!${fields[it]?.type[0]}!${fields[it]?.required === false ? "f" : "t"
+			`${it}!${fields[it]?.type[0]}!${
+				fields[it]?.required === false ? "f" : "t"
 			}`,
 	);
 }
@@ -380,16 +384,16 @@ export const getMigration = async ({
 		}
 	}
 
-	async function down(db: Kysely<any>): Promise<void> { }
+	async function down(db: Kysely<any>): Promise<void> {}
 
 	const latestMigration =
 		toAdd || toUpdate || toRemove
 			? {
-				[`${Date.now()}${prefix}${migrationKey.join("-")}|`]: {
-					up,
-					down,
-				},
-			}
+					[`${Date.now()}${prefix}${migrationKey.join("-")}|`]: {
+						up,
+						down,
+					},
+				}
 			: {};
 
 	const kMigrations = migrations.reduce((acc, it) => {
@@ -397,8 +401,8 @@ export const getMigration = async ({
 			// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 			...acc,
 			[it.name]: {
-				up: async (db: Kysely<any>) => { },
-				down: async (db: Kysely<any>) => { },
+				up: async (db: Kysely<any>) => {},
+				down: async (db: Kysely<any>) => {},
 			},
 		};
 	}, latestMigration);

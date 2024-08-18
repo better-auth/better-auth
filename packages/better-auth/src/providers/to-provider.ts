@@ -20,8 +20,8 @@ export const toBetterAuthProvider = <
 	type CParam = ConstructorParameters<C>[2];
 	type Options = CParam extends string
 		? {
-			redirectURI?: CParam;
-		}
+				redirectURI?: CParam;
+			}
 		: CParam;
 
 	return (params: ProviderOptions, options?: Options) => {

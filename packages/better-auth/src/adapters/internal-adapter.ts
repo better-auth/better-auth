@@ -5,24 +5,27 @@ import { getAuthTables } from "./get-tables";
 import { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 
-export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptions) => {
-	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7 // 7 days
-	const tables = getAuthTables(options)
+export const createInternalAdapter = (
+	adapter: Adapter,
+	options: BetterAuthOptions,
+) => {
+	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	const tables = getAuthTables(options);
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
 				const createdUser = await adapter.create({
 					model: tables.user.tableName,
-					data: user
-				})
+					data: user,
+				});
 				const createdAccount = await adapter.create({
 					model: tables.account.tableName,
-					data: account
-				})
+					data: account,
+				});
 				return {
 					user: createdUser,
-					account: createdAccount
-				}
+					account: createdAccount,
+				};
 			} catch (e) {
 				console.log(e);
 				return null;
@@ -32,46 +35,50 @@ export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptio
 			const data = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
-				expiresAt: Date.now() + sessionExpiration
-			}
+				expiresAt: Date.now() + sessionExpiration,
+			};
 			const session = adapter.create<Session>({
 				model: tables.session.tableName,
-				data
-			})
+				data,
+			});
 			return session;
 		},
 		findSession: async (sessionId: string) => {
 			const session = await adapter.findOne<Session>({
 				model: tables.session.tableName,
-				where: [{
-					value: sessionId,
-					field: "id"
-				}]
-			})
+				where: [
+					{
+						value: sessionId,
+						field: "id",
+					},
+				],
+			});
 			if (!session) {
-				return null
+				return null;
 			}
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
-				where: [{
-					value: session.userId,
-					field: "id"
-				}]
-			})
+				where: [
+					{
+						value: session.userId,
+						field: "id",
+					},
+				],
+			});
 			if (!user) {
-				return null
+				return null;
 			}
 			return {
 				session,
-				user
+				user,
 			};
 		},
 		updateSession: async (session: Session) => {
-			const updateAge = options.session?.updateAge === undefined ? 60 * 60 * 24 : options.session?.updateAge
-			const updateDate =
-				updateAge === 0
-					? 0
-					: getDate(updateAge).valueOf();
+			const updateAge =
+				options.session?.updateAge === undefined
+					? 60 * 60 * 24
+					: options.session?.updateAge;
+			const updateDate = updateAge === 0 ? 0 : getDate(updateAge).valueOf();
 			const maxAge = getDate(sessionExpiration);
 			const shouldBeUpdated =
 				session.expiresAt.valueOf() - maxAge.valueOf() + updateDate <=
@@ -119,23 +126,27 @@ export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptio
 		findOAuthUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
-				where: [{
-					value: email,
-					field: "email"
-				}]
-			})
+				where: [
+					{
+						value: email,
+						field: "email",
+					},
+				],
+			});
 			if (!user) return null;
 			const accounts = await adapter.findMany<Account>({
 				model: tables.account.tableName,
-				where: [{
-					value: user.id,
-					field: "userId"
-				}]
-			})
+				where: [
+					{
+						value: user.id,
+						field: "userId",
+					},
+				],
+			});
 			return {
 				user,
-				accounts
-			}
+				accounts,
+			};
 		},
 		linkAccount: async (account: Account) => {
 			const _account = await adapter.create<Account>({

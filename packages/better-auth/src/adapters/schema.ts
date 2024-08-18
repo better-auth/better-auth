@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-
 export const accountSchema = z.object({
 	id: z.string(),
 	providerId: z.string(),
@@ -11,7 +10,7 @@ export const accountSchema = z.object({
 	idToken: z.string().nullable().optional(),
 	accessTokenExpiresAt: z.date().nullable().optional(),
 	refreshTokenExpiresAt: z.date().nullable().optional(),
-})
+});
 
 export const userSchema = z.object({
 	id: z.string(),

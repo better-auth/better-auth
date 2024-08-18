@@ -27,10 +27,10 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 
 	type PluginEndpoint = UnionToIntersection<
 		O["plugins"] extends Array<infer T>
-		? T extends Plugin
-		? T["endpoints"]
-		: {}
-		: {}
+			? T extends Plugin
+				? T["endpoints"]
+				: {}
+			: {}
 	>;
 	return {
 		handler,

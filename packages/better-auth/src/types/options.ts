@@ -67,11 +67,11 @@ export interface BetterAuthOptions {
 	 * Database configuration
 	 */
 	database:
-	| {
-		provider: "postgres" | "sqlite" | "mysql";
-		url: string;
-	}
-	| Adapter;
+		| {
+				provider: "postgres" | "sqlite" | "mysql";
+				url: string;
+		  }
+		| Adapter;
 	/**
 	 * User configuration
 	 */
@@ -91,7 +91,7 @@ export interface BetterAuthOptions {
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
 		 * @default 7 days (60 * 60 * 24 * 7)
-		*/
+		 */
 		expiresIn?: number;
 		/**
 		 * How often the session should be refreshed. The value

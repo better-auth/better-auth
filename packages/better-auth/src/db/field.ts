@@ -22,12 +22,12 @@ export type FieldType = "string" | "number" | "boolean" | "date";
 export type InferValueType<T extends FieldType> = T extends "string"
 	? string
 	: T extends "number"
-	? number
-	: T extends "boolean"
-	? boolean
-	: T extends "date"
-	? Date
-	: never;
+		? number
+		: T extends "boolean"
+			? boolean
+			: T extends "date"
+				? Date
+				: never;
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
@@ -73,11 +73,11 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 		 * @default "cascade"
 		 */
 		onDelete?:
-		| "no action"
-		| "restrict"
-		| "cascade"
-		| "set null"
-		| "set default";
+			| "no action"
+			| "restrict"
+			| "cascade"
+			| "set null"
+			| "set default";
 	};
 	unique?: boolean;
 	/**

@@ -11,15 +11,17 @@ export const router = (ctx: AuthContext) => {
 			callbackOAuth,
 			getCSRFToken,
 			getSession,
-			signOut
+			signOut,
 		},
 		{
 			extraContext: ctx,
 			basePath: ctx.options.basePath,
-			routerMiddleware: [{
-				path: "/**",
-				middleware: csrfMiddleware
-			}]
+			routerMiddleware: [
+				{
+					path: "/**",
+					middleware: csrfMiddleware,
+				},
+			],
 		},
 	);
 };

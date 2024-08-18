@@ -16,9 +16,9 @@ export function toColumns(
 		dbType: string;
 		to: "update" | "add" | "remove";
 		builder:
-		| AlterTableBuilder
-		| AlterTableColumnAlteringBuilder
-		| CreateTableBuilder<any, any>;
+			| AlterTableBuilder
+			| AlterTableColumnAlteringBuilder
+			| CreateTableBuilder<any, any>;
 	},
 ) {
 	for (const key in fields) {

@@ -5,7 +5,7 @@ import { getCookies } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
 
 export const init = (options: BetterAuthOptions) => {
-	const adapter = getAdapter(options)
+	const adapter = getAdapter(options);
 	return {
 		options,
 		authCookies: getCookies(options),
@@ -13,7 +13,7 @@ export const init = (options: BetterAuthOptions) => {
 			disabled: options.disableLog,
 		}),
 		adapter: adapter,
-		internalAdapter: createInternalAdapter(adapter, options)
+		internalAdapter: createInternalAdapter(adapter, options),
 	};
 };
 
