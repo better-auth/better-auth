@@ -25,6 +25,7 @@ export function getCookies(options: BetterAuthOptions) {
 				sameSite: "lax",
 				path: "/",
 				secure,
+				maxAge: 60 * 60 * 24 * 7,
 			} satisfies CookieOptions,
 		},
 		state: {

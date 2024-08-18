@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { parseState } from "../../utils/state";
 import { userSchema } from "../../adapters/schema";
+import { csrfMiddleware } from "../middlewares/csrf";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",

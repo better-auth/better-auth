@@ -4,7 +4,7 @@ import { O } from "./type";
 import { getProxy } from "./proxy";
 import { ProviderList } from "../providers";
 import { createClient } from "better-call/client";
-import { BetterFetchPlugin } from "@better-fetch/fetch";
+import { betterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
 
 const redirectPlugin = {
@@ -31,6 +31,35 @@ const addCurrentURL = {
 		},
 	},
 } satisfies BetterFetchPlugin;
+
+export const csrfPlugin = {
+	id: "csrf",
+	name: "CSRF Check",
+	async init(url, options) {
+		if (options?.method !== "GET") {
+			options = options || {};
+			const { data, error } = await betterFetch<{
+				csrfToken: string;
+			}>("/csrf", {
+				baseURL: options.baseURL
+			});
+			if (error?.status === 404) {
+				throw new BetterAuthError(
+					"Route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
+				);
+			}
+			if (error) {
+				throw new BetterAuthError(error.message || "Failed to get CSRF token.");
+			}
+			options.body = {
+				...options?.body,
+				csrfToken: data.csrfToken,
+			};
+		}
+		return { url, options };
+	},
+} satisfies BetterFetchPlugin;
+
 
 function inferBaeURL() {
 	const url =
@@ -61,7 +90,7 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	const client = createClient<API>({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
-		plugins: [redirectPlugin, addCurrentURL],
+		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
@@ -79,6 +108,7 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		}
 		return res
 	};
+
 	const actions = {
 		signInOAuth,
 	};

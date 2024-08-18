@@ -49,6 +49,10 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		useSecureCookies?: boolean;
+		/**
+		 * Disable CSRF check
+		 */
+		disableCSRFCheck?: boolean;
 	};
 	organization?: {
 		enabled: true;

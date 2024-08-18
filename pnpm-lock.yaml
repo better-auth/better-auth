@@ -168,8 +168,8 @@ importers:
         specifier: ^1.9.2
         version: 1.9.2
       better-call:
-        specifier: ^0.1.2
-        version: 0.1.2(typescript@5.5.4)
+        specifier: ^0.1.4
+        version: 0.1.4(typescript@5.5.4)
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
@@ -1619,8 +1619,8 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
-  better-call@0.1.2:
-    resolution: {integrity: sha512-W/rwkqlhmdxTENRXUFAQq9gT9FrCDIRa5v8FrB7b940frO3+KTkIb4ZZj2Pn9mJw4Y7jB7JHvo0g7ZRpMI6iaQ==}
+  better-call@0.1.4:
+    resolution: {integrity: sha512-ukDbQ49mHDSiJa1opSXOZFEZwyjFsSdkzhg0u28tqePvRWvNwcEX92jToNSCtWqAbJkzUsZhj1ebfDD1E3CSqw==}
     peerDependencies:
       typescript: ^5.0.0
 
@@ -4166,7 +4166,7 @@ snapshots:
       rou3: 0.5.1
       typescript: 5.5.4
 
-  better-call@0.1.2(typescript@5.5.4):
+  better-call@0.1.4(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       rou3: 0.5.1
