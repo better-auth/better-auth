@@ -3,11 +3,11 @@ import { BetterAuthOptions } from "../types";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { getAuthTables } from "./get-tables";
 import { Adapter } from "../types/adapter";
+import { getDate } from "../utils/date";
 
 export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptions) => {
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7 // 7 days
 	const tables = getAuthTables(options)
-
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
@@ -39,6 +39,70 @@ export const createInternalAdapter = (adapter: Adapter, options: BetterAuthOptio
 				data
 			})
 			return session;
+		},
+		findSession: async (sessionId: string) => {
+			const session = await adapter.findOne<Session>({
+				model: tables.session.tableName,
+				where: [{
+					value: sessionId,
+					field: "id"
+				}]
+			})
+			if (!session) {
+				return null
+			}
+			const user = await adapter.findOne<User>({
+				model: tables.user.tableName,
+				where: [{
+					value: session.userId,
+					field: "id"
+				}]
+			})
+			if (!user) {
+				return null
+			}
+			return {
+				session,
+				user
+			};
+		},
+		updateSession: async (session: Session) => {
+			const updateAge = options.session?.updateAge === undefined ? 60 * 60 * 24 : options.session?.updateAge
+			const updateDate =
+				updateAge === 0
+					? 0
+					: getDate(updateAge).valueOf();
+			const maxAge = getDate(sessionExpiration);
+			const shouldBeUpdated =
+				session.expiresAt.valueOf() - maxAge.valueOf() + updateDate <=
+				Date.now();
+			if (shouldBeUpdated) {
+				const updatedSession = await adapter.update<Session>({
+					model: tables.session.tableName,
+					where: [
+						{
+							field: "id",
+							value: session.id,
+						},
+					],
+					update: {
+						...session,
+						expiresAt: new Date(Date.now() + sessionExpiration),
+					},
+				});
+				return updatedSession;
+			}
+			const updatedSession = await adapter.update<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "id",
+						value: session.id,
+					},
+				],
+				update: session,
+			});
+			return updatedSession;
 		},
 		findOAuthUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({

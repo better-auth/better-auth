@@ -1,5 +1,5 @@
 import { createRouter } from "better-call";
-import { signInOAuth, callbackOAuth } from "./routes";
+import { signInOAuth, callbackOAuth, getSession } from "./routes";
 import { AuthContext } from "../init";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { getCSRFToken } from "./routes/csrf";
@@ -9,7 +9,8 @@ export const router = (ctx: AuthContext) => {
 		{
 			signInOAuth,
 			callbackOAuth,
-			getCSRFToken
+			getCSRFToken,
+			getSession
 		},
 		{
 			extraContext: ctx,
