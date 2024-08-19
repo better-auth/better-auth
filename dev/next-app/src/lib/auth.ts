@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { github } from "better-auth/provider";
 import { organization } from "better-auth/plugins";
+
 export const auth = betterAuth({
 	basePath: "/api/auth",
 	providers: [
