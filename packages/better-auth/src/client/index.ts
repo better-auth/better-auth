@@ -3,7 +3,11 @@ import { BetterAuth } from "../auth";
 import { InferActions } from "./type";
 import { getProxy } from "./proxy";
 import { createClient } from "better-call/client";
-import { betterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
+import {
+	betterFetch,
+	BetterFetchPlugin,
+	createFetch,
+} from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
 import {
 	CustomProvider,
@@ -15,6 +19,11 @@ import { Prettify } from "better-call";
 import { atom, computed, task } from "nanostores";
 import { FieldAttribute, InferFieldOutput, InferValueType } from "../db";
 import { Session, User } from "../adapters/schema";
+import {
+	Invitation,
+	Member,
+	Organization,
+} from "../plugins/organization/schema";
 
 const redirectPlugin = {
 	id: "redirect",
@@ -34,9 +43,11 @@ const addCurrentURL = {
 	name: "Add current URL",
 	hooks: {
 		onRequest(context) {
-			const url = new URL(context.url);
-			url.searchParams.set("currentURL", window.location.href);
-			context.url = url;
+			if (typeof window !== "undefined") {
+				const url = new URL(context.url);
+				url.searchParams.set("currentURL", window.location.href);
+				context.url = url;
+			}
 			return context;
 		},
 	},
@@ -101,6 +112,11 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		baseURL: options?.baseURL || inferBaeURL(),
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
+	const $fetch = createFetch({
+		...options,
+		baseURL: options?.baseURL || inferBaeURL(),
+		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
+	});
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
 			? T extends OAuthProvider
@@ -117,9 +133,7 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		}
 		return res;
 	};
-	const actions = {
-		signInOAuth,
-	};
+
 	type ProviderEndpoint = UnionToIntersection<
 		Auth["options"]["providers"] extends Array<infer T>
 			? T extends CustomProvider
@@ -134,16 +148,26 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	}
 		? ""
 		: "signUpCredential" | "signInCredential";
-
+	type OrganizationPaths = "$activeOrganization" | "setActiveOrg";
+	type ExcludeOrganizationPaths = Auth["options"]["plugins"] extends Array<
+		infer T
+	>
+		? T extends {
+				id: "organization";
+			}
+			? ""
+			: OrganizationPaths
+		: OrganizationPaths;
 	type ExcludedPaths =
 		| "signinOauth"
 		| "signUpOauth"
 		| "callback"
 		| "session"
-		| ExcludeCredentialPaths;
+		| ExcludeCredentialPaths
+		| ExcludeOrganizationPaths;
 
 	const $signal = atom<boolean>(false);
-
+	const activeOrgId = atom<string | null>(null);
 	type AdditionalSessionFields = Auth["options"]["plugins"] extends Array<
 		infer T
 	>
@@ -172,12 +196,40 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 			} | null;
 		}),
 	);
+	const $activeOrganization = computed(activeOrgId, () =>
+		task(async () => {
+			if (!activeOrgId.get()) {
+				return null;
+			}
+			const session = $session.get();
+			if (!session) {
+				return null;
+			}
+			const organization = await $fetch<
+				Prettify<
+					Organization & {
+						members: Member[];
+						invitations: Invitation[];
+					}
+				>
+			>("/organization/full", {
+				method: "GET",
+				credentials: "include",
+			});
+			return organization.data;
+		}),
+	);
+	const actions = {
+		signInOAuth,
+		$session,
+		$activeOrganization,
+		setActiveOrg: (orgId: string | null) => {
+			activeOrgId.set(orgId);
+		},
+	};
 	const proxy = getProxy(actions, client) as Prettify<
 		Omit<InferActions<Actions>, ExcludedPaths>
 	> &
 		typeof actions;
-	return {
-		...proxy,
-		$session,
-	};
+	return proxy;
 };

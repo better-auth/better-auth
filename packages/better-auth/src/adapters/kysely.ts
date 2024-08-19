@@ -107,7 +107,7 @@ export const kyselyAdapter = (
 			}
 			let res = await db
 				.insertInto(model)
-				.values(val)
+				.values(val as any)
 				.returningAll()
 				.executeTakeFirst();
 

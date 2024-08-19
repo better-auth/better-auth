@@ -13,6 +13,10 @@ export const shimContext = <T extends Record<string, any>>(
 				},
 			});
 		};
+		shimmedObj[key].path = value.path;
+		shimmedObj[key].method = value.method;
+		shimmedObj[key].options = value.options;
+		shimmedObj[key].headers = value.headers;
 	}
 	return shimmedObj as T;
 };

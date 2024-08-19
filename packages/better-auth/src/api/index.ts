@@ -76,7 +76,7 @@ export const router = <C extends AuthContext>(ctx: C) => {
 			},
 		],
 		onError(e) {
-			// ctx.logger.error(e);
+			ctx.logger.error(e);
 		},
 	});
 };

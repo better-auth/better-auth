@@ -1,4 +1,4 @@
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint, createAuthMiddleware } from "../call";
 
 export const getSession = createAuthEndpoint(
 	"/session",

@@ -1,6 +1,7 @@
+import { OrganizationOptions } from "../organization";
 import { Role } from "./src/access";
-import { Statements } from "./statement";
+import { defaultRoles } from "./statement";
 
 export const permissionFromString = (permission?: string) => {
-    return Role.fromString<Statements>(permission ?? "");
+	return Role.fromString(permission ?? "");
 };

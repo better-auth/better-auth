@@ -3,7 +3,7 @@ import { User } from "../../adapters/schema";
 import { createAuthEndpoint } from "../../api/call";
 import { Plugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import { createOrganization } from "./routes/create-organization";
+import { createOrganization, updateOrganization } from "./routes/crud-org";
 import {
 	AccessControl,
 	createAccessControl,
@@ -11,6 +11,8 @@ import {
 	defaultStatements,
 	Role,
 } from "./access";
+import { getSession } from "../../api/routes";
+import { AuthContext } from "../../init";
 
 export interface OrganizationOptions {
 	/**
@@ -61,21 +63,29 @@ export interface OrganizationOptions {
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
+		updateOrganization,
 	};
-	const api = shimContext(endpoints, {
-		orgOptions: options || {},
-	});
+
 	const roles = {
 		...defaultRoles,
 		...options?.roles,
 	};
+
+	const api = shimContext(endpoints, {
+		orgOptions: options || {},
+		roles,
+		getSession: async (context: AuthContext) => {
+			//@ts-expect-error
+			return await getSession(context);
+		},
+	});
+
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S extends Record<string, any>
 			? S & DefaultStatements
 			: DefaultStatements
 		: DefaultStatements;
-
 	return {
 		id: "organization",
 		endpoints: {
@@ -115,6 +125,56 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					slug: {
 						type: "string",
 						unique: true,
+					},
+				},
+			},
+			member: {
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					userId: {
+						type: "string",
+						required: true,
+					},
+					email: {
+						type: "string",
+						required: true,
+					},
+					role: {
+						type: "string",
+						required: true,
+						defaultValue: "member",
+					},
+				},
+			},
+			invitation: {
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					userId: {
+						type: "string",
+						required: true,
+					},
+					email: {
+						type: "string",
+						required: true,
+					},
+					role: {
+						type: "string",
+						required: false,
+					},
+					status: {
+						type: "string",
+						required: true,
+						defaultValue: "pending",
+					},
+					expiresAt: {
+						type: "date",
+						required: true,
 					},
 				},
 			},

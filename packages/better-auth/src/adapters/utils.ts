@@ -5,6 +5,9 @@ import { getAuthTables } from "./get-tables";
 import { createKyselyAdapter, getDatabaseType, kyselyAdapter } from "./kysely";
 
 export function getAdapter(options: BetterAuthOptions): Adapter {
+	if (!options.database) {
+		throw new BetterAuthError("Database configuration is required");
+	}
 	if ("provider" in options.database) {
 		const db = createKyselyAdapter(options);
 		if (!db) {

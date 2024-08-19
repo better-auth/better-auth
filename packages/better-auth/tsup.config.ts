@@ -7,6 +7,7 @@ export default defineConfig({
 		client: "./src/client/index.ts",
 		cli: "./src/cli/index.ts",
 		react: "./src/client/react.ts",
+		preact: "./src/client/preact.ts",
 		plugins: "./src/plugins/index.ts",
 	},
 	splitting: false,

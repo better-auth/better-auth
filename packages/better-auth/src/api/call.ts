@@ -23,24 +23,26 @@ export const createAuthMiddleware = createMiddlewareCreator({
 	use: [optionsMiddleware],
 });
 
+export const autoMigrateMiddleware = createAuthMiddleware(async (ctx) => {
+	if (!ctx.context?.options?.database) {
+		return;
+	}
+	if (
+		"autoMigrate" in ctx.context?.options?.database &&
+		ctx.context.options.database.autoMigrate
+	) {
+		const { noMigration } = await getMigrations(ctx.context.options, false);
+		if (noMigration) {
+			return;
+		}
+		await migrateAll(ctx.context.options, {
+			cli: false,
+		});
+	}
+});
+
 export const createAuthEndpoint = createEndpointCreator({
-	use: [
-		optionsMiddleware,
-		createAuthMiddleware(async (ctx) => {
-			if (
-				"autoMigrate" in ctx.context?.options.database &&
-				ctx.context.options.database.autoMigrate
-			) {
-				const { noMigration } = await getMigrations(ctx.context.options, false);
-				if (noMigration) {
-					return;
-				}
-				await migrateAll(ctx.context.options, {
-					cli: false,
-				});
-			}
-		}),
-	],
+	use: [optionsMiddleware, autoMigrateMiddleware],
 });
 
 export type AuthEndpoint = Endpoint<
@@ -48,6 +50,7 @@ export type AuthEndpoint = Endpoint<
 		options: BetterAuthOptions;
 		body: any;
 		query: any;
+		headers: Headers;
 	}) => Promise<EndpointResponse>
 >;
 
