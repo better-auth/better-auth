@@ -22,7 +22,6 @@ export const migrateAll = async (
 		() => spinner?.stop(),
 	);
 	spinner?.stop();
-
 	if (!noMigration && cli) {
 		logger.info(chalk.bgBlack("\n🔑 The migration will affect the following:"));
 		for (const key of Object.keys(affected)) {

@@ -1,7 +1,9 @@
 import { betterAuth } from "../auth";
 import { github, google } from "../providers";
-import { Server } from "bun";
-import { beforeAll, afterAll } from "bun:test";
+import { beforeAll, afterAll } from "vitest";
+import { type Listener, listen } from "listhen";
+import { toNodeHandler } from "better-call";
+import fs from "fs/promises";
 
 export async function getTestInstance() {
 	const auth = betterAuth({
@@ -18,28 +20,22 @@ export async function getTestInstance() {
 		secret: "better-auth.secret",
 		database: {
 			provider: "sqlite",
-			url: ":memory:",
+			url: "./test.db",
+			autoMigrate: true,
+		},
+		emailAndPassword: {
+			enabled: true,
 		},
 	});
 
-	let server: Server;
+	let server: Listener;
 
 	beforeAll(async () => {
-		server = Bun.serve({
-			fetch: async (req) => {
-				try {
-					const res = await auth.handler(req);
-					return res;
-				} catch (e) {
-					return new Response(null, {
-						status: 500,
-					});
-				}
-			},
-		});
+		server = await listen(toNodeHandler(auth.handler));
 	});
-	afterAll(() => {
-		server.stop();
+	afterAll(async () => {
+		server.close();
+		await fs.unlink("./test.db");
 	});
 	return auth;
 }

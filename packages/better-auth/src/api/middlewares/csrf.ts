@@ -14,13 +14,13 @@ export const csrfMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		if (
 			ctx.request?.method !== "POST" ||
-			ctx.options.advanced?.disableCSRFCheck
+			ctx.context.options.advanced?.disableCSRFCheck
 		)
 			return;
 		const csrfToken = ctx.body?.csrfToken;
 		const csrfCookie = await ctx.getSignedCookie(
-			ctx.authCookies.csrfToken.name,
-			ctx.options.secret,
+			ctx.context.authCookies.csrfToken.name,
+			ctx.context.options.secret,
 		);
 		const [token, hash] = csrfCookie?.split("!") || [null, null];
 		if (
@@ -30,16 +30,16 @@ export const csrfMiddleware = createAuthMiddleware(
 			!hash ||
 			csrfCookie !== csrfToken
 		) {
-			ctx.setCookie(ctx.authCookies.csrfToken.name, "", {
+			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
 				maxAge: 0,
 			});
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid CSRF Token",
 			});
 		}
-		const expectedHash = await hs256(ctx.options.secret, token);
+		const expectedHash = await hs256(ctx.context.options.secret, token);
 		if (hash !== expectedHash) {
-			ctx.setCookie(ctx.authCookies.csrfToken.name, "", {
+			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
 				maxAge: 0,
 			});
 			throw new APIError("UNAUTHORIZED", {

@@ -31,25 +31,27 @@ export const signInOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.options.providers?.find((p) => p.id === c.body.provider);
+		const provider = c.context.options.providers?.find(
+			(p) => p.id === c.body.provider,
+		);
 		if (!provider) {
 			throw new APIError("NOT_FOUND");
 		}
 		if (provider.type === "oauth2") {
-			const cookie = c.authCookies;
+			const cookie = c.context.authCookies;
 			const state = generateState(c.body.callbackURL, c.query?.currentURL);
 			try {
 				await c.setSignedCookie(
 					cookie.state.name,
 					state.code,
-					c.options.secret,
+					c.context.options.secret,
 					cookie.state.options,
 				);
 				const codeVerifier = generateCodeVerifier();
 				await c.setSignedCookie(
 					cookie.pkCodeVerifier.name,
 					codeVerifier,
-					c.options.secret,
+					c.context.options.secret,
 					cookie.pkCodeVerifier.options,
 				);
 				const url = await provider.provider.createAuthorizationURL(
@@ -81,30 +83,27 @@ export const signInCredential = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
-		if (!ctx.options?.emailAndPassword?.enabled) {
-			ctx.logger.error("Email and password is not enabled");
+		if (!ctx.context.options?.emailAndPassword?.enabled) {
+			ctx.context.logger.error("Email and password is not enabled");
 			return ctx.json({
 				message: "Email and password is not enabled",
 				status: 400,
 			});
 		}
 		const { email, password } = ctx.body;
-		const user = await ctx.internalAdapter.findUserByEmail(email);
+		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
-			ctx.logger.error("User not found");
-			return ctx.json(
-				{ message: "User not found" },
-				{
-					status: 400,
-				},
-			);
+			ctx.context.logger.error("User not found");
+			return ctx.json(null, {
+				status: 400,
+			});
 		}
 		const credentialAccount = user.accounts.find(
 			(a) => a.providerId === "credential",
 		);
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
-			ctx.logger.error("Password not found");
+			ctx.context.logger.error("Password not found");
 			return ctx.json(
 				{ message: "unexpected error" },
 				{
@@ -114,9 +113,9 @@ export const signInCredential = createAuthEndpoint(
 		}
 		const argon2id = new Argon2id();
 		const hash = await argon2id.hash(password);
-		const validPassword = await argon2id.verify(hash, currentPassword);
+		const validPassword = await argon2id.verify(hash, password);
 		if (!validPassword) {
-			ctx.logger.error("Invalid password");
+			ctx.context.logger.error("Invalid password");
 			return ctx.json(
 				{ message: "Invalid email or password" },
 				{
@@ -124,12 +123,14 @@ export const signInCredential = createAuthEndpoint(
 				},
 			);
 		}
-		const session = await ctx.internalAdapter.createSession(user.user.id);
+		const session = await ctx.context.internalAdapter.createSession(
+			user.user.id,
+		);
 		await ctx.setSignedCookie(
-			ctx.authCookies.sessionToken.name,
+			ctx.context.authCookies.sessionToken.name,
 			session.id,
-			ctx.options.secret,
-			ctx.authCookies.sessionToken.options,
+			ctx.context.options.secret,
+			ctx.context.authCookies.sessionToken.options,
 		);
 		return ctx.json({
 			user: user.user,

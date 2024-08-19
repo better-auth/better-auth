@@ -1,8 +1,8 @@
 import { Dialect } from "kysely";
-import { FieldAttribute } from "../db/field";
-import { Provider } from "./provider";
-import { Plugin } from "./plugins";
-import { Adapter } from "./adapter";
+import type { FieldAttribute } from "../db/field";
+import type { Provider } from "./provider";
+import type { Plugin } from "./plugins";
+import type { Adapter } from "./adapter";
 
 export interface BetterAuthOptions {
 	/**
@@ -34,7 +34,7 @@ export interface BetterAuthOptions {
 	/**
 	 * list of oauth providers
 	 */
-	providers: Provider[];
+	providers?: Provider[];
 	/**
 	 * Plugins
 	 */
@@ -70,6 +70,12 @@ export interface BetterAuthOptions {
 		| {
 				provider: "postgres" | "sqlite" | "mysql";
 				url: string;
+				/**
+				 * Automatically migrate the database
+				 *
+				 * @default false
+				 */
+				autoMigrate?: boolean;
 		  }
 		| Adapter;
 	/**

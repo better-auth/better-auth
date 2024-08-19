@@ -47,7 +47,6 @@ export const getMigrations = async (
 			migrations: Object.keys(plugin.schema || {})
 				.map((key) => {
 					const schema = plugin.schema || {};
-					// biome-ignore lint/style/noNonNullAssertion: <explanation>
 					const table = schema[key]!;
 					if (table?.disableMigration) {
 						return;
@@ -62,24 +61,24 @@ export const getMigrations = async (
 			prefix: plugin.id,
 		})) || [];
 
-	const providerMigrations = option.providers.map((provider) => ({
-		prefix: provider.id,
-		migrations: Object.keys(provider.schema || {})
-			.map((key) => {
-				const schema = provider.schema || {};
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				const table = schema[key]!;
-				if (table?.disableMigration) {
-					return;
-				}
-				return {
-					tableName: key,
-					fields: table?.fields as Record<string, FieldAttribute>,
-				};
-			})
-			.filter((value) => value !== undefined),
-		default: provider.migrations || {},
-	}));
+	const providerMigrations =
+		option.providers?.map((provider) => ({
+			prefix: provider.id,
+			migrations: Object.keys(provider.schema || {})
+				.map((key) => {
+					const schema = provider.schema || {};
+					const table = schema[key]!;
+					if (table?.disableMigration) {
+						return;
+					}
+					return {
+						tableName: key,
+						fields: table?.fields as Record<string, FieldAttribute>,
+					};
+				})
+				.filter((value) => value !== undefined),
+			default: provider.migrations || {},
+		})) || [];
 
 	const baseSchema = getAuthTables(option);
 
@@ -399,7 +398,6 @@ export const getMigration = async ({
 
 	const kMigrations = migrations.reduce((acc, it) => {
 		return {
-			// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 			...acc,
 			[it.name]: {
 				up: async (db: Kysely<any>) => {},

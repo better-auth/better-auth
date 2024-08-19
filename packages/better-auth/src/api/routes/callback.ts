@@ -15,9 +15,15 @@ export const callbackOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.options.providers?.find((p) => p.id === c.params.id);
+		const provider = c.context.options.providers?.find(
+			(p) => p.id === c.params.id,
+		);
 		if (!provider || provider.type !== "oauth2") {
-			c.logger.error("Oauth provider with id", c.params.id, "not found");
+			c.context.logger.error(
+				"Oauth provider with id",
+				c.params.id,
+				"not found",
+			);
 			throw new APIError("NOT_FOUND");
 		}
 		const tokens = await provider.provider.validateAuthorizationCode(
@@ -25,7 +31,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.query.code_verifier || "",
 		);
 		if (!tokens) {
-			c.logger.error("Code verification failed");
+			c.context.logger.error("Code verification failed");
 			throw new APIError("UNAUTHORIZED");
 		}
 
@@ -39,11 +45,11 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		const { callbackURL, currentURL } = parseState(c.query.state);
 		if (!callbackURL) {
-			c.logger.error("Callback URL not found");
+			c.context.logger.error("Callback URL not found");
 			throw new APIError("FORBIDDEN");
 		}
 		//find user in db
-		const dbUser = await c.internalAdapter.findUserByEmail(user.email);
+		const dbUser = await c.context.internalAdapter.findUserByEmail(user.email);
 		let userId = dbUser?.user.id;
 		if (dbUser) {
 			//check if user has already linked this provider
@@ -51,14 +57,14 @@ export const callbackOAuth = createAuthEndpoint(
 				(a) => a.providerId === provider.id,
 			);
 			if (!hasBeenLinked && !user.emailVerified) {
-				c.logger.error("User already exists");
+				c.context.logger.error("User already exists");
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "user_already_exists");
 				throw c.redirect(url.toString());
 			}
 
 			if (!hasBeenLinked && user.emailVerified) {
-				await c.internalAdapter.linkAccount({
+				await c.context.internalAdapter.linkAccount({
 					providerId: provider.id,
 					accountId: user.id,
 					id: `${provider.id}:${user.id}`,
@@ -68,7 +74,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				await c.internalAdapter.createOAuthUser(user, {
+				await c.context.internalAdapter.createOAuthUser(user, {
 					...tokens,
 					id: `${provider.id}:${user.id}`,
 					providerId: provider.id,
@@ -87,16 +93,16 @@ export const callbackOAuth = createAuthEndpoint(
 		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR");
 
 		//create session
-		const session = await c.internalAdapter.createSession(userId);
+		const session = await c.context.internalAdapter.createSession(userId);
 		try {
 			await c.setSignedCookie(
-				c.authCookies.sessionToken.name,
+				c.context.authCookies.sessionToken.name,
 				session.id,
-				c.options.secret,
-				c.authCookies.sessionToken.options,
+				c.context.options.secret,
+				c.context.authCookies.sessionToken.options,
 			);
 		} catch (e) {
-			c.logger.error("Unable to set session cookie", e);
+			c.context.logger.error("Unable to set session cookie", e);
 			const url = new URL(currentURL || callbackURL);
 			url.searchParams.set("error", "unable_to_create_session");
 			throw c.redirect(url.toString());

@@ -22,15 +22,18 @@ export const router = <C extends AuthContext>(ctx: C) => {
 		{} as Record<string, any>,
 	);
 
-	const providerEndpoints = ctx.options.providers.reduce((acc, provider) => {
-		if (provider.type === "custom") {
-			return {
-				...acc,
-				...provider.endpoints,
-			};
-		}
-		return acc;
-	});
+	const providerEndpoints = ctx.options.providers?.reduce(
+		(acc, provider) => {
+			if (provider.type === "custom") {
+				return {
+					...acc,
+					...provider.endpoints,
+				};
+			}
+			return acc;
+		},
+		{} as Record<string, any>,
+	);
 
 	const baseEndpoints = {
 		signInOAuth,

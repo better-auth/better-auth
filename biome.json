@@ -5,7 +5,22 @@
 		"indentStyle": "tab"
 	},
 	"linter": {
-		"enabled": false
+		"enabled": true,
+		"rules": {
+			"recommended": false,
+			"suspicious": {
+				"noImplicitAnyLet": "warn",
+				"noDuplicateObjectKeys": "warn"
+			},
+			"performance": {
+				"noDelete": "error"
+			},
+			"complexity": {
+				"noForEach": "warn",
+				"noUselessSwitchCase": "warn",
+				"noUselessTypeConstraint": "warn"
+			}
+		}
 	},
 	"files": {
 		"ignore": [

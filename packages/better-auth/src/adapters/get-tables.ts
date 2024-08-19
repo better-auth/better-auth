@@ -9,7 +9,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			...schema,
 		};
 	}, {});
-	const providerSchema = options.providers.reduce((acc, provider) => {
+	const providerSchema = options.providers?.reduce((acc, provider) => {
 		const schema = provider.schema;
 		return {
 			...acc,
@@ -34,6 +34,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				},
 				image: {
 					type: "string",
+					required: false,
 				},
 				createdAt: {
 					type: "date",
