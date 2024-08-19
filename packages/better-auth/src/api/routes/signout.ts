@@ -1,9 +1,15 @@
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
 export const signOut = createAuthEndpoint(
 	"/signout",
 	{
 		method: "POST",
+		body: z
+			.object({
+				callbackURL: z.string().optional(),
+			})
+			.optional(),
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(
@@ -17,6 +23,11 @@ export const signOut = createAuthEndpoint(
 		ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 			maxAge: 0,
 		});
-		return ctx.json(null);
+		return ctx.json(null, {
+			body: {
+				redirect: !!ctx.body?.callbackURL,
+				url: ctx.body?.callbackURL,
+			},
+		});
 	},
 );

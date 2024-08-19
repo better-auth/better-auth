@@ -24,23 +24,9 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	>;
 	const { handler, endpoints } = router(authContext);
 	type Endpoint = typeof endpoints;
-
-	let api: Record<string, any> = {};
-	for (const [key, value] of Object.entries(endpoints)) {
-		api[key] = (ctx: any) => {
-			//@ts-ignore
-			return value({
-				...ctx,
-				context: {
-					...authContext,
-					...ctx.context,
-				},
-			});
-		};
-	}
 	return {
 		handler,
-		api: api as Endpoint & PluginEndpoint & ProviderEndpoint,
+		api: endpoints as Endpoint & PluginEndpoint & ProviderEndpoint,
 		options,
 	};
 };

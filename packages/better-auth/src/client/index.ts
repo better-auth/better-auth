@@ -15,8 +15,7 @@ import {
 	OAuthProviderList,
 } from "../types/provider";
 import { UnionToIntersection } from "../types/helper";
-import { Context, Endpoint, Prettify } from "better-call";
-import { HasRequiredKeys } from "type-fest";
+import { Prettify } from "better-call";
 
 const redirectPlugin = {
 	id: "redirect",
@@ -25,6 +24,7 @@ const redirectPlugin = {
 		onSuccess(context) {
 			if (context.data?.url && context.data?.redirect) {
 				console.log("redirecting to", context.data.url);
+				window.location.href = context.data.url;
 			}
 		},
 	},

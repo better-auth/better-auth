@@ -12,59 +12,41 @@ export const signUpCredential = createAuthEndpoint(
 			email: z.string().email(),
 			password: z.string(),
 			image: z.string().optional(),
+			callbackUrl: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.enabled) {
-			return ctx.json(
-				{
+			return ctx.json(null, {
+				status: 400,
+				body: {
 					message: "Email and password is not enabled",
 				},
-				{
-					status: 400,
-				},
-			);
+			});
 		}
 		const { name, email, password, image } = ctx.body;
 		const minPasswordLength =
 			ctx.context.options?.emailAndPassword?.minPasswordLength || 8;
 		if (password.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			return ctx.json(
-				{ message: "Password is too short" },
-				{
-					status: 400,
-				},
-			);
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Password is too short" },
+			});
 		}
+		const argon2id = new Argon2id();
 		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+		/**
+		 * hash first to avoid timing attacks
+		 */
+		const hash = await argon2id.hash(password);
 		if (dbUser?.user) {
-			const isLinked = dbUser.accounts.find(
-				(a) => a.providerId === "credential",
-			);
-			if (isLinked) {
-				const session = await ctx.context.internalAdapter.createSession(
-					dbUser.user.id,
-				);
-				await ctx.setSignedCookie(
-					ctx.context.authCookies.sessionToken.name,
-					session.id,
-					ctx.context.options.secret,
-					ctx.context.authCookies.sessionToken.options,
-				);
-				return ctx.json({
-					user: dbUser.user,
-					session,
-				});
-			}
-			return ctx.json(
-				{
+			return ctx.json(null, {
+				status: 400,
+				body: {
 					message: "User already exists",
 				},
-				{
-					status: 400,
-				},
-			);
+			});
 		}
 		const createdUser = await ctx.context.internalAdapter.createUser({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
@@ -78,8 +60,6 @@ export const signUpCredential = createAuthEndpoint(
 		/**
 		 * Link the account to the user
 		 */
-		const argon2id = new Argon2id();
-		const hash = await argon2id.hash(password);
 		await ctx.context.internalAdapter.linkAccount({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 			userId: createdUser.id,
@@ -96,6 +76,9 @@ export const signUpCredential = createAuthEndpoint(
 			ctx.context.options.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
+		if (ctx.body.callbackUrl) {
+			throw ctx.redirect(ctx.body.callbackUrl);
+		}
 		return ctx.json({
 			user: createdUser,
 			session,

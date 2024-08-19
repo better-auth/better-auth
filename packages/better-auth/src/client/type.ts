@@ -5,9 +5,14 @@ import {
 	HasRequiredKeys,
 	UnionToIntersection,
 } from "../types/helper";
+import { BetterFetchResponse } from "@better-fetch/fetch";
 
 export type Ctx<C extends Context<any, any>> = Prettify<
-	(C["body"] extends Record<string, any> ? C["body"] : {}) &
+	(C["body"] extends Record<string, any>
+		? {
+				body: C["body"];
+			}
+		: {}) &
 		(C["params"] extends Record<string, any>
 			? {
 					params: C["params"];
@@ -42,7 +47,7 @@ export type InferActions<Actions> = Actions extends {
 										...data: HasRequiredKeys<C> extends true
 											? [Ctx<Prettify<C>>]
 											: [Ctx<Prettify<C>>?]
-									) => R
+									) => Promise<BetterFetchResponse<Awaited<R>>>
 								: never
 							: never;
 					}

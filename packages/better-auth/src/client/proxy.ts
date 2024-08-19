@@ -9,16 +9,44 @@ function fromCamelCase(str: string) {
 	return `/${path}`;
 }
 
+const knownCases = [
+	["sign", "in"],
+	["sign", "up"],
+];
+
 /**
  * Handles edge cases like signInCredential and
  * signUpCredential
  */
 function handleEdgeCases(str: string) {
-	const splits = str.split("/");
-	if (splits[0] === "sign" && (splits[1] === "in" || splits[1] === "up")) {
-		splits[1] === "in" ? "signIn" : "signUp";
+	const splits = str.split("/").filter((s) => s);
+	let index = 0;
+	for (const path of splits) {
+		const secondPath = splits[index + 1]?.trim();
+		if (secondPath) {
+			const isKnownCase = knownCases.some(
+				([a, b]) => a === path && b === secondPath,
+			);
+			if (isKnownCase) {
+				splits[index] = `${path}-${secondPath}`;
+				splits.splice(1, index + 1);
+			}
+		}
 	}
 	return splits.join("/");
+}
+
+const knownPathMethods: Record<string, "POST" | "GET"> = {};
+
+function getMethod(path: string, args?: BetterFetchOption) {
+	const method = knownPathMethods[path];
+	if (method) {
+		return method;
+	}
+	if (args?.body) {
+		return "POST";
+	}
+	return "GET";
 }
 
 export function getProxy(actions: Record<string, any>, client: any) {
@@ -40,7 +68,7 @@ export function getProxy(actions: Record<string, any>, client: any) {
 				}
 				return client(key as "/signin/oauth", {
 					...(args || {}),
-					method: args?.body ? "POST" : "GET",
+					method: getMethod(key, args),
 				});
 			};
 		},

@@ -28,7 +28,7 @@ export const createAuthEndpoint = createEndpointCreator({
 		optionsMiddleware,
 		createAuthMiddleware(async (ctx) => {
 			if (
-				"autoMigrate" in ctx.context.options.database &&
+				"autoMigrate" in ctx.context?.options.database &&
 				ctx.context.options.database.autoMigrate
 			) {
 				const { noMigration } = await getMigrations(ctx.context.options, false);

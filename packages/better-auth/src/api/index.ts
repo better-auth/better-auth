@@ -49,8 +49,24 @@ export const router = <C extends AuthContext>(ctx: C) => {
 		...providerEndpoints,
 		...pluginEndpoints,
 	};
-
-	return createRouter(endpoints as typeof baseEndpoints, {
+	let api: Record<string, any> = {};
+	for (const [key, value] of Object.entries(endpoints)) {
+		api[key] = (context: any) => {
+			//@ts-ignore
+			return value({
+				...context,
+				context: {
+					...ctx,
+					...context.context,
+				},
+			});
+		};
+		api[key].path = value.path;
+		api[key].method = value.method;
+		api[key].options = value.options;
+		api[key].headers = value.headers;
+	}
+	return createRouter(api as typeof baseEndpoints, {
 		extraContext: ctx,
 		basePath: ctx.options.basePath,
 		routerMiddleware: [
@@ -59,5 +75,8 @@ export const router = <C extends AuthContext>(ctx: C) => {
 				middleware: csrfMiddleware,
 			},
 		],
+		onError(e) {
+			// ctx.logger.error(e);
+		},
 	});
 };

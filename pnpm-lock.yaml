@@ -168,8 +168,8 @@ importers:
         specifier: ^1.9.2
         version: 1.9.2
       better-call:
-        specifier: ^0.1.14
-        version: 0.1.14(typescript@5.5.4)
+        specifier: ^0.1.20
+        version: 0.1.20(typescript@5.5.4)
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
@@ -1576,8 +1576,8 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
-  better-call@0.1.14:
-    resolution: {integrity: sha512-okkbVX4KsbuQlp7/bRQ17ZRDqI6JIE65n/+auEb8k8/svNmymXAsbTheDHS8HYa7KEsA7QRYAct2ww0sgfgcJA==}
+  better-call@0.1.20:
+    resolution: {integrity: sha512-IEw2rU5ViT/yaZKY51tEl6QGeB3JTUhpAQKoTKbkNYqweFh9xmfNFYOja7v25G+OqrV6j6GPYyD5FqUBqtTHlg==}
     peerDependencies:
       typescript: ^5.0.0
 
@@ -4100,7 +4100,7 @@ snapshots:
       rou3: 0.5.1
       typescript: 5.5.4
 
-  better-call@0.1.14(typescript@5.5.4):
+  better-call@0.1.20(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       '@types/set-cookie-parser': 2.4.10

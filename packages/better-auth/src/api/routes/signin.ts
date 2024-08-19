@@ -65,7 +65,6 @@ export const signInOAuth = createAuthEndpoint(
 					redirect: true,
 				};
 			} catch (e) {
-				console.log(e);
 				throw new APIError("INTERNAL_SERVER_ERROR");
 			}
 		}
@@ -80,22 +79,27 @@ export const signInCredential = createAuthEndpoint(
 		body: z.object({
 			email: z.string().email(),
 			password: z.string(),
+			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
 			ctx.context.logger.error("Email and password is not enabled");
-			return ctx.json({
-				message: "Email and password is not enabled",
+			return ctx.json(null, {
+				body: {
+					message: "Email and password is not enabled",
+				},
 				status: 400,
 			});
 		}
 		const { email, password } = ctx.body;
+		const argon2id = new Argon2id();
+		await argon2id.hash(password);
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
-			ctx.context.logger.error("User not found");
+			ctx.context.logger.error("User not found", { email });
 			return ctx.json(null, {
-				status: 400,
+				status: 401,
 			});
 		}
 		const credentialAccount = user.accounts.find(
@@ -103,25 +107,19 @@ export const signInCredential = createAuthEndpoint(
 		);
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
-			ctx.context.logger.error("Password not found");
-			return ctx.json(
-				{ message: "unexpected error" },
-				{
-					status: 400,
-				},
-			);
+			ctx.context.logger.error("Password not found", { email });
+			return ctx.json(null, {
+				status: 401,
+				body: { message: "Unexpected error" },
+			});
 		}
-		const argon2id = new Argon2id();
-		const hash = await argon2id.hash(password);
-		const validPassword = await argon2id.verify(hash, password);
+		const validPassword = await argon2id.verify(currentPassword, password);
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
-			return ctx.json(
-				{ message: "Invalid email or password" },
-				{
-					status: 400,
-				},
-			);
+			return ctx.json(null, {
+				status: 401,
+				body: { message: "Invalid email or password" },
+			});
 		}
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
@@ -132,9 +130,19 @@ export const signInCredential = createAuthEndpoint(
 			ctx.context.options.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
-		return ctx.json({
-			user: user.user,
-			session,
-		});
+		return ctx.json(
+			{
+				user: user.user,
+				session,
+			},
+			{
+				body: {
+					user,
+					session,
+					redirect: !!ctx.body.callbackURL,
+					url: ctx.body.callbackURL,
+				},
+			},
+		);
 	},
 );

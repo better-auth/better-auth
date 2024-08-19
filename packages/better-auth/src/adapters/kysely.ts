@@ -20,7 +20,6 @@ function convertWhere(w?: Where[]) {
 		.reduce(
 			(acc, w) =>
 				({
-					// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 					...acc,
 					[w.field]: w.value,
 				}) as any,
@@ -31,7 +30,6 @@ function convertWhere(w?: Where[]) {
 		.reduce(
 			(acc, w) =>
 				({
-					// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 					...acc,
 					[w.field]: w.value,
 				}) as any,
@@ -123,7 +121,6 @@ export const kyselyAdapter = (
 					? select.reduce((acc, cur) => {
 							if (res?.[cur]) {
 								return {
-									// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 									...acc,
 									[cur]: res[cur],
 								};
@@ -152,7 +149,6 @@ export const kyselyAdapter = (
 					? select.reduce((acc, cur) => {
 							if (res?.[cur]) {
 								return {
-									// biome-ignore lint/performance/noAccumulatingSpread: <explanation>
 									...acc,
 									[cur]: res[cur],
 								};
