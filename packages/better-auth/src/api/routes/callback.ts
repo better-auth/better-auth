@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { parseState } from "../../utils/state";
 import { userSchema } from "../../adapters/schema";
-import { csrfMiddleware } from "../middlewares/csrf";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -44,7 +43,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw new APIError("FORBIDDEN");
 		}
 		//find user in db
-		const dbUser = await c.internalAdapter.findOAuthUserByEmail(user.email);
+		const dbUser = await c.internalAdapter.findUserByEmail(user.email);
 		let userId = dbUser?.user.id;
 		if (dbUser) {
 			//check if user has already linked this provider

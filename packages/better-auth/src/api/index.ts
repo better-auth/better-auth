@@ -1,27 +1,60 @@
 import { createRouter } from "better-call";
-import { signInOAuth, callbackOAuth, getSession, signOut } from "./routes";
+import {
+	signInOAuth,
+	callbackOAuth,
+	getSession,
+	signOut,
+	signInCredential,
+} from "./routes";
 import { AuthContext } from "../init";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { getCSRFToken } from "./routes/csrf";
+import { signUpCredential } from "./routes/signup";
 
-export const router = (ctx: AuthContext) => {
-	return createRouter(
-		{
-			signInOAuth,
-			callbackOAuth,
-			getCSRFToken,
-			getSession,
-			signOut,
+export const router = <C extends AuthContext>(ctx: C) => {
+	const pluginEndpoints = ctx.options.plugins?.reduce(
+		(acc, plugin) => {
+			return {
+				...acc,
+				...plugin.endpoints,
+			};
 		},
-		{
-			extraContext: ctx,
-			basePath: ctx.options.basePath,
-			routerMiddleware: [
-				{
-					path: "/**",
-					middleware: csrfMiddleware,
-				},
-			],
-		},
+		{} as Record<string, any>,
 	);
+
+	const providerEndpoints = ctx.options.providers.reduce((acc, provider) => {
+		if (provider.type === "custom") {
+			return {
+				...acc,
+				...provider.endpoints,
+			};
+		}
+		return acc;
+	});
+
+	const baseEndpoints = {
+		signInOAuth,
+		callbackOAuth,
+		getCSRFToken,
+		getSession,
+		signOut,
+		signUpCredential,
+		signInCredential,
+	};
+	const endpoints = {
+		...baseEndpoints,
+		...providerEndpoints,
+		...pluginEndpoints,
+	};
+
+	return createRouter(endpoints as typeof baseEndpoints, {
+		extraContext: ctx,
+		basePath: ctx.options.basePath,
+		routerMiddleware: [
+			{
+				path: "/**",
+				middleware: csrfMiddleware,
+			},
+		],
+	});
 };

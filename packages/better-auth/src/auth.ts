@@ -3,28 +3,10 @@ import { BetterAuthOptions } from "./types/options";
 import { UnionToIntersection } from "type-fest";
 import { Plugin } from "./types/plugins";
 import { init } from "./init";
+import { CustomProvider } from "./providers";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
-			return {
-				...acc,
-				...plugin.endpoints,
-			};
-		},
-		{} as Record<string, any>,
-	);
-
 	const authContext = init(options);
-
-	const { handler, endpoints } = router(authContext);
-	type Endpoint = typeof endpoints;
-
-	const api = {
-		...endpoints,
-		...pluginEndpoints,
-	};
-
 	type PluginEndpoint = UnionToIntersection<
 		O["plugins"] extends Array<infer T>
 			? T extends Plugin
@@ -32,9 +14,19 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				: {}
 			: {}
 	>;
+
+	type ProviderEndpoint = UnionToIntersection<
+		O["providers"] extends Array<infer T>
+			? T extends CustomProvider
+				? T["endpoints"]
+				: {}
+			: {}
+	>;
+	const { handler, endpoints } = router(authContext);
+	type Endpoint = typeof endpoints;
 	return {
 		handler,
-		api: Object.entries(api).reduce(
+		api: Object.entries(endpoints).reduce(
 			(acc, [key, value]) => {
 				acc[key] = (ctx: any) => {
 					//@ts-ignore
@@ -46,7 +38,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				return acc;
 			},
 			{} as Record<string, any>,
-		) as Endpoint & PluginEndpoint,
+		) as Endpoint & PluginEndpoint & ProviderEndpoint,
 		options,
 	};
 };

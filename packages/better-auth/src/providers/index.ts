@@ -1,14 +1,14 @@
 import { github } from "./github";
 import { google } from "./google";
 
-export const providers = {
+export const oAuthProviders = {
 	github,
 	google,
 };
 
-export const providerList = Object.keys(providers) as [
+export const oAuthProviderList = Object.keys(oAuthProviders) as [
 	"github",
-	...(keyof typeof providers)[],
+	...(keyof typeof oAuthProviders)[],
 ];
 
 export * from "./github";

@@ -1,11 +1,22 @@
 import { ClientOptions } from "./base";
 import { BetterAuth } from "../auth";
-import { InferActions } from "./type";
+import { Ctx, InferActions, InferKeys } from "./type";
 import { getProxy } from "./proxy";
-import { ProviderList } from "../providers";
 import { createClient } from "better-call/client";
-import { betterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
+import {
+	betterFetch,
+	BetterFetchPlugin,
+	createFetch,
+} from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
+import {
+	CustomProvider,
+	OAuthProvider,
+	OAuthProviderList,
+} from "../types/provider";
+import { UnionToIntersection } from "../types/helper";
+import { Context, Endpoint, Prettify } from "better-call";
+import { HasRequiredKeys } from "type-fest";
 
 const redirectPlugin = {
 	id: "redirect",
@@ -86,17 +97,19 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	options?: ClientOptions,
 ) => {
 	type API = BetterAuth["api"];
+
 	const client = createClient<API>({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
+
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
-			? T extends { id: infer Id }
-				? Id
+			? T extends OAuthProvider
+				? T["id"]
 				: never
-			: ProviderList[number];
+			: OAuthProviderList[number];
 		callbackURL: string;
 	}) => {
 		const res = await client("@post/signin/oauth", {
@@ -116,5 +129,31 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		signInOAuth,
 		signOut,
 	};
-	return getProxy(actions, client) as InferActions<Auth> & typeof actions;
+
+	type ProviderEndpoint = UnionToIntersection<
+		Auth["options"]["providers"] extends Array<infer T>
+			? T extends CustomProvider
+				? T["endpoints"]
+				: {}
+			: {}
+	>;
+	type Actions = ProviderEndpoint & Auth["api"];
+
+	type ExcludeCredentialPaths = Auth["options"]["emailAndPassword"] extends {
+		enabled: true;
+	}
+		? ""
+		: "signUpCredential" | "signInCredential";
+
+	type ExcludedPaths =
+		| "signinOauth"
+		| "signUpOauth"
+		| "callback"
+		| "signout"
+		| ExcludeCredentialPaths;
+
+	return getProxy(actions, client) as Prettify<
+		Omit<InferActions<Actions>, ExcludedPaths>
+	> &
+		typeof actions;
 };

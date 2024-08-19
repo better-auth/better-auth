@@ -10,6 +10,10 @@ export const accountSchema = z.object({
 	idToken: z.string().nullable().optional(),
 	accessTokenExpiresAt: z.date().nullable().optional(),
 	refreshTokenExpiresAt: z.date().nullable().optional(),
+	/**
+	 * Password is only stored in the credential provider
+	 */
+	password: z.string().optional().nullable(),
 });
 
 export const userSchema = z.object({
@@ -18,8 +22,8 @@ export const userSchema = z.object({
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().optional(),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.date().default(new Date()),
+	updatedAt: z.date().default(new Date()),
 });
 
 export const sessionSchema = z.object({

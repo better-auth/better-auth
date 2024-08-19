@@ -1,5 +1,4 @@
 import { betterAuth } from "../auth";
-import { createFieldAttribute } from "../db/field";
 import { github, google } from "../providers";
 import { Server } from "bun";
 import { beforeAll, afterAll } from "bun:test";

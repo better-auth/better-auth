@@ -1,39 +1,26 @@
 import { Context, Endpoint } from "better-call";
-import { CamelCase, HasRequiredKeys, UnionToIntersection } from "type-fest";
-import { Prettify } from "../types/helper";
-import { BetterAuth } from "../auth";
+import { CamelCase } from "type-fest";
+import {
+	Prettify,
+	HasRequiredKeys,
+	UnionToIntersection,
+} from "../types/helper";
 
-type Ctx<C extends Context<any, any>> = (C["body"] | {}) &
-	(C["params"] extends Record<string, any>
-		? {
-				params: C["params"];
-			}
-		: {}) &
-	(C["query"] extends Record<string, any>
-		? {
-				query: C["query"];
-			}
-		: {});
+export type Ctx<C extends Context<any, any>> = Prettify<
+	(C["body"] extends Record<string, any> ? C["body"] : {}) &
+		(C["params"] extends Record<string, any>
+			? {
+					params: C["params"];
+				}
+			: {}) &
+		(C["query"] extends Record<string, any>
+			? {
+					query: C["query"];
+				}
+			: {})
+>;
 
-type Options<API extends Record<string, any>> = API extends {
-	[key: string]: infer T;
-}
-	? T extends Endpoint
-		? {
-				[key in InferKeys<T["path"]>]: T extends (ctx: infer C) => infer R
-					? C extends Context<any, any>
-						? (
-								...data: HasRequiredKeys<Ctx<C>> extends true
-									? [Ctx<C>]
-									: [Ctx<C>?]
-							) => R
-						: never
-					: never;
-			}
-		: {}
-	: {};
-
-type InferKeys<T> = T extends `/${infer A}/${infer B}`
+export type InferKeys<T> = T extends `/${infer A}/${infer B}`
 	? CamelCase<`${A}-${InferKeys<B>}`>
 	: T extends `${infer I}/:${infer _}`
 		? I
@@ -41,15 +28,24 @@ type InferKeys<T> = T extends `/${infer A}/${infer B}`
 			? I
 			: T extends `/${infer I}`
 				? I
-				: never;
+				: T;
 
-export type ExcludedPaths =
-	| "signinOauth"
-	| "signUpOauth"
-	| "callback"
-	| "signout";
-
-export type InferActions<Auth extends BetterAuth = BetterAuth> = Omit<
-	Prettify<UnionToIntersection<Options<Auth["api"]>>>,
-	ExcludedPaths
->;
+export type InferActions<Actions> = Actions extends {
+	[key: string]: infer T;
+}
+	? UnionToIntersection<
+			T extends Endpoint
+				? {
+						[key in InferKeys<T["path"]>]: T extends (ctx: infer C) => infer R
+							? C extends Context<any, any>
+								? (
+										...data: HasRequiredKeys<C> extends true
+											? [Ctx<Prettify<C>>]
+											: [Ctx<Prettify<C>>?]
+									) => R
+								: never
+							: never;
+					}
+				: never
+		>
+	: never;

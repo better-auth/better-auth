@@ -4,10 +4,11 @@ import {
 	Tokens,
 } from "arctic";
 import { LiteralString } from "./helper";
-import { providerList } from "../providers";
+import { oAuthProviderList } from "../providers";
 import { User } from "../adapters/schema";
 import { FieldAttribute } from "../db";
 import { Migration } from "kysely";
+import { AuthEndpoint } from "../api/call";
 
 export interface BaseProvider {
 	id: LiteralString;
@@ -44,9 +45,11 @@ export interface OAuthProvider extends BaseProvider {
 
 export interface CustomProvider extends BaseProvider {
 	type: "custom";
-	provider: CustomProvider;
+	endpoints: {
+		[key: string]: AuthEndpoint;
+	};
 }
 
 export type Provider = OAuthProvider | CustomProvider;
 
-export type ProviderList = typeof providerList;
+export type OAuthProviderList = typeof oAuthProviderList;

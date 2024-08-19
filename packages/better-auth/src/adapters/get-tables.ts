@@ -17,6 +17,8 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 		};
 	}, {});
 	return {
+		...providerSchema,
+		...pluginSchema,
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
@@ -96,10 +98,12 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "date",
 					required: false,
 				},
+				password: {
+					type: "string",
+					required: false,
+				},
 			},
 		},
-		...pluginSchema,
-		...providerSchema,
 	} satisfies Record<
 		string,
 		{

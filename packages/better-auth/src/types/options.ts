@@ -104,4 +104,27 @@ export interface BetterAuthOptions {
 	account?: {
 		modelName?: string;
 	};
+	/**
+	 * Email and password authentication
+	 */
+	emailAndPassword?: {
+		/**
+		 * Enable email and password authentication
+		 *
+		 * @default false
+		 */
+		enabled: boolean;
+		/**
+		 * The minimum length of the password.
+		 *
+		 * @default 8
+		 */
+		maxPasswordLength?: number;
+		/**
+		 * The maximum length of the password.
+		 *
+		 * @default 32
+		 */
+		minPasswordLength?: number;
+	};
 }

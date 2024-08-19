@@ -13,4 +13,7 @@ export const auth = betterAuth({
 		url: "./prisma/db.sqlite",
 	},
 	secret: "better-auth-secret.1234567890",
+	emailAndPassword: {
+		enabled: true,
+	},
 });

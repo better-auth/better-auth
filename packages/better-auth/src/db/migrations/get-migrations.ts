@@ -14,6 +14,7 @@ import { createKyselyAdapter, getDatabaseType } from "../../adapters/kysely";
 import { FieldAttribute } from "../field";
 import { migrationTableName } from ".";
 import { getAuthTables } from "../../adapters/get-tables";
+
 export const BaseModels = ["session", "account", "user"];
 
 async function findAllMigrations(db: Kysely<any>) {

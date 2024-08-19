@@ -9,6 +9,18 @@ function fromCamelCase(str: string) {
 	return `/${path}`;
 }
 
+/**
+ * Handles edge cases like signInCredential and
+ * signUpCredential
+ */
+function handleEdgeCases(str: string) {
+	const splits = str.split("/");
+	if (splits[0] === "sign" && (splits[1] === "in" || splits[1] === "up")) {
+		splits[1] === "in" ? "signIn" : "signUp";
+	}
+	return splits.join("/");
+}
+
 export function getProxy(actions: Record<string, any>, client: any) {
 	return new Proxy(actions, {
 		get(target, key) {
@@ -17,6 +29,7 @@ export function getProxy(actions: Record<string, any>, client: any) {
 			}
 			return (args?: BetterFetchOption) => {
 				key = fromCamelCase(key as string);
+				key = handleEdgeCases(key);
 				if (args?.params) {
 					const paramPlaceholder = Object.keys(args?.params)
 						.map((key) => `:${key}`)

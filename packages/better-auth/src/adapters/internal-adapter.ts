@@ -31,6 +31,13 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
+		createUser: async (user: User) => {
+			const createdUser = await adapter.create<User>({
+				model: tables.user.tableName,
+				data: user,
+			});
+			return createdUser;
+		},
 		createSession: async (userId: string) => {
 			const data = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
@@ -123,7 +130,7 @@ export const createInternalAdapter = (
 			});
 			return session;
 		},
-		findOAuthUserByEmail: async (email: string) => {
+		findUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
 				where: [
