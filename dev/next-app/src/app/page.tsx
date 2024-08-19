@@ -1,3 +1,4 @@
+import { Client } from "@/components/client";
 import { SignOut } from "@/components/signout";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,7 @@ export default async function Home() {
 					<Button>signin</Button>
 				</Link>
 			)}
+			<Client />
 		</main>
 	);
 }

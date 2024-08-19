@@ -6,6 +6,8 @@ export default defineConfig({
 		provider: "./src/providers/index.ts",
 		client: "./src/client/index.ts",
 		cli: "./src/cli/index.ts",
+		react: "./src/client/react.ts",
+		plugins: "./src/plugins/index.ts",
 	},
 	splitting: false,
 	sourcemap: true,

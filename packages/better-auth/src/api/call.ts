@@ -10,7 +10,7 @@ import { AuthContext } from "../init";
 import { getMigrations } from "../db/migrations/get-migrations";
 import { migrateAll } from "../db/migrations";
 
-const optionsMiddleware = createMiddleware(async (ctx) => {
+export const optionsMiddleware = createMiddleware(async (ctx) => {
 	/**
 	 * This will be passed on the instance of
 	 * the context. Used to infer the type

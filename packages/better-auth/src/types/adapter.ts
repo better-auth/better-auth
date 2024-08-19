@@ -17,7 +17,7 @@ export type Where = {
 export interface Adapter {
 	create: <T, R = T>(data: {
 		model: string;
-		data: Record<string, any>;
+		data: T;
 		select?: string[];
 	}) => Promise<R>;
 	findOne: <T>(data: {

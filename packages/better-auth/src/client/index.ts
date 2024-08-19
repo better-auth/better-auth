@@ -12,6 +12,9 @@ import {
 } from "../types/provider";
 import { UnionToIntersection } from "../types/helper";
 import { Prettify } from "better-call";
+import { atom, computed, task } from "nanostores";
+import { FieldAttribute, InferFieldOutput, InferValueType } from "../db";
+import { Session, User } from "../adapters/schema";
 
 const redirectPlugin = {
 	id: "redirect",
@@ -93,13 +96,11 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	options?: ClientOptions,
 ) => {
 	type API = BetterAuth["api"];
-
 	const client = createClient<API>({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
-
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
 			? T extends OAuthProvider
@@ -116,11 +117,9 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		}
 		return res;
 	};
-
 	const actions = {
 		signInOAuth,
 	};
-
 	type ProviderEndpoint = UnionToIntersection<
 		Auth["options"]["providers"] extends Array<infer T>
 			? T extends CustomProvider
@@ -140,10 +139,45 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		| "signinOauth"
 		| "signUpOauth"
 		| "callback"
+		| "session"
 		| ExcludeCredentialPaths;
 
-	return getProxy(actions, client) as Prettify<
+	const $signal = atom<boolean>(false);
+
+	type AdditionalSessionFields = Auth["options"]["plugins"] extends Array<
+		infer T
+	>
+		? T extends {
+				schema: {
+					session: {
+						fields: infer Field;
+					};
+				};
+			}
+			? Field extends Record<string, FieldAttribute>
+				? InferFieldOutput<Field>
+				: {}
+			: {}
+		: {};
+
+	const $session = computed($signal, () =>
+		task(async () => {
+			const session = await client("/session", {
+				credentials: "include",
+				method: "GET",
+			});
+			return session.data as {
+				user: User;
+				session: Prettify<Session & AdditionalSessionFields>;
+			} | null;
+		}),
+	);
+	const proxy = getProxy(actions, client) as Prettify<
 		Omit<InferActions<Actions>, ExcludedPaths>
 	> &
 		typeof actions;
+	return {
+		...proxy,
+		$session,
+	};
 };

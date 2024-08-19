@@ -42,7 +42,7 @@ export const createInternalAdapter = (
 			const data = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
-				expiresAt: Date.now() + sessionExpiration,
+				expiresAt: getDate(sessionExpiration),
 			};
 			const session = adapter.create<Session>({
 				model: tables.session.tableName,
@@ -154,6 +154,18 @@ export const createInternalAdapter = (
 				user,
 				accounts,
 			};
+		},
+		findUserById: async (userId: string) => {
+			const user = await adapter.findOne<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			});
+			return user;
 		},
 		linkAccount: async (account: Account) => {
 			const _account = await adapter.create<Account>({

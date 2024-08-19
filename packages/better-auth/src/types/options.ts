@@ -54,9 +54,6 @@ export interface BetterAuthOptions {
 		 */
 		disableCSRFCheck?: boolean;
 	};
-	organization?: {
-		enabled: true;
-	};
 	/**
 	 * Disable logging
 	 *
