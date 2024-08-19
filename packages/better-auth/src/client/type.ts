@@ -7,24 +7,6 @@ import {
 } from "../types/helper";
 import { BetterFetchResponse } from "@better-fetch/fetch";
 
-export type Ctx<C extends Context<any, any>> = Prettify<
-	(C["body"] extends Record<string, any>
-		? {
-				body: C["body"];
-			}
-		: {}) &
-		(C["params"] extends Record<string, any>
-			? {
-					params: C["params"];
-				}
-			: {}) &
-		(C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
-				}
-			: {})
->;
-
 export type InferKeys<T> = T extends `/${infer A}/${infer B}`
 	? CamelCase<`${A}-${InferKeys<B>}`>
 	: T extends `${infer I}/:${infer _}`
@@ -32,8 +14,8 @@ export type InferKeys<T> = T extends `/${infer A}/${infer B}`
 		: T extends `${infer I}:${infer _}`
 			? I
 			: T extends `/${infer I}`
-				? I
-				: T;
+				? CamelCase<I>
+				: CamelCase<T>;
 
 export type InferActions<Actions> = Actions extends {
 	[key: string]: infer T;
@@ -45,8 +27,8 @@ export type InferActions<Actions> = Actions extends {
 							? C extends Context<any, any>
 								? (
 										...data: HasRequiredKeys<C> extends true
-											? [Ctx<Prettify<C>>]
-											: [Ctx<Prettify<C>>?]
+											? [Prettify<C>]
+											: [Prettify<C>?]
 									) => Promise<BetterFetchResponse<Awaited<R>>>
 								: never
 							: never;

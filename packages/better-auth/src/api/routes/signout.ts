@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
 export const signOut = createAuthEndpoint(
-	"/signout",
+	"/sign-out",
 	{
 		method: "POST",
 		body: z

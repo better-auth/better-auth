@@ -12,6 +12,7 @@ function fromCamelCase(str: string) {
 const knownCases = [
 	["sign", "in"],
 	["sign", "up"],
+	["sign", "out"],
 ];
 
 /**
@@ -36,7 +37,9 @@ function handleEdgeCases(str: string) {
 	return splits.join("/");
 }
 
-const knownPathMethods: Record<string, "POST" | "GET"> = {};
+const knownPathMethods: Record<string, "POST" | "GET"> = {
+	"/sign-out": "POST",
+};
 
 function getMethod(path: string, args?: BetterFetchOption) {
 	const method = knownPathMethods[path];

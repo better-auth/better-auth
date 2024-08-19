@@ -7,7 +7,11 @@ export const SignOut = () => {
 	return (
 		<Button
 			onClick={async () => {
-				await authClient.signOut();
+				await authClient.signOut({
+					body: {
+						callbackURL: "/"
+					}
+				})
 			}}
 		>
 			Sign Out

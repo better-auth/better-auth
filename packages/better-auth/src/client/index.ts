@@ -1,13 +1,9 @@
 import { ClientOptions } from "./base";
 import { BetterAuth } from "../auth";
-import { Ctx, InferActions, InferKeys } from "./type";
+import { InferActions } from "./type";
 import { getProxy } from "./proxy";
 import { createClient } from "better-call/client";
-import {
-	betterFetch,
-	BetterFetchPlugin,
-	createFetch,
-} from "@better-fetch/fetch";
+import { betterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
 import {
 	CustomProvider,
@@ -121,13 +117,8 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		return res;
 	};
 
-	const signOut = async () => {
-		return await client("@post/signout", {});
-	};
-
 	const actions = {
 		signInOAuth,
-		signOut,
 	};
 
 	type ProviderEndpoint = UnionToIntersection<
@@ -149,7 +140,6 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		| "signinOauth"
 		| "signUpOauth"
 		| "callback"
-		| "signout"
 		| ExcludeCredentialPaths;
 
 	return getProxy(actions, client) as Prettify<
