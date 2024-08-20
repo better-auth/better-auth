@@ -10,21 +10,21 @@ export const createAccessControl = <S extends StatementsPrimitive>(
 export const defaultStatements = {
 	organization: ["update", "delete"],
 	member: ["create", "update", "delete"],
-	invitation: ["create", "delete"],
+	invitation: ["create", "cancel"],
 } as const;
 
 export const defaultAc = createAccessControl(defaultStatements);
 
 export const adminAc = defaultAc.newRole({
 	organization: ["update"],
-	invitation: ["create", "delete"],
+	invitation: ["create", "cancel"],
 	member: ["create", "update", "delete"],
 });
 
 export const ownerAc = defaultAc.newRole({
 	organization: ["update", "delete"],
 	member: ["create", "update", "delete"],
-	invitation: ["create", "delete"],
+	invitation: ["create", "cancel"],
 });
 
 export const memberAc = defaultAc.newRole({

@@ -1,3 +1,4 @@
+import { Context } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 
 export const getSession = createAuthEndpoint(
@@ -35,3 +36,12 @@ export const getSession = createAuthEndpoint(
 		});
 	},
 );
+
+export const getSessionFromCtx = async (ctx: Context<any, any>) => {
+	const session = await getSession({
+		...ctx,
+		//@ts-expect-error: By default since this request context comes from a router it'll have a `router` flag which force it to be a request object
+		_flag: undefined,
+	});
+	return session;
+};

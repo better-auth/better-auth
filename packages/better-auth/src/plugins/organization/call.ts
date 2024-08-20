@@ -4,6 +4,7 @@ import { OrganizationOptions } from "./organization";
 import { defaultRoles, Role } from "./access";
 import { Session, User } from "../../adapters/schema";
 import { getSession } from "../../api/routes";
+import { sessionMiddleware } from "../../api/middlewares/session";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 	return {} as {
@@ -20,22 +21,20 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
-export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSession({
-		...ctx,
-		//@ts-expect-error: By default since this request context comes from a router it'll have a `router` flag which force it to be a request object
-		_flag: undefined,
-	});
-	console.log({ session });
-	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
-	}
-	return {
-		session: {
-			session: session.session as Session & {
+export const orgSessionMiddleware = createAuthMiddleware(
+	{
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		//@ts-expect-error: fix this later on better-call repo. Session middleware will return session in the context.
+		const session = ctx.context.session as {
+			session: Session & {
 				activeOrganizationId?: string;
-			},
-			user: session.user,
-		},
-	};
-});
+			};
+			user: User;
+		};
+		return {
+			session,
+		};
+	},
+);

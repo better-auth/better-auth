@@ -1,5 +1,6 @@
-import { BetterFetchOption } from "@better-fetch/fetch";
+import { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import { createBaseClient } from "./base";
+import { Atom, PreinitializedWritableAtom } from "nanostores";
 
 function fromCamelCase(str: string) {
 	const path = str
@@ -13,6 +14,13 @@ const knownCases = [
 	["sign", "in"],
 	["sign", "up"],
 	["sign", "out"],
+	["invite", "member"],
+	["update", "member"],
+	["delete", "member"],
+	["accept", "invitation"],
+	["reject", "invitation"],
+	["cancel", "invitation"],
+	["has", "permission"],
 ];
 
 /**
@@ -52,7 +60,13 @@ function getMethod(path: string, args?: BetterFetchOption) {
 	return "GET";
 }
 
-export function getProxy(actions: Record<string, any>, client: any) {
+export function getProxy(
+	actions: Record<string, any>,
+	client: BetterFetch,
+	$signal?: {
+		[key: string]: PreinitializedWritableAtom<boolean>;
+	},
+) {
 	return new Proxy(actions, {
 		get(target, key) {
 			if (key in target) {
@@ -72,6 +86,12 @@ export function getProxy(actions: Record<string, any>, client: any) {
 				return client(key as "/signin/oauth", {
 					...(args || {}),
 					method: getMethod(key, args),
+					onSuccess() {
+						const signal = $signal?.[key as string];
+						if (signal) {
+							signal.set(!signal.get());
+						}
+					},
 				});
 			};
 		},

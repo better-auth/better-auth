@@ -3,16 +3,21 @@ import { User } from "../../adapters/schema";
 import { createAuthEndpoint } from "../../api/call";
 import { Plugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import { createOrganization, updateOrganization } from "./routes/crud-org";
 import {
-	AccessControl,
-	createAccessControl,
-	defaultRoles,
-	defaultStatements,
-	Role,
-} from "./access";
+	createOrganization,
+	listOrganization,
+	updateOrganization,
+} from "./routes/crud-org";
+import { AccessControl, defaultRoles, defaultStatements, Role } from "./access";
 import { getSession } from "../../api/routes";
 import { AuthContext } from "../../init";
+import {
+	acceptInvitation,
+	cancelInvitation,
+	createInvitation,
+	rejectInvitation,
+} from "./routes/crud-invites";
+import { deleteMember, updateMember } from "./routes/crud-members";
 
 export interface OrganizationOptions {
 	/**
@@ -40,7 +45,7 @@ export interface OrganizationOptions {
 	 *
 	 * @default "admin"
 	 */
-	creatorRole?: string;
+	creatorRole?: "admin" | "owner";
 	/**
 	 * The number of memberships a user can have in an organization.
 	 *
@@ -56,14 +61,27 @@ export interface OrganizationOptions {
 	 *
 	 */
 	roles?: {
-		[key: string]: Role<any>;
+		[key in "admin" | "member" | "owner"]?: Role<any>;
 	};
+	/**
+	 * The expiration time for the invitation link.
+	 *
+	 * @default 48 hours
+	 */
+	invitationExpiresIn?: number;
 }
 
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
 		updateOrganization,
+		listOrganization,
+		createInvitation,
+		cancelInvitation,
+		acceptInvitation,
+		rejectInvitation,
+		deleteMember,
+		updateMember,
 	};
 
 	const roles = {
@@ -91,7 +109,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		endpoints: {
 			...api,
 			hasPermission: createAuthEndpoint(
-				"/organization/has-permission",
+				"/has-permission",
 				{
 					method: "GET",
 					query: z.object({
@@ -105,7 +123,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						}>;
 					}>,
 				},
-				async () => {},
+				async () => {
+					const hasPerm = true;
+					return hasPerm;
+				},
 			),
 		},
 		schema: {
@@ -181,20 +202,3 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 	} satisfies Plugin;
 };
-
-const ac = createAccessControl({
-	sales: ["delete"],
-});
-
-const res = organization({
-	ac,
-});
-res.endpoints.hasPermission({
-	query: {
-		permission: {
-			organization: ["delete"],
-			member: ["create"],
-			sales: ["delete"],
-		},
-	},
-});

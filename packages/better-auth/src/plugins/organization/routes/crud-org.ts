@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { User } from "../../../adapters/schema";
-import { getSession } from "../../../api/routes";
 import { getOrgAdapter } from "../adapter";
 import { generateId } from "../../../utils/id";
-import { orgMiddleware, sessionMiddleware } from "../call";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
 
 export const createOrganization = createAuthEndpoint(
-	"/organization/create",
+	"/create/organization",
 	{
 		method: "POST",
 		body: z.object({
@@ -15,7 +13,7 @@ export const createOrganization = createAuthEndpoint(
 			slug: z.string(),
 			userId: z.string().optional(),
 		}),
-		use: [orgMiddleware, sessionMiddleware],
+		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const user = ctx.context.session.user;
@@ -64,7 +62,7 @@ export const createOrganization = createAuthEndpoint(
 );
 
 export const updateOrganization = createAuthEndpoint(
-	"/organization/update",
+	"/update/organization",
 	{
 		method: "POST",
 		body: z.object({
@@ -130,7 +128,7 @@ export const updateOrganization = createAuthEndpoint(
 );
 
 export const deleteOrganization = createAuthEndpoint(
-	"/organization/delete",
+	"/delete/organization",
 	{
 		method: "POST",
 		body: z.object({
@@ -200,14 +198,14 @@ export const deleteOrganization = createAuthEndpoint(
 );
 
 export const getFullOrganization = createAuthEndpoint(
-	"/organization/get",
+	"/get/organization",
 	{
 		method: "GET",
 		body: z.object({
 			orgId: z.string().optional(),
 		}),
 		requireHeaders: true,
-		use: [orgMiddleware, sessionMiddleware],
+		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -231,5 +229,20 @@ export const getFullOrganization = createAuthEndpoint(
 			});
 		}
 		return ctx.json(organization);
+	},
+);
+
+export const listOrganization = createAuthEndpoint(
+	"/list/organization",
+	{
+		method: "GET",
+		use: [orgMiddleware, orgSessionMiddleware],
+	},
+	async (ctx) => {
+		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const organizations = await adapter.listOrganizations(
+			ctx.context.session.user.id,
+		);
+		return ctx.json(organizations);
 	},
 );

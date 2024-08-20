@@ -21,6 +21,7 @@
         "./plugins": "./dist/plugins.js"
     },
     "devDependencies": {
+        "@simplewebauthn/types": "^10.0.0",
         "@types/better-sqlite3": "^7.6.11",
         "@types/pg": "^8.11.6",
         "@types/prompts": "^2.4.9",
@@ -43,6 +44,7 @@
         "@nanostores/react": "^0.7.3",
         "@nanostores/solid": "^0.4.2",
         "@paralleldrive/cuid2": "^2.2.2",
+        "@simplewebauthn/server": "^10.0.1",
         "arctic": "^1.9.2",
         "better-call": "^0.1.20",
         "chalk": "^5.3.0",

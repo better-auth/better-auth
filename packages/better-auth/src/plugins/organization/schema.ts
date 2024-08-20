@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const role = z.enum(["admin", "member", "owner"]);
+export const invitationStatus = z
+	.enum(["pending", "accepted", "rejected", "canceled"])
+	.default("pending");
 export const organizationSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -11,7 +15,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
 	email: z.string(),
-	role: z.string(),
+	role,
 });
 
 export const invitationSchema = z.object({
@@ -19,8 +23,8 @@ export const invitationSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
 	email: z.string(),
-	role: z.string(),
-	status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
+	role,
+	status: invitationStatus,
 	expiresAt: z.date(),
 });
 

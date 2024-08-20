@@ -4,6 +4,7 @@ import { InferActions } from "./type";
 import { getProxy } from "./proxy";
 import { createClient } from "better-call/client";
 import {
+	BetterFetch,
 	betterFetch,
 	BetterFetchPlugin,
 	createFetch,
@@ -167,6 +168,7 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		| ExcludeOrganizationPaths;
 
 	const $signal = atom<boolean>(false);
+	const $listOrg = atom<boolean>(false);
 	const activeOrgId = atom<string | null>(null);
 	type AdditionalSessionFields = Auth["options"]["plugins"] extends Array<
 		infer T
@@ -219,17 +221,28 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 			return organization.data;
 		}),
 	);
+
+	const $listOrganizations = computed($listOrg, () =>
+		task(async () => {
+			const organizations = await $fetch<Organization[]>("/list/organization", {
+				method: "GET",
+			});
+			return organizations.data;
+		}),
+	);
+
 	const actions = {
 		signInOAuth,
 		$session,
 		$activeOrganization,
+		$listOrganizations,
 		setActiveOrg: (orgId: string | null) => {
 			activeOrgId.set(orgId);
 		},
 	};
-	const proxy = getProxy(actions, client) as Prettify<
-		Omit<InferActions<Actions>, ExcludedPaths>
-	> &
-		typeof actions;
+
+	const proxy = getProxy(actions, client as BetterFetch, {
+		"create/organization": $listOrg,
+	}) as Prettify<Omit<InferActions<Actions>, ExcludedPaths>> & typeof actions;
 	return proxy;
 };
