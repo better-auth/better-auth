@@ -18,6 +18,8 @@
         "./cli": "./dist/cli.js",
         "./react": "./dist/react.js",
         "./preact": "./dist/preact.js",
+        "./solid": "./dist/solid.js",
+        "./vue": "./dist/vue.js",
         "./plugins": "./dist/plugins.js"
     },
     "devDependencies": {
@@ -43,6 +45,7 @@
         "@chronark/access-policies": "^0.0.2",
         "@nanostores/react": "^0.7.3",
         "@nanostores/solid": "^0.4.2",
+        "@nanostores/vue": "^0.10.0",
         "@paralleldrive/cuid2": "^2.2.2",
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",

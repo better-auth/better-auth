@@ -8,6 +8,8 @@ export default defineConfig({
 		cli: "./src/cli/index.ts",
 		react: "./src/client/react.ts",
 		preact: "./src/client/preact.ts",
+		solid: "./src/client/solid.ts",
+		vue: "./src/client/vue.ts",
 		plugins: "./src/plugins/index.ts",
 	},
 	splitting: false,
