@@ -78,7 +78,7 @@ export const passkey = (options: PasskeyOptions) => {
 		type: "custom",
 		endpoints: {
 			generatePasskeyRegistrationOptions: createAuthEndpoint(
-				"/passkey/generate-register",
+				"/passkey/generate-register-options",
 				{
 					method: "GET",
 					use: [sessionMiddleware],
@@ -144,7 +144,7 @@ export const passkey = (options: PasskeyOptions) => {
 				},
 			),
 			generatePasskeyAuthenticationOptions: createAuthEndpoint(
-				"/passkey/generate-authenticate",
+				"/passkey/generate-authenticate-options",
 				{
 					method: "GET",
 				},

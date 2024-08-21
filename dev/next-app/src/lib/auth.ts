@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { github } from "better-auth/provider";
+import { github, passkey } from "better-auth/provider";
 import { organization } from "better-auth/plugins";
 
 export const auth = betterAuth({
@@ -8,6 +8,10 @@ export const auth = betterAuth({
 		github({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+		}),
+		passkey({
+			rpID: "localhost",
+			rpName: "Better Auth",
 		}),
 	],
 	database: {
@@ -18,5 +22,4 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
-	plugins: [organization()],
 });

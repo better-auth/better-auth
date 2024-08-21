@@ -1,6 +1,12 @@
 import { ClientOptions } from "./base";
 import { BetterAuth } from "../auth";
-import { InferActions } from "./type";
+import {
+	InferActions,
+	InferredActions,
+	PickDefaultPaths,
+	PickOrganizationPaths,
+	PickProvidePaths,
+} from "./type";
 import { getProxy } from "./proxy";
 import { createClient } from "better-call/client";
 import {
@@ -14,17 +20,31 @@ import {
 	CustomProvider,
 	OAuthProvider,
 	OAuthProviderList,
+	Provider,
 } from "../types/provider";
 import { UnionToIntersection } from "../types/helper";
 import { Prettify } from "better-call";
 import { atom, computed, task } from "nanostores";
-import { FieldAttribute, InferFieldOutput, InferValueType } from "../db";
+import { FieldAttribute, InferFieldOutput } from "../db";
 import { Session, User } from "../adapters/schema";
 import {
 	Invitation,
 	Member,
 	Organization,
 } from "../plugins/organization/schema";
+import {
+	PublicKeyCredentialCreationOptionsJSON,
+	PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/types";
+import {
+	startAuthentication,
+	startRegistration,
+	WebAuthnError,
+} from "@simplewebauthn/browser";
+import { Passkey } from "../providers/passkey";
+import { getSessionAtom } from "./session-atom";
+import { getOrganizationAtoms } from "./org-atoms";
+import { getPasskeyActions } from "./passkey-actions";
 
 const redirectPlugin = {
 	id: "redirect",
@@ -108,16 +128,19 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 	options?: ClientOptions,
 ) => {
 	type API = BetterAuth["api"];
+
 	const client = createClient<API>({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
+
 	const $fetch = createFetch({
 		...options,
 		baseURL: options?.baseURL || inferBaeURL(),
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
+
 	const signInOAuth = async (data: {
 		provider: Auth["options"]["providers"] extends Array<infer T>
 			? T extends OAuthProvider
@@ -135,101 +158,10 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		return res;
 	};
 
-	type ProviderEndpoint = UnionToIntersection<
-		Auth["options"]["providers"] extends Array<infer T>
-			? T extends CustomProvider
-				? T["endpoints"]
-				: {}
-			: {}
-	>;
-	type Actions = ProviderEndpoint & Auth["api"];
-
-	type ExcludeCredentialPaths = Auth["options"]["emailAndPassword"] extends {
-		enabled: true;
-	}
-		? ""
-		: "signUpCredential" | "signInCredential";
-	type OrganizationPaths = "$activeOrganization" | "setActiveOrg";
-	type ExcludeOrganizationPaths = Auth["options"]["plugins"] extends Array<
-		infer T
-	>
-		? T extends {
-				id: "organization";
-			}
-			? ""
-			: OrganizationPaths
-		: OrganizationPaths;
-	type ExcludedPaths =
-		| "signinOauth"
-		| "signUpOauth"
-		| "callback"
-		| "session"
-		| ExcludeCredentialPaths
-		| ExcludeOrganizationPaths;
-
-	const $signal = atom<boolean>(false);
-	const $listOrg = atom<boolean>(false);
-	const activeOrgId = atom<string | null>(null);
-	type AdditionalSessionFields = Auth["options"]["plugins"] extends Array<
-		infer T
-	>
-		? T extends {
-				schema: {
-					session: {
-						fields: infer Field;
-					};
-				};
-			}
-			? Field extends Record<string, FieldAttribute>
-				? InferFieldOutput<Field>
-				: {}
-			: {}
-		: {};
-
-	const $session = computed($signal, () =>
-		task(async () => {
-			const session = await client("/session", {
-				credentials: "include",
-				method: "GET",
-			});
-			return session.data as {
-				user: User;
-				session: Prettify<Session & AdditionalSessionFields>;
-			} | null;
-		}),
-	);
-	const $activeOrganization = computed(activeOrgId, () =>
-		task(async () => {
-			if (!activeOrgId.get()) {
-				return null;
-			}
-			const session = $session.get();
-			if (!session) {
-				return null;
-			}
-			const organization = await $fetch<
-				Prettify<
-					Organization & {
-						members: Member[];
-						invitations: Invitation[];
-					}
-				>
-			>("/organization/full", {
-				method: "GET",
-				credentials: "include",
-			});
-			return organization.data;
-		}),
-	);
-
-	const $listOrganizations = computed($listOrg, () =>
-		task(async () => {
-			const organizations = await $fetch<Organization[]>("/list/organization", {
-				method: "GET",
-			});
-			return organizations.data;
-		}),
-	);
+	const { $session } = getSessionAtom<Auth>($fetch);
+	const { signInPasskey, signUpPasskey } = getPasskeyActions($fetch);
+	const { $activeOrganization, $listOrganizations, activeOrgId, $listOrg } =
+		getOrganizationAtoms<Auth>($fetch, $session);
 
 	const actions = {
 		signInOAuth,
@@ -239,10 +171,19 @@ export const createAuthClient = <Auth extends BetterAuth = BetterAuth>(
 		setActiveOrg: (orgId: string | null) => {
 			activeOrgId.set(orgId);
 		},
+		signInPasskey,
+		signUpPasskey,
 	};
+
+	type PickedActions = Pick<
+		typeof actions,
+		| PickOrganizationPaths<Auth>
+		| PickDefaultPaths
+		| PickProvidePaths<"passkey", "signInPasskey" | "signUpPasskey", Auth>
+	>;
 
 	const proxy = getProxy(actions, client as BetterFetch, {
 		"create/organization": $listOrg,
-	}) as Prettify<Omit<InferActions<Actions>, ExcludedPaths>> & typeof actions;
+	}) as InferredActions<Auth> & PickedActions;
 	return proxy;
 };
