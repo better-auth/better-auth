@@ -1,7 +1,6 @@
 import { ClientOptions } from "./base";
 import { BetterAuth } from "../auth";
 import {
-	InferActions,
 	InferredActions,
 	PickDefaultPaths,
 	PickOrganizationPaths,
@@ -16,32 +15,7 @@ import {
 	createFetch,
 } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
-import {
-	CustomProvider,
-	OAuthProvider,
-	OAuthProviderList,
-	Provider,
-} from "../types/provider";
-import { UnionToIntersection } from "../types/helper";
-import { Prettify } from "better-call";
-import { atom, computed, task } from "nanostores";
-import { FieldAttribute, InferFieldOutput } from "../db";
-import { Session, User } from "../adapters/schema";
-import {
-	Invitation,
-	Member,
-	Organization,
-} from "../plugins/organization/schema";
-import {
-	PublicKeyCredentialCreationOptionsJSON,
-	PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/types";
-import {
-	startAuthentication,
-	startRegistration,
-	WebAuthnError,
-} from "@simplewebauthn/browser";
-import { Passkey } from "../providers/passkey";
+import { OAuthProvider, OAuthProviderList } from "../types/provider";
 import { getSessionAtom } from "./session-atom";
 import { getOrganizationAtoms } from "./org-atoms";
 import { getPasskeyActions } from "./passkey-actions";
