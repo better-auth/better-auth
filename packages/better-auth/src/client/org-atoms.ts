@@ -8,10 +8,7 @@ import {
 	Organization,
 } from "../plugins/organization/schema";
 
-export function getOrganizationAtoms<Auth extends BetterAuth>(
-	$fetch: BetterFetch,
-	$session: Atom,
-) {
+export function getOrganizationAtoms($fetch: BetterFetch, $session: Atom) {
 	const $listOrg = atom<boolean>(false);
 	const activeOrgId = atom<string | null>(null);
 	const $activeOrganization = computed(activeOrgId, () =>
