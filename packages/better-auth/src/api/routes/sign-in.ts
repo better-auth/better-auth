@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import { generateState } from "../../utils/state";
 import { oAuthProviderList } from "../../providers";
 import { Argon2id } from "oslo/password";
+import { getSessionFromCtx } from "./session";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/oauth",
@@ -92,6 +93,15 @@ export const signInCredential = createAuthEndpoint(
 				status: 400,
 			});
 		}
+		const currentSession = await getSessionFromCtx(ctx);
+		if (currentSession) {
+			return ctx.json({
+				user: currentSession.user,
+				session: currentSession.session,
+				redirect: !!ctx.body.callbackURL,
+				url: ctx.body.callbackURL,
+			});
+		}
 		const { email, password } = ctx.body;
 		const argon2id = new Argon2id();
 		await argon2id.hash(password);
@@ -131,19 +141,11 @@ export const signInCredential = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
-		return ctx.json(
-			{
-				user: user.user,
-				session,
-			},
-			{
-				body: {
-					user,
-					session,
-					redirect: !!ctx.body.callbackURL,
-					url: ctx.body.callbackURL,
-				},
-			},
-		);
+		return ctx.json({
+			user: user.user,
+			session,
+			redirect: !!ctx.body.callbackURL,
+			url: ctx.body.callbackURL,
+		});
 	},
 );

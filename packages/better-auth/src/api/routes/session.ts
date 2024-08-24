@@ -1,5 +1,6 @@
 import { Context } from "better-call";
-import { createAuthEndpoint, createAuthMiddleware } from "../call";
+import { createAuthEndpoint } from "../call";
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const getSession = createAuthEndpoint(
 	"/session",

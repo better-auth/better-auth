@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { parseState } from "../../utils/state";
 import { userSchema } from "../../adapters/schema";
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -13,6 +14,7 @@ export const callbackOAuth = createAuthEndpoint(
 			code: z.string(),
 			code_verifier: z.string().optional(),
 		}),
+		metadata: HIDE_ON_CLIENT_METADATA,
 	},
 	async (c) => {
 		const provider = c.context.options.providers?.find(

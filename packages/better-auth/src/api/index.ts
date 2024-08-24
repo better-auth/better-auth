@@ -5,11 +5,15 @@ import {
 	getSession,
 	signOut,
 	signInCredential,
+	forgetPassword,
+	resetPassword,
+	verifyEmail,
+	sendVerificationEmail,
 } from "./routes";
 import { AuthContext } from "../init";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { getCSRFToken } from "./routes/csrf";
-import { signUpCredential } from "./routes/signup";
+import { signUpCredential } from "./routes/sign-up";
 import { parseAccount, parseSession, parseUser } from "../adapters/schema";
 
 export const router = <C extends AuthContext>(ctx: C) => {
@@ -69,6 +73,10 @@ export const router = <C extends AuthContext>(ctx: C) => {
 		signOut,
 		signUpCredential,
 		signInCredential,
+		forgetPassword,
+		resetPassword,
+		verifyEmail,
+		sendVerificationEmail,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -106,7 +114,10 @@ export const router = <C extends AuthContext>(ctx: C) => {
 		 * this is to remove any sensitive data from the response
 		 */
 		async transformResponse(res) {
-			const body = await res.json();
+			let body: Record<string, any> = {};
+			try {
+				body = await res.json();
+			} catch (e) {}
 			if (body?.user) {
 				body.user = parseUser(ctx.options, body.user);
 			}

@@ -2,6 +2,7 @@ import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
 import { createInternalAdapter } from "./db";
 import { BetterAuthOptions } from "./types";
+import { getBaseURL } from "./utils/base-url";
 import {
 	BetterAuthCookies,
 	createCookieGetter,
@@ -12,8 +13,13 @@ import { createLogger } from "./utils/logger";
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
+	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	return {
-		options,
+		options: {
+			...options,
+			baseURL,
+		},
+		baseURL,
 		secret:
 			options.secret ||
 			process.env.BETTER_AUTH_SECRET ||
@@ -32,6 +38,7 @@ export const init = (options: BetterAuthOptions) => {
 
 export type AuthContext = {
 	options: BetterAuthOptions;
+	baseURL: string;
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
 	db: ReturnType<typeof createKyselyAdapter>;

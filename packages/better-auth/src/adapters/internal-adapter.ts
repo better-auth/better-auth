@@ -135,7 +135,7 @@ export const createInternalAdapter = (
 				model: tables.user.tableName,
 				where: [
 					{
-						value: email,
+						value: email.toLowerCase(),
 						field: "email",
 					},
 				],
@@ -173,6 +173,38 @@ export const createInternalAdapter = (
 				data: account,
 			});
 			return _account;
+		},
+		updateUserByEmail: async (email: string, data: Partial<User>) => {
+			const user = await adapter.update<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						value: email,
+						field: "email",
+					},
+				],
+				update: data,
+			});
+			return user;
+		},
+		updatePassword: async (userId: string, password: string) => {
+			const account = await adapter.update<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						value: userId,
+						field: "userId",
+					},
+					{
+						field: "providerId",
+						value: "credential",
+					},
+				],
+				update: {
+					password,
+				},
+			});
+			return account;
 		},
 	};
 };

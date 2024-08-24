@@ -8,7 +8,7 @@ import { getPasskeyActions } from "./passkey-actions";
 import { addCurrentURL, csrfPlugin, redirectPlugin } from "./client-plugins";
 import { InferRoutes } from "./path-to-object";
 import { ClientOptions } from "./type";
-import { getBaseURL } from "./client-utils";
+import { getBaseURL } from "../utils/base-url";
 
 export const createVanillaClient = <Auth extends BetterAuth = never>(
 	options?: ClientOptions,
@@ -39,6 +39,7 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 		"/create/organization": $listOrg,
 		"/two-factor/enable": $sessionSignal,
 		"/two-factor/disable": $sessionSignal,
+		"/sign-out": $sessionSignal,
 	}) as unknown as InferRoutes<API> & typeof actions;
 	return proxy;
 };

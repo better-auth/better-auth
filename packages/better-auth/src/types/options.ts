@@ -3,6 +3,7 @@ import type { FieldAttribute } from "../db/field";
 import type { Provider } from "./provider";
 import type { Plugin } from "./plugins";
 import type { Adapter } from "./adapter";
+import { User } from "../adapters/schema";
 
 export interface BetterAuthOptions {
 	/**
@@ -13,15 +14,14 @@ export interface BetterAuthOptions {
 	 *
 	 * process.env.BETTER_AUTH_URL
 	 *
-	 * If not set it will default to the request origin.
+	 * If not set it will throw an error.
 	 */
 	baseURL?: string;
 	/**
 	 * Base path for the better auth. This is typically the path where the
-	 * better auth routes are mounted. If not explicitly set, the system will
-	 * check if the following environment variables includes a path in order:
-	 * process.env.BETTER_AUTH_BASE_PATH, process.env.AUTH_BASE_PATH. If none
-	 * of these environment variables are set, it will default to /api/auth/.
+	 * better auth routes are mounted.
+	 *
+	 * @default "/api/auth"
 	 */
 	basePath?: string;
 	/**
@@ -146,5 +146,18 @@ export interface BetterAuthOptions {
 		 * @default 32
 		 */
 		minPasswordLength?: number;
+		/**
+		 * send reset password email
+		 *
+		 * @param token the token to send to the email. Make sure to include the token as a
+		 * parameter in the URL. You'll need to send it back to reset the password.
+		 * @param user the user to send the email to
+		 */
+		sendResetPasswordToken?: (token: string, user: User) => Promise<void>;
+		/**
+		 * @param email the email to send the verification email to
+		 * @param url the url to send the verification email to
+		 */
+		sendVerificationEmail?: (email: string, url: string) => Promise<void>;
 	};
 }

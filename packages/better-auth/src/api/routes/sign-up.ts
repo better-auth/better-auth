@@ -76,12 +76,19 @@ export const signUpCredential = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
-		if (ctx.body.callbackUrl) {
-			throw ctx.redirect(ctx.body.callbackUrl);
-		}
-		return ctx.json({
-			user: createdUser,
-			session,
-		});
+		return ctx.json(
+			{
+				user: createdUser,
+				session,
+			},
+			{
+				body: ctx.body.callbackUrl
+					? {
+							url: ctx.body.callbackUrl,
+							redirect: true,
+						}
+					: {},
+			},
+		);
 	},
 );
