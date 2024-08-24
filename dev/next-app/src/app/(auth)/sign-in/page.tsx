@@ -14,12 +14,15 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { useState } from "react";
 import { Key } from "lucide-react";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export default function Page() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	return (
-		<main className="flex min-h-screen flex-col items-center justify-between p-24">
+		<div className="h-[50rem] w-full dark:bg-black bg-white  dark:bg-grid-white/[0.2] bg-grid-black/[0.2] relative flex items-center justify-center">
+			{/* Radial gradient for the container to give a faded look */}
+			<div className="absolute pointer-events-none inset-0 flex items-center justify-center dark:bg-black bg-white [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
 			<Card className="mx-auto max-w-sm">
 				<CardHeader>
 					<CardTitle className="text-2xl">Login</CardTitle>
@@ -46,17 +49,18 @@ export default function Page() {
 							<div className="flex items-center">
 								<Label htmlFor="password">Password</Label>
 								<Link
-									href="#"
+									href="/forget-password"
 									className="ml-auto inline-block text-sm underline"
 								>
 									Forgot your password?
 								</Link>
 							</div>
-							<Input id="password" type="password" required
-								onChange={(e) => {
-									setPassword(e.target.value);
-								}}
+							<PasswordInput
+								id="password"
 								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								autoComplete="password"
+								placeholder="Password"
 							/>
 						</div>
 						<Button type="submit" className="w-full" onClick={async () => {
@@ -99,6 +103,6 @@ export default function Page() {
 					</div>
 				</CardContent>
 			</Card>
-		</main>
+		</div>
 	);
 }

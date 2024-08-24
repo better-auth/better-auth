@@ -17,6 +17,9 @@ export const auth = betterAuth({
 	secret: "better-auth-secret.1234567890",
 	emailAndPassword: {
 		enabled: true,
+		async sendResetPasswordToken(token, user) {
+			console.log({ token, user });
+		},
 	},
 	plugins: [
 		organization(),

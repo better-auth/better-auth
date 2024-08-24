@@ -20,10 +20,9 @@ export default function Component() {
             setError("TOTP code must be 6 digits")
             return
         }
-        authClient.twoFactor.verify({
+        authClient.twoFactor.verifyTotp({
             body: {
                 code: totpCode,
-                with: "totp",
             }
         }).then((res) => {
             console.log(res)

@@ -1,35 +1,19 @@
-import { Client } from "@/components/client";
-import { Organization } from "@/components/org";
-import { SignOut } from "@/components/signout";
-import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import UserCard from "@/components/user-card";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import Image from "next/image";
-import Link from "next/link";
 
-export default async function Home() {
+export default async function TypewriterEffectSmoothDemo() {
 	const session = await auth.api.getSession({
-		headers: headers(),
-	});
+		headers: headers()
+	})
 	return (
-		<main className="flex min-h-screen flex-col items-center justify-between p-24">
-			{session ? (
-				<Card>
-					<CardHeader>
-						<CardTitle>{session.user.name}</CardTitle>
-						<CardFooter>
-							<SignOut />
-						</CardFooter>
-					</CardHeader>
-				</Card>
-			) : (
-				<Link href="/sign-in">
-					<Button>signin</Button>
-				</Link>
-			)}
-			{/* <Organization /> */}
-			<Client />
-		</main>
+		<div className="h-[50rem] w-full dark:bg-black bg-white  dark:bg-grid-white/[0.2] bg-grid-black/[0.2] relative flex items-center justify-center">
+			{/* Radial gradient for the container to give a faded look */}
+			<div className="absolute pointer-events-none inset-0 flex items-center justify-center dark:bg-black bg-white [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
+			{
+				session ? <UserCard user={session.user} /> : null
+			}
+		</div>
+
 	);
 }
