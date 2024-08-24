@@ -47,6 +47,7 @@ function handleEdgeCases(str: string) {
 
 const knownPathMethods: Record<string, "POST" | "GET"> = {
 	"/sign-out": "POST",
+	"enable/totp": "POST",
 };
 
 function getMethod(path: string, args?: BetterFetchOption) {

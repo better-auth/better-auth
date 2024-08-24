@@ -1,7 +1,8 @@
 import { Migration } from "kysely";
-import { AuthEndpoint } from "../api/call";
+import { AuthEndpoint, AuthMiddleware } from "../api/call";
 import { FieldAttribute } from "../db/field";
 import { LiteralString } from "./helper";
+import { Endpoint } from "better-call";
 
 export type PluginSchema = {
 	[table: string]: {
@@ -17,6 +18,10 @@ export type Plugin = {
 	endpoints: {
 		[key: string]: AuthEndpoint;
 	};
+	middlewares?: {
+		path: string;
+		middleware: Endpoint;
+	}[];
 	/**
 	 * Schema the plugin needs
 	 *
@@ -53,4 +58,8 @@ export type Plugin = {
 	 * the tables.
 	 */
 	migrations?: Record<string, Migration>;
+	/**
+	 * The options of the plugin
+	 */
+	options?: Record<string, any>;
 };

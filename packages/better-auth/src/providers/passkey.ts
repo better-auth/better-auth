@@ -130,7 +130,7 @@ export const passkey = (options: PasskeyOptions) => {
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						JSON.stringify(data),
-						ctx.context.options.secret,
+						ctx.context.secret,
 						{
 							secure: true,
 							httpOnly: true,
@@ -189,7 +189,7 @@ export const passkey = (options: PasskeyOptions) => {
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						JSON.stringify(data),
-						ctx.context.options.secret,
+						ctx.context.secret,
 						{
 							secure: true,
 							httpOnly: true,
@@ -224,7 +224,7 @@ export const passkey = (options: PasskeyOptions) => {
 
 					const challengeString = await ctx.getSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
-						ctx.context.options.secret,
+						ctx.context.secret,
 					);
 					if (!challengeString) {
 						return ctx.json(null, {
@@ -329,7 +329,7 @@ export const passkey = (options: PasskeyOptions) => {
 					await ctx.setSignedCookie(
 						ctx.context.authCookies.sessionToken.name,
 						s.id,
-						ctx.context.options.secret,
+						ctx.context.secret,
 						ctx.context.authCookies.sessionToken.options,
 					);
 					const user = await ctx.context.internalAdapter.findUserById(

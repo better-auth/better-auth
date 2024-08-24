@@ -9,6 +9,7 @@ import { User } from "../adapters/schema";
 import { FieldAttribute } from "../db";
 import { Migration } from "kysely";
 import { AuthEndpoint } from "../api/call";
+import { Context, Endpoint } from "better-call";
 
 export interface BaseProvider {
 	id: LiteralString;
@@ -43,6 +44,17 @@ export interface OAuthProvider extends BaseProvider {
 	userInfo: OAuthUserInfo;
 }
 
+export interface TwoFactorProvider extends BaseProvider {
+	type: "two-factor";
+	endpoints: {
+		[key: string]: AuthEndpoint;
+	};
+	verify?: (ctx: any) => Promise<{
+		status: boolean;
+	}>;
+	isEnabled: (user: User) => Promise<boolean>;
+}
+
 export interface CustomProvider extends BaseProvider {
 	type: "custom";
 	endpoints: {
@@ -50,6 +62,6 @@ export interface CustomProvider extends BaseProvider {
 	};
 }
 
-export type Provider = OAuthProvider | CustomProvider;
+export type Provider = OAuthProvider | CustomProvider | TwoFactorProvider;
 
 export type OAuthProviderList = typeof oAuthProviderList;

@@ -3,7 +3,9 @@ import { BetterAuthOptions } from "../types/options";
 import { TimeSpan } from "oslo";
 
 export function getCookies(options: BetterAuthOptions) {
-	const secure = !!options.advanced?.useSecureCookies;
+	const secure =
+		!!options.advanced?.useSecureCookies ||
+		process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge = new TimeSpan(7, "d").seconds();
@@ -61,4 +63,27 @@ export function getCookies(options: BetterAuthOptions) {
 	};
 }
 
+export function createCookieGetter(options: BetterAuthOptions) {
+	const secure =
+		!!options.advanced?.useSecureCookies ||
+		process.env.NODE_ENV === "production";
+	const secureCookiePrefix = secure ? "__Secure-" : "";
+	const cookiePrefix = "better-auth";
+	function getCookie(cookieName: string, options?: CookieOptions) {
+		return {
+			name:
+				process.env.NODE_ENV === "production"
+					? `${secureCookiePrefix}${cookiePrefix}.${cookieName}`
+					: `${cookiePrefix}${cookieName}`,
+			options: {
+				secure,
+				sameSite: "lax",
+				path: "/",
+				maxAge: 60 * 15, // 15 minutes in seconds
+				...options,
+			} as CookieOptions,
+		};
+	}
+	return getCookie;
+}
 export type BetterAuthCookies = ReturnType<typeof getCookies>;

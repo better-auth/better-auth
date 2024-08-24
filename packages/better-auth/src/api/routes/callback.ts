@@ -98,7 +98,7 @@ export const callbackOAuth = createAuthEndpoint(
 			await c.setSignedCookie(
 				c.context.authCookies.sessionToken.name,
 				session.id,
-				c.context.options.secret,
+				c.context.secret,
 				c.context.authCookies.sessionToken.options,
 			);
 		} catch (e) {

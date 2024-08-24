@@ -25,12 +25,29 @@ export interface BetterAuthOptions {
 	 */
 	basePath?: string;
 	/**
-	 * The secret used to sign the session token. This is required for the session to work.
-	 * to generate a good secret you can use the following command:
+	 * The secret to use for encryption,
+	 * signing and hashing.
 	 *
-	 * @example openssl rand -base64 32
+	 * By default better auth will look for
+	 * the following environment variables:
+	 * process.env.BETTER_AUTH_SECRET,
+	 * process.env.AUTH_SECRET
+	 * If none of these environment
+	 * variables are set,
+	 * it will default to
+	 * "better-auth-secret-123456789".
+	 *
+	 * on production if it's not set
+	 * it will throw an error.
+	 *
+	 * you can generate a good secret
+	 * using the following command:
+	 * @example
+	 * ```bash
+	 * openssl rand -base64 32
+	 * ```
 	 */
-	secret: string;
+	secret?: string;
 	/**
 	 * list of oauth providers
 	 */
@@ -129,5 +146,11 @@ export interface BetterAuthOptions {
 		 * @default 32
 		 */
 		minPasswordLength?: number;
+		/**
+		 * Two factor configuration
+		 */
+		twoFactor?: {
+			enabled: boolean;
+		};
 	};
 }

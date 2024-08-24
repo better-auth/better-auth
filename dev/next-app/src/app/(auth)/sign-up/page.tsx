@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { authClient } from "@/lib/client";
 

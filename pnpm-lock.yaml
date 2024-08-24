@@ -51,7 +51,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.1.6
+        version: 1.1.7
       vite:
         specifier: ^5.3.5
         version: 5.3.5(@types/node@20.14.12)
@@ -109,6 +109,9 @@ importers:
       input-otp:
         specifier: ^1.2.4
         version: 1.2.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      lucide-react:
+        specifier: ^0.435.0
+        version: 0.435.0(react@18.3.1)
       next:
         specifier: 14.2.5
         version: 14.2.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -176,6 +179,12 @@ importers:
       '@nanostores/vue':
         specifier: ^0.10.0
         version: 0.10.0(nanostores@0.11.2)(vue@3.4.38(typescript@5.5.4))
+      '@noble/ciphers':
+        specifier: ^0.6.0
+        version: 0.6.0
+      '@noble/hashes':
+        specifier: ^1.4.0
+        version: 1.4.0
       '@paralleldrive/cuid2':
         specifier: ^2.2.2
         version: 2.2.2
@@ -189,8 +198,8 @@ importers:
         specifier: ^1.9.2
         version: 1.9.2
       better-call:
-        specifier: ^0.1.20
-        version: 0.1.20(typescript@5.5.4)
+        specifier: ^0.1.28
+        version: 0.1.28(typescript@5.5.4)
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
@@ -804,6 +813,9 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@noble/ciphers@0.6.0':
+    resolution: {integrity: sha512-mIbq/R9QXk5/cTfESb1OKtyFnk7oc1Om/8onA1158K9/OZUQFDEVy55jVTato+xmp3XX6F6Qh0zz0Nc1AxAlRQ==}
 
   '@noble/hashes@1.4.0':
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
@@ -1569,8 +1581,8 @@ packages:
   '@types/better-sqlite3@7.6.11':
     resolution: {integrity: sha512-i8KcD3PgGtGBLl3+mMYA8PdKkButvPyARxA7IQAd6qeslht13qxb1zzO8dRCtE7U3IoJS782zDBAeoKiM695kg==}
 
-  '@types/bun@1.1.6':
-    resolution: {integrity: sha512-uJgKjTdX0GkWEHZzQzFsJkWp5+43ZS7HC8sZPFnOwnSo1AsNl2q9o2bFeS23disNDqbggEgyFkKCHl/w8iZsMA==}
+  '@types/bun@1.1.7':
+    resolution: {integrity: sha512-iIIn26SOX8qI5E8Juh+0rUgBmFHvll1akscwerhp9O/fHZGdQBWNLJkkRg/3z2Mh6a3ZgWUIkXViLZZYg47TXw==}
 
   '@types/estree@1.0.5':
     resolution: {integrity: sha512-/kYRxGDLWzHOB7q+wtSUQlFrtcdUccpfy+X+9iMBpHK8QLLhx2wIPYuS5DYtR9Wa/YlZAbIovy7qVdB1Aq6Lyw==}
@@ -1721,8 +1733,8 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
-  better-call@0.1.20:
-    resolution: {integrity: sha512-IEw2rU5ViT/yaZKY51tEl6QGeB3JTUhpAQKoTKbkNYqweFh9xmfNFYOja7v25G+OqrV6j6GPYyD5FqUBqtTHlg==}
+  better-call@0.1.28:
+    resolution: {integrity: sha512-9jl3q7Mb+3lRGeJUqkHAzAHph8BKcGHsj84h1gkfcMy2skyrCUbpFuhxMNAKBDtg2ppa66wTWDv0mGLOshxtEA==}
     peerDependencies:
       typescript: ^5.0.0
 
@@ -1757,8 +1769,8 @@ packages:
   bun-html-live-reload@0.1.3:
     resolution: {integrity: sha512-PW1sp9ZmBAqiAa0aUhHpFc6sEQmC6FgRNKVAvcjSDUMqASzgq7xYpNkEt2Z6VjuiPXKtOx/49b6sLLmjyojrOw==}
 
-  bun-types@1.1.17:
-    resolution: {integrity: sha512-Z4+OplcSd/YZq7ZsrfD00DKJeCwuNY96a1IDJyR73+cTBaFIS7SC6LhpY/W3AMEXO9iYq5NJ58WAwnwL1p5vKg==}
+  bun-types@1.1.25:
+    resolution: {integrity: sha512-WpRb8/N3S5IE8UYdIn39+0Is1XzxsC78+MCe5cIdaer0lfFs6+DREtQH9TM6KJNKTxBYDvbx81RwbvxS5+CkVQ==}
 
   bundle-require@5.0.0:
     resolution: {integrity: sha512-GuziW3fSSmopcx4KRymQEJVbZUfqlCqcq7dvs6TYwKRZiegK/2buMxQTPs6MGlNv50wms1699qYO54R8XfRX4w==}
@@ -2296,6 +2308,11 @@ packages:
   lru-cache@8.0.5:
     resolution: {integrity: sha512-MhWWlVnuab1RG5/zMRRcVGXZLCXrZTgfwMikgzCegsPnG62yDQo5JnqKkrK4jO5iKqDAZGItAqN5CtKBCBWRUA==}
     engines: {node: '>=16.14'}
+
+  lucide-react@0.435.0:
+    resolution: {integrity: sha512-we5GKfzjMDw9m9SsyZJvWim9qaT+Ya5kaRS+OGFqgLqXUrPM1h+7CiMw5pKdEIoaBqfXz2pyv9TASAdpIAJs0Q==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0-rc
 
   magic-string@0.30.10:
     resolution: {integrity: sha512-iIRwTIf0QKV3UAnYK4PU8uiEc4SRh5jX0mwpIwETPpHdhVM4f53RSwS/vXvN1JhGX+Cs7B8qIq3d6AH49O5fAQ==}
@@ -3613,6 +3630,8 @@ snapshots:
   '@next/swc-win32-x64-msvc@14.2.5':
     optional: true
 
+  '@noble/ciphers@0.6.0': {}
+
   '@noble/hashes@1.4.0': {}
 
   '@node-rs/argon2-android-arm-eabi@1.7.0':
@@ -4282,9 +4301,9 @@ snapshots:
     dependencies:
       '@types/node': 20.14.12
 
-  '@types/bun@1.1.6':
+  '@types/bun@1.1.7':
     dependencies:
-      bun-types: 1.1.17
+      bun-types: 1.1.25
 
   '@types/estree@1.0.5': {}
 
@@ -4468,7 +4487,7 @@ snapshots:
       rou3: 0.5.1
       typescript: 5.5.4
 
-  better-call@0.1.20(typescript@5.5.4):
+  better-call@0.1.28(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       '@types/set-cookie-parser': 2.4.10
@@ -4522,7 +4541,7 @@ snapshots:
 
   bun-html-live-reload@0.1.3: {}
 
-  bun-types@1.1.17:
+  bun-types@1.1.25:
     dependencies:
       '@types/node': 20.12.14
       '@types/ws': 8.5.11
@@ -5064,6 +5083,10 @@ snapshots:
   lru-cache@7.18.3: {}
 
   lru-cache@8.0.5: {}
+
+  lucide-react@0.435.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   magic-string@0.30.10:
     dependencies:

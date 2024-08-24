@@ -44,14 +44,14 @@ export const signInOAuth = createAuthEndpoint(
 				await c.setSignedCookie(
 					cookie.state.name,
 					state.code,
-					c.context.options.secret,
+					c.context.secret,
 					cookie.state.options,
 				);
 				const codeVerifier = generateCodeVerifier();
 				await c.setSignedCookie(
 					cookie.pkCodeVerifier.name,
 					codeVerifier,
-					c.context.options.secret,
+					c.context.secret,
 					cookie.pkCodeVerifier.options,
 				);
 				const url = await provider.provider.createAuthorizationURL(
@@ -121,13 +121,14 @@ export const signInCredential = createAuthEndpoint(
 				body: { message: "Invalid email or password" },
 			});
 		}
+
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 		);
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			session.id,
-			ctx.context.options.secret,
+			ctx.context.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
 		return ctx.json(

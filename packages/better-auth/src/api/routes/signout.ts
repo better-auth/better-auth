@@ -14,7 +14,7 @@ export const signOut = createAuthEndpoint(
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
-			ctx.context.options.secret,
+			ctx.context.secret,
 		);
 		if (!sessionCookieToken) {
 			return ctx.json(null);

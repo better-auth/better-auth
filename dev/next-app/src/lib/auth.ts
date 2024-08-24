@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { github, passkey } from "better-auth/provider";
-import { organization } from "better-auth/plugins";
+import { twoFactor } from "better-auth/plugins";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",
@@ -22,4 +22,10 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
+	plugins: [
+		twoFactor({
+			issuer: "BetterAuth",
+			twoFactorURL: "/two-factor",
+		}),
+	],
 });

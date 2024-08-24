@@ -1,4 +1,4 @@
-import { createRouter } from "better-call";
+import { createRouter, Endpoint } from "better-call";
 import {
 	signInOAuth,
 	callbackOAuth,
@@ -34,6 +34,31 @@ export const router = <C extends AuthContext>(ctx: C) => {
 		},
 		{} as Record<string, any>,
 	);
+
+	const middlewares =
+		ctx.options.plugins
+			?.map((plugin) =>
+				plugin.middlewares?.map((m) => {
+					const middleware = (async (context: any) => {
+						return m.middleware({
+							...context,
+							context: {
+								...ctx,
+								...context.context,
+							},
+						});
+					}) as Endpoint;
+					middleware.path = m.path;
+					middleware.options = m.middleware.options;
+					middleware.headers = m.middleware.headers;
+					return {
+						path: m.path,
+						middleware,
+					};
+				}),
+			)
+			.filter((plugin) => plugin !== undefined)
+			.flat() || [];
 
 	const baseEndpoints = {
 		signInOAuth,
@@ -74,6 +99,7 @@ export const router = <C extends AuthContext>(ctx: C) => {
 				path: "/**",
 				middleware: csrfMiddleware,
 			},
+			...middlewares,
 		],
 		onError(e) {
 			ctx.logger.error(e);

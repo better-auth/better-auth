@@ -10,7 +10,7 @@ export const getCSRFToken = createAuthEndpoint(
 	async (ctx) => {
 		const csrfToken = await ctx.getSignedCookie(
 			ctx.context.authCookies.csrfToken.name,
-			ctx.context.options.secret,
+			ctx.context.secret,
 		);
 		if (csrfToken) {
 			return {
@@ -18,12 +18,12 @@ export const getCSRFToken = createAuthEndpoint(
 			};
 		}
 		const token = generateRandomString(32, alphabet("a-z", "0-9", "A-Z"));
-		const hash = await hs256(ctx.context.options.secret, token);
+		const hash = await hs256(ctx.context.secret, token);
 		const cookie = `${token}!${hash}`;
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.csrfToken.name,
 			cookie,
-			ctx.context.options.secret,
+			ctx.context.secret,
 			ctx.context.authCookies.csrfToken.options,
 		);
 		return {

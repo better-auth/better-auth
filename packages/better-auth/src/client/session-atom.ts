@@ -17,10 +17,46 @@ export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 				};
 			}
 			? Field extends Record<string, FieldAttribute>
-				? InferFieldOutput<Field>
+				? {
+						[key in keyof Field]: InferFieldOutput<Field[key]>;
+					}
 				: {}
 			: {}
 		: {};
+	type AdditionalUserFields = Auth["options"]["plugins"] extends Array<infer T>
+		? T extends {
+				schema: {
+					user: {
+						fields: infer Field;
+					};
+				};
+			}
+			? Field extends Record<infer Key, FieldAttribute>
+				? Prettify<
+						{
+							[key in Key as Field[key]["required"] extends false
+								? never
+								: Field[key]["defaultValue"] extends
+											| boolean
+											| string
+											| number
+											| Date
+											| Function
+									? key
+									: never]: InferFieldOutput<Field[key]>;
+						} & {
+							[key in Key as Field[key]["returned"] extends false
+								? never
+								: key]?: InferFieldOutput<Field[key]>;
+						}
+					>
+				: {}
+			: {}
+		: {};
+
+	type UserWithAdditionalFields = User & AdditionalUserFields;
+	type SessionWithAdditionalFields = Session & AdditionalSessionFields;
+
 	const $signal = atom<boolean>(false);
 	const $session = computed($signal, () =>
 		task(async () => {
@@ -29,8 +65,8 @@ export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 				method: "GET",
 			});
 			return session.data as {
-				user: User;
-				session: Prettify<Session & AdditionalSessionFields>;
+				user: Prettify<UserWithAdditionalFields>;
+				session: Prettify<SessionWithAdditionalFields>;
 			} | null;
 		}),
 	);

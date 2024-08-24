@@ -20,7 +20,7 @@ export const csrfMiddleware = createAuthMiddleware(
 		const csrfToken = ctx.body?.csrfToken;
 		const csrfCookie = await ctx.getSignedCookie(
 			ctx.context.authCookies.csrfToken.name,
-			ctx.context.options.secret,
+			ctx.context.secret,
 		);
 		const [token, hash] = csrfCookie?.split("!") || [null, null];
 		if (
@@ -37,7 +37,7 @@ export const csrfMiddleware = createAuthMiddleware(
 				message: "Invalid CSRF Token",
 			});
 		}
-		const expectedHash = await hs256(ctx.context.options.secret, token);
+		const expectedHash = await hs256(ctx.context.secret, token);
 		if (hash !== expectedHash) {
 			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
 				maxAge: 0,

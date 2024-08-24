@@ -29,18 +29,12 @@ export type InferValueType<T extends FieldType> = T extends "string"
 				? Date
 				: never;
 
-export type InferFieldOutput<
-	T extends Record<string, FieldAttribute>,
-	K extends keyof T = keyof T,
-> = T[K]["returned"] extends false
-	? never
-	: T[K]["required"] extends false
-		? {
-				[key in K]?: InferValueType<T[K]["type"]>;
-			}
-		: {
-				[key in K]: InferValueType<T[K]["type"]>;
-			};
+export type InferFieldOutput<T extends FieldAttribute> =
+	T["returned"] extends false
+		? never
+		: T["required"] extends false
+			? InferValueType<T["type"]> | undefined
+			: InferValueType<T["type"]>;
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**

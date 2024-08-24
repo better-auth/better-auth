@@ -73,7 +73,7 @@ export const signUpCredential = createAuthEndpoint(
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			session.id,
-			ctx.context.options.secret,
+			ctx.context.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
 		if (ctx.body.callbackUrl) {
