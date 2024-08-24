@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { github, passkey } from "better-auth/provider";
-import { twoFactor } from "better-auth/plugins";
+import { organization, twoFactor } from "better-auth/plugins";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",
@@ -8,10 +8,6 @@ export const auth = betterAuth({
 		github({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
-		}),
-		passkey({
-			rpID: "localhost",
-			rpName: "Better Auth",
 		}),
 	],
 	database: {
@@ -23,9 +19,15 @@ export const auth = betterAuth({
 		enabled: true,
 	},
 	plugins: [
+		organization(),
 		twoFactor({
 			issuer: "BetterAuth",
 			twoFactorURL: "/two-factor",
+			otpOptions: {
+				async sendOTP(user, otp) {
+					console.log({ user, otp });
+				},
+			},
 		}),
 	],
 });

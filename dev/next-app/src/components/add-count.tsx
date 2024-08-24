@@ -1,7 +1,7 @@
 "use client";
 import { setCounter } from "@/server/counter";
 import { Button } from "./ui/button";
-import { client } from "@/lib/client";
+import { client } from "@/lib/auth-client";
 
 export async function AddCount() {
 	return (

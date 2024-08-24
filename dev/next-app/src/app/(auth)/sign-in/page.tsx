@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@/lib/client";
+import { authClient } from "@/lib/auth-client";
 import { useState } from "react";
+import { Key } from "lucide-react";
 
 export default function Page() {
 	const [email, setEmail] = useState("");
@@ -59,7 +60,7 @@ export default function Page() {
 							/>
 						</div>
 						<Button type="submit" className="w-full" onClick={async () => {
-							const res = await authClient.signInCredential({
+							await authClient.signIn.credential({
 								body: {
 									email,
 									password,
@@ -73,13 +74,21 @@ export default function Page() {
 							variant="outline"
 							className="w-full"
 							onClick={async () => {
-								await authClient.signInOAuth({
-									provider: "github",
-									callbackURL: "http://localhost:3000/",
+								await authClient.signIn.oauth({
+									body: {
+										provider: "github",
+										callbackURL: "http://localhost:3000",
+									}
 								});
 							}}
 						>
 							Login with Github
+						</Button>
+						<Button variant="secondary" className="gap-2" onClick={async () => {
+
+						}}>
+							<Key size={16} />
+							Login with Passkey
 						</Button>
 					</div>
 					<div className="mt-4 text-center text-sm">

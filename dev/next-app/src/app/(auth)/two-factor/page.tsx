@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, CheckCircle2 } from "lucide-react"
-import { authClient } from "@/lib/client"
+import { authClient } from "@/lib/auth-client"
+import Link from "next/link"
 
 export default function Component() {
     const [totpCode, setTotpCode] = useState("")
@@ -19,10 +20,10 @@ export default function Component() {
             setError("TOTP code must be 6 digits")
             return
         }
-        authClient.verifyTotp({
+        authClient.twoFactor.verify({
             body: {
                 code: totpCode,
-                callbackURL: "/"
+                with: "totp",
             }
         }).then((res) => {
             console.log(res)
@@ -78,8 +79,12 @@ export default function Component() {
                         </div>
                     )}
                 </CardContent>
-                <CardFooter className="text-sm text-muted-foreground">
-                    Protect your account with TOTP-based authentication
+                <CardFooter className="text-sm text-muted-foreground gap-2">
+                    <Link href="/two-factor/otp">
+                        <Button variant="link" size="sm">
+                            Switch to Email Verification
+                        </Button>
+                    </Link>
                 </CardFooter>
             </Card>
         </main>

@@ -26,7 +26,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "./ui/table";
-import { authClient } from "@/lib/client";
+import { authClient } from "@/lib/auth-client";
 import { useAuthStore } from "better-auth/react";
 
 export const Organization = () => {

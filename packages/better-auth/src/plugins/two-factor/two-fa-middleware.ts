@@ -5,6 +5,7 @@ import { hs256 } from "../../crypto";
 import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import { z } from "zod";
+import { signInCredential } from "../../api/routes";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 	const cookie = await ctx.getSignedCookie(
@@ -62,7 +63,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 		}
 		if (hashToMatch === hash) {
 			return {
-				createSession: async () => {
+				valid: async () => {
 					/**
 					 * Set the session cookie
 					 */
@@ -71,6 +72,26 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 						session.id,
 						ctx.context.secret,
 						ctx.context.authCookies.sessionToken.options,
+					);
+					if (ctx.body.callbackURL) {
+						return ctx.json({
+							status: true,
+							callbackURL: ctx.body.callbackURL,
+							redirect: true,
+						});
+					}
+
+					return ctx.json({ status: true });
+				},
+				invalid: async () => {
+					return ctx.json(
+						{ status: false },
+						{
+							status: 401,
+							body: {
+								message: "Invalid code",
+							},
+						},
 					);
 				},
 				session: {

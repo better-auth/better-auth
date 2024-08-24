@@ -82,6 +82,9 @@ export const passkey = (options: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [sessionMiddleware],
+					metadata: {
+						client: false,
+					},
 				},
 				async (ctx) => {
 					const session = ctx.context.session;

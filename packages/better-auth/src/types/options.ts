@@ -146,11 +146,5 @@ export interface BetterAuthOptions {
 		 * @default 32
 		 */
 		minPasswordLength?: number;
-		/**
-		 * Two factor configuration
-		 */
-		twoFactor?: {
-			enabled: boolean;
-		};
 	};
 }

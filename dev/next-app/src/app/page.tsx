@@ -28,7 +28,7 @@ export default async function Home() {
 					<Button>signin</Button>
 				</Link>
 			)}
-			<Organization />
+			{/* <Organization /> */}
 			<Client />
 		</main>
 	);

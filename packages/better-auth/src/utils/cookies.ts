@@ -74,7 +74,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 			name:
 				process.env.NODE_ENV === "production"
 					? `${secureCookiePrefix}${cookiePrefix}.${cookieName}`
-					: `${cookiePrefix}${cookieName}`,
+					: `${cookiePrefix}.${cookieName}`,
 			options: {
 				secure,
 				sameSite: "lax",

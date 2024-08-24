@@ -4,9 +4,12 @@ import { beforeAll, afterAll } from "vitest";
 import { type Listener, listen } from "listhen";
 import { toNodeHandler } from "better-call";
 import fs from "fs/promises";
+import { BetterAuthOptions } from "../types";
 
-export async function getTestInstance() {
-	const auth = betterAuth({
+export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
+	options?: O,
+) {
+	const opts = {
 		providers: [
 			github({
 				clientId: "test",
@@ -26,7 +29,12 @@ export async function getTestInstance() {
 		emailAndPassword: {
 			enabled: true,
 		},
-	});
+	} satisfies BetterAuthOptions;
+
+	const auth = betterAuth({
+		...opts,
+		...options,
+	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	let server: Listener;
 

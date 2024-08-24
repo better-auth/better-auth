@@ -6,7 +6,7 @@ import { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import {
 	twoFactorMiddleware,
 	verifyTwoFactorMiddleware,
-} from "./verify-middleware";
+} from "./two-fa-middleware";
 import { sessionMiddleware } from "../../api/middlewares/session";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
@@ -24,11 +24,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 	return {
 		id: "two-factor",
 		endpoints: {
-			...totp.customActions,
-			...otp.customActions,
-			...backupCode.customActions,
+			...totp.endpoints,
+			...otp.endpoints,
+			...backupCode.endpoints,
 			enableTwoFactor: createAuthEndpoint(
-				"/enable/two-factor",
+				"/two-factor/enable",
 				{
 					method: "POST",
 					use: [sessionMiddleware],
@@ -40,6 +40,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						key: ctx.context.secret,
 						data: secret,
 					});
+					console.log({ encryptedSecret });
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						options.backupCodeOptions,
@@ -62,7 +63,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 				},
 			),
 			disableTwoFactor: createAuthEndpoint(
-				"/disable/two-factor",
+				"/two-factor/disable",
 				{
 					method: "POST",
 					use: [sessionMiddleware],
@@ -81,51 +82,6 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 							},
 						],
 					});
-					return ctx.json({ status: true });
-				},
-			),
-			verifyTwoFactor: createAuthEndpoint(
-				"/verify/two-factor",
-				{
-					method: "POST",
-					body: z.object({
-						/**
-						 * The code to validate
-						 */
-						code: z.string(),
-						with: z.enum(["totp", "otp", "backup_code"]),
-						callbackURL: z.string().optional(),
-					}),
-					use: [verifyTwoFactorMiddleware],
-				},
-				async (ctx) => {
-					const providerId = ctx.body.with;
-					const provider = providers.find((p) => p.id === providerId);
-					if (!provider) {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 401,
-							},
-						);
-					}
-					const res = await provider.verify(ctx);
-					if (!res.status) {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 401,
-							},
-						);
-					}
-					await ctx.context.createSession();
-					if (ctx.body.callbackURL) {
-						return ctx.json({
-							status: true,
-							callbackURL: ctx.body.callbackURL,
-							redirect: true,
-						});
-					}
 					return ctx.json({ status: true });
 				},
 			),
@@ -149,17 +105,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						type: "string",
 						required: false,
 					},
-					backupCodes: {
+					twoFactorBackupCodes: {
 						type: "string",
 						required: false,
 						returned: false,
-					},
-					/**
-					 * list of two factor providers id separated by comma
-					 */
-					twoFactorProviders: {
-						type: "string",
-						required: false,
 					},
 				},
 			},

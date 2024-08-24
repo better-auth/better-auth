@@ -7,7 +7,7 @@ import { oAuthProviderList } from "../../providers";
 import { Argon2id } from "oslo/password";
 
 export const signInOAuth = createAuthEndpoint(
-	"/signin/oauth",
+	"/sign-in/oauth",
 	{
 		method: "POST",
 		query: z

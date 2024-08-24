@@ -1,6 +1,6 @@
 import { atom, computed, task } from "nanostores";
 import { Session, User } from "../adapters/schema";
-import { Prettify } from "../types/helper";
+import { Prettify, UnionToIntersection } from "../types/helper";
 import { BetterAuth } from "../auth";
 import { FieldAttribute, InferFieldOutput } from "../db";
 import { BetterFetch } from "@better-fetch/fetch";
@@ -54,8 +54,10 @@ export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 			: {}
 		: {};
 
-	type UserWithAdditionalFields = User & AdditionalUserFields;
-	type SessionWithAdditionalFields = Session & AdditionalSessionFields;
+	type UserWithAdditionalFields = User &
+		UnionToIntersection<AdditionalUserFields>;
+	type SessionWithAdditionalFields = Session &
+		UnionToIntersection<AdditionalSessionFields>;
 
 	const $signal = atom<boolean>(false);
 	const $session = computed($signal, () =>
@@ -70,5 +72,5 @@ export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 			} | null;
 		}),
 	);
-	return { $session };
+	return { $session, $sessionSignal: $signal };
 }

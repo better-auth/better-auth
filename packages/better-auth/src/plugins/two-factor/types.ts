@@ -45,12 +45,5 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
-	enable?: (user: UserWithTwoFactor) => Promise<void>;
-	disable?: () => Promise<void>;
-	verify: Endpoint<
-		(ctx: any) => Promise<{
-			status: boolean;
-		}>
-	>;
-	customActions?: Record<string, AuthEndpoint>;
+	endpoints?: Record<string, AuthEndpoint>;
 }

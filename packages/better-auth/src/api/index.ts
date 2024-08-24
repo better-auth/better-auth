@@ -10,6 +10,7 @@ import { AuthContext } from "../init";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { getCSRFToken } from "./routes/csrf";
 import { signUpCredential } from "./routes/signup";
+import { parseAccount, parseSession, parseUser } from "../adapters/schema";
 
 export const router = <C extends AuthContext>(ctx: C) => {
 	const pluginEndpoints = ctx.options.plugins?.reduce(
@@ -101,8 +102,25 @@ export const router = <C extends AuthContext>(ctx: C) => {
 			},
 			...middlewares,
 		],
-		onError(e) {
-			ctx.logger.error(e);
+		/**
+		 * this is to remove any sensitive data from the response
+		 */
+		async transformResponse(res) {
+			const body = await res.json();
+			if (body?.user) {
+				body.user = parseUser(ctx.options, body.user);
+			}
+			if (body?.session) {
+				body.session = parseSession(ctx.options, body.session);
+			}
+			if (body?.account) {
+				body.account = parseAccount(ctx.options, body.account);
+			}
+			return new Response(body ? JSON.stringify(body) : null, {
+				headers: res.headers,
+				status: res.status,
+				statusText: res.statusText,
+			});
 		},
 	});
 };

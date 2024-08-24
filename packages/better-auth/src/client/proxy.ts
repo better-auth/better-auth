@@ -1,53 +1,12 @@
 import { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
-import { createBaseClient } from "./base";
-import { Atom, PreinitializedWritableAtom } from "nanostores";
-
-function fromCamelCase(str: string) {
-	const path = str
-		.split(/(?=[A-Z])/)
-		.join("/")
-		.toLowerCase();
-	return `/${path}`;
-}
-
-const knownCases = [
-	["sign", "in"],
-	["sign", "up"],
-	["sign", "out"],
-	["invite", "member"],
-	["update", "member"],
-	["delete", "member"],
-	["accept", "invitation"],
-	["reject", "invitation"],
-	["cancel", "invitation"],
-	["has", "permission"],
-];
-
-/**
- * Handles edge cases like signInCredential and
- * signUpCredential
- */
-function handleEdgeCases(str: string) {
-	const splits = str.split("/").filter((s) => s);
-	let index = 0;
-	for (const path of splits) {
-		const secondPath = splits[index + 1]?.trim();
-		if (secondPath) {
-			const isKnownCase = knownCases.some(
-				([a, b]) => a === path && b === secondPath,
-			);
-			if (isKnownCase) {
-				splits[index] = `${path}-${secondPath}`;
-				splits.splice(1, index + 1);
-			}
-		}
-	}
-	return splits.join("/");
-}
+import { PreinitializedWritableAtom } from "nanostores";
 
 const knownPathMethods: Record<string, "POST" | "GET"> = {
 	"/sign-out": "POST",
 	"enable/totp": "POST",
+	"/two-factor/disable": "POST",
+	"/two-factor/enable": "POST",
+	"/two-factor/send-otp": "POST",
 };
 
 function getMethod(path: string, args?: BetterFetchOption) {
@@ -61,40 +20,48 @@ function getMethod(path: string, args?: BetterFetchOption) {
 	return "GET";
 }
 
-export function getProxy(
-	actions: Record<string, any>,
+export function createDynamicPathProxy<T extends Record<string, any>>(
+	routes: T,
 	client: BetterFetch,
 	$signal?: {
 		[key: string]: PreinitializedWritableAtom<boolean>;
 	},
-) {
-	return new Proxy(actions, {
-		get(target, key) {
-			if (key in target) {
-				return target[key as keyof typeof actions];
+): T {
+	const handler: ProxyHandler<any> = {
+		get(target, prop: string) {
+			// If the property exists in the initial object, return it directly
+			if (prop in routes) {
+				return routes[prop as string];
 			}
-			return (args?: BetterFetchOption) => {
-				key = fromCamelCase(key as string);
-				key = handleEdgeCases(key);
-				if (args?.params) {
-					const paramPlaceholder = Object.keys(args?.params)
-						.map((key) => `:${key}`)
+			return new Proxy(() => {}, {
+				get: (_, nestedProp: string) => {
+					//@ts-expect-error
+					return handler.get(target, `${prop}.${nestedProp}`);
+				},
+				apply: async (_, __, args) => {
+					if (prop in target) {
+						return target[prop](...args);
+					}
+					const path = prop
+						.split(".")
+						.map((segment) =>
+							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+						)
 						.join("/");
-					key = paramPlaceholder.length
-						? `${key as string}/${paramPlaceholder}`
-						: key;
-				}
-				return client(key as "/signin/oauth", {
-					...(args || {}),
-					method: getMethod(key, args),
-					onSuccess() {
-						const signal = $signal?.[key as string];
-						if (signal) {
-							signal.set(!signal.get());
-						}
-					},
-				});
-			};
+					const routePath = `/${path}`;
+					return await client(routePath, {
+						...args[0],
+						method: getMethod(routePath, args[0]),
+						onSuccess() {
+							const signal = $signal?.[routePath as string];
+							if (signal) {
+								signal.set(!signal.get());
+							}
+						},
+					});
+				},
+			});
 		},
-	});
+	};
+	return new Proxy(routes, handler);
 }

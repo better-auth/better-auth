@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { BetterAuthOptions } from "../types";
+import { FieldAttribute } from "../db";
 
 export const accountSchema = z.object({
 	id: z.string(),
@@ -38,4 +40,54 @@ export type Session = z.infer<typeof sessionSchema>;
 export interface MigrationTable {
 	name: string;
 	timestamp: string;
+}
+
+export function parseData<T extends Record<string, any>>(
+	data: T,
+	schema: {
+		fields: Record<string, FieldAttribute>;
+	},
+) {
+	const fields = schema.fields;
+	const parsedData: Record<string, any> = {};
+	for (const key in data) {
+		const field = fields[key];
+		if (!field) {
+			parsedData[key] = data[key];
+			continue;
+		}
+		if (field.returned === false) {
+			continue;
+		}
+		parsedData[key] = data[key];
+	}
+	return parsedData as T;
+}
+
+export function getAllFields(options: BetterAuthOptions, table: string) {
+	let schema: Record<string, FieldAttribute> = {};
+	for (const plugin of options.plugins || []) {
+		if (plugin.schema && plugin.schema[table]) {
+			schema = {
+				...schema,
+				...plugin.schema[table].fields,
+			};
+		}
+	}
+	return schema;
+}
+
+export function parseUser(options: BetterAuthOptions, user: User) {
+	const schema = getAllFields(options, "user");
+	return parseData(user, { fields: schema });
+}
+
+export function parseAccount(options: BetterAuthOptions, account: Account) {
+	const schema = getAllFields(options, "account");
+	return parseData(account, { fields: schema });
+}
+
+export function parseSession(options: BetterAuthOptions, session: Session) {
+	const schema = getAllFields(options, "session");
+	return parseData(session, { fields: schema });
 }

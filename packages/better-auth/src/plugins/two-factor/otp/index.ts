@@ -6,7 +6,7 @@ import { generateHOTP } from "oslo/otp";
 import { generateRandomInteger } from "oslo/crypto";
 import { OTP_RANDOM_NUMBER_COOKIE_NAME } from "../constant";
 import { z } from "zod";
-import { verifyTwoFactorMiddleware } from "../verify-middleware";
+import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
 
 export interface OTPOptions {
 	/**
@@ -25,11 +25,11 @@ export const otp2fa = (options?: OTPOptions) => {
 	/**
 	 * Generate OTP and send it to the user.
 	 */
-	const generateOTP = createAuthEndpoint(
-		"/generate/otp",
+	const send2FaOTP = createAuthEndpoint(
+		"/two-factor/send-otp",
 		{
 			method: "POST",
-			use: [sessionMiddleware],
+			use: [verifyTwoFactorMiddleware],
 		},
 		async (ctx) => {
 			if (!options || !options.sendOTP) {
@@ -63,7 +63,7 @@ export const otp2fa = (options?: OTPOptions) => {
 	);
 
 	const verifyOTP = createAuthEndpoint(
-		"/verify/otp",
+		"/two-factor/verify-otp",
 		{
 			method: "POST",
 			body: z.object({
@@ -86,34 +86,35 @@ export const otp2fa = (options?: OTPOptions) => {
 				ctx.context.secret,
 			);
 			if (!randomNumber) {
-				throw new APIError("BAD_REQUEST", {
-					message: "counter cookie not found",
+				throw new APIError("UNAUTHORIZED", {
+					message: "OTP is expired",
 				});
 			}
 			const toCheckOtp = await generateHOTP(
 				Buffer.from(ctx.context.secret),
 				parseInt(randomNumber),
 			);
+			console.log(toCheckOtp, ctx.body.code);
 
-			if (toCheckOtp !== ctx.body.code) {
-				await ctx.context.createSession();
-				return ctx.json({ status: true });
+			if (toCheckOtp === ctx.body.code) {
+				ctx.setCookie(cookie.name, "", {
+					path: "/",
+					sameSite: "lax",
+					httpOnly: true,
+					secure: false,
+					maxAge: 0,
+				});
+				return ctx.context.valid();
 			} else {
-				return ctx.json(
-					{ status: false },
-					{
-						status: 401,
-					},
-				);
+				return ctx.context.invalid();
 			}
 		},
 	);
-
 	return {
 		id: "otp",
-		verify: verifyOTP,
-		customActions: {
-			generateOTP: generateOTP,
+		endpoints: {
+			send2FaOTP,
+			verifyOTP,
 		},
 	} satisfies TwoFactorProvider;
 };

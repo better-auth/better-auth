@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { authClient } from "@/lib/client";
+import { authClient } from "@/lib/auth-client";
 
 export default function SignUpForm() {
     const [firstName, setFirstName] = useState("");

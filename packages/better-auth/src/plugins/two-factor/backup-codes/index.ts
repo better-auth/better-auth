@@ -3,7 +3,7 @@ import { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { verifyTwoFactorMiddleware } from "../verify-middleware";
+import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
 import { sessionMiddleware } from "../../../api/middlewares/session";
 
 export interface BackupCodeOptions {
@@ -78,37 +78,37 @@ export function getBackupCodes(user: UserWithTwoFactor, key: string) {
 export const backupCode2fa = (options?: BackupCodeOptions) => {
 	return {
 		id: "backup_code",
-		verify: createAuthEndpoint(
-			"/verify/backup-code",
-			{
-				method: "POST",
-				body: z.object({
-					code: z.string(),
-				}),
-				use: [verifyTwoFactorMiddleware],
-			},
-			async (ctx) => {
-				const validate = verifyBackupCode(
-					{
-						user: ctx.context.session.user,
-						code: ctx.body.code,
-					},
-					ctx.context.secret,
-				);
-				if (!validate) {
-					return ctx.json(
-						{ status: false },
+		endpoints: {
+			verifyBackupCode: createAuthEndpoint(
+				"/two-factor/verify-backup-code",
+				{
+					method: "POST",
+					body: z.object({
+						code: z.string(),
+					}),
+					use: [verifyTwoFactorMiddleware],
+				},
+				async (ctx) => {
+					const validate = verifyBackupCode(
 						{
-							status: 401,
+							user: ctx.context.session.user,
+							code: ctx.body.code,
 						},
+						ctx.context.secret,
 					);
-				}
-				return ctx.json({ status: true });
-			},
-		),
-		customActions: {
+					if (!validate) {
+						return ctx.json(
+							{ status: false },
+							{
+								status: 401,
+							},
+						);
+					}
+					return ctx.json({ status: true });
+				},
+			),
 			generateBackupCodes: createAuthEndpoint(
-				"/generate/backup-codes",
+				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
 					use: [sessionMiddleware],
