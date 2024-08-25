@@ -1,7 +1,6 @@
 import { RequiredDeep } from "type-fest";
-import { Provider } from ".";
-import { createAuthEndpoint } from "../api/call";
-import { getSessionFromCtx } from "../api/routes";
+import { createAuthEndpoint } from "../../api/call";
+import { getSessionFromCtx } from "../../api/routes";
 import { z } from "zod";
 import type {
 	AuthenticationResponseJSON,
@@ -9,7 +8,7 @@ import type {
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/types";
-import { sessionMiddleware } from "../api/middlewares/session";
+import { sessionMiddleware } from "../../api/middlewares/session";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import {
 	generateAuthenticationOptions,
@@ -17,6 +16,8 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
+import { Plugin } from "../../types/plugins";
+import { APIError } from "better-call";
 
 export interface PasskeyOptions {
 	/**
@@ -48,6 +49,7 @@ export interface PasskeyOptions {
 export type WebAuthnCookieType = {
 	expectedChallenge: string;
 	userData: { id: string; email: string };
+	callbackURL?: string;
 };
 
 export type Passkey = {
@@ -72,10 +74,9 @@ export const passkey = (options: PasskeyOptions) => {
 			...options.advanced,
 		},
 	};
-	const webAuthnChallengeCookieExpiration = 1000 * 60 * 60 * 24; // 24 hours
+	const webAuthnChallengeCookieExpiration = 60 * 60 * 24; // 24 hours
 	return {
 		id: "passkey",
-		type: "custom",
 		endpoints: {
 			generatePasskeyRegistrationOptions: createAuthEndpoint(
 				"/passkey/generate-register-options",
@@ -149,7 +150,13 @@ export const passkey = (options: PasskeyOptions) => {
 			generatePasskeyAuthenticationOptions: createAuthEndpoint(
 				"/passkey/generate-authenticate-options",
 				{
-					method: "GET",
+					method: "POST",
+					body: z
+						.object({
+							email: z.string().optional(),
+							callbackURL: z.string().optional(),
+						})
+						.optional(),
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
@@ -188,6 +195,7 @@ export const passkey = (options: PasskeyOptions) => {
 							email: session?.user.email || session?.user.id || "",
 							id: session?.user.id || "",
 						},
+						callbackURL: ctx.body?.callbackURL,
 					};
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
@@ -205,14 +213,14 @@ export const passkey = (options: PasskeyOptions) => {
 					});
 				},
 			),
-			verifyPasskey: createAuthEndpoint(
-				"/verify/passkey",
+			verifyPasskeyRegistration: createAuthEndpoint(
+				"/passkey/verify-registration",
 				{
 					method: "POST",
 					body: z.object({
 						response: z.any(),
-						type: z.enum(["register", "authenticate"]),
 					}),
+					use: [sessionMiddleware],
 				},
 				async (ctx) => {
 					const origin = options.origin || ctx.headers?.get("origin") || "";
@@ -221,10 +229,7 @@ export const passkey = (options: PasskeyOptions) => {
 							status: 400,
 						});
 					}
-					const isRegister = ctx.body.type === "register";
-					const session = await getSessionFromCtx(ctx);
 					const resp = ctx.body.response;
-
 					const challengeString = await ctx.getSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						ctx.context.secret,
@@ -238,49 +243,81 @@ export const passkey = (options: PasskeyOptions) => {
 						challengeString,
 					) as WebAuthnCookieType;
 
-					if (isRegister) {
-						const verification = await verifyRegistrationResponse({
-							response: resp,
-							expectedChallenge,
-							expectedOrigin: origin,
-							expectedRPID: options.rpID,
-						});
-						const { verified, registrationInfo } = verification;
-						if (!verified || !registrationInfo) {
-							return ctx.json(null, {
-								status: 400,
-							});
-						}
-						const {
-							credentialID,
-							credentialPublicKey,
-							counter,
-							credentialDeviceType,
-							credentialBackedUp,
-						} = registrationInfo;
-						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
-						const userID = generateRandomString(32, alphabet("a-z", "0-9"));
-						const newPasskey: Passkey = {
-							userId: userData.id,
-							webauthnUserID: userID,
-							id: credentialID,
-							publicKey: pubKey,
-							counter,
-							deviceType: credentialDeviceType,
-							transports: resp.response.transports.join(","),
-							backedUp: credentialBackedUp,
-							createdAt: new Date(),
-						};
-						const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
-							model: "passkey",
-							data: newPasskey,
-						});
-						return ctx.json(newPasskeyRes, {
-							status: 200,
+					if (userData.id !== ctx.context.session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "You are not authorized to register this passkey",
 						});
 					}
 
-					AuthenticatorResponse;
+					const verification = await verifyRegistrationResponse({
+						response: resp,
+						expectedChallenge,
+						expectedOrigin: origin,
+						expectedRPID: options.rpID,
+					});
+					const { verified, registrationInfo } = verification;
+					if (!verified || !registrationInfo) {
+						return ctx.json(null, {
+							status: 400,
+						});
+					}
+					const {
+						credentialID,
+						credentialPublicKey,
+						counter,
+						credentialDeviceType,
+						credentialBackedUp,
+					} = registrationInfo;
+					const pubKey = Buffer.from(credentialPublicKey).toString("base64");
+					const userID = generateRandomString(32, alphabet("a-z", "0-9"));
+					const newPasskey: Passkey = {
+						userId: userData.id,
+						webauthnUserID: userID,
+						id: credentialID,
+						publicKey: pubKey,
+						counter,
+						deviceType: credentialDeviceType,
+						transports: resp.response.transports.join(","),
+						backedUp: credentialBackedUp,
+						createdAt: new Date(),
+					};
+					const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
+						model: "passkey",
+						data: newPasskey,
+					});
+					return ctx.json(newPasskeyRes, {
+						status: 200,
+					});
+				},
+			),
+			verifyPasskeyAuthentication: createAuthEndpoint(
+				"/passkey/verify-authentication",
+				{
+					method: "POST",
+					body: z.object({
+						response: z.any(),
+					}),
+				},
+				async (ctx) => {
+					const origin = options.origin || ctx.headers?.get("origin") || "";
+					if (!origin) {
+						return ctx.json(null, {
+							status: 400,
+						});
+					}
+					const resp = ctx.body.response;
+					const challengeString = await ctx.getSignedCookie(
+						opts.advanced.webAuthnChallengeCookie,
+						ctx.context.secret,
+					);
+					if (!challengeString) {
+						return ctx.json(null, {
+							status: 400,
+						});
+					}
+					const { expectedChallenge, callbackURL } = JSON.parse(
+						challengeString,
+					) as WebAuthnCookieType;
 					const passkey = await ctx.context.adapter.findOne<Passkey>({
 						model: "passkey",
 						where: [
@@ -292,7 +329,10 @@ export const passkey = (options: PasskeyOptions) => {
 					});
 					if (!passkey) {
 						return ctx.json(null, {
-							status: 400,
+							status: 401,
+							body: {
+								message: "Passkey not found",
+							},
 						});
 					}
 					const verification = await verifyAuthenticationResponse({
@@ -312,7 +352,13 @@ export const passkey = (options: PasskeyOptions) => {
 						},
 					});
 					const { verified } = verification;
-					if (!verified) return ctx.json(null, { status: 401 });
+					if (!verified)
+						return ctx.json(null, {
+							status: 401,
+							body: {
+								message: "verification failed",
+							},
+						});
 
 					await ctx.context.adapter.update<Passkey>({
 						model: "passkey",
@@ -335,12 +381,16 @@ export const passkey = (options: PasskeyOptions) => {
 						ctx.context.secret,
 						ctx.context.authCookies.sessionToken.options,
 					);
-					const user = await ctx.context.internalAdapter.findUserById(
-						passkey.userId,
-					);
+					if (callbackURL) {
+						return ctx.json({
+							url: callbackURL,
+							redirect: true,
+							session: s,
+						});
+					}
 					return ctx.json(
 						{
-							user,
+							session: s,
 						},
 						{
 							status: 200,
@@ -386,5 +436,5 @@ export const passkey = (options: PasskeyOptions) => {
 				},
 			},
 		},
-	} satisfies Provider;
+	} satisfies Plugin;
 };

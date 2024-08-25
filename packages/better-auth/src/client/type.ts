@@ -15,3 +15,10 @@ export type ProviderEndpoint<Auth extends BetterAuth> = UnionToIntersection<
 
 export type AuthStore = typeof reactStore | typeof vueStore;
 export interface ClientOptions extends BetterFetchOption {}
+
+export type HasPlugin<
+	PluginId extends string,
+	Auth extends BetterAuth,
+> = Auth["options"]["plugins"] extends Array<infer T>
+	? UnionToIntersection<T extends { id: PluginId } ? true : false>
+	: false;

@@ -6,7 +6,7 @@ import { generateId } from "../../../utils/id";
 import { role } from "../schema";
 
 export const createInvitation = createAuthEndpoint(
-	"/invite-member",
+	"/org/invite-member",
 	{
 		method: "POST",
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -98,7 +98,7 @@ export const createInvitation = createAuthEndpoint(
 );
 
 export const acceptInvitation = createAuthEndpoint(
-	"/accept-invitation",
+	"/org/accept-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -148,7 +148,7 @@ export const acceptInvitation = createAuthEndpoint(
 	},
 );
 export const rejectInvitation = createAuthEndpoint(
-	"/reject-invitation",
+	"/org/reject-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -192,7 +192,7 @@ export const rejectInvitation = createAuthEndpoint(
 );
 
 export const cancelInvitation = createAuthEndpoint(
-	"/cancel-invitation",
+	"/org/cancel-invitation",
 	{
 		method: "POST",
 		body: z.object({

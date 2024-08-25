@@ -28,9 +28,7 @@ export default function Component() {
 
     const validateOTP = async () => {
         await authClient.twoFactor.verifyOtp({
-            body: {
-                code: otp,
-            }
+            code: otp,
         })
     }
     return (

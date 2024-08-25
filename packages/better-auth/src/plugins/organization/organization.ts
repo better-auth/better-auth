@@ -109,7 +109,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		endpoints: {
 			...api,
 			hasPermission: createAuthEndpoint(
-				"/has-permission",
+				"/org/has-permission",
 				{
 					method: "GET",
 					query: z.object({

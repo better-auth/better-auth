@@ -25,9 +25,7 @@ export default function Component() {
         // Simulate API call
         try {
             const res = await authClient.forgetPassword({
-                body: {
-                    email
-                }
+                email
             })
             // If the API call is successful, set isSubmitted to true
             setIsSubmitted(true)

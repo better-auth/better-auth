@@ -21,9 +21,7 @@ export default function Component() {
             return
         }
         authClient.twoFactor.verifyTotp({
-            body: {
-                code: totpCode,
-            }
+            code: totpCode,
         }).then((res) => {
             console.log(res)
             if (res.data?.status) {

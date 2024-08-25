@@ -32,5 +32,10 @@ export const auth = betterAuth({
 				},
 			},
 		}),
+		passkey({
+			rpID: "localhost",
+			rpName: "BetterAuth",
+			origin: "http://localhost:3000",
+		}),
 	],
 });

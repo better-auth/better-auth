@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import AddPasskey from "./add-passkey";
 
 export default function UserCard({
     user,
@@ -32,6 +33,9 @@ export default function UserCard({
                         <p className="text-sm font-medium leading-none">{user.name}</p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                     </div>
+                </div>
+                <div className="border-y py-4 flex items-center justify-between">
+                    <AddPasskey />
                 </div>
             </CardContent>
             <CardFooter>

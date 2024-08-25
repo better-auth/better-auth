@@ -133,5 +133,8 @@ export const router = <C extends AuthContext>(ctx: C) => {
 				statusText: res.statusText,
 			});
 		},
+		onError(e) {
+			console.log(e);
+		},
 	});
 };

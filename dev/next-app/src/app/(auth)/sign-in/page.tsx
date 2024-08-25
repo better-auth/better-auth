@@ -65,11 +65,9 @@ export default function Page() {
 						</div>
 						<Button type="submit" className="w-full" onClick={async () => {
 							await authClient.signIn.credential({
-								body: {
-									email,
-									password,
-									callbackURL: "/"
-								}
+								email,
+								password,
+								callbackURL: "/"
 							})
 						}}>
 							Login
@@ -79,17 +77,15 @@ export default function Page() {
 							className="w-full"
 							onClick={async () => {
 								await authClient.signIn.oauth({
-									body: {
-										provider: "github",
-										callbackURL: "http://localhost:3000",
-									}
+									provider: "github",
+									callbackURL: "http://localhost:3000",
 								});
 							}}
 						>
 							Login with Github
 						</Button>
 						<Button variant="secondary" className="gap-2" onClick={async () => {
-
+							await authClient.passkey.signIn()
 						}}>
 							<Key size={16} />
 							Login with Passkey

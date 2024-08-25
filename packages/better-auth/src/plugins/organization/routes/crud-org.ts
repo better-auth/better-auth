@@ -5,7 +5,7 @@ import { generateId } from "../../../utils/id";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 
 export const createOrganization = createAuthEndpoint(
-	"/create/organization",
+	"/organization/create",
 	{
 		method: "POST",
 		body: z.object({
@@ -62,7 +62,7 @@ export const createOrganization = createAuthEndpoint(
 );
 
 export const updateOrganization = createAuthEndpoint(
-	"/update/organization",
+	"/organization/update",
 	{
 		method: "POST",
 		body: z.object({
@@ -128,7 +128,7 @@ export const updateOrganization = createAuthEndpoint(
 );
 
 export const deleteOrganization = createAuthEndpoint(
-	"/delete/organization",
+	"/organization/delete",
 	{
 		method: "POST",
 		body: z.object({
@@ -198,7 +198,7 @@ export const deleteOrganization = createAuthEndpoint(
 );
 
 export const getFullOrganization = createAuthEndpoint(
-	"/get/organization",
+	"/organization/get",
 	{
 		method: "GET",
 		body: z.object({
@@ -233,7 +233,7 @@ export const getFullOrganization = createAuthEndpoint(
 );
 
 export const listOrganization = createAuthEndpoint(
-	"/list/organization",
+	"/organization/list",
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],

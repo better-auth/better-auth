@@ -49,9 +49,14 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						)
 						.join("/");
 					const routePath = `/${path}`;
+					const method = getMethod(routePath, args[0]);
+					const body = args[0]?.body;
+					const query = args[0]?.query;
 					return await client(routePath, {
 						...args[0],
-						method: getMethod(routePath, args[0]),
+						body: method === "GET" ? undefined : body,
+						query: method === "POST" ? undefined : query,
+						method,
 						onSuccess() {
 							const signal = $signal?.[routePath as string];
 							if (signal) {

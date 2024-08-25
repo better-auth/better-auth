@@ -9,17 +9,22 @@ import {
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/types";
 import { Session } from "inspector";
-import { User } from "../adapters/schema";
-import { Passkey } from "../providers";
+import { User } from "../../adapters/schema";
+import { Passkey } from "../../providers";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {
 		autoFill?: boolean;
+		email?: string;
+		callbackURL?: string;
 	}) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
-				method: "GET",
+				method: "POST",
+				body: {
+					email: opts?.email,
+				},
 			},
 		);
 		if (!response.data) {
@@ -33,7 +38,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			const verified = await $fetch<{
 				session: Session;
 				user: User;
-			}>("/passkey/verify", {
+			}>("/passkey/verify-authentication", {
 				body: {
 					response: res,
 					type: "authenticate",
@@ -47,9 +52,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		}
 	};
 
-	const signUpPasskey = async (opts?: {
-		autoFill?: boolean;
-	}) => {
+	const register = async () => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
 			{
@@ -63,7 +66,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			const res = await startRegistration(options.data);
 			const verified = await $fetch<{
 				passkey: Passkey;
-			}>("/passkey/verify", {
+			}>("/passkey/verify-registration", {
 				body: {
 					response: res,
 					type: "register",
@@ -89,6 +92,6 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 	};
 	return {
 		signInPasskey,
-		signUpPasskey,
+		register,
 	};
 };

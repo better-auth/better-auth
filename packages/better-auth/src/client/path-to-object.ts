@@ -20,6 +20,15 @@ export type PathToObject<
 		? { [K in CamelCase<Segment>]: Fn }
 		: never;
 
+type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
+	string,
+	any
+>
+	? C["body"]
+	: C["query"] extends Record<string, any>
+		? C["query"]
+		: never;
+
 type MergeRoutes<T> = UnionToIntersection<T>;
 type InferRoute<API> = API extends {
 	[key: string]: infer T;
@@ -34,9 +43,9 @@ type InferRoute<API> = API extends {
 					T extends (ctx: infer C) => infer R
 						? C extends Context<any, any>
 							? (
-									...data: HasRequiredKeys<C> extends true
-										? [Prettify<C>]
-										: [Prettify<C>?]
+									...data: HasRequiredKeys<InferCtx<C>> extends true
+										? [Prettify<InferCtx<C>>]
+										: [Prettify<InferCtx<C>>?]
 								) => Promise<BetterFetchResponse<Awaited<R>>>
 							: never
 						: never

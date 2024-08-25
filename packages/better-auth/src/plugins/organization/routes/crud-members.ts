@@ -4,7 +4,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { getOrgAdapter } from "../adapter";
 
 export const deleteMember = createAuthEndpoint(
-	"/delete-member",
+	"/org/delete-member",
 	{
 		method: "POST",
 		body: z.object({
@@ -88,7 +88,7 @@ export const deleteMember = createAuthEndpoint(
 );
 
 export const updateMember = createAuthEndpoint(
-	"/update-member",
+	"/org/update-member",
 	{
 		method: "POST",
 		body: z.object({

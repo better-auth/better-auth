@@ -104,12 +104,10 @@ export default function SignUpForm() {
                                     return alert("Please fill all fields");
 
                                 const res = await authClient.signUp.credential({
-                                    body: {
-                                        email,
-                                        name: `${firstName} ${lastName}`,
-                                        password,
-                                        callbackUrl: "/"
-                                    }
+                                    email,
+                                    name: `${firstName} ${lastName}`,
+                                    password,
+                                    callbackUrl: "/"
                                 })
                                 if (res.error) {
                                     alert(res.error.message)
@@ -120,10 +118,8 @@ export default function SignUpForm() {
                         </Button>
                         <Button variant="outline" className="w-full gap-2" onClick={async () => {
                             await authClient.signIn.oauth({
-                                body: {
-                                    provider: "google",
-                                    callbackURL: "/",
-                                }
+                                provider: "google",
+                                callbackURL: "/",
                             });
                         }}>
                             <svg
@@ -156,10 +152,8 @@ export default function SignUpForm() {
                             className="w-full gap-2"
                             onClick={async () => {
                                 await authClient.signIn.oauth({
-                                    body: {
-                                        provider: "github",
-                                        callbackURL: "/",
-                                    }
+                                    provider: "github",
+                                    callbackURL: "/",
                                 });
                             }}
                         >
