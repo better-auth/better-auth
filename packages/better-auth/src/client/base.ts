@@ -8,13 +8,15 @@ import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
 import { InferRoutes } from "./path-to-object";
 import { ClientOptions, HasPlugin } from "./type";
 import { getBaseURL } from "../utils/base-url";
-import { Plugin } from "../types/plugins";
+import type { router } from "../api";
 
 export const createVanillaClient = <Auth extends BetterAuth = never>(
 	options?: ClientOptions,
 ) => {
 	type BAuth = Auth extends never ? BetterAuth : Auth;
-	type API = BAuth["api"];
+	type API = Auth extends never
+		? ReturnType<typeof router>["endpoints"]
+		: BAuth["api"];
 	const $fetch = createFetch({
 		...options,
 		baseURL: getBaseURL(options?.baseURL),
@@ -40,6 +42,7 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 			$activeOrganization,
 			$listOrganizations,
 		},
+		$fetch,
 	};
 	type HasPasskeyConfig = HasPlugin<"passkey", BAuth>;
 	type HasOrganizationConfig = HasPlugin<"organization", BAuth>;
@@ -48,6 +51,7 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 		| (HasPasskeyConfig extends true ? "passkey" : never)
 		| (HasOrganizationConfig extends true ? "setActiveOrganization" : never)
 		| "$atoms"
+		| "$fetch"
 	>;
 	const proxy = createDynamicPathProxy(actions, $fetch, {
 		"/create/organization": $listOrg,

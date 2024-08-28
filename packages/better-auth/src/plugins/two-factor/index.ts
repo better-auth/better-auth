@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
-import { Plugin } from "../../types/plugins";
+import { BetterAuthPlugin } from "../../types/plugins";
 import { totp2fa } from "./totp";
 import { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import {
@@ -113,5 +113,5 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 				},
 			},
 		},
-	} satisfies Plugin;
+	} satisfies BetterAuthPlugin;
 };

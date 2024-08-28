@@ -1,4 +1,4 @@
-import { BetterFetchResponse } from "@better-fetch/fetch";
+import { BetterFetchOption, BetterFetchResponse } from "@better-fetch/fetch";
 import { Context, Endpoint } from "better-call";
 import {
 	HasRequiredKeys,
@@ -24,10 +24,20 @@ type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 	string,
 	any
 >
-	? C["body"]
+	? C["body"] & {
+			options?: BetterFetchOption<undefined, C["query"], C["params"]>;
+		}
 	: C["query"] extends Record<string, any>
-		? C["query"]
-		: never;
+		? {
+				query: C["query"];
+				options?: Omit<
+					BetterFetchOption<C["body"], C["query"], C["params"]>,
+					"query"
+				>;
+			}
+		: {
+				options?: BetterFetchOption<C["body"], C["query"], C["params"]>;
+			};
 
 type MergeRoutes<T> = UnionToIntersection<T>;
 type InferRoute<API> = API extends {
@@ -52,4 +62,12 @@ type InferRoute<API> = API extends {
 				>
 		: never
 	: never;
-export type InferRoutes<API> = MergeRoutes<InferRoute<API>>;
+export type InferRoutes<API extends Record<string, Endpoint>> = MergeRoutes<
+	InferRoute<API>
+>;
+
+export interface ProxyRequest {
+	options?: BetterFetchOption<any, any>;
+	query?: any;
+	[key: string]: any;
+}

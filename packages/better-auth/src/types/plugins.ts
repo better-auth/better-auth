@@ -13,7 +13,7 @@ export type PluginSchema = {
 	};
 };
 
-export type Plugin = {
+export type BetterAuthPlugin = {
 	id: LiteralString;
 	endpoints: {
 		[key: string]: AuthEndpoint;

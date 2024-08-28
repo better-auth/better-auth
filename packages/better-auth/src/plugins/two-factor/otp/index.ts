@@ -94,8 +94,6 @@ export const otp2fa = (options?: OTPOptions) => {
 				Buffer.from(ctx.context.secret),
 				parseInt(randomNumber),
 			);
-			console.log(toCheckOtp, ctx.body.code);
-
 			if (toCheckOtp === ctx.body.code) {
 				ctx.setCookie(cookie.name, "", {
 					path: "/",

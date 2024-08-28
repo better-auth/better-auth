@@ -1,5 +1,6 @@
 import { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import { PreinitializedWritableAtom } from "nanostores";
+import { ProxyRequest } from "./path-to-object";
 
 const knownPathMethods: Record<string, "POST" | "GET"> = {
 	"/sign-out": "POST",
@@ -9,12 +10,16 @@ const knownPathMethods: Record<string, "POST" | "GET"> = {
 	"/two-factor/send-otp": "POST",
 };
 
-function getMethod(path: string, args?: BetterFetchOption) {
+function getMethod(path: string, args?: ProxyRequest) {
 	const method = knownPathMethods[path];
+	const { options, query, ...body } = args || {};
 	if (method) {
 		return method;
 	}
-	if (args?.body) {
+	if (options?.method) {
+		return options.method;
+	}
+	if (body && Object.keys(body).length > 0) {
 		return "POST";
 	}
 	return "GET";
@@ -49,13 +54,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						)
 						.join("/");
 					const routePath = `/${path}`;
-					const method = getMethod(routePath, args[0]);
-					const body = args[0]?.body;
-					const query = args[0]?.query;
+					const arg = (args[0] || {}) as ProxyRequest;
+					const method = getMethod(routePath, arg);
+					const { query, options, ...body } = arg;
 					return await client(routePath, {
-						...args[0],
+						...options,
 						body: method === "GET" ? undefined : body,
-						query: method === "POST" ? undefined : query,
+						query: query,
 						method,
 						onSuccess() {
 							const signal = $signal?.[routePath as string];

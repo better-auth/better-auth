@@ -15,8 +15,25 @@ export const csrfMiddleware = createAuthMiddleware(
 		if (
 			ctx.request?.method !== "POST" ||
 			ctx.context.options.advanced?.disableCSRFCheck
-		)
+		) {
 			return;
+		}
+		const url = new URL(ctx.request.url);
+		console.log({
+			url: ctx.request.url,
+		});
+		/**
+		 * If origin is the same as baseURL or if the
+		 * origin is in the trustedOrigins then we
+		 * don't need to check the CSRF token.
+		 */
+		if (
+			url.origin === ctx.context.baseURL ||
+			ctx.context.options.trustedOrigins?.includes(url.origin)
+		) {
+			return;
+		}
+
 		const csrfToken = ctx.body?.csrfToken;
 		const csrfCookie = await ctx.getSignedCookie(
 			ctx.context.authCookies.csrfToken.name,

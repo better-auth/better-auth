@@ -38,11 +38,13 @@ export const createInternalAdapter = (
 			});
 			return createdUser;
 		},
-		createSession: async (userId: string) => {
-			const data = {
+		createSession: async (userId: string, request?: Request) => {
+			const data: Session = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
 				expiresAt: getDate(sessionExpiration),
+				ipAddress: request?.headers.get("x-forwarded-for") || "",
+				userAgent: request?.headers.get("user-agent") || "",
 			};
 			const session = adapter.create<Session>({
 				model: tables.session.tableName,

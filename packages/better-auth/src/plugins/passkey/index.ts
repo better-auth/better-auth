@@ -16,7 +16,7 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { Plugin } from "../../types/plugins";
+import { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 
 export interface PasskeyOptions {
@@ -249,45 +249,55 @@ export const passkey = (options: PasskeyOptions) => {
 						});
 					}
 
-					const verification = await verifyRegistrationResponse({
-						response: resp,
-						expectedChallenge,
-						expectedOrigin: origin,
-						expectedRPID: options.rpID,
-					});
-					const { verified, registrationInfo } = verification;
-					if (!verified || !registrationInfo) {
+					try {
+						const verification = await verifyRegistrationResponse({
+							response: resp,
+							expectedChallenge,
+							expectedOrigin: origin,
+							expectedRPID: options.rpID,
+						});
+						const { verified, registrationInfo } = verification;
+						if (!verified || !registrationInfo) {
+							return ctx.json(null, {
+								status: 400,
+							});
+						}
+						const {
+							credentialID,
+							credentialPublicKey,
+							counter,
+							credentialDeviceType,
+							credentialBackedUp,
+						} = registrationInfo;
+						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
+						const userID = generateRandomString(32, alphabet("a-z", "0-9"));
+						const newPasskey: Passkey = {
+							userId: userData.id,
+							webauthnUserID: userID,
+							id: credentialID,
+							publicKey: pubKey,
+							counter,
+							deviceType: credentialDeviceType,
+							transports: resp.response.transports.join(","),
+							backedUp: credentialBackedUp,
+							createdAt: new Date(),
+						};
+						const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
+							model: "passkey",
+							data: newPasskey,
+						});
+						return ctx.json(newPasskeyRes, {
+							status: 200,
+						});
+					} catch (e) {
+						console.log(e);
 						return ctx.json(null, {
 							status: 400,
+							body: {
+								message: "Registration failed",
+							},
 						});
 					}
-					const {
-						credentialID,
-						credentialPublicKey,
-						counter,
-						credentialDeviceType,
-						credentialBackedUp,
-					} = registrationInfo;
-					const pubKey = Buffer.from(credentialPublicKey).toString("base64");
-					const userID = generateRandomString(32, alphabet("a-z", "0-9"));
-					const newPasskey: Passkey = {
-						userId: userData.id,
-						webauthnUserID: userID,
-						id: credentialID,
-						publicKey: pubKey,
-						counter,
-						deviceType: credentialDeviceType,
-						transports: resp.response.transports.join(","),
-						backedUp: credentialBackedUp,
-						createdAt: new Date(),
-					};
-					const newPasskeyRes = await ctx.context.adapter.create<Passkey>({
-						model: "passkey",
-						data: newPasskey,
-					});
-					return ctx.json(newPasskeyRes, {
-						status: 200,
-					});
 				},
 			),
 			verifyPasskeyAuthentication: createAuthEndpoint(
@@ -335,67 +345,79 @@ export const passkey = (options: PasskeyOptions) => {
 							},
 						});
 					}
-					const verification = await verifyAuthenticationResponse({
-						response: resp as AuthenticationResponseJSON,
-						expectedChallenge,
-						expectedOrigin: origin,
-						expectedRPID: opts.rpID,
-						authenticator: {
-							credentialID: passkey.id,
-							credentialPublicKey: new Uint8Array(
-								Buffer.from(passkey.publicKey, "base64"),
-							),
-							counter: passkey.counter,
-							transports: passkey.transports?.split(
-								",",
-							) as AuthenticatorTransportFuture[],
-						},
-					});
-					const { verified } = verification;
-					if (!verified)
-						return ctx.json(null, {
-							status: 401,
-							body: {
-								message: "verification failed",
+					try {
+						console.log({ resp });
+						const verification = await verifyAuthenticationResponse({
+							response: resp as AuthenticationResponseJSON,
+							expectedChallenge,
+							expectedOrigin: origin,
+							expectedRPID: opts.rpID,
+							authenticator: {
+								credentialID: passkey.id,
+								credentialPublicKey: new Uint8Array(
+									Buffer.from(passkey.publicKey, "base64"),
+								),
+								counter: passkey.counter,
+								transports: passkey.transports?.split(
+									",",
+								) as AuthenticatorTransportFuture[],
 							},
 						});
+						const { verified } = verification;
+						if (!verified)
+							return ctx.json(null, {
+								status: 401,
+								body: {
+									message: "verification failed",
+								},
+							});
 
-					await ctx.context.adapter.update<Passkey>({
-						model: "passkey",
-						where: [
-							{
-								field: "id",
-								value: passkey.id,
+						await ctx.context.adapter.update<Passkey>({
+							model: "passkey",
+							where: [
+								{
+									field: "id",
+									value: passkey.id,
+								},
+							],
+							update: {
+								counter: verification.authenticationInfo.newCounter,
 							},
-						],
-						update: {
-							counter: passkey.counter + 1,
-						},
-					});
-					const s = await ctx.context.internalAdapter.createSession(
-						passkey.userId,
-					);
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						s.id,
-						ctx.context.secret,
-						ctx.context.authCookies.sessionToken.options,
-					);
-					if (callbackURL) {
-						return ctx.json({
-							url: callbackURL,
-							redirect: true,
-							session: s,
+						});
+						const s = await ctx.context.internalAdapter.createSession(
+							passkey.userId,
+							ctx.request,
+						);
+						await ctx.setSignedCookie(
+							ctx.context.authCookies.sessionToken.name,
+							s.id,
+							ctx.context.secret,
+							ctx.context.authCookies.sessionToken.options,
+						);
+						if (callbackURL) {
+							return ctx.json({
+								url: callbackURL,
+								redirect: true,
+								session: s,
+							});
+						}
+						return ctx.json(
+							{
+								session: s,
+							},
+							{
+								status: 200,
+							},
+						);
+					} catch (e) {
+						ctx.context.logger.error(e);
+						return ctx.json(null, {
+							status: 400,
+							body: {
+								message: "Authentication failed",
+							},
 						});
 					}
-					return ctx.json(
-						{
-							session: s,
-						},
-						{
-							status: 200,
-						},
-					);
 				},
 			),
 		},
@@ -436,5 +458,5 @@ export const passkey = (options: PasskeyOptions) => {
 				},
 			},
 		},
-	} satisfies Plugin;
+	} satisfies BetterAuthPlugin;
 };

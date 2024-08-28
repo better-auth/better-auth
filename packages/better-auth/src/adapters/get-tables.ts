@@ -49,6 +49,17 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 		session: {
 			tableName: options.session?.modelName || "session",
 			fields: {
+				expiresAt: {
+					type: "date",
+				},
+				ipAddress: {
+					type: "string",
+					required: false,
+				},
+				userAgent: {
+					type: "string",
+					required: false,
+				},
 				userId: {
 					type: "string",
 					references: {
@@ -56,9 +67,6 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						field: "id",
 						onDelete: "cascade",
 					},
-				},
-				expiresAt: {
-					type: "date",
 				},
 			},
 		},

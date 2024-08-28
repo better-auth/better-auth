@@ -85,7 +85,9 @@ export default function Page() {
 							Login with Github
 						</Button>
 						<Button variant="secondary" className="gap-2" onClick={async () => {
-							await authClient.passkey.signIn()
+							await authClient.passkey.signIn({
+								callbackURL: "/"
+							})
 						}}>
 							<Key size={16} />
 							Login with Passkey

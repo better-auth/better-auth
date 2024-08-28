@@ -4,11 +4,18 @@ import { authClient } from "./lib/auth-client";
 
 export async function middleware(request: NextRequest) {
 	const session = await authClient.session({
-		headers: request.headers,
+		options: {
+			headers: request.headers,
+		},
 	});
 	if (!session.data) {
 		return NextResponse.redirect(new URL("/sign-in", request.url));
 	}
+	const canInvite = await authClient.org.hasPermission({
+		permission: {
+			invitation: ["create"],
+		},
+	});
 	return NextResponse.next();
 }
 

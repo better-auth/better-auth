@@ -95,7 +95,10 @@ export const callbackOAuth = createAuthEndpoint(
 		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR");
 
 		//create session
-		const session = await c.context.internalAdapter.createSession(userId);
+		const session = await c.context.internalAdapter.createSession(
+			userId,
+			c.request,
+		);
 		try {
 			await c.setSignedCookie(
 				c.context.authCookies.sessionToken.name,

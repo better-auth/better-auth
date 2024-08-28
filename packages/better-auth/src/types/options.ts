@@ -160,4 +160,8 @@ export interface BetterAuthOptions {
 		 */
 		sendVerificationEmail?: (email: string, url: string) => Promise<void>;
 	};
+	/**
+	 * List of trusted origins.
+	 */
+	trustedOrigins?: string[];
 }

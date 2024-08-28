@@ -69,6 +69,7 @@ export const signUpCredential = createAuthEndpoint(
 		});
 		const session = await ctx.context.internalAdapter.createSession(
 			createdUser.id,
+			ctx.request,
 		);
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.sessionToken.name,

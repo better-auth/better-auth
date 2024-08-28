@@ -1,7 +1,7 @@
 import { z, ZodArray, ZodLiteral, ZodObject, ZodOptional } from "zod";
 import { User } from "../../adapters/schema";
 import { createAuthEndpoint } from "../../api/call";
-import { Plugin } from "../../types/plugins";
+import { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
 import {
 	createOrganization,
@@ -111,8 +111,8 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			hasPermission: createAuthEndpoint(
 				"/org/has-permission",
 				{
-					method: "GET",
-					query: z.object({
+					method: "POST",
+					body: z.object({
 						permission: z.record(z.string(), z.array(z.string())),
 					}) as unknown as ZodObject<{
 						permission: ZodObject<{
@@ -200,5 +200,5 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 		},
-	} satisfies Plugin;
+	} satisfies BetterAuthPlugin;
 };
