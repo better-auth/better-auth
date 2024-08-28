@@ -3,7 +3,6 @@ import { createAuthMiddleware, optionsMiddleware } from "../../api/call";
 import { OrganizationOptions } from "./organization";
 import { defaultRoles, Role } from "./access";
 import { Session, User } from "../../adapters/schema";
-import { getSession } from "../../api/routes";
 import { sessionMiddleware } from "../../api/middlewares/session";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {

@@ -5,6 +5,7 @@
 		"target": "es2022",
 		"allowJs": true,
 		"resolveJsonModule": true,
+		"disableReferencedProjectLoad": true,
 		"moduleDetection": "force",
 		"isolatedModules": true,
 		"strict": true,

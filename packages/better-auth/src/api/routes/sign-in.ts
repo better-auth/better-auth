@@ -87,16 +87,18 @@ export const signInCredential = createAuthEndpoint(
 			email: z.string().email(),
 			password: z.string(),
 			callbackURL: z.string().optional(),
+			/**
+			 * If this is true the session will only be valid for the current browser session
+			 * @default false
+			 */
+			dontRememberMe: z.boolean().default(false).optional(),
 		}),
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
 			ctx.context.logger.error("Email and password is not enabled");
-			return ctx.json(null, {
-				body: {
-					message: "Email and password is not enabled",
-				},
-				status: 400,
+			throw new APIError("BAD_REQUEST", {
+				message: "Email and password is not enabled",
 			});
 		}
 		const currentSession = await getSessionFromCtx(ctx);
@@ -114,8 +116,8 @@ export const signInCredential = createAuthEndpoint(
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
 			ctx.context.logger.error("User not found", { email });
-			return ctx.json(null, {
-				status: 401,
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
 			});
 		}
 		const credentialAccount = user.accounts.find(
@@ -124,20 +126,17 @@ export const signInCredential = createAuthEndpoint(
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
 			ctx.context.logger.error("Password not found", { email });
-			return ctx.json(null, {
-				status: 401,
-				body: { message: "Unexpected error" },
+			throw new APIError("UNAUTHORIZED", {
+				message: "Unexpected error",
 			});
 		}
 		const validPassword = await argon2id.verify(currentPassword, password);
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
-			return ctx.json(null, {
-				status: 401,
-				body: { message: "Invalid email or password" },
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
 			});
 		}
-
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.request,
@@ -146,7 +145,12 @@ export const signInCredential = createAuthEndpoint(
 			ctx.context.authCookies.sessionToken.name,
 			session.id,
 			ctx.context.secret,
-			ctx.context.authCookies.sessionToken.options,
+			ctx.body.dontRememberMe
+				? {
+						...ctx.context.authCookies.sessionToken.options,
+						maxAge: undefined,
+					}
+				: ctx.context.authCookies.sessionToken.options,
 		);
 		return ctx.json({
 			user: user.user,

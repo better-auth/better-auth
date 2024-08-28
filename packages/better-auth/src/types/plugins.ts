@@ -1,8 +1,9 @@
 import { Migration } from "kysely";
-import { AuthEndpoint, AuthMiddleware } from "../api/call";
+import { AuthEndpoint } from "../api/call";
 import { FieldAttribute } from "../db/field";
 import { LiteralString } from "./helper";
-import { Endpoint } from "better-call";
+import { Endpoint, EndpointResponse } from "better-call";
+import { GenericEndpointContext } from "./context";
 
 export type PluginSchema = {
 	[table: string]: {
@@ -22,6 +23,28 @@ export type BetterAuthPlugin = {
 		path: string;
 		middleware: Endpoint;
 	}[];
+	hooks?: {
+		before?: {
+			matcher: (context: GenericEndpointContext) => boolean;
+			handler: Endpoint<
+				(context: GenericEndpointContext) => Promise<void | {
+					context: Partial<GenericEndpointContext>;
+				}>
+			>;
+		}[];
+		after?: {
+			matcher: (context: GenericEndpointContext) => boolean;
+			handler: Endpoint<
+				(
+					context: GenericEndpointContext & {
+						returned: EndpointResponse;
+					},
+				) => Promise<void | {
+					response: EndpointResponse;
+				}>
+			>;
+		}[];
+	};
 	/**
 	 * Schema the plugin needs
 	 *

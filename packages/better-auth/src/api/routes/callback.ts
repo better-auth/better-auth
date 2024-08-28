@@ -4,6 +4,7 @@ import { APIError } from "better-call";
 import { parseState } from "../../utils/state";
 import { userSchema } from "../../adapters/schema";
 import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
+import { generateId } from "../../utils/id";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -36,11 +37,11 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("Code verification failed");
 			throw new APIError("UNAUTHORIZED");
 		}
-
 		const user = await provider.userInfo.getUserInfo(tokens);
+		const id = generateId();
 		const data = userSchema.safeParse({
 			...user,
-			id: user?.id.toString(),
+			id,
 		});
 		if (!user || data.success === false) {
 			throw new APIError("BAD_REQUEST");
@@ -52,7 +53,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		//find user in db
 		const dbUser = await c.context.internalAdapter.findUserByEmail(user.email);
-		let userId = dbUser?.user.id;
+		const userId = dbUser?.user.id;
 		if (dbUser) {
 			//check if user has already linked this provider
 			const hasBeenLinked = dbUser.accounts.find(
@@ -76,14 +77,13 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				await c.context.internalAdapter.createOAuthUser(user, {
+				await c.context.internalAdapter.createOAuthUser(data.data, {
 					...tokens,
 					id: `${provider.id}:${user.id}`,
 					providerId: provider.id,
 					accountId: user.id,
-					userId: user.id,
+					userId: id,
 				});
-				userId = user.id;
 			} catch (e) {
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "unable_to_create_user");
@@ -93,10 +93,9 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		//this should never happen
 		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR");
-
 		//create session
 		const session = await c.context.internalAdapter.createSession(
-			userId,
+			userId || id,
 			c.request,
 		);
 		try {

@@ -93,16 +93,11 @@ export const createInternalAdapter = (
 				session.expiresAt.valueOf() - maxAge.valueOf() + updateDate <=
 				Date.now();
 			if (shouldBeUpdated) {
-				const updatedSession = await adapter.update<Session>({
+				const updatedSession = await adapter.create<Session>({
 					model: tables.session.tableName,
-					where: [
-						{
-							field: "id",
-							value: session.id,
-						},
-					],
-					update: {
+					data: {
 						...session,
+						id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 						expiresAt: new Date(Date.now() + sessionExpiration),
 					},
 				});

@@ -51,7 +51,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.1.7
+        version: 1.1.8
       vite:
         specifier: ^5.3.5
         version: 5.3.5(@types/node@20.14.12)
@@ -478,8 +478,8 @@ importers:
         specifier: ^1.9.2
         version: 1.9.2
       better-call:
-        specifier: ^0.1.33
-        version: 0.1.33(typescript@5.5.4)
+        specifier: ^0.1.36
+        version: 0.1.36(typescript@5.5.4)
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
@@ -2659,8 +2659,8 @@ packages:
   '@types/better-sqlite3@7.6.11':
     resolution: {integrity: sha512-i8KcD3PgGtGBLl3+mMYA8PdKkButvPyARxA7IQAd6qeslht13qxb1zzO8dRCtE7U3IoJS782zDBAeoKiM695kg==}
 
-  '@types/bun@1.1.7':
-    resolution: {integrity: sha512-iIIn26SOX8qI5E8Juh+0rUgBmFHvll1akscwerhp9O/fHZGdQBWNLJkkRg/3z2Mh6a3ZgWUIkXViLZZYg47TXw==}
+  '@types/bun@1.1.8':
+    resolution: {integrity: sha512-PIwVFQKPviksiibobyvcWtMvMFMTj91T8dQEh9l1P3Ypr3ZuVn9w7HSr+5mTNrPqD1xpdDLEErzZPU8gqHBu6g==}
 
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
@@ -3042,10 +3042,10 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
-  better-call@0.1.33:
-    resolution: {integrity: sha512-gzthE/AnimwMCNBNyy9LRqqAtjXkqO+dR4n1OjCiUhiBK4X+NZMKekQUKIzpfwDRC4k3hCshb1LsPhqwiSM7Bw==}
+  better-call@0.1.36:
+    resolution: {integrity: sha512-+FsoIB8tMVRciTTN9UUXXoJEzAqIaaNPrxa9kDYoTaGCTCimNKbHNuLwsnIAibamG0Lo7CFCiSL4yyV+I32O4A==}
     peerDependencies:
-      typescript: ^5.0.0
+      typescript: ^5.6.0-beta
 
   better-sqlite3@11.1.2:
     resolution: {integrity: sha512-gujtFwavWU4MSPT+h9B+4pkvZdyOUkH54zgLdIrMmmmd4ZqiBIrRNBzNzYVFO417xo882uP5HBu4GjOfaSrIQw==}
@@ -3089,8 +3089,8 @@ packages:
   bun-html-live-reload@0.1.3:
     resolution: {integrity: sha512-PW1sp9ZmBAqiAa0aUhHpFc6sEQmC6FgRNKVAvcjSDUMqASzgq7xYpNkEt2Z6VjuiPXKtOx/49b6sLLmjyojrOw==}
 
-  bun-types@1.1.25:
-    resolution: {integrity: sha512-WpRb8/N3S5IE8UYdIn39+0Is1XzxsC78+MCe5cIdaer0lfFs6+DREtQH9TM6KJNKTxBYDvbx81RwbvxS5+CkVQ==}
+  bun-types@1.1.26:
+    resolution: {integrity: sha512-n7jDe62LsB2+WE8Q8/mT3azkPaatKlj/2MyP6hi3mKvPz9oPpB6JW/Ll6JHtNLudasFFuvfgklYSE+rreGvBjw==}
 
   bundle-require@5.0.0:
     resolution: {integrity: sha512-GuziW3fSSmopcx4KRymQEJVbZUfqlCqcq7dvs6TYwKRZiegK/2buMxQTPs6MGlNv50wms1699qYO54R8XfRX4w==}
@@ -8820,9 +8820,9 @@ snapshots:
     dependencies:
       '@types/node': 20.14.12
 
-  '@types/bun@1.1.7':
+  '@types/bun@1.1.8':
     dependencies:
-      bun-types: 1.1.25
+      bun-types: 1.1.26
 
   '@types/cookie@0.6.0': {}
 
@@ -9275,7 +9275,7 @@ snapshots:
       rou3: 0.5.1
       typescript: 5.5.4
 
-  better-call@0.1.33(typescript@5.5.4):
+  better-call@0.1.36(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       '@types/set-cookie-parser': 2.4.10
@@ -9343,7 +9343,7 @@ snapshots:
 
   bun-html-live-reload@0.1.3: {}
 
-  bun-types@1.1.25:
+  bun-types@1.1.26:
     dependencies:
       '@types/node': 20.12.14
       '@types/ws': 8.5.11

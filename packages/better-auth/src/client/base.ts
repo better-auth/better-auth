@@ -19,7 +19,7 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 		: BAuth["api"];
 	const $fetch = createFetch({
 		...options,
-		baseURL: getBaseURL(options?.baseURL),
+		baseURL: getBaseURL(options?.baseURL).withPath,
 		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
 	});
 	const { $session, $sessionSignal } = getSessionAtom<Auth>($fetch);

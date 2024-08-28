@@ -9,7 +9,7 @@ import {
 	updateOrganization,
 } from "./routes/crud-org";
 import { AccessControl, defaultRoles, defaultStatements, Role } from "./access";
-import { getSession } from "../../api/routes";
+import { getSessionFromCtx } from "../../api/routes";
 import { AuthContext } from "../../init";
 import {
 	acceptInvitation,
@@ -18,6 +18,10 @@ import {
 	rejectInvitation,
 } from "./routes/crud-invites";
 import { deleteMember, updateMember } from "./routes/crud-members";
+import { sessionMiddleware } from "../../api/middlewares/session";
+import { orgMiddleware, orgSessionMiddleware } from "./call";
+import { getOrgAdapter } from "./adapter";
+import { APIError } from "better-call";
 
 export interface OrganizationOptions {
 	/**
@@ -94,7 +98,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		roles,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
-			return await getSession(context);
+			return await getSessionFromCtx(context);
 		},
 	});
 
@@ -112,6 +116,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				"/org/has-permission",
 				{
 					method: "POST",
+					requireHeaders: true,
 					body: z.object({
 						permission: z.record(z.string(), z.array(z.string())),
 					}) as unknown as ZodObject<{
@@ -122,10 +127,42 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							>;
 						}>;
 					}>,
+					use: [orgSessionMiddleware],
 				},
-				async () => {
-					const hasPerm = true;
-					return hasPerm;
+				async (ctx) => {
+					if (!ctx.context.session.session.activeOrganizationId) {
+						throw new APIError("BAD_REQUEST", {
+							message: "No active organization",
+						});
+					}
+					const adapter = getOrgAdapter(ctx.context.adapter);
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId:
+							ctx.context.session.session.activeOrganizationId || "",
+					});
+					if (!member) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "You are not a member of this organization",
+						});
+					}
+					const role = roles[member.role];
+					const result = role.authorize(ctx.body.permission as any);
+					if (result.error) {
+						return ctx.json(
+							{
+								error: result.error,
+								success: false,
+							},
+							{
+								status: 403,
+							},
+						);
+					}
+					return ctx.json({
+						error: null,
+						success: true,
+					});
 				},
 			),
 		},

@@ -15,7 +15,11 @@ export async function middleware(request: NextRequest) {
 		permission: {
 			invitation: ["create"],
 		},
+		options: {
+			headers: request.headers,
+		},
 	});
+	console.log({ canInvite });
 	return NextResponse.next();
 }
 

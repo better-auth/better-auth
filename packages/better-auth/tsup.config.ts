@@ -4,6 +4,7 @@ export default defineConfig({
 	entry: {
 		index: "./src/index.ts",
 		provider: "./src/providers/index.ts",
+		types: "./src/types/index.ts",
 		client: "./src/client/index.ts",
 		cli: "./src/cli/index.ts",
 		react: "./src/client/react.ts",

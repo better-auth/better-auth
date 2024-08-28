@@ -64,6 +64,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						method,
 						onSuccess() {
 							const signal = $signal?.[routePath as string];
+							console.log({ routePath, signal });
 							if (signal) {
 								signal.set(!signal.get());
 							}

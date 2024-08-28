@@ -1,3 +1,4 @@
+import { Context, ContextTools } from "better-call";
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
 import { createInternalAdapter } from "./db";
@@ -13,13 +14,13 @@ import { createLogger } from "./utils/logger";
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const { baseURL, withPath } = getBaseURL(options.baseURL, options.basePath);
 	return {
 		options: {
 			...options,
-			baseURL,
+			baseURL: baseURL,
 		},
-		baseURL,
+		baseURL: withPath,
 		secret:
 			options.secret ||
 			process.env.BETTER_AUTH_SECRET ||

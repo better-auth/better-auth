@@ -11,10 +11,16 @@ function checkHasPath(url: string): boolean {
 function withPath(url: string, path = "/api/auth") {
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
-		return url;
+		return {
+			baseURL: new URL(url).origin,
+			withPath: url,
+		};
 	}
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${url}${path}`;
+	return {
+		baseURL: url,
+		withPath: `${url}${path}`,
+	};
 }
 
 export function getBaseURL(url?: string, path?: string) {
@@ -33,7 +39,10 @@ export function getBaseURL(url?: string, path?: string) {
 		!fromEnv &&
 		(process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test")
 	) {
-		return "http://localhost:3000/api/auth";
+		return {
+			baseURL: "http://localhost:3000",
+			withPath: "http://localhost:3000/api/auth",
+		};
 	}
 	throw new Error(
 		"Could not infer baseURL from environment variables. Please pass it as an option to the createClient function.",

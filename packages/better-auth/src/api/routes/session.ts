@@ -1,6 +1,5 @@
 import { Context } from "better-call";
 import { createAuthEndpoint } from "../call";
-import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const getSession = createAuthEndpoint(
 	"/session",
@@ -30,6 +29,15 @@ export const getSession = createAuthEndpoint(
 		}
 		const updatedSession = await ctx.context.internalAdapter.updateSession(
 			session.session,
+		);
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionToken.name,
+			updatedSession.id,
+			ctx.context.secret,
+			{
+				...ctx.context.authCookies.sessionToken.options,
+				maxAge: updatedSession.expiresAt.valueOf() - Date.now(),
+			},
 		);
 		return ctx.json({
 			session: updatedSession,
