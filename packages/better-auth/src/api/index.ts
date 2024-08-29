@@ -99,13 +99,17 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
-						const match = hook.matcher(context);
+						const match = hook.matcher({
+							...context,
+							...value,
+						});
 						if (match) {
 							const hookRes = await hook.handler(context);
 							if (hookRes && "context" in hookRes) {
 								context = {
 									...context,
 									...hookRes.context,
+									...value,
 								};
 							}
 						}

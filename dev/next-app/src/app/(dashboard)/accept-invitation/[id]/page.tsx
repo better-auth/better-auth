@@ -31,7 +31,6 @@ export default function InvitationPage({ params }: {
     }
 
     const invitation = authClient.useInvitation()
-    console.log({ invitation })
     useEffect(() => {
         if (params.id) {
             authClient.setInvitationId(params.id)

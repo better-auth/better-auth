@@ -1,6 +1,11 @@
 import { betterAuth } from "better-auth";
-import { github, passkey } from "better-auth/provider";
-import { organization, twoFactor } from "better-auth/plugins";
+import { github } from "better-auth/provider";
+import {
+	organization,
+	passkey,
+	twoFactor,
+	validEmail,
+} from "better-auth/plugins";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",
@@ -41,5 +46,6 @@ export const auth = betterAuth({
 			rpName: "BetterAuth",
 			origin: "http://localhost:3000",
 		}),
+		validEmail(),
 	],
 });
