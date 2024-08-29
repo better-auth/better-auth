@@ -13,5 +13,8 @@ export const oAuthProviderList = Object.keys(oAuthProviders) as [
 
 export * from "./github";
 export * from "./google";
-export * from "../plugins/passkey";
+export * from "./apple";
+export * from "./discord";
+export * from "./spotify";
+export * from "./twitch";
 export * from "../types/provider";
