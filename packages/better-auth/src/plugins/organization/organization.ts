@@ -5,7 +5,9 @@ import { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
 import {
 	createOrganization,
+	getFullOrganization,
 	listOrganization,
+	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
 import { AccessControl, defaultRoles, defaultStatements, Role } from "./access";
@@ -15,6 +17,7 @@ import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
+	getActiveInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import { deleteMember, updateMember } from "./routes/crud-members";
@@ -22,6 +25,7 @@ import { sessionMiddleware } from "../../api/middlewares/session";
 import { orgMiddleware, orgSessionMiddleware } from "./call";
 import { getOrgAdapter } from "./adapter";
 import { APIError } from "better-call";
+import { Invitation } from "./schema";
 
 export interface OrganizationOptions {
 	/**
@@ -73,16 +77,35 @@ export interface OrganizationOptions {
 	 * @default 48 hours
 	 */
 	invitationExpiresIn?: number;
+	/**
+	 * @param invitation  the invitation object
+	 * @param email  the email of the user to be invited
+	 *
+	 * Make sure to construct the invitation link using the invitation id.
+	 * @example
+	 * ```ts
+	 * const invitationLink = `${ctx.origin}/organization/accept-invitation?invitationId=$
+	 * {invitation.id}`
+	 *
+	 * ```
+	 */
+	sendInvitationEmail?: (
+		invitation: Invitation,
+		email: string,
+	) => Promise<void>;
 }
 
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
 		updateOrganization,
+		setActiveOrganization,
+		getFullOrganization,
 		listOrganization,
 		createInvitation,
 		cancelInvitation,
 		acceptInvitation,
+		getActiveInvitation,
 		rejectInvitation,
 		deleteMember,
 		updateMember,
@@ -113,7 +136,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		endpoints: {
 			...api,
 			hasPermission: createAuthEndpoint(
-				"/org/has-permission",
+				"/organization/has-permission",
 				{
 					method: "POST",
 					requireHeaders: true,
@@ -200,6 +223,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 					},
+					name: {
+						type: "string",
+					},
 					role: {
 						type: "string",
 						required: true,
@@ -210,10 +236,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			invitation: {
 				fields: {
 					organizationId: {
-						type: "string",
-						required: true,
-					},
-					userId: {
 						type: "string",
 						required: true,
 					},
@@ -233,6 +255,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					expiresAt: {
 						type: "date",
 						required: true,
+					},
+					inviterId: {
+						type: "string",
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 				},
 			},

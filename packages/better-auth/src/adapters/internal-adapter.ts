@@ -85,7 +85,7 @@ export const createInternalAdapter = (
 		updateSession: async (session: Session) => {
 			const updateAge =
 				options.session?.updateAge === undefined
-					? 60 * 60 * 24
+					? 1000 // 1 hour update age
 					: options.session?.updateAge;
 			const updateDate = updateAge === 0 ? 0 : getDate(updateAge).valueOf();
 			const maxAge = getDate(sessionExpiration);
@@ -101,19 +101,26 @@ export const createInternalAdapter = (
 						expiresAt: new Date(Date.now() + sessionExpiration),
 					},
 				});
+				await adapter.update<Session>({
+					model: tables.session.tableName,
+					where: [
+						{
+							field: "id",
+							value: session.id,
+						},
+					],
+					update: {
+						/**
+						 * update the session to expire in 2 minute. This is to prevent
+						 * the session from expiring too quickly and logging the user out.
+						 */
+						expiresAt: new Date(Date.now() + 1000 * 60 * 2),
+					},
+				});
 				return updatedSession;
 			}
-			const updatedSession = await adapter.update<Session>({
-				model: tables.session.tableName,
-				where: [
-					{
-						field: "id",
-						value: session.id,
-					},
-				],
-				update: session,
-			});
-			return updatedSession;
+
+			return session;
 		},
 		deleteSession: async (id: string) => {
 			const session = await adapter.delete<Session>({

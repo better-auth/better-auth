@@ -43,10 +43,14 @@ export const callbackOAuth = createAuthEndpoint(
 			...user,
 			id,
 		});
-		if (!user || data.success === false) {
-			throw new APIError("BAD_REQUEST");
-		}
 		const { callbackURL, currentURL } = parseState(c.query.state);
+		if (!user || data.success === false) {
+			if (currentURL) {
+				throw c.redirect(`${currentURL}?error=oauth_validation_failed`);
+			} else {
+				throw new APIError("BAD_REQUEST");
+			}
+		}
 		if (!callbackURL) {
 			c.context.logger.error("Callback URL not found");
 			throw new APIError("FORBIDDEN");
@@ -92,7 +96,10 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		}
 		//this should never happen
-		if (!userId) throw new APIError("INTERNAL_SERVER_ERROR");
+		if (!userId && !id)
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: "Unable to create user",
+			});
 		//create session
 		const session = await c.context.internalAdapter.createSession(
 			userId || id,

@@ -24,11 +24,23 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 	});
 	const { $session, $sessionSignal } = getSessionAtom<Auth>($fetch);
 	const { signInPasskey, register } = getPasskeyActions($fetch);
-	const { $activeOrganization, $listOrganizations, activeOrgId, $listOrg } =
-		getOrganizationAtoms($fetch, $session);
+	const {
+		$activeOrganization,
+		$listOrganizations,
+		activeOrgId,
+		$listOrg,
+		$activeOrgSignal,
+
+		$activeInvitationId,
+		$invitation,
+	} = getOrganizationAtoms($fetch, $session);
+
 	const actions = {
 		setActiveOrganization: (orgId: string | null) => {
 			activeOrgId.set(orgId);
+		},
+		setInvitationId: (id: string | null) => {
+			$activeInvitationId.set(id);
 		},
 		passkey: {
 			signIn: signInPasskey,
@@ -41,6 +53,8 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 			$session,
 			$activeOrganization,
 			$listOrganizations,
+			$activeInvitationId,
+			$invitation,
 		},
 		$fetch,
 	};
@@ -49,15 +63,31 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 	type Actions = Pick<
 		typeof actions,
 		| (HasPasskeyConfig extends true ? "passkey" : never)
-		| (HasOrganizationConfig extends true ? "setActiveOrganization" : never)
+		| (HasOrganizationConfig extends true
+				? "setActiveOrganization" | "setInvitationId"
+				: never)
 		| "$atoms"
 		| "$fetch"
 	>;
-	const proxy = createDynamicPathProxy(actions, $fetch, {
-		"/create/organization": $listOrg,
-		"/two-factor/enable": $sessionSignal,
-		"/two-factor/disable": $sessionSignal,
-		"/sign-out": $sessionSignal,
-	}) as unknown as InferRoutes<API> & Actions;
+
+	const proxy = createDynamicPathProxy(actions, $fetch, [
+		{
+			matcher: (path) => path === "/organization/create",
+			atom: $listOrg,
+		},
+		{
+			matcher: (path) => path.startsWith("/organization"),
+			atom: $activeOrgSignal,
+		},
+		{
+			matcher: (path) => path === "/sign-out",
+			atom: $sessionSignal,
+		},
+		{
+			matcher: (path) =>
+				path === "/two-factor/enable" || path === "/two-factor/send-otp",
+			atom: $sessionSignal,
+		},
+	]) as unknown as InferRoutes<API> & Actions;
 	return proxy;
 };

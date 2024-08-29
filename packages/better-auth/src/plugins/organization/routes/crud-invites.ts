@@ -4,9 +4,10 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { getOrgAdapter } from "../adapter";
 import { generateId } from "../../../utils/id";
 import { role } from "../schema";
+import { getSessionFromCtx } from "../../../api/routes";
 
 export const createInvitation = createAuthEndpoint(
-	"/org/invite-member",
+	"/organization/invite-member",
 	{
 		method: "POST",
 		use: [orgMiddleware, orgSessionMiddleware],
@@ -14,6 +15,7 @@ export const createInvitation = createAuthEndpoint(
 			email: z.string(),
 			role: role,
 			organizationId: z.string().optional(),
+			resend: z.boolean().optional(),
 		}),
 	},
 	async (ctx) => {
@@ -77,7 +79,7 @@ export const createInvitation = createAuthEndpoint(
 			email: ctx.body.email,
 			organizationId: orgId,
 		});
-		if (alreadyInvited) {
+		if (alreadyInvited.length && !ctx.body.resend) {
 			return ctx.json(null, {
 				status: 400,
 				body: {
@@ -93,12 +95,16 @@ export const createInvitation = createAuthEndpoint(
 			},
 			user: session.user,
 		});
+		await ctx.context.orgOptions.sendInvitationEmail?.(
+			invitation,
+			ctx.body.email,
+		);
 		return ctx.json(invitation);
 	},
 );
 
 export const acceptInvitation = createAuthEndpoint(
-	"/org/accept-invitation",
+	"/organization/accept-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -140,6 +146,7 @@ export const acceptInvitation = createAuthEndpoint(
 			userId: session.user.id,
 			email: invitation.email,
 			role: invitation.role,
+			name: session.user.name,
 		});
 		return ctx.json({
 			invitation: acceptedI,
@@ -148,7 +155,7 @@ export const acceptInvitation = createAuthEndpoint(
 	},
 );
 export const rejectInvitation = createAuthEndpoint(
-	"/org/reject-invitation",
+	"/organization/reject-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -192,7 +199,7 @@ export const rejectInvitation = createAuthEndpoint(
 );
 
 export const cancelInvitation = createAuthEndpoint(
-	"/org/cancel-invitation",
+	"/organization/cancel-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -240,5 +247,79 @@ export const cancelInvitation = createAuthEndpoint(
 			status: "canceled",
 		});
 		return ctx.json(canceledI);
+	},
+);
+
+export const getActiveInvitation = createAuthEndpoint(
+	"/organization/get-active-invitation",
+	{
+		method: "GET",
+		use: [orgMiddleware],
+		query: z.object({
+			id: z.string(),
+		}),
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "User not logged in",
+				},
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const invitation = await adapter.findInvitationById(ctx.query.id);
+		if (
+			!invitation ||
+			invitation.status !== "pending" ||
+			invitation.expiresAt < new Date()
+		) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Invitation not found!",
+				},
+			});
+		}
+		if (invitation.email !== session.user.email) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "You are not the repentant of the invitation",
+				},
+			});
+		}
+		const organization = await adapter.findOrganizationById(
+			invitation.organizationId,
+		);
+		if (!organization) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Organization not found!",
+				},
+			});
+		}
+		const member = await adapter.findMemberByOrgId({
+			userId: invitation.inviterId,
+			organizationId: invitation.organizationId,
+		});
+		if (!member) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Inviter is no longer a member of this organization",
+				},
+			});
+		}
+		return ctx.json({
+			...invitation,
+			organizationName: organization.name,
+			organizationSlug: organization.slug,
+			inviterEmail: member.email,
+			inviterName: member.name,
+		});
 	},
 );

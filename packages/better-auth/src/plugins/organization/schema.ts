@@ -12,19 +12,23 @@ export const organizationSchema = z.object({
 
 export const memberSchema = z.object({
 	id: z.string(),
+	name: z.string(),
+	email: z.string(),
 	organizationId: z.string(),
 	userId: z.string(),
-	email: z.string(),
 	role,
 });
 
 export const invitationSchema = z.object({
 	id: z.string(),
 	organizationId: z.string(),
-	userId: z.string(),
 	email: z.string(),
 	role,
 	status: invitationStatus,
+	/**
+	 * The id of the user who invited the user.
+	 */
+	inviterId: z.string(),
 	expiresAt: z.date(),
 });
 

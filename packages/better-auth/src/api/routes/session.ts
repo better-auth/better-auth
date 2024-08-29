@@ -20,9 +20,14 @@ export const getSession = createAuthEndpoint(
 		const session =
 			await ctx.context.internalAdapter.findSession(sessionCookieToken);
 		if (!session || session.session.expiresAt < new Date()) {
-			ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-				maxAge: 0,
-			});
+			ctx.setSignedCookie(
+				ctx.context.authCookies.sessionToken.name,
+				"",
+				ctx.context.secret,
+				{
+					maxAge: 0,
+				},
+			);
 			return ctx.json(null, {
 				status: 401,
 			});
@@ -30,6 +35,7 @@ export const getSession = createAuthEndpoint(
 		const updatedSession = await ctx.context.internalAdapter.updateSession(
 			session.session,
 		);
+
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			updatedSession.id,

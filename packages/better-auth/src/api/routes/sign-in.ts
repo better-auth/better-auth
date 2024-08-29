@@ -123,6 +123,12 @@ export const signInCredential = createAuthEndpoint(
 		const credentialAccount = user.accounts.find(
 			(a) => a.providerId === "credential",
 		);
+		if (!credentialAccount) {
+			ctx.context.logger.error("Credential account not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
+			});
+		}
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
 			ctx.context.logger.error("Password not found", { email });

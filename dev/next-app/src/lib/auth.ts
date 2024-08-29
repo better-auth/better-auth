@@ -22,7 +22,11 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
-		organization(),
+		organization({
+			async sendInvitationEmail(invitation, email) {
+				console.log({ invitation, email });
+			},
+		}),
 		twoFactor({
 			issuer: "BetterAuth",
 			twoFactorURL: "/two-factor",

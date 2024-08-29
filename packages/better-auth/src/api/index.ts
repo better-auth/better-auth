@@ -192,7 +192,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			});
 		},
 		onError(e) {
-			// console.log(e);
+			console.log(e);
 		},
 	});
 };

@@ -29,8 +29,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
 	$signal?: {
-		[key: string]: PreinitializedWritableAtom<boolean>;
-	},
+		atom: PreinitializedWritableAtom<boolean>;
+		matcher: (path: string) => boolean;
+	}[],
 ): T {
 	const handler: ProxyHandler<any> = {
 		get(target, prop: string) {
@@ -63,10 +64,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						query: query,
 						method,
 						onSuccess() {
-							const signal = $signal?.[routePath as string];
-							console.log({ routePath, signal });
+							const signal = $signal?.find((s) => s.matcher(routePath));
+							console.log({
+								signal,
+								routePath,
+							});
 							if (signal) {
-								signal.set(!signal.get());
+								signal.atom.set(!signal.atom.get());
 							}
 						},
 					});

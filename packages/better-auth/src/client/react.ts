@@ -26,11 +26,22 @@ export const createAuthClient = <Auth extends BetterAuth>(
 	function useListOrganization() {
 		return useStore(client.$atoms.$listOrganizations);
 	}
-	return Object.assign(client, {
+	function useInvitation() {
+		return (
+			useAuthStore(client.$atoms.$invitation) || {
+				error: null,
+				data: null,
+			}
+		);
+	}
+
+	const obj = Object.assign(client, {
 		useSession,
 		useActiveOrganization,
 		useListOrganization,
+		useInvitation,
 	});
+	return obj;
 };
 
 export const useAuthStore = useStore;

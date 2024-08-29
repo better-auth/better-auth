@@ -34,10 +34,11 @@ export const getOrgAdapter = (
 				model: "member",
 				data: {
 					id: generateId(),
+					name: data.user.name,
 					organizationId: organization.id,
 					userId: data.user.id,
 					email: data.user.email,
-					role: options?.creatorRole || "admin",
+					role: options?.creatorRole || "owner",
 				},
 			});
 			return {
@@ -169,6 +170,18 @@ export const getOrgAdapter = (
 			});
 			return session;
 		},
+		findOrganizationById: async (orgId: string) => {
+			const organization = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: orgId,
+					},
+				],
+			});
+			return organization;
+		},
 		findFullOrganization: async (orgId: string) => {
 			const organization = await adapter.findOne<Organization>({
 				model: "organization",
@@ -217,6 +230,7 @@ export const getOrgAdapter = (
 				],
 			});
 			const organizationIds = members?.map((member) => member.organizationId);
+			console.log({ organizationIds });
 			if (!organizationIds) {
 				return [];
 			}
@@ -259,9 +273,9 @@ export const getOrgAdapter = (
 					email: invitation.email,
 					role: invitation.role,
 					organizationId: invitation.organizationId,
-					userId: user.id,
 					status: "pending",
 					expiresAt,
+					inviterId: user.id,
 				},
 			});
 			return invite;
@@ -299,7 +313,9 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return invitation.find((invite) => invite.expiresAt > new Date()) || null;
+			return invitation.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
 		},
 		updateInvitation: async (data: {
 			invitationId: string;

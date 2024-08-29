@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { generateId } from "../../../utils/id";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { sessionMiddleware } from "../../../api/middlewares/session";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -198,10 +199,10 @@ export const deleteOrganization = createAuthEndpoint(
 );
 
 export const getFullOrganization = createAuthEndpoint(
-	"/organization/get",
+	"/organization/full",
 	{
 		method: "GET",
-		body: z.object({
+		query: z.object({
 			orgId: z.string().optional(),
 		}),
 		requireHeaders: true,
@@ -209,7 +210,7 @@ export const getFullOrganization = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId = ctx.body.orgId || session.session.activeOrganizationId;
+		const orgId = ctx.query.orgId || session.session.activeOrganizationId;
 		if (!orgId) {
 			return ctx.json(null, {
 				status: 400,
@@ -228,6 +229,25 @@ export const getFullOrganization = createAuthEndpoint(
 				},
 			});
 		}
+		return ctx.json(organization);
+	},
+);
+
+export const setActiveOrganization = createAuthEndpoint(
+	"/organization/set-active",
+	{
+		method: "POST",
+		body: z.object({
+			orgId: z.string(),
+		}),
+		use: [sessionMiddleware, orgMiddleware],
+	},
+	async (ctx) => {
+		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const session = ctx.context.session;
+		const orgId = ctx.body.orgId;
+		await adapter.setActiveOrganization(session.session.id, orgId);
+		const organization = await adapter.findFullOrganization(orgId);
 		return ctx.json(organization);
 	},
 );

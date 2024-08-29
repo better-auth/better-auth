@@ -15,9 +15,18 @@ export const createAuthClient = (options?: BetterFetchOption) => {
 	function useListOrganization() {
 		return useStore(client.$atoms.$listOrganizations);
 	}
+	const useInvitation = () => {
+		return (
+			useAuthStore(client.$atoms.$invitation) || {
+				error: null,
+				data: null,
+			}
+		);
+	};
 	return Object.assign(client, {
 		useSession,
 		useActiveOrganization,
 		useListOrganization,
+		useInvitation,
 	});
 };
