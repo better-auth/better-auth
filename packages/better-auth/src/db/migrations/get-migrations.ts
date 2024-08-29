@@ -62,7 +62,7 @@ export const getMigrations = async (
 		})) || [];
 
 	const providerMigrations =
-		option.providers?.map((provider) => ({
+		option.socialProvider?.map((provider) => ({
 			prefix: provider.id,
 			migrations: Object.keys(provider.schema || {})
 				.map((key) => {

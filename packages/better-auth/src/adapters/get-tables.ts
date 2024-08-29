@@ -9,7 +9,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			...schema,
 		};
 	}, {});
-	const providerSchema = options.providers?.reduce((acc, provider) => {
+	const providerSchema = options.socialProvider?.reduce((acc, provider) => {
 		const schema = provider.schema;
 		return {
 			...acc,

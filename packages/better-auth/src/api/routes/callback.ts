@@ -18,10 +18,10 @@ export const callbackOAuth = createAuthEndpoint(
 		metadata: HIDE_ON_CLIENT_METADATA,
 	},
 	async (c) => {
-		const provider = c.context.options.providers?.find(
+		const provider = c.context.options.socialProvider?.find(
 			(p) => p.id === c.params.id,
 		);
-		if (!provider || provider.type !== "oauth2") {
+		if (!provider) {
 			c.context.logger.error(
 				"Oauth provider with id",
 				c.params.id,

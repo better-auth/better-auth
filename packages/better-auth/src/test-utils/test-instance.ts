@@ -1,5 +1,5 @@
 import { betterAuth } from "../auth";
-import { github, google } from "../providers";
+import { github, google } from "../social-providers";
 import { beforeAll, afterAll } from "vitest";
 import { type Listener, listen } from "listhen";
 import { toNodeHandler } from "better-call";
@@ -10,7 +10,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
 ) {
 	const opts = {
-		providers: [
+		socialProvider: [
 			github({
 				clientId: "test",
 				clientSecret: "test",

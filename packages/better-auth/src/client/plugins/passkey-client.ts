@@ -10,7 +10,7 @@ import {
 } from "@simplewebauthn/types";
 import { Session } from "inspector";
 import { User } from "../../adapters/schema";
-import { Passkey } from "../../providers";
+import { Passkey } from "../../plugins";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {

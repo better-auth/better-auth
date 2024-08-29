@@ -4,14 +4,14 @@ import {
 	Tokens,
 } from "arctic";
 import { LiteralString } from "./helper";
-import { oAuthProviderList } from "../providers";
+import { oAuthProviderList } from "../social-providers";
 import { User } from "../adapters/schema";
 import { FieldAttribute } from "../db";
 import { Migration } from "kysely";
 import { AuthEndpoint } from "../api/call";
 import { Context, Endpoint } from "better-call";
 
-export interface BaseProvider {
+export interface Provider {
 	id: LiteralString;
 	/**
 	 * Database schema for the provider.
@@ -32,36 +32,12 @@ export interface BaseProvider {
 	 * the tables.
 	 */
 	migrations?: Record<string, Migration>;
+	provider: ArcticOAuth2Provider | OAuth2ProviderWithPKCE;
+	userInfo: OAuthUserInfo;
 }
 
 export type OAuthUserInfo = {
 	getUserInfo: (token: Tokens) => Promise<User | null>;
 };
-
-export interface OAuthProvider extends BaseProvider {
-	type: "oauth2";
-	provider: ArcticOAuth2Provider | OAuth2ProviderWithPKCE;
-	userInfo: OAuthUserInfo;
-}
-
-export interface TwoFactorProvider extends BaseProvider {
-	type: "two-factor";
-	endpoints: {
-		[key: string]: AuthEndpoint;
-	};
-	verify?: (ctx: any) => Promise<{
-		status: boolean;
-	}>;
-	isEnabled: (user: User) => Promise<boolean>;
-}
-
-export interface CustomProvider extends BaseProvider {
-	type: "custom";
-	endpoints: {
-		[key: string]: AuthEndpoint;
-	};
-}
-
-export type Provider = OAuthProvider | CustomProvider | TwoFactorProvider;
 
 export type OAuthProviderList = typeof oAuthProviderList;

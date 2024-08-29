@@ -3,12 +3,12 @@ import { createAuthEndpoint } from "../call";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { APIError } from "better-call";
 import { generateState } from "../../utils/state";
-import { oAuthProviderList } from "../../providers";
+import { oAuthProviderList } from "../../social-providers";
 import { Argon2id } from "oslo/password";
 import { getSessionFromCtx } from "./session";
 
 export const signInOAuth = createAuthEndpoint(
-	"/sign-in/oauth",
+	"/sign-in/social",
 	{
 		method: "POST",
 		query: z
@@ -32,50 +32,48 @@ export const signInOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.context.options.providers?.find(
+		const provider = c.context.options.socialProvider?.find(
 			(p) => p.id === c.body.provider,
 		);
 		if (!provider) {
 			throw new APIError("NOT_FOUND");
 		}
-		if (provider.type === "oauth2") {
-			const cookie = c.context.authCookies;
-			const currentURL = c.query?.currentURL
-				? new URL(c.query?.currentURL)
-				: null;
-			const state = generateState(
-				c.body.callbackURL || currentURL?.origin || c.context.baseURL,
-				c.query?.currentURL,
+
+		const cookie = c.context.authCookies;
+		const currentURL = c.query?.currentURL
+			? new URL(c.query?.currentURL)
+			: null;
+		const state = generateState(
+			c.body.callbackURL || currentURL?.origin || c.context.baseURL,
+			c.query?.currentURL,
+		);
+		try {
+			await c.setSignedCookie(
+				cookie.state.name,
+				state.code,
+				c.context.secret,
+				cookie.state.options,
 			);
-			try {
-				await c.setSignedCookie(
-					cookie.state.name,
-					state.code,
-					c.context.secret,
-					cookie.state.options,
-				);
-				const codeVerifier = generateCodeVerifier();
-				await c.setSignedCookie(
-					cookie.pkCodeVerifier.name,
-					codeVerifier,
-					c.context.secret,
-					cookie.pkCodeVerifier.options,
-				);
-				const url = await provider.provider.createAuthorizationURL(
-					state.state,
-					codeVerifier,
-				);
-				return {
-					url: url.toString(),
-					state: state.state,
-					codeVerifier,
-					redirect: true,
-				};
-			} catch (e) {
-				throw new APIError("INTERNAL_SERVER_ERROR");
-			}
+			const codeVerifier = generateCodeVerifier();
+			await c.setSignedCookie(
+				cookie.pkCodeVerifier.name,
+				codeVerifier,
+				c.context.secret,
+				cookie.pkCodeVerifier.options,
+			);
+			const url = await provider.provider.createAuthorizationURL(
+				state.state,
+				codeVerifier,
+			);
+			return {
+				url: url.toString(),
+				state: state.state,
+				codeVerifier,
+				redirect: true,
+			};
+		} catch (e) {
+			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
-		throw new APIError("NOT_FOUND");
 	},
 );
 

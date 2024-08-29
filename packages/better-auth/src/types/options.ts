@@ -49,9 +49,9 @@ export interface BetterAuthOptions {
 	 */
 	secret?: string;
 	/**
-	 * list of oauth providers
+	 * list of social providers
 	 */
-	providers?: Provider[];
+	socialProvider?: Provider[];
 	/**
 	 * Plugins
 	 */

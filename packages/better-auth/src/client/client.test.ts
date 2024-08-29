@@ -1,12 +1,12 @@
 import { describe, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { createAuthClient } from "./react";
-import { passkey } from "../providers";
 import { createClient } from "better-call/client";
+import { passkey } from "../plugins";
 
 describe("client path to object", async () => {
 	const auth = await getTestInstance({
-		providers: [
+		plugins: [
 			passkey({
 				rpID: "test",
 				rpName: "test",

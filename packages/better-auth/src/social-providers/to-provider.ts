@@ -27,7 +27,6 @@ export const toBetterAuthProvider = <
 	return (params: ProviderOptions, options?: Options) => {
 		return {
 			id: id,
-			type: "oauth2" as const,
 			provider: new instance(params.clientId, params.clientSecret, options),
 			userInfo: userInfo,
 		};

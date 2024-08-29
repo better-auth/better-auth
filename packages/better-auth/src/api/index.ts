@@ -32,19 +32,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		{} as Record<string, any>,
 	);
 
-	const providerEndpoints = ctx.options.providers?.reduce(
-		(acc, provider) => {
-			if (provider.type === "custom") {
-				return {
-					...acc,
-					...provider.endpoints,
-				};
-			}
-			return acc;
-		},
-		{} as Record<string, any>,
-	);
-
 	const middlewares =
 		ctx.options.plugins
 			?.map((plugin) =>
@@ -104,7 +91,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	};
 	const endpoints = {
 		...baseEndpoints,
-		...providerEndpoints,
 		...pluginEndpoints,
 	};
 	let api: Record<string, any> = {};
