@@ -1,14 +1,16 @@
 import { betterAuth } from "../auth";
 import { github, google } from "../social-providers";
-import { beforeAll, afterAll } from "vitest";
-import { type Listener, listen } from "listhen";
-import { toNodeHandler } from "better-call";
+import { afterAll } from "vitest";
 import fs from "fs/promises";
 import { BetterAuthOptions } from "../types";
+import { createAuthClient } from "../client";
+import { alphabet, generateRandomString } from "oslo/crypto";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
 ) {
+	const randomStr = generateRandomString(4, alphabet("a-z"));
+	const dbName = `test-${randomStr}.db`;
 	const opts = {
 		socialProvider: [
 			github({
@@ -23,7 +25,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		secret: "better-auth.secret",
 		database: {
 			provider: "sqlite",
-			url: "./test.db",
+			url: dbName,
 			autoMigrate: true,
 		},
 		emailAndPassword: {
@@ -36,14 +38,20 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
-	let server: Listener;
-
-	beforeAll(async () => {
-		server = await listen(toNodeHandler(auth.handler));
-	});
 	afterAll(async () => {
-		server.close();
-		await fs.unlink("./test.db");
+		await fs.unlink(dbName);
 	});
-	return auth;
+
+	const client = createAuthClient<typeof auth>({
+		customFetchImpl: async (url, init) => {
+			const req = new Request(url.toString(), init);
+			return auth.handler(req);
+		},
+		baseURL: "http://localhost:3000/api/auth",
+		csrfPlugin: false,
+	});
+	return {
+		auth,
+		client,
+	};
 }

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { init } from "./init";
 import { createAuthClient } from "./client";
+import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {
-	const client = createAuthClient();
+	const { client } = await getTestInstance();
 
 	it("should match config", () => {
 		const res = init({

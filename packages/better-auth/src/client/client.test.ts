@@ -22,6 +22,5 @@ describe("client path to object", async () => {
 				return new Response();
 			},
 		});
-		console.log(client.$atoms.$session.get());
 	});
 });

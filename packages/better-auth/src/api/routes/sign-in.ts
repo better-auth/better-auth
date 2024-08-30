@@ -11,6 +11,7 @@ export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
+		requireHeaders: true,
 		query: z
 			.object({
 				/**

@@ -88,7 +88,10 @@ export const signUpCredential = createAuthEndpoint(
 							url: ctx.body.callbackUrl,
 							redirect: true,
 						}
-					: {},
+					: {
+							user: createdUser,
+							session,
+						},
 			},
 		);
 	},
