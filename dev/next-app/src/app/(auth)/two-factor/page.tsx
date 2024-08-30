@@ -23,7 +23,6 @@ export default function Component() {
         authClient.twoFactor.verifyTotp({
             code: totpCode,
         }).then((res) => {
-            console.log(res)
             if (res.data?.status) {
                 setSuccess(true)
                 setError("")

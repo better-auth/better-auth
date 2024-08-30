@@ -175,3 +175,5 @@ dist
 .DS_Store
 
 .notes/
+
+.db/

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-
+import { parseCookies } from "oslo/cookie";
 const { auth, client } = await getTestInstance();
 const testCredential1 = {
 	email: "test@test.com",
@@ -118,5 +118,23 @@ describe("sign-in credential", async () => {
 				userAgent: expect.any(String),
 			},
 		});
+	});
+
+	it("should't remember me", async () => {
+		const res = await client.signIn.credential({
+			email: testCredential1.email,
+			password: testCredential1.password,
+			dontRememberMe: true,
+			options: {
+				onResponse(context) {
+					const headers = context.response.headers;
+					const cookies = headers.get("set-cookie") || "";
+					const parsedCookie = parseCookies(cookies);
+				},
+			},
+		});
+		expect(
+			new Date(res.data?.session.expiresAt || "").getTime() - Date.now(),
+		).toBeLessThan(1000 * 60 * 60);
 	});
 });

@@ -8,9 +8,10 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
+	port?: number,
 ) {
 	const randomStr = generateRandomString(4, alphabet("a-z"));
-	const dbName = `test-${randomStr}.db`;
+	const dbName = `./.db/test-${randomStr}.db`;
 	const opts = {
 		socialProvider: [
 			github({
@@ -38,6 +39,20 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
+	async function createTestUser() {
+		await auth.api.signUpCredential({
+			body: {
+				email: "test@test.com",
+				password: "test123456",
+				name: "test",
+			},
+		});
+		return {
+			email: "test@test.com",
+			password: "test123456",
+		};
+	}
+
 	afterAll(async () => {
 		await fs.unlink(dbName);
 	});
@@ -47,11 +62,15 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 			const req = new Request(url.toString(), init);
 			return auth.handler(req);
 		},
-		baseURL: "http://localhost:3000/api/auth",
+		baseURL:
+			options?.baseURL && options.basePath
+				? `${options?.baseURL}/${options?.basePath}`
+				: "http://localhost:3000/api/auth",
 		csrfPlugin: false,
 	});
 	return {
 		auth,
 		client,
+		createTestUser,
 	};
 }

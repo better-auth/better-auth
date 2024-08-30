@@ -16,7 +16,7 @@ export type PluginSchema = {
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
-	endpoints: {
+	endpoints?: {
 		[key: string]: AuthEndpoint;
 	};
 	middlewares?: {
