@@ -1,7 +1,7 @@
-import { Google } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
 import { betterFetch } from "@better-fetch/fetch";
+import { Google } from "arctic";
 import { parseJWT } from "oslo/jwt";
+import { toBetterAuthProvider } from "./to-provider";
 
 export interface GoogleProfile {
 	aud: string;

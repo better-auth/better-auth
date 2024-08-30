@@ -1,16 +1,16 @@
 import {
+	type Endpoint,
+	type EndpointResponse,
 	createEndpointCreator,
 	createMiddleware,
 	createMiddlewareCreator,
-	Endpoint,
-	EndpointResponse,
 } from "better-call";
-import { BetterAuthOptions } from "../types/options";
-import { AuthContext } from "../init";
-import { getMigrations } from "../db/migrations/get-migrations";
 import { migrateAll } from "../db/migrations";
+import { getMigrations } from "../db/migrations/get-migrations";
+import type { AuthContext } from "../init";
+import type { BetterAuthOptions } from "../types/options";
 
-export const optionsMiddleware = createMiddleware(async (ctx) => {
+export const optionsMiddleware = createMiddleware(async () => {
 	/**
 	 * This will be passed on the instance of
 	 * the context. Used to infer the type

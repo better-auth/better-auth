@@ -1,7 +1,7 @@
+import { TimeSpan } from "oslo";
+import { createJWT, validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import { createJWT, validateJWT } from "oslo/jwt";
-import { TimeSpan } from "oslo";
 
 export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",

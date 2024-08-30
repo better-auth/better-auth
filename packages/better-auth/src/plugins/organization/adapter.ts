@@ -1,9 +1,9 @@
-import { Session, User } from "../../adapters/schema";
-import { Adapter } from "../../types/adapter";
+import type { Session, User } from "../../adapters/schema";
+import type { Adapter } from "../../types/adapter";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils/id";
-import { OrganizationOptions } from "./organization";
-import { Invitation, Member, Organization } from "./schema";
+import type { OrganizationOptions } from "./organization";
+import type { Invitation, Member, Organization } from "./schema";
 
 export const getOrgAdapter = (
 	adapter: Adapter,

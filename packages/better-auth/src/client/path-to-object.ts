@@ -1,6 +1,9 @@
-import { BetterFetchOption, BetterFetchResponse } from "@better-fetch/fetch";
-import { Context, Endpoint } from "better-call";
-import {
+import type {
+	BetterFetchOption,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { Context, Endpoint } from "better-call";
+import type {
 	HasRequiredKeys,
 	Prettify,
 	UnionToIntersection,

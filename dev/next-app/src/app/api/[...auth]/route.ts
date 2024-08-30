@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
 const handler = auth.handler;
 

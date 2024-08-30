@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/react";
-import { auth } from "./auth";
+import type { auth } from "./auth";
 
 export const authClient = createAuthClient<typeof auth>({
 	baseURL: "http://localhost:3000/api/auth",

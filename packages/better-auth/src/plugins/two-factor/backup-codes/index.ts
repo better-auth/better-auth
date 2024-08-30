@@ -1,10 +1,10 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { TwoFactorProvider, UserWithTwoFactor } from "../types";
-import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
 import { sessionMiddleware } from "../../../api/middlewares/session";
+import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
+import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 
 export interface BackupCodeOptions {
 	/**

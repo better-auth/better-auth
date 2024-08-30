@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { Command } from "commander";
 import { z } from "zod";
+import { migrateAll } from "../../db/migrations";
 import { logger } from "../../utils/logger";
 import { getConfig, possiblePaths } from "../get-config";
-import { migrateAll } from "../../db/migrations";
 
 export const migrate = new Command()
 	.name("migrate")

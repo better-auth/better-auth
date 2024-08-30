@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
 
 export const deleteMember = createAuthEndpoint(
 	"/org/delete-member",

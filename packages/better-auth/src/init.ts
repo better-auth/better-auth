@@ -1,11 +1,10 @@
-import { Context, ContextTools } from "better-call";
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
 import { createInternalAdapter } from "./db";
-import { BetterAuthOptions } from "./types";
+import type { BetterAuthOptions } from "./types";
 import { getBaseURL } from "./utils/base-url";
 import {
-	BetterAuthCookies,
+	type BetterAuthCookies,
 	createCookieGetter,
 	getCookies,
 } from "./utils/cookies";

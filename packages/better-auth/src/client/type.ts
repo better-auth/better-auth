@@ -1,6 +1,6 @@
-import { UnionToIntersection } from "../types/helper";
-import { BetterAuth } from "../auth";
-import { BetterFetchOption } from "@better-fetch/fetch";
+import type { BetterFetchOption } from "@better-fetch/fetch";
+import type { BetterAuth } from "../auth";
+import type { UnionToIntersection } from "../types/helper";
 import type { useAuthStore as reactStore } from "./react";
 import type { useAuthStore as vueStore } from "./vue";
 

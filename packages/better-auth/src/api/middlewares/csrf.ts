@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { createAuthMiddleware } from "../call";
 import { APIError } from "better-call";
+import { z } from "zod";
 import { hs256 } from "../../crypto";
+import { createAuthMiddleware } from "../call";
 
 export const csrfMiddleware = createAuthMiddleware(
 	{

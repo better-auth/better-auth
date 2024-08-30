@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BetterAuthOptions } from "../types";
-import { FieldAttribute } from "../db";
+import type { FieldAttribute } from "../db";
+import type { BetterAuthOptions } from "../types";
 
 export const accountSchema = z.object({
 	id: z.string(),

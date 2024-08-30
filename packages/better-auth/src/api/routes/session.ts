@@ -1,4 +1,4 @@
-import { Context } from "better-call";
+import type { Context } from "better-call";
 import { createAuthEndpoint } from "../call";
 
 export const getSession = createAuthEndpoint(

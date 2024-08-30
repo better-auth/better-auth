@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import { BetterAuthPlugin } from "../../types/plugins";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
+import { z } from "zod";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import type { BetterAuthPlugin } from "../../types/plugins";
 
 export const validEmail = () => {
 	return {

@@ -1,6 +1,6 @@
 import path from "node:path";
 import jiti from "jiti";
-import { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "../types";
 import { logger } from "../utils/logger";
 
 let possiblePaths = ["auth.ts", "auth.config.ts"];

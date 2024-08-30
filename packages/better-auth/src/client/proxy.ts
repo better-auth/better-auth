@@ -1,6 +1,6 @@
-import { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
-import { PreinitializedWritableAtom } from "nanostores";
-import { ProxyRequest } from "./path-to-object";
+import type { BetterFetch } from "@better-fetch/fetch";
+import type { PreinitializedWritableAtom } from "nanostores";
+import type { ProxyRequest } from "./path-to-object";
 
 const knownPathMethods: Record<string, "POST" | "GET"> = {
 	"/sign-out": "POST",

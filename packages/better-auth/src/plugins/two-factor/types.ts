@@ -1,11 +1,9 @@
-import { ZodObject, ZodSchema } from "zod";
-import { User } from "../../adapters/schema";
-import { AuthEndpoint } from "../../api/call";
-import { LiteralString } from "../../types/helper";
-import { BackupCodeOptions } from "./backup-codes";
-import { TOTPOptions } from "./totp";
-import { Endpoint } from "better-call";
-import { OTPOptions } from "./otp";
+import type { User } from "../../adapters/schema";
+import type { AuthEndpoint } from "../../api/call";
+import type { LiteralString } from "../../types/helper";
+import type { BackupCodeOptions } from "./backup-codes";
+import type { OTPOptions } from "./otp";
+import type { TOTPOptions } from "./totp";
 
 export interface TwoFactorOptions {
 	issuer: string;

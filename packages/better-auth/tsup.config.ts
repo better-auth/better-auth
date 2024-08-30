@@ -14,7 +14,7 @@ export default defineConfig({
 	},
 	splitting: false,
 	sourcemap: true,
-	format: ["esm", "cjs"],
+	format: ["esm"],
 	dts: true,
 	external: [
 		"react",
@@ -27,4 +27,5 @@ export default defineConfig({
 		"better-sqlite3",
 		"typescript",
 	],
+	noExternal: ["type-fest"],
 });

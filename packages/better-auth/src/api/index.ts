@@ -1,27 +1,26 @@
-import { Context, createRouter, Endpoint } from "better-call";
-import {
-	signInOAuth,
-	callbackOAuth,
-	signOut,
-	signInCredential,
-	forgetPassword,
-	resetPassword,
-	verifyEmail,
-	sendVerificationEmail,
-	getSession,
-} from "./routes";
-import { AuthContext } from "../init";
-import { csrfMiddleware } from "./middlewares/csrf";
-import { getCSRFToken } from "./routes/csrf";
-import { signUpCredential } from "./routes/sign-up";
+import { type Context, type Endpoint, createRouter } from "better-call";
 import { parseAccount, parseSession, parseUser } from "../adapters/schema";
-import { BetterAuthOptions, InferSession, InferUser } from "../types";
-import { Prettify } from "../types/helper";
+import type { AuthContext } from "../init";
+import type { BetterAuthOptions, InferSession, InferUser } from "../types";
+import type { Prettify } from "../types/helper";
+import { csrfMiddleware } from "./middlewares/csrf";
+import {
+	callbackOAuth,
+	forgetPassword,
+	getSession,
+	resetPassword,
+	sendVerificationEmail,
+	signInCredential,
+	signInOAuth,
+	signOut,
+	verifyEmail,
+} from "./routes";
+import { getCSRFToken } from "./routes/csrf";
 import { ok } from "./routes/ok";
+import { signUpCredential } from "./routes/sign-up";
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
-	option: Option,
 ) => {
 	const pluginEndpoints = ctx.options.plugins?.reduce(
 		(acc, plugin) => {

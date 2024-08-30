@@ -1,9 +1,9 @@
-import { Migration } from "kysely";
-import { AuthEndpoint } from "../api/call";
-import { FieldAttribute } from "../db/field";
-import { LiteralString } from "./helper";
-import { Endpoint, EndpointResponse } from "better-call";
-import { GenericEndpointContext } from "./context";
+import type { Endpoint, EndpointResponse } from "better-call";
+import type { Migration } from "kysely";
+import type { AuthEndpoint } from "../api/call";
+import type { FieldAttribute } from "../db/field";
+import type { GenericEndpointContext } from "./context";
+import type { LiteralString } from "./helper";
 
 export type PluginSchema = {
 	[table: string]: {

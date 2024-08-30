@@ -1,15 +1,19 @@
-import { betterAuth } from "../auth";
-import { github, google } from "../social-providers";
-import { afterAll } from "vitest";
 import fs from "fs/promises";
-import { BetterAuthOptions } from "../types";
-import { createAuthClient } from "../client";
 import { alphabet, generateRandomString } from "oslo/crypto";
+import { afterAll, beforeAll } from "vitest";
+import { betterAuth } from "../auth";
+import { createAuthClient } from "../client";
+import { github, google } from "../social-providers";
+import type { BetterAuthOptions } from "../types";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
 	port?: number,
 ) {
+	/**
+	 * create db folder if not exists
+	 */
+	await fs.mkdir(".db", { recursive: true });
 	const randomStr = generateRandomString(4, alphabet("a-z"));
 	const dbName = `./.db/test-${randomStr}.db`;
 	const opts = {

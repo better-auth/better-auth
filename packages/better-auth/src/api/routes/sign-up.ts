@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { createAuthEndpoint } from "../call";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { Argon2id } from "oslo/password";
+import { z } from "zod";
+import { createAuthEndpoint } from "../call";
 
 export const signUpCredential = createAuthEndpoint(
 	"/sign-up/credential",

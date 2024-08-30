@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -9,21 +8,22 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@/lib/auth-client";
-import { useState } from "react";
-import { Key } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
+import { Key } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function Page() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [rememberMe, setRememberMe] = useState(false);
-	const router = useRouter()
+	const router = useRouter();
 	return (
 		<div className="h-[50rem] w-full dark:bg-black bg-white  dark:bg-grid-white/[0.2] bg-grid-black/[0.2] relative flex items-center justify-center">
 			{/* Radial gradient for the container to give a faded look */}
@@ -69,22 +69,28 @@ export default function Page() {
 							/>
 						</div>
 						<div className="flex items-center gap-2">
-							<Checkbox onClick={() => {
-								setRememberMe(!rememberMe)
-							}} />
+							<Checkbox
+								onClick={() => {
+									setRememberMe(!rememberMe);
+								}}
+							/>
 							<Label>Remember me</Label>
 						</div>
-						<Button type="submit" className="w-full" onClick={async () => {
-							const res = await authClient.signIn.credential({
-								email,
-								password,
-								callbackURL: "/",
-								dontRememberMe: !rememberMe
-							})
-							if (res.error) {
-								toast.error(res.error.message)
-							}
-						}}>
+						<Button
+							type="submit"
+							className="w-full"
+							onClick={async () => {
+								const res = await authClient.signIn.credential({
+									email,
+									password,
+									callbackURL: "/",
+									dontRememberMe: !rememberMe,
+								});
+								if (res.error) {
+									toast.error(res.error.message);
+								}
+							}}
+						>
 							Login
 						</Button>
 						<Button
@@ -99,16 +105,20 @@ export default function Page() {
 						>
 							Login with Github
 						</Button>
-						<Button variant="secondary" className="gap-2" onClick={async () => {
-							const res = await authClient.passkey.signIn({
-								callbackURL: "/"
-							})
-							if (res?.error) {
-								toast.error(res.error.message)
-							} else {
-								router.push("/")
-							}
-						}}>
+						<Button
+							variant="secondary"
+							className="gap-2"
+							onClick={async () => {
+								const res = await authClient.passkey.signIn({
+									callbackURL: "/",
+								});
+								if (res?.error) {
+									toast.error(res.error.message);
+								} else {
+									router.push("/");
+								}
+							}}
+						>
 							<Key size={16} />
 							Login with Passkey
 						</Button>

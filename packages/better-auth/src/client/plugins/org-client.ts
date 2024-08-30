@@ -1,11 +1,11 @@
-import { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { Atom, atom, computed, onMount, task } from "nanostores";
-import { Prettify } from "../../types/helper";
-import {
+import { type BetterFetch, BetterFetchError } from "@better-fetch/fetch";
+import { type Atom, atom, computed, onMount, task } from "nanostores";
+import type {
 	Invitation,
 	Member,
 	Organization,
 } from "../../plugins/organization/schema";
+import type { Prettify } from "../../types/helper";
 
 export function getOrganizationAtoms($fetch: BetterFetch, $session: Atom) {
 	const $listOrg = atom<boolean>(false);

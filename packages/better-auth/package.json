@@ -13,7 +13,7 @@
     "bin": "./dist/cli.js",
     "exports": {
         ".": "./dist/index.js",
-        "./provider": "./dist/provider.js",
+        "./social-providers": "./dist/social.js",
         "./client": "./dist/client.js",
         "./types": "./dist/types.js",
         "./cli": "./dist/cli.js",

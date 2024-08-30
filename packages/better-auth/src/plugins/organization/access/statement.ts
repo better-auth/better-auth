@@ -1,5 +1,5 @@
 import { AccessControl } from "./src/access";
-import { StatementsPrimitive } from "./src/types";
+import type { StatementsPrimitive } from "./src/types";
 
 export const createAccessControl = <S extends StatementsPrimitive>(
 	statements: S,

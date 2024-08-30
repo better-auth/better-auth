@@ -1,7 +1,7 @@
+import { serializeSigned } from "better-call";
 import { createAuthMiddleware } from "../../api/call";
 import { BetterAuthError } from "../../error/better-auth-error";
-import { BetterAuthPlugin } from "../../types/plugins";
-import { serializeSigned } from "better-call";
+import type { BetterAuthPlugin } from "../../types/plugins";
 
 /**
  * Converts bearer token to session cookie

@@ -6,14 +6,14 @@ import {
 	type Migration,
 	sql,
 } from "kysely";
-import { toColumns } from "./to-columns";
-import { BetterAuthOptions } from "../../types";
-import { BetterAuthError } from "../../error/better-auth-error";
-import { MigrationTable } from "../../adapters/schema";
-import { createKyselyAdapter, getDatabaseType } from "../../adapters/kysely";
-import { FieldAttribute } from "../field";
 import { migrationTableName } from ".";
 import { getAuthTables } from "../../adapters/get-tables";
+import { createKyselyAdapter, getDatabaseType } from "../../adapters/kysely";
+import type { MigrationTable } from "../../adapters/schema";
+import { BetterAuthError } from "../../error/better-auth-error";
+import type { BetterAuthOptions } from "../../types";
+import type { FieldAttribute } from "../field";
+import { toColumns } from "./to-columns";
 
 export const BaseModels = ["session", "account", "user"];
 

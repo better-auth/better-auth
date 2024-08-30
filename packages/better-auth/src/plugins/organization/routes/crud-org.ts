@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { getOrgAdapter } from "../adapter";
-import { generateId } from "../../../utils/id";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { sessionMiddleware } from "../../../api/middlewares/session";
+import { generateId } from "../../../utils/id";
+import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",

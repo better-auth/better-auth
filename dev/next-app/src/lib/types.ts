@@ -1,4 +1,4 @@
-import { InferSession, InferUser } from "better-auth/types";
+import type { InferSession, InferUser } from "better-auth/types";
 import type { auth } from "./auth";
 
 export type User = InferUser<typeof auth>;

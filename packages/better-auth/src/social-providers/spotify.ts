@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { Spotify } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 interface SpotifyProfile {
 	id: string;

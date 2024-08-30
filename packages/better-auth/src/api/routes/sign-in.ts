@@ -1,10 +1,10 @@
-import { z } from "zod";
-import { createAuthEndpoint } from "../call";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { APIError } from "better-call";
-import { generateState } from "../../utils/state";
-import { oAuthProviderList } from "../../social-providers";
+import { generateCodeVerifier } from "oslo/oauth2";
 import { Argon2id } from "oslo/password";
+import { z } from "zod";
+import { oAuthProviderList } from "../../social-providers";
+import { generateState } from "../../utils/state";
+import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
 
 export const signInOAuth = createAuthEndpoint(

@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { Twitch } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface TwitchProfile {
 	/**

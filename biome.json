@@ -12,6 +12,9 @@
 				"noImplicitAnyLet": "warn",
 				"noDuplicateObjectKeys": "warn"
 			},
+			"style": {
+				"useImportType": "error"
+			},
 			"performance": {
 				"noDelete": "error"
 			},
@@ -28,7 +31,8 @@
 			".next",
 			".svelte-kit",
 			"package.json",
-			".contentlayer"
+			".contentlayer",
+			"dev"
 		]
 	}
 }

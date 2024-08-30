@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { init } from "./init";
 import { createAuthClient } from "./client";
+import { init } from "./init";
 import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {

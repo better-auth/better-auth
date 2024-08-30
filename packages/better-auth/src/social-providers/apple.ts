@@ -1,6 +1,6 @@
 import { Apple } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
 import { parseJWT } from "oslo/jwt";
+import { toBetterAuthProvider } from "./to-provider";
 
 interface AppleProfile {
 	/**

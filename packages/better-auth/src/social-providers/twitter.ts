@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { Twitter } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface TwitterProfile {
 	data: {

@@ -1,8 +1,8 @@
-import { BetterAuthOptions } from ".";
-import { Session, User } from "../adapters/schema";
-import { BetterAuth } from "../auth";
-import { FieldAttribute, InferFieldOutput } from "../db";
-import { Prettify, UnionToIntersection } from "./helper";
+import type { BetterAuthOptions } from ".";
+import type { Session, User } from "../adapters/schema";
+import type { BetterAuth } from "../auth";
+import type { FieldAttribute, InferFieldOutput } from "../db";
+import type { Prettify, UnionToIntersection } from "./helper";
 
 type AdditionalSessionFields<Options extends BetterAuthOptions> =
 	Options["plugins"] extends Array<infer T>

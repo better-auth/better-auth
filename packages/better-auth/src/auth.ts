@@ -1,8 +1,8 @@
-import { router } from "./api";
-import type { BetterAuthOptions } from "./types/options";
 import type { UnionToIntersection } from "type-fest";
-import type { BetterAuthPlugin } from "./types/plugins";
+import { router } from "./api";
 import { init } from "./init";
+import type { BetterAuthOptions } from "./types/options";
+import type { BetterAuthPlugin } from "./types/plugins";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
@@ -13,7 +13,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				: {}
 			: {}
 	>;
-	const { handler, endpoints } = router(authContext, options);
+	const { handler, endpoints } = router(authContext);
 	type Endpoint = typeof endpoints;
 	return {
 		handler,

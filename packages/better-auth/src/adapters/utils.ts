@@ -1,6 +1,6 @@
 import { BetterAuthError } from "../error/better-auth-error";
-import { BetterAuthOptions } from "../types";
-import { Adapter } from "../types/adapter";
+import type { BetterAuthOptions } from "../types";
+import type { Adapter } from "../types/adapter";
 import { getAuthTables } from "./get-tables";
 import { createKyselyAdapter, getDatabaseType, kyselyAdapter } from "./kysely";
 

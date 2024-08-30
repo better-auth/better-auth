@@ -1,23 +1,23 @@
-import { RequiredDeep } from "type-fest";
-import { createAuthEndpoint } from "../../api/call";
-import { getSessionFromCtx } from "../../api/routes";
-import { z } from "zod";
-import type {
-	AuthenticationResponseJSON,
-	AuthenticatorTransportFuture,
-	CredentialDeviceType,
-	PublicKeyCredentialCreationOptionsJSON,
-} from "@simplewebauthn/types";
-import { sessionMiddleware } from "../../api/middlewares/session";
-import { alphabet, generateRandomString } from "oslo/crypto";
 import {
 	generateAuthenticationOptions,
 	generateRegistrationOptions,
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { BetterAuthPlugin } from "../../types/plugins";
+import type {
+	AuthenticationResponseJSON,
+	AuthenticatorTransportFuture,
+	CredentialDeviceType,
+	PublicKeyCredentialCreationOptionsJSON,
+} from "@simplewebauthn/types";
 import { APIError } from "better-call";
+import { alphabet, generateRandomString } from "oslo/crypto";
+import type { RequiredDeep } from "type-fest";
+import { z } from "zod";
+import { createAuthEndpoint } from "../../api/call";
+import { sessionMiddleware } from "../../api/middlewares/session";
+import { getSessionFromCtx } from "../../api/routes";
+import type { BetterAuthPlugin } from "../../types/plugins";
 
 export interface PasskeyOptions {
 	/**
@@ -346,7 +346,6 @@ export const passkey = (options: PasskeyOptions) => {
 						});
 					}
 					try {
-						console.log({ resp });
 						const verification = await verifyAuthenticationResponse({
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,

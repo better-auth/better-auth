@@ -1,4 +1,4 @@
-import { betterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
+import { type BetterFetchPlugin, betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
 
 export const redirectPlugin = {

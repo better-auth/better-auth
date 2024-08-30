@@ -1,17 +1,17 @@
+import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
-import { BetterAuthPlugin } from "../../types/plugins";
+import { sessionMiddleware } from "../../api/middlewares/session";
+import { symmetricEncrypt } from "../../crypto";
+import type { BetterAuthPlugin } from "../../types/plugins";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-import { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import {
 	twoFactorMiddleware,
 	verifyTwoFactorMiddleware,
 } from "./two-fa-middleware";
-import { sessionMiddleware } from "../../api/middlewares/session";
-import { alphabet, generateRandomString } from "oslo/crypto";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
-import { otp2fa } from "./otp";
-import { symmetricEncrypt } from "../../crypto";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 	const totp = totp2fa({
@@ -40,7 +40,6 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						key: ctx.context.secret,
 						data: secret,
 					});
-					console.log({ encryptedSecret });
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						options.backupCodeOptions,

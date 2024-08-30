@@ -1,4 +1,6 @@
 "use client";
+import { authClient } from "@/lib/auth-client";
+import { useAuthStore } from "better-auth/react";
 import { useState } from "react";
 import { useEffect } from "react";
 import { Button } from "./ui/button";
@@ -26,8 +28,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "./ui/table";
-import { authClient } from "@/lib/auth-client";
-import { useAuthStore } from "better-auth/react";
 
 export const Organization = () => {
 	const [name, setName] = useState("");
@@ -48,7 +48,7 @@ export const Organization = () => {
 						<Select
 							value={organization?.id || "null"}
 							onValueChange={(value) => {
-								authClient.setActiveOrg(value)
+								authClient.setActiveOrg(value);
 							}}
 						>
 							<SelectTrigger>
@@ -93,8 +93,8 @@ export const Organization = () => {
 										body: {
 											name: name,
 											slug: slug,
-										}
-									})
+										},
+									});
 								}}
 							>
 								Create

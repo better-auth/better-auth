@@ -1,5 +1,20 @@
 {
-	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"target": "es2022",
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"module": "Preserve",
+		"noEmit": true,
+		"moduleDetection": "force",
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true
+	},
 	"exclude": ["node_modules"],
 	"include": ["src", "tests"]
 }

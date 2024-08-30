@@ -1,12 +1,12 @@
 import { APIError } from "better-call";
+import { generateRandomInteger } from "oslo/crypto";
+import { generateHOTP } from "oslo/otp";
+import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api/middlewares/session";
-import { TwoFactorProvider, UserWithTwoFactor } from "../types";
-import { generateHOTP } from "oslo/otp";
-import { generateRandomInteger } from "oslo/crypto";
 import { OTP_RANDOM_NUMBER_COOKIE_NAME } from "../constant";
-import { z } from "zod";
 import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 
 export interface OTPOptions {
 	/**

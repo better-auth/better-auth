@@ -1,8 +1,8 @@
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import { useStore } from "@nanostores/react";
+import type { BetterAuth } from "../auth";
+import type { InferSession, InferUser } from "../types";
 import { createAuthClient as createVanillaClient } from "./base";
-import { BetterFetchOption } from "@better-fetch/fetch";
-import { BetterAuth } from "../auth";
-import { InferSession, InferUser } from "../types";
 
 export const createAuthClient = <Auth extends BetterAuth>(
 	options?: BetterFetchOption,

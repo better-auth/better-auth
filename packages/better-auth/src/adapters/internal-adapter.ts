@@ -1,9 +1,9 @@
-import { Account, Session, User } from "./schema";
-import { BetterAuthOptions } from "../types";
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { getAuthTables } from "./get-tables";
-import { Adapter } from "../types/adapter";
+import type { BetterAuthOptions } from "../types";
+import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
+import { getAuthTables } from "./get-tables";
+import type { Account, Session, User } from "./schema";
 
 export const createInternalAdapter = (
 	adapter: Adapter,

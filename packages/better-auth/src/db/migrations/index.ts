@@ -2,11 +2,11 @@ import chalk from "chalk";
 import { Kysely, Migrator } from "kysely";
 import ora from "ora";
 import prompts from "prompts";
-import { type BetterAuthOptions } from "../../types";
-import { logger } from "../../utils/logger";
-import { BetterAuthError } from "../../error/better-auth-error";
-import { getMigrations } from "./get-migrations";
 import { getDialect } from "../../adapters/kysely";
+import { BetterAuthError } from "../../error/better-auth-error";
+import type { BetterAuthOptions } from "../../types";
+import { logger } from "../../utils/logger";
+import { getMigrations } from "./get-migrations";
 
 export const migrationTableName = "better_auth_migrations";
 export const migrationLockTableName = "better_auth_migrations_lock";

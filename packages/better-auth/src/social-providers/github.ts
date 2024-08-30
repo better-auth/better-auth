@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { GitHub } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 interface GithubProfile {
 	login: string;

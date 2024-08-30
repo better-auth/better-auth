@@ -1,8 +1,8 @@
+import type { BetterFetch } from "@better-fetch/fetch";
 import { atom, computed, task } from "nanostores";
-import { Prettify } from "../types/helper";
-import { BetterAuth } from "../auth";
-import { BetterFetch } from "@better-fetch/fetch";
-import { InferSession, InferUser } from "../types/models";
+import type { BetterAuth } from "../auth";
+import type { Prettify } from "../types/helper";
+import type { InferSession, InferUser } from "../types/models";
 
 export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 	type UserWithAdditionalFields = InferUser<Auth["options"]>;

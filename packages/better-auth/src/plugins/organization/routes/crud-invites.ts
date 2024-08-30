@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { getOrgAdapter } from "../adapter";
-import { generateId } from "../../../utils/id";
-import { role } from "../schema";
 import { getSessionFromCtx } from "../../../api/routes";
+import { generateId } from "../../../utils/id";
+import { getOrgAdapter } from "../adapter";
+import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { role } from "../schema";
 
 export const createInvitation = createAuthEndpoint(
 	"/organization/invite-member",

@@ -1,11 +1,16 @@
-import { Kysely } from "kysely";
-import { FieldAttribute } from "../db";
-import { Adapter, Where } from "../types/adapter";
-import { Dialect, MysqlDialect, PostgresDialect, SqliteDialect } from "kysely";
-import { BetterAuthOptions } from "../types";
-import { createPool } from "mysql2";
 import Database from "better-sqlite3";
+import { Kysely } from "kysely";
+import {
+	type Dialect,
+	MysqlDialect,
+	PostgresDialect,
+	SqliteDialect,
+} from "kysely";
+import { createPool } from "mysql2";
 import pg from "pg";
+import type { FieldAttribute } from "../db";
+import type { BetterAuthOptions } from "../types";
+import type { Adapter, Where } from "../types/adapter";
 
 const { Pool } = pg;
 

@@ -1,11 +1,11 @@
 import { APIError } from "better-call";
-import { Session } from "../../adapters/schema";
+import { z } from "zod";
+import type { Session } from "../../adapters/schema";
 import { createAuthMiddleware } from "../../api/call";
+import { signInCredential } from "../../api/routes";
 import { hs256 } from "../../crypto";
 import { TWO_FACTOR_COOKIE_NAME } from "./constant";
-import { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { z } from "zod";
-import { signInCredential } from "../../api/routes";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 	const cookie = await ctx.getSignedCookie(

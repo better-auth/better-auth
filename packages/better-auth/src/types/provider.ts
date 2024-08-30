@@ -1,15 +1,13 @@
-import {
+import type {
 	OAuth2Provider as ArcticOAuth2Provider,
 	OAuth2ProviderWithPKCE,
 	Tokens,
 } from "arctic";
-import { LiteralString } from "./helper";
-import { oAuthProviderList } from "../social-providers";
-import { User } from "../adapters/schema";
-import { FieldAttribute } from "../db";
-import { Migration } from "kysely";
-import { AuthEndpoint } from "../api/call";
-import { Context, Endpoint } from "better-call";
+import type { Migration } from "kysely";
+import type { User } from "../adapters/schema";
+import type { FieldAttribute } from "../db";
+import type { oAuthProviderList } from "../social-providers";
+import type { LiteralString } from "./helper";
 
 export interface Provider {
 	id: LiteralString;

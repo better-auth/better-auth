@@ -1,16 +1,16 @@
-import { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch } from "@better-fetch/fetch";
 import {
+	WebAuthnError,
 	startAuthentication,
 	startRegistration,
-	WebAuthnError,
 } from "@simplewebauthn/browser";
-import {
+import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/types";
-import { Session } from "inspector";
-import { User } from "../../adapters/schema";
-import { Passkey } from "../../plugins";
+import type { Session } from "inspector";
+import type { User } from "../../adapters/schema";
+import type { Passkey } from "../../plugins";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {

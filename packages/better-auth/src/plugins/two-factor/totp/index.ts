@@ -1,13 +1,13 @@
+import { APIError } from "better-call";
 import { TimeSpan } from "oslo";
 import { TOTPController, createTOTPKeyURI } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api/middlewares/session";
-import { APIError } from "better-call";
-import { TwoFactorProvider, UserWithTwoFactor } from "../types";
-import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
-import { BackupCodeOptions } from "../backup-codes";
 import { symmetricDecrypt } from "../../../crypto";
+import type { BackupCodeOptions } from "../backup-codes";
+import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 
 export type TOTPOptions = {
 	/**

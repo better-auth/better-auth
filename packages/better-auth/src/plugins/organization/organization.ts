@@ -1,18 +1,26 @@
-import { z, ZodArray, ZodLiteral, ZodObject, ZodOptional } from "zod";
-import { User } from "../../adapters/schema";
+import { APIError } from "better-call";
+import {
+	type ZodArray,
+	type ZodLiteral,
+	type ZodObject,
+	type ZodOptional,
+	z,
+} from "zod";
+import type { User } from "../../adapters/schema";
 import { createAuthEndpoint } from "../../api/call";
-import { BetterAuthPlugin } from "../../types/plugins";
+import { sessionMiddleware } from "../../api/middlewares/session";
+import { getSessionFromCtx } from "../../api/routes";
+import type { AuthContext } from "../../init";
+import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
 import {
-	createOrganization,
-	getFullOrganization,
-	listOrganization,
-	setActiveOrganization,
-	updateOrganization,
-} from "./routes/crud-org";
-import { AccessControl, defaultRoles, defaultStatements, Role } from "./access";
-import { getSessionFromCtx } from "../../api/routes";
-import { AuthContext } from "../../init";
+	type AccessControl,
+	type Role,
+	defaultRoles,
+	type defaultStatements,
+} from "./access";
+import { getOrgAdapter } from "./adapter";
+import { orgMiddleware, orgSessionMiddleware } from "./call";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -21,11 +29,14 @@ import {
 	rejectInvitation,
 } from "./routes/crud-invites";
 import { deleteMember, updateMember } from "./routes/crud-members";
-import { sessionMiddleware } from "../../api/middlewares/session";
-import { orgMiddleware, orgSessionMiddleware } from "./call";
-import { getOrgAdapter } from "./adapter";
-import { APIError } from "better-call";
-import { Invitation } from "./schema";
+import {
+	createOrganization,
+	getFullOrganization,
+	listOrganization,
+	setActiveOrganization,
+	updateOrganization,
+} from "./routes/crud-org";
+import type { Invitation } from "./schema";
 
 export interface OrganizationOptions {
 	/**

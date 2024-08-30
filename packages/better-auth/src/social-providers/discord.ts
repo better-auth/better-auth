@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { Discord } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */

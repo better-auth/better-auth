@@ -1,5 +1,5 @@
-import { FieldAttribute } from "../db";
-import { BetterAuthOptions } from "../types";
+import type { FieldAttribute } from "../db";
+import type { BetterAuthOptions } from "../types";
 
 export const getAuthTables = (options: BetterAuthOptions) => {
 	const pluginSchema = options.plugins?.reduce((acc, plugin) => {

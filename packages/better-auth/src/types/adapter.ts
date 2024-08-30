@@ -1,5 +1,5 @@
-import { Session } from "../adapters/schema";
-import { FieldAttribute } from "../db";
+import type { Session } from "../adapters/schema";
+import type { FieldAttribute } from "../db";
 
 /**
  * Adapter where clause

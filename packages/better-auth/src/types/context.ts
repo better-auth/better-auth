@@ -1,5 +1,5 @@
-import { ContextTools } from "better-call";
-import { AuthContext } from "../init";
+import type { ContextTools } from "better-call";
+import type { AuthContext } from "../init";
 
 export type GenericEndpointContext = ContextTools & {
 	context: AuthContext;

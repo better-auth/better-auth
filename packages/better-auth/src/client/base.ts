@@ -1,14 +1,14 @@
-import { BetterAuth } from "../auth";
-import { createDynamicPathProxy } from "./proxy";
 import { createFetch } from "@better-fetch/fetch";
-import { getSessionAtom } from "./session-atom";
+import type { router } from "../api";
+import type { BetterAuth } from "../auth";
+import { getBaseURL } from "../utils/base-url";
+import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
+import type { InferRoutes } from "./path-to-object";
 import { getOrganizationAtoms } from "./plugins/org-client";
 import { getPasskeyActions } from "./plugins/passkey-client";
-import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
-import { InferRoutes } from "./path-to-object";
-import { ClientOptions, HasPlugin } from "./type";
-import { getBaseURL } from "../utils/base-url";
-import type { router } from "../api";
+import { createDynamicPathProxy } from "./proxy";
+import { getSessionAtom } from "./session-atom";
+import type { ClientOptions, HasPlugin } from "./type";
 
 export const createAuthClient = <Auth extends BetterAuth = never>(
 	options?: ClientOptions,

@@ -1,6 +1,6 @@
+import { parseCookies } from "oslo/cookie";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { parseCookies } from "oslo/cookie";
 const { auth, client } = await getTestInstance();
 const testCredential1 = {
 	email: "test@test.com",

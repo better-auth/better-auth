@@ -1,6 +1,6 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { Facebook } from "arctic";
 import { toBetterAuthProvider } from "./to-provider";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface FacebookProfile {
 	id: string;

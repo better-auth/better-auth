@@ -1,9 +1,9 @@
-import { z } from "zod";
-import { createAuthEndpoint } from "../call";
-import { createJWT } from "oslo/jwt";
 import { TimeSpan } from "oslo";
+import { createJWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
 import { Argon2id } from "oslo/password";
+import { z } from "zod";
+import { createAuthEndpoint } from "../call";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -87,7 +87,6 @@ export const resetPassword = createAuthEndpoint(
 				Buffer.from(ctx.context.secret),
 				token,
 			);
-			console.log(jwt);
 			const email = z
 				.string()
 				.email()
