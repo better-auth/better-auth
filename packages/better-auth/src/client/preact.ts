@@ -1,7 +1,7 @@
 import { useStore } from "@nanostores/react";
 export const useAuthStore = useStore;
 
-import { createVanillaClient } from "./base";
+import { createAuthClient as createVanillaClient } from "./base";
 import { BetterFetchOption } from "@better-fetch/fetch";
 
 export const createAuthClient = (options?: BetterFetchOption) => {

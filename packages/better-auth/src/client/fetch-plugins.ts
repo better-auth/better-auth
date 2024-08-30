@@ -39,6 +39,8 @@ export const csrfPlugin = {
 				csrfToken: string;
 			}>("/csrf", {
 				baseURL: options.baseURL,
+				...options,
+				plugins: [],
 			});
 			if (error?.status === 404) {
 				throw new BetterAuthError(

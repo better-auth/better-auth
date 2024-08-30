@@ -17,6 +17,7 @@ import { signUpCredential } from "./routes/sign-up";
 import { parseAccount, parseSession, parseUser } from "../adapters/schema";
 import { BetterAuthOptions, InferSession, InferUser } from "../types";
 import { Prettify } from "../types/helper";
+import { ok } from "./routes/ok";
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
@@ -92,6 +93,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	const endpoints = {
 		...baseEndpoints,
 		...pluginEndpoints,
+		ok,
 	};
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {

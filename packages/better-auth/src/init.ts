@@ -19,6 +19,7 @@ export const init = (options: BetterAuthOptions) => {
 		options: {
 			...options,
 			baseURL: baseURL,
+			basePath: options.basePath || "/api/auth",
 		},
 		baseURL: withPath,
 		secret:

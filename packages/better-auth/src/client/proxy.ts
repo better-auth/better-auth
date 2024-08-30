@@ -65,10 +65,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						method,
 						onSuccess() {
 							const signal = $signal?.find((s) => s.matcher(routePath));
-							console.log({
-								signal,
-								routePath,
-							});
 							if (signal) {
 								signal.atom.set(!signal.atom.get());
 							}

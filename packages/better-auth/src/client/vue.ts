@@ -1,6 +1,6 @@
 import { useStore } from "@nanostores/vue";
 import { BetterFetchOption } from "@better-fetch/fetch";
-import { createVanillaClient } from "./base";
+import { createAuthClient as createVanillaClient } from "./base";
 
 export const createAuthClient = (options?: BetterFetchOption) => {
 	const client = createVanillaClient(options);

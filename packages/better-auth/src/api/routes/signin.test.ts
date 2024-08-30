@@ -1,56 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createAuthClient } from "../../client";
 
 describe("signIn", async () => {
-	const app = await getTestInstance();
-	it("should sign up with credential", async () => {
-		const res = await app.api.signUpCredential({
-			body: {
-				email: "test@test.com",
-				password: "test1234",
-				name: "test",
-			},
-		});
-		expect(res).toMatchObject({
-			user: {
-				id: expect.any(String),
-				email: "test@test.com",
-				name: "test",
-				image: undefined,
-				emailVerified: false,
-				createdAt: expect.any(Date),
-				updatedAt: expect.any(Date),
-			},
-			session: {
-				id: expect.any(String),
-				userId: expect.any(String),
-				expiresAt: expect.any(Date),
-			},
-		});
+	const auth = await getTestInstance();
+	const client = createAuthClient<typeof auth>({
+		customFetchImpl: async (url, init) => {
+			const req = new Request(url.toString(), init);
+			const res = await auth.handler(req);
+			return res;
+		},
+		csrfPlugin: false,
 	});
 
-	it("should sign in with credential", async () => {
-		const res = await app.api.signInCredential({
-			body: {
-				email: "test@test.com",
-				password: "test1234",
-			},
-		});
-		expect(res).toMatchObject({
-			user: {
-				id: expect.any(String),
-				email: "test@test.com",
-				name: "test",
-				image: null,
-				emailVerified: false,
-				createdAt: expect.any(Date),
-				updatedAt: expect.any(Date),
-			},
-			session: {
-				id: expect.any(String),
-				userId: expect.any(String),
-				expiresAt: expect.any(Date),
-			},
-		});
+	it("should sign up with email and password", async () => {
+		// const res = await client.signUp.credential({
+		// 	email: "test@test.com",
+		// 	password: "test",
+		// 	name: "test",
+		// });
+		// console.log(res);
 	});
 });

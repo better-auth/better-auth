@@ -10,7 +10,7 @@ import { ClientOptions, HasPlugin } from "./type";
 import { getBaseURL } from "../utils/base-url";
 import type { router } from "../api";
 
-export const createVanillaClient = <Auth extends BetterAuth = never>(
+export const createAuthClient = <Auth extends BetterAuth = never>(
 	options?: ClientOptions,
 ) => {
 	type BAuth = Auth extends never ? BetterAuth : Auth;
@@ -18,9 +18,15 @@ export const createVanillaClient = <Auth extends BetterAuth = never>(
 		? ReturnType<typeof router>["endpoints"]
 		: BAuth["api"];
 	const $fetch = createFetch({
+		method: "GET",
 		...options,
 		baseURL: getBaseURL(options?.baseURL).withPath,
-		plugins: [redirectPlugin, addCurrentURL, csrfPlugin],
+		plugins: [
+			redirectPlugin,
+			addCurrentURL,
+			...(options?.csrfPlugin !== false ? [csrfPlugin] : []),
+			...(options?.plugins || []),
+		],
 	});
 	const { $session, $sessionSignal } = getSessionAtom<Auth>($fetch);
 	const { signInPasskey, register } = getPasskeyActions($fetch);

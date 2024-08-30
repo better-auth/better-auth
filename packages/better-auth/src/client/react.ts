@@ -1,5 +1,5 @@
 import { useStore } from "@nanostores/react";
-import { createVanillaClient } from "./base";
+import { createAuthClient as createVanillaClient } from "./base";
 import { BetterFetchOption } from "@better-fetch/fetch";
 import { BetterAuth } from "../auth";
 import { InferSession, InferUser } from "../types";

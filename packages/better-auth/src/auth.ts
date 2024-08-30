@@ -13,7 +13,6 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				: {}
 			: {}
 	>;
-
 	const { handler, endpoints } = router(authContext, options);
 	type Endpoint = typeof endpoints;
 	return {

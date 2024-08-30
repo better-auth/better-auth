@@ -5,7 +5,12 @@ import type { useAuthStore as reactStore } from "./react";
 import type { useAuthStore as vueStore } from "./vue";
 
 export type AuthStore = typeof reactStore | typeof vueStore;
-export interface ClientOptions extends BetterFetchOption {}
+export interface ClientOptions extends BetterFetchOption {
+	/**
+	 * csrf plugin is enabled by default
+	 */
+	csrfPlugin?: boolean;
+}
 
 export type HasPlugin<
 	PluginId extends string,

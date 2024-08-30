@@ -1,0 +1,100 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`init > should match config 1`] = `
+{
+  "adapter": {
+    "create": [Function],
+    "delete": [Function],
+    "findMany": [Function],
+    "findOne": [Function],
+    "update": [Function],
+  },
+  "authCookies": {
+    "csrfToken": {
+      "name": "better-auth.csrf_token",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 604800,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+    "nonce": {
+      "name": "better-auth.nonce",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 900,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+    "pkCodeVerifier": {
+      "name": "better-auth.pk_code_verifier",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 900,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+    "sessionToken": {
+      "name": "better-auth.session_token",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 604800,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+    "state": {
+      "name": "better-auth.state",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 900,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+  },
+  "baseURL": "http://localhost:3000/api/auth",
+  "createAuthCookie": [Function],
+  "db": Kysely {},
+  "internalAdapter": {
+    "createOAuthUser": [Function],
+    "createSession": [Function],
+    "createUser": [Function],
+    "deleteSession": [Function],
+    "findSession": [Function],
+    "findUserByEmail": [Function],
+    "findUserById": [Function],
+    "linkAccount": [Function],
+    "updatePassword": [Function],
+    "updateSession": [Function],
+    "updateUserByEmail": [Function],
+  },
+  "logger": {
+    "box": [Function],
+    "break": [Function],
+    "debug": [Function],
+    "error": [Function],
+    "info": [Function],
+    "log": [Function],
+    "success": [Function],
+    "warn": [Function],
+  },
+  "options": {
+    "basePath": "/api/auth",
+    "baseURL": "http://localhost:3000",
+    "database": {
+      "provider": "sqlite",
+      "url": ":memory:",
+    },
+  },
+  "secret": "better-auth-secret-123456789",
+}
+`;
