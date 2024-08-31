@@ -10,7 +10,8 @@ import type {
 } from "@simplewebauthn/types";
 import type { Session } from "inspector";
 import type { User } from "../../adapters/schema";
-import type { Passkey } from "../../plugins";
+import type { passkey as passkeyPl, Passkey } from "../../plugins";
+import { createClientPlugin } from "../../client/create-client-plugin";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {
@@ -95,3 +96,12 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		register,
 	};
 };
+
+export const passkeyClient = createClientPlugin<ReturnType<typeof passkeyPl>>()(
+	($fetch) => {
+		return {
+			id: "passkey",
+			actions: getPasskeyActions($fetch),
+		};
+	},
+);

@@ -22,8 +22,8 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	};
 };
 
-export type BetterAuth<Endpoints extends Record<string, any> = {}> = {
+export type Auth = {
 	handler: (request: Request) => Promise<Response>;
-	api: Endpoints;
+	api: ReturnType<typeof router>["endpoints"];
 	options: BetterAuthOptions;
 };

@@ -5,7 +5,7 @@ import {
 	twoFactor,
 	validEmail,
 } from "better-auth/plugins";
-import { github } from "better-auth/provider";
+import { github } from "better-auth/social-providers";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",

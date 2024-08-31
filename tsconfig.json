@@ -5,21 +5,15 @@
 		"target": "es2022",
 		"allowJs": true,
 		"resolveJsonModule": true,
-		"disableReferencedProjectLoad": true,
+		"module": "Preserve",
+		"noEmit": true,
 		"moduleDetection": "force",
 		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
 		"strict": true,
 		"noUncheckedIndexedAccess": true,
-		"noImplicitAny": true,
-		"checkJs": true,
-		"lib": ["dom", "dom.iterable", "ES2022"],
-		"noEmit": true,
-		"module": "ESNext",
-		"moduleResolution": "Bundler",
-		"jsx": "preserve",
-		"incremental": true,
-		"tsBuildInfoFile": ".tsbuildinfo",
-		"types": ["node"]
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true
 	},
 	"exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
 }

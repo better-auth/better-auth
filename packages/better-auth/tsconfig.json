@@ -7,11 +7,11 @@
 		"resolveJsonModule": true,
 		"module": "Preserve",
 		"noEmit": true,
+		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
 		"strict": true,
-		"noUncheckedIndexedAccess": true,
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true
 	},

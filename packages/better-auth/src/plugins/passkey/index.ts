@@ -459,3 +459,5 @@ export const passkey = (options: PasskeyOptions) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./client";

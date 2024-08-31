@@ -8,7 +8,6 @@ import {
 } from "zod";
 import type { User } from "../../adapters/schema";
 import { createAuthEndpoint } from "../../api/call";
-import { sessionMiddleware } from "../../api/middlewares/session";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";

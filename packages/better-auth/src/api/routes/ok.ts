@@ -11,3 +11,13 @@ export const ok = createAuthEndpoint(
 		});
 	},
 );
+
+export const welcome = createAuthEndpoint(
+	"/welcome/ok",
+	{
+		method: "GET",
+	},
+	async () => {
+		return new Response("Welcome to Better Auth");
+	},
+);

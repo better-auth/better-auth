@@ -14,6 +14,7 @@ export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
 	const { baseURL, withPath } = getBaseURL(options.baseURL, options.basePath);
+
 	return {
 		options: {
 			...options,

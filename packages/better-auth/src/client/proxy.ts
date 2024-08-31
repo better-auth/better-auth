@@ -1,16 +1,13 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
+import type { LiteralUnion } from "type-fest";
 
-const knownPathMethods: Record<string, "POST" | "GET"> = {
-	"/sign-out": "POST",
-	"enable/totp": "POST",
-	"/two-factor/disable": "POST",
-	"/two-factor/enable": "POST",
-	"/two-factor/send-otp": "POST",
-};
-
-function getMethod(path: string, args?: ProxyRequest) {
+function getMethod(
+	path: string,
+	knownPathMethods: Record<string, "POST" | "GET">,
+	args?: ProxyRequest,
+) {
 	const method = knownPathMethods[path];
 	const { options, query, ...body } = args || {};
 	if (method) {
@@ -25,13 +22,17 @@ function getMethod(path: string, args?: ProxyRequest) {
 	return "GET";
 }
 
+export type AuthProxySignal = {
+	atom: LiteralUnion<string, "$sessionSignal">;
+	matcher: (path: string) => boolean;
+};
+
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
-	$signal?: {
-		atom: PreinitializedWritableAtom<boolean>;
-		matcher: (path: string) => boolean;
-	}[],
+	knownPathMethods: Record<string, "POST" | "GET">,
+	$signal?: AuthProxySignal[],
+	$signals?: Record<string, PreinitializedWritableAtom<boolean>>,
 ): T {
 	const handler: ProxyHandler<any> = {
 		get(target, prop: string) {
@@ -56,7 +57,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						.join("/");
 					const routePath = `/${path}`;
 					const arg = (args[0] || {}) as ProxyRequest;
-					const method = getMethod(routePath, arg);
+					const method = getMethod(routePath, knownPathMethods, arg);
 					const { query, options, ...body } = arg;
 					return await client(routePath, {
 						...options,
@@ -65,9 +66,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						method,
 						onSuccess() {
 							const signal = $signal?.find((s) => s.matcher(routePath));
-							if (signal) {
-								signal.atom.set(!signal.atom.get());
-							}
+							if (!signal) return;
+							const signalAtom = $signals?.[signal.atom];
+							if (!signalAtom) return;
+							signalAtom.set(!signalAtom.get());
 						},
 					});
 				},

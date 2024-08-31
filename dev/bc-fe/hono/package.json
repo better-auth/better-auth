@@ -1,0 +1,17 @@
+{
+  "name": "hono",
+  "scripts": {
+    "dev": "tsx -r dotenv/config src/index.ts",
+    "auth": "pnpm better-auth"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.12.2",
+    "better-auth": "^0.0.2-beta.8",
+    "dotenv": "^16.4.5",
+    "hono": "^4.5.9",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

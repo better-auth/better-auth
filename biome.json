@@ -31,8 +31,7 @@
 			".next",
 			".svelte-kit",
 			"package.json",
-			".contentlayer",
-			"dev"
+			".contentlayer"
 		]
 	}
 }

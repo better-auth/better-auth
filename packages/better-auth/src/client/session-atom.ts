@@ -1,6 +1,6 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import { atom, computed, task } from "nanostores";
-import type { BetterAuth } from "../auth";
+import type { Auth as BetterAuth } from "../auth";
 import type { Prettify } from "../types/helper";
 import type { InferSession, InferUser } from "../types/models";
 

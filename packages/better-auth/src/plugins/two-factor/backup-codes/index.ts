@@ -49,23 +49,23 @@ export async function generateBackupCodes(
 	};
 }
 
-export function verifyBackupCode(
+export async function verifyBackupCode(
 	data: {
 		user: UserWithTwoFactor;
 		code: string;
 	},
 	key: string,
 ) {
-	const codes = getBackupCodes(data.user, key);
+	const codes = await getBackupCodes(data.user, key);
 	if (!codes) {
 		return false;
 	}
 	return codes.includes(data.code);
 }
 
-export function getBackupCodes(user: UserWithTwoFactor, key: string) {
+export async function getBackupCodes(user: UserWithTwoFactor, key: string) {
 	const secret = Buffer.from(
-		symmetricDecrypt({ key, data: user.twoFactorBackupCodes }),
+		await symmetricDecrypt({ key, data: user.twoFactorBackupCodes }),
 	).toString("utf-8");
 	const data = JSON.parse(secret);
 	const result = z.array(z.string()).safeParse(data);
@@ -81,6 +81,7 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 		endpoints: {
 			verifyBackupCode: createAuthEndpoint(
 				"/two-factor/verify-backup-code",
+
 				{
 					method: "POST",
 					body: z.object({

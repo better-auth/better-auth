@@ -11,6 +11,7 @@ export default defineConfig({
 		preact: "./src/client/preact.ts",
 		vue: "./src/client/vue.ts",
 		plugins: "./src/plugins/index.ts",
+		"client/plugins": "./src/client/plugins.ts",
 	},
 	splitting: false,
 	sourcemap: true,

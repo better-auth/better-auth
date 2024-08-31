@@ -1,3 +1,5 @@
+import { BetterAuthError } from "../error/better-auth-error";
+
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
@@ -35,6 +37,7 @@ export function getBaseURL(url?: string, path?: string) {
 	if (fromEnv) {
 		return withPath(fromEnv, path);
 	}
+	console.log(process.env);
 	if (
 		!fromEnv &&
 		(process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test")
@@ -44,7 +47,7 @@ export function getBaseURL(url?: string, path?: string) {
 			withPath: "http://localhost:3000/api/auth",
 		};
 	}
-	throw new Error(
-		"Could not infer baseURL from environment variables. Please pass it as an option to the createClient function.",
+	throw new BetterAuthError(
+		"Could not infer baseURL from environment variables",
 	);
 }

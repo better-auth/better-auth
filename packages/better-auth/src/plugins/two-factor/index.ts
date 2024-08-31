@@ -36,7 +36,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
-					const encryptedSecret = symmetricEncrypt({
+					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secret,
 						data: secret,
 					});
@@ -114,3 +114,5 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./client";

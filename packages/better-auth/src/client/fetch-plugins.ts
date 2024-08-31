@@ -38,9 +38,11 @@ export const csrfPlugin = {
 			const { data, error } = await betterFetch<{
 				csrfToken: string;
 			}>("/csrf", {
+				body: undefined,
 				baseURL: options.baseURL,
-				...options,
 				plugins: [],
+				method: "GET",
+				credentials: "include",
 			});
 			if (error?.status === 404) {
 				throw new BetterAuthError(
@@ -55,6 +57,7 @@ export const csrfPlugin = {
 				csrfToken: data.csrfToken,
 			};
 		}
+		options.credentials = "include";
 		return { url, options };
 	},
 } satisfies BetterFetchPlugin;

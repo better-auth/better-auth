@@ -1,16 +1,20 @@
-import { createClient } from "better-call/client";
 import { describe, it } from "vitest";
-import { passkey } from "../plugins";
+
 import { getTestInstance } from "../test-utils/test-instance";
-import { createAuthClient } from "./react";
+import { createAuthClient } from "./base";
+import { createAuthClient as createReactClient } from "./react";
+import { twoFactor } from "./plugins/two-factor";
+import { organization } from "./plugins/organization";
+import { passkey } from "./plugins/passkey";
+import { twoFactorClient } from "../plugins";
 
 describe("client path to object", async () => {
 	const auth = await getTestInstance({
 		plugins: [
-			passkey({
-				rpID: "test",
-				rpName: "test",
-			}),
+			// passkey({
+			// 	rpID: "test",
+			// 	rpName: "test",
+			// }),
 		],
 	});
 
@@ -20,6 +24,13 @@ describe("client path to object", async () => {
 			customFetchImpl: async (url, options) => {
 				return new Response();
 			},
+			authPlugins: [twoFactor, passkey],
 		});
+		client.$atoms.$session;
+
+		const client2 = createReactClient({
+			authPlugins: [organization, twoFactorClient],
+		});
+		client2.$atoms.$session;
 	});
 });

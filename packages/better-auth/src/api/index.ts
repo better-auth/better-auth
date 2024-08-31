@@ -16,8 +16,9 @@ import {
 	verifyEmail,
 } from "./routes";
 import { getCSRFToken } from "./routes/csrf";
-import { ok } from "./routes/ok";
+import { ok, welcome } from "./routes/ok";
 import { signUpCredential } from "./routes/sign-up";
+import { error } from "./routes/error";
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
@@ -93,6 +94,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		...baseEndpoints,
 		...pluginEndpoints,
 		ok,
+		welcome,
+		error,
 	};
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {
@@ -166,7 +169,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			let body: Record<string, any> = {};
 			try {
 				body = await res.json();
-			} catch (e) {}
+			} catch (e) {
+				return res;
+			}
 			if (body?.user) {
 				body.user = parseUser(ctx.options, body.user);
 			}

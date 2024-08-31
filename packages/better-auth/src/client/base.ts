@@ -1,22 +1,33 @@
 import { createFetch } from "@better-fetch/fetch";
-import type { router } from "../api";
-import type { BetterAuth } from "../auth";
+import type { Auth } from "../auth";
 import { getBaseURL } from "../utils/base-url";
 import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
 import type { InferRoutes } from "./path-to-object";
-import { getOrganizationAtoms } from "./plugins/org-client";
-import { getPasskeyActions } from "./plugins/passkey-client";
-import { createDynamicPathProxy } from "./proxy";
+import { createDynamicPathProxy, type AuthProxySignal } from "./proxy";
 import { getSessionAtom } from "./session-atom";
-import type { ClientOptions, HasPlugin } from "./type";
+import type { AuthPlugin, ClientOptions } from "./type";
+import type { UnionToIntersection } from "../types/helper";
+import type { PreinitializedWritableAtom } from "nanostores";
+import type { BetterAuthPlugin } from "../types/plugins";
 
-export const createAuthClient = <Auth extends BetterAuth = never>(
-	options?: ClientOptions,
+export const createAuthClient = <O extends ClientOptions = ClientOptions>(
+	options?: O,
 ) => {
-	type BAuth = Auth extends never ? BetterAuth : Auth;
-	type API = Auth extends never
-		? ReturnType<typeof router>["endpoints"]
-		: BAuth["api"];
+	type API = O["authPlugins"] extends Array<any>
+		? (O["authPlugins"] extends Array<infer Pl>
+				? UnionToIntersection<
+						//@ts-expect-error
+						ReturnType<Pl> extends {
+							plugin: infer Plug;
+						}
+							? Plug extends BetterAuthPlugin
+								? Plug["endpoints"]
+								: {}
+							: {}
+					>
+				: {}) &
+				Auth["api"]
+		: Auth["api"];
 	const $fetch = createFetch({
 		method: "GET",
 		...options,
@@ -28,72 +39,101 @@ export const createAuthClient = <Auth extends BetterAuth = never>(
 			...(options?.plugins || []),
 		],
 	});
-	const { $session, $sessionSignal } = getSessionAtom<Auth>($fetch);
-	const { signInPasskey, register } = getPasskeyActions($fetch);
-	const {
-		$activeOrganization,
-		$listOrganizations,
-		activeOrgId,
-		$listOrg,
-		$activeOrgSignal,
 
-		$activeInvitationId,
-		$invitation,
-	} = getOrganizationAtoms($fetch, $session);
+	type Plugins = O["authPlugins"] extends Array<AuthPlugin>
+		? Array<ReturnType<O["authPlugins"][number]>["plugin"]>
+		: undefined;
+	//@ts-expect-error
+	const { $session, $sessionSignal } = getSessionAtom<{
+		handler: any;
+		api: any;
+		options: {
+			database: any;
+			plugins: Plugins;
+		};
+	}>($fetch);
 
-	const actions = {
-		setActiveOrganization: (orgId: string | null) => {
-			activeOrgId.set(orgId);
-		},
-		setInvitationId: (id: string | null) => {
-			$activeInvitationId.set(id);
-		},
-		passkey: {
-			signIn: signInPasskey,
-			/**
-			 * Add a new passkey
-			 */
-			register: register,
-		},
-		$atoms: {
-			$session,
-			$activeOrganization,
-			$listOrganizations,
-			$activeInvitationId,
-			$invitation,
-		},
-		$fetch,
-	};
-	type HasPasskeyConfig = HasPlugin<"passkey", BAuth>;
-	type HasOrganizationConfig = HasPlugin<"organization", BAuth>;
-	type Actions = Pick<
-		typeof actions,
-		| (HasPasskeyConfig extends true ? "passkey" : never)
-		| (HasOrganizationConfig extends true
-				? "setActiveOrganization" | "setInvitationId"
-				: never)
-		| "$atoms"
-		| "$fetch"
+	let pluginsActions = {} as Record<string, any>;
+	type PluginActions = UnionToIntersection<
+		O["authPlugins"] extends Array<infer Pl>
+			? //@ts-expect-error
+				ReturnType<Pl> extends {
+					actions?: infer R;
+				}
+				? R
+				: {}
+			: {}
 	>;
 
-	const proxy = createDynamicPathProxy(actions, $fetch, [
-		{
-			matcher: (path) => path === "/organization/create",
-			atom: $listOrg,
+	const pluginProxySignals: AuthProxySignal[] = [];
+	let pluginSignals: Record<string, PreinitializedWritableAtom<boolean>> = {};
+	let pluginPathMethods: Record<string, "POST" | "GET"> = {};
+
+	for (const plugin of options?.authPlugins || []) {
+		const pl = plugin($fetch);
+		if (pl.authProxySignal) {
+			pluginProxySignals.push(...pl.authProxySignal);
+		}
+		if (pl.actions) {
+			pluginsActions = {
+				...pluginsActions,
+				...pl.actions,
+			};
+		}
+		if (pl.signals) {
+			pluginSignals = {
+				...pluginSignals,
+				...pl.signals,
+			};
+		}
+		if (pl.pathMethods) {
+			pluginPathMethods = {
+				...pluginPathMethods,
+				...pl.pathMethods,
+			};
+		}
+	}
+
+	const actions = {
+		$atoms: {
+			$session,
 		},
+		$fetch,
+		...(pluginsActions as object),
+	};
+
+	type Actions = typeof actions & PluginActions;
+
+	const proxy = createDynamicPathProxy(
+		actions,
+		$fetch,
 		{
-			matcher: (path) => path.startsWith("/organization"),
-			atom: $activeOrgSignal,
+			...pluginPathMethods,
+			"/sign-out": "POST",
 		},
+		[
+			{
+				matcher: (path) => path === "/organization/create",
+				atom: "$listOrg",
+			},
+			{
+				matcher: (path) => path.startsWith("/organization"),
+				atom: "$activeOrgSignal",
+			},
+			{
+				matcher: (path) => path === "/sign-out",
+				atom: "$sessionSignal",
+			},
+			{
+				matcher: (path) => path.startsWith("/sign-up"),
+				atom: "$sessionSignal",
+			},
+			...pluginProxySignals,
+		],
 		{
-			matcher: (path) => path === "/sign-out",
-			atom: $sessionSignal,
+			$sessionSignal,
+			...pluginSignals,
 		},
-		{
-			matcher: (path) =>
-				path === "/two-factor/enable" || path === "/two-factor/send-otp",
-			atom: $sessionSignal,
-		},
-	]) as unknown as InferRoutes<API> & Actions;
+	) as unknown as InferRoutes<API> & Actions;
 	return proxy;
 };

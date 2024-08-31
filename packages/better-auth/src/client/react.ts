@@ -1,18 +1,39 @@
-import type { BetterFetchOption } from "@better-fetch/fetch";
 import { useStore } from "@nanostores/react";
-import type { BetterAuth } from "../auth";
 import type { InferSession, InferUser } from "../types";
 import { createAuthClient as createVanillaClient } from "./base";
+import type { AuthPlugin, ClientOptions } from "./type";
+import type { UnionToIntersection } from "../types/helper";
 
-export const createAuthClient = <Auth extends BetterAuth>(
-	options?: BetterFetchOption,
+export const createAuthClient = <Option extends ClientOptions>(
+	options?: Option,
 ) => {
-	const client = createVanillaClient<Auth>(options);
+	const client = createVanillaClient(options);
+	const hooks = options?.authPlugins?.reduce(
+		(acc, plugin) => {
+			return {
+				...acc,
+				...(plugin(client.$fetch).integrations?.react?.(useStore) || {}),
+			};
+		},
+		{} as Record<string, any>,
+	) as Option["authPlugins"] extends Array<infer Pl>
+		? Pl extends AuthPlugin
+			? UnionToIntersection<
+					ReturnType<Pl>["integrations"] extends
+						| {
+								react?: (useStore: any) => infer R;
+						  }
+						| undefined
+						? R
+						: {
+								test1: ReturnType<Pl>["integrations"];
+							}
+				>
+			: {}
+		: {};
+
 	function useSession(
-		initialValue: {
-			user: InferUser<Auth>;
-			session: InferSession<Auth>;
-		} | null = null,
+		initialValue: typeof client.$atoms.$session.value = null,
 	) {
 		const session = useStore(client.$atoms.$session);
 		if (session) {
@@ -20,26 +41,10 @@ export const createAuthClient = <Auth extends BetterAuth>(
 		}
 		return initialValue;
 	}
-	function useActiveOrganization() {
-		return useStore(client.$atoms.$activeOrganization);
-	}
-	function useListOrganization() {
-		return useStore(client.$atoms.$listOrganizations);
-	}
-	function useInvitation() {
-		return (
-			useAuthStore(client.$atoms.$invitation) || {
-				error: null,
-				data: null,
-			}
-		);
-	}
 
 	const obj = Object.assign(client, {
 		useSession,
-		useActiveOrganization,
-		useListOrganization,
-		useInvitation,
+		...hooks,
 	});
 	return obj;
 };

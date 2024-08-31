@@ -9,19 +9,27 @@
         "typecheck": "tsc --noEmit"
     },
     "main": "./dist/index.js",
+    "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "bin": "./dist/cli.js",
+    "publishConfig": {
+        "executableFiles": [
+            "./dist/cli.js"
+        ]
+    },
     "exports": {
         ".": "./dist/index.js",
         "./social-providers": "./dist/social.js",
         "./client": "./dist/client.js",
+        "./client/plugins": "./dist/client/plugins.js",
         "./types": "./dist/types.js",
         "./cli": "./dist/cli.js",
         "./react": "./dist/react.js",
         "./preact": "./dist/preact.js",
         "./solid": "./dist/solid.js",
         "./vue": "./dist/vue.js",
-        "./plugins": "./dist/plugins.js"
+        "./plugins": "./dist/plugins.js",
+        "./package.json": "./package.json"
     },
     "devDependencies": {
         "@simplewebauthn/types": "^10.0.0",
@@ -68,6 +76,7 @@
         "oslo": "^1.2.1",
         "pg": "^8.12.0",
         "prompts": "^2.4.2",
+        "ts-morph": "^23.0.0",
         "zod": "^3.22.5"
     },
     "files": [

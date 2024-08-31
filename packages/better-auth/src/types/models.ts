@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from ".";
 import type { Session, User } from "../adapters/schema";
-import type { BetterAuth } from "../auth";
+import type { Auth } from "../auth";
 import type { FieldAttribute, InferFieldOutput } from "../db";
 import type { Prettify, UnionToIntersection } from "./helper";
 
@@ -52,22 +52,21 @@ type AdditionalUserFields<Options extends BetterAuthOptions> =
 			: {}
 		: {};
 
-export type InferUser<O extends BetterAuthOptions | BetterAuth> =
-	UnionToIntersection<
-		User &
-			(O extends BetterAuthOptions
-				? AdditionalUserFields<O>
-				: O extends BetterAuth
-					? AdditionalUserFields<O["options"]>
-					: {})
-	>;
+export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
+	User &
+		(O extends BetterAuthOptions
+			? AdditionalUserFields<O>
+			: O extends Auth
+				? AdditionalUserFields<O["options"]>
+				: {})
+>;
 
-export type InferSession<O extends BetterAuthOptions | BetterAuth> =
+export type InferSession<O extends BetterAuthOptions | Auth> =
 	UnionToIntersection<
 		Session &
 			(O extends BetterAuthOptions
 				? AdditionalSessionFields<O>
-				: O extends BetterAuth
+				: O extends Auth
 					? AdditionalSessionFields<O["options"]>
 					: {})
 	>;
