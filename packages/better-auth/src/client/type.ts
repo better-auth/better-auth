@@ -32,6 +32,7 @@ export type AuthPlugin = ($fetch: BetterFetch) => {
 		react?: (useStore: typeof reactStore) => Record<string, any>;
 		vue?: (useStore: typeof vueStore) => Record<string, any>;
 		preact?: (useStore: typeof preactStore) => Record<string, any>;
+		svelte?: () => Record<string, any>;
 	};
 	pathMethods?: Record<string, "POST" | "GET">;
 	fetchPlugins?: BetterFetchPlugin[];

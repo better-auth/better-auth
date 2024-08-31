@@ -29,19 +29,21 @@ export function getBaseURL(url?: string, path?: string) {
 	if (url) {
 		return withPath(url, path);
 	}
+	const env = typeof process !== "undefined" ? process.env : import.meta.env;
 	const fromEnv =
-		process.env.BETTER_AUTH_URL ||
-		process.env.AUTH_URL ||
-		process.env.NEXT_PUBLIC_AUTH_URL ||
-		process.env.NEXT_PUBLIC_BETTER_AUTH_URL;
+		env.BETTER_AUTH_URL ||
+		env.AUTH_URL ||
+		env.NEXT_PUBLIC_AUTH_URL ||
+		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+		env.PUBLIC_AUTH_URL ||
+		env.PUBLIC_BETTER_AUTH_URL;
 	if (fromEnv) {
 		return withPath(fromEnv, path);
 	}
-	console.log(process.env);
-	if (
-		!fromEnv &&
-		(process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test")
-	) {
+
+	const isDev =
+		!fromEnv && (env.NODE_ENV === "development" || env.NODE_ENV === "test");
+	if (isDev) {
 		return {
 			baseURL: "http://localhost:3000",
 			withPath: "http://localhost:3000/api/auth",

@@ -37,6 +37,12 @@ export const signInOAuth = createAuthEndpoint(
 			(p) => p.id === c.body.provider,
 		);
 		if (!provider) {
+			c.context.logger.error(
+				"Provider not found. Make sure to add the provider to your auth config",
+				{
+					provider: c.body.provider,
+				},
+			);
 			throw new APIError("NOT_FOUND");
 		}
 		const cookie = c.context.authCookies;

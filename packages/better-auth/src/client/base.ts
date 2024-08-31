@@ -31,10 +31,7 @@ export const createAuthClient = <O extends ClientOptions = ClientOptions>(
 	/**
 	 * used for plugins only
 	 */
-	const $baseFetch = createFetch({
-		...options,
-		baseURL: getBaseURL(options?.baseURL).withPath,
-	});
+	const $baseFetch = createFetch();
 	const $fetch = createFetch({
 		method: "GET",
 		...options,

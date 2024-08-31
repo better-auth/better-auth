@@ -1,8 +1,9 @@
 import { createAuthClient } from "better-auth/react";
-import type { auth } from "./auth";
+import { organization } from "better-auth/client";
 
-export const authClient = createAuthClient<typeof auth>({
+export const authClient = createAuthClient({
 	baseURL: "http://localhost:3000/api/auth",
+	authPlugins: [organization],
 });
 
 export const {

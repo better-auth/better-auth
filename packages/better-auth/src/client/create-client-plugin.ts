@@ -15,6 +15,7 @@ export const createClientPlugin = <E extends BetterAuthPlugin = never>() => {
 			react?: (useStore: typeof reactStore) => Record<string, any>;
 			vue?: (useStore: typeof vueStore) => Record<string, any>;
 			preact?: (useStore: typeof preactStore) => Record<string, any>;
+			svelte?: () => Record<string, any>;
 		},
 	>(
 		$fn: ($fetch: BetterFetch) => {
