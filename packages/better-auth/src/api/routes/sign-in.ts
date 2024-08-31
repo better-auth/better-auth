@@ -79,7 +79,7 @@ export const signInOAuth = createAuthEndpoint(
 );
 
 export const signInCredential = createAuthEndpoint(
-	"/sign-in/credential",
+	"/sign-in/email-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -111,9 +111,9 @@ export const signInCredential = createAuthEndpoint(
 		}
 		const { email, password } = ctx.body;
 		const argon2id = new Argon2id();
-		await argon2id.hash(password);
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
+			await argon2id.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid email or password",

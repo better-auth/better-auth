@@ -178,7 +178,10 @@ export const createInternalAdapter = (
 			});
 			return _account;
 		},
-		updateUserByEmail: async (email: string, data: Partial<User>) => {
+		updateUserByEmail: async (
+			email: string,
+			data: Partial<User & Record<string, any>>,
+		) => {
 			const user = await adapter.update<User>({
 				model: tables.user.tableName,
 				where: [

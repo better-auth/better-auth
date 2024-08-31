@@ -7,6 +7,7 @@ import { twoFactor } from "./plugins/two-factor";
 import { organization } from "./plugins/organization";
 import { passkey } from "./plugins/passkey";
 import { twoFactorClient } from "../plugins";
+import { usernameClient } from "../plugins/username/client";
 
 describe("client path to object", async () => {
 	const auth = await getTestInstance({
@@ -29,8 +30,7 @@ describe("client path to object", async () => {
 		client.$atoms.$session;
 
 		const client2 = createReactClient({
-			authPlugins: [organization, twoFactorClient],
+			authPlugins: [organization, twoFactorClient, usernameClient],
 		});
-		client2.$atoms.$session;
 	});
 });

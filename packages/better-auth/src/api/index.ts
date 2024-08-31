@@ -19,6 +19,7 @@ import { getCSRFToken } from "./routes/csrf";
 import { ok, welcome } from "./routes/ok";
 import { signUpCredential } from "./routes/sign-up";
 import { error } from "./routes/error";
+import type { z, ZodAny, ZodObject, ZodOptional, ZodString } from "zod";
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
@@ -77,6 +78,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	typedSession.method = getSession.method;
 	typedSession.options = getSession.options;
 	typedSession.headers = getSession.headers;
+
 	const baseEndpoints = {
 		signInOAuth,
 		callbackOAuth,

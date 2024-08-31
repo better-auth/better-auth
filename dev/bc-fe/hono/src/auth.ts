@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { organization, twoFactor } from "better-auth/plugins";
+import { organization, twoFactor, username } from "better-auth/plugins";
 import { github } from "better-auth/social-providers";
 
 export const auth = betterAuth({
@@ -20,6 +20,7 @@ export const auth = betterAuth({
 			issuer: "BetterAuth",
 		}),
 		organization(),
+		username(),
 	],
 	emailAndPassword: {
 		enabled: true,
