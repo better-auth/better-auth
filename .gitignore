@@ -177,3 +177,6 @@ dist
 .notes/
 
 .db/
+
+*.sqlite
+*.db

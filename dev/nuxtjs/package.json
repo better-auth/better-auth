@@ -1,9 +1,10 @@
 {
-  "name": "nuxt-app",
+  "name": "nuxtjs",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "nuxt build",
+    "auth": "better-auth",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
