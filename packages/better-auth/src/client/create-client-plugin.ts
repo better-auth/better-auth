@@ -1,4 +1,4 @@
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
 import type { Endpoint } from "better-call";
 import type { AuthProxySignal } from "./proxy";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
@@ -25,6 +25,7 @@ export const createClientPlugin = <E extends BetterAuthPlugin = never>() => {
 			atoms?: Record<string, Atom<any>>;
 			integrations?: Integrations;
 			pathMethods?: Record<string, "POST" | "GET">;
+			fetchPlugins?: BetterFetchPlugin[];
 		},
 	) => {
 		return ($fetch: BetterFetch) => {

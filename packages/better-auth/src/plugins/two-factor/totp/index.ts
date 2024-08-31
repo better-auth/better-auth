@@ -6,7 +6,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api/middlewares/session";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
-import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
+import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 
 export type TOTPOptions = {

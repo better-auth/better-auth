@@ -1,17 +1,15 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api/middlewares/session";
-import { symmetricEncrypt } from "../../crypto";
+import { hs256, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-import {
-	twoFactorMiddleware,
-	verifyTwoFactorMiddleware,
-} from "./two-fa-middleware";
+
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+import type { Session } from "../../adapters/schema";
 
 export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 	const totp = totp2fa({
@@ -86,12 +84,65 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 			),
 		},
 		options: options,
-		middlewares: [
-			{
-				path: "/sign-in/credential",
-				middleware: twoFactorMiddleware(options),
-			},
-		],
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-in/email" ||
+							context.path === "/sign-in/username"
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const returned = (await (ctx as any).returned) as Response;
+						if (returned?.status !== 200) {
+							return;
+						}
+						const response = (await returned.json()) as {
+							user: UserWithTwoFactor;
+							session: Session;
+						};
+						if (!response.user.twoFactorEnabled) {
+							return;
+						}
+						/**
+						 * remove the session cookie. It's set by the sign in credential
+						 */
+						ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+							path: "/",
+							sameSite: "lax",
+							httpOnly: true,
+							secure: false,
+							maxAge: 0,
+						});
+						const hash = await hs256(ctx.context.secret, response.session.id);
+						/**
+						 * We set the user id and the session
+						 * id as a hash. Later will fetch for
+						 * sessions with the user id compare
+						 * the hash and set that as session.
+						 */
+						await ctx.setSignedCookie(
+							"better-auth.two-factor",
+							`${response.session.userId}!${hash}`,
+							ctx.context.secret,
+							ctx.context.authCookies.sessionToken.options,
+						);
+						const res = new Response(
+							JSON.stringify({
+								twoFactorRedirect: true,
+							}),
+							{
+								headers: ctx.responseHeader,
+							},
+						);
+						return {
+							response: res,
+						};
+					}),
+				},
+			],
+		},
 		schema: {
 			user: {
 				fields: {

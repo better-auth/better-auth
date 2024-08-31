@@ -30,7 +30,13 @@ describe("client path to object", async () => {
 		client.$atoms.$session;
 
 		const client2 = createReactClient({
-			authPlugins: [organization, twoFactorClient, usernameClient],
+			authPlugins: [
+				organization,
+				twoFactorClient({
+					twoFactorPage: "/two-factor",
+				}),
+				usernameClient,
+			],
 		});
 	});
 });

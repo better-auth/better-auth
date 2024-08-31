@@ -64,12 +64,18 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						body: method === "GET" ? undefined : body,
 						query: query,
 						method,
-						onSuccess() {
+						async onSuccess(context) {
 							const signal = $signal?.find((s) => s.matcher(routePath));
 							if (!signal) return;
 							const signalAtom = $signals?.[signal.atom];
 							if (!signalAtom) return;
 							signalAtom.set(!signalAtom.get());
+							/**
+							 * call if options.onSuccess
+							 * is passed since we are
+							 * overriding onSuccess
+							 */
+							await options?.onSuccess?.(context);
 						},
 					});
 				},

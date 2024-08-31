@@ -1,11 +1,9 @@
 import { APIError } from "better-call";
-import { z } from "zod";
 import type { Session } from "../../adapters/schema";
 import { createAuthMiddleware } from "../../api/call";
-import { signInCredential } from "../../api/routes";
 import { hs256 } from "../../crypto";
 import { TWO_FACTOR_COOKIE_NAME } from "./constant";
-import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+import type { UserWithTwoFactor } from "./types";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 	const cookie = await ctx.getSignedCookie(
@@ -107,69 +105,3 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 		message: "invalid two factor authentication",
 	});
 });
-
-export const twoFactorMiddleware = (options: TwoFactorOptions) =>
-	createAuthMiddleware(
-		{
-			body: z.object({
-				email: z.string().email(),
-				password: z.string(),
-				/**
-				 * Callback URL to
-				 * redirect to after
-				 * the user has signed in.
-				 */
-				callbackURL: z.string().optional(),
-			}),
-		},
-		async (ctx) => {
-			//@ts-ignore
-			const signIn = await signInCredential({
-				...ctx,
-				body: ctx.body,
-			});
-			if (!signIn?.user) {
-				return new Response(null, {
-					status: 401,
-				});
-			}
-			const user = signIn.user as UserWithTwoFactor;
-			if (!user.twoFactorEnabled) {
-				return new Response(JSON.stringify(signIn), {
-					headers: ctx.responseHeader,
-				});
-			}
-			/**
-			 * remove the session cookie. It's set by the sign in credential
-			 */
-			ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-				path: "/",
-				sameSite: "lax",
-				httpOnly: true,
-				secure: false,
-				maxAge: 0,
-			});
-			const hash = await hs256(ctx.context.secret, signIn.session.id);
-			/**
-			 * We set the user id and the session
-			 * id as a hash. Later will fetch for
-			 * sessions with the user id compare
-			 * the hash and set that as session.
-			 */
-			await ctx.setSignedCookie(
-				"better-auth.two-factor",
-				`${signIn.session.userId}!${hash}`,
-				ctx.context.secret,
-				ctx.context.authCookies.sessionToken.options,
-			);
-			return new Response(
-				JSON.stringify({
-					url: options.twoFactorURL || ctx.body.callbackURL || "/",
-					redirect: true,
-				}),
-				{
-					headers: ctx.responseHeader,
-				},
-			);
-		},
-	);

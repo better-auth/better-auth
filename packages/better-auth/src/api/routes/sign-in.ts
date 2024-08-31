@@ -39,7 +39,6 @@ export const signInOAuth = createAuthEndpoint(
 		if (!provider) {
 			throw new APIError("NOT_FOUND");
 		}
-
 		const cookie = c.context.authCookies;
 		const currentURL = c.query?.currentURL
 			? new URL(c.query?.currentURL)
@@ -78,8 +77,8 @@ export const signInOAuth = createAuthEndpoint(
 	},
 );
 
-export const signInCredential = createAuthEndpoint(
-	"/sign-in/email-password",
+export const signInEmail = createAuthEndpoint(
+	"/sign-in/email",
 	{
 		method: "POST",
 		body: z.object({

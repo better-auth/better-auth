@@ -7,7 +7,6 @@ export const redirectPlugin = {
 	hooks: {
 		onSuccess(context) {
 			if (context.data?.url && context.data?.redirect) {
-				console.log("redirecting to", context.data.url);
 				window.location.href = context.data.url;
 			}
 		},

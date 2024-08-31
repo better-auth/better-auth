@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api/middlewares/session";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
-import { verifyTwoFactorMiddleware } from "../two-fa-middleware";
+import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 
 export interface BackupCodeOptions {

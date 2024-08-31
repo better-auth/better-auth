@@ -1,4 +1,8 @@
-import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterFetch,
+	BetterFetchOption,
+	BetterFetchPlugin,
+} from "@better-fetch/fetch";
 import type { Auth } from "../auth";
 import type { UnionToIntersection } from "../types/helper";
 import type { useAuthStore as reactStore } from "./react";
@@ -30,6 +34,7 @@ export type AuthPlugin = ($fetch: BetterFetch) => {
 		preact?: (useStore: typeof preactStore) => Record<string, any>;
 	};
 	pathMethods?: Record<string, "POST" | "GET">;
+	fetchPlugins?: BetterFetchPlugin[];
 };
 export interface ClientOptions extends BetterFetchOption {
 	/**

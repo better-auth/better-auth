@@ -3,8 +3,8 @@ import { Argon2id } from "oslo/password";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
-export const signUpCredential = createAuthEndpoint(
-	"/sign-up/credential",
+export const signUpEmail = createAuthEndpoint(
+	"/sign-up/email",
 	{
 		method: "POST",
 		body: z.object({

@@ -22,6 +22,9 @@ function App() {
 								{session.user.name}
 							</p>
 							<p>
+								{session.user.username}
+							</p>
+							<p>
 								{session.user.email}
 							</p>
 							<div className="flex gap-2">
@@ -58,6 +61,7 @@ function App() {
 							}}>
 								Continue with github
 							</button>
+							<SignIn />
 							<SignUp />
 						</div>
 					)
@@ -73,6 +77,7 @@ export default App;
 function SignUp() {
 	const [email, setEmail] = useState("")
 	const [name, setName] = useState("")
+	const [username, setUsername] = useState("")
 	const [password, setPassword] = useState("")
 	return (
 		<div style={{
@@ -96,6 +101,12 @@ function SignUp() {
 				value={name}
 				onChange={(e) => setName(e.target.value)}
 			/>
+			<input type="text" id="username" placeholder="username" style={{
+				width: "100%"
+			}}
+				value={username}
+				onChange={(e) => setUsername(e.target.value)}
+			/>
 			<input type="password" id="password" placeholder="Password" style={{
 				width: "100%"
 			}}
@@ -103,14 +114,65 @@ function SignUp() {
 				onChange={(e) => setPassword(e.target.value)}
 			/>
 			<button onClick={async () => {
-				const res = await auth.signUp.credential({
+				await auth.signUp.username({
 					email,
 					password,
-					name
+					name,
+					username
 				})
-				console.log(res)
+
 			}}>
 				Sign Up
+			</button>
+		</div>
+	)
+}
+
+
+
+function SignIn() {
+	const [email, setEmail] = useState("")
+	const [password, setPassword] = useState("")
+	return (
+		<div style={{
+			display: "flex",
+			flexDirection: "column",
+			gap: "10px",
+			borderRadius: "10px",
+			border: "1px solid #4B453F",
+			padding: "20px",
+			marginTop: "10px"
+		}}>
+			<input type="email" id="email" placeholder="Email" style={{
+				width: "100%",
+			}}
+				value={email}
+				onChange={(e) => setEmail(e.target.value)}
+			/>
+
+			<input type="password" id="password" placeholder="Password" style={{
+				width: "100%"
+			}}
+				value={password}
+				onChange={(e) => setPassword(e.target.value)}
+			/>
+			<button onClick={async () => {
+				await auth.signIn.username({
+					username: email,
+					password,
+					options: {
+						onSuccess(context) {
+							console.log({
+								context
+							})
+							if (context.data.twoFactorRedirect) {
+								alert("two factor required")
+							}
+						},
+					}
+				})
+			}}>
+				Sign In
 			</button>
 		</div>
 	)

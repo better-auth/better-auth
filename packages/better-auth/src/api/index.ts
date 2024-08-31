@@ -10,14 +10,14 @@ import {
 	getSession,
 	resetPassword,
 	sendVerificationEmail,
-	signInCredential,
+	signInEmail,
 	signInOAuth,
 	signOut,
 	verifyEmail,
 } from "./routes";
 import { getCSRFToken } from "./routes/csrf";
 import { ok, welcome } from "./routes/ok";
-import { signUpCredential } from "./routes/sign-up";
+import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import type { z, ZodAny, ZodObject, ZodOptional, ZodString } from "zod";
 
@@ -85,8 +85,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		getCSRFToken,
 		getSession: typedSession,
 		signOut,
-		signUpCredential,
-		signInCredential,
+		signUpEmail,
+		signInEmail,
 		forgetPassword,
 		resetPassword,
 		verifyEmail,
@@ -136,10 +136,10 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					for (const hook of plugin.hooks.after) {
 						const match = hook.matcher(context);
 						if (match) {
-							const hookRes = await hook.handler({
-								...context,
+							const obj = Object.assign(context, {
 								returned: endpointRes,
 							});
+							const hookRes = await hook.handler(obj);
 							if (hookRes && "response" in hookRes) {
 								response = hookRes.response as any;
 							}

@@ -19,7 +19,7 @@ export const bearer = () => {
 								?.startsWith("Bearer ") || false
 						);
 					},
-					handler: createAuthMiddleware(async (ctx) => {
+					handler: async (ctx) => {
 						const token = ctx.request?.headers
 							.get("authorization")
 							?.replace("Bearer ", "");
@@ -38,7 +38,7 @@ export const bearer = () => {
 								ctx.context.authCookies.sessionToken.name
 							}=${signedToken.replace("=", "")}`,
 						);
-					}),
+					},
 				},
 			],
 		},

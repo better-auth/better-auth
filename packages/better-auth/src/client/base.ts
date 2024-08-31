@@ -28,15 +28,25 @@ export const createAuthClient = <O extends ClientOptions = ClientOptions>(
 				: {}) &
 				Auth["api"]
 		: Auth["api"];
+	/**
+	 * used for plugins only
+	 */
+	const $baseFetch = createFetch({
+		...options,
+		baseURL: getBaseURL(options?.baseURL).withPath,
+	});
 	const $fetch = createFetch({
 		method: "GET",
 		...options,
 		baseURL: getBaseURL(options?.baseURL).withPath,
 		plugins: [
+			...(options?.plugins || []),
+			...(options?.authPlugins
+				?.flatMap((plugin) => plugin($baseFetch).fetchPlugins)
+				.filter((plugin) => plugin !== undefined) || []),
+			...(options?.csrfPlugin !== false ? [csrfPlugin] : []),
 			redirectPlugin,
 			addCurrentURL,
-			...(options?.csrfPlugin !== false ? [csrfPlugin] : []),
-			...(options?.plugins || []),
 		],
 	});
 
@@ -121,11 +131,10 @@ export const createAuthClient = <O extends ClientOptions = ClientOptions>(
 				atom: "$activeOrgSignal",
 			},
 			{
-				matcher: (path) => path === "/sign-out",
-				atom: "$sessionSignal",
-			},
-			{
-				matcher: (path) => path.startsWith("/sign-up"),
+				matcher: (path) =>
+					path === "/sign-out" ||
+					path.startsWith("/sign-up") ||
+					path.startsWith("/sign-in"),
 				atom: "$sessionSignal",
 			},
 			...pluginProxySignals,

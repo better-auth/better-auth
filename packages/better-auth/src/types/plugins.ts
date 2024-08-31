@@ -26,23 +26,19 @@ export type BetterAuthPlugin = {
 	hooks?: {
 		before?: {
 			matcher: (context: GenericEndpointContext) => boolean;
-			handler: Endpoint<
-				(context: GenericEndpointContext) => Promise<void | {
-					context: Partial<GenericEndpointContext>;
-				}>
-			>;
+			handler: (context: GenericEndpointContext) => Promise<void | {
+				context: Partial<GenericEndpointContext>;
+			}>;
 		}[];
 		after?: {
 			matcher: (context: GenericEndpointContext) => boolean;
-			handler: Endpoint<
-				(
-					context: GenericEndpointContext & {
-						returned: EndpointResponse;
-					},
-				) => Promise<void | {
-					response: EndpointResponse;
-				}>
-			>;
+			handler: (
+				context: GenericEndpointContext & {
+					returned: EndpointResponse;
+				},
+			) => Promise<void | {
+				response: EndpointResponse;
+			}>;
 		}[];
 	};
 	/**

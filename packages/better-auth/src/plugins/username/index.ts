@@ -4,14 +4,14 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { Argon2id } from "oslo/password";
 import { APIError } from "better-call";
 import type { Account, User } from "../../adapters/schema";
-import { signUpCredential } from "../../api/routes/sign-up";
+import { signUpEmail } from "../../api/routes/sign-up";
 
 export const username = () => {
 	return {
 		id: "username",
 		endpoints: {
 			signInUsername: createAuthEndpoint(
-				"/sign-in/username-password",
+				"/sign-in/username",
 				{
 					method: "POST",
 					body: z.object({
@@ -102,7 +102,7 @@ export const username = () => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().min(3).max(20).optional(),
+						username: z.string().min(3).max(20),
 						name: z.string(),
 						email: z.string().email(),
 						password: z.string(),
@@ -111,7 +111,11 @@ export const username = () => {
 					}),
 				},
 				async (ctx) => {
-					const res = await signUpCredential(ctx);
+					const res = await signUpEmail({
+						...ctx,
+						//@ts-expect-error
+						_flag: undefined,
+					});
 					if (!res) {
 						return ctx.json(null, {
 							status: 400,
@@ -121,9 +125,14 @@ export const username = () => {
 							},
 						});
 					}
-					await ctx.context.internalAdapter.updateUserByEmail(res.user.email, {
-						username: ctx.body.username,
-					});
+					const updatedUser =
+						await ctx.context.internalAdapter.updateUserByEmail(
+							res.user.email,
+							{
+								username: ctx.body.username,
+							},
+						);
+					console.log(updatedUser);
 					return ctx.json(res);
 				},
 			),
@@ -135,6 +144,8 @@ export const username = () => {
 					username: {
 						type: "string",
 						required: false,
+						unique: true,
+						returned: true,
 					},
 				},
 			},
