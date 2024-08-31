@@ -19,7 +19,6 @@ import { getCSRFToken } from "./routes/csrf";
 import { ok, welcome } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
-import type { z, ZodAny, ZodObject, ZodOptional, ZodString } from "zod";
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
@@ -190,7 +189,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			});
 		},
 		onError(e) {
-			console.log(e);
+			// console.log(e);
 		},
 	});
 };

@@ -9,5 +9,8 @@
 	},
 	"[svelte]": {
 		"editor.defaultFormatter": "svelte.svelte-vscode"
+	},
+	"[vue]": {
+		"editor.defaultFormatter": "Vue.volar"
 	}
 }

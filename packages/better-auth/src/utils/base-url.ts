@@ -36,7 +36,9 @@ export function getBaseURL(url?: string, path?: string) {
 		env.NEXT_PUBLIC_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
 		env.PUBLIC_AUTH_URL ||
-		env.PUBLIC_BETTER_AUTH_URL;
+		env.PUBLIC_BETTER_AUTH_URL ||
+		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
+		env.NUXT_PUBLIC_AUTH_URL;
 	if (fromEnv) {
 		return withPath(fromEnv, path);
 	}
