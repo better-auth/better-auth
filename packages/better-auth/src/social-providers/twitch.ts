@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Twitch } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
+import type { OAuthProvider } from ".";
+import { getRedirectURI } from "./utils";
 
 export interface TwitchProfile {
 	/**
@@ -21,28 +22,53 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export const twitch = toBetterAuthProvider("twitch", Twitch, {
-	async getUserInfo(token) {
-		const { data: profile, error } = await betterFetch<TwitchProfile>(
-			"https://api.twitch.tv/helix/users",
-			{
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
+export interface TwitchOptions {
+	clientId: string;
+	clientSecret: string;
+	redirectURI?: string;
+}
+
+export const twitch = ({
+	clientId,
+	clientSecret,
+	redirectURI,
+}: TwitchOptions) => {
+	const twitchArctic = new Twitch(
+		clientId,
+		clientSecret,
+		getRedirectURI("twitch", redirectURI),
+	);
+	return {
+		id: "twitch",
+		name: "Twitch",
+		createAuthorizationURL({ state, scopes }) {
+			const _scopes = scopes || ["activity:write", "read"];
+			return twitchArctic.createAuthorizationURL(state, _scopes);
+		},
+		validateAuthorizationCode: twitchArctic.validateAuthorizationCode,
+		async getUserInfo(token) {
+			const { data: profile, error } = await betterFetch<TwitchProfile>(
+				"https://api.twitch.tv/helix/users",
+				{
+					method: "GET",
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+					},
 				},
-			},
-		);
-		if (error) {
-			return null;
-		}
-		return {
-			id: profile.sub,
-			name: profile.preferred_username,
-			email: profile.email,
-			image: profile.picture,
-			emailVerified: false,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
-	},
-});
+			);
+			if (error) {
+				return null;
+			}
+			return {
+				user: {
+					id: profile.sub,
+					name: profile.preferred_username,
+					email: profile.email,
+					image: profile.picture,
+					emailVerified: false,
+				},
+				data: profile,
+			};
+		},
+	} satisfies OAuthProvider<TwitchProfile>;
+};

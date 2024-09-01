@@ -29,7 +29,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			throw new APIError("NOT_FOUND");
 		}
-		const tokens = await provider.provider.validateAuthorizationCode(
+		const tokens = await provider.validateAuthorizationCode(
 			c.query.code,
 			c.query.code_verifier || "",
 		);
@@ -37,7 +37,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("Code verification failed");
 			throw new APIError("UNAUTHORIZED");
 		}
-		const user = await provider.userInfo.getUserInfo(tokens);
+		const user = await provider.getUserInfo(tokens).then((res) => res?.user);
 		const id = generateId();
 		const data = userSchema.safeParse({
 			...user,

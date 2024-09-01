@@ -1,0 +1,132 @@
+---
+title: Installation
+description: Installation
+---
+
+
+<Steps>
+    <Step>
+         ### Install better-auth
+        start by installing better-auth package. You need this both on the server and client
+
+        ```package-install
+        better-auth
+        ```
+    </Step>
+    <Step>
+        ### Environment Variables
+        Better auth requries a secret. This is a random value used by the library for encryption and generating hashes. You can generate one using the button below or you can use something like openssl.
+        ```txt title=".env.local"
+        BETTER_AUTH_SECRET=
+        ```
+        <GenerateSecret/>
+    </Step>
+    <Step>
+    ### Create Server
+        better auth requries a file called `auth.ts` or `auth.config.ts` to be present in the root directory or one of the following directories:
+        - `lib/`
+        - `utils/`
+
+        any of these directories can also be nested under `src/` directory.
+
+        ```ts twoslash title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            database: {
+                provider: "sqlite", // or "mysql", "postgresql"
+                url: "./db.sqlite", // path to your database
+            }
+        })
+        ```
+        <Callout type="info"> 
+           Better Auth currently supports only SQLite, MySQL, and PostgreSQL. It uses Kysely under the hood, so you can also pass any Kysely dialect directly to the database object.
+        </Callout>
+    </Step>
+    <Step>
+        ### Providers
+        better auth comes with email and password authenticator and social sign-on providers. You can configure them in the auth object.
+        ```ts
+        import { betterAuth } from "better-auth"
+        import { github } from "better-auth/social-providers"
+
+        export const auth = betterAuth({
+            database: {
+                provider: "sqlite",
+                url: "./db.sqlite",
+            },
+            socialProvider: [
+                github({
+                    clientId: process.env.GITHUB_CLIENT_ID as string,
+                    clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+                }),
+            ],
+            emailAndPassword: {
+                enabled: true
+            }
+        });
+        ```
+    </Step>
+    <Step>
+        ### Migrate Database
+        better auth comes with a cli tool to migrate your database. You can run the following command to migrate your database.
+        ```bash
+        npx better-auth migrate
+        ```
+    </Step>
+    <Step>
+        ### Mount Handler
+        After creating an instance, mount the handler on the appropriate server route so it can listen and respond to authentication requests. Ensure this file is placed in your framework's catch-all directory, where the base path is `/api/auth`. 
+
+        <Tabs items={["next-js", "svelte-kit", "nuxt", "solid-start", "hono"]} defaultValue="react">
+            <Tab value="next-js">
+                ```ts title="api/[...auth]/route.ts"
+                import { auth } from "~/utils/auth.config"
+                import { toNextJSHandler } from "better-auth/next-js"
+
+                export const { GET, POST } = toNextJSHandler(auth)
+                ```
+            </Tab>
+        </Tabs>
+    </Step>
+    <Step>
+        ### Create Client
+        better auth client comes with a support for differnt frameworks including React, Vue, Svelte, Preact, and Solid. You can also use it with vanilla javascript. 
+       <Tabs items={["vanilla","react", "vue", "svelte", "solid"]} defaultValue="react">
+            <Tab value="vanilla">
+                    ```ts 
+                    import { createAuthClient } from "better-auth/client"
+                    const client = createAuthClient()
+                    ```
+            </Tab>
+            <Tab value="react">
+                    ```ts 
+                    import { createAuthClient } from "better-auth/react"
+                    const client = createAuthClient()
+                    ```
+            </Tab>
+            <Tab value="vue">
+                    ```ts
+                    import { createAuthClient } from "better-auth/vue"
+                    const client = createAuthClient()
+                    ```
+            </Tab>
+            <Tab value="svelte">
+                    ```ts
+                    import { createAuthClient } from "better-auth/svelte"
+                    const client = createAuthClient()
+                    ```
+            </Tab>
+            <Tab value="solid">
+                    ```ts
+                    import { createAuthClient } from "better-auth/solid"
+                    const client = createAuthClient()
+                    ```
+            </Tab>
+       </Tabs>
+    </Step>
+    <Step>
+        ### That's it!
+        🎉 That's it! You're now ready to use better-auth in your application.
+    </Step>
+</Steps>

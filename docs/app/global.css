@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+
+  :root  {
+    --background: 360 74% 95%;
+    --foreground: 360 5% 0%;
+    --card: 360 50% 90%;
+    --card-foreground: 360 5% 10%;
+    --popover: 360 74% 95%;
+    --popover-foreground: 360 95% 0%;
+    --primary: 360 0% 90%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 360 30% 70%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 322 30% 85%;
+    --muted-foreground: 360 5% 35%;
+    --accent: 322 30% 80%;
+    --accent-foreground: 360 5% 10%;
+    --destructive: 0 74% 30%;
+    --destructive-foreground: 360 5% 90%;
+    --border: 360 30% 50%;
+    --input: 360 30% 18%;
+    --ring: 360 0% 90%;
+    --radius: 0.5rem;
+  }
+  .dark  {
+    --background: 360 50% 5%;
+    --foreground: 360 5% 90%;
+    --card: 360 50% 0%;
+    --card-foreground: 360 5% 90%;
+    --popover: 360 50% 5%;
+    --popover-foreground: 360 5% 90%;
+    --primary: 360 0% 90%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 360 30% 10%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 322 30% 15%;
+    --muted-foreground: 360 5% 60%;
+    --accent: 322 30% 15%;
+    --accent-foreground: 360 5% 90%;
+    --destructive: 0 74% 30%;
+    --destructive-foreground: 360 5% 90%;
+    --border: 360 30% 18%;
+    --input: 360 30% 18%;
+    --ring: 360 0% 90%;
+    --radius: 0.5rem;
+  }
+  
+
+}
+
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* hide scrollbar */
+::-webkit-scrollbar {
+  display: none;
+}

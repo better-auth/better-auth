@@ -2,7 +2,7 @@ import type { User } from "../adapters/schema";
 import type { FieldAttribute } from "../db/field";
 import type { Adapter } from "./adapter";
 import type { BetterAuthPlugin } from "./plugins";
-import type { Provider } from "./provider";
+import type { OAuthProvider } from "./provider";
 
 export interface BetterAuthOptions {
 	/**
@@ -50,7 +50,7 @@ export interface BetterAuthOptions {
 	/**
 	 * list of social providers
 	 */
-	socialProvider?: Provider[];
+	socialProvider?: OAuthProvider[];
 	/**
 	 * Plugins
 	 */
@@ -134,13 +134,13 @@ export interface BetterAuthOptions {
 		 */
 		enabled: boolean;
 		/**
-		 * The minimum length of the password.
+		 * The maximum length of the password.
 		 *
 		 * @default 8
 		 */
 		maxPasswordLength?: number;
 		/**
-		 * The maximum length of the password.
+		 * The minimum length of the password.
 		 *
 		 * @default 32
 		 */

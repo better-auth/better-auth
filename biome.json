@@ -12,9 +12,6 @@
 				"noImplicitAnyLet": "warn",
 				"noDuplicateObjectKeys": "warn"
 			},
-			"style": {
-				"useImportType": "error"
-			},
 			"performance": {
 				"noDelete": "error"
 			},

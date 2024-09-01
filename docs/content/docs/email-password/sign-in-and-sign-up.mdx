@@ -1,0 +1,127 @@
+---
+title: Email & Password
+description: Email & Password
+---
+
+Email and password authentication is a common authentication method used by many applications. It involves users entering their email and password to log in. Better Auth provides a built-in email and password authenticator that you can use to authenticate users.
+
+<Callout type="info">
+  If you want to use username as an identifier you can use <Link href="/docs/plugins/username">username plugin</Link>. It wraps the email and password authenticator and adds username support.
+</Callout>
+
+## Signup and Signin with Email
+
+To use email and password authentication, you need to configure the email and password authenticator. You can do this by adding the following code to your better auth instance:
+
+```ts title="auth.ts" twoslash 
+import { betterAuth } from "better-auth"
+
+export const { api, handler } = await betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite",
+    },
+    emailAndPassword: {    // [!code highlight]
+        enabled: true // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+<Callout type="info">
+If it's not enabled, it'll not allow you to sign in or sign up with email and password.
+</Callout>
+
+### Signup
+
+To signup a user, you can use the `signUp.email` function provided by the client. The `signUp` function takes an object with the following properties:
+
+- `email`: The email address of the user.
+- `password`: The password of the user. It should be at least 8 characters long and max 32 by default. 
+- `name`: The name of the user.
+- `image`: The image of the user. (optional)
+- `callbackURL`: The url to redirect to after the user has signed up. (optional)
+
+```ts title="client.ts" twoslash /
+/**
+ * Make sure to import the client for your framework
+ */
+import { createAuthClient } from "better-auth/client"
+
+const client = createAuthClient()
+
+const signup = async () => {
+    const data = await client.signUp.email({
+        email: "test@example.com",
+        password: "password1234",
+        name: "test",
+        image: "https://example.com/image.png",
+        callbackURL: "/"
+    })
+}
+```
+
+The function returns a promise that resolves an object with `data` and `error` properties. The `data` property contains the user object that was created, and the `error` property contains any error that occurred during the signup process.
+
+<Callout type="info">
+Hover over the `data` object to see the shape of the response.
+</Callout>
+
+### Signin
+
+To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `email`: The email address of the user.
+- `password`: The password of the user.
+- `callbackURL`: The url to redirect to after the user has signed in. (optional)
+
+```ts title="client.ts" twoslash 
+import { createAuthClient } from "better-auth/client"
+
+const client = createAuthClient()
+
+const signin = async () => {
+    const data = await client.signIn.email({
+        email: "test@example.com",
+        password: "password1234",
+        callbackURL: "/"
+    })
+}
+```
+
+### Email Verification
+
+To enable email verification, you need to configure the email and password authenticator. You can do this by adding the following code to your better auth instance:
+
+```ts title="auth.ts" twoslash
+
+import { betterAuth } from "better-auth"
+
+export const { api, handler } = await betterAuth({
+    // ---cut-start---
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite"
+    },
+    // ---cut-end---
+    emailAndPassword: {    
+        enabled: true, 
+        async sendVerificationEmail(email, url){
+            // send email to user.
+        }
+    }
+})
+```
+
+on the client side you can use `sendVerificationEmail` function to send verification link to user.
+
+```ts title="client.ts" twoslash  
+import { createAuthClient } from "better-auth/client"
+const client = createAuthClient()
+// ---cut---
+const verifyEmail = async () => {
+    const data = await client.sendVerificationEmail({
+	    email: "test@example.com",
+        callbackURL: "/"
+    })
+}
+```

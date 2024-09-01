@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Discord } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
+import type { OAuthProvider } from ".";
+import { getRedirectURI } from "./utils";
 
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
@@ -74,28 +75,52 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export const discord = toBetterAuthProvider("discord", Discord, {
-	async getUserInfo(token) {
-		const { data: profile, error } = await betterFetch<DiscordProfile>(
-			"https://discord.com/api/users/@me",
-			{
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
+export interface DiscordOptions {
+	clientId: string;
+	clientSecret: string;
+	redirectURI?: string;
+}
+
+export const discord = ({
+	clientId,
+	clientSecret,
+	redirectURI,
+}: DiscordOptions) => {
+	const discordArctic = new Discord(
+		clientId,
+		clientSecret,
+		getRedirectURI("discord", redirectURI),
+	);
+	return {
+		id: "discord",
+		name: "Discord",
+		createAuthorizationURL({ state, scopes }) {
+			const _scope = scopes || ["email"];
+			return discordArctic.createAuthorizationURL(state, _scope);
+		},
+		validateAuthorizationCode: discordArctic.validateAuthorizationCode,
+		async getUserInfo(token) {
+			const { data: profile, error } = await betterFetch<DiscordProfile>(
+				"https://discord.com/api/users/@me",
+				{
+					auth: {
+						type: "Bearer",
+						token: token.accessToken,
+					},
 				},
-			},
-		);
-		if (error) {
-			return null;
-		}
-		return {
-			id: profile.id,
-			name: profile.display_name || profile.username,
-			email: profile.email,
-			image: profile.image_url,
-			emailVerified: profile.verified,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
-	},
-});
+			);
+			if (error) {
+				return null;
+			}
+			return {
+				user: {
+					id: profile.id,
+					name: profile.display_name || profile.username || "",
+					email: profile.email,
+					emailVerified: profile.verified,
+				},
+				data: profile,
+			};
+		},
+	} satisfies OAuthProvider<DiscordProfile>;
+};

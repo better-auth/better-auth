@@ -1,6 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Twitter } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
+import type { OAuthProvider } from ".";
+import { getRedirectURI } from "./utils";
+import { BetterAuthError } from "../error/better-auth-error";
 
 export interface TwitterProfile {
 	data: {
@@ -91,31 +93,65 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export const twitter = toBetterAuthProvider("twitter", Twitter, {
-	async getUserInfo(token) {
-		const { data: profile, error } = await betterFetch<TwitterProfile>(
-			"https://api.x.com/2/users/me?user.fields=profile_image_url",
-			{
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
+export interface TwitterOption {
+	clientId: string;
+	clientSecret: string;
+	redirectURI?: string;
+}
+
+export const twitter = ({
+	clientId,
+	clientSecret,
+	redirectURI,
+}: TwitterOption) => {
+	const twitterArctic = new Twitter(
+		clientId,
+		clientSecret,
+		getRedirectURI("twitter", redirectURI),
+	);
+	return {
+		id: "twitter",
+		name: "Twitter",
+		createAuthorizationURL(data) {
+			const _scopes = data.scopes || ["account_info.read"];
+			return twitterArctic.createAuthorizationURL(
+				data.state,
+				data.codeVerifier,
+				_scopes,
+			);
+		},
+		validateAuthorizationCode: async (code, codeVerifier) => {
+			if (!codeVerifier) {
+				throw new BetterAuthError("codeVerifier is required for Twitter");
+			}
+			return twitterArctic.validateAuthorizationCode(code, codeVerifier);
+		},
+		async getUserInfo(token) {
+			const { data: profile, error } = await betterFetch<TwitterProfile>(
+				"https://api.x.com/2/users/me?user.fields=profile_image_url",
+				{
+					method: "GET",
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+					},
 				},
-			},
-		);
-		if (error) {
-			return null;
-		}
-		if (!profile.data.email) {
-			return null;
-		}
-		return {
-			id: profile.data.id,
-			name: profile.data.name,
-			email: profile.data.email,
-			image: profile.data.profile_image_url,
-			emailVerified: profile.data.verified || false,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
-	},
-});
+			);
+			if (error) {
+				return null;
+			}
+			if (!profile.data.email) {
+				return null;
+			}
+			return {
+				user: {
+					id: profile.data.id,
+					name: profile.data.name,
+					email: profile.data.email,
+					image: profile.data.profile_image_url,
+					emailVerified: profile.data.verified || false,
+				},
+				data: profile,
+			};
+		},
+	} satisfies OAuthProvider<TwitterProfile>;
+};

@@ -1,0 +1,63 @@
+---
+title: Twitter (X)
+description: Twitter Provider
+---
+
+<Steps>
+    <Step> 
+        ### Get your X(Twitter) Credentials
+        Get your Twitter credentials from the [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard).
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProvider` option of the auth instance.
+
+        ```ts title="auth.ts" twoslash 
+        const process = {
+            env: {
+                TWITTER_CLIENT_ID: "" as string,
+                TWITTER_CLIENT_SECRET: "" as string,
+            }
+        }
+        // ---cut---
+        import { betterAuth } from "better-auth"
+        import { twitter } from "better-auth/social-providers"
+        
+        export const { api, handler } = await betterAuth({
+            database: {
+                provider: "sqlite",
+                url: "./db.sqlite",
+            },
+                ocialProvider: [ // [!code highlight]
+                twitter({ // [!code highlight]
+                    clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]
+                    clientSecret: process.env.TWITTER_CLIENT_SECRET, // [!code highlight]
+                    /** // [!code highlight]
+                     * this is optional.  // [!code highlight]
+                     * only needed if you passed a custom basePath from `/api/auth` to `betterAuth`  // [!code highlight]
+                     * or if you're using a custom domain. // [!code highlight]
+                     */ // [!code highlight]
+                    redirectURI: "https://example.com/api/auth/callback/apple", // [!code highlight]
+                }), // [!code highlight]
+            ], // [!code highlight]
+        })
+        ```
+    </Step>
+       <Step>
+        ### Signin with Twitter 
+        To signin with Twitter, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        - `provider`: The provider to use. It should be set to `twitter`.
+
+        ```ts title="client.ts" twoslash 
+        import { createAuthClient } from "better-auth/client"
+        const client = createAuthClient()
+        
+        const signin = async () => {
+            const data = await client.signIn.social({
+                provider: "twitter"
+            })
+        }
+        ```
+    </Step>
+</Steps>

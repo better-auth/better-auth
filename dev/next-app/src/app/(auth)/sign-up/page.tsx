@@ -110,7 +110,7 @@ export default function SignUpForm() {
 								)
 									return alert("Please fill all fields");
 
-								const res = await authClient.signUp.credential({
+								const res = await authClient.signUp.email({
 									email,
 									name: `${firstName} ${lastName}`,
 									password,

@@ -1,41 +1,28 @@
-import type {
-	OAuth2Provider as ArcticOAuth2Provider,
-	OAuth2ProviderWithPKCE,
-	Tokens,
-} from "arctic";
-import type { Migration } from "kysely";
 import type { User } from "../adapters/schema";
-import type { FieldAttribute } from "../db";
 import type { oAuthProviderList } from "../social-providers";
 import type { LiteralString } from "./helper";
+import { OAuth2Tokens } from "arctic";
 
-export interface Provider {
+export interface OAuthProvider<
+	T extends Record<string, any> = Record<string, any>,
+> {
 	id: LiteralString;
-	/**
-	 * Database schema for the provider.
-	 */
-	schema?: {
-		[table: string]: {
-			fields: {
-				[field: string]: FieldAttribute;
-			};
-			disableMigration?: boolean;
-		};
-	};
-	/**
-	 * The migrations of the provider. If you define schema that will automatically create
-	 * migrations for you.
-	 *
-	 * ⚠️ Only uses this if you dont't want to use the schema option and you disabled migrations for
-	 * the tables.
-	 */
-	migrations?: Record<string, Migration>;
-	provider: ArcticOAuth2Provider | OAuth2ProviderWithPKCE;
-	userInfo: OAuthUserInfo;
+	createAuthorizationURL: (data: {
+		state: string;
+		codeVerifier: string;
+		scopes?: string[];
+	}) => URL;
+	name: string;
+	validateAuthorizationCode: (
+		code: string,
+		codeVerifier?: string,
+	) => Promise<OAuth2Tokens>;
+	getUserInfo: (token: OAuth2Tokens) => Promise<{
+		user: Omit<User, "createdAt" | "updatedAt">;
+		data: T;
+	} | null>;
+	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
+	revokeToken?: (token: string) => Promise<void>;
 }
-
-export type OAuthUserInfo = {
-	getUserInfo: (token: Tokens) => Promise<User | null>;
-};
 
 export type OAuthProviderList = typeof oAuthProviderList;

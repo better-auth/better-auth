@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { GitHub } from "arctic";
-import { toBetterAuthProvider } from "./to-provider";
+import type { OAuthProvider } from ".";
+import { getRedirectURI } from "./utils";
 
-interface GithubProfile {
+export interface GithubProfile {
 	login: string;
 	id: string;
 	node_id: string;
@@ -51,50 +52,76 @@ interface GithubProfile {
 	last_name: string;
 }
 
-export const github = toBetterAuthProvider("github", GitHub, {
-	async getUserInfo(token) {
-		const { data: profile, error } = await betterFetch<GithubProfile>(
-			"https://api.github.com/user",
-			{
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
-				},
-			},
-		);
-		if (error) {
-			return null;
-		}
-		let emailVerified = false;
-		if (!profile.email) {
-			const { data, error } = await betterFetch<
+export interface GithubOptions {
+	clientId: string;
+	clientSecret: string;
+	redirectURI?: string;
+}
+export const github = ({
+	clientId,
+	clientSecret,
+	redirectURI,
+}: GithubOptions) => {
+	const githubArctic = new GitHub(
+		clientId,
+		clientSecret,
+		getRedirectURI("github", redirectURI),
+	);
+	return {
+		id: "github",
+		name: "Github",
+		createAuthorizationURL({ state, scopes }) {
+			const _scopes = scopes || ["user:email"];
+			return githubArctic.createAuthorizationURL(state, _scopes);
+		},
+		validateAuthorizationCode: githubArctic.validateAuthorizationCode,
+		async getUserInfo(token) {
+			const { data: profile, error } = await betterFetch<GithubProfile>(
+				"https://api.github.com/user",
 				{
-					email: string;
-					primary: boolean;
-					verified: boolean;
-					visibility: "public" | "private";
-				}[]
-			>("https://api.github.com/user/emails", {
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
-					"User-Agent": "better-auth",
+					method: "GET",
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+					},
 				},
-			});
-			if (!error) {
-				profile.email = (data.find((e) => e.primary) ?? data[0])
-					?.email as string;
-				emailVerified =
-					data.find((e) => e.email === profile.email)?.verified ?? false;
+			);
+			if (error) {
+				return null;
 			}
-		}
-		return {
-			id: profile.id,
-			name: profile.name,
-			email: profile.email,
-			image: profile.avatar_url,
-			emailVerified,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
-	},
-});
+			let emailVerified = false;
+			if (!profile.email) {
+				const { data, error } = await betterFetch<
+					{
+						email: string;
+						primary: boolean;
+						verified: boolean;
+						visibility: "public" | "private";
+					}[]
+				>("https://api.github.com/user/emails", {
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+						"User-Agent": "better-auth",
+					},
+				});
+				if (!error) {
+					profile.email = (data.find((e) => e.primary) ?? data[0])
+						?.email as string;
+					emailVerified =
+						data.find((e) => e.email === profile.email)?.verified ?? false;
+				}
+			}
+			return {
+				user: {
+					id: profile.id,
+					name: profile.name,
+					email: profile.email,
+					image: profile.avatar_url,
+					emailVerified,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				data: profile,
+			};
+		},
+	} satisfies OAuthProvider<GithubProfile>;
+};

@@ -12,7 +12,7 @@ export const signUpEmail = createAuthEndpoint(
 			email: z.string().email(),
 			password: z.string(),
 			image: z.string().optional(),
-			callbackUrl: z.string().optional(),
+			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
@@ -83,9 +83,9 @@ export const signUpEmail = createAuthEndpoint(
 				session,
 			},
 			{
-				body: ctx.body.callbackUrl
+				body: ctx.body.callbackURL
 					? {
-							url: ctx.body.callbackUrl,
+							url: ctx.body.callbackURL,
 							redirect: true,
 						}
 					: {

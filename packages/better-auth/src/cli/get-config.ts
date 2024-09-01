@@ -8,7 +8,6 @@ let possiblePaths = ["auth.ts", "auth.config.ts"];
 possiblePaths = [
 	...possiblePaths,
 	...possiblePaths.map((it) => `lib/${it}`),
-	...possiblePaths.map((it) => `auth/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
 possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`)];

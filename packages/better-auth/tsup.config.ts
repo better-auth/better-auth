@@ -34,4 +34,5 @@ export default defineConfig({
 		"typescript",
 	],
 	noExternal: ["type-fest"],
+	target: "es2022",
 });
