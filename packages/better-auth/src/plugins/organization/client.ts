@@ -142,5 +142,19 @@ export const organizationClient = () =>
 				$listOrg,
 				$activeOrgSignal,
 			},
+			authProxySignal: [
+				{
+					matcher(path) {
+						return path.startsWith("/organization");
+					},
+					atom: "$listOrg",
+				},
+				{
+					matcher(path) {
+						return path.startsWith("/organization");
+					},
+					atom: "$activeOrgSignal",
+				},
+			],
 		};
 	});

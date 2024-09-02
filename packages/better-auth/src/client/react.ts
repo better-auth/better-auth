@@ -1,5 +1,4 @@
 import { useStore } from "@nanostores/react";
-import type { InferSession, InferUser } from "../types";
 import { createAuthClient as createVanillaClient } from "./base";
 import type { AuthPlugin, ClientOptions } from "./type";
 import type { UnionToIntersection } from "../types/helper";
@@ -25,9 +24,7 @@ export const createAuthClient = <Option extends ClientOptions>(
 						  }
 						| undefined
 						? R
-						: {
-								test1: ReturnType<Pl>["integrations"];
-							}
+						: {}
 				>
 			: {}
 		: {};

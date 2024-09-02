@@ -1,3 +1,5 @@
 import { createAuthClient } from "better-auth/vue";
-
-export const client = createAuthClient();
+import { organizationClient } from "better-auth/client";
+export const client = createAuthClient({
+	authPlugins: [organizationClient()],
+});

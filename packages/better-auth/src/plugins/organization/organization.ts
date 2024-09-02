@@ -19,7 +19,7 @@ import {
 	type defaultStatements,
 } from "./access";
 import { getOrgAdapter } from "./adapter";
-import { orgMiddleware, orgSessionMiddleware } from "./call";
+import { orgSessionMiddleware } from "./call";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -27,7 +27,7 @@ import {
 	getActiveInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
-import { deleteMember, updateMember } from "./routes/crud-members";
+import { removeMember, updateMember } from "./routes/crud-members";
 import {
 	createOrganization,
 	getFullOrganization,
@@ -117,7 +117,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getActiveInvitation,
 		rejectInvitation,
-		deleteMember,
+		removeMember,
 		updateMember,
 	};
 

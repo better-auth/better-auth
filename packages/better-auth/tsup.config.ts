@@ -14,6 +14,7 @@ export default defineConfig({
 		"client/plugins": "./src/client/plugins.ts",
 		"svelte-kit": "./src/integrations/svelte-kit.ts",
 		svelte: "./src/client/svelte.ts",
+		access: "./src/plugins/organization/access/index.ts",
 		solid: "./src/client/solid.ts",
 		"solid-start": "./src/integrations/solid-start.ts",
 		"next-js": "./src/integrations/next-js.ts",

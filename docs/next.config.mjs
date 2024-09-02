@@ -2,7 +2,7 @@ import createMDX from 'fumadocs-mdx/config';
 import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
 import { remarkInstall } from "fumadocs-docgen";
 import { transformerTwoslash } from "fumadocs-twoslash"
-import { ModuleResolutionKind } from 'typescript';
+import { JsxEmit, ModuleResolutionKind } from 'typescript';
 const withMDX = createMDX({
   mdxOptions: {
     rehypeCodeOptions: {
@@ -11,7 +11,8 @@ const withMDX = createMDX({
         transformerTwoslash({
           twoslashOptions: {
             compilerOptions: {
-              moduleResolution: ModuleResolutionKind.Bundler
+              moduleResolution: ModuleResolutionKind.Bundler,
+              jsx: JsxEmit.React
             }
           }
         }),

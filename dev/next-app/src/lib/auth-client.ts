@@ -14,11 +14,6 @@ export const authClient = createAuthClient({
 	],
 });
 
-export const {
-	useSession,
-	useActiveOrganization,
-	useInvitation,
-	useListOrganization,
-} = authClient;
-
 authClient.signInPasskey();
+
+const res = authClient.useActiveOrganization();

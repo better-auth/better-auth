@@ -2,12 +2,13 @@
 import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
 import clsx from "clsx";
-import { Github } from "lucide-react";
+import { Github, Icon } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { Highlight, themes } from "prism-react-renderer";
-import { Fragment, useId, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 import { LayoutGroup, motion } from "framer-motion"
+import { Icons } from "../icons";
 
 
 function Glow() {
@@ -51,7 +52,7 @@ function Glow() {
 
 const tabs = [
     {
-        name: "server.ts", code: `export const auth = betterAuth({
+        name: "auth.ts", code: `export const auth = betterAuth({
 	database: {
         provider: "postgresql",
         url: process.env.DATABASE_URL,
@@ -85,8 +86,10 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 
 export default function Hero() {
     const theme = useTheme();
-    const [activeTab, setActiveTab] = useState("server.ts");
+    const [activeTab, setActiveTab] = useState("auth.ts");
     const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
+
+
     return (
         <section className="flex mt-1 min-h-screen items-center justify-center gap-20 p-5">
             <div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] px-10">
@@ -122,16 +125,10 @@ export default function Hero() {
 								<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-stone-300 via-stone-300/70 to-blue-300 opacity-5" /> */}
                                 <LayoutGroup >
                                     <motion.div
+
                                         layoutId="hero"
-                                        animate={{
-                                            y: [10, -10, 0],
-                                            transition: {
-                                                duration: 2,
-                                                stiffness: 10,
-                                                type: "just"
-                                            },
-                                        }}
-                                        className="relative rounded-sm bg-gradient-to-tr from-stone-50 to-stone-100 dark:from-stone-950/70 dark:to-stone-900/90  ring-1 ring-white/10 backdrop-blur-lg">
+
+                                        className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-900/90  ring-1 ring-white/10 backdrop-blur-lg">
                                         <div className="absolute -top-px left-0 right-0 h-px " />
                                         <div className="absolute -bottom-px left-11 right-20 h-px" />
                                         <div className="pl-4 pt-4">
@@ -185,6 +182,7 @@ export default function Hero() {
                                                     ))}
                                                 </div>
                                                 <Highlight
+                                                    key={theme.resolvedTheme}
                                                     code={code}
                                                     language={"javascript"}
                                                     theme={{
@@ -192,7 +190,8 @@ export default function Hero() {
                                                         plain: {
                                                             backgroundColor: "transparent",
                                                         }
-                                                    }}
+                                                    }
+                                                    }
 
                                                 >
                                                     {({
@@ -212,7 +211,6 @@ export default function Hero() {
                                                             <code className="px-4">
                                                                 {tokens.map((line, lineIndex) => (
                                                                     <div
-
                                                                         key={lineIndex}
                                                                         {...getLineProps({ line })}
                                                                     >
@@ -231,6 +229,7 @@ export default function Hero() {
                                             </div>
                                         </div>
                                     </motion.div>
+
                                 </LayoutGroup>
                             </div>
                         </div>
@@ -238,7 +237,7 @@ export default function Hero() {
                 </div>
             </div>
             <GridPattern
-                className="absolute inset-x-0 -top-14 -z-10 h-full w-full dark:fill-secondary/20 fill-neutral-100 dark:stroke-secondary/30 stroke-neutral-700/5 [mask-image:linear-gradient(to_bottom_left,white_40%,transparent_50%)]"
+                className="absolute inset-x-0 -top-14 -z-10 h-full w-full dark:fill-secondary/30 fill-neutral-100 dark:stroke-secondary/30 stroke-neutral-700/5 [mask-image:linear-gradient(to_bottom_left,white_40%,transparent_50%)]"
                 yOffset={-96}
                 interactive
             />
@@ -248,7 +247,6 @@ export default function Hero() {
 
 export function HeroBackground(props: React.ComponentPropsWithoutRef<"svg">) {
     const id = useId();
-
     return (
         <svg
             aria-hidden="true"

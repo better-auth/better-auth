@@ -29,6 +29,7 @@
         "./solid": "./dist/solid.js",
         "./vue": "./dist/vue.js",
         "./plugins": "./dist/plugins.js",
+        "./plugins/access": "./dist/access.js",
         "./svelte-kit": "./dist/svelte-kit.js",
         "./solid-start": "./dist/solid-start.js",
         "./svelte": "./dist/svelte.js",
@@ -50,7 +51,7 @@
         "swr": "^2.2.5",
         "tsup": "^8.2.4",
         "type-fest": "^4.24.0",
-        "typescript": "^5.5.0-dev.20240508",
+        "typescript": "5.6.0-beta",
         "vitest": "^1.6.0"
     },
     "dependencies": {

@@ -6,3 +6,5 @@
 [x] providers should only be oauth
 [ ] add tests
 [ ] add callback url on otp and backup code verification
+[ ] implement the ac check on the client to for organization
+[ ] add delete organization endpoint
