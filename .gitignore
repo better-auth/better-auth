@@ -180,3 +180,5 @@ dist
 
 *.sqlite
 *.db
+
+.turbo/

@@ -3,7 +3,7 @@ import {
 	organizationClient,
 	twoFactorClient,
 	passkeyClient,
-} from "better-auth/client";
+} from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
 	baseURL: "http://localhost:3000/api/auth",
@@ -15,5 +15,3 @@ export const authClient = createAuthClient({
 });
 
 authClient.signInPasskey();
-
-const res = authClient.useActiveOrganization();

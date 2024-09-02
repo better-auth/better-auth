@@ -34,53 +34,56 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	$signal?: AuthProxySignal[],
 	$signals?: Record<string, PreinitializedWritableAtom<boolean>>,
 ): T {
-	const handler: ProxyHandler<any> = {
-		get(target, prop: string) {
-			// If the property exists in the initial object, return it directly
-			if (prop in routes) {
-				return routes[prop as string];
-			}
-			return new Proxy(() => {}, {
-				get: (_, nestedProp: string) => {
-					//@ts-expect-error
-					return handler.get(target, `${prop}.${nestedProp}`);
-				},
-				apply: async (_, __, args) => {
-					if (prop in target) {
-						return target[prop](...args);
+	function createProxy(path: string[] = []): any {
+		return new Proxy(function () {}, {
+			get(target, prop: string) {
+				const fullPath = [...path, prop];
+				let current: any = routes;
+				for (const segment of fullPath) {
+					if (current && typeof current === "object" && segment in current) {
+						current = current[segment];
+					} else {
+						current = undefined;
+						break;
 					}
-					const path = prop
-						.split(".")
+				}
+
+				if (typeof current === "function") {
+					return current;
+				}
+
+				return createProxy(fullPath);
+			},
+			apply: async (_, __, args) => {
+				const routePath =
+					"/" +
+					path
 						.map((segment) =>
 							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
 						)
 						.join("/");
-					const routePath = `/${path}`;
-					const arg = (args[0] || {}) as ProxyRequest;
-					const method = getMethod(routePath, knownPathMethods, arg);
-					const { query, options, ...body } = arg;
-					return await client(routePath, {
-						...options,
-						body: method === "GET" ? undefined : body,
-						query: query,
-						method,
-						async onSuccess(context) {
-							const signal = $signal?.find((s) => s.matcher(routePath));
-							if (!signal) return;
-							const signalAtom = $signals?.[signal.atom];
-							if (!signalAtom) return;
-							signalAtom.set(!signalAtom.get());
-							/**
-							 * call if options.onSuccess
-							 * is passed since we are
-							 * overriding onSuccess
-							 */
-							await options?.onSuccess?.(context);
-						},
-					});
-				},
-			});
-		},
-	};
-	return new Proxy(routes, handler);
+
+				const arg = (args[0] || {}) as ProxyRequest;
+				const method = getMethod(routePath, knownPathMethods, arg);
+				const { query, options, ...body } = arg;
+
+				return await client(routePath, {
+					...options,
+					body: method === "GET" ? undefined : body,
+					query: query,
+					method,
+					async onSuccess(context) {
+						const signal = $signal?.find((s) => s.matcher(routePath));
+						if (!signal) return;
+						const signalAtom = $signals?.[signal.atom];
+						if (!signalAtom) return;
+						signalAtom.set(!signalAtom.get());
+						await options?.onSuccess?.(context);
+					},
+				});
+			},
+		});
+	}
+
+	return createProxy() as T;
 }

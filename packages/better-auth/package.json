@@ -1,6 +1,7 @@
 {
     "name": "better-auth",
     "version": "0.0.2-beta.8",
+    "description": "Framework-agnostic, batteries included authentication library for typescript",
     "type": "module",
     "scripts": {
         "build": "tsup --clean",
@@ -10,7 +11,6 @@
     },
     "main": "./dist/index.js",
     "module": "./dist/index.js",
-    "types": "./dist/index.d.ts",
     "bin": "./dist/cli.js",
     "publishConfig": {
         "executableFiles": [
@@ -20,8 +20,14 @@
     "exports": {
         ".": "./dist/index.js",
         "./social-providers": "./dist/social.js",
-        "./client": "./dist/client.js",
-        "./client/plugins": "./dist/client/plugins.js",
+        "./client": {
+            "import": "./dist/client.js",
+            "types": "./dist/client.d.ts"
+        },
+        "./client/plugins": {
+            "import": "./dist/client/plugins.js",
+            "types": "./dist/client/plugins.d.ts"
+        },
         "./types": "./dist/types.js",
         "./cli": "./dist/cli.js",
         "./react": "./dist/react.js",
@@ -87,6 +93,6 @@
         "zod": "^3.22.5"
     },
     "files": [
-        "dist"
+        "dist/*"
     ]
 }

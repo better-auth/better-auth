@@ -7,8 +7,18 @@ import type {
 import type { Prettify } from "../../types/helper";
 import type { organization as org } from "../../plugins";
 import { createClientPlugin } from "../../client/create-client-plugin";
+import { defaultStatements, type AccessControl, type Role } from "./access";
 
-export const organizationClient = () =>
+interface OrganizationClientOptions {
+	ac: AccessControl;
+	roles?: {
+		[key in "admin" | "member" | "owner"]?: Role<any>;
+	};
+}
+
+export const organizationClient = <O extends OrganizationClientOptions>(
+	options?: O,
+) =>
 	createClientPlugin<ReturnType<typeof org>>()(($fetch) => {
 		const activeOrgId = atom<string | null>(null);
 		const $listOrg = atom<boolean>(false);
@@ -80,14 +90,35 @@ export const organizationClient = () =>
 				return res;
 			}),
 		);
+		type DefaultStatements = typeof defaultStatements;
+		type Statements = O["ac"] extends AccessControl<infer S>
+			? S extends Record<string, Array<any>>
+				? S & DefaultStatements
+				: DefaultStatements
+			: DefaultStatements;
 		return {
 			id: "organization",
 			actions: {
-				setActiveOrganization(orgId: string | null) {
-					activeOrgId.set(orgId);
-				},
-				setInvitationId: (id: string | null) => {
-					$activeInvitationId.set(id);
+				organization: {
+					setActive(orgId: string | null) {
+						activeOrgId.set(orgId);
+					},
+					setInvitationId: (id: string | null) => {
+						$activeInvitationId.set(id);
+					},
+					hasPermission: async (
+						permission: Partial<{
+							//@ts-expect-error fix this later
+							[key in keyof Statements]: Statements[key][number][];
+						}>,
+					) => {
+						await $fetch<boolean>("/organization/has-permission", {
+							method: "POST",
+							body: {
+								permission,
+							},
+						});
+					},
 				},
 			},
 			integrations: {

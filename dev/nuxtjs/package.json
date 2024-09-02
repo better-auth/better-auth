@@ -1,5 +1,5 @@
 {
-  "name": "nuxtjs",
+  "name": "@dev/nuxt",
   "private": true,
   "type": "module",
   "scripts": {
