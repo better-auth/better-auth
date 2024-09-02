@@ -261,11 +261,6 @@ export const contents: Content[] = [
                 icon: LucideAArrowDown
             },
             {
-                title: "Hono",
-                icon: Icons.hono,
-                href: "/docs/integrations/hono",
-            },
-            {
                 title: "Next",
                 icon: Icons.nextJS,
                 href: "/docs/integrations/next",
@@ -281,14 +276,14 @@ export const contents: Content[] = [
                 href: "/docs/integrations/svelte-kit",
             },
             {
+                title: "Hono",
+                icon: Icons.hono,
+                href: "/docs/integrations/hono",
+            },
+            {
                 title: "Solid Start",
                 icon: Icons.solidStart,
                 href: "/docs/integrations/solid-start",
-            },
-            {
-                title: "React",
-                icon: Icons.react,
-                href: "/docs/integrations/react",
             },
         ]
     },
@@ -311,13 +306,7 @@ export const contents: Content[] = [
             </svg>
         ),
         list: [
-            {
-                title: "Introduction",
-                icon: () => (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="1.1em" height="1.1em" viewBox="0 0 14 14"><path fill="currentColor" fillRule="evenodd" d="M12.402 8.976H7.259a2.278 2.278 0 0 0-.193-4.547h-1.68A3.095 3.095 0 0 0 4.609 0h7.793a1.35 1.35 0 0 1 1.348 1.35v6.279c0 .744-.604 1.348-1.348 1.348ZM2.898 4.431a1.848 1.848 0 1 0 0-3.695a1.848 1.848 0 0 0 0 3.695m5.195 2.276c0-.568-.46-1.028-1.027-1.028H2.899a2.65 2.65 0 0 0-2.65 2.65v1.205c0 .532.432.963.964.963h.172l.282 2.61A1 1 0 0 0 2.66 14h.502a1 1 0 0 0 .99-.862l.753-5.404h2.16c.567 0 1.027-.46 1.027-1.027Z" clipRule="evenodd"></path></svg>
-                ),
-                href: "/docs/plugins/introduction",
-            },
+
             {
                 title: "Authentication",
                 group: true,
@@ -361,12 +350,7 @@ export const contents: Content[] = [
             {
                 title: "Bearer",
                 icon: Key,
-                href: "/docs/plugins/email-verifier",
-            },
-            {
-                title: "Email Checker",
-                icon: MailCheck,
-                href: "/docs/plugins/email-verifier",
+                href: "/docs/plugins/bearer",
             },
         ],
     },

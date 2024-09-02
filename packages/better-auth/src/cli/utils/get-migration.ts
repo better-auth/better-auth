@@ -154,7 +154,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema.createTable(table.table);
+			let dbT = db.schema
+				.createTable(table.table)
+				.addColumn("id", "text", (col) => col.primaryKey());
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = typeMap[field.type];
 				dbT = dbT.addColumn(fieldName, type, (col) => {

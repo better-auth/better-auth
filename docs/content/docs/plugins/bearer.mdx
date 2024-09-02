@@ -1,0 +1,21 @@
+---
+title: Bearer
+description: The Bearer plugin allows you to authenticate with a Bearer token instead of a browser cookie.
+---
+
+The Bearer plugin allows you to authenticate with a Bearer token instead of a browser cookie. It proxies the request and set the bearer token in the Authorization header to a cookie request internally.
+
+## Add the Bearer plugin
+
+```ts title="auth.ts" twoslash
+import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
+
+export const { api, handler } = betterAuth({
+    database: {
+        provider: 'sqlite',
+        url: './db.sqlite'
+    },
+    plugins: [bearer()]
+});
+```

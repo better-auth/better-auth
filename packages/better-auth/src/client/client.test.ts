@@ -1,21 +1,13 @@
 import { describe, it } from "vitest";
-
 import { getTestInstance } from "../test-utils/test-instance";
-import { createAuthClient } from "./base";
 import { createAuthClient as createReactClient } from "./react";
-import { twoFactorClient } from "../plugins";
-import { usernameClient } from "../plugins/username/client";
+import { organization } from "../plugins";
 import { organizationClient } from "./plugins";
 import { createAccessControl } from "../plugins/organization/access";
 
 describe("client path to object", async () => {
 	const auth = await getTestInstance({
-		plugins: [
-			// passkey({
-			// 	rpID: "test",
-			// 	rpName: "test",
-			// }),
-		],
+		plugins: [organization()],
 	});
 
 	it("should return a path to object", async () => {
@@ -41,6 +33,5 @@ describe("client path to object", async () => {
 			],
 			csrfPlugin: false,
 		});
-		client.organization.useActiveOrganization();
 	});
 });

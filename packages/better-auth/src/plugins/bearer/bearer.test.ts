@@ -6,8 +6,8 @@ describe("bearer", async () => {
 	const { client, createTestUser } = await getTestInstance({
 		plugins: [bearer()],
 	});
-	await createTestUser();
 	it("should get session", async () => {
+		await createTestUser();
 		const res = await client.$fetch<{ session: { id: string } }>(
 			"/sign-in/credential",
 			{

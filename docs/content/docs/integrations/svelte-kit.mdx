@@ -1,0 +1,148 @@
+---
+title: Svelte Kit
+description: Learn how to integrate Better Auth with Svelte Kit
+---
+
+Better Auth has first class support for Svelte Kit. It provides utilities to make it easier to use Better Auth with Svelte Kit.
+
+## Installation
+
+First, install Better Auth
+
+```package-install
+npm install better-auth
+```
+
+## Set Environment Variables
+
+Create a `.env` file in the root of your project and add the following environment variables:
+
+**Set Base URL**
+```txt title=".env"
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your Next.js app
+```
+
+**Set Secret**
+
+Random value used by the library for encryption and generating hashes. You can generate one using the button below or you can use something like openssl.
+```txt title=".env"
+BETTER_AUTH_SECRET=
+```
+
+<GenerateSecret/>
+
+## Configure Server
+
+### Create Better Auth instance
+
+We recommend to create `auth.ts` file inside your `lib/` directory. This file will contain your Better Auth instance.
+
+```ts twoslash title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const { api, handler } = betterAuth({
+    database: {
+        provider: "sqlite", //change this to your database provider
+        url: "./db.sqlite", // path to your database or connection string
+    }
+    // Refer to the api documentation for more configuration options
+})
+```
+
+<Callout type="warn">
+Better Auth currently supports only SQLite, MySQL, and PostgreSQL. It uses Kysely under the hood, so you can also pass any Kysely dialect directly to the database object.
+</Callout>
+
+### Mount the handler
+
+We need to mount the handler to svelte kit server hook.
+
+```ts
+import { auth } from "$lib/auth";
+import { svelteKitHandler } from "better-auth/svelte-kit";
+
+export async function handle({ event, resolve }) {
+	return svelteKitHandler({ event, resolve, auth });
+}
+```
+
+### Migrate the database
+Run the following command to create the necessary tables in your database:
+
+```bash
+npx better-auth migrate
+```
+
+
+## Create a client
+
+Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
+
+```ts twoslash title="client.ts"
+import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svlete
+
+export const client = createAuthClient({
+    //you can pass client configuration here
+})
+```
+
+Once you have created the client, you can use it to sign up, sign in, and perform other actions.
+Some of the actinos are reactive. The client use [nano-store](https://github.com/nanostores/nanostores) to store the state and refelct changes when there is a change like a user signing in or out affecting the session state.
+
+### Example usage
+```svelte
+<script lang="ts">
+  import { client } from "$lib/client";
+  const session = client.$session;
+</script>
+    <div>
+      {#if $session}
+        <div>
+          <p>
+            {$session?.user.name}
+          </p>
+          <button
+            on:click={async () => {
+              await client.signOut();
+            }}
+          >
+            Signout
+          </button>
+        </div>
+      {:else}
+        <button
+          on:click={async () => {
+            await client.signIn.social({
+              provider: "github",
+            });
+          }}
+        >
+          Continue with github
+        </button>
+      {/if}
+    </div>
+```
+
+### Example: Getting Session on a ServerComponent
+
+```ts title="+page.ts"
+import { auth } from "$lib/auth";
+
+export async function load(request: Request) {
+	const session = await auth.api.getSession({
+		headers: request.headers,
+	});
+	if (!session) {
+		return {
+			status: 401,
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				error: "Unauthorized",
+			}),
+		};
+	}
+	return session;
+}
+```

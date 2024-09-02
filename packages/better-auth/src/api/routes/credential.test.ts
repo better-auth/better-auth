@@ -16,7 +16,7 @@ const testCredential2 = {
 
 describe("credential", async () => {
 	it("should sign up with email and password", async () => {
-		const res = await client.signUp.credential({
+		const res = await client.signUp.email({
 			email: testCredential1.email,
 			password: testCredential1.password,
 			name: testCredential1.name,
@@ -39,7 +39,7 @@ describe("credential", async () => {
 			},
 		});
 
-		const res2 = await auth.api.signUpCredential({
+		const res2 = await auth.api.signUpEmail({
 			method: "POST",
 			body: {
 				email: testCredential2.email,
@@ -69,7 +69,7 @@ describe("credential", async () => {
 
 describe("sign-in credential", async () => {
 	it("should sign in with email and password", async () => {
-		const res = await client.signIn.credential({
+		const res = await client.signIn.email({
 			email: testCredential1.email,
 			password: testCredential1.password,
 		});
@@ -91,7 +91,7 @@ describe("sign-in credential", async () => {
 			},
 		});
 
-		const res2 = await auth.api.signInCredential({
+		const res2 = await auth.api.signInEmail({
 			method: "POST",
 			body: {
 				email: testCredential2.email,
@@ -121,7 +121,7 @@ describe("sign-in credential", async () => {
 	});
 
 	it("should't remember me", async () => {
-		const res = await client.signIn.credential({
+		const res = await client.signIn.email({
 			email: testCredential1.email,
 			password: testCredential1.password,
 			dontRememberMe: true,

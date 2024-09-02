@@ -43,6 +43,16 @@ const config = {
       },
     ];
   },
+  images: {
+    remotePatterns: [
+      {
+        hostname: 'images.unsplash.com'
+      },
+      {
+        hostname: 'assets.aceternity.com'
+      },
+    ]
+  }
 };
 
 export default withMDX(config);

@@ -5,6 +5,7 @@ import { betterAuth } from "../auth";
 import { createAuthClient } from "../client";
 import { github, google } from "../social-providers";
 import type { BetterAuthOptions } from "../types";
+import { getMigrations } from "../cli/utils/get-migration";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
@@ -31,7 +32,6 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		database: {
 			provider: "sqlite",
 			url: dbName,
-			autoMigrate: true,
 		},
 		emailAndPassword: {
 			enabled: true,
@@ -44,7 +44,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	async function createTestUser() {
-		await auth.api.signUpCredential({
+		await auth.api.signUpEmail({
 			body: {
 				email: "test@test.com",
 				password: "test123456",
@@ -57,11 +57,16 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		};
 	}
 
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(opts);
+		await runMigrations();
+	});
+
 	afterAll(async () => {
 		await fs.unlink(dbName);
 	});
 
-	const client = createAuthClient<typeof auth>({
+	const client = createAuthClient({
 		customFetchImpl: async (url, init) => {
 			const req = new Request(url.toString(), init);
 			return auth.handler(req);

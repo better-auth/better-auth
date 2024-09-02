@@ -9,12 +9,15 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	type PluginEndpoint = UnionToIntersection<
 		O["plugins"] extends Array<infer T>
 			? T extends BetterAuthPlugin
-				? T["endpoints"]
+				? {
+						[key in T["id"]]: T["endpoints"];
+					}
 				: {}
 			: {}
 	>;
 	const { handler, endpoints } = router(authContext);
 	type Endpoint = typeof endpoints;
+
 	return {
 		handler,
 		api: endpoints as Endpoint & PluginEndpoint,

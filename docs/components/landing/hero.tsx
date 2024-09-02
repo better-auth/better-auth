@@ -9,6 +9,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import { Fragment, useEffect, useId, useState } from "react";
 import { LayoutGroup, motion } from "framer-motion"
 import { Icons } from "../icons";
+import { Cover } from "../ui/cover";
 
 
 function Glow() {
@@ -92,146 +93,148 @@ export default function Hero() {
 
     return (
         <section className="flex mt-1 min-h-screen items-center justify-center gap-20 p-5">
-            <div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] px-10">
-                <div className="py-16 sm:px-2 lg:relative lg:px-20 lg:py-20">
-                    <div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
-                        <div className="relative z-10 md:text-center lg:text-left">
-                            <div className="relative">
-                                <div className="flex items-center gap-2 relative">
-                                    <p className="inline  dark:text-white opacity-90 text-5xl tracking-tight  relative">
-                                        BETTER-AUTH.
+            <div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
+                <div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
+                    <div className="relative z-10 md:text-center lg:text-left">
+                        <div className="relative">
+                            <div className="flex items-center gap-2 relative">
+                                <Cover>
+                                    <p className="inline  dark:text-white opacity-90 2xl md:text-3xl lg:text-5xl tracking-tight  relative">
+                                        Better Auth.
                                     </p>
-                                </div>
+                                </Cover>
+                            </div>
 
-                                <p className="mt-3 text-2xl font-mono tracking-tight dark:text-zinc-300 text-zinc-800">
-                                    Framework agnostic, comprehensive authentication library and ecosystem for typescript.
-                                </p>
+                            <p className="mt-3 md:text-2xl font-mono tracking-tight dark:text-zinc-300 text-zinc-800">
+                                Framework agnostic, comprehensive authentication solution with a plugin ecosystem for typescript.
+                            </p>
 
-                                <div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start">
-                                    <Link href="/docs">
-                                        <Button variant="default">Get started</Button>
-                                    </Link>
-                                    <Button variant="outline" className="flex items-center gap-2">
-                                        <Github size={16} />
-                                        View on GitHub
-                                    </Button>
-                                </div>
+
+                            <div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
+                                <button className="px-4 md:px-8 py-0.5  border-2 border-black dark:border-white uppercase bg-white text-black transition duration-200 text-sm shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] ">
+                                    Get Started
+                                </button>
+                                <Button variant="outline" size="lg" className="flex rounded-none items-center gap-2">
+                                    <Github size={16} />
+                                    View on GitHub
+                                </Button>
+
                             </div>
                         </div>
+                    </div>
 
-                        <div className="relative lg:static xl:pl-10">
-                            <div className="relative">
-                                {/* <div className="absolute inset-0 rounded-none bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-5 blur-lg" />
+                    <div className="relative lg:static xl:pl-10 hidden md:block">
+                        <div className="relative">
+                            {/* <div className="absolute inset-0 rounded-none bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-5 blur-lg" />
 								<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-stone-300 via-stone-300/70 to-blue-300 opacity-5" /> */}
-                                <LayoutGroup >
-                                    <motion.div
+                            <LayoutGroup >
+                                <motion.div
 
-                                        layoutId="hero"
+                                    layoutId="hero"
 
-                                        className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-900/90  ring-1 ring-white/10 backdrop-blur-lg">
-                                        <div className="absolute -top-px left-0 right-0 h-px " />
-                                        <div className="absolute -bottom-px left-11 right-20 h-px" />
-                                        <div className="pl-4 pt-4">
-                                            <TrafficLightsIcon className="h-2.5 w-auto stroke-slate-500/30" />
+                                    className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-900/90  ring-1 ring-white/10 backdrop-blur-lg">
+                                    <div className="absolute -top-px left-0 right-0 h-px " />
+                                    <div className="absolute -bottom-px left-11 right-20 h-px" />
+                                    <div className="pl-4 pt-4">
+                                        <TrafficLightsIcon className="h-2.5 w-auto stroke-slate-500/30" />
 
-                                            <div className="mt-4 flex space-x-2 text-xs">
+                                        <div className="mt-4 flex space-x-2 text-xs">
 
 
-                                                {tabs.map((tab) => (
-                                                    <motion.div
-                                                        key={tab.name}
-                                                        layoutId={`tab-${tab.name}`}
-                                                        whileHover={{
-                                                            scale: 1.05,
-                                                            transition: { duration: 1 },
-                                                        }}
-                                                        whileTap={{ scale: 0.1 }}
-                                                        onClick={() => setActiveTab(tab.name)}
+                                            {tabs.map((tab) => (
+                                                <motion.div
+                                                    key={tab.name}
+                                                    layoutId={`tab-${tab.name}`}
+                                                    whileHover={{
+                                                        scale: 1.05,
+                                                        transition: { duration: 1 },
+                                                    }}
+                                                    whileTap={{ scale: 0.1 }}
+                                                    onClick={() => setActiveTab(tab.name)}
+                                                    className={clsx(
+                                                        "flex h-6 rounded-full cursor-pointer",
+                                                        activeTab === tab.name
+                                                            ? "bg-gradient-to-r from-stone-400/90 via-stone-400 to-orange-400/20 p-px font-medium text-stone-300"
+                                                            : "text-slate-500",
+                                                    )}
+                                                >
+                                                    <div
                                                         className={clsx(
-                                                            "flex h-6 rounded-full cursor-pointer",
-                                                            activeTab === tab.name
-                                                                ? "bg-gradient-to-r from-stone-400/90 via-stone-400 to-orange-400/20 p-px font-medium text-stone-300"
-                                                                : "text-slate-500",
+                                                            "flex items-center rounded-full px-2.5",
+                                                            tab.name === activeTab && "bg-stone-800",
                                                         )}
                                                     >
-                                                        <div
-                                                            className={clsx(
-                                                                "flex items-center rounded-full px-2.5",
-                                                                tab.name === activeTab && "bg-stone-800",
-                                                            )}
-                                                        >
-                                                            {tab.name}
-                                                        </div>
-                                                    </motion.div>
-                                                ))}
+                                                        {tab.name}
+                                                    </div>
+                                                </motion.div>
+                                            ))}
 
-                                            </div>
-
-                                            <div className="mt-6 flex items-start px-1 text-sm">
-                                                <div
-                                                    aria-hidden="true"
-                                                    className="select-none border-r border-slate-300/5 pr-4 font-mono text-slate-600"
-                                                >
-                                                    {Array.from({
-                                                        length: code.split("\n").length,
-                                                    }).map((_, index) => (
-                                                        <Fragment key={index}>
-                                                            {(index + 1).toString().padStart(2, "0")}
-                                                            <br />
-                                                        </Fragment>
-                                                    ))}
-                                                </div>
-                                                <Highlight
-                                                    key={theme.resolvedTheme}
-                                                    code={code}
-                                                    language={"javascript"}
-                                                    theme={{
-                                                        ...themes.synthwave84,
-                                                        plain: {
-                                                            backgroundColor: "transparent",
-                                                        }
-                                                    }
-                                                    }
-
-                                                >
-                                                    {({
-                                                        className,
-                                                        style,
-                                                        tokens,
-                                                        getLineProps,
-                                                        getTokenProps,
-                                                    }) => (
-                                                        <pre
-                                                            className={clsx(
-                                                                className,
-                                                                "flex overflow-x-auto pb-6",
-                                                            )}
-                                                            style={style}
-                                                        >
-                                                            <code className="px-4">
-                                                                {tokens.map((line, lineIndex) => (
-                                                                    <div
-                                                                        key={lineIndex}
-                                                                        {...getLineProps({ line })}
-                                                                    >
-                                                                        {line.map((token, tokenIndex) => (
-                                                                            <span
-                                                                                key={tokenIndex}
-                                                                                {...getTokenProps({ token })}
-                                                                            />
-                                                                        ))}
-                                                                    </div>
-                                                                ))}
-                                                            </code>
-                                                        </pre>
-                                                    )}
-                                                </Highlight>
-                                            </div>
                                         </div>
-                                    </motion.div>
 
-                                </LayoutGroup>
-                            </div>
+                                        <div className="mt-6 flex items-start px-1 text-sm">
+                                            <div
+                                                aria-hidden="true"
+                                                className="select-none border-r border-slate-300/5 pr-4 font-mono text-slate-600"
+                                            >
+                                                {Array.from({
+                                                    length: code.split("\n").length,
+                                                }).map((_, index) => (
+                                                    <Fragment key={index}>
+                                                        {(index + 1).toString().padStart(2, "0")}
+                                                        <br />
+                                                    </Fragment>
+                                                ))}
+                                            </div>
+                                            <Highlight
+                                                key={theme.resolvedTheme}
+                                                code={code}
+                                                language={"javascript"}
+                                                theme={{
+                                                    ...themes.synthwave84,
+                                                    plain: {
+                                                        backgroundColor: "transparent",
+                                                    }
+                                                }
+                                                }
+
+                                            >
+                                                {({
+                                                    className,
+                                                    style,
+                                                    tokens,
+                                                    getLineProps,
+                                                    getTokenProps,
+                                                }) => (
+                                                    <pre
+                                                        className={clsx(
+                                                            className,
+                                                            "flex overflow-x-auto pb-6",
+                                                        )}
+                                                        style={style}
+                                                    >
+                                                        <code className="px-4">
+                                                            {tokens.map((line, lineIndex) => (
+                                                                <div
+                                                                    key={lineIndex}
+                                                                    {...getLineProps({ line })}
+                                                                >
+                                                                    {line.map((token, tokenIndex) => (
+                                                                        <span
+                                                                            key={tokenIndex}
+                                                                            {...getTokenProps({ token })}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            ))}
+                                                        </code>
+                                                    </pre>
+                                                )}
+                                            </Highlight>
+                                        </div>
+                                    </div>
+                                </motion.div>
+
+                            </LayoutGroup>
                         </div>
                     </div>
                 </div>
