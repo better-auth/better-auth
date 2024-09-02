@@ -1,7 +1,7 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
-import type { LiteralUnion } from "type-fest";
+import type { LiteralUnion } from "../types/helper";
 
 function getMethod(
 	path: string,

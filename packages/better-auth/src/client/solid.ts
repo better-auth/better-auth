@@ -2,7 +2,7 @@ import type { AuthPlugin, ClientOptions } from "./type";
 import { createAuthFetch, createAuthClient as createClient } from "./base";
 import { useStore } from "@nanostores/solid";
 import type * as SolidJS from "solid-js"; //to fix ts error: This is likely not portable. A type annotation is necessary.
-import type { UnionToIntersection } from "type-fest";
+import type { UnionToIntersection } from "../types/helper";
 export const createAuthClient = <Option extends ClientOptions>(
 	options?: Option,
 ) => {

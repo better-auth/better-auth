@@ -1,4 +1,4 @@
-import type { UnionToIntersection } from "type-fest";
+import type { UnionToIntersection } from "./types/helper";
 import { router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";

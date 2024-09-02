@@ -34,6 +34,5 @@ export default defineConfig({
 		"better-sqlite3",
 		"typescript",
 	],
-	noExternal: ["type-fest"],
 	target: "es2022",
 });

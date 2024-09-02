@@ -12,7 +12,6 @@ import type {
 } from "@simplewebauthn/types";
 import { APIError } from "better-call";
 import { alphabet, generateRandomString } from "oslo/crypto";
-import type { RequiredDeep } from "type-fest";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api/middlewares/session";
@@ -65,7 +64,7 @@ export type Passkey = {
 };
 
 export const passkey = (options: PasskeyOptions) => {
-	const opts: RequiredDeep<PasskeyOptions> = {
+	const opts = {
 		origin: null,
 		...options,
 		rpID: process.env.NODE_ENV === "development" ? "localhost" : options.rpID,

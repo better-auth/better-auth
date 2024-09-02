@@ -1,7 +1,7 @@
 import { useStore } from "@nanostores/vue";
 import { createAuthFetch, createAuthClient as createClient } from "./base";
 import type { AuthPlugin, ClientOptions } from "./type";
-import type { UnionToIntersection } from "type-fest";
+import type { UnionToIntersection } from "../types/helper";
 
 export const createAuthClient = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createAuthFetch(options);
