@@ -25,7 +25,7 @@ describe("client path to object", async () => {
 		const admin = ac.newRole({
 			user: ["read"],
 		});
-		const client = createAuthClient({
+		const client = createReactClient({
 			baseURL: "http://localhost:3000/api/auth",
 			customFetchImpl: async (url, options) => {
 				console.log(url.toString());
@@ -41,5 +41,6 @@ describe("client path to object", async () => {
 			],
 			csrfPlugin: false,
 		});
+		client.organization.useActiveOrganization();
 	});
 });

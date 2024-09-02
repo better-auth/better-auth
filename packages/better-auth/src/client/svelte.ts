@@ -1,16 +1,16 @@
 import type { UnionToIntersection } from "../types/helper";
-import { createAuthClient as createClient } from "./base";
+import { createAuthFetch, createAuthClient as createClient } from "./base";
 import type { AuthPlugin, ClientOptions } from "./type";
 
 export const createAuthClient = <Option extends ClientOptions>(
 	options?: Option,
 ) => {
-	const client = createClient(options);
+	const $fetch = createAuthFetch(options);
 	const signals = options?.authPlugins?.reduce(
 		(acc, plugin) => {
 			return {
 				...acc,
-				...(plugin(client.$fetch).integrations?.svelte?.() || {}),
+				...(plugin($fetch).integrations?.svelte?.() || {}),
 			};
 		},
 		{} as Record<string, any>,
@@ -29,8 +29,11 @@ export const createAuthClient = <Option extends ClientOptions>(
 				>
 			: {}
 		: {};
-	const obj = Object.assign(client, {
+	const client = createClient(options, {
 		...signals,
+	});
+
+	const obj = Object.assign(client, {
 		$session: client.$atoms.$session,
 	});
 	return obj;

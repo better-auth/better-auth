@@ -10,8 +10,34 @@ import type { UnionToIntersection } from "../types/helper";
 import type { PreinitializedWritableAtom } from "nanostores";
 import type { BetterAuthPlugin } from "../types/plugins";
 
-export const createAuthClient = <O extends ClientOptions = ClientOptions>(
+/**
+ * used for plugins only
+ */
+
+export const createAuthFetch = (options?: ClientOptions) => {
+	const $baseFetch = createFetch();
+	return createFetch({
+		method: "GET",
+		...options,
+		baseURL: getBaseURL(options?.baseURL).withPath,
+		plugins: [
+			...(options?.plugins || []),
+			...(options?.authPlugins
+				?.flatMap((plugin) => plugin($baseFetch).fetchPlugins)
+				.filter((plugin) => plugin !== undefined) || []),
+			...(options?.csrfPlugin !== false ? [csrfPlugin] : []),
+			redirectPlugin,
+			addCurrentURL,
+		],
+	});
+};
+
+export const createAuthClient = <
+	O extends ClientOptions = ClientOptions,
+	AT extends Record<string, any> = {},
+>(
 	options?: O,
+	additionalActions = {} as AT,
 ) => {
 	type API = O["authPlugins"] extends Array<any>
 		? (O["authPlugins"] extends Array<infer Pl>
@@ -28,24 +54,8 @@ export const createAuthClient = <O extends ClientOptions = ClientOptions>(
 				: {}) &
 				Auth["api"]
 		: Auth["api"];
-	/**
-	 * used for plugins only
-	 */
-	const $baseFetch = createFetch();
-	const $fetch = createFetch({
-		method: "GET",
-		...options,
-		baseURL: getBaseURL(options?.baseURL).withPath,
-		plugins: [
-			...(options?.plugins || []),
-			...(options?.authPlugins
-				?.flatMap((plugin) => plugin($baseFetch).fetchPlugins)
-				.filter((plugin) => plugin !== undefined) || []),
-			...(options?.csrfPlugin !== false ? [csrfPlugin] : []),
-			redirectPlugin,
-			addCurrentURL,
-		],
-	});
+
+	const $fetch = createAuthFetch(options);
 
 	type Plugins = O["authPlugins"] extends Array<AuthPlugin>
 		? Array<ReturnType<O["authPlugins"][number]>["plugin"]>
@@ -107,6 +117,7 @@ export const createAuthClient = <O extends ClientOptions = ClientOptions>(
 		},
 		$fetch,
 		...(pluginsActions as object),
+		...additionalActions,
 	};
 
 	type Actions = typeof actions & PluginActions;

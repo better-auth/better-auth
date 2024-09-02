@@ -7,7 +7,7 @@ import type { Auth } from "../auth";
 import type { UnionToIntersection } from "../types/helper";
 import type { useAuthStore as reactStore } from "./react";
 import type { useAuthStore as vueStore } from "./vue";
-import type { useAuthStore as preactStore } from "./preact";
+import type { useStore as solidStore } from "@nanostores/solid";
 import type { AuthProxySignal } from "./proxy";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
 import type { BetterAuthPlugin } from "../types/plugins";
@@ -31,7 +31,7 @@ export type AuthPlugin = ($fetch: BetterFetch) => {
 	integrations?: {
 		react?: (useStore: typeof reactStore) => Record<string, any>;
 		vue?: (useStore: typeof vueStore) => Record<string, any>;
-		preact?: (useStore: typeof preactStore) => Record<string, any>;
+		solid?: (useStore: typeof solidStore) => Record<string, any>;
 		svelte?: () => Record<string, any>;
 	};
 	pathMethods?: Record<string, "POST" | "GET">;

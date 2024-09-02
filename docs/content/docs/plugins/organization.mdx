@@ -104,7 +104,7 @@ Organizations Plugin offer a versatile and scalable approach to controlling user
 
         #### Set Active Organization
         
-        Active organization is the organization that the user is currently working on. You can set the active organization by calling the `setActiveOrganization` function. It'll set the active organization for the user both on the client state and the session on the server.
+        Active organization is the organization that the user is currently working on. You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user both on the client state and the session on the server.
         
         ```ts title="client.ts" twoslash
         import { createAuthClient } from "better-auth/client"
@@ -117,10 +117,10 @@ Organizations Plugin offer a versatile and scalable approach to controlling user
         })
         // ---cut---
         
-        client.setActiveOrganization("organization-id")
+        client.organization.setActive("organization-id")
         ```
         <Callout type="info">
-           `setActiveOrganization` updates the active organization reactively. Ensure it's used according to your framework's rules for reactive calls. For React, call it within a component and follow the rules of hooks.
+           `setActive` updates the active organization reactively. Ensure it's used according to your framework's rules for reactive calls. For React, call it within a component and follow the rules of hooks.
         </Callout>
 
         #### Get Active Organization

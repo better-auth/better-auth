@@ -1,18 +1,15 @@
 import { useStore } from "@nanostores/vue";
-import { createAuthClient as createClient } from "./base";
+import { createAuthFetch, createAuthClient as createClient } from "./base";
 import type { AuthPlugin, ClientOptions } from "./type";
 import type { UnionToIntersection } from "type-fest";
 
 export const createAuthClient = <O extends ClientOptions>(options?: O) => {
-	const client = createClient(options);
-	function useSession() {
-		return useStore(client.$atoms.$session);
-	}
+	const $fetch = createAuthFetch(options);
 	const hooks = options?.authPlugins?.reduce(
 		(acc, plugin) => {
 			return {
 				...acc,
-				...(plugin(client.$fetch).integrations?.vue?.(useStore) || {}),
+				...(plugin($fetch).integrations?.vue?.(useStore) || {}),
 			};
 		},
 		{} as Record<string, any>,
@@ -29,6 +26,10 @@ export const createAuthClient = <O extends ClientOptions>(options?: O) => {
 				>
 			: {}
 		: {};
+	const client = createClient(options, hooks);
+	function useSession() {
+		return useStore(client.$atoms.$session);
+	}
 	const obj = Object.assign(client, {
 		useSession,
 		...hooks,

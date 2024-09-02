@@ -1,17 +1,20 @@
 import { useStore } from "@nanostores/react";
-import { createAuthClient as createVanillaClient } from "./base";
+import {
+	createAuthFetch,
+	createAuthClient as createVanillaClient,
+} from "./base";
 import type { AuthPlugin, ClientOptions } from "./type";
 import type { UnionToIntersection } from "../types/helper";
 
 export const createAuthClient = <Option extends ClientOptions>(
 	options?: Option,
 ) => {
-	const client = createVanillaClient(options);
+	const $fetch = createAuthFetch(options);
 	const hooks = options?.authPlugins?.reduce(
 		(acc, plugin) => {
 			return {
 				...acc,
-				...(plugin(client.$fetch).integrations?.react?.(useStore) || {}),
+				...(plugin($fetch).integrations?.react?.(useStore) || {}),
 			};
 		},
 		{} as Record<string, any>,
@@ -29,6 +32,8 @@ export const createAuthClient = <Option extends ClientOptions>(
 			: {}
 		: {};
 
+	const client = createVanillaClient(options, hooks);
+
 	function useSession(
 		initialValue: typeof client.$atoms.$session.value = null,
 	) {
@@ -41,7 +46,6 @@ export const createAuthClient = <Option extends ClientOptions>(
 
 	const obj = Object.assign(client, {
 		useSession,
-		...hooks,
 	});
 	return obj;
 };

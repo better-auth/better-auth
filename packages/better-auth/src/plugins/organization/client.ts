@@ -7,7 +7,12 @@ import type {
 import type { Prettify } from "../../types/helper";
 import type { organization as org } from "../../plugins";
 import { createClientPlugin } from "../../client/create-client-plugin";
-import { defaultStatements, type AccessControl, type Role } from "./access";
+import {
+	createAccessControl,
+	defaultStatements,
+	type AccessControl,
+	type Role,
+} from "./access";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
@@ -124,14 +129,16 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			integrations: {
 				react(useStore) {
 					return {
-						useActiveOrganization() {
-							return useStore($activeOrganization);
-						},
-						useListOrganization() {
-							return useStore($listOrganizations);
-						},
-						useInvitation() {
-							return useStore($invitation);
+						organization: {
+							useActiveOrganization() {
+								return useStore($activeOrganization);
+							},
+							useListOrganization() {
+								return useStore($listOrganizations);
+							},
+							useInvitation() {
+								return useStore($invitation);
+							},
 						},
 					};
 				},
