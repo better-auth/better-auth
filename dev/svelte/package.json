@@ -20,6 +20,6 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"better-auth": "workspace:0.0.2-beta.8"
+		"better-auth": "^0.0.4"
 	}
 }
