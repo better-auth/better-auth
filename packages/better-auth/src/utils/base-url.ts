@@ -34,7 +34,8 @@ export function getBaseURL(url?: string, path?: string) {
 		typeof process !== "undefined"
 			? process.env
 			: typeof import.meta !== "undefined"
-				? import.meta.env
+				? //@ts-ignore
+					import.meta.env
 				: {};
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
