@@ -8,11 +8,11 @@
         "build": "turbo --filter \"./packages/*\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
-        "bump": "bumpp -r",
         "format": "biome format . --write",
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
         "release": "turbo --filter \"./packages/*\" typecheck && build && bumpp -r",
+        "release:beta": "bumpp && nr build && pnpm -r publish --access public --tag beta",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck",
         "knip": "turbo --filter \"./packages/*\" knip"

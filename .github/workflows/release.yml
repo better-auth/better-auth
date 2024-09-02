@@ -5,46 +5,21 @@ on:
     tags:
       - 'v*'
 
-jobs: 
+permissions:
+  contents: write
+
+jobs:
   release:
-    permissions: 
-      contents: write
-      id-token: write
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - uses: actions/checkout@v4
-        with: 
+        with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
 
       - run: npx changelogithub
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-      - uses: pnpm/action-setup@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-            node-version: 20.x
-            registry-url: 'https://registry.npmjs.org'
-
-      - run: pnpm install
-      
-      - name: Build
-        run: pnpm build
-
-      - name: Check version
-        id: check_version
-        run: |
-          tag=$(echo ${GITHUB_REF#refs/tags/})
-          if [[ $tag == *"beta"* ]]; then
-            echo "::set-output name=tag::beta"
-          elif [[ $tag == *"alpha"* ]]; then
-            echo "::set-output name=tag::alpha"
-          else
-            echo "::set-output name=tag::latest"
-          fi
-          
-      - name: Publish to npm
-        run: pnpm -r publish --access public --no-git-checks --tag ${{steps.check_version.outputs.tag}}
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
