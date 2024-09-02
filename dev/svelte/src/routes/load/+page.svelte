@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { client } from "$lib/client";
+import { client } from "$lib/client";
 
-  export let data;
+export let data;
 </script>
