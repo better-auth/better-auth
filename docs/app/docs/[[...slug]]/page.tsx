@@ -3,12 +3,10 @@ import type { Metadata } from "next";
 import {
 	DocsPage,
 	DocsBody,
-	DocsDescription,
 	DocsTitle,
 } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { InlineTOC } from "fumadocs-ui/components/inline-toc";
-import PromoCard from "@/components/promo-card";
+
 
 export default async function Page({
 	params,
