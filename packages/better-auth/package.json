@@ -6,7 +6,7 @@
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
         "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch",
-        "test": "bun vitest",
+        "test": "vitest",
         "typecheck": "tsc --noEmit"
     },
     "main": "./dist/index.js",
