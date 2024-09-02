@@ -41,7 +41,7 @@ importers:
         version: 1.12.2(hono@4.5.9)
       better-auth:
         specifier: ^0.0.4
-        version: link:../../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta))
       dotenv:
         specifier: ^16.4.5
         version: 16.4.5
@@ -60,7 +60,7 @@ importers:
     dependencies:
       better-auth:
         specifier: ^0.0.4
-        version: link:../../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -148,7 +148,7 @@ importers:
         version: 3.12.0(react@18.3.1)
       better-auth:
         specifier: ^0.0.4
-        version: link:../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))
       better-call:
         specifier: ^0.1.0
         version: 0.1.0(typescript@5.5.4)
@@ -227,13 +227,13 @@ importers:
     dependencies:
       better-auth:
         specifier: ^0.0.4
-        version: link:../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta))
       nuxt:
         specifier: ^3.13.0
-        version: 3.13.0(@biomejs/biome@1.7.3)(@parcel/watcher@2.4.1)(@types/node@22.3.0)(eslint@9.9.1)(ioredis@5.4.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.5.4)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))
+        version: 3.13.0(@biomejs/biome@1.7.3)(@parcel/watcher@2.4.1)(@types/node@22.3.0)(eslint@9.9.1)(ioredis@5.4.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.6.0-beta)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))
       vue:
         specifier: latest
-        version: 3.4.38(typescript@5.5.4)
+        version: 3.4.38(typescript@5.6.0-beta)
 
   dev/solidjs:
     dependencies:
@@ -248,7 +248,7 @@ importers:
         version: 10.4.20(postcss@8.4.41)
       better-auth:
         specifier: ^0.0.4
-        version: link:../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta))
       postcss:
         specifier: ^8.4.38
         version: 8.4.41
@@ -266,7 +266,7 @@ importers:
     dependencies:
       better-auth:
         specifier: ^0.0.4
-        version: link:../../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))
     devDependencies:
       '@sveltejs/adapter-auto':
         specifier: ^3.0.0
@@ -393,7 +393,7 @@ importers:
         version: 3.5.0
       better-auth:
         specifier: ^0.0.4
-        version: link:../packages/better-auth
+        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
@@ -3745,6 +3745,10 @@ packages:
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+
+  better-auth@0.0.4:
+    resolution: {integrity: sha512-PR1bR6zbgNRkSHZAPQQEqaHpHMyASXwBU2IbDY60gDWJO72d3wBSCiOKQcSGJRxJ55O9jitHVMHqHcAtC0++0A==}
+    hasBin: true
 
   better-call@0.1.0:
     resolution: {integrity: sha512-CfLBgWyReKx2fXJb0OkNV0/ot8BMO+HDRKJRCidIGuCBkk07d7NzVZR4BnnOy02Jiuh4x3l5oupKQGXw78fqSA==}
@@ -8932,6 +8936,13 @@ snapshots:
       nanostores: 0.11.2
       solid-js: 1.8.21
 
+  '@nanostores/vue@0.10.0(@vue/devtools-api@6.6.3)(nanostores@0.11.2)(vue@3.4.38(typescript@5.5.4))':
+    dependencies:
+      nanostores: 0.11.2
+      vue: 3.4.38(typescript@5.5.4)
+    optionalDependencies:
+      '@vue/devtools-api': 6.6.3
+
   '@nanostores/vue@0.10.0(@vue/devtools-api@6.6.3)(nanostores@0.11.2)(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       nanostores: 0.11.2
@@ -9264,12 +9275,12 @@ snapshots:
       - rollup
       - supports-color
 
-  '@nuxt/vite-builder@3.13.0(@biomejs/biome@1.7.3)(@types/node@22.3.0)(eslint@9.9.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))':
+  '@nuxt/vite-builder@3.13.0(@biomejs/biome@1.7.3)(@types/node@22.3.0)(eslint@9.9.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       '@nuxt/kit': 3.13.0(magicast@0.3.5)(rollup@4.21.2)
       '@rollup/plugin-replace': 5.0.7(rollup@4.21.2)
-      '@vitejs/plugin-vue': 5.1.3(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.5.4))
-      '@vitejs/plugin-vue-jsx': 4.0.1(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.5.4))
+      '@vitejs/plugin-vue': 5.1.3(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.6.0-beta))
+      '@vitejs/plugin-vue-jsx': 4.0.1(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.6.0-beta))
       autoprefixer: 10.4.20(postcss@8.4.41)
       clear: 0.1.0
       consola: 3.2.3
@@ -9297,8 +9308,8 @@ snapshots:
       unplugin: 1.12.2
       vite: 5.4.2(@types/node@22.3.0)(terser@5.31.6)
       vite-node: 2.0.5(@types/node@22.3.0)(terser@5.31.6)
-      vite-plugin-checker: 0.7.2(@biomejs/biome@1.7.3)(eslint@9.9.1)(optionator@0.9.4)(typescript@5.5.4)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))
-      vue: 3.4.38(typescript@5.5.4)
+      vite-plugin-checker: 0.7.2(@biomejs/biome@1.7.3)(eslint@9.9.1)(optionator@0.9.4)(typescript@5.6.0-beta)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))
+      vue: 3.4.38(typescript@5.6.0-beta)
       vue-bundle-renderer: 2.1.0
     transitivePeerDependencies:
       - '@biomejs/biome'
@@ -10965,13 +10976,13 @@ snapshots:
       '@unhead/schema': 1.10.0
       '@unhead/shared': 1.10.0
 
-  '@unhead/vue@1.10.0(vue@3.4.38(typescript@5.5.4))':
+  '@unhead/vue@1.10.0(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       '@unhead/schema': 1.10.0
       '@unhead/shared': 1.10.0
       hookable: 5.5.3
       unhead: 1.10.0
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
 
   '@vercel/nft@0.26.5':
     dependencies:
@@ -11059,20 +11070,20 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-vue-jsx@4.0.1(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.5.4))':
+  '@vitejs/plugin-vue-jsx@4.0.1(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       '@babel/core': 7.25.2
       '@babel/plugin-transform-typescript': 7.25.2(@babel/core@7.25.2)
       '@vue/babel-plugin-jsx': 1.2.2(@babel/core@7.25.2)
       vite: 5.4.2(@types/node@22.3.0)(terser@5.31.6)
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-vue@5.1.3(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.5.4))':
+  '@vitejs/plugin-vue@5.1.3(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       vite: 5.4.2(@types/node@22.3.0)(terser@5.31.6)
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
 
   '@vitest/expect@1.6.0':
     dependencies:
@@ -11103,7 +11114,7 @@ snapshots:
       loupe: 2.3.7
       pretty-format: 29.7.0
 
-  '@vue-macros/common@1.12.2(rollup@4.21.2)(vue@3.4.38(typescript@5.5.4))':
+  '@vue-macros/common@1.12.2(rollup@4.21.2)(vue@3.4.38(typescript@5.6.0-beta))':
     dependencies:
       '@babel/types': 7.25.6
       '@rollup/pluginutils': 5.1.0(rollup@4.21.2)
@@ -11112,7 +11123,7 @@ snapshots:
       local-pkg: 0.5.0
       magic-string-ast: 0.6.2
     optionalDependencies:
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
     transitivePeerDependencies:
       - rollup
 
@@ -11424,10 +11435,104 @@ snapshots:
 
   base64-js@1.5.1: {}
 
+  better-auth@0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4)):
+    dependencies:
+      '@better-fetch/fetch': 1.1.4
+      '@better-fetch/logger': 1.1.3
+      '@chronark/access-policies': 0.0.2
+      '@nanostores/query': 0.3.4(nanostores@0.11.2)
+      '@nanostores/react': 0.7.3(nanostores@0.11.2)(react@18.3.1)
+      '@nanostores/solid': 0.4.2(nanostores@0.11.2)(solid-js@1.8.21)
+      '@nanostores/vue': 0.10.0(@vue/devtools-api@6.6.3)(nanostores@0.11.2)(vue@3.4.38(typescript@5.5.4))
+      '@noble/ciphers': 0.6.0
+      '@noble/hashes': 1.4.0
+      '@paralleldrive/cuid2': 2.2.2
+      '@simplewebauthn/browser': 10.0.0
+      '@simplewebauthn/server': 10.0.1
+      arctic: 2.0.0-next.5
+      better-call: 0.1.38(typescript@5.5.4)
+      chalk: 5.3.0
+      commander: 12.1.0
+      consola: 3.2.3
+      dotenv: 16.4.5
+      jiti: 1.21.6
+      jose: 5.7.0
+      kysely: 0.27.4
+      mysql2: 3.11.0
+      nanostores: 0.11.2
+      oauth4webapi: 2.12.0
+      ora: 8.0.1
+      oslo: 1.2.1
+      pg: 8.12.0
+      prompts: 2.4.2
+      tiny-glob: 0.2.9
+      ts-morph: 23.0.0
+      zod: 3.23.8
+    transitivePeerDependencies:
+      - '@nanostores/logger'
+      - '@vue/devtools-api'
+      - encoding
+      - pg-native
+      - react
+      - solid-js
+      - typescript
+      - vue
+
+  better-auth@0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta)):
+    dependencies:
+      '@better-fetch/fetch': 1.1.4
+      '@better-fetch/logger': 1.1.3
+      '@chronark/access-policies': 0.0.2
+      '@nanostores/query': 0.3.4(nanostores@0.11.2)
+      '@nanostores/react': 0.7.3(nanostores@0.11.2)(react@18.3.1)
+      '@nanostores/solid': 0.4.2(nanostores@0.11.2)(solid-js@1.8.21)
+      '@nanostores/vue': 0.10.0(@vue/devtools-api@6.6.3)(nanostores@0.11.2)(vue@3.4.38(typescript@5.6.0-beta))
+      '@noble/ciphers': 0.6.0
+      '@noble/hashes': 1.4.0
+      '@paralleldrive/cuid2': 2.2.2
+      '@simplewebauthn/browser': 10.0.0
+      '@simplewebauthn/server': 10.0.1
+      arctic: 2.0.0-next.5
+      better-call: 0.1.38(typescript@5.6.0-beta)
+      chalk: 5.3.0
+      commander: 12.1.0
+      consola: 3.2.3
+      dotenv: 16.4.5
+      jiti: 1.21.6
+      jose: 5.7.0
+      kysely: 0.27.4
+      mysql2: 3.11.0
+      nanostores: 0.11.2
+      oauth4webapi: 2.12.0
+      ora: 8.0.1
+      oslo: 1.2.1
+      pg: 8.12.0
+      prompts: 2.4.2
+      tiny-glob: 0.2.9
+      ts-morph: 23.0.0
+      zod: 3.23.8
+    transitivePeerDependencies:
+      - '@nanostores/logger'
+      - '@vue/devtools-api'
+      - encoding
+      - pg-native
+      - react
+      - solid-js
+      - typescript
+      - vue
+
   better-call@0.1.0(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       rou3: 0.5.1
+      typescript: 5.5.4
+
+  better-call@0.1.38(typescript@5.5.4):
+    dependencies:
+      '@better-fetch/fetch': 1.1.4
+      '@types/set-cookie-parser': 2.4.10
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.0
       typescript: 5.5.4
 
   better-call@0.1.38(typescript@5.6.0-beta):
@@ -14409,17 +14514,17 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  nuxt@3.13.0(@biomejs/biome@1.7.3)(@parcel/watcher@2.4.1)(@types/node@22.3.0)(eslint@9.9.1)(ioredis@5.4.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.5.4)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6)):
+  nuxt@3.13.0(@biomejs/biome@1.7.3)(@parcel/watcher@2.4.1)(@types/node@22.3.0)(eslint@9.9.1)(ioredis@5.4.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.6.0-beta)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6)):
     dependencies:
       '@nuxt/devalue': 2.0.2
       '@nuxt/devtools': 1.4.1(rollup@4.21.2)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6))
       '@nuxt/kit': 3.13.0(magicast@0.3.5)(rollup@4.21.2)
       '@nuxt/schema': 3.13.0(rollup@4.21.2)
       '@nuxt/telemetry': 2.5.4(magicast@0.3.5)(rollup@4.21.2)
-      '@nuxt/vite-builder': 3.13.0(@biomejs/biome@1.7.3)(@types/node@22.3.0)(eslint@9.9.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.5.4)(vue@3.4.38(typescript@5.5.4))
+      '@nuxt/vite-builder': 3.13.0(@biomejs/biome@1.7.3)(@types/node@22.3.0)(eslint@9.9.1)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.21.2)(terser@5.31.6)(typescript@5.6.0-beta)(vue@3.4.38(typescript@5.6.0-beta))
       '@unhead/dom': 1.10.0
       '@unhead/ssr': 1.10.0
-      '@unhead/vue': 1.10.0(vue@3.4.38(typescript@5.5.4))
+      '@unhead/vue': 1.10.0(vue@3.4.38(typescript@5.6.0-beta))
       '@vue/shared': 3.4.38
       acorn: 8.12.1
       c12: 1.11.1(magicast@0.3.5)
@@ -14463,13 +14568,13 @@ snapshots:
       unenv: 1.10.0
       unimport: 3.11.1(rollup@4.21.2)
       unplugin: 1.12.2
-      unplugin-vue-router: 0.10.7(rollup@4.21.2)(vue-router@4.4.3(vue@3.4.38(typescript@5.5.4)))(vue@3.4.38(typescript@5.5.4))
+      unplugin-vue-router: 0.10.7(rollup@4.21.2)(vue-router@4.4.3(vue@3.4.38(typescript@5.6.0-beta)))(vue@3.4.38(typescript@5.6.0-beta))
       unstorage: 1.10.2(ioredis@5.4.1)
       untyped: 1.4.2
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
       vue-bundle-renderer: 2.1.0
       vue-devtools-stub: 0.1.0
-      vue-router: 4.4.3(vue@3.4.38(typescript@5.5.4))
+      vue-router: 4.4.3(vue@3.4.38(typescript@5.6.0-beta))
     optionalDependencies:
       '@parcel/watcher': 2.4.1
       '@types/node': 22.3.0
@@ -16229,11 +16334,11 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  unplugin-vue-router@0.10.7(rollup@4.21.2)(vue-router@4.4.3(vue@3.4.38(typescript@5.5.4)))(vue@3.4.38(typescript@5.5.4)):
+  unplugin-vue-router@0.10.7(rollup@4.21.2)(vue-router@4.4.3(vue@3.4.38(typescript@5.6.0-beta)))(vue@3.4.38(typescript@5.6.0-beta)):
     dependencies:
       '@babel/types': 7.25.6
       '@rollup/pluginutils': 5.1.0(rollup@4.21.2)
-      '@vue-macros/common': 1.12.2(rollup@4.21.2)(vue@3.4.38(typescript@5.5.4))
+      '@vue-macros/common': 1.12.2(rollup@4.21.2)(vue@3.4.38(typescript@5.6.0-beta))
       ast-walker-scope: 0.6.2
       chokidar: 3.6.0
       fast-glob: 3.3.2
@@ -16246,7 +16351,7 @@ snapshots:
       unplugin: 1.12.2
       yaml: 2.5.0
     optionalDependencies:
-      vue-router: 4.4.3(vue@3.4.38(typescript@5.5.4))
+      vue-router: 4.4.3(vue@3.4.38(typescript@5.6.0-beta))
     transitivePeerDependencies:
       - rollup
       - vue
@@ -16499,7 +16604,7 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-checker@0.7.2(@biomejs/biome@1.7.3)(eslint@9.9.1)(optionator@0.9.4)(typescript@5.5.4)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6)):
+  vite-plugin-checker@0.7.2(@biomejs/biome@1.7.3)(eslint@9.9.1)(optionator@0.9.4)(typescript@5.6.0-beta)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6)):
     dependencies:
       '@babel/code-frame': 7.24.7
       ansi-escapes: 4.3.2
@@ -16520,7 +16625,7 @@ snapshots:
       '@biomejs/biome': 1.7.3
       eslint: 9.9.1
       optionator: 0.9.4
-      typescript: 5.5.4
+      typescript: 5.6.0-beta
 
   vite-plugin-inspect@0.7.42(rollup@4.21.2)(vite@5.4.2(@types/node@22.3.0)(terser@5.31.6)):
     dependencies:
@@ -16660,10 +16765,10 @@ snapshots:
 
   vue-devtools-stub@0.1.0: {}
 
-  vue-router@4.4.3(vue@3.4.38(typescript@5.5.4)):
+  vue-router@4.4.3(vue@3.4.38(typescript@5.6.0-beta)):
     dependencies:
       '@vue/devtools-api': 6.6.3
-      vue: 3.4.38(typescript@5.5.4)
+      vue: 3.4.38(typescript@5.6.0-beta)
 
   vue@3.4.38(typescript@5.5.4):
     dependencies:
