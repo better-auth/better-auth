@@ -368,7 +368,6 @@ export const contents: Content[] = [
                 icon: MailCheck,
                 href: "/docs/plugins/email-verifier",
             },
-
         ],
     },
 ];

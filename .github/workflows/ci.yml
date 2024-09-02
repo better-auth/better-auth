@@ -1,0 +1,39 @@
+name: CI
+
+on: 
+    pull_request:  
+        branches: main
+    push: 
+        branches: main
+    merge_group: {}
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                    fetch-depth: 0
+
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 20.x
+                registry-url: 'https://registry.npmjs.org'
+                cache: pnpm
+            
+            - name: Install
+              run: pnpm install
+
+            - name: Build
+              run: pnpm build
+            
+            - name: lint
+              run: pnpm lint
+            
+            - name: test
+              run: pnpm test
+
+            - name: typecheck
+              run: pnpm typecheck

@@ -8,6 +8,7 @@
         "build": "turbo --filter \"./packages/*\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
+        "bump": "bumpp -r",
         "format": "biome format . --write",
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
