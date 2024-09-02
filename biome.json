@@ -32,7 +32,8 @@
 			".svelte-kit",
 			"package.json",
 			".contentlayer",
-			".turbo"
+			".turbo",
+			".nuxt"
 		]
 	}
 }
