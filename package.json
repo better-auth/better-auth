@@ -11,8 +11,8 @@
         "format": "biome format . --write",
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
-        "release": "pnpm build && bumpp && pnpm -r publish --access public",
-        "release:beta": "pnpm build && bumpp && pnpm -r publish --access public --tag beta",
+        "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public",
+        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag beta",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck",
         "knip": "turbo --filter \"./packages/*\" knip"
