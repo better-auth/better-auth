@@ -8,10 +8,6 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { ENV } from "@/lib/constants";
 import { Metadata } from "next";
-const inter = Inter({
-	subsets: ["latin"],
-});
-
 
 export const metadata: Metadata = {
 	metadataBase: new URL(ENV.NEXT_PUBLIC_WEBSITE_URL),
@@ -27,6 +23,7 @@ export const metadata: Metadata = {
 		siteName: "Better-auth",
 		locale: "en_US",
 		type: "website",
+		images: "/og.png",
 	},
 	robots: {
 		index: true,
@@ -52,6 +49,9 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: ReactNode }) {
 	return (
 		<html lang="en" suppressHydrationWarning>
+			<head>
+				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
+			</head>
 			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans`}>
 				<RootProvider>
 					<NavbarProvider>
