@@ -1,0 +1,42 @@
+---
+title: Organization Plugin
+description: Organization Plugin
+---
+
+Organizations Plugin offer a versatile and scalable approach to controlling user access and permissions within your application. By leveraging organizations, you can allocate distinct roles and permissions to individuals, streamlining the management of projects, team coordination, and partnership facilitation.
+
+## Quick setup
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        ```ts title="auth.ts" twoslash
+        import { betterAuth } from "better-auth"
+        import { organization } from "better-auth/plugins"
+
+        export const { api, handler } = await betterAuth({
+            database: {
+                provider: "sqlite",
+                url: "./db.sqlite",
+            },
+            plugins: [ // [!code highlight]
+                organization() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+
+        ### Add the client plugin
+        
+        ```ts title="client.ts" twoslash
+        import { createAuthClient } from "better-auth/client"
+        import { organizationClient } from "better-auth/client/plugins"
+
+        const client = createAuthClient({
+            authPlugins: [ // [!code highlight]
+                organizationClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+</Steps>

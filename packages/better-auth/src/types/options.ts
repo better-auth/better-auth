@@ -83,12 +83,6 @@ export interface BetterAuthOptions {
 		| {
 				provider: "postgres" | "sqlite" | "mysql";
 				url: string;
-				/**
-				 * Automatically migrate the database
-				 *
-				 * @default false
-				 */
-				autoMigrate?: boolean;
 		  }
 		| Adapter;
 	/**

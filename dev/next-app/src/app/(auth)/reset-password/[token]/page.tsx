@@ -30,10 +30,8 @@ export default function ResetPassword({
 		setIsSubmitting(true);
 		setError("");
 		const res = await authClient.resetPassword({
-			body: {
-				token,
-				newPassword: password,
-			},
+			token,
+			newPassword: password,
 		});
 	}
 	return (

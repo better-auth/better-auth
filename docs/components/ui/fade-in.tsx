@@ -24,11 +24,11 @@ export const FadeIn = (
             variants={{
                 hidden: {
                     opacity: 0,
-                    y: shouldReduceMotion ? 0 : props.fromTopToBottom ? -24 : 24,
+                    y: shouldReduceMotion ? 0 : props.fromTopToBottom ? -24 : 2,
                 },
                 visible: { opacity: 1, y: 0 },
             }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.3 }}
             {...(isInStaggerGroup
                 ? {}
                 : {
@@ -53,7 +53,7 @@ export const FadeInStagger = ({
                 initial="hidden"
                 whileInView="visible"
                 viewport={viewport}
-                transition={{ staggerChildren: faster ? 0.12 : 0.2 }}
+                transition={{ staggerChildren: faster ? 0.08 : 0.2 }}
                 {...props}
             />
         </FadeInStaggerContext.Provider>

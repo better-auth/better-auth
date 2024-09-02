@@ -53,7 +53,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		}
 	};
 
-	const register = async () => {
+	const registerPasskey = async () => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
 			{
@@ -93,7 +93,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 	};
 	return {
 		signInPasskey,
-		register,
+		registerPasskey,
 	};
 };
 

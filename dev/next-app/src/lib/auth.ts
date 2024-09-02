@@ -34,7 +34,6 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			issuer: "BetterAuth",
-			twoFactorURL: "/two-factor",
 			otpOptions: {
 				async sendOTP(user, otp) {
 					console.log({ user, otp });

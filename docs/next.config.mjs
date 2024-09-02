@@ -2,8 +2,7 @@ import createMDX from 'fumadocs-mdx/config';
 import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
 import { remarkInstall } from "fumadocs-docgen";
 import { transformerTwoslash } from "fumadocs-twoslash"
-import { getParsedCommandLineOfConfigFile, ModuleResolutionKind } from 'typescript';
-
+import { ModuleResolutionKind } from 'typescript';
 const withMDX = createMDX({
   mdxOptions: {
     rehypeCodeOptions: {

@@ -1,19 +1,19 @@
 import Link from 'next/link';
 import { } from "better-auth/client";
+import Section from '@/components/landing/section';
+import Hero from '@/components/landing/hero';
+import { Separator } from '@/components/ui/separator';
 export default function HomePage() {
   return (
-    <main className="flex h-screen flex-col justify-center text-center">
-      <h1 className="mb-4 text-2xl font-bold">Hello World</h1>
-      <p className="text-fd-muted-foreground">
-        You can open{' '}
-        <Link
-          href="/docs"
-          className="text-fd-foreground font-semibold underline"
-        >
-          /docs
-        </Link>{' '}
-        and see the documentation.
-      </p>
-    </main>
+    <Section
+      className="-z-1 mb-1"
+      crosses
+      crossesOffset="lg:translate-y-[5.25rem]"
+      customPaddings
+      id="hero"
+    >
+      <Hero />
+      <Separator className="w-full" />
+    </Section>
   );
 }

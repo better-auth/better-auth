@@ -1,9 +1,17 @@
 import { createAuthClient } from "better-auth/react";
-import { organization } from "better-auth/client";
+import {
+	organizationClient,
+	twoFactorClient,
+	passkeyClient,
+} from "better-auth/client";
 
 export const authClient = createAuthClient({
 	baseURL: "http://localhost:3000/api/auth",
-	authPlugins: [organization],
+	authPlugins: [
+		organizationClient(),
+		twoFactorClient({ twoFactorPage: "/two-factor" }),
+		passkeyClient,
+	],
 });
 
 export const {
@@ -12,3 +20,5 @@ export const {
 	useInvitation,
 	useListOrganization,
 } = authClient;
+
+authClient.signInPasskey();

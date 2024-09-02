@@ -107,7 +107,7 @@ export const username = () => {
 						email: z.string().email(),
 						password: z.string(),
 						image: z.string().optional(),
-						callbackUrl: z.string().optional(),
+						callbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -125,14 +125,18 @@ export const username = () => {
 							},
 						});
 					}
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(
-							res.user.email,
-							{
-								username: ctx.body.username,
+					await ctx.context.internalAdapter.updateUserByEmail(res.user.email, {
+						username: ctx.body.username,
+					});
+					if (ctx.body.callbackURL) {
+						return ctx.json(res, {
+							body: {
+								url: ctx.body.callbackURL,
+								redirect: true,
+								...res,
 							},
-						);
-					console.log(updatedUser);
+						});
+					}
 					return ctx.json(res);
 				},
 			),

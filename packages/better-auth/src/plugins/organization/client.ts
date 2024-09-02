@@ -8,8 +8,8 @@ import type { Prettify } from "../../types/helper";
 import type { organization as org } from "../../plugins";
 import { createClientPlugin } from "../../client/create-client-plugin";
 
-export const organization = createClientPlugin<ReturnType<typeof org>>()(
-	($fetch) => {
+export const organizationClient = () =>
+	createClientPlugin<ReturnType<typeof org>>()(($fetch) => {
 		const activeOrgId = atom<string | null>(null);
 		const $listOrg = atom<boolean>(false);
 		const $activeOrgSignal = atom<boolean>(false);
@@ -143,5 +143,4 @@ export const organization = createClientPlugin<ReturnType<typeof org>>()(
 				$activeOrgSignal,
 			},
 		};
-	},
-);
+	});

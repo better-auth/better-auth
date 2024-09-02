@@ -1,6 +1,15 @@
 import type { FieldAttribute } from "../db";
 import type { BetterAuthOptions } from "../types";
 
+export type BetterAuthDbSchema = Record<
+	string,
+	{
+		tableName: string;
+		fields: Record<string, FieldAttribute>;
+		disableMigrations?: boolean;
+	}
+>;
+
 export const getAuthTables = (options: BetterAuthOptions) => {
 	const pluginSchema = options.plugins?.reduce((acc, plugin) => {
 		const schema = plugin.schema;
@@ -113,12 +122,5 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				},
 			},
 		},
-	} satisfies Record<
-		string,
-		{
-			tableName: string;
-			fields: Record<string, FieldAttribute>;
-			disableMigrations?: boolean;
-		}
-	>;
+	} satisfies BetterAuthDbSchema;
 };

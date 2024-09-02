@@ -10,19 +10,6 @@ export interface TwoFactorOptions {
 	totpOptions?: Omit<TOTPOptions, "issuer">;
 	otpOptions?: OTPOptions;
 	backupCodeOptions?: BackupCodeOptions;
-	requireOn?: {
-		signIn: () => boolean;
-	};
-	/**
-	 * The url to redirect to after the user has
-	 * signed in to validate the two factor. If not
-	 * provided, the callbackURL will be used. If
-	 * callbackURL is not provided, the user will be
-	 * redirected to the root path.
-	 *
-	 * @default "/"
-	 */
-	twoFactorURL?: string;
 }
 
 export interface UserWithTwoFactor extends User {

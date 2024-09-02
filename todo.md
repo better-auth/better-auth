@@ -5,3 +5,4 @@
 [x] add all oauth providers
 [x] providers should only be oauth
 [ ] add tests
+[ ] add callback url on otp and backup code verification
