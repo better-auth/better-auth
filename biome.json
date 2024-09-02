@@ -26,6 +26,13 @@
 		}
 	},
 	"files": {
-		"ignore": ["dist", ".next", ".svelte-kit", "package.json", ".contentlayer"]
+		"ignore": [
+			"dist",
+			".next",
+			".svelte-kit",
+			"package.json",
+			".contentlayer",
+			".turbo"
+		]
 	}
 }
