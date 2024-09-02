@@ -602,6 +602,9 @@ importers:
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
+      tiny-glob:
+        specifier: ^0.2.9
+        version: 0.2.9
       ts-morph:
         specifier: ^23.0.0
         version: 23.0.0
