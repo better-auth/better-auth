@@ -2,7 +2,7 @@
     "name": "root",
     "private": true,
     "type": "module",
-    "version": "0.1.0",
+    "version": "0.0.2-beta.8",
     "packageManager": "pnpm@9.1.1",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
@@ -11,8 +11,8 @@
         "format": "biome format . --write",
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
-        "release": "turbo --filter \"./packages/*\" typecheck && build && bumpp -r",
-        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag beta",
+        "release": "bumpp && build && pnpm -r publish --access public",
+        "release:beta": "bumpp && build && pnpm -r publish --access public --tag beta",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck",
         "knip": "turbo --filter \"./packages/*\" knip"

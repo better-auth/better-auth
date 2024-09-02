@@ -1,12 +1,12 @@
 {
     "name": "better-auth",
-    "version": "0.0.2-beta.8",
     "description": "Framework-agnostic, batteries included authentication library for typescript",
     "type": "module",
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
         "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch",
         "test": "vitest",
+        "bump": "bumpp",
         "typecheck": "tsc --noEmit"
     },
     "main": "./dist/index.js",
