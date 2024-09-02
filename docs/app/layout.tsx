@@ -15,10 +15,10 @@ export const metadata: Metadata = {
 		default: "Better-Auth.",
 		template: "%s ~ Better Auth",
 	},
-	description: "Dev agnostic auth library solution",
+	description: "The Authentication library for typescript.",
 	openGraph: {
 		title: "Better-auth",
-		description: "Dev agnostic auth library solution",
+		description: "The Authentication library for typescript.",
 		url: ENV.NEXT_PUBLIC_WEBSITE_URL,
 		siteName: "Better-auth",
 		locale: "en_US",
