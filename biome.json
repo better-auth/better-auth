@@ -4,6 +4,9 @@
 		"enabled": true,
 		"indentStyle": "tab"
 	},
+	"organizeImports": {
+		"enabled": false
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
