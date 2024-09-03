@@ -34,9 +34,9 @@ export default defineConfig({
 		"$app/environment",
 		"next",
 		"mysql2",
-		"better-sqlite3",
 		"pg",
 		"typescript",
 	],
+	noExternal: ["better-sqlite3"],
 	target: "es2022",
 });
