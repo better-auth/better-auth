@@ -36,7 +36,7 @@ export default defineConfig({
 		"mysql2",
 		"pg",
 		"typescript",
+		"better-sqlite3",
 	],
-	noExternal: ["better-sqlite3"],
 	target: "es2022",
 });

@@ -49,7 +49,6 @@
         "@types/pg": "^8.11.6",
         "@types/prompts": "^2.4.9",
         "@types/react": "^18.3.3",
-        "better-sqlite3": "^11.1.2",
         "h3": "^1.12.0",
         "hono": "^4.5.4",
         "listhen": "^1.7.2",
@@ -62,6 +61,7 @@
     },
     "dependencies": {
         "@better-fetch/fetch": "^1.1.4",
+        "better-sqlite3": "^11.1.2",
         "@better-fetch/logger": "^1.1.3",
         "@chronark/access-policies": "^0.0.2",
         "@nanostores/query": "^0.3.4",
