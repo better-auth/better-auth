@@ -1,5 +1,3 @@
-import { BetterAuthError } from "../error/better-auth-error";
-
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
@@ -13,29 +11,20 @@ function checkHasPath(url: string): boolean {
 function withPath(url: string, path = "/api/auth") {
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
-		return {
-			baseURL: new URL(url).origin,
-			withPath: url,
-		};
+		return url;
 	}
 	path = path.startsWith("/") ? path : `/${path}`;
-	return {
-		baseURL: url,
-		withPath: `${url}${path}`,
-	};
+	return `${url}${path}`;
 }
 
-export function getBaseURL(url?: string, path?: string, request?: Request) {
+export function getBaseURL(url?: string, path?: string) {
 	if (url) {
 		return withPath(url, path);
 	}
 	const env: any = typeof process !== "undefined" ? process.env : {};
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
-		env.AUTH_URL ||
-		env.NEXT_PUBLIC_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
-		env.PUBLIC_AUTH_URL ||
 		env.PUBLIC_BETTER_AUTH_URL ||
 		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
 		env.NUXT_PUBLIC_AUTH_URL;
@@ -43,14 +32,9 @@ export function getBaseURL(url?: string, path?: string, request?: Request) {
 		return withPath(fromEnv, path);
 	}
 
-	if (request) {
-		return {
-			baseURL: new URL(request.url).origin,
-			withPath: new URL(request.url).origin + "/api/auth",
-		};
+	if (typeof window !== "undefined") {
+		return withPath(window.location.origin, path);
 	}
-	return {
-		baseURL: "",
-		withPath: "/api/auth",
-	};
+
+	return undefined;
 }

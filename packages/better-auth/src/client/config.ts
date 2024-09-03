@@ -7,7 +7,7 @@ import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createFetch({
-		baseURL: getBaseURL(options?.fetchOptions?.baseURL).withPath,
+		baseURL: getBaseURL(options?.fetchOptions?.baseURL),
 		...options?.fetchOptions,
 		plugins: [
 			csrfPlugin,

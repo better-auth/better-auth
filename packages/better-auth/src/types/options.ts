@@ -17,13 +17,6 @@ export interface BetterAuthOptions {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically the path where the
-	 * better auth routes are mounted.
-	 *
-	 * @default "/api/auth"
-	 */
-	basePath?: string;
-	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *

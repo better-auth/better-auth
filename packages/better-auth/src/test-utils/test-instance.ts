@@ -72,14 +72,12 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 				const req = new Request(url.toString(), init);
 				return auth.handler(req);
 			},
-			baseURL:
-				options?.baseURL && options.basePath
-					? `${options?.baseURL}/${options?.basePath}`
-					: "http://localhost:3000/api/auth",
+			baseURL: options?.baseURL || "http://localhost:" + (port || 3000),
 		},
 	});
 	return {
 		auth,
+
 		client,
 		createTestUser,
 	};

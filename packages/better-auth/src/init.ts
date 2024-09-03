@@ -10,18 +10,17 @@ import {
 } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
 
-export const init = (options: BetterAuthOptions, request?: Request) => {
+export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
-	const { baseURL, withPath } = getBaseURL(options.baseURL, options.basePath);
+	const baseURL = getBaseURL(options.baseURL);
 
 	return {
 		options: {
 			...options,
-			baseURL: baseURL,
-			basePath: options.basePath || "/api/auth",
+			baseURL,
 		},
-		baseURL: withPath,
+		baseURL: baseURL || "",
 		secret:
 			options.secret ||
 			process.env.BETTER_AUTH_SECRET ||

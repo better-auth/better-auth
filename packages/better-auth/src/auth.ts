@@ -8,14 +8,9 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	return {
 		handler: async (request: Request) => {
 			if (!authContext.options.baseURL) {
-				const baseURL = new URL(request.url).origin;
+				const baseURL = `${new URL(request.url).origin}/api/auth`;
 				authContext.options.baseURL = baseURL;
-				authContext.baseURL = `${baseURL}${
-					authContext.options.basePath || "/api/auth"
-				}`;
-			}
-			if (!authContext.options.basePath) {
-				authContext.options.basePath = "/api/auth";
+				authContext.baseURL = baseURL;
 			}
 			const { handler } = router(authContext, options);
 			return handler(request);
