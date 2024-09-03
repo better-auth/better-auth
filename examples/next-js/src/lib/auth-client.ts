@@ -9,5 +9,11 @@ export const authClient = createAuthClient({
 	fetchOptions: {
 		baseURL: "http://localhost:3000/api/auth",
 	},
-	plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
+	plugins: [
+		organizationClient(),
+		twoFactorClient({
+			twoFactorPage: "/two-factor",
+		}),
+		passkeyClient(),
+	],
 });

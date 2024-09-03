@@ -14,15 +14,25 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 			redirectPlugin,
 			addCurrentURL,
 			...(options?.fetchOptions?.plugins || []),
+			...(options?.plugins
+				?.flatMap((plugin) => plugin.fetchPlugins)
+				.filter((pl) => pl !== undefined) || []),
 		],
 	});
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {} as Record<string, Atom<any>>;
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
-		"/sing-out": "POST",
+		"/sign-out": "POST",
 	};
-	const atomListeners: AtomListener[] = [];
+	const atomListeners: AtomListener[] = [
+		{
+			signal: "_sessionSignal",
+			matcher(path) {
+				return path === "/sign-out" || path === "sign-up/email";
+			},
+		},
+	];
 	for (const plugin of plugins) {
 		if (plugin.getActions) {
 			Object.assign(pluginsActions, plugin.getActions?.($fetch));

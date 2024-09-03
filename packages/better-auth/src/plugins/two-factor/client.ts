@@ -40,7 +40,7 @@ export const twoFactorClient = (
 				hooks: {
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
-							if (options.redirect) {
+							if (options.redirect || options.twoFactorPage) {
 								window.location.href = options.twoFactorPage;
 							}
 						}
