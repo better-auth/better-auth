@@ -1,4 +1,4 @@
-import { createClientPlugin } from "../../client/create-client-plugin";
+import type { AuthClientPlugin } from "../../client/types";
 import type { twoFactor as twoFa } from "../../plugins/two-factor";
 
 export const twoFactorClient = (
@@ -15,37 +15,38 @@ export const twoFactorClient = (
 		twoFactorPage: "/",
 	},
 ) => {
-	return createClientPlugin<ReturnType<typeof twoFa>>()(($fetch) => {
-		return {
-			id: "two-factor",
-			authProxySignal: [
-				{
-					matcher: (path) =>
-						path === "/two-factor/enable" || path === "/two-factor/send-otp",
-					atom: "$sessionSignal",
-				},
-			],
-			pathMethods: {
-				"enable/totp": "POST",
-				"/two-factor/disable": "POST",
-				"/two-factor/enable": "POST",
-				"/two-factor/send-otp": "POST",
+	return {
+		id: "two-factor",
+		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
+		atomListeners: [
+			{
+				matcher: (path) =>
+					path === "/two-factor/enable" ||
+					path === "/two-factor/send-otp" ||
+					path === "/two-factor/disable",
+				signal: "_sessionSignal",
 			},
-			fetchPlugins: [
-				{
-					id: "two-factor",
-					name: "two-factor",
-					hooks: {
-						async onSuccess(context) {
-							if (context.data?.twoFactorRedirect) {
-								if (options.redirect) {
-									window.location.href = options.twoFactorPage;
-								}
+		],
+		pathMethods: {
+			"enable/totp": "POST",
+			"/two-factor/disable": "POST",
+			"/two-factor/enable": "POST",
+			"/two-factor/send-otp": "POST",
+		},
+		fetchPlugins: [
+			{
+				id: "two-factor",
+				name: "two-factor",
+				hooks: {
+					async onSuccess(context) {
+						if (context.data?.twoFactorRedirect) {
+							if (options.redirect) {
+								window.location.href = options.twoFactorPage;
 							}
-						},
+						}
 					},
 				},
-			],
-		};
-	});
+			},
+		],
+	} satisfies AuthClientPlugin;
 };

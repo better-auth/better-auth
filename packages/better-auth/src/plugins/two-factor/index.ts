@@ -94,11 +94,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = (await (ctx as any).returned) as Response;
+						const returned = ctx.context.returned;
 						if (returned?.status !== 200) {
 							return;
 						}
-						const response = (await returned.json()) as {
+						const response = (await returned.clone().json()) as {
 							user: UserWithTwoFactor;
 							session: Session;
 						};

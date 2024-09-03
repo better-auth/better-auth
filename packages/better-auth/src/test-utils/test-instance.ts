@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { afterAll, beforeAll } from "vitest";
 import { betterAuth } from "../auth";
-import { createAuthClient } from "../client";
+import { createAuthClient } from "../client/vanilla";
 import { github, google } from "../social-providers";
 import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
@@ -67,15 +67,16 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	});
 
 	const client = createAuthClient({
-		customFetchImpl: async (url, init) => {
-			const req = new Request(url.toString(), init);
-			return auth.handler(req);
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				const req = new Request(url.toString(), init);
+				return auth.handler(req);
+			},
+			baseURL:
+				options?.baseURL && options.basePath
+					? `${options?.baseURL}/${options?.basePath}`
+					: "http://localhost:3000/api/auth",
 		},
-		baseURL:
-			options?.baseURL && options.basePath
-				? `${options?.baseURL}/${options?.basePath}`
-				: "http://localhost:3000/api/auth",
-		csrfPlugin: false,
 	});
 	return {
 		auth,

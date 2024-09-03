@@ -1,10 +1,10 @@
 import { APIError } from "better-call";
 import { z } from "zod";
 import { userSchema } from "../../adapters/schema";
-import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",

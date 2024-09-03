@@ -1,2 +1,1 @@
-export * from "./base";
-export * from "./plugins";
+export * from "./vanilla";

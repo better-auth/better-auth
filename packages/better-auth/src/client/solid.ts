@@ -1,41 +1,76 @@
-import type { AuthPlugin, ClientOptions } from "./type";
-import { createAuthFetch, createAuthClient as createClient } from "./base";
 import { useStore } from "@nanostores/solid";
-import type * as SolidJS from "solid-js"; //to fix ts error: This is likely not portable. A type annotation is necessary.
-import type { UnionToIntersection } from "../types/helper";
-export const createAuthClient = <Option extends ClientOptions>(
-	options?: Option,
-) => {
-	const $fetch = createAuthFetch(options);
-	const hooks = options?.authPlugins?.reduce(
-		(acc, plugin) => {
-			return {
-				...acc,
-				...(plugin($fetch).integrations?.solid?.(useStore) || {}),
-			};
-		},
-		{} as Record<string, any>,
-	) as Option["authPlugins"] extends Array<infer Pl>
-		? Pl extends AuthPlugin
-			? UnionToIntersection<
-					ReturnType<Pl>["integrations"] extends
-						| {
-								react?: (useStore: any) => infer R;
-						  }
-						| undefined
-						? R
-						: {}
-				>
-			: {}
-		: {};
+import { getClientConfig } from "./config";
+import { createDynamicPathProxy } from "./proxy";
+import { capitalizeFirstLetter } from "../utils/misc";
+import type {
+	AuthClientPlugin,
+	ClientOptions,
+	InferActions,
+	InferClientAPI,
+	IsSignal,
+} from "./types";
+import type { Accessor } from "solid-js";
+import { getSessionAtom } from "./session-atom";
 
-	const client = createClient(options, hooks);
+function getAtomKey(str: string) {
+	return `use${capitalizeFirstLetter(str)}`;
+}
+
+type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
+	infer Plugin
+>
+	? Plugin extends AuthClientPlugin
+		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			? Atoms extends Record<string, any>
+				? {
+						[key in keyof Atoms as IsSignal<key> extends true
+							? never
+							: key extends string
+								? `use${Capitalize<key>}`
+								: never]: () => Accessor<ReturnType<Atoms[key]["get"]>>;
+					}
+				: {}
+			: {}
+		: {}
+	: {};
+
+export function createAuthClient<Option extends ClientOptions>(
+	options?: Option,
+) {
+	const {
+		pluginPathMethods,
+		pluginsActions,
+		pluginsAtoms,
+		$fetch,
+		atomListeners,
+	} = getClientConfig(options);
+	let resolvedHooks: Record<string, any> = {};
+	for (const [key, value] of Object.entries(pluginsAtoms)) {
+		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+	}
+	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 
 	function useSession() {
-		return useStore(client.$atoms.$session);
+		return useStore($session);
 	}
-	const obj = Object.assign(client, {
+	const routes = {
+		...pluginsActions,
+		...resolvedHooks,
 		useSession,
-	});
-	return obj;
-};
+	};
+	const proxy = createDynamicPathProxy(
+		routes,
+		$fetch,
+		pluginPathMethods,
+		{
+			...pluginsAtoms,
+			_sessionSignal,
+		},
+		atomListeners,
+	);
+	return proxy as InferResolvedHooks<Option> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: typeof useSession;
+		};
+}

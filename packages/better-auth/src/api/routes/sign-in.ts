@@ -43,7 +43,9 @@ export const signInOAuth = createAuthEndpoint(
 					provider: c.body.provider,
 				},
 			);
-			throw new APIError("NOT_FOUND");
+			throw new APIError("NOT_FOUND", {
+				message: "Provider not found",
+			});
 		}
 		const cookie = c.context.authCookies;
 		const currentURL = c.query?.currentURL
@@ -115,6 +117,12 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		const { email, password } = ctx.body;
+		const checkEmail = z.string().email().safeParse(email);
+		if (!checkEmail.success) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid email",
+			});
+		}
 		const argon2id = new Argon2id();
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {

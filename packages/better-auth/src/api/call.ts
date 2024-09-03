@@ -18,7 +18,18 @@ export const optionsMiddleware = createMiddleware(async () => {
 });
 
 export const createAuthMiddleware = createMiddlewareCreator({
-	use: [optionsMiddleware],
+	use: [
+		optionsMiddleware,
+		/**
+		 * This of for hooks. to tell ts there will a
+		 * return response object
+		 */
+		createMiddleware(async () => {
+			return {} as {
+				returned: Response;
+			};
+		}),
+	],
 });
 
 export const createAuthEndpoint = createEndpointCreator({

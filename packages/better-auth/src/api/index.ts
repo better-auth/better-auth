@@ -121,8 +121,12 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					}
 				}
 			}
+			/**
+			 * TODO: move this to respond a json response
+			 * instead of response object.
+			 */
 			//@ts-ignore
-			const endpointRes = value({
+			const endpointRes = await value({
 				...context,
 				context: {
 					...ctx,
@@ -136,7 +140,10 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 						const match = hook.matcher(context);
 						if (match) {
 							const obj = Object.assign(context, {
-								returned: endpointRes,
+								context: {
+									...ctx,
+									returned: response,
+								},
 							});
 							const hookRes = await hook.handler(obj);
 							if (hookRes && "response" in hookRes) {
@@ -163,9 +170,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
-		/**
-		 * this is to remove any sensitive data from the response
-		 */
+		// /**
+		//  * this is to remove any sensitive data from the response
+		//  */
 		async transformResponse(res) {
 			let body: Record<string, any> = {};
 			try {

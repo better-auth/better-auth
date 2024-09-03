@@ -1,7 +1,7 @@
 import type { BetterFetch } from "@better-fetch/fetch";
-import type { PreinitializedWritableAtom } from "nanostores";
+import type { Atom, PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
-import type { LiteralUnion } from "../types/helper";
+import type { AuthClientPlugin } from "./types";
 
 function getMethod(
 	path: string,
@@ -23,7 +23,7 @@ function getMethod(
 }
 
 export type AuthProxySignal = {
-	atom: LiteralUnion<string, "$sessionSignal">;
+	atom: PreinitializedWritableAtom<boolean>;
 	matcher: (path: string) => boolean;
 };
 
@@ -31,8 +31,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
 	knownPathMethods: Record<string, "POST" | "GET">,
-	$signal?: AuthProxySignal[],
-	$signals?: Record<string, PreinitializedWritableAtom<boolean>>,
+	atoms: Record<string, Atom>,
+	atomListeners: AuthClientPlugin["atomListeners"],
 ): T {
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
@@ -51,7 +51,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				if (typeof current === "function") {
 					return current;
 				}
-
 				return createProxy(fullPath);
 			},
 			apply: async (_, __, args) => {
@@ -73,11 +72,14 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					query: query,
 					method,
 					async onSuccess(context) {
-						const signal = $signal?.find((s) => s.matcher(routePath));
-						if (!signal) return;
-						const signalAtom = $signals?.[signal.atom];
-						if (!signalAtom) return;
-						signalAtom.set(!signalAtom.get());
+						/**
+						 * We trigger listeners
+						 */
+						const matches = atomListeners?.find((s) => s.matcher(routePath));
+						if (!matches) return;
+						const signal = atoms[matches.signal];
+						//@ts-expect-error
+						signal.set(!signal.get());
 						await options?.onSuccess?.(context);
 					},
 				});

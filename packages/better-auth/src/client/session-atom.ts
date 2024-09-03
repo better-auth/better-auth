@@ -3,9 +3,29 @@ import { atom, computed, task } from "nanostores";
 import type { Auth as BetterAuth } from "../auth";
 import type { Prettify } from "../types/helper";
 import type { InferSession, InferUser } from "../types/models";
+import type { AuthClientPlugin, ClientOptions } from "./types";
 
-export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
-	type UserWithAdditionalFields = InferUser<Auth["options"]>;
+export function getSessionAtom<Option extends ClientOptions>(
+	client: BetterFetch,
+) {
+	type Plugins = Option["plugins"] extends Array<AuthClientPlugin>
+		? Array<Option["plugins"][number]["$InferServerPlugin"]>
+		: undefined;
+
+	type Auth = {
+		handler: any;
+		api: any;
+		options: {
+			database: any;
+			plugins: Plugins;
+		};
+	};
+
+	type UserWithAdditionalFields = InferUser<
+		Auth extends BetterAuth ? Auth : never
+	>;
+
+	//@ts-expect-error
 	type SessionWithAdditionalFields = InferSession<Auth["options"]>;
 	const $signal = atom<boolean>(false);
 	const $session = computed($signal, () =>
@@ -20,5 +40,5 @@ export function getSessionAtom<Auth extends BetterAuth>(client: BetterFetch) {
 			} | null;
 		}),
 	);
-	return { $session, $sessionSignal: $signal };
+	return { $session, _sessionSignal: $signal };
 }

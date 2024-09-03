@@ -1,53 +1,75 @@
 import { useStore } from "@nanostores/react";
-import {
-	createAuthFetch,
-	createAuthClient as createVanillaClient,
-} from "./base";
-import type { AuthPlugin, ClientOptions } from "./type";
-import type { UnionToIntersection } from "../types/helper";
+import { getClientConfig } from "./config";
+import { capitalizeFirstLetter } from "../utils/misc";
+import type {
+	AuthClientPlugin,
+	ClientOptions,
+	InferActions,
+	InferClientAPI,
+	IsSignal,
+} from "./types";
+import { createDynamicPathProxy } from "./proxy";
+import { getSessionAtom } from "./session-atom";
 
-export const createAuthClient = <Option extends ClientOptions>(
-	options?: Option,
-) => {
-	const $fetch = createAuthFetch(options);
-	const hooks = options?.authPlugins?.reduce(
-		(acc, plugin) => {
-			return {
-				...acc,
-				...(plugin($fetch).integrations?.react?.(useStore) || {}),
-			};
-		},
-		{} as Record<string, any>,
-	) as Option["authPlugins"] extends Array<infer Pl>
-		? Pl extends AuthPlugin
-			? UnionToIntersection<
-					ReturnType<Pl>["integrations"] extends
-						| {
-								react?: (useStore: any) => infer R;
-						  }
-						| undefined
-						? R
-						: {}
-				>
+function getAtomKey(str: string) {
+	return `use${capitalizeFirstLetter(str)}`;
+}
+
+type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
+	infer Plugin
+>
+	? Plugin extends AuthClientPlugin
+		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			? Atoms extends Record<string, any>
+				? {
+						[key in keyof Atoms as IsSignal<key> extends true
+							? never
+							: key extends string
+								? `use${Capitalize<key>}`
+								: never]: () => ReturnType<Atoms[key]["get"]>;
+					}
+				: {}
 			: {}
-		: {};
+		: {}
+	: {};
 
-	const client = createVanillaClient(options, hooks);
-
-	function useSession(
-		initialValue: typeof client.$atoms.$session.value = null,
-	) {
-		const session = useStore(client.$atoms.$session);
-		if (session) {
-			return session;
-		}
-		return initialValue;
+export function createAuthClient<Option extends ClientOptions>(
+	options?: Option,
+) {
+	const {
+		pluginPathMethods,
+		pluginsActions,
+		pluginsAtoms,
+		$fetch,
+		atomListeners,
+	} = getClientConfig(options);
+	let resolvedHooks: Record<string, any> = {};
+	for (const [key, value] of Object.entries(pluginsAtoms)) {
+		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
+	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 
-	const obj = Object.assign(client, {
+	function useSession() {
+		return useStore($session);
+	}
+	const routes = {
+		...pluginsActions,
+		...resolvedHooks,
 		useSession,
-	});
-	return obj;
-};
-
-export const useAuthStore = useStore;
+	};
+	const proxy = createDynamicPathProxy(
+		routes,
+		$fetch,
+		pluginPathMethods,
+		{
+			...pluginsAtoms,
+			_sessionSignal,
+		},
+		atomListeners,
+	);
+	return proxy as InferResolvedHooks<Option> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: typeof useSession;
+		};
+}

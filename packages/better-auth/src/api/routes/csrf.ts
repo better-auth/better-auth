@@ -1,7 +1,7 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 import { hs256 } from "../../crypto";
 import { createAuthEndpoint } from "../call";
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const getCSRFToken = createAuthEndpoint(
 	"/csrf",

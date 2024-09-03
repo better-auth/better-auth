@@ -42,6 +42,7 @@ export const csrfPlugin = {
 				plugins: [],
 				method: "GET",
 				credentials: "include",
+				customFetchImpl: options.customFetchImpl,
 			});
 			if (error?.status === 404) {
 				throw new BetterAuthError(

@@ -43,7 +43,7 @@ type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 			};
 
 type MergeRoutes<T> = UnionToIntersection<T>;
-type InferRoute<API> = API extends {
+export type InferRoute<API> = API extends {
 	[key: string]: infer T;
 }
 	? T extends Endpoint

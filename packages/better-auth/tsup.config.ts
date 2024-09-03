@@ -1,8 +1,4 @@
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import { defineConfig } from "tsup";
-
-const pexec = promisify(exec);
 
 export default defineConfig({
 	entry: {
@@ -12,14 +8,13 @@ export default defineConfig({
 		client: "./src/client/index.ts",
 		cli: "./src/cli/index.ts",
 		react: "./src/client/react.ts",
-		preact: "./src/client/preact.ts",
 		vue: "./src/client/vue.ts",
+		svelte: "./src/client/svelte.ts",
+		solid: "./src/client/solid.ts",
 		plugins: "./src/plugins/index.ts",
 		"client/plugins": "./src/client/plugins.ts",
 		"svelte-kit": "./src/integrations/svelte-kit.ts",
-		svelte: "./src/client/svelte.ts",
 		access: "./src/plugins/organization/access/index.ts",
-		solid: "./src/client/solid.ts",
 		"solid-start": "./src/integrations/solid-start.ts",
 		"next-js": "./src/integrations/next-js.ts",
 	},

@@ -1,10 +1,9 @@
 import type { username } from ".";
-import { createClientPlugin } from "../../client/create-client-plugin";
+import type { AuthClientPlugin } from "../../client/types";
 
-export const usernameClient = createClientPlugin<ReturnType<typeof username>>()(
-	($fetch) => {
-		return {
-			id: "username",
-		};
-	},
-);
+export const usernameClient = () => {
+	return {
+		id: "username",
+		$InferServerPlugin: {} as ReturnType<typeof username>,
+	} satisfies AuthClientPlugin;
+};

@@ -11,7 +11,7 @@ import type {
 import type { Session } from "inspector";
 import type { User } from "../../adapters/schema";
 import type { passkey as passkeyPl, Passkey } from "../../plugins";
-import { createClientPlugin } from "../../client/create-client-plugin";
+import type { AuthClientPlugin } from "../../client/types";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {
@@ -92,16 +92,19 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		}
 	};
 	return {
-		signInPasskey,
-		registerPasskey,
+		signIn: {
+			passkey: signInPasskey,
+		},
+		passkey: {
+			registerPasskey,
+		},
 	};
 };
 
-export const passkeyClient = createClientPlugin<ReturnType<typeof passkeyPl>>()(
-	($fetch) => {
-		return {
-			id: "passkey",
-			actions: getPasskeyActions($fetch),
-		};
-	},
-);
+export const passkeyClient = () => {
+	return {
+		id: "passkey",
+		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
+		getActions: ($fetch) => getPasskeyActions($fetch),
+	} satisfies AuthClientPlugin;
+};
