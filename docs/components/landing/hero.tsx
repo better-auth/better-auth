@@ -106,8 +106,7 @@ export default function Hero() {
 							</div>
 
 							<p className="mt-3 md:text-2xl font-mono tracking-tight dark:text-zinc-300 text-zinc-800">
-								Framework agnostic, comprehensive authentication solution with a
-								plugin ecosystem for typescript.
+								The authentication library for modern web applications.
 							</p>
 
 							<div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">

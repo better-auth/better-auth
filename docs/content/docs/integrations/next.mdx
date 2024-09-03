@@ -124,12 +124,12 @@ export const auth = betterAuth({
 // ---cut---
 //@filename: server.ts
 //---cut---
-import { api } from "@/lib/auth"
+import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 
 const someAuthenticatedAction = async () => {
     "use server";
-    const session = await api.getSession({
+    const session = await auth.api.getSession({
         headers: headers()
     })
 };
@@ -138,11 +138,11 @@ const someAuthenticatedAction = async () => {
 **Example: Getting Session on a RSC**
 
 ```tsx
-import { api } from "@/lib/auth"
+import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 
 export async function ServerComponent() {
-    const session = await api.getSession({
+    const session = await auth.api.getSession({
         headers: headers()
     })
     if(!session) {
