@@ -82,12 +82,67 @@ description: Installation
 
         <Tabs items={["next-js", "svelte-kit", "nuxt", "solid-start", "hono"]} defaultValue="react">
             <Tab value="next-js">
-                ```ts title="api/[...auth]/route.ts"
+                ```ts title="/app/api/[...auth]/route.ts"
                 import { auth } from "~/utils/auth.config"
                 import { toNextJSHandler } from "better-auth/next-js"
 
                 export const { GET, POST } = toNextJSHandler(auth)
                 ```
+            </Tab>
+            <Tab value="nuxt">
+            ```ts title="/server/api/[...auth].ts"
+            import { Hono } from "hono";
+            import { auth } from "./auth";
+            import { serve } from "@hono/node-server";
+            import { cors } from "hono/cors";
+
+            const app = new Hono();
+
+            app.on(["POST", "GET"], "/api/auth/**", (c) => {
+                return auth.handler(c.req.raw);
+            });
+
+            serve(app);
+            ```
+            </Tab>
+            <Tab value="svelte-kit">
+            ```ts title="hooks.server.ts"
+            import { auth } from "$lib/auth";
+            import { svelteKitHandler } from "better-auth/svelte-kit";
+
+            export async function handle({ event, resolve }) {
+                return svelteKitHandler({ event, resolve, auth });
+            }
+            ```
+            </Tab>
+            <Tab value="solid-start">
+            ```ts title="/routes/api/auth/*auth.ts"
+            import { betterAuth } from "better-auth"
+
+            export const { api, handler } = betterAuth({
+                database: {
+                    provider: "sqlite", //change this to your database provider
+                    url: "./db.sqlite", // path to your database or connection string
+                }
+                // Refer to the api documentation for more configuration options
+            })
+            ```
+            </Tab>
+            <Tab value="hono">
+            ```ts title="src/index.ts"
+            import { Hono } from "hono";
+            import { auth } from "./auth";
+            import { serve } from "@hono/node-server";
+            import { cors } from "hono/cors";
+
+            const app = new Hono();
+
+            app.on(["POST", "GET"], "/api/auth/**", (c) => {
+                return auth.handler(c.req.raw);
+            });
+
+            serve(app);
+            ```
             </Tab>
         </Tabs>
     </Step>
