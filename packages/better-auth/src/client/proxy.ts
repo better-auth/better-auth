@@ -78,6 +78,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						const matches = atomListeners?.find((s) => s.matcher(routePath));
 						if (!matches) return;
 						const signal = atoms[matches.signal];
+						if (!signal) return;
 						//@ts-expect-error
 						signal.set(!signal.get());
 						await options?.onSuccess?.(context);

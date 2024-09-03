@@ -137,13 +137,13 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						path === "/organization/create" || path === "/organization/delete"
 					);
 				},
-				signal: "$listOrg",
+				signal: "_listOrg",
 			},
 			{
 				matcher(path) {
 					return path.startsWith("/organization");
 				},
-				signal: "$activeOrgSignal",
+				signal: "_activeOrgSignal",
 			},
 		],
 	} satisfies AuthClientPlugin;

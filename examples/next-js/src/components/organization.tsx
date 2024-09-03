@@ -42,8 +42,8 @@ const mockMembers = [
 ];
 
 export function Organization() {
-	const organizations = authClient.organization.useListOrganization()
-	const activeOrg = authClient.organization.useActiveOrganization();
+	const organizations = authClient.useListOrganizations()
+	const activeOrg = authClient.useActiveOrganization();
 	const [members, setMembers] = useState(mockMembers);
 	const [newOrgName, setNewOrgName] = useState("");
 	const [newMemberEmail, setNewMemberEmail] = useState("");
@@ -131,7 +131,7 @@ export function Organization() {
 						{organizations?.map((org) => (
 							<DropdownMenuItem
 								key={org.id}
-								onSelect={() => authClient.setActiveOrganization(org.id)}
+								onSelect={() => authClient.organization.setActive(org.id)}
 							>
 								{org.name}
 							</DropdownMenuItem>

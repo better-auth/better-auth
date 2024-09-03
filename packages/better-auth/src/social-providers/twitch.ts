@@ -52,7 +52,7 @@ export const twitch = ({
 				{
 					method: "GET",
 					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+						Authorization: `Bearer ${token.accessToken()}`,
 					},
 				},
 			);

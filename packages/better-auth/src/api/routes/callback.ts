@@ -5,6 +5,7 @@ import { generateId } from "../../utils/id";
 import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
+import { getAccountTokens } from "../../utils/getAccount";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -76,13 +77,13 @@ export const callbackOAuth = createAuthEndpoint(
 					accountId: user.id,
 					id: `${provider.id}:${user.id}`,
 					userId: dbUser.user.id,
-					...tokens,
+					...getAccountTokens(tokens),
 				});
 			}
 		} else {
 			try {
 				await c.context.internalAdapter.createOAuthUser(data.data, {
-					...tokens,
+					...getAccountTokens(tokens),
 					id: `${provider.id}:${user.id}`,
 					providerId: provider.id,
 					accountId: user.id,

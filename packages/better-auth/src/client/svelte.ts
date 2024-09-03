@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
 import { getSessionAtom } from "./session-atom";
+import type { UnionToIntersection } from "../types/helper";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -58,7 +59,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		},
 		atomListeners,
 	);
-	return proxy as InferResolvedHooks<Option> &
+	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof $session;

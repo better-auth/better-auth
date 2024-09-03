@@ -230,7 +230,6 @@ export const getOrgAdapter = (
 				],
 			});
 			const organizationIds = members?.map((member) => member.organizationId);
-			console.log({ organizationIds });
 			if (!organizationIds) {
 				return [];
 			}

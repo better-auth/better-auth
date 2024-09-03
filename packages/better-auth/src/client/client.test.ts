@@ -3,7 +3,7 @@ import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createVueClient } from "./vue";
 import { createAuthClient as createSvelteClient } from "./svelte";
-import { testClientPlugin } from "./test-plugin";
+import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
@@ -130,5 +130,20 @@ describe("type", () => {
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => ReadableAtom<number>
 		>();
+	});
+
+	it("should infer from multiple plugins", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin(), testClientPlugin2()],
+		});
+		const res = client.useAnotherAtom();
+	});
+
+	it("should infer actions", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin(), testClientPlugin2()],
+		});
+		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
+		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
 	});
 });

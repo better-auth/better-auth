@@ -64,6 +64,9 @@ export const testClientPlugin = () => {
 				setTestAtom(value: boolean) {
 					_test.set(value);
 				},
+				test: {
+					signOut: async () => {},
+				},
 			};
 		},
 		getAtoms($fetch) {
@@ -73,6 +76,32 @@ export const testClientPlugin = () => {
 			};
 		},
 		$InferServerPlugin: {} as typeof serverPlugin,
+		atomListeners: [
+			{
+				matcher: (path) => path === "/test",
+				signal: "_test",
+			},
+			{
+				matcher: (path) => path === "/test2/sign-out",
+				signal: "_sessionSignal",
+			},
+		],
+	} satisfies AuthClientPlugin;
+};
+export const testClientPlugin2 = () => {
+	const _test2 = atom(false);
+	let testValue = 0;
+	const anotherAtom = computed(_test2, () => {
+		return testValue++;
+	});
+	return {
+		id: "test",
+		getAtoms($fetch) {
+			return {
+				_test2,
+				anotherAtom,
+			};
+		},
 		atomListeners: [
 			{
 				matcher: (path) => path === "/test",

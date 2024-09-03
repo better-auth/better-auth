@@ -46,7 +46,7 @@ export const facebook = ({
 				{
 					auth: {
 						type: "Bearer",
-						token: token.accessToken,
+						token: token.accessToken(),
 					},
 				},
 			);

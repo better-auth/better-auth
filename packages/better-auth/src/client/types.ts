@@ -5,7 +5,7 @@ import type {
 } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../types/plugins";
 import type { Atom } from "nanostores";
-import type { UnionToIntersection } from "../types/helper";
+import type { LiteralString, UnionToIntersection } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
 
@@ -15,7 +15,7 @@ export type AtomListener = {
 };
 
 export interface AuthClientPlugin {
-	id: string;
+	id: LiteralString;
 	/**
 	 * only used for type inference. don't pass the
 	 * actual plugin
@@ -72,13 +72,13 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
 >
-	? Plugin extends AuthClientPlugin
-		? UnionToIntersection<
-				Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
+	? UnionToIntersection<
+			Plugin extends AuthClientPlugin
+				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
 					? Actions
 					: {}
-			>
-		: {}
+				: {}
+		>
 	: {};
 /**
  * signals are just used to recall a computed value. as a

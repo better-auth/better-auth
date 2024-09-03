@@ -74,14 +74,17 @@ export const github = ({
 			const _scopes = scopes || ["user:email"];
 			return githubArctic.createAuthorizationURL(state, _scopes);
 		},
-		validateAuthorizationCode: githubArctic.validateAuthorizationCode,
+		validateAuthorizationCode: async (state) => {
+			return await githubArctic.validateAuthorizationCode(state);
+		},
 		async getUserInfo(token) {
+			console.log(`Bearer ${token.accessToken()}`);
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+					auth: {
+						type: "Bearer",
+						token: token.accessToken(),
 					},
 				},
 			);
@@ -98,9 +101,9 @@ export const github = ({
 						visibility: "public" | "private";
 					}[]
 				>("https://api.github.com/user/emails", {
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
-						"User-Agent": "better-auth",
+					auth: {
+						type: "Bearer",
+						token: token.accessToken(),
 					},
 				});
 				if (!error) {

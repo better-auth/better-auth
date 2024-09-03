@@ -15,7 +15,7 @@ export interface GoogleProfile {
 	 * Western languages.
 	 */
 	family_name: string;
-	/**
+	/*s*
 	 * The given name of the user, or first name in most
 	 * Western languages.
 	 */

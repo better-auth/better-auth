@@ -105,7 +105,7 @@ export const discord = ({
 				{
 					auth: {
 						type: "Bearer",
-						token: token.accessToken,
+						token: token.accessToken(),
 					},
 				},
 			);
