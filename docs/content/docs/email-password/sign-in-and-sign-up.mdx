@@ -40,6 +40,7 @@ To signup a user, you can use the `signUp.email` function provided by the client
 - `name`: The name of the user.
 - `image`: The image of the user. (optional)
 - `callbackURL`: The url to redirect to after the user has signed up. (optional)
+- `dontRememberMe`: If true, the user will be signed out when the browser is closed. (optional)
 
 ```ts title="client.ts" twoslash /
 /**
@@ -73,6 +74,7 @@ To signin a user, you can use the `signIn.email` function provided by the client
 - `email`: The email address of the user.
 - `password`: The password of the user.
 - `callbackURL`: The url to redirect to after the user has signed in. (optional)
+- `dontRememberMe`: If true, the user will be signed out when the browser is closed. (optional)
 
 ```ts title="client.ts" twoslash 
 import { createAuthClient } from "better-auth/client"
