@@ -25,7 +25,7 @@ function withPath(url: string, path = "/api/auth") {
 	};
 }
 
-export function getBaseURL(url?: string, path?: string) {
+export function getBaseURL(url?: string, path?: string, request?: Request) {
 	if (url) {
 		return withPath(url, path);
 	}
@@ -43,15 +43,14 @@ export function getBaseURL(url?: string, path?: string) {
 		return withPath(fromEnv, path);
 	}
 
-	const isDev =
-		!fromEnv && (env.NODE_ENV === "development" || env.NODE_ENV === "test");
-	if (isDev) {
+	if (request) {
 		return {
-			baseURL: "http://localhost:3000",
-			withPath: "http://localhost:3000/api/auth",
+			baseURL: new URL(request.url).origin,
+			withPath: new URL(request.url).origin + "/api/auth",
 		};
 	}
-	throw new BetterAuthError(
-		"Could not infer baseURL from environment variables",
-	);
+	return {
+		baseURL: "",
+		withPath: "/api/auth",
+	};
 }

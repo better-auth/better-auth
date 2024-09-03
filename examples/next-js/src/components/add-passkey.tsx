@@ -21,7 +21,7 @@ export default function AddPasskey() {
 
 	const handleAddPasskey = async () => {
 		// This is where you would implement the actual passkey addition logic
-		const res = await authClient.passkey.register();
+		const res = await authClient.passkey.register()
 		setIsOpen(false);
 		setPasskeyName("");
 	};

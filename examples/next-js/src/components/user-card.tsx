@@ -23,7 +23,7 @@ export default function UserCard(props: {
 	} | null;
 }) {
 	const router = useRouter();
-	const session = authClient.useSession();
+	const session = authClient.useSession(props.session);
 	return (
 		<Card>
 			<CardHeader>

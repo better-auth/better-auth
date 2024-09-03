@@ -114,7 +114,7 @@ export default function SignUpForm() {
 									email,
 									name: `${firstName} ${lastName}`,
 									password,
-									callbackUrl: "/",
+									callbackURL: "/",
 								});
 								if (res.error) {
 									alert(res.error.message);
@@ -127,7 +127,7 @@ export default function SignUpForm() {
 							variant="outline"
 							className="w-full gap-2"
 							onClick={async () => {
-								await authClient.signIn.oauth({
+								await authClient.signIn.social({
 									provider: "google",
 									callbackURL: "/",
 								});
@@ -162,7 +162,7 @@ export default function SignUpForm() {
 							variant="outline"
 							className="w-full gap-2"
 							onClick={async () => {
-								await authClient.signIn.oauth({
+								await authClient.signIn.social({
 									provider: "github",
 									callbackURL: "/",
 								});

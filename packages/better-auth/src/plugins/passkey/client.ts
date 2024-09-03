@@ -96,7 +96,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			passkey: signInPasskey,
 		},
 		passkey: {
-			registerPasskey,
+			register: registerPasskey,
 		},
 	};
 };
@@ -106,5 +106,9 @@ export const passkeyClient = () => {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
 		getActions: ($fetch) => getPasskeyActions($fetch),
+		pathMethods: {
+			"/passkey/register": "POST",
+			"/passkey/authenticate": "POST",
+		},
 	} satisfies AuthClientPlugin;
 };

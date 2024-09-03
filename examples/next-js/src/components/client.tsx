@@ -1,7 +1,6 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
-import { useAuthStore } from "better-auth/react";
 import { useEffect, useState } from "react";
 import QRCode from "react-qr-code";
 import { Button } from "./ui/button";

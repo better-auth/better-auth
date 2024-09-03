@@ -10,7 +10,7 @@ import {
 } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
 
-export const init = (options: BetterAuthOptions) => {
+export const init = (options: BetterAuthOptions, request?: Request) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
 	const { baseURL, withPath } = getBaseURL(options.baseURL, options.basePath);

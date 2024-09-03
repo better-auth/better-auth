@@ -11,6 +11,7 @@ import type {
 import { createDynamicPathProxy } from "./proxy";
 import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
+import { useEffect, useState } from "react";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -50,8 +51,18 @@ export function createAuthClient<Option extends ClientOptions>(
 	}
 	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 
-	function useSession() {
-		return useStore($session);
+	function useSession(initialValue?: (typeof $session)["value"]) {
+		const [isClient, setIsClient] = useState(false);
+		const storeValue = useStore($session);
+
+		useEffect(() => {
+			setIsClient(true);
+		}, []);
+
+		if (!isClient && initialValue !== undefined) {
+			return initialValue;
+		}
+		return storeValue;
 	}
 	const routes = {
 		...pluginsActions,

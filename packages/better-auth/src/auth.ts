@@ -1,26 +1,26 @@
-import type { UnionToIntersection } from "./types/helper";
-import { router } from "./api";
+import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
-import type { BetterAuthPlugin } from "./types/plugins";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
-	type PluginEndpoint = UnionToIntersection<
-		O["plugins"] extends Array<infer T>
-			? T extends BetterAuthPlugin
-				? {
-						[key in T["id"]]: T["endpoints"];
-					}
-				: {}
-			: {}
-	>;
-	const { handler, endpoints } = router(authContext);
-	type Endpoint = typeof endpoints;
-
+	const { api } = getEndpoints(authContext, options);
 	return {
-		handler,
-		api: endpoints as Endpoint & PluginEndpoint,
+		handler: async (request: Request) => {
+			if (!authContext.options.baseURL) {
+				const baseURL = new URL(request.url).origin;
+				authContext.options.baseURL = baseURL;
+				authContext.baseURL = `${baseURL}${
+					authContext.options.basePath || "/api/auth"
+				}`;
+			}
+			if (!authContext.options.basePath) {
+				authContext.options.basePath = "/api/auth";
+			}
+			const { handler } = router(authContext, options);
+			return handler(request);
+		},
+		api,
 		options,
 	};
 };

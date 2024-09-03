@@ -20,9 +20,10 @@ import { ok, welcome } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 
-export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
-	ctx: C,
-) => {
+export function getEndpoints<
+	C extends AuthContext,
+	Option extends BetterAuthOptions,
+>(ctx: C, options: Option) {
 	const pluginEndpoints = ctx.options.plugins?.reduce(
 		(acc, plugin) => {
 			return {
@@ -160,7 +161,18 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		api[key].options = value.options;
 		api[key].headers = value.headers;
 	}
-	return createRouter(api as typeof baseEndpoints, {
+	return {
+		api: api as typeof endpoints,
+		middlewares,
+	};
+}
+
+export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
+	ctx: C,
+	_options: Option,
+) => {
+	const { api, middlewares } = getEndpoints(ctx, _options);
+	return createRouter(api, {
 		extraContext: ctx,
 		basePath: ctx.options.basePath,
 		routerMiddleware: [

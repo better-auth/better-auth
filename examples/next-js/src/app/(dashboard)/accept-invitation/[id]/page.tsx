@@ -41,7 +41,7 @@ export default function InvitationPage({
 	const invitation = authClient.useInvitation();
 	useEffect(() => {
 		if (params.id) {
-			authClient.setInvitationId(params.id);
+			authClient.organization.setInvitationId(params.id);
 		}
 	}, [params]);
 
