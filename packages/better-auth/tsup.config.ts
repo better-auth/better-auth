@@ -1,8 +1,5 @@
-import { copyFile } from "node:fs/promises";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-
-import glob from "tiny-glob";
 import { defineConfig } from "tsup";
 
 const pexec = promisify(exec);
