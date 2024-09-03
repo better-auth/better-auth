@@ -24,7 +24,7 @@ description: Discord Provider
         import { betterAuth } from "better-auth"
         import { discord } from "better-auth/social-providers"
         
-        export const { api, handler } = await betterAuth({
+        export const auth = await betterAuth({
             database: {
                 provider: "sqlite",
                 url: "./db.sqlite",

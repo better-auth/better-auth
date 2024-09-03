@@ -129,7 +129,7 @@ description: Installation
             ```ts title="/routes/api/auth/*auth.ts"
             import { betterAuth } from "better-auth"
 
-            export const { api, handler } = betterAuth({
+            export const auth = betterAuth({
                 database: {
                     provider: "sqlite", //change this to your database provider
                     url: "./db.sqlite", // path to your database or connection string

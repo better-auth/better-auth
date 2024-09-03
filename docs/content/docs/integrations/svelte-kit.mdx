@@ -40,7 +40,7 @@ We recommend to create `auth.ts` file inside your `lib/` directory. This file wi
 ```ts twoslash title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = betterAuth({
+export const auth = betterAuth({
     database: {
         provider: "sqlite", //change this to your database provider
         url: "./db.sqlite", // path to your database or connection string

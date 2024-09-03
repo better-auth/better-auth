@@ -268,7 +268,7 @@ The server provides a `session` object that you can use to access the session da
     // @filename: auth.ts
     // ---cut---
     import { betterAuth } from "better-auth"
-    export const { api, handler } = await betterAuth({
+    export const auth = await betterAuth({
         database: {
             provider: "sqlite",
             url: "./db.sqlite",
@@ -280,9 +280,9 @@ The server provides a `session` object that you can use to access the session da
     // ---cut-end---
 
     // somewhere in your server code
-    import { api } from "./auth"
+    import { auth } from "./auth"
     async function addToCart(request: Request){
-        const session = await api.getSession({
+        const session = await auth.api.getSession({
             headers: request.headers, //it requies a header to be passed
         })
    }

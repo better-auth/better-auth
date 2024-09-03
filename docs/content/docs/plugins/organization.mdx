@@ -15,7 +15,7 @@ Organizations Plugin offer a versatile and scalable approach to controlling user
         import { betterAuth } from "better-auth"
         import { organization } from "better-auth/plugins"
 
-        export const { api, handler } = await betterAuth({
+        export const auth = await betterAuth({
             database: {
                 provider: "sqlite",
                 url: "./db.sqlite",
@@ -179,7 +179,7 @@ Organizations Plugin offer a versatile and scalable approach to controlling user
         import { betterAuth } from "better-auth"
         import { organization } from "better-auth/plugins"
 
-        export const { api, handler } = await betterAuth({
+        export const auth = await betterAuth({
             database: {
                 provider: "sqlite",
                 url: "./db.sqlite",
@@ -356,7 +356,7 @@ import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 import { ac, member, owner, admin } from "./permissions" // [!code highlight]
 
-export const { api, handler } = await betterAuth({
+export const auth = await betterAuth({
     database: {
         provider: "sqlite",
         url: "./db.sqlite",
@@ -384,7 +384,7 @@ export const { api, handler } = await betterAuth({
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-const { api, handler } = await betterAuth({
+const auth = await betterAuth({
     database: {
         provider: "sqlite",
         url: "./db.sqlite",
@@ -411,7 +411,7 @@ const { api, handler } = await betterAuth({
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-export const { api, handler } = await betterAuth({
+export const auth = await betterAuth({
     database: {
         provider: "sqlite",
         url: "./db.sqlite",

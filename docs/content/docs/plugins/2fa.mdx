@@ -19,7 +19,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { betterAuth } from "better-auth"
         import { twoFactor } from "better-auth/plugins"
         
-        export const { api, handler } = await betterAuth({
+        export const auth = await betterAuth({
             database: {
                 provider: "sqlite",
                 url: "./db.sqlite",
@@ -240,7 +240,7 @@ To configure the two factor plugin, you need to add the following code to your b
 import { betterAuth } from "better-auth"
 import { twoFactor } from "better-auth/plugins"
 
-export const { api, handler } = await betterAuth({
+export const auth = await betterAuth({
     database: {
         provider: "sqlite",
         url: "./db.sqlite",

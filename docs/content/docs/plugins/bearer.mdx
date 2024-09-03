@@ -11,7 +11,7 @@ The Bearer plugin allows you to authenticate with a Bearer token instead of a br
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 
-export const { api, handler } = betterAuth({
+export const auth = betterAuth({
     database: {
         provider: 'sqlite',
         url: './db.sqlite'

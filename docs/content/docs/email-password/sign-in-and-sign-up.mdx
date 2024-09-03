@@ -16,7 +16,7 @@ To use email and password authentication, you need to configure the email and pa
 ```ts title="auth.ts" twoslash 
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = await betterAuth({
+export const auth = await betterAuth({
     database: {
         provider: "sqlite",
         url: "./db.sqlite",
@@ -98,7 +98,7 @@ To enable email verification, you need to configure the email and password authe
 
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = await betterAuth({
+export const auth = await betterAuth({
     // ---cut-start---
     database: {
         provider: "sqlite",

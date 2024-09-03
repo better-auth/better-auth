@@ -39,7 +39,7 @@ We recommend to create `auth.ts` file inside your `lib/` directory. This file wi
 ```ts twoslash title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = betterAuth({
+export const auth = betterAuth({
     database: {
         provider: "sqlite", //change this to your database provider
         url: "./db.sqlite", // path to your database or connection string
@@ -60,7 +60,7 @@ We need to mount the handler to an API route. Create a route file inside `/api/[
 //@filename: @/lib/auth.ts
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = betterAuth({
+export const auth = betterAuth({
     database: {
         provider: "sqlite", //change this to your database provider
         url: "./db.sqlite", // path to your database or connection string
@@ -70,10 +70,10 @@ export const { api, handler } = betterAuth({
 // ---cut---
 //@filename: api/[...auth]/route.ts
 //---cut---
-import { handler } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
-export const { GET, POST } = toNextJsHandler(handler);
+export const { GET, POST } = toNextJsHandler(auth.handler);
 ```
 
 <Callout type="info">
@@ -114,7 +114,7 @@ The `api` object exported from the auth instance contains all the actions that y
 //@filename: @/lib/auth.ts
 import { betterAuth } from "better-auth"
 
-export const { api, handler } = betterAuth({
+export const auth = betterAuth({
     database: {
         provider: "sqlite", //change this to your database provider
         url: "./db.sqlite", // path to your database or connection string
