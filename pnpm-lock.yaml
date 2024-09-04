@@ -102,6 +102,19 @@ importers:
         specifier: ^5.4.1
         version: 5.4.2(@types/node@22.3.0)(terser@5.31.6)
 
+  dev/bun:
+    dependencies:
+      better-auth:
+        specifier: workspace:0.0.8-beta.6
+        version: link:../../packages/better-auth
+      typescript:
+        specifier: ^5.0.0
+        version: 5.5.4
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.1.8
+
   dev/next-app:
     dependencies:
       '@hookform/resolvers':
@@ -392,7 +405,7 @@ importers:
         specifier: ^3.5.0
         version: 3.5.0
       better-auth:
-        specifier: workspace:0.0.8-beta.5
+        specifier: ^0.0.8-beta.6
         version: link:../packages/better-auth
       class-variance-authority:
         specifier: ^0.7.0

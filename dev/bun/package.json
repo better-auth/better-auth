@@ -1,0 +1,14 @@
+{
+  "name": "@dev/bun",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "better-auth": "workspace:0.0.8-beta.6"
+  }
+}
