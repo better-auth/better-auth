@@ -34,8 +34,8 @@ The username plugin wraps the email and password authenticator and adds username
         import { usernameClient } from "better-auth/client/plugins"
         
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
-                usernameClient // [!code highlight]
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
             ] // [!code highlight]
         })
         ```
@@ -56,8 +56,8 @@ The username plugin wraps the email and password authenticator and adds username
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
-                usernameClient // [!code highlight]
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
             ] // [!code highlight]
         })
         // ---cut---
@@ -84,8 +84,8 @@ The username plugin wraps the email and password authenticator and adds username
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
-                usernameClient // [!code highlight]
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
             ] // [!code highlight]
         })
         // ---cut---

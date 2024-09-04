@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "better-auth": "^0.0.4",
+    "better-auth": "workspace:^",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

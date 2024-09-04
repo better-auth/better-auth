@@ -49,8 +49,8 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
             import { passkeyClient } from "better-auth/client/plugins"
             
             const client = createAuthClient({
-                authPlugins: [ // [!code highlight]
-                    passkeyClient // [!code highlight]
+                plugins: [ // [!code highlight]
+                    passkeyClient() // [!code highlight]
                 ] // [!code highlight]
             })
             ```
@@ -63,15 +63,15 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         ```ts title="client.ts" twoslash
           import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
+          import { passkeyClient } from "better-auth/client/plugins"
             
             const client = createAuthClient({
-                authPlugins: [ // [!code highlight]
-                    passkeyClient // [!code highlight]
+                plugins: [ // [!code highlight]
+                    passkeyClient() // [!code highlight]
                 ] // [!code highlight]
             })
         // ---cut---
-        const data = await client.registerPasskey()
+        const data = await client.passkey.register()
         ```
         This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
     </Step>
@@ -92,12 +92,12 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
             import { passkeyClient } from "better-auth/client/plugins"
             
             const client = createAuthClient({
-                authPlugins: [ // [!code highlight]
-                    passkeyClient // [!code highlight]
+                plugins: [ // [!code highlight]
+                    passkeyClient() // [!code highlight]
                 ] // [!code highlight]
             })
         // ---cut---
-        const data = await client.signInPasskey()
+        const data = await client.signIn.passkey()
         ```
         
     </Step>

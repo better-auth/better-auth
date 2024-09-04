@@ -44,14 +44,14 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
 
     <Step>
     ### Add the client plugin
-    To use the two factor plugin in the client, you need to add it on your authPlugins list.
+    To use the two factor plugin in the client, you need to add it on your plugins list.
 
     ```ts title="client.ts" twoslash
     import { createAuthClient } from "better-auth/client"
     import { twoFactorClient } from "better-auth/client/plugins"
     
     const client = createAuthClient({
-        authPlugins: [ // [!code highlight]
+        plugins: [ // [!code highlight]
             twoFactorClient({ // [!code highlight]
                 twoFactorPage: "/two-factor" // [!code highlight] 
             }) // [!code highlight]
@@ -68,7 +68,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -91,7 +91,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -112,7 +112,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -138,7 +138,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -167,7 +167,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -188,7 +188,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -212,7 +212,7 @@ The two facor plugin providers `OTP` and `TOTP` authentication methods. The `OTP
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
         const client = createAuthClient({
-            authPlugins: [ // [!code highlight]
+            plugins: [ // [!code highlight]
                 twoFactorClient({ // [!code highlight]
                     twoFactorPage: "/two-factor" // [!code highlight] 
                 }) // [!code highlight]
@@ -317,14 +317,14 @@ backup codes are generated and stored in the database when the user enabled two 
 
 ### Client 
 
-To use the two factor plugin in the client, you need to add it on your authPlugins list.
+To use the two factor plugin in the client, you need to add it on your plugins list.
 
 ```ts title="client.ts" twoslash
 import { createAuthClient } from "better-auth/client"
 import { twoFactorClient } from "better-auth/client/plugins"
 
 const client = createAuthClient({
-    authPlugins: [
+    plugins: [
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight] 
         }) // [!code highlight]

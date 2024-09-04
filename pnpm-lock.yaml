@@ -59,8 +59,8 @@ importers:
   dev/bc-fe/react:
     dependencies:
       better-auth:
-        specifier: ^0.0.4
-        version: 0.0.4(@vue/devtools-api@6.6.3)(react@18.3.1)(solid-js@1.8.21)(typescript@5.5.4)(vue@3.5.0(typescript@5.5.4))
+        specifier: workspace:^
+        version: link:../../../packages/better-auth
       react:
         specifier: ^18.3.1
         version: 18.3.1

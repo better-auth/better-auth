@@ -331,7 +331,7 @@ npx better-auth migrate
 
 ### Client Configuration
 
-Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `authPlugins` option of the auth client. For example, to add two facor authentication, you can use the following code:
+Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `plugins` option of the auth client. For example, to add two facor authentication, you can use the following code:
 
 ```ts title="client.ts" twoslash /
 import { createAuthClient } from "better-auth/client";

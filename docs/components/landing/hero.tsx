@@ -70,7 +70,7 @@ const tabs = [
 	{
 		name: "client.ts",
 		code: `const client = createAuthClient({
-    authPlugins: [passkeyClient()]
+    plugins: [passkeyClient()]
 });
         `,
 	},
