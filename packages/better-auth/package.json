@@ -57,7 +57,8 @@
         "swr": "^2.2.5",
         "tsup": "^8.2.4",
         "typescript": "5.6.0-beta",
-        "vitest": "^1.6.0"
+        "vitest": "^1.6.0",
+        "vue": "^3.5.0"
     },
     "dependencies": {
         "@better-fetch/fetch": "^1.1.4",
