@@ -13,12 +13,11 @@ import { createLogger } from "./utils/logger";
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
-	const baseURL = getBaseURL(options.baseURL);
-
+	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	return {
 		options: {
 			...options,
-			baseURL,
+			baseURL: baseURL ? new URL(baseURL).origin : "",
 		},
 		baseURL: baseURL || "",
 		session: {

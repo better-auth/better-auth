@@ -94,10 +94,10 @@ description: Installation
         <Tabs items={["next-js", "svelte-kit", "nuxt", "solid-start", "hono"]} defaultValue="react">
             <Tab value="next-js">
                 ```ts title="/app/api/[...auth]/route.ts"
-                import { auth } from "~/utils/auth.config"
-                import { toNextJSHandler } from "better-auth/next-js"
+                import { auth } from "@/lib/auth"; // path to your auth file
+                import { toNextJsHandler } from "better-auth/next-js";
 
-                export const { GET, POST } = toNextJSHandler(auth)
+                export const { POST, GET } = toNextJsHandler(auth);
                 ```
             </Tab>
             <Tab value="nuxt">
@@ -159,37 +159,38 @@ description: Installation
     </Step>
     <Step>
         ### Create Client
-        better auth client comes with a support for differnt frameworks including React, Vue, Svelte, and Solid. You can also use it with vanilla javascript. 
+        Better Auth Client supports various frameworks like React, Vue, Svelte, and Solid, and it even plays nice with vanilla JavaScript. To get started, just import the createAuthClient function from the appropriate package and drop it into any file where you want to use the client.
+
 
         <Callout type="warn">
          Make sure you import the client from the correct path.
         </Callout>
        <Tabs items={["vanilla","react", "vue", "svelte", "solid"]} defaultValue="react">
-            <Tab value="vanilla">
+            <Tab value="vanilla" title="lib/auth-client.ts">
                     ```ts 
                     import { createAuthClient } from "better-auth/client"
                     const client = createAuthClient()
                     ```
             </Tab>
-            <Tab value="react">
+            <Tab value="react" title="lib/auth-client.ts">
                     ```ts 
                     import { createAuthClient } from "better-auth/react"
                     const client = createAuthClient()
                     ```
             </Tab>
-            <Tab value="vue">
+            <Tab value="vue" title="lib/auth-client.ts">
                     ```ts
                     import { createAuthClient } from "better-auth/vue"
                     const client = createAuthClient()
                     ```
             </Tab>
-            <Tab value="svelte">
+            <Tab value="svelte" title="lib/auth-client.ts">
                     ```ts
                     import { createAuthClient } from "better-auth/svelte"
                     const client = createAuthClient()
                     ```
             </Tab>
-            <Tab value="solid">
+            <Tab value="solid" title="lib/auth-client.ts">
                     ```ts
                     import { createAuthClient } from "better-auth/solid"
                     const client = createAuthClient()

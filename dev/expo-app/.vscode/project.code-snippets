@@ -1,0 +1,75 @@
+{
+  "View": {
+    "prefix": "V",
+    "body": [
+      "<View className=\"flex-1 items-center justify-center\">",
+      "  $1",
+      "</View>"
+    ],
+    "description": "A Simple View "
+  },
+  "Button": {
+    "prefix": "bt",
+    "body": [
+      "<Button onPress={() => }>",
+      "  <Text>${1}</Text>",
+      "</Button>"
+    ],
+    "description": "Button"
+  },
+  "Text": {
+    "prefix": "T",
+    "body": [
+      "<Text>",
+      "  $1",
+      "</Text>"
+    ],
+    "description": "A Simple Text"
+  },
+  "export *": {
+    "prefix": "ex",
+    "body": ["export * from '.$1';"],
+    "description": "export *"
+  },
+  "import": {
+    "prefix": "im",
+    "body": [
+      "import * from ${1}"
+    ],
+    "description": "import"
+  },
+  "state": {
+    "prefix": "useS",
+    "body": [
+      "const [${1}, set${1:example}] = useState();",
+      ""
+    ],
+    "description": "state"
+  },
+  "Component": {
+    "prefix": "comp",
+    "body": [
+      "import * as React from 'react';",
+      "",
+      "import { Text, View } from '@/components/ui';",
+      "",
+      "type Props = {",
+      "  $2",
+      "};",
+      "export const ${1:CompName} = ({}: Props) => {",
+      "  return (",
+      "    <View className=\"flex-1\">",
+      "      <Text className=\"text-base\">${1:CompName} Component</Text>",
+      "    </View>",
+      "  );",
+      "};",
+      ""
+    ],
+    "description": "Component"
+  },
+  "router": {
+    "prefix": "router",
+    "body": ["const router = useRouter();", ""],
+    "description": "navigate"
+  }
+}

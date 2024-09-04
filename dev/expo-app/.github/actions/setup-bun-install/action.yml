@@ -1,0 +1,25 @@
+# 🔗 Links:
+# Source file: https://github.com/launchtrack/expo-starters/blob/master/.github/actions/setup-bun-install/action.yml
+# Composite actions docs: https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+
+# ✍️ Description:
+# This is a composite action, which means it can be used in other actions.
+# It is used in almost all workflows to set up the environment and install dependencies.
+# Updating  the package manager or Node version here will be reflected in all workflows.
+
+# 👀 Example usage:
+#       - name : 📦 Setup bun + install deps
+#         uses: ./.github/actions/setup-bun
+
+name: 'Setup  Node + PNPM + Install Dependencies'
+description: 'Setup  Node + PNPM + Install Dependencies'
+runs:
+  using: 'composite'
+  steps:
+    - uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: 📦 Install Project Dependencies
+      run: bun install --frozen-lockfile
+      shell: bash
