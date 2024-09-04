@@ -19,6 +19,7 @@ describe("run time proxy", async () => {
 					apiCalled = true;
 					return new Response();
 				},
+				baseURL: "http://localhost:3000",
 			},
 		});
 		await client.test();
@@ -32,6 +33,7 @@ describe("run time proxy", async () => {
 				customFetchImpl: async (url, init) => {
 					return new Response();
 				},
+				baseURL: "http://localhost:3000",
 			},
 		});
 		const res = client.useComputedAtom();
@@ -58,6 +60,7 @@ describe("run time proxy", async () => {
 						}),
 					);
 				},
+				baseURL: "http://localhost:3000",
 			},
 		});
 		const res = client.useSession();

@@ -104,9 +104,15 @@ importers:
 
   dev/bun:
     dependencies:
+      '@noble/ciphers':
+        specifier: ^0.6.0
+        version: 0.6.0
       better-auth:
-        specifier: workspace:0.0.8-beta.6
+        specifier: ^0.0.8-beta.6
         version: link:../../packages/better-auth
+      oslo:
+        specifier: ^1.2.1
+        version: 1.2.1
       typescript:
         specifier: ^5.0.0
         version: 5.5.4

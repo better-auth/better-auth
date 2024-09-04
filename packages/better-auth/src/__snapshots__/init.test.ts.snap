@@ -20,6 +20,15 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
+    "dontRememberToken": {
+      "name": "better-auth.dont_remember",
+      "options": {
+        "httpOnly": true,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
     "nonce": {
       "name": "better-auth.nonce",
       "options": {
@@ -61,7 +70,7 @@ exports[`init > should match config 1`] = `
       },
     },
   },
-  "baseURL": "http://localhost:3000/api/auth",
+  "baseURL": "",
   "createAuthCookie": [Function],
   "db": Kysely {},
   "internalAdapter": {
@@ -88,13 +97,16 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "options": {
-    "basePath": "/api/auth",
-    "baseURL": "http://localhost:3000",
+    "baseURL": undefined,
     "database": {
       "provider": "sqlite",
       "url": ":memory:",
     },
   },
   "secret": "better-auth-secret-123456789",
+  "session": {
+    "expiresIn": 604800,
+    "updateAge": 86400,
+  },
 }
 `;
