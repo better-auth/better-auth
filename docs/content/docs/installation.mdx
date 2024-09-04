@@ -34,7 +34,7 @@ description: Installation
         <GenerateSecret/>
     </Step>
     <Step>
-    ### Create Server
+        ### Create A Better Auth Instance
         better auth requries a file called `auth.ts` or `auth.config.ts` to be present in the root directory or one of the following directories:
         - `lib/`
         - `utils/`
@@ -160,6 +160,10 @@ description: Installation
     <Step>
         ### Create Client
         better auth client comes with a support for differnt frameworks including React, Vue, Svelte, and Solid. You can also use it with vanilla javascript. 
+
+        <Callout type="warn">
+         Make sure you import the client from the correct path.
+        </Callout>
        <Tabs items={["vanilla","react", "vue", "svelte", "solid"]} defaultValue="react">
             <Tab value="vanilla">
                     ```ts 

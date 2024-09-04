@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { organization, passkey, twoFactor } from "better-auth/plugins";
-import { github } from "better-auth/social-providers";
+import { github, google } from "better-auth/social-providers";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",
@@ -8,6 +8,10 @@ export const auth = betterAuth({
 		github({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+		}),
+		google({
+			clientId: process.env.GOOGLE_CLIENT_ID as string,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
 		}),
 	],
 	database: {

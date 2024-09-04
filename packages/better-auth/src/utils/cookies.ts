@@ -1,6 +1,7 @@
-import type { CookieOptions } from "better-call";
+import type { Context, CookieOptions } from "better-call";
 import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
+import type { GenericEndpointContext } from "../types/context";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
@@ -50,6 +51,16 @@ export function getCookies(options: BetterAuthOptions) {
 				maxAge: 60 * 15, // 15 minutes in seconds
 			} as CookieOptions,
 		},
+		dontRememberToken: {
+			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
+			options: {
+				httpOnly: true,
+				sameSite: "lax",
+				path: "/",
+				secure,
+				//no max age so it expires when the browser closes
+			} as CookieOptions,
+		},
 		nonce: {
 			name: `${secureCookiePrefix}${cookiePrefix}.nonce`,
 			options: {
@@ -87,3 +98,43 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	return getCookie;
 }
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
+
+export async function setSessionCookie(
+	ctx: GenericEndpointContext,
+	sessionToken: string,
+	dontRememberMe?: boolean,
+	overrides?: Partial<CookieOptions>,
+) {
+	await ctx.setSignedCookie(
+		ctx.context.authCookies.sessionToken.name,
+		sessionToken,
+		ctx.context.secret,
+		dontRememberMe
+			? {
+					...ctx.context.authCookies.sessionToken.options,
+					maxAge: undefined,
+					...overrides,
+				}
+			: {
+					...ctx.context.authCookies.sessionToken.options,
+					...overrides,
+				},
+	);
+	if (dontRememberMe) {
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.dontRememberToken.name,
+			"true",
+			ctx.context.secret,
+			ctx.context.authCookies.dontRememberToken.options,
+		);
+	}
+}
+
+export function deleteSessionCookie(ctx: GenericEndpointContext) {
+	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+		maxAge: 0,
+	});
+	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+		maxAge: 0,
+	});
+}

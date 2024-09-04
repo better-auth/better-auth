@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function Component() {
@@ -21,22 +22,40 @@ export default function Component() {
 	const [message, setMessage] = useState("");
 	const [isError, setIsError] = useState(false);
 	const [isValidated, setIsValidated] = useState(false);
+	const [OTP, setOTP] = useState("");
 
 	// In a real app, this email would come from your authentication context
 	const userEmail = "user@example.com";
 
 	const requestOTP = async () => {
-		await authClient.twoFactor.sendOtp();
+		const res = await authClient.twoFactor.sendOtp({
+			options: {
+				body: {
+					returnOTP: true
+				}
+			}
+		});
+		setOTP(res.data?.OTP || "");
 		// In a real app, this would call your backend API to send the OTP
 		setMessage("OTP sent to your email");
 		setIsError(false);
 		setIsOtpSent(true);
 	};
+	const router = useRouter()
 
 	const validateOTP = async () => {
-		await authClient.twoFactor.verifyOtp({
+		const res = await authClient.twoFactor.verifyOtp({
 			code: otp,
 		});
+		if (res.data) {
+			setMessage("OTP validated successfully");
+			setIsError(false);
+			setIsValidated(true);
+			router.push("/")
+		} else {
+			setIsError(true)
+			setMessage("Invalid OTP")
+		}
 	};
 	return (
 		<main className="flex flex-col items-center justify-center min-h-screen">
@@ -57,6 +76,10 @@ export default function Component() {
 							<>
 								<div className="flex flex-col space-y-1.5">
 									<Label htmlFor="otp">One-Time Password</Label>
+									<Label className="py-2">
+										Use <span className="text-blue-100 bg-slate-800 px-2">
+											{OTP}</span> (on real app, this would be sent to your email)
+									</Label>
 									<Input
 										id="otp"
 										placeholder="Enter 6-digit OTP"
@@ -76,9 +99,8 @@ export default function Component() {
 					</div>
 					{message && (
 						<div
-							className={`flex items-center gap-2 mt-4 ${
-								isError ? "text-destructive" : "text-primary"
-							}`}
+							className={`flex items-center gap-2 mt-4 ${isError ? "text-red-500" : "text-primary"
+								}`}
 						>
 							{isError ? (
 								<AlertCircle className="h-4 w-4" />

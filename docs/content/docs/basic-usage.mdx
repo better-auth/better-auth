@@ -3,9 +3,9 @@ title: Basic Usage
 description: Usage
 ---
 
-## Signin and Signup with Email
+## Sign-in & Sign-up with Email & Password
 
-To use signin and signup with email, you need to configure the email and password authenticator. You can do this by adding the following code to your `auth.ts` file:
+To use email and password as authentication startgey, you need to enable `emailAndPassword` in the `auth` config. 
 
 ```ts title="auth.ts" twoslash 
 import { betterAuth } from "better-auth"
@@ -200,7 +200,7 @@ the client providers a `useSession` hook or a `session` object that you can use 
             ```svelte title="user.svelte"
             <script lang="ts">
             import { client } from "$lib/client";
-            const session = client.$session;
+            const session = client.useSsession;
             </script>
 
             <div
@@ -334,10 +334,11 @@ npx better-auth migrate
 Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `authPlugins` option of the auth client. For example, to add two facor authentication, you can use the following code:
 
 ```ts title="client.ts" twoslash /
-import { createAuthClient, twoFactorClient } from "better-auth/client"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
 
 const client = createAuthClient({
-    authPlugins: [ // [!code highlight]
+    plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight] 
         }) // [!code highlight]
@@ -349,10 +350,11 @@ now two factor related methods will be available on the client.
 
 ```ts title="profile.ts" twoslash
 // @filename: client.ts
-import { createAuthClient, twoFactorClient } from "better-auth/client"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
 
 export const client = createAuthClient({
-    authPlugins: [ // [!code highlight]
+    plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight] 
         }) // [!code highlight]

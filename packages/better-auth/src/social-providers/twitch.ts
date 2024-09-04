@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Twitch } from "arctic";
 import type { OAuthProvider } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface TwitchProfile {
 	/**
@@ -28,15 +28,11 @@ export interface TwitchOptions {
 	redirectURI?: string;
 }
 
-export const twitch = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: TwitchOptions) => {
+export const twitch = (options: TwitchOptions) => {
 	const twitchArctic = new Twitch(
-		clientId,
-		clientSecret,
-		getRedirectURI("twitch", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("twitch", options.redirectURI),
 	);
 	return {
 		id: "twitch",
@@ -45,7 +41,16 @@ export const twitch = ({
 			const _scopes = scopes || ["activity:write", "read"];
 			return twitchArctic.createAuthorizationURL(state, _scopes);
 		},
-		validateAuthorizationCode: twitchArctic.validateAuthorizationCode,
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("twitch", options.redirectURI),
+				options,
+				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+			});
+		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<TwitchProfile>(
 				"https://api.twitch.tv/helix/users",

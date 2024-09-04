@@ -6,6 +6,7 @@ import { oAuthProviderList } from "../../social-providers";
 import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
+import { setSessionCookie } from "../../utils/cookies";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -30,6 +31,10 @@ export const signInOAuth = createAuthEndpoint(
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(oAuthProviderList),
+			/**
+			 * If this is true the session will only be valid for the current browser session
+			 */
+			dontRememberMe: z.boolean().default(false).optional(),
 		}),
 	},
 	async (c) => {
@@ -73,6 +78,10 @@ export const signInOAuth = createAuthEndpoint(
 				state: state.state,
 				codeVerifier,
 			});
+			url.searchParams.set(
+				"redirect_uri",
+				`${c.context.baseURL}/callback/${c.body.provider}`,
+			);
 			return {
 				url: url.toString(),
 				state: state.state,
@@ -109,12 +118,12 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const currentSession = await getSessionFromCtx(ctx);
 		if (currentSession) {
-			return ctx.json({
-				user: currentSession.user,
-				session: currentSession.session,
-				redirect: !!ctx.body.callbackURL,
-				url: ctx.body.callbackURL,
-			});
+			/**
+			 * Delete the current session if it exists
+			 */
+			await ctx.context.internalAdapter.deleteSession(
+				currentSession.session.id,
+			);
 		}
 		const { email, password } = ctx.body;
 		const checkEmail = z.string().email().safeParse(email);
@@ -158,18 +167,9 @@ export const signInEmail = createAuthEndpoint(
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.request,
+			ctx.body.dontRememberMe,
 		);
-		await ctx.setSignedCookie(
-			ctx.context.authCookies.sessionToken.name,
-			session.id,
-			ctx.context.secret,
-			ctx.body.dontRememberMe
-				? {
-						...ctx.context.authCookies.sessionToken.options,
-						maxAge: undefined,
-					}
-				: ctx.context.authCookies.sessionToken.options,
-		);
+		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
 		return ctx.json({
 			user: user.user,
 			session,

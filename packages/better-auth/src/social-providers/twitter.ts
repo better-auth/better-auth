@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Twitter } from "arctic";
 import type { OAuthProvider } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
 import { BetterAuthError } from "../error/better-auth-error";
 
 export interface TwitterProfile {
@@ -99,15 +99,11 @@ export interface TwitterOption {
 	redirectURI?: string;
 }
 
-export const twitter = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: TwitterOption) => {
+export const twitter = (options: TwitterOption) => {
 	const twitterArctic = new Twitter(
-		clientId,
-		clientSecret,
-		getRedirectURI("twitter", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("twitter", options.redirectURI),
 	);
 	return {
 		id: "twitter",
@@ -120,11 +116,15 @@ export const twitter = ({
 				_scopes,
 			);
 		},
-		validateAuthorizationCode: async (code, codeVerifier) => {
-			if (!codeVerifier) {
-				throw new BetterAuthError("codeVerifier is required for Twitter");
-			}
-			return twitterArctic.validateAuthorizationCode(code, codeVerifier);
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("twitch", options.redirectURI),
+				options,
+				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+			});
 		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<TwitterProfile>(

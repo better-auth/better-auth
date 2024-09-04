@@ -38,11 +38,22 @@ export const createInternalAdapter = (
 			});
 			return createdUser;
 		},
-		createSession: async (userId: string, request?: Request) => {
+		createSession: async (
+			userId: string,
+			request?: Request,
+			dontRememberMe?: boolean,
+		) => {
 			const data: Session = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
-				expiresAt: getDate(sessionExpiration),
+				/**
+				 * If the user doesn't want to be remembered
+				 * set the session to expire in 1 day.
+				 * The cookie will be set to expire at the end of the session
+				 */
+				expiresAt: dontRememberMe
+					? getDate(1000 * 60 * 60 * 24) // 1 day
+					: getDate(sessionExpiration),
 				ipAddress: request?.headers.get("x-forwarded-for") || "",
 				userAgent: request?.headers.get("user-agent") || "",
 			};
@@ -82,45 +93,18 @@ export const createInternalAdapter = (
 				user,
 			};
 		},
-		updateSession: async (session: Session) => {
-			const updateAge =
-				options.session?.updateAge === undefined
-					? 1000 // 1 hour update age
-					: options.session?.updateAge;
-			const updateDate = updateAge === 0 ? 0 : getDate(updateAge).valueOf();
-			const maxAge = getDate(sessionExpiration);
-			const shouldBeUpdated =
-				session.expiresAt.valueOf() - maxAge.valueOf() + updateDate <=
-				Date.now();
-			if (shouldBeUpdated) {
-				const updatedSession = await adapter.create<Session>({
-					model: tables.session.tableName,
-					data: {
-						...session,
-						id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
-						expiresAt: new Date(Date.now() + sessionExpiration),
+		updateSession: async (sessionId: string, session: Partial<Session>) => {
+			const updatedSession = await adapter.update<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "id",
+						value: sessionId,
 					},
-				});
-				await adapter.update<Session>({
-					model: tables.session.tableName,
-					where: [
-						{
-							field: "id",
-							value: session.id,
-						},
-					],
-					update: {
-						/**
-						 * update the session to expire in 2 minute. This is to prevent
-						 * the session from expiring too quickly and logging the user out.
-						 */
-						expiresAt: new Date(Date.now() + 1000 * 60 * 2),
-					},
-				});
-				return updatedSession;
-			}
-
-			return session;
+				],
+				update: session,
+			});
+			return updatedSession;
 		},
 		deleteSession: async (id: string) => {
 			const session = await adapter.delete<Session>({

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
+import { deleteSessionCookie } from "../../utils/cookies";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
@@ -20,9 +21,7 @@ export const signOut = createAuthEndpoint(
 			return ctx.json(null);
 		}
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
-		ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-			maxAge: 0,
-		});
+		deleteSessionCookie(ctx);
 		return ctx.json(null, {
 			body: {
 				redirect: !!ctx.body?.callbackURL,

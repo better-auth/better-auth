@@ -4,6 +4,7 @@ import { createAuthMiddleware } from "../../api/call";
 import { hs256 } from "../../crypto";
 import { TWO_FACTOR_COOKIE_NAME } from "./constant";
 import type { UserWithTwoFactor } from "./types";
+import { setSessionCookie } from "../../utils/cookies";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 	const cookie = await ctx.getSignedCookie(
@@ -62,15 +63,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 		if (hashToMatch === hash) {
 			return {
 				valid: async () => {
-					/**
-					 * Set the session cookie
-					 */
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						session.id,
-						ctx.context.secret,
-						ctx.context.authCookies.sessionToken.options,
-					);
+					await setSessionCookie(ctx, session.id, false);
 					if (ctx.body.callbackURL) {
 						return ctx.json({
 							status: true,
@@ -78,7 +71,6 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(async (ctx) => {
 							redirect: true,
 						});
 					}
-
 					return ctx.json({ status: true });
 				},
 				invalid: async () => {

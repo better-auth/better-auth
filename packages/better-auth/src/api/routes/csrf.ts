@@ -19,6 +19,7 @@ export const getCSRFToken = createAuthEndpoint(
 				csrfToken,
 			};
 		}
+
 		const token = generateRandomString(32, alphabet("a-z", "0-9", "A-Z"));
 		const hash = await hs256(ctx.context.secret, token);
 		const cookie = `${token}!${hash}`;

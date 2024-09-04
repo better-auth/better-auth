@@ -1,7 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Facebook } from "arctic";
 import type { OAuthProvider } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
 
 export interface FacebookProfile {
 	id: string;
@@ -22,15 +23,11 @@ export interface FacebookOptions {
 	clientSecret: string;
 	redirectURI?: string;
 }
-export const facebook = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: FacebookOptions) => {
+export const facebook = (options: FacebookOptions) => {
 	const facebookArctic = new Facebook(
-		clientId,
-		clientSecret,
-		getRedirectURI("facebook", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("facebook", options.redirectURI),
 	);
 	return {
 		id: "facebook",
@@ -39,7 +36,16 @@ export const facebook = ({
 			const _scopes = scopes || ["email", "public_profile"];
 			return facebookArctic.createAuthorizationURL(state, _scopes);
 		},
-		validateAuthorizationCode: facebookArctic.validateAuthorizationCode,
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("facebook", options.redirectURI),
+				options,
+				tokenEndpoint: "https://graph.facebook.com/v16.0/oauth/access_token",
+			});
+		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
 				"https://graph.facebook.com/me",

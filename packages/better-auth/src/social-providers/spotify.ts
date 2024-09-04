@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Spotify } from "arctic";
 import type { OAuthProvider } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface SpotifyProfile {
 	id: string;
@@ -18,15 +18,11 @@ export interface SpotifyOptions {
 	redirectURI?: string;
 }
 
-export const spotify = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: SpotifyOptions) => {
+export const spotify = (options: SpotifyOptions) => {
 	const spotifyArctic = new Spotify(
-		clientId,
-		clientSecret,
-		getRedirectURI("spotify", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("spotify", options.redirectURI),
 	);
 	return {
 		id: "spotify",
@@ -35,7 +31,16 @@ export const spotify = ({
 			const _scopes = scopes || ["user-read-email"];
 			return spotifyArctic.createAuthorizationURL(state, _scopes);
 		},
-		validateAuthorizationCode: spotifyArctic.validateAuthorizationCode,
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("spotify", options.redirectURI),
+				options,
+				tokenEndpoint: "https://accounts.spotify.com/api/token",
+			});
+		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<SpotifyProfile>(
 				"https://api.spotify.com/v1/me",

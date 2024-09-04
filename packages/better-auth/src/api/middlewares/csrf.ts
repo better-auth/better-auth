@@ -19,14 +19,13 @@ export const csrfMiddleware = createAuthMiddleware(
 			return;
 		}
 		const url = new URL(ctx.request.url);
-		console.log(url.origin, ctx.context.options.baseURL);
 		/**
 		 * If origin is the same as baseURL or if the
 		 * origin is in the trustedOrigins then we
 		 * don't need to check the CSRF token.
 		 */
 		if (
-			url.origin === ctx.context.options.baseURL ||
+			url.origin === new URL(ctx.context.baseURL).origin ||
 			ctx.context.options.trustedOrigins?.includes(url.origin)
 		) {
 			return;

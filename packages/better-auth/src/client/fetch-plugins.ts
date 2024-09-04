@@ -32,6 +32,17 @@ export const csrfPlugin = {
 	id: "csrf",
 	name: "CSRF Check",
 	async init(url, options) {
+		if (typeof window !== "undefined") {
+			/**
+			 * If origin is the same as baseURL
+			 * then we don't need to check the CSRF token.
+			 */
+			const isTheSameOrigin =
+				new URL(options?.baseURL || url).origin === window.location.origin;
+			if (isTheSameOrigin) {
+				return { url, options };
+			}
+		}
 		if (options?.method !== "GET") {
 			options = options || {};
 			const { data, error } = await betterFetch<{

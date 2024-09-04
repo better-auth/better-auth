@@ -17,6 +17,7 @@ import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api/middlewares/session";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
+import { setSessionCookie } from "../../utils/cookies";
 
 export interface PasskeyOptions {
 	/**
@@ -386,12 +387,7 @@ export const passkey = (options: PasskeyOptions) => {
 							passkey.userId,
 							ctx.request,
 						);
-						await ctx.setSignedCookie(
-							ctx.context.authCookies.sessionToken.name,
-							s.id,
-							ctx.context.secret,
-							ctx.context.authCookies.sessionToken.options,
-						);
+						await setSessionCookie(ctx, s.id);
 						if (callbackURL) {
 							return ctx.json({
 								url: callbackURL,

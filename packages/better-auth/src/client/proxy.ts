@@ -68,7 +68,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 
 				return await client(routePath, {
 					...options,
-					body: method === "GET" ? undefined : body,
+					body:
+						method === "GET"
+							? undefined
+							: {
+									...body,
+									...(options?.body || {}),
+								},
 					query: query,
 					method,
 					async onSuccess(context) {
@@ -79,8 +85,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						if (!matches) return;
 						const signal = atoms[matches.signal];
 						if (!signal) return;
-						//@ts-expect-error
-						signal.set(!signal.get());
+						setTimeout(() => {
+							//@ts-expect-error
+							signal.set(!signal.get());
+						}, 0);
 						await options?.onSuccess?.(context);
 					},
 				});

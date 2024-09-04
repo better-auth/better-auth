@@ -3,6 +3,11 @@ import { createConsola } from "consola";
 const consola = createConsola({
 	formatOptions: {
 		date: false,
+		colors: true,
+		compact: true,
+	},
+	defaults: {
+		tag: "[Better Auth]",
 	},
 });
 

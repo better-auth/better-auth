@@ -1,7 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Discord } from "arctic";
 import type { OAuthProvider } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
 
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
@@ -81,15 +82,11 @@ export interface DiscordOptions {
 	redirectURI?: string;
 }
 
-export const discord = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: DiscordOptions) => {
+export const discord = (options: DiscordOptions) => {
 	const discordArctic = new Discord(
-		clientId,
-		clientSecret,
-		getRedirectURI("discord", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("discord", options.redirectURI),
 	);
 	return {
 		id: "discord",
@@ -98,7 +95,16 @@ export const discord = ({
 			const _scope = scopes || ["email"];
 			return discordArctic.createAuthorizationURL(state, _scope);
 		},
-		validateAuthorizationCode: discordArctic.validateAuthorizationCode,
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("discord", options.redirectURI),
+				options,
+				tokenEndpoint: "https://discord.com/api/oauth2/token",
+			});
+		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
 				"https://discord.com/api/users/@me",

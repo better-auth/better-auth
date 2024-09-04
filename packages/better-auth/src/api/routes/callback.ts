@@ -6,6 +6,7 @@ import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 import { getAccountTokens } from "../../utils/getAccount";
+import { setSessionCookie } from "../../utils/cookies";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -14,7 +15,6 @@ export const callbackOAuth = createAuthEndpoint(
 		query: z.object({
 			state: z.string(),
 			code: z.string(),
-			code_verifier: z.string().optional(),
 		}),
 		metadata: HIDE_ON_CLIENT_METADATA,
 	},
@@ -30,9 +30,14 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			throw new APIError("NOT_FOUND");
 		}
+		const codeVerifier = await c.getSignedCookie(
+			c.context.authCookies.pkCodeVerifier.name,
+			c.context.secret,
+		);
 		const tokens = await provider.validateAuthorizationCode(
 			c.query.code,
-			c.query.code_verifier || "",
+			codeVerifier,
+			`${c.context.baseURL}/callback/${provider.id}`,
 		);
 		if (!tokens) {
 			c.context.logger.error("Code verification failed");
@@ -44,7 +49,14 @@ export const callbackOAuth = createAuthEndpoint(
 			...user,
 			id,
 		});
-		const { callbackURL, currentURL } = parseState(c.query.state);
+		const parsedState = parseState(c.query.state);
+		if (!parsedState.success) {
+			c.context.logger.error("Unable to parse state");
+			throw new APIError("BAD_REQUEST", {
+				message: "invalid state",
+			});
+		}
+		const { callbackURL, currentURL, dontRememberMe } = parsedState.data;
 		if (!user || data.success === false) {
 			if (currentURL) {
 				throw c.redirect(`${currentURL}?error=oauth_validation_failed`);
@@ -105,14 +117,10 @@ export const callbackOAuth = createAuthEndpoint(
 		const session = await c.context.internalAdapter.createSession(
 			userId || id,
 			c.request,
+			dontRememberMe,
 		);
 		try {
-			await c.setSignedCookie(
-				c.context.authCookies.sessionToken.name,
-				session.id,
-				c.context.secret,
-				c.context.authCookies.sessionToken.options,
-			);
+			await setSessionCookie(c, session.id, dontRememberMe);
 		} catch (e) {
 			c.context.logger.error("Unable to set session cookie", e);
 			const url = new URL(currentURL || callbackURL);
