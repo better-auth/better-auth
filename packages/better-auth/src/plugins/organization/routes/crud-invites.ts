@@ -148,6 +148,18 @@ export const acceptInvitation = createAuthEndpoint(
 			role: invitation.role,
 			name: session.user.name,
 		});
+		await adapter.setActiveOrganization(
+			session.session.id,
+			invitation.organizationId,
+		);
+		if (!acceptedI) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Invitation not found!",
+				},
+			});
+		}
 		return ctx.json({
 			invitation: acceptedI,
 			member,

@@ -2,19 +2,25 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
+import type { Member } from "../schema";
 
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",
 	{
 		method: "POST",
 		body: z.object({
-			memberId: z.string(),
+			memberIdOrEmail: z.string(),
+			/**
+			 * If not provided, the active organization will be used
+			 */
+			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId = session.session.activeOrganizationId;
+		const orgId =
+			ctx.body.organizationId || session.session.activeOrganizationId;
 		if (!orgId) {
 			return ctx.json(null, {
 				status: 400,
@@ -46,7 +52,8 @@ export const removeMember = createAuthEndpoint(
 			});
 		}
 		if (
-			session.user.id === member.userId &&
+			(session.user.email === ctx.body.memberIdOrEmail ||
+				session.user.id === ctx.body.memberIdOrEmail) &&
 			member.role === (ctx.context.orgOptions?.creatorRole || "owner")
 		) {
 			return ctx.json(null, {
@@ -67,7 +74,15 @@ export const removeMember = createAuthEndpoint(
 				status: 403,
 			});
 		}
-		const existing = await adapter.findMemberById(ctx.body.memberId);
+		let existing: Member | null = null;
+		if (ctx.body.memberIdOrEmail.includes("@")) {
+			existing = await adapter.findMemberByEmail({
+				email: ctx.body.memberIdOrEmail,
+				organizationId: orgId,
+			});
+		} else {
+			existing = await adapter.findMemberById(ctx.body.memberIdOrEmail);
+		}
 		if (existing?.organizationId !== orgId) {
 			return ctx.json(null, {
 				status: 400,
@@ -76,30 +91,37 @@ export const removeMember = createAuthEndpoint(
 				},
 			});
 		}
-		const deletedMember = await adapter.deleteMember(ctx.body.memberId);
+		await adapter.deleteMember(existing.id);
 		if (
 			session.user.id === existing.userId &&
 			session.session.activeOrganizationId === existing.organizationId
 		) {
 			await adapter.setActiveOrganization(session.session.id, null);
 		}
-		return ctx.json(deletedMember);
+		return ctx.json({
+			member: existing,
+		});
 	},
 );
 
-export const updateMember = createAuthEndpoint(
-	"/organization/update-member",
+export const updateMemberRole = createAuthEndpoint(
+	"/organization/update-member-role",
 	{
 		method: "POST",
 		body: z.object({
+			role: z.enum(["admin", "member", "owner"]),
 			memberId: z.string(),
-			role: z.string(),
+			/**
+			 * If not provided, the active organization will be used
+			 */
+			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId = session.session.activeOrganizationId;
+		const orgId =
+			ctx.body.organizationId || session.session.activeOrganizationId;
 		if (!orgId) {
 			return ctx.json(null, {
 				status: 400,
@@ -130,10 +152,16 @@ export const updateMember = createAuthEndpoint(
 				},
 			});
 		}
-		const canUpdateMember = role.authorize({
-			member: ["update"],
-		});
-		if (canUpdateMember.error) {
+		/**
+		 * If the member is not an owner, they cannot update the role of another member
+		 * as an owner.
+		 */
+		const canUpdateMember =
+			role.authorize({
+				member: ["update"],
+			}).error ||
+			(ctx.body.role === "owner" && member.role !== "owner");
+		if (canUpdateMember) {
 			return ctx.json(null, {
 				body: {
 					message: "You are not allowed to update this member",
@@ -141,10 +169,19 @@ export const updateMember = createAuthEndpoint(
 				status: 403,
 			});
 		}
+
 		const updatedMember = await adapter.updateMember(
 			ctx.body.memberId,
 			ctx.body.role,
 		);
+		if (!updatedMember) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Member not found!",
+				},
+			});
+		}
 		return ctx.json(updatedMember);
 	},
 );

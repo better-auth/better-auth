@@ -50,6 +50,7 @@ export interface AuthClientPlugin {
 export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: AuthClientPlugin[];
+	baseURL?: string;
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<

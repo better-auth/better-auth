@@ -27,9 +27,10 @@ import {
 	getActiveInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
-import { removeMember, updateMember } from "./routes/crud-members";
+import { removeMember, updateMemberRole } from "./routes/crud-members";
 import {
 	createOrganization,
+	deleteOrganization,
 	getFullOrganization,
 	listOrganization,
 	setActiveOrganization,
@@ -109,6 +110,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
 		updateOrganization,
+		deleteOrganization,
 		setActiveOrganization,
 		getFullOrganization,
 		listOrganization,
@@ -118,7 +120,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		getActiveInvitation,
 		rejectInvitation,
 		removeMember,
-		updateMember,
+		updateMemberRole,
 	};
 
 	const roles = {

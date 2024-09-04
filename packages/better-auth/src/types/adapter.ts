@@ -33,7 +33,7 @@ export interface Adapter {
 		model: string;
 		where: Where[];
 		update: Record<string, any>;
-	}) => Promise<T>;
+	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
 	/**
 	 * adapter specific configuration

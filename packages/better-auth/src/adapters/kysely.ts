@@ -206,11 +206,12 @@ export const kyselyAdapter = (
 			if (or) {
 				query = query.where((eb) => eb.or(or));
 			}
-			const res = await query.returningAll().executeTakeFirst();
+			const res = (await query.returningAll().executeTakeFirst()) || null;
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				return schema ? transformTo(res, schema, config.transform) : res;
 			}
+
 			return res as any;
 		},
 		async delete(data) {

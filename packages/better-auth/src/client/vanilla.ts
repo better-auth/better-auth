@@ -22,7 +22,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: () => Atoms[key];
+								: never]: Atoms[key];
 					}
 				: {}
 			: {}
@@ -43,6 +43,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}
+
 	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 	const routes = {
 		...pluginsActions,

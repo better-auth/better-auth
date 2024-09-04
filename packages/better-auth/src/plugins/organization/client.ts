@@ -8,6 +8,7 @@ import type { Prettify } from "../../types/helper";
 import { defaultStatements, type AccessControl, type Role } from "./access";
 import type { AuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
@@ -41,17 +42,19 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				setInvitationId: (id: string | null) => {
 					_activeISignal.set(id);
 				},
-				hasPermission: async (
+				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
 						[key in keyof Statements]: Statements[key][number][];
-					}>,
-				) => {
+					}>;
+					options?: BetterFetchOption;
+				}) => {
 					return await $fetch<boolean>("/organization/has-permission", {
 						method: "POST",
 						body: {
-							...permission,
+							permission: data.permission,
 						},
+						...data.options,
 					});
 				},
 			},
@@ -81,7 +84,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 								invitations: Invitation[];
 							}
 						>
-					>("/organization/set-active", {
+					>("/organization/activate", {
 						method: "POST",
 						credentials: "include",
 						body: {

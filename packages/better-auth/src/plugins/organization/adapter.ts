@@ -153,7 +153,7 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			return organization;
+			return orgId;
 		},
 		setActiveOrganization: async (sessionId: string, orgId: string | null) => {
 			const session = await adapter.update<Session>({

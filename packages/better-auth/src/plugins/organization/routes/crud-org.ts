@@ -67,8 +67,12 @@ export const updateOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			name: z.string().optional(),
-			slug: z.string().optional(),
+			data: z
+				.object({
+					name: z.string().optional(),
+					slug: z.string().optional(),
+				})
+				.partial(),
 			orgId: z.string().optional(),
 		}),
 		requireHeaders: true,
@@ -123,7 +127,7 @@ export const updateOrganization = createAuthEndpoint(
 				status: 403,
 			});
 		}
-		const updatedOrg = await adapter.updateOrganization(orgId, ctx.body);
+		const updatedOrg = await adapter.updateOrganization(orgId, ctx.body.data);
 		return ctx.json(updatedOrg);
 	},
 );
@@ -193,13 +197,13 @@ export const deleteOrganization = createAuthEndpoint(
 			 */
 			await adapter.setActiveOrganization(session.session.id, null);
 		}
-		const deletedOrg = await adapter.deleteOrganization(orgId);
-		return ctx.json(deletedOrg);
+		await adapter.deleteOrganization(orgId);
+		return ctx.json(orgId);
 	},
 );
 
 export const getFullOrganization = createAuthEndpoint(
-	"/organization/full",
+	"/organization/get-full",
 	{
 		method: "GET",
 		query: z.object({
@@ -234,7 +238,7 @@ export const getFullOrganization = createAuthEndpoint(
 );
 
 export const setActiveOrganization = createAuthEndpoint(
-	"/organization/set-active",
+	"/organization/activate",
 	{
 		method: "POST",
 		body: z.object({

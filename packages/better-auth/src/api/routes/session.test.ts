@@ -135,7 +135,7 @@ describe("session", async () => {
 			throw new Error("No session found");
 		}
 		expect(res.data.session).not.toBeNull();
-		const signOutResponse = await client.signOut({
+		await client.signOut({
 			options: {
 				headers,
 			},

@@ -6,6 +6,7 @@ import { createAuthClient } from "../client/vanilla";
 import { github, google } from "../social-providers";
 import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
+import { parseSetCookieHeader } from "../utils/cookies";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
@@ -55,7 +56,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	}
 
 	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(opts);
+		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
 		await createTestUser();
 	});
@@ -63,6 +64,45 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	afterAll(async () => {
 		await fs.unlink(dbName);
 	});
+
+	async function signInWithTestUser() {
+		let headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			options: {
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					const signedCookie = cookies.get("better-auth.session_token")?.value;
+					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
+				},
+			},
+		});
+		return {
+			res,
+			headers,
+		};
+	}
+	async function signInWithUser(email: string, password: string) {
+		let headers = new Headers();
+		const res = await client.signIn.email({
+			email,
+			password,
+			options: {
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					const signedCookie = cookies.get("better-auth.session_token")?.value;
+					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
+				},
+			},
+		});
+		return {
+			res,
+			headers,
+		};
+	}
 
 	const client = createAuthClient({
 		fetchOptions: {
@@ -78,5 +118,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		auth,
 		client,
 		testUser,
+		signInWithTestUser,
+		signInWithUser,
 	};
 }

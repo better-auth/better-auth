@@ -22,7 +22,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: () => Atoms[key];
+								: never]: Atoms[key];
 					}
 				: {}
 			: {}
