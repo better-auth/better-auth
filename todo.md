@@ -9,6 +9,7 @@
 [ ] implement the ac check on the client to for organization
 [ ] add delete organization endpoint
 [ ] fix bun problem
+[ ] allow enabling two factor automatically for users
 
 
 ## Docs

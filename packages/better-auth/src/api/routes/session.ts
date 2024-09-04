@@ -10,72 +10,88 @@ export const getSession = createAuthEndpoint(
 		requireHeaders: true,
 	},
 	async (ctx) => {
-		const sessionCookieToken = await ctx.getSignedCookie(
-			ctx.context.authCookies.sessionToken.name,
-			ctx.context.secret,
-		);
-
-		if (!sessionCookieToken) {
-			ctx.setHeader("set-cookie", "");
-			return ctx.json(null, {
-				status: 401,
-			});
-		}
-		const session =
-			await ctx.context.internalAdapter.findSession(sessionCookieToken);
-
-		if (!session || session.session.expiresAt < new Date()) {
-			deleteSessionCookie(ctx);
-			if (session) {
-				/**
-				 * if session expired clean up the session
-				 */
-				await ctx.context.internalAdapter.deleteSession(session.session.id);
-			}
-			return ctx.json(null, {
-				status: 401,
-			});
-		}
-		const dontRememberMe = await ctx.getSignedCookie(
-			ctx.context.authCookies.dontRememberToken.name,
-			ctx.context.secret,
-		);
-		/**
-		 * We don't need to update the session if the user doesn't want to be remembered
-		 */
-		if (dontRememberMe) {
-			return ctx.json(session);
-		}
-		const expiresIn = ctx.context.session.expiresIn;
-		const updateAge = ctx.context.session.updateAge;
-		/**
-		 * Calculate last updated date to throttle write updates to database
-		 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
-		 *
-		 * e.g. ({expiry date} - 30 days) + 1 hour
-		 *
-		 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/
-		 * actions/session.ts
-		 */
-		const sessionIsDueToBeUpdatedDate =
-			session.session.expiresAt.valueOf() - expiresIn * 1000 + updateAge * 1000;
-
-		if (sessionIsDueToBeUpdatedDate <= Date.now()) {
-			const updatedSession = await ctx.context.internalAdapter.updateSession(
-				session.session.id,
-				{
-					expiresAt: getDate(ctx.context.session.expiresIn),
-				},
+		try {
+			const sessionCookieToken = await ctx.getSignedCookie(
+				ctx.context.authCookies.sessionToken.name,
+				ctx.context.secret,
 			);
-			await setSessionCookie(ctx, updatedSession.id, false, {
-				maxAge: updatedSession.expiresAt.valueOf() - Date.now(),
-			});
-			return ctx.json({
-				session: updatedSession,
-				user: session.user,
-			});
+
+			if (!sessionCookieToken) {
+				deleteSessionCookie(ctx);
+				return ctx.json(null, {
+					status: 401,
+				});
+			}
+			const session =
+				await ctx.context.internalAdapter.findSession(sessionCookieToken);
+
+			if (!session || session.session.expiresAt < new Date()) {
+				deleteSessionCookie(ctx);
+				if (session) {
+					/**
+					 * if session expired clean up the session
+					 */
+					await ctx.context.internalAdapter.deleteSession(session.session.id);
+				}
+				return ctx.json(null, {
+					status: 401,
+				});
+			}
+			const dontRememberMe = await ctx.getSignedCookie(
+				ctx.context.authCookies.dontRememberToken.name,
+				ctx.context.secret,
+			);
+			/**
+			 * We don't need to update the session if the user doesn't want to be remembered
+			 */
+			if (dontRememberMe) {
+				return ctx.json(session);
+			}
+			const expiresIn = ctx.context.session.expiresIn;
+			const updateAge = ctx.context.session.updateAge;
+			/**
+			 * Calculate last updated date to throttle write updates to database
+			 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
+			 *
+			 * e.g. ({expiry date} - 30 days) + 1 hour
+			 *
+			 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/
+			 * actions/session.ts
+			 */
+			const sessionIsDueToBeUpdatedDate =
+				session.session.expiresAt.valueOf() -
+				expiresIn * 1000 +
+				updateAge * 1000;
+			const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
+
+			if (shouldBeUpdated) {
+				const updatedSession = await ctx.context.internalAdapter.updateSession(
+					session.session.id,
+					{
+						expiresAt: getDate(ctx.context.session.expiresIn, true),
+					},
+				);
+				if (!updatedSession) {
+					/**
+					 * Handle case where session update fails (e.g., concurrent deletion)
+					 */
+					deleteSessionCookie(ctx);
+					return ctx.json(null, { status: 401 });
+				}
+				const maxAge = (updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+				await setSessionCookie(ctx, updatedSession.id, false, {
+					maxAge,
+				});
+				return ctx.json({
+					session: updatedSession,
+					user: session.user,
+				});
+			}
+			return ctx.json(session);
+		} catch (error) {
+			ctx.context.logger.error(error);
+			return ctx.json(null, { status: 500 });
 		}
-		return ctx.json(session);
 	},
 );
 

@@ -1,3 +1,4 @@
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 import { createAuthEndpoint } from "../call";
 
 const html = (errorCode: string = "Unknown") => `<!DOCTYPE html>
@@ -86,6 +87,7 @@ export const error = createAuthEndpoint(
 	"/error",
 	{
 		method: "GET",
+		metadata: HIDE_ON_CLIENT_METADATA,
 	},
 	async (c) => {
 		const query =

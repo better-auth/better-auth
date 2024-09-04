@@ -3,6 +3,7 @@ import { getAdapter } from "./adapters/utils";
 import { createInternalAdapter } from "./db";
 import type { BetterAuthOptions } from "./types";
 import { getBaseURL } from "./utils/base-url";
+import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
 	createCookieGetter,
@@ -28,7 +29,7 @@ export const init = (options: BetterAuthOptions) => {
 			options.secret ||
 			process.env.BETTER_AUTH_SECRET ||
 			process.env.AUTH_SECRET ||
-			"better-auth-secret-123456789",
+			DEFAULT_SECRET,
 		authCookies: getCookies(options),
 		logger: createLogger({
 			disabled: options.disableLog,

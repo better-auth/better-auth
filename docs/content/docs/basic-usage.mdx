@@ -31,11 +31,16 @@ To signup a user, you can use the `signUp.email` function provided by the client
 - `image`: The image of the user. (optional)
 - `callbackUrl`: The url to redirect to after the user has signed up. (optional)
 
-```ts title="client.ts" twoslash /
+```ts title="signup.ts" twoslash /
+// @filename: client.ts
 import { createAuthClient } from "better-auth/client"
 
 const client = createAuthClient()
 
+// ---cut---
+// @filename: signup.ts
+// ---cut---
+import { client } from "./client"
 const signup = async () => {
     const data = await client.signUp.email({
         email: "test@example.com",

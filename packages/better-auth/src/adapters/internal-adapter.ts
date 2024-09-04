@@ -53,7 +53,7 @@ export const createInternalAdapter = (
 				 */
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
-					: getDate(sessionExpiration),
+					: getDate(sessionExpiration, true),
 				ipAddress: request?.headers.get("x-forwarded-for") || "",
 				userAgent: request?.headers.get("user-agent") || "",
 			};

@@ -43,23 +43,21 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
+	const testUser = {
+		email: "test@test.com",
+		password: "test123456",
+		name: "test",
+	};
 	async function createTestUser() {
 		await auth.api.signUpEmail({
-			body: {
-				email: "test@test.com",
-				password: "test123456",
-				name: "test",
-			},
+			body: testUser,
 		});
-		return {
-			email: "test@test.com",
-			password: "test123456",
-		};
 	}
 
 	beforeAll(async () => {
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
+		await createTestUser();
 	});
 
 	afterAll(async () => {
@@ -79,6 +77,6 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	return {
 		auth,
 		client,
-		createTestUser,
+		testUser,
 	};
 }
