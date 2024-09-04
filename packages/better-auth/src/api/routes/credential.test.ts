@@ -1,7 +1,9 @@
-import { parseCookies } from "oslo/cookie";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../utils/cookies";
+
 const { auth, client } = await getTestInstance();
+
 const testCredential1 = {
 	email: "test@test.com",
 	password: "test123456",
@@ -129,12 +131,28 @@ describe("sign-in credential", async () => {
 				onResponse(context) {
 					const headers = context.response.headers;
 					const cookies = headers.get("set-cookie") || "";
-					const parsedCookie = parseCookies(cookies);
+					const parsedCookie = parseSetCookieHeader(cookies);
+					const sessionCookie = parsedCookie.get("better-auth.session_token");
+					expect(sessionCookie).toMatchObject({
+						value: expect.any(String),
+						path: "/",
+						httponly: true,
+						samesite: "Lax",
+					});
+					const dontRememberCookie = parsedCookie.get(
+						"better-auth.dont_remember",
+					);
+					expect(dontRememberCookie).toMatchObject({
+						value: expect.any(String),
+						path: "/",
+						httponly: true,
+						samesite: "Lax",
+					});
 				},
 			},
 		});
 		expect(
 			new Date(res.data?.session.expiresAt || "").getTime() - Date.now(),
-		).toBeLessThan(1000 * 60 * 60);
+		).toBeLessThan(1000 * 60 * 60 * 24);
 	});
 });

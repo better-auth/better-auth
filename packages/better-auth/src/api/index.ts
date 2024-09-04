@@ -172,9 +172,11 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	_options: Option,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, _options);
+	const basePath = new URL(ctx.baseURL).pathname;
+
 	return createRouter(api, {
 		extraContext: ctx,
-		basePath: new URL(ctx.baseURL).pathname,
+		basePath,
 		routerMiddleware: [
 			{
 				path: "/**",
@@ -182,31 +184,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
-		// /**
-		//  * this is to remove any sensitive data from the response
-		//  */
-		async transformResponse(res) {
-			let body: Record<string, any> = {};
-			try {
-				body = await res.json();
-			} catch (e) {
-				return res;
-			}
-			if (body?.user) {
-				body.user = parseUser(ctx.options, body.user);
-			}
-			if (body?.session) {
-				body.session = parseSession(ctx.options, body.session);
-			}
-			if (body?.account) {
-				body.account = parseAccount(ctx.options, body.account);
-			}
-			return new Response(body ? JSON.stringify(body) : null, {
-				headers: res.headers,
-				status: res.status,
-				statusText: res.statusText,
-			});
-		},
 		onError(e) {
 			console.log(e);
 		},

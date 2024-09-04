@@ -138,3 +138,35 @@ export function deleteSessionCookie(ctx: GenericEndpointContext) {
 		maxAge: 0,
 	});
 }
+
+type CookieAttributes = {
+	value: string;
+	[key: string]: string | boolean;
+};
+
+export function parseSetCookieHeader(
+	header: string,
+): Map<string, CookieAttributes> {
+	const cookieMap = new Map<string, CookieAttributes>();
+
+	// Split the header into individual cookies
+	const cookies = header.split(", ");
+
+	// biome-ignore lint/complexity/noForEach: <explanation>
+	cookies.forEach((cookie) => {
+		const [nameValue, ...attributes] = cookie.split("; ");
+		const [name, value] = nameValue.split("=");
+
+		const cookieObj: CookieAttributes = { value };
+
+		// biome-ignore lint/complexity/noForEach: <explanation>
+		attributes.forEach((attr) => {
+			const [attrName, attrValue] = attr.split("=");
+			cookieObj[attrName.toLowerCase()] = attrValue || true;
+		});
+
+		cookieMap.set(name, cookieObj);
+	});
+
+	return cookieMap;
+}
