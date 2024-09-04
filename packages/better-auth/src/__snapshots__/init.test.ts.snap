@@ -97,7 +97,7 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "options": {
-    "baseURL": undefined,
+    "baseURL": "",
     "database": {
       "provider": "sqlite",
       "url": ":memory:",

@@ -2,6 +2,7 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 import { Argon2id } from "oslo/password";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
+import { createEmailVerificationToken } from "./verify-email";
 
 export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",
@@ -77,6 +78,18 @@ export const signUpEmail = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.authCookies.sessionToken.options,
 		);
+		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
+			const token = await createEmailVerificationToken(
+				ctx.context.secret,
+				createdUser.email,
+			);
+			const url = `${ctx.context.baseURL}/verify-email?token=${token}?callbackURL=${ctx.body.callbackURL}`;
+			await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
+				createdUser.email,
+				url,
+				token,
+			);
+		}
 		return ctx.json(
 			{
 				user: createdUser,

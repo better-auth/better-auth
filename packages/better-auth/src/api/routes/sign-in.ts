@@ -164,7 +164,6 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email or password",
 			});
 		}
-
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.request,

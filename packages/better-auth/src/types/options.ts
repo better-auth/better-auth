@@ -149,9 +149,24 @@ export interface BetterAuthOptions {
 		sendResetPasswordToken?: (token: string, user: User) => Promise<void>;
 		/**
 		 * @param email the email to send the verification email to
-		 * @param url the url to send the verification email to
+		 * @param url the url to send the verification
+		 * email to
+		 * @param token the actual token. You can use this
+		 * if you want to custom endpoint to verify the
+		 * email.
 		 */
-		sendVerificationEmail?: (email: string, url: string) => Promise<void>;
+		sendVerificationEmail?: (
+			email: string,
+			url: string,
+			token: string,
+		) => Promise<void>;
+		/**
+		 * Send a verification email automatically after
+		 * sign up
+		 *
+		 * @default false
+		 */
+		sendEmailVerificationOnSignUp?: boolean;
 	};
 	/**
 	 * List of trusted origins.

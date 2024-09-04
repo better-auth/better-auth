@@ -3,11 +3,10 @@ import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
-	const { client, createTestUser } = await getTestInstance({
+	const { client, testUser } = await getTestInstance({
 		plugins: [bearer()],
 	});
 	it("should get session", async () => {
-		await createTestUser();
 		const res = await client.$fetch<{ session: { id: string } }>(
 			"/sign-in/credential",
 			{
