@@ -2,7 +2,6 @@ import {
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
-	MailCheck,
 	ScanFace,
 	Users2,
 	UserSquare2,
@@ -79,17 +78,7 @@ export const contents: Content[] = [
 				title: "Basic Usage",
 				href: "/docs/basic-usage",
 				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-					>
-						<path
-							fill="currentColor"
-							d="M21 2H3c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2M10 19.4l-1.6.6C6.9 18.6 6 16.6 6 14.5s.9-4.1 2.4-5.5l1.6.6c-1.3 1.1-2 3-2 4.9s.7 3.7 2 4.9m5.6.6l-1.6-.6c1.3-1.2 2-3 2-4.9s-.7-3.7-2-4.9l1.6-.6c1.5 1.4 2.4 3.4 2.4 5.5s-.9 4.1-2.4 5.5M21 7H3V4h18z"
-						></path>
-					</svg>
+					<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 16 16"><path fill="currentColor" d="M2 3.75C2 2.784 2.784 2 3.75 2h8.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25zM6 6.5a.5.5 0 0 0-1 0v4a.5.5 0 0 0 1 0zM8 8a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 1 0v-2A.5.5 0 0 0 8 8m3-2.5a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0z"></path></svg>
 				),
 			},
 		],
