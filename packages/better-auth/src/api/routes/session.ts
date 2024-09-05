@@ -2,6 +2,7 @@ import type { Context } from "better-call";
 import { createAuthEndpoint } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
+import { createConsola } from "consola";
 
 export const getSession = createAuthEndpoint(
 	"/session",
@@ -17,7 +18,6 @@ export const getSession = createAuthEndpoint(
 			);
 
 			if (!sessionCookieToken) {
-				deleteSessionCookie(ctx);
 				return ctx.json(null, {
 					status: 401,
 				});
