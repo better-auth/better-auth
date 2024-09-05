@@ -2,13 +2,14 @@ import type { Context } from "better-call";
 import { createAuthEndpoint } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
-import { createConsola } from "consola";
+import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
 
 export const getSession = createAuthEndpoint(
 	"/session",
 	{
 		method: "GET",
 		requireHeaders: true,
+		metadata: HIDE_ON_CLIENT_METADATA,
 	},
 	async (ctx) => {
 		try {

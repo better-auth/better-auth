@@ -31,6 +31,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.3.30",
     "input-otp": "^1.2.4",
+    "kysely": "^0.27.4",
     "lucide-react": "^0.435.0",
     "mini-svg-data-uri": "^1.4.4",
     "next": "14.2.5",

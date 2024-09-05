@@ -1,6 +1,6 @@
+import type { Dialect } from "kysely";
 import type { User } from "../adapters/schema";
 import type { FieldAttribute } from "../db/field";
-import type { Adapter } from "./adapter";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProvider } from "./provider";
 
@@ -84,7 +84,7 @@ export interface BetterAuthOptions {
 				provider: "postgres" | "sqlite" | "mysql";
 				url: string;
 		  }
-		| Adapter;
+		| Dialect;
 	/**
 	 * User configuration
 	 */
