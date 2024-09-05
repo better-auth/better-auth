@@ -45,6 +45,12 @@ description: Installation
             //...
         })
         ```
+
+        <Callout type="info">
+                The auth object has 2 properties: 
+            - `handler`: This is the handler that will be used to handle requests to the auth server. You'll configure this in the next step.
+            - `api`: A collection of methods you can call directly on the server to interact with the auth server, such as **getSession** to retrieve the current session.
+        </Callout>
     </Step>
     <Step>
         ### Database 
