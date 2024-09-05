@@ -15,10 +15,10 @@ export const auth = betterAuth({
 		}),
 	],
 	database: {
-		provider: "sqlite",
-		url: "./prisma/db.sqlite",
+		provider: "postgres",
+		url: process.env.DATABASE_URL as string,
 	},
-	secret: "better-auth-secret.1234567890",
+	secret: process.env.BETTER_AUTH_SECRET as string,
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPasswordToken(token, user) {

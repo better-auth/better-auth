@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
 	if (!session.data) {
 		return NextResponse.redirect(new URL("/sign-in", request.url));
 	}
-	const canInvite = await authClient.org.hasPermission({
+	const canInvite = await authClient.organization.hasPermission({
 		permission: {
 			invitation: ["create"],
 		},
@@ -19,7 +19,6 @@ export async function middleware(request: NextRequest) {
 			headers: request.headers,
 		},
 	});
-	console.log({ canInvite });
 	return NextResponse.next();
 }
 

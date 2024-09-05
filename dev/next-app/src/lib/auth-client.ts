@@ -7,11 +7,7 @@ import {
 
 export const authClient = createAuthClient({
 	baseURL: "http://localhost:3000/api/auth",
-	plugins: [
-		organizationClient(),
-		twoFactorClient({ twoFactorPage: "/two-factor" }),
-		passkeyClient,
-	],
+	plugins: [organizationClient()],
 });
 
-authClient.signInPasskey();
+authClient.useListOrganizations();
