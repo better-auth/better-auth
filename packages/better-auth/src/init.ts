@@ -1,5 +1,6 @@
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
+import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import type { BetterAuthOptions } from "./types";
 import { getBaseURL } from "./utils/base-url";
@@ -35,6 +36,10 @@ export const init = (options: BetterAuthOptions) => {
 			disabled: options.disableLog,
 		}),
 		db,
+		password: {
+			hash: options.emailAndPassword?.password?.hash || hashPassword,
+			verify: options.emailAndPassword?.password?.verify || verifyPassword,
+		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, options),
 		createAuthCookie: createCookieGetter(options),
@@ -54,5 +59,9 @@ export type AuthContext = {
 	session: {
 		updateAge: number;
 		expiresIn: number;
+	};
+	password: {
+		hash: (password: string) => Promise<string>;
+		verify: (password: string, hash: string) => Promise<boolean>;
 	};
 };

@@ -39,7 +39,7 @@ export const signUpEmail = createAuthEndpoint(
 		/**
 		 * hash first to avoid timing attacks
 		 */
-		const hash = await hashPassword(password);
+		const hash = await ctx.context.password.hash(password);
 		if (dbUser?.user) {
 			return ctx.json(null, {
 				status: 400,

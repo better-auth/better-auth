@@ -6,7 +6,6 @@ import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../utils/cookies";
-import { hashPassword, verifyPassword } from "../../crypto/password";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -134,7 +133,7 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
-			await hashPassword(password);
+			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid email or password",
@@ -156,7 +155,10 @@ export const signInEmail = createAuthEndpoint(
 				message: "Unexpected error",
 			});
 		}
-		const validPassword = await verifyPassword(currentPassword, password);
+		const validPassword = await ctx.context.password.verify(
+			currentPassword,
+			password,
+		);
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {

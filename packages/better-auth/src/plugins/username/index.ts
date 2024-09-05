@@ -4,7 +4,6 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../adapters/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
-import { hashPassword, verifyPassword } from "../../crypto/password";
 
 export const username = () => {
 	return {
@@ -32,7 +31,7 @@ export const username = () => {
 						],
 					});
 					if (!user) {
-						await hashPassword(ctx.body.password);
+						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
 							message: "Invalid email or password",
@@ -63,7 +62,7 @@ export const username = () => {
 							message: "Unexpected error",
 						});
 					}
-					const validPassword = await verifyPassword(
+					const validPassword = await ctx.context.password.verify(
 						currentPassword,
 						ctx.body.password,
 					);

@@ -115,7 +115,7 @@ export const resetPassword = createAuthEndpoint(
 					},
 				});
 			}
-			const hashedPassword = await hashPassword(newPassword);
+			const hashedPassword = await ctx.context.password.hash(newPassword);
 			const updatedUser = await ctx.context.internalAdapter.updatePassword(
 				user.user.id,
 				hashedPassword,
