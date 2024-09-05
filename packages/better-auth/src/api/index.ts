@@ -1,5 +1,4 @@
 import { type Context, type Endpoint, createRouter } from "better-call";
-import { parseAccount, parseSession, parseUser } from "../adapters/schema";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions, InferSession, InferUser } from "../types";
 import type { Prettify } from "../types/helper";
@@ -184,8 +183,5 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
-		onError(e) {
-			console.log(e);
-		},
 	});
 };
