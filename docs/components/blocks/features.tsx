@@ -1,7 +1,7 @@
 import React from "react";
 import { useId } from "react";
 
-export function FeaturesSectionDemo() {
+export function Features() {
 	return (
 		<div className="py-2">
 			<div className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-10 md:gap-2 max-w-7xl mx-auto">
@@ -31,6 +31,11 @@ const grid = [
 			"Supports your favorite frontend, backend and meta frameworks, including React, Vue, Svelte, Solid, Next.js, Nuxt.js, Hono, and more.",
 	},
 	{
+		title: "Automatic Database Management",
+		description:
+			"better auth will automatically manage required tables for authentication, just configure the database and better auth will do the rest.",
+	},
+	{
 		title: "Email & Password Authentication",
 		description:
 			"Builtin support for email and password authentication, with secure password hashing and account management features.",
@@ -39,11 +44,6 @@ const grid = [
 		title: "Social Sign-on",
 		description:
 			"Allow users to sign in with their accounts, including Github, Google, Discord, Twitter, and more.",
-	},
-	{
-		title: "Two Factor",
-		description:
-			"Add an extra layer of security with two-factor authentication, including TOTP and SMS.",
 	},
 	{
 		title: "Organization & Access Control",

@@ -1,9 +1,9 @@
 import { TimeSpan } from "oslo";
 import { createJWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
-import { Argon2id } from "oslo/password";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
+import { hashPassword } from "../../crypto/password";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -115,8 +115,7 @@ export const resetPassword = createAuthEndpoint(
 					},
 				});
 			}
-			const argon2id = new Argon2id();
-			const hashedPassword = await argon2id.hash(newPassword);
+			const hashedPassword = await hashPassword(newPassword);
 			const updatedUser = await ctx.context.internalAdapter.updatePassword(
 				user.user.id,
 				hashedPassword,

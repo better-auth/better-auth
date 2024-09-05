@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
-import { Argon2id } from "oslo/password";
 import { APIError } from "better-call";
 import type { Account, User } from "../../adapters/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
+import { hashPassword, verifyPassword } from "../../crypto/password";
 
 export const username = () => {
 	return {
@@ -31,9 +31,8 @@ export const username = () => {
 							},
 						],
 					});
-					const argon2id = new Argon2id();
 					if (!user) {
-						await argon2id.hash(ctx.body.password);
+						await hashPassword(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
 							message: "Invalid email or password",
@@ -64,7 +63,7 @@ export const username = () => {
 							message: "Unexpected error",
 						});
 					}
-					const validPassword = await argon2id.verify(
+					const validPassword = await verifyPassword(
 						currentPassword,
 						ctx.body.password,
 					);
