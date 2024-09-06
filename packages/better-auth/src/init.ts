@@ -20,6 +20,7 @@ export const init = (options: BetterAuthOptions) => {
 		options: {
 			...options,
 			baseURL: baseURL ? new URL(baseURL).origin : "",
+			basePath: options.basePath || "/api/auth",
 		},
 		baseURL: baseURL || "",
 		session: {

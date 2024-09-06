@@ -1,4 +1,4 @@
-import { Scrypt } from "oslo/password";
+import argon2 from "argon2";
 
-const password = new Scrypt();
-export const { hash: hashPassword, verify: verifyPassword } = password;
+export const hashPassword = argon2.hash;
+export const verifyPassword = argon2.verify;

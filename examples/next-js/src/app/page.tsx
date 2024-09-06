@@ -1,6 +1,6 @@
 import { Organization } from "@/components/organization";
 import UserCard from "@/components/user-card";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/_auth";
 import { headers } from "next/headers";
 
 export default async function TypewriterEffectSmoothDemo() {

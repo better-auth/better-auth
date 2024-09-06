@@ -3,7 +3,6 @@ import { createJWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import { hashPassword } from "../../crypto/password";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",

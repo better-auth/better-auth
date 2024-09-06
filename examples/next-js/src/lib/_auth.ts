@@ -1,6 +1,12 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	twoFactor,
+	username,
+} from "better-auth/plugins";
 import { github, google } from "better-auth/social-providers";
+import { ac, admin } from "./permissions";
 
 export const auth = betterAuth({
 	basePath: "/api/auth",
@@ -30,6 +36,10 @@ export const auth = betterAuth({
 			async sendInvitationEmail(invitation, email) {
 				console.log({ invitation, email });
 			},
+			ac: ac,
+			roles: {
+				admin: admin,
+			},
 		}),
 		twoFactor({
 			issuer: "BetterAuth",
@@ -44,5 +54,6 @@ export const auth = betterAuth({
 			rpName: "BetterAuth",
 			origin: "http://localhost:3000",
 		}),
+		username(),
 	],
 });

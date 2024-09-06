@@ -173,7 +173,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	const { api, middlewares } = getEndpoints(ctx, _options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
-	return createRouter(api, {
+	return createRouter(api as Omit<typeof api, "error" | "ok" | "welcome">, {
 		extraContext: ctx,
 		basePath,
 		routerMiddleware: [
@@ -183,5 +183,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		onError(e) {
+			console.log(e);
+		},
 	});
 };

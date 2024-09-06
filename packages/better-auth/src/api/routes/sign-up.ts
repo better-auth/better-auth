@@ -2,7 +2,6 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
-import { hashPassword } from "../../crypto/password";
 
 export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",
