@@ -12,6 +12,9 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				authContext.options.baseURL = baseURL;
 				authContext.baseURL = baseURL;
 			}
+			if (!authContext.options.baseURL) {
+				return new Response("Base URL not set", { status: 200 });
+			}
 			const { handler } = router(authContext, options);
 			return handler(request);
 		},
