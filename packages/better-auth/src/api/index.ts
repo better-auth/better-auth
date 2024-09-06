@@ -1,4 +1,9 @@
-import { type Context, type Endpoint, createRouter } from "better-call";
+import {
+	APIError,
+	type Context,
+	type Endpoint,
+	createRouter,
+} from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions, InferSession, InferUser } from "../types";
 import type { Prettify } from "../types/helper";
@@ -18,6 +23,7 @@ import { getCSRFToken } from "./routes/csrf";
 import { ok, welcome } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
+import { logger } from "../utils/logger";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -184,7 +190,11 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			console.log(e);
+			if (e instanceof APIError) {
+				if (e.status === "INTERNAL_SERVER_ERROR") {
+					logger.error(e);
+				}
+			}
 		},
 	});
 };
