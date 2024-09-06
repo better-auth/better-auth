@@ -2,8 +2,7 @@ import Link from "next/link";
 import { } from "better-auth/client";
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
-import { Separator } from "@/components/ui/separator";
-import { FeaturesSectionDemo } from "@/components/blocks/features";
+
 export default function HomePage() {
 	return (
 		<main>
