@@ -456,18 +456,5 @@ export const contents: Content[] = [
 				href: "/docs/plugins/bearer",
 			},
 		],
-	},
-	{
-		title: "Guides",
-		Icon: () => (
-			<svg xmlns="http://www.w3.org/2000/svg" width="1.4em" height="1.4em" viewBox="0 0 24 24"><path fill="currentColor" d="M5.616 20q-.691 0-1.153-.462T4 18.384V5.616q0-.691.463-1.153T5.616 4h12.769q.69 0 1.153.463T20 5.616v12.769q0 .69-.462 1.153T18.384 20zM12.5 5v5.414q0 .242.202.36t.414-.012l.975-.597q.192-.13.409-.13t.41.13l.974.597q.212.13.414.012t.202-.36V5z"></path></svg>
-		),
-		list: [{
-			title: "Setting up Login with Github",
-			href: "/docs/guides/github-login",
-			icon: () => (
-				<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 24 24"><path fill="currentColor" d="M8 17.175V6.825q0-.425.3-.713t.7-.287q.125 0 .263.037t.262.113l8.15 5.175q.225.15.338.375t.112.475t-.112.475t-.338.375l-8.15 5.175q-.125.075-.262.113T9 18.175q-.4 0-.7-.288t-.3-.712"></path></svg>
-			)
-		}]
 	}
 ];
