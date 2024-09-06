@@ -22,21 +22,12 @@ export function getBaseURL(url?: string, path?: string) {
 		return withPath(url, path);
 	}
 	const env: any = typeof process !== "undefined" ? process.env : {};
-	const VENDOR_BASE_URLS =
-		env.VERCEL_URL ||
-		env.NEXT_PUBLIC_VERCEL_URL ||
-		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
-		env.PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_AUTH_URL ||
-		env.AUTH_URL;
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
 		env.PUBLIC_BETTER_AUTH_URL ||
 		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_AUTH_URL ||
-		VENDOR_BASE_URLS;
+		env.NUXT_PUBLIC_AUTH_URL;
 	if (fromEnv) {
 		return withPath(fromEnv, path);
 	}
