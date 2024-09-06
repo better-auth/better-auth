@@ -245,7 +245,7 @@ export const getDialect = (config: BetterAuthOptions) => {
 	let dialect: Dialect | null = null;
 	if ("provider" in config.database) {
 		const provider = config.database.provider;
-		const connectionString = config.database.url.trim();
+		const connectionString = config.database?.url?.trim();
 		if (provider === "postgres") {
 			const pool = new Pool({
 				connectionString,
