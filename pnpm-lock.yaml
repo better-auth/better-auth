@@ -108,7 +108,7 @@ importers:
         specifier: ^0.6.0
         version: 0.6.0
       better-auth:
-        specifier: ^0.0.8-beta.6
+        specifier: workspace:*
         version: link:../../packages/better-auth
       oslo:
         specifier: ^1.2.1
@@ -297,127 +297,6 @@ importers:
         version: 3.4.1
       typescript:
         specifier: ^5.4.5
-        version: 5.5.4
-
-  dev/next-app:
-    dependencies:
-      '@hookform/resolvers':
-        specifier: ^3.9.0
-        version: 3.9.0(react-hook-form@7.52.2(react@18.3.1))
-      '@radix-ui/react-avatar':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-checkbox':
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-dialog':
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-dropdown-menu':
-        specifier: ^2.1.1
-        version: 2.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-icons':
-        specifier: ^1.3.0
-        version: 1.3.0(react@18.3.1)
-      '@radix-ui/react-label':
-        specifier: ^2.1.0
-        version: 2.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-select':
-        specifier: ^2.1.1
-        version: 2.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-separator':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-slot':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react@18.3.3)(react@18.3.1)
-      '@radix-ui/react-switch':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-tabs':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-toggle':
-        specifier: ^1.1.0
-        version: 1.1.0(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tabler/icons-react':
-        specifier: ^3.12.0
-        version: 3.12.0(react@18.3.1)
-      better-auth:
-        specifier: ^0.0.8-beta.9
-        version: link:../../packages/better-auth
-      better-call:
-        specifier: ^0.1.0
-        version: 0.1.0(typescript@5.5.4)
-      better-sqlite3:
-        specifier: ^11.1.2
-        version: 11.1.2
-      class-variance-authority:
-        specifier: ^0.7.0
-        version: 0.7.0
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      framer-motion:
-        specifier: ^11.3.30
-        version: 11.3.30(@emotion/is-prop-valid@0.8.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      input-otp:
-        specifier: ^1.2.4
-        version: 1.2.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      lucide-react:
-        specifier: ^0.435.0
-        version: 0.435.0(react@18.3.1)
-      mini-svg-data-uri:
-        specifier: ^1.4.4
-        version: 1.4.4
-      next:
-        specifier: 14.2.5
-        version: 14.2.5(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      next-themes:
-        specifier: ^0.3.0
-        version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      react:
-        specifier: ^18
-        version: 18.3.1
-      react-dom:
-        specifier: ^18
-        version: 18.3.1(react@18.3.1)
-      react-hook-form:
-        specifier: ^7.52.2
-        version: 7.52.2(react@18.3.1)
-      react-qr-code:
-        specifier: ^2.0.15
-        version: 2.0.15(react@18.3.1)
-      sonner:
-        specifier: ^1.5.0
-        version: 1.5.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      tailwind-merge:
-        specifier: ^2.5.0
-        version: 2.5.0
-      tailwindcss-animate:
-        specifier: ^1.0.7
-        version: 1.0.7(tailwindcss@3.4.9)
-      zod:
-        specifier: ^3.23.8
-        version: 3.23.8
-    devDependencies:
-      '@types/node':
-        specifier: ^20
-        version: 20.14.12
-      '@types/react':
-        specifier: ^18
-        version: 18.3.3
-      '@types/react-dom':
-        specifier: ^18
-        version: 18.3.0
-      postcss:
-        specifier: ^8
-        version: 8.4.40
-      tailwindcss:
-        specifier: ^3.4.1
-        version: 3.4.9
-      typescript:
-        specifier: ^5
         version: 5.5.4
 
   dev/nuxtjs:
@@ -2750,7 +2629,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {node: '>=0.10.0'}
+    engines: {'0': node >=0.10.0}
 
   '@expo/cli@0.18.29':
     resolution: {integrity: sha512-X810C48Ss+67RdZU39YEO1khNYo1RmjouRV+vVe0QhMoTe8R6OA3t+XYEdwaNbJ5p/DJN7szfHfNmX2glpC7xg==}
@@ -5684,11 +5563,6 @@ packages:
   better-auth@0.0.4:
     resolution: {integrity: sha512-PR1bR6zbgNRkSHZAPQQEqaHpHMyASXwBU2IbDY60gDWJO72d3wBSCiOKQcSGJRxJ55O9jitHVMHqHcAtC0++0A==}
     hasBin: true
-
-  better-call@0.1.0:
-    resolution: {integrity: sha512-CfLBgWyReKx2fXJb0OkNV0/ot8BMO+HDRKJRCidIGuCBkk07d7NzVZR4BnnOy02Jiuh4x3l5oupKQGXw78fqSA==}
-    peerDependencies:
-      typescript: ^5.0.0
 
   better-call@0.1.38:
     resolution: {integrity: sha512-Dx/T6/l1C1yDialymI+q3YN85lFPSwD35BvfsJxwD9G30lfwRSDS3uNKyYlykwacWBNLYrizmuMXnCxxu7oCBA==}
@@ -9947,10 +9821,6 @@ packages:
     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postcss@8.4.40:
-    resolution: {integrity: sha512-YF2kKIUzAofPMpfH6hOi2cGnv/HrUlfucspc7pDyvv7kGdqXrfj8SCl/t8owkEgKEuu8ZcRjSOxFxVLqwChZ2Q==}
-    engines: {node: ^10 || ^12 || >=14}
-
   postcss@8.4.41:
     resolution: {integrity: sha512-TesUflQ0WKZqAvg52PWL6kHgLKP6xB6heTOdoYM0Wt2UHyxNa4K25EZZMgKns3BH1RLVbZCREPpLY0rhnNoHVQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -11121,9 +10991,6 @@ packages:
   system-architecture@0.1.0:
     resolution: {integrity: sha512-ulAk51I9UVUyJgxlv9M6lFot2WP3e7t8Kz9+IS6D4rVba1tR9kON+Ey69f+1R4Q8cd45Lod6a4IcJIxnzGc/zA==}
     engines: {node: '>=18'}
-
-  tailwind-merge@2.5.0:
-    resolution: {integrity: sha512-a6Q/isR5XAo9IR7Hjh80BQDkn8PG9ONJpSO/U3vGzdKyKG125lPHNXdiPfeQ5X0EOG0qKlS/0qnxdBYkLlD6tA==}
 
   tailwind-merge@2.5.2:
     resolution: {integrity: sha512-kjEBm+pvD+6eAwzJL2Bi+02/9LFLal1Gs61+QB7HvTfQQ0aXwC5LGT8PEt1gS0CWKktKe6ysPTAy3cBC5MeiIg==}
@@ -18302,12 +18169,6 @@ snapshots:
       - typescript
       - vue
 
-  better-call@0.1.0(typescript@5.5.4):
-    dependencies:
-      '@better-fetch/fetch': 1.1.4
-      rou3: 0.5.1
-      typescript: 5.5.4
-
   better-call@0.1.38(typescript@5.5.4):
     dependencies:
       '@better-fetch/fetch': 1.1.4
@@ -23625,12 +23486,6 @@ snapshots:
       picocolors: 1.0.1
       source-map-js: 1.2.0
 
-  postcss@8.4.40:
-    dependencies:
-      nanoid: 3.3.7
-      picocolors: 1.0.1
-      source-map-js: 1.2.0
-
   postcss@8.4.41:
     dependencies:
       nanoid: 3.3.7
@@ -24975,8 +24830,6 @@ snapshots:
 
   system-architecture@0.1.0: {}
 
-  tailwind-merge@2.5.0: {}
-
   tailwind-merge@2.5.2: {}
 
   tailwindcss-animate@1.0.7(tailwindcss@3.4.1):
@@ -24986,10 +24839,6 @@ snapshots:
   tailwindcss-animate@1.0.7(tailwindcss@3.4.10):
     dependencies:
       tailwindcss: 3.4.10
-
-  tailwindcss-animate@1.0.7(tailwindcss@3.4.9):
-    dependencies:
-      tailwindcss: 3.4.9
 
   tailwindcss@3.4.1:
     dependencies:
