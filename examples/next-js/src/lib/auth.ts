@@ -9,7 +9,6 @@ import { github, google } from "better-auth/social-providers";
 import { ac, admin } from "./permissions";
 
 export const auth = betterAuth({
-	basePath: "/api/auth",
 	socialProvider: [
 		github({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
@@ -51,7 +50,7 @@ export const auth = betterAuth({
 		}),
 		passkey({
 			rpID: "localhost",
-			rpName: "BetterAuth",
+			rpName: "better-auth",
 			origin: "http://localhost:3000",
 		}),
 		username(),

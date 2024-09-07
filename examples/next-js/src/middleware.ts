@@ -1,25 +1,10 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { authClient } from "./lib/auth-client";
+import { authMiddleware } from "better-auth/next-js";
+import { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-	const session = await authClient.session({
-		options: {
-			headers: request.headers,
-		},
-	});
-	if (!session.data) {
-		return NextResponse.redirect(new URL("/sign-in", request.url));
-	}
-	const canInvite = await authClient.organization.hasPermission({
-		permission: {
-			invitation: ["create"],
-		},
-		options: {
-			headers: request.headers,
-		},
-	});
-	return NextResponse.next();
+export default async function middleware(request: NextRequest) {
+	const res = await authMiddleware({
+		redirectTo: "/sign-in",
+	})(request);
 }
 
 export const config = {

@@ -155,3 +155,21 @@ export async function ServerComponent() {
     )
 }
 ```
+
+
+## Middleware
+
+You can use the `authMiddleware` to protect your routes. It's a wrapper around the Next.js middleware.
+
+```ts twoslash title="middleware.ts"
+
+import { authMiddleware } from "better-auth/next-js"
+
+export default authMiddleware({
+    redirectTo: "/sign-in" // redirect to this path if the user is not authenticated
+})
+
+export const config = {
+  matcher: ['/dashboard/:path*'],
+}
+```

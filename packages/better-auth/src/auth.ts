@@ -26,7 +26,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			return handler(request);
 		},
 		api,
-		options: authContext.options,
+		options: authContext.options as O,
 	};
 };
 

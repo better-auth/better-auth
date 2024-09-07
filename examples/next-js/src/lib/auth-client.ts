@@ -5,12 +5,8 @@ import {
 	passkeyClient,
 	usernameClient,
 } from "better-auth/client/plugins";
-import { ac } from "./permissions";
 
 export const authClient = createAuthClient({
-	fetchOptions: {
-		baseURL: "http://localhost:3000/api/auth",
-	},
 	plugins: [
 		organizationClient(),
 		twoFactorClient({

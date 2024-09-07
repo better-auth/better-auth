@@ -212,7 +212,6 @@ export function Organization() {
 								</li>
 							))}
 						</ul>
-
 						<div>
 							<div className="flex items-center gap-2 mt-4">
 								<MessageSquareText size={18} />
