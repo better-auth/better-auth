@@ -109,6 +109,7 @@ export const signInEmail = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
+		console.log({ ...ctx.body });
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
 			ctx.context.logger.error("Email and password is not enabled");
 			throw new APIError("BAD_REQUEST", {

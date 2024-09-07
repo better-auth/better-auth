@@ -773,8 +773,8 @@ importers:
         specifier: ^0.31.2
         version: 0.31.2
       better-call:
-        specifier: ^0.1.38
-        version: 0.1.38(typescript@5.6.0-beta)
+        specifier: ^0.2.0
+        version: 0.2.0(typescript@5.6.0-beta)
       better-sqlite3:
         specifier: ^11.1.2
         version: 11.1.2
@@ -2629,7 +2629,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {'0': node >=0.10.0}
+    engines: {node: '>=0.10.0'}
 
   '@expo/cli@0.18.29':
     resolution: {integrity: sha512-X810C48Ss+67RdZU39YEO1khNYo1RmjouRV+vVe0QhMoTe8R6OA3t+XYEdwaNbJ5p/DJN7szfHfNmX2glpC7xg==}
@@ -5566,6 +5566,11 @@ packages:
 
   better-call@0.1.38:
     resolution: {integrity: sha512-Dx/T6/l1C1yDialymI+q3YN85lFPSwD35BvfsJxwD9G30lfwRSDS3uNKyYlykwacWBNLYrizmuMXnCxxu7oCBA==}
+    peerDependencies:
+      typescript: ^5.6.0-beta
+
+  better-call@0.2.0:
+    resolution: {integrity: sha512-a2NFJP2BBnUzyaHHwDldUBc4mr3V0czleV4t0Di9e2zewzFVNdCY1m5ZugbIhzY1b5xoUN8R1yMhyZFDuZh2aA==}
     peerDependencies:
       typescript: ^5.6.0-beta
 
@@ -18178,6 +18183,14 @@ snapshots:
       typescript: 5.5.4
 
   better-call@0.1.38(typescript@5.6.0-beta):
+    dependencies:
+      '@better-fetch/fetch': 1.1.4
+      '@types/set-cookie-parser': 2.4.10
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.0
+      typescript: 5.6.0-beta
+
+  better-call@0.2.0(typescript@5.6.0-beta):
     dependencies:
       '@better-fetch/fetch': 1.1.4
       '@types/set-cookie-parser': 2.4.10

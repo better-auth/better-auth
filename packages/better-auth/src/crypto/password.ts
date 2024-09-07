@@ -34,16 +34,13 @@ async function generateKey(
 	});
 }
 
-export function getPasswordHasher(secret: string) {
-	const hashPassword = async (password: string) => {
-		const salt = encodeHex(crypto.getRandomValues(new Uint8Array(16)));
-		const key = await generateKey(password, salt);
-		return `${salt}:${encodeHex(key)}`;
-	};
-	const verifyPassword = async (password: string, hash: string) => {
-		const [salt, key] = hash.split(":");
-		const targetKey = await generateKey(password, salt!);
-		return constantTimeEqual(targetKey, decodeHex(key!));
-	};
-	return { hashPassword, verifyPassword };
-}
+export const hashPassword = async (password: string) => {
+	const salt = encodeHex(crypto.getRandomValues(new Uint8Array(16)));
+	const key = await generateKey(password, salt);
+	return `${salt}:${encodeHex(key)}`;
+};
+export const verifyPassword = async (hash: string, password: string) => {
+	const [salt, key] = hash.split(":");
+	const targetKey = await generateKey(password, salt!);
+	return constantTimeEqual(targetKey, decodeHex(key!));
+};
