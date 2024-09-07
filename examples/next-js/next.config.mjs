@@ -1,9 +1,4 @@
 /** @type {import("next").NextConfig} */
-const nextConfig = {
-	webpack: (config) => {
-		config.externals.push("argon2");
-		return config;
-	}
-}
+const nextConfig = {}
 
 export default nextConfig;
