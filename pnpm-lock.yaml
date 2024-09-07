@@ -891,8 +891,8 @@ importers:
         specifier: 2.0.0-next.5
         version: 2.0.0-next.5
       argon2:
-        specifier: ^0.41.1
-        version: 0.41.1
+        specifier: ^0.31.2
+        version: 0.31.2
       better-call:
         specifier: ^0.1.38
         version: 0.1.38(typescript@5.6.0-beta)
@@ -5520,9 +5520,9 @@ packages:
   arg@5.0.2:
     resolution: {integrity: sha512-PYjyFOLKQ9y57JvQ6QLo8dAgNqswh8M1RMJYdQduT6xbWSgK36P/Z/v+p888pM69jMMfS8Xd8F6I1kQ/I9HUGg==}
 
-  argon2@0.41.1:
-    resolution: {integrity: sha512-dqCW8kJXke8Ik+McUcMDltrbuAWETPyU6iq+4AhxqKphWi7pChB/Zgd/Tp/o8xRLbg8ksMj46F/vph9wnxpTzQ==}
-    engines: {node: '>=16.17.0'}
+  argon2@0.31.2:
+    resolution: {integrity: sha512-QSnJ8By5Mth60IEte45w9Y7v6bWcQw3YhRtJKKN8oNCxnTLDiv/AXXkDPf2srTMfxFVn3QJdVv2nhXESsUa+Yg==}
+    engines: {node: '>=14.0.0'}
 
   argparse@1.0.10:
     resolution: {integrity: sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==}
@@ -9245,10 +9245,6 @@ packages:
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
-
-  node-addon-api@8.1.0:
-    resolution: {integrity: sha512-yBY+qqWSv3dWKGODD6OGE6GnTX7Q2r+4+DfpqxHSHh8x0B4EKP9+wVGLS6U/AM1vxSNNmUEuIV5EGhYwPpfOwQ==}
-    engines: {node: ^18 || ^20 || >= 21}
 
   node-dir@0.1.17:
     resolution: {integrity: sha512-tmPX422rYgofd4epzrNoOXiE8XFZYOcCq1vD7MAXCDO+O+zndlA2ztdKKMa+EeuBG5tHETpr4ml4RGgpqDCCAg==}
@@ -18033,11 +18029,14 @@ snapshots:
 
   arg@5.0.2: {}
 
-  argon2@0.41.1:
+  argon2@0.31.2:
     dependencies:
+      '@mapbox/node-pre-gyp': 1.0.11
       '@phc/format': 1.0.0
-      node-addon-api: 8.1.0
-      node-gyp-build: 4.8.2
+      node-addon-api: 7.1.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   argparse@1.0.10:
     dependencies:
@@ -22827,8 +22826,6 @@ snapshots:
   node-abort-controller@3.1.1: {}
 
   node-addon-api@7.1.1: {}
-
-  node-addon-api@8.1.0: {}
 
   node-dir@0.1.17:
     dependencies:

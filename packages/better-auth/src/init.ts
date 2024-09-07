@@ -1,6 +1,6 @@
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
-import { hashPassword, verifyPassword } from "./crypto/password";
+import { getPasswordHasher } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import type { BetterAuthOptions } from "./types";
 import { getBaseURL } from "./utils/base-url";
@@ -16,6 +16,15 @@ export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+
+	const secret =
+		options.secret ||
+		process.env.BETTER_AUTH_SECRET ||
+		process.env.AUTH_SECRET ||
+		DEFAULT_SECRET;
+
+	const { hashPassword, verifyPassword } = getPasswordHasher(secret);
+
 	return {
 		options: {
 			...options,
@@ -27,11 +36,7 @@ export const init = (options: BetterAuthOptions) => {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 		},
-		secret:
-			options.secret ||
-			process.env.BETTER_AUTH_SECRET ||
-			process.env.AUTH_SECRET ||
-			DEFAULT_SECRET,
+		secret,
 		authCookies: getCookies(options),
 		logger: createLogger({
 			disabled: options.disableLog,
