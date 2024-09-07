@@ -170,9 +170,10 @@ export interface BetterAuthOptions {
 		/**
 		 * Password hashing and verification
 		 *
-		 * By default Argon2id is used for password hashing and verification.
-		 * You can provide your own hashing and verification function
-		 * if you want to use a different algorithm.
+		 * By default Scrypt is used for password hashing and
+		 * verification. You can provide your own hashing and
+		 * verification function. if you want to use a
+		 * different algorithm.
 		 */
 		password?: {
 			hash?: (password: string) => Promise<string>;
