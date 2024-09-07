@@ -20,6 +20,7 @@ export default defineConfig({
 	},
 	splitting: false,
 	sourcemap: true,
+	treeshake: true,
 	format: ["esm"],
 	dts: true,
 	external: [
