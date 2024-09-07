@@ -32,6 +32,7 @@ export default defineConfig({
 		"mysql2",
 		"pg",
 		"typescript",
+		"argon2",
 		"better-sqlite3",
 	],
 	target: "es2022",
