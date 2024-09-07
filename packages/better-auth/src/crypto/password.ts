@@ -1,4 +1,5 @@
-import * as argon2 from "argon2";
+import { Bcrypt } from "oslo/password";
 
-export const hashPassword = argon2.hash;
-export const verifyPassword = argon2.verify;
+const bcrypt = new Bcrypt();
+export const hashPassword = bcrypt.hash;
+export const verifyPassword = bcrypt.verify;
