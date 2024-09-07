@@ -7,18 +7,16 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const { api } = getEndpoints(authContext, options);
 	return {
 		handler: async (request: Request) => {
-			console.log(request);
 			const basePath = authContext.options.basePath;
+			const url = new URL(request.url);
 			if (!authContext.options.baseURL) {
-				const baseURL = `${new URL(request.url).origin}/api/auth`;
+				const baseURL = `${url.origin}/api/auth`;
 				authContext.options.baseURL = baseURL;
 				authContext.baseURL = baseURL;
 			}
 			if (!authContext.options.baseURL) {
 				return new Response("Base URL not set", { status: 400 });
 			}
-
-			const url = new URL(request.url);
 			if (url.pathname === basePath || url.pathname === `${basePath}/`) {
 				return new Response("Welcome to BetterAuth", { status: 200 });
 			}
