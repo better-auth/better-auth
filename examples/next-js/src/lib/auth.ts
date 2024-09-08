@@ -49,9 +49,9 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey({
-			rpID: "localhost",
+			rpID: "better-auth",
 			rpName: "better-auth",
-			origin: "http://localhost:3000",
+			origin: process.env.BETTER_AUTH_URL as string,
 		}),
 		username(),
 	],
