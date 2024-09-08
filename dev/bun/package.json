@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@noble/ciphers": "^0.6.0",
-    "better-auth": "^0.0.8-beta.6",
+    "better-auth": "workspace:*",
     "oslo": "^1.2.1"
   }
 }

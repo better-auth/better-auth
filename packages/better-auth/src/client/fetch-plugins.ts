@@ -34,18 +34,6 @@ export const csrfPlugin = {
 	id: "csrf",
 	name: "CSRF Check",
 	async init(url, options) {
-		if (typeof window !== "undefined") {
-			/**
-			 * If origin is the same as baseURL
-			 * then we don't need to check the CSRF token.
-			 */
-			const isTheSameOrigin =
-				new URL(options?.baseURL || url).origin === window.location.origin;
-			if (isTheSameOrigin) {
-				return { url, options };
-			}
-		}
-
 		if (!options?.baseURL) {
 			throw new BetterAuthError(
 				"API Base URL on the auth client isn't configured. Please pass it directly to the client `baseURL`",

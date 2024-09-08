@@ -17,7 +17,6 @@ export const getSession = createAuthEndpoint(
 			);
 
 			if (!sessionCookieToken) {
-				deleteSessionCookie(ctx);
 				return ctx.json(null, {
 					status: 401,
 				});

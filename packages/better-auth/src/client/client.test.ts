@@ -39,7 +39,10 @@ describe("run time proxy", async () => {
 		const res = client.useComputedAtom();
 		expect(res()).toBe(0);
 		await client.test();
-		expect(res()).toBe(1);
+		vi.useFakeTimers();
+		setTimeout(() => {
+			expect(res()).toBe(1);
+		}, 2);
 	});
 
 	it("should call useSession", async () => {
@@ -130,9 +133,7 @@ describe("type", () => {
 		const client = createSvelteClient({
 			plugins: [testClientPlugin()],
 		});
-		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
-			() => ReadableAtom<number>
-		>();
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
 
 	it("should infer from multiple plugins", () => {

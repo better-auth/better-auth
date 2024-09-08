@@ -1,7 +1,7 @@
 {
-  "platforms": "universal",
-  "aliases": {
-    "components": "~/components",
-    "lib": "~/lib"
-  }
+	"platforms": "universal",
+	"aliases": {
+		"components": "~/components",
+		"lib": "~/lib"
+	}
 }

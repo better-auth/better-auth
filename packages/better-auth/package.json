@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.0.8-beta.8",
+    "version": "0.0.8-beta.25",
     "description": "Framework-agnostic, batteries included authentication library for typescript",
     "type": "module",
     "scripts": {
@@ -53,6 +53,7 @@
         "happy-dom": "^15.7.3",
         "hono": "^4.5.4",
         "listhen": "^1.7.2",
+        "next": "^14.2.8",
         "react": "^18.3.1",
         "solid-js": "^1.8.18",
         "swr": "^2.2.5",
@@ -75,8 +76,8 @@
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "arctic": "2.0.0-next.5",
-        "argon2": "^0.41.1",
-        "better-call": "^0.1.38",
+        "argon2": "^0.31.2",
+        "better-call": "^0.2.0",
         "better-sqlite3": "^11.1.2",
         "chalk": "^5.3.0",
         "commander": "^12.1.0",

@@ -31,9 +31,9 @@ export default function Component() {
 		const res = await authClient.twoFactor.sendOtp({
 			options: {
 				body: {
-					returnOTP: true
-				}
-			}
+					returnOTP: true,
+				},
+			},
 		});
 		setOTP(res.data?.OTP || "");
 		// In a real app, this would call your backend API to send the OTP
@@ -41,7 +41,7 @@ export default function Component() {
 		setIsError(false);
 		setIsOtpSent(true);
 	};
-	const router = useRouter()
+	const router = useRouter();
 
 	const validateOTP = async () => {
 		const res = await authClient.twoFactor.verifyOtp({
@@ -51,10 +51,10 @@ export default function Component() {
 			setMessage("OTP validated successfully");
 			setIsError(false);
 			setIsValidated(true);
-			router.push("/")
+			router.push("/");
 		} else {
-			setIsError(true)
-			setMessage("Invalid OTP")
+			setIsError(true);
+			setMessage("Invalid OTP");
 		}
 	};
 	return (
@@ -77,8 +77,11 @@ export default function Component() {
 								<div className="flex flex-col space-y-1.5">
 									<Label htmlFor="otp">One-Time Password</Label>
 									<Label className="py-2">
-										Use <span className="text-blue-100 bg-slate-800 px-2">
-											{OTP}</span> (on real app, this would be sent to your email)
+										Use{" "}
+										<span className="text-blue-100 bg-slate-800 px-2">
+											{OTP}
+										</span>{" "}
+										(on real app, this would be sent to your email)
 									</Label>
 									<Input
 										id="otp"
@@ -99,8 +102,9 @@ export default function Component() {
 					</div>
 					{message && (
 						<div
-							className={`flex items-center gap-2 mt-4 ${isError ? "text-red-500" : "text-primary"
-								}`}
+							className={`flex items-center gap-2 mt-4 ${
+								isError ? "text-red-500" : "text-primary"
+							}`}
 						>
 							{isError ? (
 								<AlertCircle className="h-4 w-4" />

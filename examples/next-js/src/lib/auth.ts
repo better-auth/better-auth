@@ -1,9 +1,14 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	twoFactor,
+	username,
+} from "better-auth/plugins";
 import { github, google } from "better-auth/social-providers";
+import { ac, admin } from "./permissions";
 
 export const auth = betterAuth({
-	basePath: "/api/auth",
 	socialProvider: [
 		github({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
@@ -15,10 +20,10 @@ export const auth = betterAuth({
 		}),
 	],
 	database: {
-		provider: "sqlite",
-		url: "./prisma/db.sqlite",
+		provider: "postgres",
+		url: process.env.DATABASE_URL as string,
 	},
-	secret: "better-auth-secret.1234567890",
+	secret: process.env.BETTER_AUTH_SECRET as string,
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPasswordToken(token, user) {
@@ -30,6 +35,10 @@ export const auth = betterAuth({
 			async sendInvitationEmail(invitation, email) {
 				console.log({ invitation, email });
 			},
+			ac: ac,
+			roles: {
+				admin: admin,
+			},
 		}),
 		twoFactor({
 			issuer: "BetterAuth",
@@ -40,9 +49,13 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey({
-			rpID: "localhost",
-			rpName: "BetterAuth",
-			origin: "http://localhost:3000",
+			rpID: "better-auth",
+			rpName: "better-auth",
+			origin: process.env.BETTER_AUTH_URL as string,
 		}),
+		username(),
 	],
+	advanced: {
+		useSecureCookies: true,
+	},
 });

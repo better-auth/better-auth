@@ -1,6 +1,5 @@
 import { APIError } from "better-call";
 import { generateCodeVerifier } from "oslo/oauth2";
-import { Argon2id } from "oslo/password";
 import { z } from "zod";
 import { oAuthProviderList } from "../../social-providers";
 import { generateState } from "../../utils/state";
@@ -56,8 +55,11 @@ export const signInOAuth = createAuthEndpoint(
 		const currentURL = c.query?.currentURL
 			? new URL(c.query?.currentURL)
 			: null;
+		const callbackURL = c.body.callbackURL?.startsWith("http")
+			? c.body.callbackURL
+			: `${currentURL?.origin}${c.body.callbackURL}`;
 		const state = generateState(
-			c.body.callbackURL || currentURL?.origin || c.context.baseURL,
+			callbackURL || currentURL?.origin || c.context.baseURL,
 			c.query?.currentURL,
 		);
 		try {
@@ -132,10 +134,9 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email",
 			});
 		}
-		const argon2id = new Argon2id();
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
-			await argon2id.hash(password);
+			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid email or password",
@@ -157,7 +158,10 @@ export const signInEmail = createAuthEndpoint(
 				message: "Unexpected error",
 			});
 		}
-		const validPassword = await argon2id.verify(currentPassword, password);
+		const validPassword = await ctx.context.password.verify(
+			currentPassword,
+			password,
+		);
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
