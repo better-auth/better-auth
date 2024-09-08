@@ -190,7 +190,11 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			logger.error(e);
+			if (e instanceof APIError) {
+				if (e.status === "INTERNAL_SERVER_ERROR") {
+					logger.error(e);
+				}
+			}
 		},
 	});
 };
