@@ -62,7 +62,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		getAtoms: ($fetch) => {
 			const listOrganizations = computed([_listOrg], () =>
 				task(async () => {
-					console.log("fetching organizations");
 					const organizations = await $fetch<Organization[]>(
 						"/organization/list",
 						{

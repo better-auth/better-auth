@@ -7,7 +7,6 @@ export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		!!options.advanced?.useSecureCookies ||
 		(process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
-	console.log({ secure });
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge = new TimeSpan(7, "d").seconds();
