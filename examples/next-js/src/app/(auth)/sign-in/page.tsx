@@ -96,7 +96,7 @@ export default function Page() {
 							onClick={async () => {
 								await authClient.signIn.social({
 									provider: "github",
-									callbackURL: "http://localhost:3000",
+									callbackURL: "/",
 								});
 							}}
 						>
@@ -109,7 +109,7 @@ export default function Page() {
 							onClick={async () => {
 								await authClient.signIn.social({
 									provider: "google",
-									callbackURL: "http://localhost:3000",
+									callbackURL: "/",
 								});
 							}}
 						>

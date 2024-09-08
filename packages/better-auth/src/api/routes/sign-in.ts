@@ -55,8 +55,11 @@ export const signInOAuth = createAuthEndpoint(
 		const currentURL = c.query?.currentURL
 			? new URL(c.query?.currentURL)
 			: null;
+		const callbackURL = c.body.callbackURL?.startsWith("http")
+			? c.body.callbackURL
+			: `${currentURL?.origin}${c.body.callbackURL}`;
 		const state = generateState(
-			c.body.callbackURL || currentURL?.origin || c.context.baseURL,
+			callbackURL || currentURL?.origin || c.context.baseURL,
 			c.query?.currentURL,
 		);
 		try {
