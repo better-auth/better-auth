@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { } from "better-auth/client";
+import {} from "better-auth/client";
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 

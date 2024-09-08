@@ -1,15 +1,21 @@
-import {cva, type VariantProps} from "class-variance-authority";
-import {Link} from "expo-router";
-import type {LinkProps} from "expo-router/build/link/Link";
-import type {ExpoRouter} from "expo-router/types/expo-router";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Link } from "expo-router";
+import type { LinkProps } from "expo-router/build/link/Link";
+import type { ExpoRouter } from "expo-router/types/expo-router";
 import type React from "react";
-import type {ElementType} from "react";
-import {Pressable, type PressableProps, Text, View, type ViewProps} from "react-native";
+import type { ElementType } from "react";
+import {
+	Pressable,
+	type PressableProps,
+	Text,
+	View,
+	type ViewProps,
+} from "react-native";
 
-import {Muted} from "./typography";
+import { Muted } from "./typography";
 
-import {ChevronRight} from "@/components/Icons";
-import {cn} from "@/lib/utils";
+import { ChevronRight } from "@/components/Icons";
+import { cn } from "@/lib/utils";
 
 const listItemTextVariants = cva(
 	"text-base font-normal", // base styles
@@ -66,12 +72,12 @@ const ListItem: React.FC<ListItemProps> = ({
 	const ItemRight = () => {
 		if (itemRight) {
 			return itemRight({
-				className: cn("size-5 opacity-70", listItemTextVariants({variant})),
+				className: cn("size-5 opacity-70", listItemTextVariants({ variant })),
 			});
 		} else if ((props?.onPress && detail) || (href && detail)) {
 			return (
 				<ChevronRight
-					className={cn("size-5 opacity-70", listItemTextVariants({variant}))}
+					className={cn("size-5 opacity-70", listItemTextVariants({ variant }))}
 				/>
 			);
 		}
@@ -87,11 +93,11 @@ const ListItem: React.FC<ListItemProps> = ({
 			className={cn(
 				"flex-row items-center justify-between w-full px-4 py-3 border-b border-border bg-card",
 				pressable ? "web:hover:opacity-90 active:opacity-90" : "",
-				listItemTextVariants({variant}),
+				listItemTextVariants({ variant }),
 				className,
 			)}
 			accessibilityRole={pressable ? "button" : "none"}
-			accessibilityLabel={`${ label }${ description ? `, ${ description }` : "" }`}
+			accessibilityLabel={`${label}${description ? `, ${description}` : ""}`}
 			{...props}
 		>
 			{itemLeft && (
@@ -99,13 +105,13 @@ const ListItem: React.FC<ListItemProps> = ({
 					{itemLeft({
 						className: cn(
 							"size-5 text-foreground",
-							listItemTextVariants({variant}),
+							listItemTextVariants({ variant }),
 						),
 					})}
 				</View>
 			)}
 			<View className="flex-1">
-				<Text className={cn(listItemTextVariants({variant}))}>{label}</Text>
+				<Text className={cn(listItemTextVariants({ variant }))}>{label}</Text>
 				{description && <Muted>{description}</Muted>}
 			</View>
 			<ItemRight />

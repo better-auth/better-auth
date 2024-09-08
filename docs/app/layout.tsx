@@ -10,7 +10,6 @@ import { ENV } from "@/lib/constants";
 import { Metadata } from "next";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 
-
 export const metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",

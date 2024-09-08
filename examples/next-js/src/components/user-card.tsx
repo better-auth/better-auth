@@ -48,7 +48,6 @@ export default function UserCard(props: {
 							{session?.user.email}
 						</p>
 					</div>
-
 				</div>
 				<div className="border border-border p-2 rounded-md gap-1 flex flex-col bg-gradient-to-br from-stone-950 to-stone-900/60">
 					<p className="text-sm font-medium text-muted-foreground">

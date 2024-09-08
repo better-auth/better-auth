@@ -1,7 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -44,7 +50,7 @@ const mockMembers = [
 ];
 
 export function Organization() {
-	const organizations = authClient.useListOrganizations()
+	const organizations = authClient.useListOrganizations();
 	const activeOrg = authClient.useActiveOrganization();
 	const [members, setMembers] = useState(mockMembers);
 	const [newOrgName, setNewOrgName] = useState("");
@@ -93,9 +99,7 @@ export function Organization() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>
-					Organization
-				</CardTitle>
+				<CardTitle>Organization</CardTitle>
 
 				<div className="flex space-x-4 !mt-3">
 					<Dialog open={isCreateOrgOpen} onOpenChange={setIsCreateOrgOpen}>
@@ -146,7 +150,6 @@ export function Organization() {
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
-
 			</CardHeader>
 			<CardContent>
 				{activeOrg && (
@@ -198,7 +201,6 @@ export function Organization() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-
 						<ul>
 							{activeOrg?.members.map((member) => (
 								<li
@@ -215,9 +217,7 @@ export function Organization() {
 						<div>
 							<div className="flex items-center gap-2 mt-4">
 								<MessageSquareText size={18} />
-								<h3 className=" font-semibold text-sm">
-									Pending Invitations
-								</h3>
+								<h3 className=" font-semibold text-sm">Pending Invitations</h3>
 							</div>
 							<ul className="space-y-2">
 								{activeOrg?.invitations
