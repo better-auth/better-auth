@@ -23,7 +23,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			const { handler } = router(authContext, options);
 			return handler(request);
 		},
-		api,
+		api: api as Omit<typeof api, "ok" | "welcome" | "error">,
 		options: authContext.options as O,
 	};
 };

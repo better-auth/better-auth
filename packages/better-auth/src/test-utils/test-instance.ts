@@ -7,6 +7,9 @@ import { github, google } from "../social-providers";
 import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../utils/cookies";
+import type { SuccessContext } from "@better-fetch/fetch";
+import { createKyselyAdapter } from "../adapters/kysely";
+import { getAdapter } from "../adapters/utils";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
@@ -104,12 +107,28 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		};
 	}
 
+	const customFetchImpl = async (
+		url: string | URL | Request,
+		init?: RequestInit,
+	) => {
+		const req = new Request(url.toString(), init);
+		return auth.handler(req);
+	};
+
+	function sessionSetter(headers: Headers) {
+		return (context: SuccessContext) => {
+			const header = context.response.headers.get("set-cookie");
+			if (header) {
+				const cookies = parseSetCookieHeader(header || "");
+				const signedCookie = cookies.get("better-auth.session_token")?.value;
+				headers.set("cookie", `better-auth.session_token=${signedCookie}`);
+			}
+		};
+	}
+
 	const client = createAuthClient({
 		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				const req = new Request(url.toString(), init);
-				return auth.handler(req);
-			},
+			customFetchImpl,
 			baseURL:
 				options?.baseURL || "http://localhost:" + (port || 3000) + "/api/auth",
 		},
@@ -120,5 +139,8 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		testUser,
 		signInWithTestUser,
 		signInWithUser,
+		customFetchImpl,
+		sessionSetter,
+		db: getAdapter(auth.options),
 	};
 }

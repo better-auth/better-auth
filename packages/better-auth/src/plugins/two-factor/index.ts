@@ -11,14 +11,13 @@ import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import type { Session } from "../../adapters/schema";
 
-export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
+export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const totp = totp2fa({
-		issuer: options.issuer,
-		...options.totpOptions,
+		issuer: options?.issuer || "better-auth",
+		...options?.totpOptions,
 	});
-	const backupCode = backupCode2fa(options.backupCodeOptions);
-	const otp = otp2fa(options.otpOptions);
-	const providers = [totp, backupCode, otp];
+	const backupCode = backupCode2fa(options?.backupCodeOptions);
+	const otp = otp2fa(options?.otpOptions);
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -34,13 +33,13 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
-					const encryptedSecret = await symmetricEncrypt({
+					const encryptedSecret = symmetricEncrypt({
 						key: ctx.context.secret,
 						data: secret,
 					});
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
-						options.backupCodeOptions,
+						options?.backupCodeOptions,
 					);
 					await ctx.context.adapter.update({
 						model: "user",
