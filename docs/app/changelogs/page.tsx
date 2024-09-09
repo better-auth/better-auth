@@ -4,7 +4,7 @@ import { FormattedDate } from "./_components/fmt-dates"
 const ChangelogPage = () => {
     return (
         <div>
-            <div className='mt-10 h-full flex flex-col gap-10'>
+            <div className='mt-10 overflow-visible h-full flex flex-col gap-10'>
                 {Logs.map((log) => {
                     return (
                         <div className="relative my-5 h-auto">
