@@ -6,8 +6,8 @@ export function createMetadata(override: Metadata): Metadata {
 		openGraph: {
 			title: override.title ?? undefined,
 			description: override.description ?? undefined,
-			url: "https://better-auth.vercel.app",
-			images: "https://better-auth.vercel.app/og.png",
+			url: "https://better-auth.com",
+			images: "https://better-auth.com/og.png",
 			siteName: "Better Auth",
 			...override.openGraph,
 		},
@@ -16,7 +16,7 @@ export function createMetadata(override: Metadata): Metadata {
 			creator: "@beakcru",
 			title: override.title ?? undefined,
 			description: override.description ?? undefined,
-			images: "https://better-auth.vercel.app/og.png",
+			images: "https://better-auth.com/og.png",
 			...override.twitter,
 		},
 	};

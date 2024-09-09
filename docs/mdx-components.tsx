@@ -5,6 +5,7 @@ import { cn } from "./lib/utils";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { GenerateSecret } from "./components/generate-secret";
+import { AnimatePresence } from "./components/ui/fade-in";
 import { Popup, PopupContent, PopupTrigger } from "fumadocs-ui/twoslash/popup";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import { FeaturesSectionDemo } from "./components/blocks/features-section-demo-3";
@@ -26,6 +27,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 		Popup,
 		PopupTrigger,
 		PopupContent,
+	    AnimatePresence,
 		TypeTable,
 		Features: FeaturesSectionDemo,
 	};
