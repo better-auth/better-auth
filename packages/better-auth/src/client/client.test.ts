@@ -9,7 +9,6 @@ import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../adapters/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
-import { organizationClient } from "./plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -47,20 +46,7 @@ describe("run time proxy", async () => {
 		}, 100);
 	});
 
-	//work on this
-	it("should work with query", async () => {
-		const client = createSolidClient({
-			plugins: [testClientPlugin(), organizationClient()],
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return new Response(JSON.stringify({ data: "test" }));
-				},
-				baseURL: "http://localhost:3000",
-			},
-		});
-	});
-
-	it.only("should call useSession", async () => {
+	it("should call useSession", async () => {
 		let returnNull = false;
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
@@ -83,13 +69,11 @@ describe("run time proxy", async () => {
 		});
 		const res = client.useSession();
 		vi.useFakeTimers();
-		vi.advanceTimersByTime(100);
-		console.log(res());
+		await vi.advanceTimersByTimeAsync(1);
 		expect(res()).toMatchObject({
-			user: {
-				id: 1,
-				email: "test@email.com",
-			},
+			data: { user: { id: 1, email: "test@email.com" } },
+			error: null,
+			isPending: false,
 		});
 		/**
 		 * recall
@@ -97,7 +81,11 @@ describe("run time proxy", async () => {
 		returnNull = true;
 		await client.test2.signOut();
 		await vi.advanceTimersByTimeAsync(1);
-		expect(res()).toBe(null);
+		expect(res()).toMatchObject({
+			data: null,
+			error: null,
+			isPending: false,
+		});
 	});
 });
 
@@ -105,40 +93,40 @@ describe("type", () => {
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
 		expectTypeOf<ReturnedSession>().toMatchTypeOf<{
-			data?:
-				| {
-						user: {
-							id: string;
-							email: string;
-							emailVerified: boolean;
-							name: string;
-							createdAt: Date;
-							updatedAt: Date;
-							image?: string | undefined;
-							testField4: string;
-							testField?: string | undefined;
-							testField2?: number | undefined;
-						};
-						session: Session;
-				  }
-				| undefined;
-			error?: BetterFetchError | undefined;
-			loading: boolean;
-			promise?: Promise<any> | undefined;
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined;
+					testField4: string;
+					testField?: string | undefined;
+					testField2?: number | undefined;
+				};
+				session: Session;
+			} | null;
+			error: BetterFetchError | null;
+			isPending: boolean;
 		}>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
 	});
 	it("should infer resolved hooks solid", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Accessor<number>
@@ -147,6 +135,7 @@ describe("type", () => {
 	it("should infer resolved hooks vue", () => {
 		const client = createVueClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Readonly<Ref<number>>
@@ -155,6 +144,7 @@ describe("type", () => {
 	it("should infer resolved hooks svelte", () => {
 		const client = createSvelteClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
@@ -162,6 +152,7 @@ describe("type", () => {
 	it("should infer from multiple plugins", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
+			baseURL: "http://localhost:3000",
 		});
 		const res = client.useAnotherAtom();
 	});
@@ -169,6 +160,7 @@ describe("type", () => {
 	it("should infer actions", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();

@@ -1,10 +1,9 @@
-import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
 import type { Auth as BetterAuth } from "../auth";
 import type { Prettify } from "../types/helper";
 import type { InferSession, InferUser } from "../types/models";
 import type { AuthClientPlugin, ClientOptions } from "./types";
-import { nanoquery } from "@nanostores/query";
 import { useAuthQuery } from "./query";
 
 export function getSessionAtom<Option extends ClientOptions>(
@@ -30,27 +29,6 @@ export function getSessionAtom<Option extends ClientOptions>(
 	//@ts-expect-error
 	type SessionWithAdditionalFields = InferSession<Auth["options"]>;
 	const $signal = atom<boolean>(false);
-
-	const [createFetcherStore] = nanoquery({
-		fetcher: async () => {
-			return await client("/session", {
-				credentials: "include",
-				method: "GET",
-			}).then((res) => {
-				if (res.data) {
-					return res.data;
-				}
-				throw res.error;
-			});
-		},
-	});
-	const $session = createFetcherStore<
-		{
-			user: Prettify<UserWithAdditionalFields>;
-			session: Prettify<SessionWithAdditionalFields>;
-		},
-		BetterFetchError
-	>(["/", $signal]);
 	const session = useAuthQuery<{
 		user: Prettify<UserWithAdditionalFields>;
 		session: Prettify<SessionWithAdditionalFields>;
