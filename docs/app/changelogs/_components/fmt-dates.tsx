@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils"
+
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
@@ -12,7 +14,7 @@ export function FormattedDate({
     date = typeof date === 'string' ? new Date(date) : date
 
     return (
-        <time dateTime={date.toISOString()} {...props}>
+        <time className={cn(props.className , '')} dateTime={date.toISOString()} {...props}>
             {dateFormatter.format(date)}
         </time>
     )
