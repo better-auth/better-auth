@@ -39,23 +39,22 @@ export const callbackOAuth = createAuthEndpoint(
 		);
 		let tokens: OAuth2Tokens;
 		try {
+			console.log({
+				data: c.query.code,
+				codeVerifier,
+			});
 			tokens = await provider.validateAuthorizationCode(
 				c.query.code,
 				codeVerifier,
 				`${c.context.baseURL}/callback/${provider.id}`,
 			);
 		} catch (e) {
-			c.context.logger.error("Code verification failed", e);
+			c.context.logger.error(e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=oauth_code_verification_failed`,
 			);
 		}
-		if (!tokens) {
-			c.context.logger.error("Code verification failed");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=oauth_code_verification_failed`,
-			);
-		}
+
 		const user = await provider.getUserInfo(tokens).then((res) => res?.user);
 		const id = generateId();
 		const data = userSchema.safeParse({
@@ -139,7 +138,6 @@ export const callbackOAuth = createAuthEndpoint(
 			url.searchParams.set("error", "unable_to_create_session");
 			throw c.redirect(url.toString());
 		}
-
 		throw c.redirect(callbackURL);
 	},
 );

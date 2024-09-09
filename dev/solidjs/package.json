@@ -10,7 +10,7 @@
     "@solidjs/router": "^0.14.1",
     "@solidjs/start": "^1.0.6",
     "autoprefixer": "^10.4.19",
-    "better-auth": "^0.0.4",
+    "better-auth": "workspace:*",
     "postcss": "^8.4.38",
     "solid-js": "^1.8.18",
     "tailwindcss": "^3.4.3",

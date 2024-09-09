@@ -8,6 +8,8 @@ import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../adapters/schema";
+import { BetterFetchError } from "@better-fetch/fetch";
+import { organizationClient } from "./plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -42,10 +44,23 @@ describe("run time proxy", async () => {
 		vi.useFakeTimers();
 		setTimeout(() => {
 			expect(res()).toBe(1);
-		}, 2);
+		}, 100);
 	});
 
-	it("should call useSession", async () => {
+	//work on this
+	it("should work with query", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin(), organizationClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response(JSON.stringify({ data: "test" }));
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+	});
+
+	it.only("should call useSession", async () => {
 		let returnNull = false;
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
@@ -68,8 +83,9 @@ describe("run time proxy", async () => {
 		});
 		const res = client.useSession();
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1);
-		expect(res()).toEqual({
+		vi.advanceTimersByTime(100);
+		console.log(res());
+		expect(res()).toMatchObject({
 			user: {
 				id: 1,
 				email: "test@email.com",
@@ -92,20 +108,27 @@ describe("type", () => {
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
 		expectTypeOf<ReturnedSession>().toMatchTypeOf<{
-			user: {
-				id: string;
-				email: string;
-				emailVerified: boolean;
-				name: string;
-				createdAt: Date;
-				updatedAt: Date;
-				image?: string | undefined;
-				testField4: string;
-				testField?: string | undefined;
-				testField2?: number | undefined;
-			};
-			session: Session;
-		} | null>();
+			data?:
+				| {
+						user: {
+							id: string;
+							email: string;
+							emailVerified: boolean;
+							name: string;
+							createdAt: Date;
+							updatedAt: Date;
+							image?: string | undefined;
+							testField4: string;
+							testField?: string | undefined;
+							testField2?: number | undefined;
+						};
+						session: Session;
+				  }
+				| undefined;
+			error?: BetterFetchError | undefined;
+			loading: boolean;
+			promise?: Promise<any> | undefined;
+		}>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({

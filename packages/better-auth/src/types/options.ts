@@ -6,12 +6,19 @@ import type { OAuthProvider } from "./provider";
 
 export interface BetterAuthOptions {
 	/**
+	 * The name of the application
+	 *
+	 * process.env.APP_NAME
+	 *
+	 * @default "Better Auth"
+	 */
+	appName?: string;
+	/**
 	 * Base URL for the better auth. This is typically the
-	 * root URL where your
-	 * application server is hosted. If not explicitly set,
+	 * root URL where your application server is hosted. If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL
+	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
 	 *
 	 * If not set it will throw an error.
 	 */

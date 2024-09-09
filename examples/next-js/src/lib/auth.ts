@@ -55,7 +55,4 @@ export const auth = betterAuth({
 		}),
 		username(),
 	],
-	advanced: {
-		useSecureCookies: true,
-	},
 });
