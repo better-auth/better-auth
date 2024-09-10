@@ -58,11 +58,9 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		});
 	}
 
-	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
-		await createTestUser();
-	});
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+	await createTestUser();
 
 	afterAll(async () => {
 		await fs.unlink(dbName);

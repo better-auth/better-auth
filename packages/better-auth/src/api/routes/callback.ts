@@ -4,7 +4,7 @@ import { userSchema } from "../../adapters/schema";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
-import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
+import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { getAccountTokens } from "../../utils/getAccount";
 import { setSessionCookie } from "../../utils/cookies";
 import type { OAuth2Tokens } from "arctic";
@@ -17,7 +17,7 @@ export const callbackOAuth = createAuthEndpoint(
 			state: z.string(),
 			code: z.string(),
 		}),
-		metadata: HIDE_ON_CLIENT_METADATA,
+		metadata: HIDE_METADATA,
 	},
 	async (c) => {
 		const provider = c.context.options.socialProvider?.find(

@@ -26,6 +26,7 @@ export const init = (options: BetterAuthOptions) => {
 	const cookies = getCookies(options);
 
 	return {
+		appName: options.appName || "Better Auth",
 		options: {
 			...options,
 			baseURL: baseURL ? new URL(baseURL).origin : "",
@@ -54,6 +55,7 @@ export const init = (options: BetterAuthOptions) => {
 
 export type AuthContext = {
 	options: BetterAuthOptions;
+	appName: string;
 	baseURL: string;
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;

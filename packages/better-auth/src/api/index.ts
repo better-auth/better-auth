@@ -20,7 +20,7 @@ import {
 	verifyEmail,
 } from "./routes";
 import { getCSRFToken } from "./routes/csrf";
-import { ok, welcome } from "./routes/ok";
+import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
@@ -101,7 +101,6 @@ export function getEndpoints<
 		...baseEndpoints,
 		...pluginEndpoints,
 		ok,
-		welcome,
 		error,
 	};
 	let api: Record<string, any> = {};
@@ -190,6 +189,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
+			console.log(e);
 			if (e instanceof APIError) {
 				if (e.status === "INTERNAL_SERVER_ERROR") {
 					logger.error(e);
