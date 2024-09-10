@@ -52,7 +52,7 @@ export function Intro() {
             </div>
             <h1 className="mt-14  font-sans  font-semibold tracking-tighter text-5xl">
                 All of the changes made will be {' '}
-                <span className="">dumped here.</span>
+                <span className="">available here.</span>
             </h1>
             <p className="mt-4 text-sm/6 text-gray-300">
                 Better Auth is advanced authentication library for typescript packed by customizable and extendible plugin ecosystem

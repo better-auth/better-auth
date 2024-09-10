@@ -25,18 +25,18 @@ function Glow() {
     let id = useId()
 
     return (
-        <div className='absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent via-stone-800/5 to-transparent/10  lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[32rem]'>
+        <div className='absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent via-stone-950/5 to-transparent/10 lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[32rem]'>
             <svg className='absolute -bottom-48 left-[-40%] h-[80rem] w-[180%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-[80rem]' aria-hidden='true'>
                 <defs>
                     <radialGradient id={`${id}-desktop`} cx='100%'>
-                        <stop offset='0%' stopColor='rgba(214, 211, 209, 0.4)' />
-                        <stop offset='53.95%' stopColor='rgba(214, 200, 209, 0.09)' />
-                        <stop offset='100%' stopColor='rgba(10, 14, 23, 0)' />
+                        <stop offset='0%' stopColor='rgba(41, 37, 36, 0.4)' />
+                        <stop offset='53.95%' stopColor='rgba(28, 25, 23, 0.09)' />
+                        <stop offset='100%' stopColor='rgba(0, 0, 0, 0)' />
                     </radialGradient>
                     <radialGradient id={`${id}-mobile`} cy='100%'>
-                        <stop offset='0%' stopColor='rgba(56, 189, 248, 0.3)' />
-                        <stop offset='53.95%' stopColor='rgba(0, 71, 255, 0.09)' />
-                        <stop offset='100%' stopColor='rgba(10, 14, 23, 0)' />
+                        <stop offset='0%' stopColor='rgba(41, 37, 36, 0.3)' />
+                        <stop offset='53.95%' stopColor='rgba(28, 25, 23, 0.09)' />
+                        <stop offset='100%' stopColor='rgba(0, 0, 0, 0)' />
                     </radialGradient>
                 </defs>
                 <rect width='100%' height='100%' fill={`url(#${id}-desktop)`} className='hidden lg:block' />
@@ -74,7 +74,6 @@ const ChangeLogLayout = ({ children }: { children: React.ReactNode }) => {
             <div />
             <div className='relative overflow-y-auto  flex gap-2 justify-start items-start'>
                 <Timeline />
-
                 <div className='space-y-20 py-20 w-[80%] mx-auto md:mx-0 md:ml-auto md:w-1/2 h-screen sm:space-y-20 sm:py-20'>{children}</div>
             </div>
         </div>
