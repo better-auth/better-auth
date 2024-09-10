@@ -23,7 +23,7 @@ import { Ripple } from "./ripple";
 export default function Features() {
 
     return (
-        <div className="max-w-[1300px] font-geist relative my-32 mx-auto md:border-[1.2px] rounded-none md:w-full xl:w-4/5 2xl:w-3/5">
+        <div className="md:max-w-[1300px] font-geist relative mx-auto md:border-[1.2px] rounded-none">
             <Plus className="absolute top-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
             <div className="grid grid-cols-1 md:grid-cols-3 grid-rows-10 md:grid-rows-4 w-full">
                 <div className="relative items-start justify-start border-l-[1.2px] transform-gpu  flex flex-col p-10 overflow-clip">
@@ -36,7 +36,7 @@ export default function Features() {
                     <div className="mt-2">
                         <div className="max-w-full">
                             <div className="flex gap-3 ">
-                                <p className="text-2xl tracking-tighter font-normal max-w-lg">
+                                <p className="text-xl md:text-2xl tracking-tighter font-normal max-w-lg">
                                     Supports popular <strong>frameworks</strong>
                                 </p>
                             </div>
@@ -91,7 +91,7 @@ export default function Features() {
                         <div className="max-w-full">
                             <div className="flex gap-3 ">
                                 <p className="text-2xl tracking-tighter font-normal max-w-lg">
-                                    Support multiple <strong>providers.</strong>
+                                    Support multiple <strong>OAuth providers.</strong>
                                 </p>
                             </div>
                         </div>
@@ -116,20 +116,20 @@ export default function Features() {
                         <div className="max-w-full">
                             <div className="flex gap-3 ">
                                 <p className="text-2xl tracking-tighter font-normal max-w-lg">
-                                    2FA right out of <strong>the box.</strong>
+                                    Two Factor <strong>Authentication</strong>
                                 </p>
                             </div>
                         </div>
                         <p className="text-left text-sm mt-2 text-muted-foreground">
-                            Supports your favorite frontend, backend and meta frameworks, including React, Vue, Svelte, Solid, Next.js, Nuxt.js, Hono, and more,
+                            With our built-in two factor authentication plugin, you can add an extra layer of security to your account.
                             {" "}
-                            <a
+                            <Link
                                 className="text-gray-50"
                                 href="/docs"
                                 target="_blank"
                             >
                                 Learn more
-                            </a>
+                            </Link>
                         </p>
                     </div>
                 </div>
@@ -189,10 +189,14 @@ export default function Features() {
                         <div className="flex flex-col gap-3 justify-center h-full items-center w-full">
                             <div className="flex gap-2 items-center">
                                 <Globe2Icon className="w-4 h-4" />
-                                <p className="text-gray-600 dark:text-gray-400">Start in a minute</p>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    own your auth
+                                </p>
                             </div>
                             <p className="text-4xl md:text-4xl mt-4 tracking-tighter font-normal max-w-md mx-auto text-center">
-                                Start in a minute and. <strong>accelerate with 10x speed </strong>
+                                <strong>
+                                    Roll your own auth with confidence in minutes!
+                                </strong>
                             </p>
                             <div className="flex mt-[10px] z-20">
                                 <TechStackDisplay
@@ -208,16 +212,16 @@ export default function Features() {
                                 />
                             </div>
                             <Link href="/docs" className="z-50">
-                                <Button className="mt-4 rounded-lg p-5 ml-auto">
+                                <Button className="mt-4 rounded-none p-5 ml-auto">
                                     Start now!
                                 </Button>
                             </Link>
                             <Ripple />
                         </div>
                     </div>
-                    <Plus className="absolute bottom-[-15px] left-[-15px] text-black/20 dark:text-black/20 dark:text-white/40 w-8 h-8" />
-                    <Plus className="absolute bottom-[-15px] right-[-15px] text-black/20 dark:text-black/20 dark:text-white/40 w-8 h-8" />
-                    <Plus className="absolute top-[-15px] left-[-15px] text-black/20 dark:text-black/20 dark:text-white/40 w-8 h-8" />
+                    <Plus className="absolute bottom-[-15px] left-[-15px] text-black/20 dark:text-black/20  w-8 h-8" />
+                    <Plus className="absolute bottom-[-15px] right-[-15px] text-black/20 dark:text-black/20 w-8 h-8" />
+                    <Plus className="absolute top-[-15px] left-[-15px] text-black/20 dark:text-black/20  w-8 h-8" />
                 </div>
             </div>
         </div>
