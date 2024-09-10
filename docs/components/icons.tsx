@@ -1,7 +1,9 @@
+import { SVGProps } from "react";
+
 export const Icons = {
-	nextJS: ({className}: {className?:string}) => (
+	nextJS: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -13,9 +15,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	nuxt: ({className}: {className?:string}) => (
+	nuxt: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -27,9 +29,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	svelteKit: ({className}: {className?:string}) => (
+	svelteKit: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -41,9 +43,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	solidStart: ({className}: {className?:string}) => (
+	solidStart: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -55,9 +57,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	react: ({className}: {className?:string}) => (
+	react: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -71,9 +73,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	hono: ({className}: {className?:string}) => (
+	hono: (props?: SVGProps<any>) => (
 		<svg
-		    className={className}
+			className={props?.className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"

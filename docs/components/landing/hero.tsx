@@ -134,7 +134,7 @@ export default function Hero() {
 							<LayoutGroup>
 								<motion.div
 									layoutId="hero"
-									className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-900/90  ring-1 ring-white/10 backdrop-blur-lg"
+									className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-950/90  ring-1 ring-white/10 backdrop-blur-lg"
 								>
 									<div className="absolute -top-px left-0 right-0 h-px " />
 									<div className="absolute -bottom-px left-11 right-20 h-px" />

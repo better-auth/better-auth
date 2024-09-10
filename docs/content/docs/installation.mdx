@@ -18,6 +18,12 @@ description: Installation
 
         Create a `.env` file in the root of your project and add the following environment variables:
 
+        **Set Base URL**
+
+        ```txt title=".env"
+        BETTER_AUTH_URL=http//localhost:3000 #Base URL of your app
+        ```
+
         **Set Secret**
 
         Random value used by the library for encryption and generating hashes. **You can generate one using the button below**  or you can use something like openssl.
@@ -54,27 +60,29 @@ description: Installation
     </Step>
     <Step>
         ### Database 
+
+        **1. Configure Database**
         
-        Better Auth requires a database to store user data. It currently only supports `sqlite`, `postgresql` and `mysql`.
+        Better Auth requires a database to store user data. It currently only supports `sqlite`, `postgresql` and `mysql`. 
+
+        You can either pass a database provider and connection string directly to the auth instance or provide a <Link href="https://kysely.dev/">Kysley</Link>  dialect.
         
         ```ts twoslash title="auth.ts"
         import { betterAuth } from "better-auth"
 
         export const auth = betterAuth({
-            database: {
-                provider: "sqlite", // or "mysql", "postgresql"
-                url: "./db.sqlite", // path to your database
-            }
+            database: { // [!code highlight]
+                provider: "sqlite", // or "mysql", "postgresql" // [!code highlight]
+                url: "./db.sqlite", // path to your database // [!code highlight]
+            } // [!code highlight]
         })
         ```
-        <Callout type="info">
-            Better auth uses <Link href="https://kysely.dev/">Kysley</Link> under the hood. You can pass a Kysley dialect directly to the auth instance.
-        </Callout>
+      
 
-       **Push Schema**
+       **2. Push Schema**
         
        Better Auth includes a CLI tool to migrate the required schema to your database. Run the following command to perform the migration:
-        ```bash
+        ```bash title="Terminal"
         npx better-auth migrate
         ```
     </Step>
