@@ -7,7 +7,6 @@ import {
 } from "better-auth/plugins";
 import { github, google } from "better-auth/social-providers";
 import { ac, admin } from "./permissions";
-import { studio } from "@better-auth/studio";
 
 export const auth = betterAuth({
 	socialProvider: [
@@ -55,6 +54,5 @@ export const auth = betterAuth({
 			origin: process.env.BETTER_AUTH_URL as string,
 		}),
 		username(),
-		studio(),
 	],
 });
