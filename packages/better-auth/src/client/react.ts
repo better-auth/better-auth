@@ -51,7 +51,8 @@ export function createAuthClient<Option extends ClientOptions>(
 	}
 	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 
-	function useSession(initialValue?: (typeof $session)["value"]) {
+	type InitialValue = ReturnType<(typeof $session)["get"]>["data"] | null;
+	function useSession(initialValue?: InitialValue) {
 		const [isClient, setIsClient] = useState(false);
 		const storeValue = useStore($session);
 
@@ -60,7 +61,12 @@ export function createAuthClient<Option extends ClientOptions>(
 		}, []);
 
 		if (!isClient && initialValue !== undefined) {
-			return initialValue;
+			return {
+				data: initialValue || undefined,
+				loading: false,
+				error: undefined,
+				promise: () => Promise.resolve(),
+			} as unknown as typeof storeValue;
 		}
 		return storeValue;
 	}
@@ -85,3 +91,5 @@ export function createAuthClient<Option extends ClientOptions>(
 			useSession: typeof useSession;
 		};
 }
+
+export const useAuthQuery = useStore;

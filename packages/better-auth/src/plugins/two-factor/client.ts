@@ -41,7 +41,9 @@ export const twoFactorClient = (
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
 							if (options.redirect || options.twoFactorPage) {
-								window.location.href = options.twoFactorPage;
+								if (typeof window !== "undefined") {
+									window.location.href = options.twoFactorPage;
+								}
 							}
 						}
 					},

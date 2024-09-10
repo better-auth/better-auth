@@ -14,7 +14,14 @@ export interface OTPOptions {
 	 * @default "5 mins"
 	 */
 	period?: number;
-	sendOTP: (user: UserWithTwoFactor, otp: string) => Promise<void>;
+	/**
+	 * Send the otp to the user
+	 *
+	 * @param user - The user to send the otp to
+	 * @param otp - The otp to send
+	 * @returns void | Promise<void>
+	 */
+	sendOTP?: (user: UserWithTwoFactor, otp: string) => Promise<void> | void;
 }
 
 /**

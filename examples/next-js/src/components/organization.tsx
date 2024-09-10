@@ -29,14 +29,19 @@ import { authClient } from "@/lib/auth-client";
 import {
 	CheckIcon,
 	ChevronDownIcon,
+	CopyIcon,
+	Mail,
 	MessageSquareText,
 	PlusIcon,
+	Send,
 	UserPlusIcon,
 	Users,
 	XIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
+import InviteDialog from "./invite-to-org";
+import CopyButton from "./ui/copy-button";
 
 // Mock data for organizations and members
 const mockOrgs = [
@@ -50,9 +55,10 @@ const mockMembers = [
 ];
 
 export function Organization() {
-	const organizations = authClient.useListOrganizations();
-	const activeOrg = authClient.useActiveOrganization();
-	const [members, setMembers] = useState(mockMembers);
+	const { data: organizations } = authClient.useListOrganizations();
+	const {
+		data: activeOrg,
+	} = authClient.useActiveOrganization();
 	const [newOrgName, setNewOrgName] = useState("");
 	const [newMemberEmail, setNewMemberEmail] = useState("");
 	const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
@@ -82,19 +88,19 @@ export function Organization() {
 
 	const [canCreate, setCanCreate] = useState(false);
 
-	useEffect(() => {
-		authClient.organization
-			.hasPermission({
-				permission: {
-					invitation: ["create"],
-				},
-			})
-			.then((res) => {
-				if (res.data?.success) {
-					setCanCreate(true);
-				}
-			});
-	}, []);
+	// useEffect(() => {
+	// 	authClient.organization
+	// 		.hasPermission({
+	// 			permission: {
+	// 				invitation: ["create"],
+	// 			},
+	// 		})
+	// 		.then((res) => {
+	// 			if (res.data?.success) {
+	// 				setCanCreate(true);
+	// 			}
+	// 		});
+	// }, []);
 
 	return (
 		<Card>
@@ -190,88 +196,98 @@ export function Organization() {
 					</div>
 				)}
 			</CardContent>
-			<CardFooter>
-				<Card>
-					<CardHeader>
-						<CardTitle>
+			{
+				activeOrg && <CardFooter>
+					<Card className="w-full border-none">
+						<CardHeader>
+							<CardTitle>
+								<p className="font-semibold">Active Organization</p>
+								<span className="text-sm text-muted-foreground mt-1">
+									{activeOrg.name}
+								</span>
+							</CardTitle>
+						</CardHeader>
+						<CardContent >
 							<div className="flex items-center gap-2">
-								<Users />
-								<h3 className="text-lg font-semibold">Members</h3>
+								<Users size={16} />
+								<p className="text-sm font-semibold">Members</p>
 							</div>
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<ul>
-							{activeOrg?.members.map((member) => (
-								<li
-									key={member.id}
-									className="flex justify-between items-center"
-								>
-									<span>{member.name}</span>
-									<span className="text-sm text-muted-foreground">
-										{member.role}
-									</span>
-								</li>
-							))}
-						</ul>
-						<div>
-							<div className="flex items-center gap-2 mt-4">
-								<MessageSquareText size={18} />
-								<h3 className=" font-semibold text-sm">Pending Invitations</h3>
-							</div>
-							<ul className="space-y-2">
-								{activeOrg?.invitations
-									.filter((invitation) => invitation.status === "pending")
-									.map((invitation) => (
-										<li
-											key={invitation.id}
-											className="flex justify-between items-center gap-2"
-										>
-											<span>{invitation.email}</span>
-											<div className="flex items-center space-x-2">
-												<Badge
-													variant={
-														invitation.status === "canceled"
-															? "destructive"
-															: "default"
-													}
-												>
-													{invitation.status}
-												</Badge>
-												<Button
-													size="sm"
-													variant="outline"
-													onClick={async () => {
-														await authClient.organization.inviteMember({
-															email: invitation.email,
-															role: "member",
-															resend: true,
-														});
-													}}
-												>
-													<CheckIcon className="w-4 h-4 mr-1" />
-													Resend
-												</Button>
-												<Button
-													size="sm"
-													variant="outline"
-													onClick={async () => {
-														await authClient.organization.cancelInvitation({
-															invitationId: invitation.id,
-														});
-													}}
-												>
-													<XIcon className="w-4 h-4 mr-1" />
-													Cancel
-												</Button>
-											</div>
-										</li>
-									))}
+							<ul className="space-y-2 mt-2">
+								{activeOrg?.members.map((member, i) => (
+									<li
+										key={member.id}
+										className="flex justify-between items-center"
+									>
+										<span>{i + 1}. {member.name}</span>
+										<span className="text-sm text-muted-foreground">
+											{member.role}
+										</span>
+									</li>
+								))}
 							</ul>
-						</div>
-					</CardContent>
-				</Card>
-			</CardFooter>
+							<div className="flex flex-col items-start gap-2">
+								<div className="flex items-center gap-2 mt-4">
+									<Mail size={16} />
+									<p className=" font-semibold text-sm">Pending Invitations</p>
+								</div>
+
+
+								{
+									!activeOrg.invitations.length ? (
+										<p className="text-muted-foreground text-sm">No pending invitations</p>
+									) : (
+										<ul className="space-y-2">
+											{activeOrg?.invitations
+												.filter((invitation) => invitation.status === "pending")
+												.map((invitation) => (
+													<li
+														key={invitation.id}
+														className="flex justify-between items-center gap-2"
+													>
+														<span className="text-sm">{invitation.email}</span>
+														<div className="flex items-center space-x-2">
+
+															<Button
+																size="sm"
+																variant="outline"
+																onClick={async () => {
+																	await authClient.organization.inviteMember({
+																		email: invitation.email,
+																		role: "member",
+																		resend: true,
+																	});
+																}}
+															>
+																<Send size={12} className="mr-1" />
+																Resend
+															</Button>
+															<Button
+																size="sm"
+																variant="outline"
+																onClick={async () => {
+																	await authClient.organization.cancelInvitation({
+																		invitationId: invitation.id,
+																	});
+																}}
+															>
+																<XIcon className="w-4 h-4 mr-1" />
+																Cancel
+															</Button>
+															<CopyButton textToCopy={
+																`${window.location.origin}/accept-invitation/${invitation.id}`
+															} />
+														</div>
+													</li>
+												))}
+										</ul>
+									)
+								}
+								<InviteDialog />
+							</div>
+						</CardContent>
+					</Card>
+				</CardFooter>
+			}
 		</Card>
 	);
 }

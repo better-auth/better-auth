@@ -1,9 +1,10 @@
 import type { BetterFetch } from "@better-fetch/fetch";
-import { atom, computed, task } from "nanostores";
+import { atom } from "nanostores";
 import type { Auth as BetterAuth } from "../auth";
 import type { Prettify } from "../types/helper";
 import type { InferSession, InferUser } from "../types/models";
 import type { AuthClientPlugin, ClientOptions } from "./types";
+import { useAuthQuery } from "./query";
 
 export function getSessionAtom<Option extends ClientOptions>(
 	client: BetterFetch,
@@ -28,17 +29,11 @@ export function getSessionAtom<Option extends ClientOptions>(
 	//@ts-expect-error
 	type SessionWithAdditionalFields = InferSession<Auth["options"]>;
 	const $signal = atom<boolean>(false);
-	const $session = computed($signal, () =>
-		task(async () => {
-			const session = await client("/session", {
-				credentials: "include",
-				method: "GET",
-			});
-			return session.data as {
-				user: Prettify<UserWithAdditionalFields>;
-				session: Prettify<SessionWithAdditionalFields>;
-			} | null;
-		}),
-	);
-	return { $session, _sessionSignal: $signal };
+	const session = useAuthQuery<{
+		user: Prettify<UserWithAdditionalFields>;
+		session: Prettify<SessionWithAdditionalFields>;
+	}>($signal, "/session", client, {
+		method: "GET",
+	});
+	return { $session: session, _sessionSignal: $signal };
 }

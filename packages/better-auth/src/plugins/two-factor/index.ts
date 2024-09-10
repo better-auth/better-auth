@@ -10,15 +10,15 @@ import { totp2fa } from "./totp";
 
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import type { Session } from "../../adapters/schema";
+import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 
-export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
+export const twoFactor = (options?: TwoFactorOptions) => {
 	const totp = totp2fa({
-		issuer: options.issuer,
-		...options.totpOptions,
+		issuer: options?.issuer || "better-auth",
+		...options?.totpOptions,
 	});
-	const backupCode = backupCode2fa(options.backupCodeOptions);
-	const otp = otp2fa(options.otpOptions);
-	const providers = [totp, backupCode, otp];
+	const backupCode = backupCode2fa(options?.backupCodeOptions);
+	const otp = otp2fa(options?.otpOptions);
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -34,13 +34,13 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
-					const encryptedSecret = await symmetricEncrypt({
+					const encryptedSecret = symmetricEncrypt({
 						key: ctx.context.secret,
 						data: secret,
 					});
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
-						options.backupCodeOptions,
+						options?.backupCodeOptions,
 					);
 					await ctx.context.adapter.update({
 						model: "user",
@@ -105,6 +105,42 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						if (!response.user.twoFactorEnabled) {
 							return;
 						}
+
+						// Check for trust device cookie
+						const trustDeviceCookieName = ctx.context.createAuthCookie(
+							TRUST_DEVICE_COOKIE_NAME,
+							{
+								maxAge: 30 * 24 * 60 * 60, // 30 days
+							},
+						);
+						const trustDeviceCookie = await ctx.getSignedCookie(
+							trustDeviceCookieName.name,
+							ctx.context.secret,
+						);
+
+						if (trustDeviceCookie) {
+							const [token, sessionId] = trustDeviceCookie.split("!");
+							const expectedToken = await hs256(
+								ctx.context.secret,
+								`${response.user.id}!${sessionId}`,
+							);
+
+							if (token === expectedToken) {
+								// Trust device cookie is valid, refresh it and skip 2FA
+								const newToken = await hs256(
+									ctx.context.secret,
+									`${response.user.id}!${response.session.id}`,
+								);
+								await ctx.setSignedCookie(
+									trustDeviceCookieName.name,
+									`${newToken}!${response.session.id}`,
+									ctx.context.secret,
+									trustDeviceCookieName.options,
+								);
+								return;
+							}
+						}
+
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
@@ -116,6 +152,12 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 							maxAge: 0,
 						});
 						const hash = await hs256(ctx.context.secret, response.session.id);
+						const cookieName = ctx.context.createAuthCookie(
+							TWO_FACTOR_COOKIE_NAME,
+							{
+								maxAge: 60 * 60 * 24, // 24 hours,
+							},
+						);
 						/**
 						 * We set the user id and the session
 						 * id as a hash. Later will fetch for
@@ -123,10 +165,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options: O) => {
 						 * the hash and set that as session.
 						 */
 						await ctx.setSignedCookie(
-							"better-auth.two-factor",
+							cookieName.name,
 							`${response.session.userId}!${hash}`,
 							ctx.context.secret,
-							ctx.context.authCookies.sessionToken.options,
+							cookieName.options,
 						);
 						const res = new Response(
 							JSON.stringify({

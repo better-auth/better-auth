@@ -89,10 +89,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						/**
 						 * To avoid race conditions we set the signal in a setTimeout
 						 */
-						setTimeout(() => {
-							//@ts-expect-error
-							signal.set(!signal.get());
-						}, 0);
+						//@ts-expect-error
+						signal.set(!signal.get());
 					},
 				});
 			},

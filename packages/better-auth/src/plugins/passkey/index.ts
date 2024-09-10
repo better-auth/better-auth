@@ -18,17 +18,22 @@ import { sessionMiddleware } from "../../api/middlewares/session";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../utils/cookies";
+import { BetterAuthError } from "../../error/better-auth-error";
 
 export interface PasskeyOptions {
 	/**
 	 * A unique identifier for your website. 'localhost' is okay for
 	 * local dev
+	 *
+	 * @default "localhost"
 	 */
-	rpID: string;
+	rpID?: string;
 	/**
 	 * Human-readable title for your website
+	 *
+	 * @default "Better Auth"
 	 */
-	rpName: string;
+	rpName?: string;
 	/**
 	 * The URL at which registrations and authentications should occur.
 	 * 'http://localhost' and 'http://localhost:PORT' are also valid.
@@ -65,10 +70,20 @@ export type Passkey = {
 };
 
 export const passkey = (options: PasskeyOptions) => {
+	const baseURL = process.env.BETTER_AUTH_URL;
+	const rpID =
+		process.env.NODE_ENV === "development"
+			? "localhost"
+			: options.rpID || baseURL;
+	if (!rpID) {
+		throw new BetterAuthError(
+			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
+		);
+	}
 	const opts = {
 		origin: null,
 		...options,
-		rpID: process.env.NODE_ENV === "development" ? "localhost" : options.rpID,
+		rpID,
 		advanced: {
 			webAuthnChallengeCookie: "better-auth-passkey",
 			...options.advanced,
@@ -103,7 +118,7 @@ export const passkey = (options: PasskeyOptions) => {
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
-						rpName: opts.rpName,
+						rpName: opts.rpName || ctx.context.appName,
 						rpID: opts.rpID,
 						userID,
 						userName: session.user.email || session.user.id,

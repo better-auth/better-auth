@@ -48,7 +48,7 @@ export type InferRoute<API> = API extends {
 }
 	? T extends Endpoint
 		? T["options"]["metadata"] extends {
-				onClient: "hide";
+				isAction: false;
 			}
 			? {}
 			: PathToObject<

@@ -6,9 +6,21 @@ import type { OTPOptions } from "./otp";
 import type { TOTPOptions } from "./totp";
 
 export interface TwoFactorOptions {
-	issuer: string;
+	/**
+	 * Application Name
+	 */
+	issuer?: string;
+	/**
+	 * TOTP OPtions
+	 */
 	totpOptions?: Omit<TOTPOptions, "issuer">;
+	/**
+	 * OTP Options
+	 */
 	otpOptions?: OTPOptions;
+	/**
+	 * Backup code options
+	 */
 	backupCodeOptions?: BackupCodeOptions;
 }
 

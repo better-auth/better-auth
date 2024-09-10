@@ -105,7 +105,7 @@ export default function Page() {
 							}}
 						>
 							<GitHubLogoIcon />
-							Signup with Github
+							Continue with Github
 						</Button>
 						<Button
 							variant="outline"
@@ -140,7 +140,7 @@ export default function Page() {
 									d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"
 								/>
 							</svg>
-							Login with Google
+							Continue with Google
 						</Button>
 						<Button
 							variant="secondary"

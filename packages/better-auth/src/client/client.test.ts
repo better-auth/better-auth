@@ -8,6 +8,7 @@ import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../adapters/schema";
+import { BetterFetchError } from "@better-fetch/fetch";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -42,7 +43,7 @@ describe("run time proxy", async () => {
 		vi.useFakeTimers();
 		setTimeout(() => {
 			expect(res()).toBe(1);
-		}, 2);
+		}, 100);
 	});
 
 	it("should call useSession", async () => {
@@ -69,11 +70,10 @@ describe("run time proxy", async () => {
 		const res = client.useSession();
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1);
-		expect(res()).toEqual({
-			user: {
-				id: 1,
-				email: "test@email.com",
-			},
+		expect(res()).toMatchObject({
+			data: { user: { id: 1, email: "test@email.com" } },
+			error: null,
+			isPending: false,
 		});
 		/**
 		 * recall
@@ -81,7 +81,11 @@ describe("run time proxy", async () => {
 		returnNull = true;
 		await client.test2.signOut();
 		await vi.advanceTimersByTimeAsync(1);
-		expect(res()).toBe(null);
+		expect(res()).toMatchObject({
+			data: null,
+			error: null,
+			isPending: false,
+		});
 	});
 });
 
@@ -89,33 +93,40 @@ describe("type", () => {
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
 		expectTypeOf<ReturnedSession>().toMatchTypeOf<{
-			user: {
-				id: string;
-				email: string;
-				emailVerified: boolean;
-				name: string;
-				createdAt: Date;
-				updatedAt: Date;
-				image?: string | undefined;
-				testField4: string;
-				testField?: string | undefined;
-				testField2?: number | undefined;
-			};
-			session: Session;
-		} | null>();
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined;
+					testField4: string;
+					testField?: string | undefined;
+					testField2?: number | undefined;
+				};
+				session: Session;
+			} | null;
+			error: BetterFetchError | null;
+			isPending: boolean;
+		}>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
 	});
 	it("should infer resolved hooks solid", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Accessor<number>
@@ -124,6 +135,7 @@ describe("type", () => {
 	it("should infer resolved hooks vue", () => {
 		const client = createVueClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Readonly<Ref<number>>
@@ -132,6 +144,7 @@ describe("type", () => {
 	it("should infer resolved hooks svelte", () => {
 		const client = createSvelteClient({
 			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
@@ -139,6 +152,7 @@ describe("type", () => {
 	it("should infer from multiple plugins", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
+			baseURL: "http://localhost:3000",
 		});
 		const res = client.useAnotherAtom();
 	});
@@ -146,6 +160,7 @@ describe("type", () => {
 	it("should infer actions", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
+			baseURL: "http://localhost:3000",
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
