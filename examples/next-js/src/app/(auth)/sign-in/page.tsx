@@ -25,9 +25,9 @@ export default function Page() {
 	const [password, setPassword] = useState("");
 	const [rememberMe, setRememberMe] = useState(false);
 	const router = useRouter();
+
 	return (
 		<div className="h-[50rem] w-full dark:bg-black bg-white  dark:bg-grid-white/[0.2] bg-grid-black/[0.2] relative flex items-center justify-center">
-
 			<div className="absolute pointer-events-none inset-0 flex items-center justify-center dark:bg-black bg-white [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
 			<Card className="mx-auto max-w-sm z-50">
 				<CardHeader>
@@ -100,12 +100,12 @@ export default function Page() {
 							onClick={async () => {
 								await authClient.signIn.social({
 									provider: "github",
-									callbackURL: "http://localhost:3000",
+									callbackURL: "/",
 								});
 							}}
 						>
 							<GitHubLogoIcon />
-							Signup with Github
+							Continue with Github
 						</Button>
 						<Button
 							variant="outline"
@@ -113,7 +113,7 @@ export default function Page() {
 							onClick={async () => {
 								await authClient.signIn.social({
 									provider: "google",
-									callbackURL: "http://localhost:3000",
+									callbackURL: "/",
 								});
 							}}
 						>
@@ -140,7 +140,7 @@ export default function Page() {
 									d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"
 								/>
 							</svg>
-							Login with Google
+							Continue with Google
 						</Button>
 						<Button
 							variant="secondary"

@@ -45,7 +45,6 @@ export const google = (options: GoogleOptions) => {
 		id: "google",
 		name: "Google",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			redirectURI;
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"clientId and clientSecret is required for Google. Make sure to you have provided them in the options",

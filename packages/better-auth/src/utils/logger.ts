@@ -7,7 +7,7 @@ const consola = createConsola({
 		compact: true,
 	},
 	defaults: {
-		tag: "[Better Auth]",
+		tag: "Better Auth",
 	},
 });
 

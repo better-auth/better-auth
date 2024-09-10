@@ -2,6 +2,7 @@ import { atom, computed } from "nanostores";
 import type { AuthClientPlugin } from "./types";
 import type { BetterAuthPlugin } from "../types/plugins";
 import { createAuthEndpoint } from "../api/call";
+import { useAuthQuery } from "./query";
 
 const serverPlugin = {
 	id: "test",
@@ -70,9 +71,15 @@ export const testClientPlugin = () => {
 			};
 		},
 		getAtoms($fetch) {
+			const _signal = atom(false);
+			const queryAtom = useAuthQuery<any>(_signal, "/test", $fetch, {
+				method: "GET",
+			});
 			return {
 				_test,
+				_signal,
 				computedAtom,
+				queryAtom,
 			};
 		},
 		$InferServerPlugin: {} as typeof serverPlugin,

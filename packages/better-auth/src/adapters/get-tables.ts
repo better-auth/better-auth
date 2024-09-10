@@ -11,13 +11,26 @@ export type BetterAuthDbSchema = Record<
 >;
 
 export const getAuthTables = (options: BetterAuthOptions) => {
-	const pluginSchema = options.plugins?.reduce((acc, plugin) => {
-		const schema = plugin.schema;
-		return {
-			...acc,
-			...schema,
-		};
-	}, {});
+	const pluginSchema = options.plugins?.reduce(
+		(acc, plugin) => {
+			const schema = plugin.schema;
+			if (!schema) return acc;
+			for (const [key, value] of Object.entries(schema)) {
+				acc[key] = {
+					fields: {
+						...acc[key]?.fields,
+						...value.fields,
+					},
+					tableName: key,
+				};
+			}
+			return acc;
+		},
+		{} as Record<
+			string,
+			{ fields: Record<string, FieldAttribute>; tableName: string }
+		>,
+	);
 
 	return {
 		...pluginSchema,
@@ -46,6 +59,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "date",
 					defaultValue: () => new Date(),
 				},
+				...pluginSchema?.user?.fields,
 			},
 		},
 		session: {
@@ -70,6 +84,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						onDelete: "cascade",
 					},
 				},
+				...pluginSchema?.session?.fields,
 			},
 		},
 		account: {
@@ -113,6 +128,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "string",
 					required: false,
 				},
+				...pluginSchema?.account?.fields,
 			},
 		},
 	} satisfies BetterAuthDbSchema;

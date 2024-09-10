@@ -86,6 +86,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						if (!matches) return;
 						const signal = atoms[matches.signal];
 						if (!signal) return;
+						/**
+						 * To avoid race conditions we set the signal in a setTimeout
+						 */
 						//@ts-expect-error
 						signal.set(!signal.get());
 					},

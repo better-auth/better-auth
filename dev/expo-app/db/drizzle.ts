@@ -8,8 +8,8 @@ const expoDb = openDatabaseSync("database.db", { enableChangeListener: true });
 const db = drizzle(expoDb);
 
 export const initialize = (): Promise<ExpoSQLiteDatabase> => {
-  return Promise.resolve(db);
+	return Promise.resolve(db);
 };
 export const useMigrationHelper = () => {
-  return useMigrations(db as ExpoSQLiteDatabase, migrations);
+	return useMigrations(db as ExpoSQLiteDatabase, migrations);
 };

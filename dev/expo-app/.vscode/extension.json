@@ -1,7 +1,7 @@
 {
-  "recommendations": [
-    "biomejs.biome",
-    "expo.vscode-expo-tools",
-    "bradlc.vscode-tailwindcss"
-  ]
+	"recommendations": [
+		"biomejs.biome",
+		"expo.vscode-expo-tools",
+		"bradlc.vscode-tailwindcss"
+	]
 }

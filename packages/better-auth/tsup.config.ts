@@ -20,6 +20,7 @@ export default defineConfig({
 	},
 	splitting: false,
 	sourcemap: true,
+	treeshake: true,
 	format: ["esm"],
 	dts: true,
 	external: [
@@ -31,6 +32,9 @@ export default defineConfig({
 		"mysql2",
 		"pg",
 		"typescript",
+		"oslo",
+		"@node-rs/argon2",
+		"@node-rs/bcrypt",
 		"better-sqlite3",
 	],
 	target: "es2022",

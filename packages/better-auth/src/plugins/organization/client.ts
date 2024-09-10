@@ -1,4 +1,4 @@
-import { atom, computed, task } from "nanostores";
+import { atom } from "nanostores";
 import type {
 	Invitation,
 	Member,
@@ -9,6 +9,7 @@ import { defaultStatements, type AccessControl, type Role } from "./access";
 import type { AuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import type { BetterFetchOption } from "@better-fetch/fetch";
+import { useAuthQuery } from "../../client";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
@@ -60,71 +61,51 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = computed([_listOrg], () =>
-				task(async () => {
-					console.log("fetching organizations");
-					const organizations = await $fetch<Organization[]>(
-						"/organization/list",
-						{
-							method: "GET",
-						},
-					);
-					return organizations.data;
-				}),
-			);
-			const activeOrganization = computed([activeOrgId, _activeOrgSignal], () =>
-				task(async () => {
-					if (!activeOrgId.get()) {
-						return null;
+			const invitation = useAuthQuery<
+				Prettify<
+					Invitation & {
+						organizationName: string;
+						organizationSlug: string;
+						inviterEmail: string;
+						inviterName: string;
 					}
-					const organization = await $fetch<
-						Prettify<
-							Organization & {
-								members: Member[];
-								invitations: Invitation[];
-							}
-						>
-					>("/organization/activate", {
-						method: "POST",
-						credentials: "include",
-						body: {
-							orgId: activeOrgId.get(),
-						},
-					});
-					return organization.data;
-				}),
+				>
+			>(_activeISignal, "/organization/get-active-invitation", $fetch, () => ({
+				method: "GET",
+				query: {
+					id: _activeISignal.get(),
+				},
+			}));
+
+			const listOrganizations = useAuthQuery<Organization[]>(
+				_listOrg,
+				"/organization/list",
+				$fetch,
+				{
+					method: "GET",
+				},
 			);
-			const invitation = computed(_activeISignal, () =>
-				task(async () => {
-					if (!_activeISignal.get()) {
-						return {
-							error: {
-								message: "No invitation found",
-								status: 400,
-								data: null,
-							},
-							data: null,
-						};
+
+			const activeOrganization = useAuthQuery<
+				Prettify<
+					Organization & {
+						members: Member[];
+						invitations: Invitation[];
 					}
-					const res = await $fetch<
-						Prettify<
-							Invitation & {
-								organizationName: string;
-								organizationSlug: string;
-								inviterEmail: string;
-								inviterName: string;
-							}
-						>
-					>("/organization/get-active-invitation", {
-						method: "GET",
-						query: {
-							id: _activeISignal.get(),
-						},
-						credentials: "include",
-					});
-					return res;
+				>
+			>(
+				[activeOrgId, _activeOrgSignal],
+				"/organization/activate",
+				$fetch,
+				() => ({
+					method: "POST",
+					credentials: "include",
+					body: {
+						orgId: activeOrgId.get(),
+					},
 				}),
 			);
+
 			return {
 				_listOrg,
 				_activeOrgSignal,

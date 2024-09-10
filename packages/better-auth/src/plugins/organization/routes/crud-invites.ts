@@ -132,7 +132,7 @@ export const acceptInvitation = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "You are not the repentant of the invitation",
+					message: "You are not the recipient of the invitation",
 				},
 			});
 		}
@@ -195,7 +195,7 @@ export const rejectInvitation = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "You are not the repentant of the invitation",
+					message: "You are not the recipient of the invitation",
 				},
 			});
 		}
@@ -299,7 +299,7 @@ export const getActiveInvitation = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "You are not the repentant of the invitation",
+					message: "You are not the recipient of the invitation",
 				},
 			});
 		}

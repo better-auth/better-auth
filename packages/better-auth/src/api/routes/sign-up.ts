@@ -1,5 +1,4 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { Argon2id } from "oslo/password";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
@@ -35,12 +34,11 @@ export const signUpEmail = createAuthEndpoint(
 				body: { message: "Password is too short" },
 			});
 		}
-		const argon2id = new Argon2id();
 		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 		/**
 		 * hash first to avoid timing attacks
 		 */
-		const hash = await argon2id.hash(password);
+		const hash = await ctx.context.password.hash(password);
 		if (dbUser?.user) {
 			return ctx.json(null, {
 				status: 400,

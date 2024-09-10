@@ -1,6 +1,6 @@
 interface SeparatorRootProps {
-  orientation?: "horizontal" | "vertical";
-  decorative?: boolean;
+	orientation?: "horizontal" | "vertical";
+	decorative?: boolean;
 }
 
 export type { SeparatorRootProps };

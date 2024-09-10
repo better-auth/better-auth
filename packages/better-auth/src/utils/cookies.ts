@@ -6,7 +6,7 @@ import type { GenericEndpointContext } from "../types/context";
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		!!options.advanced?.useSecureCookies ||
-		process.env.NODE_ENV === "production";
+		(process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge = new TimeSpan(7, "d").seconds();
@@ -17,7 +17,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				maxAge: sessionMaxAge,
 			} satisfies CookieOptions,
 		},
@@ -27,7 +27,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				maxAge: 60 * 60 * 24 * 7,
 			} satisfies CookieOptions,
 		},
@@ -37,7 +37,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
 			} satisfies CookieOptions,
 		},
@@ -47,7 +47,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
 			} as CookieOptions,
 		},
@@ -57,7 +57,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				//no max age so it expires when the browser closes
 			} as CookieOptions,
 		},
@@ -67,7 +67,7 @@ export function getCookies(options: BetterAuthOptions) {
 				httpOnly: true,
 				sameSite: "lax",
 				path: "/",
-				secure,
+				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
 			} as CookieOptions,
 		},
@@ -87,7 +87,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? `${secureCookiePrefix}${cookiePrefix}.${cookieName}`
 					: `${cookiePrefix}.${cookieName}`,
 			options: {
-				secure,
+				secure: !!secureCookiePrefix,
 				sameSite: "lax",
 				path: "/",
 				maxAge: 60 * 15, // 15 minutes in seconds
@@ -105,20 +105,14 @@ export async function setSessionCookie(
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
 ) {
+	const options = ctx.context.authCookies.sessionToken.options;
+	//@ts-expect-error
+	options.maxAge = dontRememberMe ? undefined : options.maxAge;
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		sessionToken,
 		ctx.context.secret,
-		dontRememberMe
-			? {
-					...ctx.context.authCookies.sessionToken.options,
-					maxAge: undefined,
-					...overrides,
-				}
-			: {
-					...ctx.context.authCookies.sessionToken.options,
-					...overrides,
-				},
+		options,
 	);
 	if (dontRememberMe) {
 		await ctx.setSignedCookie(

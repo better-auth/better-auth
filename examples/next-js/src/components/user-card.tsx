@@ -10,20 +10,25 @@ import {
 } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
 import type { Session, User } from "@/lib/types";
-import { Check, LogOut } from "lucide-react";
+import { Laptop, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import AddPasskey from "./add-passkey";
 import { Button } from "./ui/button";
+import { UAParser } from "ua-parser-js";
 
 export default function UserCard(props: {
 	session: {
 		user: User;
-		session: Session;
+		session: Session & {
+			activeOrganizationId: string | undefined;
+		};
 	} | null;
 }) {
 	const router = useRouter();
 	const session = authClient.useSession(props.session);
+	const ua = new UAParser(session.data?.session.userAgent);
+
 	return (
 		<Card>
 			<CardHeader>
@@ -32,21 +37,30 @@ export default function UserCard(props: {
 			<CardContent className="grid gap-8">
 				<div className="flex items-center gap-4">
 					<Avatar className="hidden h-9 w-9 sm:flex">
-						<AvatarImage src={session?.user.image || "#"} alt="Avatar" />
-						<AvatarFallback>{session?.user.name.charAt(0)}</AvatarFallback>
+						<AvatarImage src={session.data?.user.image || "#"} alt="Avatar" />
+						<AvatarFallback>{session.data?.user.name.charAt(0)}</AvatarFallback>
 					</Avatar>
 					<div className="grid gap-1">
 						<p className="text-sm font-medium leading-none">
-							{session?.user.name}
+							{session.data?.user.name}
 						</p>
 						<p className="text-sm text-muted-foreground">
-							{session?.user.email}
+							{session.data?.user.email}
 						</p>
+					</div>
+				</div>
+				<div className="border border-border p-2 rounded-md gap-1 flex flex-col bg-gradient-to-br from-stone-950 to-stone-900/60">
+					<p className="text-sm font-medium text-muted-foreground">
+						Active Session
+					</p>
+					<div className="flex items-center gap-2 text-orange-300/80 text-sm">
+						<Laptop size={18} />
+						{ua.getOS().name}, {ua.getBrowser().name}
 					</div>
 				</div>
 				<div className="border-y py-4 flex items-center justify-between gap-2">
 					<AddPasskey />
-					{session?.user.twoFactorEnabled ? (
+					{session.data?.user.twoFactorEnabled ? (
 						<Button
 							variant="secondary"
 							className="gap-2"

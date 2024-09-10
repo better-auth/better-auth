@@ -1,13 +1,13 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { hs256 } from "../../crypto";
 import { createAuthEndpoint } from "../call";
-import { HIDE_ON_CLIENT_METADATA } from "../../client/client-utils";
+import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 export const getCSRFToken = createAuthEndpoint(
 	"/csrf",
 	{
 		method: "GET",
-		metadata: HIDE_ON_CLIENT_METADATA,
+		metadata: HIDE_METADATA,
 	},
 	async (ctx) => {
 		const csrfToken = await ctx.getSignedCookie(

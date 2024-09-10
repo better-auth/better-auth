@@ -97,11 +97,16 @@ exports[`init > should match config 1`] = `
     "warn": [Function],
   },
   "options": {
+    "basePath": "/api/auth",
     "baseURL": "",
     "database": {
       "provider": "sqlite",
       "url": ":memory:",
     },
+  },
+  "password": {
+    "hash": [Function],
+    "verify": [Function],
   },
   "secret": "better-auth-secret-123456789",
   "session": {

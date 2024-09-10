@@ -235,10 +235,17 @@ export const getDialect = (config: BetterAuthOptions) => {
 	if (!config.database) {
 		return null;
 	}
+	if (
+		config.database instanceof MysqlDialect ||
+		config.database instanceof PostgresDialect ||
+		config.database instanceof SqliteDialect
+	) {
+		return config.database;
+	}
 	let dialect: Dialect | null = null;
 	if ("provider" in config.database) {
 		const provider = config.database.provider;
-		const connectionString = config.database.url.trim();
+		const connectionString = config.database?.url?.trim();
 		if (provider === "postgres") {
 			const pool = new Pool({
 				connectionString,

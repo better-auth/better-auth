@@ -8,7 +8,7 @@ import { GenerateSecret } from "./components/generate-secret";
 import { AnimatePresence } from "./components/ui/fade-in";
 import { Popup, PopupContent, PopupTrigger } from "fumadocs-ui/twoslash/popup";
 import { TypeTable } from "fumadocs-ui/components/type-table";
-import { FeaturesSectionDemo } from "./components/blocks/features-section-demo-3";
+import { Features } from "./components/blocks/features";
 export function useMDXComponents(components: MDXComponents): MDXComponents {
 	return {
 		...defaultComponents,
@@ -29,6 +29,6 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 		PopupContent,
 	    AnimatePresence,
 		TypeTable,
-		Features: FeaturesSectionDemo,
+		Features,
 	};
 }
