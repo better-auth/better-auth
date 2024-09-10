@@ -1,8 +1,9 @@
 import Link from "next/link";
-import {} from "better-auth/client";
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
-
+import { Separator } from "@/components/ui/separator";
+import { FeaturesSectionDemo } from "@/components/blocks/features-section-demo-3";
+import Features from "@/components/features";
 export default function HomePage() {
 	return (
 		<main>
@@ -14,6 +15,7 @@ export default function HomePage() {
 				id="hero"
 			>
 				<Hero />
+				<Features />
 			</Section>
 		</main>
 	);

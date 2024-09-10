@@ -1,6 +1,7 @@
 export const Icons = {
-	nextJS: () => (
+	nextJS: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -12,8 +13,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	nuxt: () => (
+	nuxt: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -25,8 +27,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	svelteKit: () => (
+	svelteKit: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -38,8 +41,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	solidStart: () => (
+	solidStart: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -51,8 +55,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	react: () => (
+	react: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -66,8 +71,9 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	hono: () => (
+	hono: ({className}: {className?:string}) => (
 		<svg
+		    className={className}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
