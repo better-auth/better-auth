@@ -111,7 +111,7 @@ export default function Hero() {
 								The most comprehensive authentication library for typescript.
 							</p>
 							{
-								env !== "production" ? <>
+								env === "production" ? <>
 									<p className="text-orange-500 mt-3">
 										Coming Soon
 									</p>
