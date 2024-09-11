@@ -11,6 +11,7 @@ import { createKyselyAdapter, getDatabaseType } from "../../adapters/kysely";
 const postgresMap = {
 	string: ["character varying", "text"],
 	number: [
+		"int4",
 		"integer",
 		"bigint",
 		"smallint",

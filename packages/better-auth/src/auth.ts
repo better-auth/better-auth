@@ -3,6 +3,17 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 
+type InferAPI<API> = Omit<
+	API,
+	API extends { [key in infer K]: Endpoint }
+		? K extends string
+			? API[K]["options"]["metadata"] extends { isAction: false }
+				? K
+				: never
+			: never
+		: never
+>;
+
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
@@ -25,22 +36,13 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			const { handler } = router(authContext, options);
 			return handler(request);
 		},
-		api: api as Omit<
-			API,
-			API extends { [key in infer K]: Endpoint }
-				? K extends string
-					? API[K]["options"]["metadata"] extends { isAction: false }
-						? K
-						: never
-					: never
-				: never
-		>,
+		api: api as InferAPI<typeof api>,
 		options: authContext.options as O,
 	};
 };
 
 export type Auth = {
 	handler: (request: Request) => Promise<Response>;
-	api: ReturnType<typeof router>["endpoints"];
+	api: InferAPI<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
 };

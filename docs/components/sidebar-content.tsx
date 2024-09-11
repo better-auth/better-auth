@@ -113,18 +113,7 @@ export const contents: Content[] = [
 		list: [
 			{
 				title: "Email & Password",
-				group: true,
-				href: "/docs/email-password",
-				icon: () => (
-					<svg>
-						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"></path>
-					</svg>
-				),
-			},
-
-			{
-				title: "Sign-In & Sign-Up",
-				href: "/docs/email-password/sign-in-and-sign-up",
+				href: "/docs/authentication/email-password",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -142,66 +131,9 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Password Reset",
-				href: "/docs/email-password/password-reset",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1em"
-						height="1em"
-						viewBox="0 0 24 24"
-					>
-						<path
-							fill="currentColor"
-							d="M15.75 2a.75.75 0 0 0-1.5 0v20a.75.75 0 0 0 1.5 0v-2.006c2.636-.027 4.104-.191 5.078-1.166C22 17.657 22 15.771 22 12s0-5.657-1.172-6.828c-.974-.975-2.442-1.139-5.078-1.166z"
-						></path>
-						<path
-							fill="currentColor"
-							fillRule="evenodd"
-							d="M3.172 18.828C4.343 20 6.229 20 10 20h3V4h-3C6.229 4 4.343 4 3.172 5.172S2 8.229 2 12s0 5.657 1.172 6.828M13 12a1 1 0 1 0-2 0a1 1 0 0 0 2 0m-4 0a1 1 0 1 1-2 0a1 1 0 0 1 2 0"
-							clipRule="evenodd"
-						></path>
-					</svg>
-				),
-			},
-			{
-				title: "Configuration",
-				href: "/docs/email-password/configuration",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 48 48"
-					>
-						<defs>
-							<mask id="ipSConfig0">
-								<g fill="none" stroke-linejoin="round" stroke-width="4">
-									<path
-										fill="#fff"
-										stroke="#fff"
-										d="m24 4l-6 6h-8v8l-6 6l6 6v8h8l6 6l6-6h8v-8l6-6l-6-6v-8h-8z"
-									></path>
-									<path
-										fill="#000"
-										stroke="#000"
-										d="M24 30a6 6 0 1 0 0-12a6 6 0 0 0 0 12Z"
-									></path>
-								</g>
-							</mask>
-						</defs>
-						<path
-							fill="currentColor"
-							d="M0 0h48v48H0z"
-							mask="url(#ipSConfig0)"
-						></path>
-					</svg>
-				),
-			},
-			{
 				title: "Social Sign-On",
 				group: true,
-				href: "/docs/providers/social-providers",
+				href: "/docs/authentication/social-providers",
 				icon: () => (
 					<svg>
 						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"></path>
@@ -210,7 +142,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Apple",
-				href: "/docs/providers/apple",
+				href: "/docs/authentication/apple",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -229,7 +161,7 @@ export const contents: Content[] = [
 
 			{
 				title: "Discord",
-				href: "/docs/providers/discord",
+				href: "/docs/authentication/discord",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -246,7 +178,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Facebook",
-				href: "/docs/providers/facebook",
+				href: "/docs/authentication/facebook",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -266,7 +198,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Github",
-				href: "/docs/providers/github",
+				href: "/docs/authentication/github",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -285,7 +217,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Google",
-				href: "/docs/providers/google",
+				href: "/docs/authentication/google",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -303,7 +235,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Twitch",
-				href: "/docs/providers/twitch",
+				href: "/docs/authentication/twitch",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -322,7 +254,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "X (Twitter)",
-				href: "/docs/providers/twitter",
+				href: "/docs/authentication/twitter",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

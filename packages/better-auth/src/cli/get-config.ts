@@ -3,7 +3,7 @@ import jiti from "jiti";
 import type { BetterAuthOptions } from "../types";
 import { logger } from "../utils/logger";
 
-let possiblePaths = ["auth.ts", "auth.config.ts"];
+let possiblePaths = ["auth.ts"];
 
 possiblePaths = [
 	...possiblePaths,

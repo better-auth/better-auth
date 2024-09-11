@@ -9,6 +9,7 @@ import { AnimatePresence } from "./components/ui/fade-in";
 import { Popup, PopupContent, PopupTrigger } from "fumadocs-ui/twoslash/popup";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "./components/blocks/features";
+
 export function useMDXComponents(components: MDXComponents): MDXComponents {
 	return {
 		...defaultComponents,
@@ -27,7 +28,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 		Popup,
 		PopupTrigger,
 		PopupContent,
-	    AnimatePresence,
+		AnimatePresence,
 		TypeTable,
 		Features,
 	};

@@ -1,20 +1,21 @@
-import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
-import Features from "@/components/features";
-export default function HomePage() {
-	return (
-		<main className="h-min">
-			<Section
-				className="-z-1 mb-1"
-				crosses
-				crossesOffset="lg:translate-y-[5.25rem]"
-				customPaddings
-				id="hero"
+import { Button } from "@/components/ui/button";
+import { BookOpen } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 
-			>
-				<Hero />
-				<Features />
-			</Section>
-		</main>
-	);
+export default function Home() {
+    return (
+        <div className="min-h-[90vh] flex items-center justify-center">
+            <main className="flex flex-col gap-8 row-start-2 items-center justify-center">
+                <div className="flex flex-col gap-1">
+
+                    <Hero />
+
+
+
+                </div>
+            </main>
+        </div>
+    );
 }

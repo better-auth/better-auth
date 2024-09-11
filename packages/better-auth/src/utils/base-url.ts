@@ -1,10 +1,13 @@
+import { BetterAuthError } from "../error/better-auth-error";
+
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
 		return parsedUrl.pathname !== "/";
 	} catch (error) {
-		console.error("Invalid URL:", error);
-		return false;
+		throw new BetterAuthError(
+			`Invalid base URL: ${url}. Please provide a valid base URL.`,
+		);
 	}
 }
 
@@ -35,6 +38,5 @@ export function getBaseURL(url?: string, path?: string) {
 	if (typeof window !== "undefined") {
 		return withPath(window.location.origin, path);
 	}
-
 	return undefined;
 }

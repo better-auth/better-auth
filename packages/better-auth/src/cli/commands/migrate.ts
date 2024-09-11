@@ -37,7 +37,9 @@ export const migrate = new Command("migrate")
 			configPath: options.config,
 		});
 		if (!config) {
-			logger.error("No configuration file found.");
+			logger.error(
+				"No configuration file found. Add a `auth.ts` or `auth.config.ts` file to your project.",
+			);
 			return;
 		}
 		const db = createKyselyAdapter(config);

@@ -86,6 +86,8 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 	);
 }
 
+const env = process.env.NODE_ENV;
+
 export default function Hero() {
 	const theme = useTheme();
 	const [activeTab, setActiveTab] = useState("auth.ts");
@@ -105,32 +107,42 @@ export default function Hero() {
 								</Cover>
 							</div>
 
-							<p className="mt-3 md:text-2xl font-mono tracking-tight dark:text-zinc-300 text-zinc-800">
+							<p className="mt-3 md:text-2xl tracking-tight dark:text-zinc-300 text-zinc-800">
 								The most comprehensive authentication library for typescript.
 							</p>
-							<div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
-								<Link
-									href="/docs"
-									className="px-4 md:px-8 py-0.5  border-2 border-black dark:border-stone-100 uppercase bg-white text-black transition duration-200 text-sm shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] dark:hover:shadow-sm hover:shadow-sm"
-								>
-									Get Started
-								</Link>
-								<Button
-									variant="outline"
-									size="lg"
-									className="flex rounded-none items-center gap-2"
-								>
-									<Github size={16} />
-									View on GitHub
-								</Button>
-							</div>
+							{
+								env !== "production" ? <>
+									<p className="text-orange-500 mt-3">
+										Coming Soon
+									</p>
+								</> : (
+									<>
+										<div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
+											<Link
+												href="/docs"
+												className="px-4 md:px-8 py-1.5  border-2 border-black dark:border-stone-100 uppercase bg-white text-black transition duration-200 text-sm shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] dark:hover:shadow-sm hover:shadow-sm"
+											>
+												Get Started
+											</Link>
+											<Button
+												variant="outline"
+												size="lg"
+												className="flex rounded-none items-center gap-2"
+											>
+												<Github size={16} />
+												View on GitHub
+											</Button>
+										</div>
+									</>
+								)
+							}
 						</div>
 					</div>
 
 					<div className="relative lg:static xl:pl-10 hidden md:block">
 						<div className="relative">
-							{/* <div className="absolute inset-0 rounded-none bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-5 blur-lg" />
-								<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-stone-300 via-stone-300/70 to-blue-300 opacity-5" /> */}
+							<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-5 blur-lg" />
+							<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-stone-300 via-stone-300/70 to-blue-300 opacity-5" />
 							<LayoutGroup>
 								<motion.div
 									layoutId="hero"
@@ -224,10 +236,19 @@ export default function Hero() {
 																	))}
 																</div>
 															))}
+
 														</code>
+
 													</pre>
+
 												)}
 											</Highlight>
+											{/* <Link href="https://demo.better-auth.com" target="_blank" className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 hover:underline cursor-pointer">
+												<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 14 14"><path fill="currentColor" fillRule="evenodd" d="M2.676.02a1.74 1.74 0 0 0-.845.218a1.64 1.64 0 0 0-.895 1.433v10.677a1.64 1.64 0 0 0 .895 1.433a1.74 1.74 0 0 0 1.718-.016l8.63-5.338a1.61 1.61 0 0 0-.001-2.876L3.548.253A1.74 1.74 0 0 0 2.676.02" clipRule="evenodd"></path></svg>
+												<p className="text-sm">
+													Demo
+												</p>
+											</Link> */}
 										</div>
 									</div>
 								</motion.div>

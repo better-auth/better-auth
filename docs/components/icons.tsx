@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { SVGProps } from "react";
 
 export const Icons = {
@@ -75,7 +76,7 @@ export const Icons = {
 	),
 	hono: (props?: SVGProps<any>) => (
 		<svg
-			className={props?.className}
+			className={cn(props?.className)}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
@@ -83,6 +84,7 @@ export const Icons = {
 		>
 			<path
 				fill="#9E9494"
+				className="dark:fill-white"
 				d="M134.129.029q1.315-.17 2.319.662a1256 1256 0 0 1 69.573 93.427q24.141 36.346 41.082 76.862q27.055 72.162-28.16 125.564q-48.313 40.83-111.318 31.805q-75.312-15.355-102.373-87.133Q-1.796 217.85.614 193.51q4.014-41.896 19.878-80.838q6.61-15.888 17.228-29.154a382 382 0 0 1 16.565 21.203q3.66 3.825 7.62 7.289Q92.138 52.013 134.13.029"
 				opacity=".993"
 			></path>

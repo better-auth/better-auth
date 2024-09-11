@@ -503,6 +503,9 @@ importers:
       fumadocs-twoslash:
         specifier: ^1.1.2
         version: 1.1.2(fumadocs-ui@13.4.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(next@14.2.5(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.10))(shiki@1.15.2)(typescript@5.5.4)
+      fumadocs-typescript:
+        specifier: ^2.1.0
+        version: 2.1.0(typescript@5.5.4)
       fumadocs-ui:
         specifier: 13.4.1
         version: 13.4.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(next@14.2.5(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.10)
@@ -7332,8 +7335,8 @@ packages:
       fumadocs-ui: 13.x.x
       shiki: 1.x.x
 
-  fumadocs-typescript@2.0.1:
-    resolution: {integrity: sha512-FKgO/g23tcRbXnv47blZ+KLs6HacKB5eO13d+LmQyBZxa3J5L+Ewi3vjjQmkf33Gva1WMojhYELe4m6YXZLErA==}
+  fumadocs-typescript@2.1.0:
+    resolution: {integrity: sha512-fxxC8F+bQQxlVQA03vWaoztJFeKkevW3WgT7ECPCmdOB2UFsRB61cgzlRvwKqtFWJuJYASX55+2wEMxXAjzBjQ==}
     peerDependencies:
       typescript: '*'
 
@@ -20263,7 +20266,7 @@ snapshots:
   fumadocs-docgen@1.1.0(typescript@5.5.4):
     dependencies:
       estree-util-value-to-estree: 3.1.2
-      fumadocs-typescript: 2.0.1(typescript@5.5.4)
+      fumadocs-typescript: 2.1.0(typescript@5.5.4)
       hast-util-to-estree: 3.1.0
       npm-to-yarn: 2.2.1
       unist-util-visit: 5.0.0
@@ -20296,7 +20299,7 @@ snapshots:
       - supports-color
       - typescript
 
-  fumadocs-typescript@2.0.1(typescript@5.5.4):
+  fumadocs-typescript@2.1.0(typescript@5.5.4):
     dependencies:
       fast-glob: 3.3.2
       hast-util-to-jsx-runtime: 2.3.0
