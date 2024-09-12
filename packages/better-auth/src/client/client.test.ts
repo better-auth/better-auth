@@ -166,25 +166,27 @@ describe("type", () => {
 		});
 		const $infer = client.$infer;
 		expectTypeOf($infer.session).toEqualTypeOf<{
-			id: string;
-			userId: string;
-			expiresAt: Date;
-			ipAddress?: string | undefined;
-			userAgent?: string | undefined;
-		}>();
-		expectTypeOf($infer.user).toEqualTypeOf<{
-			id: string;
-			email: string;
-			emailVerified: boolean;
-			name: string;
-			createdAt: Date;
-			updatedAt: Date;
-			image?: string | undefined;
-			testField?: string | undefined;
-			testField2?: number | undefined;
-			testField4: string;
-			twoFactorEnabled?: boolean | undefined;
-			twoFactorSecret?: string | undefined;
+			session: {
+				id: string;
+				userId: string;
+				expiresAt: Date;
+				ipAddress?: string | undefined;
+				userAgent?: string | undefined;
+			};
+			user: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+				name: string;
+				createdAt: Date;
+				updatedAt: Date;
+				image?: string | undefined;
+				testField?: string | undefined;
+				testField2?: number | undefined;
+				testField4: string;
+				twoFactorEnabled?: boolean | undefined;
+				twoFactorSecret?: string | undefined;
+			};
 		}>();
 	});
 });

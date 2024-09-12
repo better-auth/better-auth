@@ -40,8 +40,10 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		api: api as InferAPI<typeof api>,
 		options: authContext.options as O,
 		$infer: {} as {
-			session: Prettify<InferSession<O>>;
-			user: Prettify<InferUser<O>>;
+			session: {
+				session: Prettify<InferSession<O>>;
+				user: Prettify<InferUser<O>>;
+			};
 		},
 	};
 };

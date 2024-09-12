@@ -46,9 +46,10 @@ export function getSessionAtom<Option extends ClientOptions>(
 		$session: session,
 		_sessionSignal: $signal,
 		$infer: {} as {
-			session: Prettify<SessionWithAdditionalFields>;
-			user: Prettify<UserWithAdditionalFields>;
-			pl: Plugins;
+			session: {
+				session: Prettify<SessionWithAdditionalFields>;
+				user: Prettify<UserWithAdditionalFields>;
+			};
 		},
 	};
 }
