@@ -9,7 +9,7 @@ export const signUpEmail = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			name: z.string(),
-			email: z.string().email(),
+			email: z.string(),
 			password: z.string(),
 			image: z.string().optional(),
 			callbackURL: z.string().optional(),
@@ -25,6 +25,15 @@ export const signUpEmail = createAuthEndpoint(
 			});
 		}
 		const { name, email, password, image } = ctx.body;
+		const isValidEmail = z.string().email().safeParse(email);
+		if (!isValidEmail.success) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Invalid email address",
+				},
+			});
+		}
 		const minPasswordLength =
 			ctx.context.options?.emailAndPassword?.minPasswordLength || 8;
 		if (password.length < minPasswordLength) {
