@@ -50,7 +50,6 @@ export function getSessionAtom<Option extends ClientOptions>(
 		$infer: {} as {
 			session: Prettify<SessionWithAdditionalFields>;
 			user: Prettify<UserWithAdditionalFields>;
-			s: Plugins;
 		},
 	};
 }
