@@ -4,6 +4,7 @@ import { type Atom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
 
 import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
+import type { InferSession } from "../types";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createFetch({

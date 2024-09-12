@@ -5,6 +5,9 @@ import { NavbarMobileBtn } from "./nav-mobile";
 import { NavLink } from "./nav-link";
 import { Logo } from "./logo";
 
+
+const hideNavbar = process.env.NODE_ENV === "production"
+
 export const Navbar = () => {
 	return (
 		<nav className="md:grid grid-cols-12 border-b sticky top-0 flex items-center justify-end bg-background backdrop-blur-md z-50">
@@ -19,11 +22,13 @@ export const Navbar = () => {
 			</Link>
 			<div className="md:col-span-9 lg:col-span-10 flex items-center justify-end  ">
 				<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
-					{navMenu.map((menu, i) => (
-						<NavLink key={menu.name} href={menu.path}>
-							{menu.name}
-						</NavLink>
-					))}
+					{
+						hideNavbar ? null : navMenu.map((menu, i) => (
+							<NavLink key={menu.name} href={menu.path}>
+								{menu.name}
+							</NavLink>
+						))
+					}
 				</ul>
 				<ThemeToggle />
 				<NavbarMobileBtn />

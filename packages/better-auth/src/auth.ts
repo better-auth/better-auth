@@ -1,7 +1,8 @@
-import type { Endpoint } from "better-call";
+import type { Endpoint, Prettify } from "better-call";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
+import type { InferSession, InferUser } from "./types";
 
 type InferAPI<API> = Omit<
 	API,
@@ -38,6 +39,10 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		},
 		api: api as InferAPI<typeof api>,
 		options: authContext.options as O,
+		$infer: {} as {
+			session: Prettify<InferSession<O>>;
+			user: Prettify<InferUser<O>>;
+		},
 	};
 };
 

@@ -8,6 +8,7 @@ import type { Atom } from "nanostores";
 import type { LiteralString, UnionToIntersection } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
+import type { InferSession, InferUser } from "../types";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
@@ -86,3 +87,25 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
  * convention they start with "_"
  */
 export type IsSignal<T> = T extends `_${infer _}` ? true : false;
+
+export type InferPluginsFromClient<O extends ClientOptions> =
+	O["plugins"] extends Array<AuthClientPlugin>
+		? Array<O["plugins"][number]["$InferServerPlugin"]>
+		: undefined;
+
+type InferAuthFromClient<O extends ClientOptions> = {
+	handler: any;
+	api: any;
+	options: {
+		database: any;
+		plugins: InferPluginsFromClient<O>;
+	};
+};
+
+type InferSessionFromClient<O extends ClientOptions> = InferSession<
+	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
+>;
+
+type InferUserFromClient<O extends ClientOptions> = InferUser<
+	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
+>;

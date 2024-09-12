@@ -165,4 +165,32 @@ describe("type", () => {
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
 	});
+
+	it("should infer session", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin(), testClientPlugin2()],
+			baseURL: "http://localhost:3000",
+		});
+		client.$infer.s;
+		const $infer = client.$infer;
+		expectTypeOf($infer.session).toEqualTypeOf<{
+			id: string;
+			userId: string;
+			expiresAt: Date;
+			ipAddress?: string | undefined;
+			userAgent?: string | undefined;
+		}>();
+		expectTypeOf($infer.user).toEqualTypeOf<{
+			id: string;
+			email: string;
+			emailVerified: boolean;
+			name: string;
+			createdAt: Date;
+			updatedAt: Date;
+			image?: string | undefined;
+			testField?: string | undefined;
+			testField2?: number | undefined;
+			testField4: string;
+		}>();
+	});
 });
