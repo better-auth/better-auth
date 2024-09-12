@@ -114,6 +114,7 @@ export const listSessions = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [sessionMiddleware],
+		requireHeaders: true,
 	},
 	async (ctx) => {
 		const sessions = await ctx.context.adapter.findMany<Session>({
@@ -143,6 +144,7 @@ export const revokeSession = createAuthEndpoint(
 			id: z.string(),
 		}),
 		use: [sessionMiddleware],
+		requireHeaders: true,
 	},
 	async (ctx) => {
 		const id = ctx.body.id;
@@ -160,6 +162,7 @@ export const revokeSessions = createAuthEndpoint(
 	{
 		method: "POST",
 		use: [sessionMiddleware],
+		requireHeaders: true,
 	},
 	async (ctx) => {
 		await ctx.context.internalAdapter.deleteSessions(
