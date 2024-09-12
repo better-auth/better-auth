@@ -94,11 +94,7 @@ export const changePassword = createAuthEndpoint(
 			password: passwordHash,
 		});
 		if (revokeOtherSessions) {
-			//remove all sessions
-			const res = await ctx.context.db
-				?.deleteFrom(ctx.context.tables.session.tableName)
-				.where("userId", "=", session.user.id)
-				.execute();
+			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
 			);

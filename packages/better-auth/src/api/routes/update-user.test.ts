@@ -55,7 +55,7 @@ describe("updateUser", async () => {
 
 	it("should revoke other sessions", async () => {
 		const newHeaders = new Headers();
-		const updated = await client.user.changePassword({
+		await client.user.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
 			revokeOtherSessions: true,
