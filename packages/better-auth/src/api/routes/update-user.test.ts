@@ -1,14 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createAuthClient } from "../../client";
 
 describe("updateUser", async () => {
-	const { auth, client, testUser, sessionSetter } = await getTestInstance();
+	const { auth, client, testUser, sessionSetter, customFetchImpl } =
+		await getTestInstance();
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
 		password: testUser.password,
 		options: {
 			onSuccess: sessionSetter(headers),
+			onRequest(context) {
+				return context;
+			},
 		},
 	});
 	if (!session) {
