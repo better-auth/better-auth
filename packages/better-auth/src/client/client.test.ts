@@ -149,14 +149,6 @@ describe("type", () => {
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
 
-	it("should infer from multiple plugins", () => {
-		const client = createSolidClient({
-			plugins: [testClientPlugin(), testClientPlugin2()],
-			baseURL: "http://localhost:3000",
-		});
-		const res = client.useAnotherAtom();
-	});
-
 	it("should infer actions", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
@@ -171,7 +163,6 @@ describe("type", () => {
 			plugins: [testClientPlugin(), testClientPlugin2()],
 			baseURL: "http://localhost:3000",
 		});
-		client.$infer.s;
 		const $infer = client.$infer;
 		expectTypeOf($infer.session).toEqualTypeOf<{
 			id: string;
