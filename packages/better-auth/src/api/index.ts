@@ -24,6 +24,7 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
+import { changePassword, updateUser } from "./routes/update-user";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -96,6 +97,8 @@ export function getEndpoints<
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
+		changePassword,
+		updateUser,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -189,7 +192,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			console.log(e);
 			if (e instanceof APIError) {
 				if (e.status === "INTERNAL_SERVER_ERROR") {
 					logger.error(e);

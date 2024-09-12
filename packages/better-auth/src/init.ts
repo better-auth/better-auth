@@ -70,6 +70,6 @@ export type AuthContext = {
 	};
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (password: string, hash: string) => Promise<boolean>;
+		verify: (hash: string, password: string) => Promise<boolean>;
 	};
 };

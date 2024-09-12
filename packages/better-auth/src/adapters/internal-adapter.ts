@@ -197,6 +197,31 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
+		findAccounts: async (userId: string) => {
+			const accounts = await adapter.findMany<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+			return accounts;
+		},
+		updateAccount: async (accountId: string, data: Partial<Account>) => {
+			const account = await adapter.update<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: "id",
+						value: accountId,
+					},
+				],
+				update: data,
+			});
+			return account;
+		},
 	};
 };
 

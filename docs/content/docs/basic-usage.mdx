@@ -142,39 +142,23 @@ Once a user is signed in, you'll want to access their session. Better auth allow
 
 ### Client Side
 
-the client providers a `useSession` hook or a `session` object that you can use to access the session data. Each framework client implements the session getter in a reactive way. So if there are actions that affect the session (like signing out), it'll be reflected in the client.
+Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented in a reactive way for each supported framework, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
 
 <Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="React">
     <Tab value="React">
         ```tsx title="user.tsx"
         //make sure you're using the react client
         import { createAuthClient } from "better-auth/react"
-        const client = createAuthClient()
+        const { useSession } = createAuthClient() // [!code highlight]
     
         export function User(){
-            const session = client.useSession()
+            const {
+                data: session,
+                isPending, //loading state
+                error //error object 
+            } = useSession()
             returns (
-                <div>
-                    {
-                        session ? (
-                            <div>
-                                <button onClick={async () => {
-                                    await client.signOut()
-                                }}>
-                                    Signout
-                                </button>
-                            </div>
-                        ) : (
-                            <button onClick={async () => {
-                                    await client.signIn.social({
-                                        provider: "github",
-                                    })
-                                }}>
-                                    Continue with github
-                            </button>
-                        )
-                    }
-                </div>
+                //...
             )
         }
         ```
@@ -263,6 +247,41 @@ the client providers a `useSession` hook or a `session` object that you can use 
             </Tab>
 </Tabs>
 
+<Callout type="info">
+  The `useSession` hook accepts an optional `initialData` parameter. This is particularly useful for server-side rendering (SSR) scenarios, such as when using Next.js or similar meta-frameworks.
+
+  By prefetching the session data on the server and passing it as `initialData`, you can avoid a flash of unauthenticated content.
+
+**Example usage with Next.js:**
+
+  ```tsx
+   // a server component
+  import { auth } from '@lib/auth';
+  import { headers } from 'next/headers';
+  export async function Page() {
+    const session = await auth.api.getSession({
+        headers: headers()
+    })
+    return { props: { initialSession: session } }
+  }
+```
+
+```tsx
+//a client component 
+import { useSession, User, Sesssion } from '@lib/client';
+
+function MyComponent({ initialSession }: {
+initialSession: {
+    session: Session,
+    user: User
+}}) {
+const { data: session } = useSession(initialSession)
+// ...
+}
+```
+
+With this approach you'll get the initial load from the server-side but you get to keep the client-side reactivity.
+</Callout>
 ### Server Side
 
 The server provides a `session` object that you can use to access the session data.
