@@ -42,9 +42,10 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request?: Request,
+			request?: Request | Headers,
 			dontRememberMe?: boolean,
 		) => {
+			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
@@ -56,8 +57,8 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
 					: getDate(sessionExpiration, true),
-				ipAddress: request?.headers.get("x-forwarded-for") || "",
-				userAgent: request?.headers.get("user-agent") || "",
+				ipAddress: headers?.get("x-forwarded-for") || "",
+				userAgent: headers?.get("user-agent") || "",
 			};
 			const session = adapter.create<Session>({
 				model: tables.session.tableName,
@@ -121,7 +122,7 @@ export const createInternalAdapter = (
 			return session;
 		},
 		/**
-		 * @requires db
+		 * @requires
 		 */
 		deleteSessions: async (userId: string) => {
 			const sessions = await db
