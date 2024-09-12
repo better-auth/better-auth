@@ -25,6 +25,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	let pluginsAtoms = {} as Record<string, Atom<any>>;
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
+		"/user/revoke-sessions": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{

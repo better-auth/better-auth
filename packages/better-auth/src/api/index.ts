@@ -12,7 +12,10 @@ import {
 	callbackOAuth,
 	forgetPassword,
 	getSession,
+	listSessions,
 	resetPassword,
+	revokeSession,
+	revokeSessions,
 	sendVerificationEmail,
 	signInEmail,
 	signInOAuth,
@@ -99,6 +102,9 @@ export function getEndpoints<
 		sendVerificationEmail,
 		changePassword,
 		updateUser,
+		listSessions,
+		revokeSession,
+		revokeSessions,
 	};
 	const endpoints = {
 		...baseEndpoints,
