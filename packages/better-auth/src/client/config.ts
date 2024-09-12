@@ -30,7 +30,11 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		{
 			signal: "_sessionSignal",
 			matcher(path) {
-				return path === "/sign-out" || path === "sign-up/email";
+				return (
+					path === "/sign-out" ||
+					path === "sign-up/email" ||
+					path === "/user/update"
+				);
 			},
 		},
 	];
