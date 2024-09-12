@@ -12,6 +12,7 @@
 [ ] allow enabling two factor automatically for users
 [ ] change the pg driver to https://www.npmjs.com/package/postgres (maybe)
 [ ] mention how users can get user and session types
+[ ] add a section about updating user and changing password
 
 
 ## Docs

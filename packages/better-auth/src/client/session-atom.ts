@@ -12,15 +12,15 @@ export function getSessionAtom<Option extends ClientOptions>(
 ) {
 	type Plugins = Option["plugins"] extends Array<AuthClientPlugin>
 		? Array<
-				UnionToIntersection<
-					Option["plugins"] extends Array<infer Pl>
-						? Pl extends AuthClientPlugin
-							? Pl["$InferServerPlugin"] extends BetterAuthPlugin
-								? Pl["$InferServerPlugin"]
+				Option["plugins"][number] extends infer T
+					? T extends AuthClientPlugin
+						? T["$InferServerPlugin"] extends infer U
+							? U extends BetterAuthPlugin
+								? U
 								: never
 							: never
 						: never
-				>
+					: never
 			>
 		: never;
 
@@ -33,9 +33,7 @@ export function getSessionAtom<Option extends ClientOptions>(
 		};
 	};
 
-	//@ts-expect-error
 	type UserWithAdditionalFields = InferUser<Auth["options"]>;
-	//@ts-expect-error
 	type SessionWithAdditionalFields = InferSession<Auth["options"]>;
 	const $signal = atom<boolean>(false);
 	const session = useAuthQuery<{
@@ -50,6 +48,7 @@ export function getSessionAtom<Option extends ClientOptions>(
 		$infer: {} as {
 			session: Prettify<SessionWithAdditionalFields>;
 			user: Prettify<UserWithAdditionalFields>;
+			pl: Plugins;
 		},
 	};
 }

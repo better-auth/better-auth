@@ -9,6 +9,7 @@ import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../adapters/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
+import { twoFactorClient } from "../plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -160,7 +161,7 @@ describe("type", () => {
 
 	it("should infer session", () => {
 		const client = createSolidClient({
-			plugins: [testClientPlugin(), testClientPlugin2()],
+			plugins: [testClientPlugin(), testClientPlugin2(), twoFactorClient()],
 			baseURL: "http://localhost:3000",
 		});
 		const $infer = client.$infer;
@@ -182,6 +183,8 @@ describe("type", () => {
 			testField?: string | undefined;
 			testField2?: number | undefined;
 			testField4: string;
+			twoFactorEnabled?: boolean | undefined;
+			twoFactorSecret?: string | undefined;
 		}>();
 	});
 });
