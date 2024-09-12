@@ -97,6 +97,7 @@ export const changePassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
+				ctx.request,
 			);
 			// set the new session cookie
 			await setSessionCookie(ctx, newSession.id);
