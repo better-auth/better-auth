@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../utils/cookies";
 
 describe("updateUser", async () => {
 	const { auth, client, testUser, sessionSetter, customFetchImpl } =
@@ -33,9 +34,10 @@ describe("updateUser", async () => {
 	it("should update the user's password", async () => {
 		const updated = await client.user.changePassword({
 			newPassword: "newPassword",
-			oldPassword: testUser.password,
+			currentPassword: testUser.password,
+			revokeOtherSessions: true,
 			options: {
-				headers,
+				headers: headers,
 			},
 		});
 		expect(updated).toBeDefined();
@@ -44,10 +46,32 @@ describe("updateUser", async () => {
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();
-		const signInOldPassword = await client.signIn.email({
+		const signInCurrentPassword = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(signInOldPassword.data).toBeNull();
+		expect(signInCurrentPassword.data).toBeNull();
+	});
+
+	it("should revoke other sessions", async () => {
+		const newHeaders = new Headers();
+		const updated = await client.user.changePassword({
+			newPassword: "newPassword",
+			currentPassword: testUser.password,
+			revokeOtherSessions: true,
+			options: {
+				headers: headers,
+				onSuccess: sessionSetter(newHeaders),
+			},
+		});
+		const cookie = newHeaders.get("cookie");
+		const oldCookie = headers.get("cookie");
+		expect(cookie).not.toBe(oldCookie);
+		const sessionAttempt = await client.session({
+			options: {
+				headers: headers,
+			},
+		});
+		expect(sessionAttempt.data).toBeNull();
 	});
 });
