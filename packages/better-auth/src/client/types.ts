@@ -102,10 +102,10 @@ type InferAuthFromClient<O extends ClientOptions> = {
 	};
 };
 
-type InferSessionFromClient<O extends ClientOptions> = InferSession<
+export type InferSessionFromClient<O extends ClientOptions> = InferSession<
 	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
 >;
 
-type InferUserFromClient<O extends ClientOptions> = InferUser<
+export type InferUserFromClient<O extends ClientOptions> = InferUser<
 	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
 >;

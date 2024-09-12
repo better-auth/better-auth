@@ -11,6 +11,7 @@
 [ ] fix bun problem
 [ ] allow enabling two factor automatically for users
 [ ] change the pg driver to https://www.npmjs.com/package/postgres (maybe)
+[ ] mention how users can get user and session types
 
 
 ## Docs

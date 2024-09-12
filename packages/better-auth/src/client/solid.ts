@@ -73,7 +73,6 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
-		} & {
 			$infer: typeof $infer;
 		};
 }

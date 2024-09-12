@@ -43,7 +43,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}
-	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
+	const { $session, _sessionSignal, $infer } = getSessionAtom<Option>($fetch);
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
@@ -63,5 +63,6 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof $session;
+			$infer: typeof $infer;
 		};
 }
