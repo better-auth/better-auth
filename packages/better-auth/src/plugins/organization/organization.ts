@@ -219,6 +219,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						unique: true,
 					},
+					logo: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			member: {

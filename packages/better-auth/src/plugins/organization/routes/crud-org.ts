@@ -12,6 +12,7 @@ export const createOrganization = createAuthEndpoint(
 			name: z.string(),
 			slug: z.string(),
 			userId: z.string().optional(),
+			logo: z.string().optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
@@ -54,6 +55,7 @@ export const createOrganization = createAuthEndpoint(
 				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
+				logo: ctx.body.logo,
 			},
 			user,
 		});

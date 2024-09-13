@@ -8,6 +8,7 @@ export const organizationSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	slug: z.string(),
+	logo: z.string().optional(),
 });
 
 export const memberSchema = z.object({
