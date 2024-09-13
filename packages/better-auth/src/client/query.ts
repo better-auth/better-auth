@@ -61,7 +61,7 @@ export const useAuthQuery = <T>(
 	let firstRun = true;
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe((value) => {
-			if (value && !firstRun) {
+			if (value !== undefined && !firstRun) {
 				fn();
 			}
 		});
