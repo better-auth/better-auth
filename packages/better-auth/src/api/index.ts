@@ -207,9 +207,9 @@ export function getEndpoints<
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
-	_options: Option,
+	options: Option,
 ) => {
-	const { api, middlewares } = getEndpoints(ctx, _options);
+	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
 	return createRouter(api as Omit<typeof api, "error" | "ok" | "welcome">, {
@@ -223,10 +223,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			if (e instanceof APIError) {
-				if (e.status === "INTERNAL_SERVER_ERROR") {
-					logger.error(e);
-				}
+			if (process.env.NODE_ENV === "development" && !options.disableLog) {
+				logger.error(e);
 			}
 		},
 	});
