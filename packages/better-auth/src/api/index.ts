@@ -223,8 +223,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			if (process.env.NODE_ENV === "development" && !options.disableLog) {
-				logger.error(e);
+			if (options.disableLog !== true) {
+				logger.warn(e);
 			}
 		},
 	});
