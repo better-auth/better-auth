@@ -73,25 +73,38 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, FieldAttribute>;
+		order: number;
 	}[] = [];
 	const toBeAdded: {
 		table: string;
 		fields: Record<string, FieldAttribute>;
+		order: number;
 	}[] = [];
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
 		const table = tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
-			if (tIndex === -1) {
-				toBeCreated.push({
-					table: key,
-					fields: value.fields,
-				});
+			const tableData = {
+				table: key,
+				fields: value.fields,
+				order: value.order || Infinity,
+			};
+
+			const insertIndex = toBeCreated.findIndex(
+				(t) => (t.order || Infinity) > tableData.order,
+			);
+
+			if (insertIndex === -1) {
+				if (tIndex === -1) {
+					toBeCreated.push(tableData);
+				} else {
+					toBeCreated[tIndex].fields = {
+						...toBeCreated[tIndex].fields,
+						...value.fields,
+					};
+				}
 			} else {
-				toBeCreated[tIndex].fields = {
-					...toBeCreated[tIndex].fields,
-					...value.fields,
-				};
+				toBeCreated.splice(insertIndex, 0, tableData);
 			}
 			continue;
 		}
@@ -115,6 +128,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			toBeAdded.push({
 				table: key,
 				fields: toBeAddedFields,
+				order: value.order || Infinity,
 			});
 		}
 	}
@@ -132,10 +146,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
-			logger.info(`Adding fields to table ${table.table}`);
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				logger.info(`Adding field ${fieldName} with type ${field.type}`);
-
 				const type = typeMap[field.type];
 				const exec = db.schema
 					.alterTable(table.table)
@@ -174,7 +185,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 	async function runMigrations() {
-		return await Promise.all(migrations.map((m) => m.execute()));
+		for (const migration of migrations) {
+			await migration.execute();
+		}
 	}
 	return { toBeCreated, toBeAdded, runMigrations };
 }

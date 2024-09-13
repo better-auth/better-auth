@@ -7,6 +7,7 @@ export type BetterAuthDbSchema = Record<
 		tableName: string;
 		fields: Record<string, FieldAttribute>;
 		disableMigrations?: boolean;
+		order?: number;
 	}
 >;
 
@@ -33,7 +34,6 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 	);
 
 	return {
-		...pluginSchema,
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
@@ -61,6 +61,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				},
 				...pluginSchema?.user?.fields,
 			},
+			order: 0,
 		},
 		session: {
 			tableName: options.session?.modelName || "session",
@@ -86,6 +87,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				},
 				...pluginSchema?.session?.fields,
 			},
+			order: 1,
 		},
 		account: {
 			tableName: options.account?.modelName || "account",
@@ -130,6 +132,8 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				},
 				...pluginSchema?.account?.fields,
 			},
+			order: 2,
 		},
+		...pluginSchema,
 	} satisfies BetterAuthDbSchema;
 };

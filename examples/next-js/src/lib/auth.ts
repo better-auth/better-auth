@@ -7,6 +7,13 @@ import {
 } from "better-auth/plugins";
 import { github, google } from "better-auth/social-providers";
 import { ac, admin } from "./permissions";
+import { Kysely } from "kysely";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+
+const dialect = new LibsqlDialect({
+	url: process.env.TURSO_DATABASE_URL as string,
+	authToken: process.env.TURSO_AUTH_TOKEN as string,
+});
 
 export const auth = betterAuth({
 	socialProvider: [
@@ -19,10 +26,7 @@ export const auth = betterAuth({
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
 		}),
 	],
-	database: {
-		provider: "postgres",
-		url: process.env.DATABASE_URL as string,
-	},
+	database: dialect,
 	secret: process.env.BETTER_AUTH_SECRET as string,
 	emailAndPassword: {
 		enabled: true,

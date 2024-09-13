@@ -7,12 +7,11 @@ import {
 	SqliteDialect,
 } from "kysely";
 import { createPool } from "mysql2";
-import pg from "pg";
+import postgres from "postgres";
 import type { FieldAttribute } from "../db";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
-
-const { Pool } = pg;
+import { PostgresJSDialect } from "kysely-postgres-js";
 
 function convertWhere(w?: Where[]) {
 	if (!w)
@@ -235,11 +234,7 @@ export const getDialect = (config: BetterAuthOptions) => {
 	if (!config.database) {
 		return null;
 	}
-	if (
-		config.database instanceof MysqlDialect ||
-		config.database instanceof PostgresDialect ||
-		config.database instanceof SqliteDialect
-	) {
+	if ("createDriver" in config.database) {
 		return config.database;
 	}
 	let dialect: Dialect | null = null;
@@ -247,11 +242,11 @@ export const getDialect = (config: BetterAuthOptions) => {
 		const provider = config.database.provider;
 		const connectionString = config.database?.url?.trim();
 		if (provider === "postgres") {
-			const pool = new Pool({
-				connectionString,
+			const pg = postgres(connectionString, {
+				prepare: false,
 			});
-			dialect = new PostgresDialect({
-				pool,
+			dialect = new PostgresJSDialect({
+				postgres: pg,
 			});
 		}
 		if (provider === "mysql") {
