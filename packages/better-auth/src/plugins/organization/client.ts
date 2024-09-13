@@ -89,7 +89,14 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			const activeOrganization = useAuthQuery<
 				Prettify<
 					Organization & {
-						members: Member[];
+						members: (Member & {
+							user: {
+								id: string;
+								name: string;
+								email: string;
+								image: string;
+							};
+						})[];
 						invitations: Invitation[];
 					}
 				>
