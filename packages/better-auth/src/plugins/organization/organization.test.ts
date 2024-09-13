@@ -71,6 +71,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
+
 		expect(organization.data?.id).toBe(orgId);
 		const session = await client.session({
 			options: {

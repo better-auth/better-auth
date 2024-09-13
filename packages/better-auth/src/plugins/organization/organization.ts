@@ -235,9 +235,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 					},
-					name: {
-						type: "string",
-					},
 					role: {
 						type: "string",
 						required: true,

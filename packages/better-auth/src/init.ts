@@ -1,3 +1,4 @@
+import type { Kysely } from "kysely";
 import { getAuthTables } from "./adapters/get-tables";
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
@@ -64,7 +65,7 @@ export type AuthContext = {
 	baseURL: string;
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: ReturnType<typeof createKyselyAdapter>;
+	db: Kysely<any>;
 	adapter: ReturnType<typeof getAdapter>;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;

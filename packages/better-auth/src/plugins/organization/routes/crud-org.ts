@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { sessionMiddleware } from "../../../api/middlewares/session";
 import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -224,7 +223,10 @@ export const getFullOrganization = createAuthEndpoint(
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
-		const organization = await adapter.findFullOrganization(orgId);
+		const organization = await adapter.findFullOrganization(
+			orgId,
+			ctx.context.db,
+		);
 		if (!organization) {
 			return ctx.json(null, {
 				status: 404,
@@ -259,7 +261,10 @@ export const setActiveOrganization = createAuthEndpoint(
 			return ctx.json(null);
 		}
 		await adapter.setActiveOrganization(session.session.id, orgId);
-		const organization = await adapter.findFullOrganization(orgId);
+		const organization = await adapter.findFullOrganization(
+			orgId,
+			ctx.context.db,
+		);
 		return ctx.json(organization);
 	},
 );
