@@ -54,18 +54,18 @@ export function Intro() {
                 All of the changes made will be {' '}
                 <span className="">available here.</span>
             </h1>
-            <p className="mt-4 text-sm/6 text-gray-300">
+            <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
                 Better Auth is advanced authentication library for typescript packed by customizable and extendible plugin ecosystem
             </p>
-            <SignUpForm />
-            <div className="mt-8 flex flex-wrap justify-center gap-x-1 gap-y-3 sm:gap-x-2 lg:justify-start">
-                <IconLink href="/docs" icon={BookIcon} className="flex-none">
+            <hr className='h-px bg-gray-300 mt-5' />
+            <div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300  justify-center gap-x-1 gap-y-3 sm:gap-x-2 lg:justify-start">
+                <IconLink href="/docs" icon={BookIcon} className="flex-none text-gray-600 dark:text-gray-300">
                     Documentation
                 </IconLink>
-                <IconLink href="https://github.com/better-auth/better-auth" icon={GitHubIcon} className="flex-none">
+                <IconLink href="https://github.com/better-auth/better-auth" icon={GitHubIcon} className="flex-none text-gray-600 dark:text-gray-300">
                     GitHub
                 </IconLink>
-                <IconLink href="/feed.xml" icon={FeedIcon} className="flex-none">
+                <IconLink href="/feed.xml" icon={FeedIcon} className="flex-none text-gray-600 dark:text-gray-300">
                     RSS
                 </IconLink>
             </div>
@@ -118,13 +118,13 @@ export function IconLink({
             {...props}
             className={clsx(
                 className,
-                'group relative isolate flex items-center rounded-lg px-2 py-0.5 text-[0.8125rem]/6 font-medium text-white/30 transition-colors hover:text-stone-300',
+                'group relative isolate flex items-center rounded-lg px-2 py-0.5 text-[0.8125rem]/6 font-medium text-black/70 dark:text-white/30 transition-colors hover:text-stone-300',
                 compact ? 'gap-x-2' : 'gap-x-3',
             )}
         >
             <span className="absolute inset-0 -z-10 scale-75 rounded-lg bg-white/5 opacity-0 transition group-hover:scale-100 group-hover:opacity-100" />
             {Icon && <Icon className="h-4 w-4 flex-none" />}
-            <span className="self-baseline text-white">{children}</span>
+            <span className="self-baseline text-black/70 dark:text-white">{children}</span>
         </Link>
     )
 }
