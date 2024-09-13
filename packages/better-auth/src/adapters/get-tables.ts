@@ -33,6 +33,8 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 		>,
 	);
 
+	const { user, session, account, ...pluginTables } = pluginSchema || {};
+
 	return {
 		user: {
 			tableName: options.user?.modelName || "user",
@@ -59,7 +61,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "date",
 					defaultValue: () => new Date(),
 				},
-				...pluginSchema?.user?.fields,
+				...user?.fields,
 			},
 			order: 0,
 		},
@@ -85,7 +87,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						onDelete: "cascade",
 					},
 				},
-				...pluginSchema?.session?.fields,
+				...session?.fields,
 			},
 			order: 1,
 		},
@@ -130,10 +132,10 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "string",
 					required: false,
 				},
-				...pluginSchema?.account?.fields,
+				...account?.fields,
 			},
 			order: 2,
 		},
-		...pluginSchema,
+		...pluginTables,
 	} satisfies BetterAuthDbSchema;
 };

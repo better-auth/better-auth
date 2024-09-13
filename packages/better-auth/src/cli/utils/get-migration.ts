@@ -80,6 +80,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		fields: Record<string, FieldAttribute>;
 		order: number;
 	}[] = [];
+
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
 		const table = tableMetadata.find((t) => t.name === key);
 		if (!table) {

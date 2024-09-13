@@ -224,7 +224,11 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		],
 		onError(e) {
 			if (options.disableLog !== true) {
-				logger.warn(e);
+				if (e instanceof APIError) {
+					logger.error(e);
+				} else {
+					logger.warn(e);
+				}
 			}
 		},
 	});
