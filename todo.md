@@ -20,3 +20,4 @@
 [ ] add a section about updating user and changing password
 [ ] mention how users can get user and session types
 [ ] add a doc about account linking
+[ ] remove the section about using useSession in next with initialValue

@@ -53,21 +53,7 @@ export function createAuthClient<Option extends ClientOptions>(
 
 	type InitialValue = ReturnType<(typeof $session)["get"]>["data"] | null;
 	function useSession(initialValue?: InitialValue) {
-		const [isClient, setIsClient] = useState(false);
 		const storeValue = useStore($session);
-
-		useEffect(() => {
-			setIsClient(true);
-		}, []);
-
-		if (!isClient && initialValue !== undefined) {
-			return {
-				data: initialValue || undefined,
-				loading: false,
-				error: undefined,
-				promise: () => Promise.resolve(),
-			} as unknown as typeof storeValue;
-		}
 		return storeValue;
 	}
 	const routes = {

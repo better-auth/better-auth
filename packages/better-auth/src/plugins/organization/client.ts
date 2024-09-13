@@ -37,6 +37,26 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		$InferServerPlugin: {} as ReturnType<typeof organization>,
 		getActions: ($fetch) => ({
 			organization: {
+				$Infer: {
+					ActiveOrganization: {} as Prettify<
+						Organization & {
+							members: Prettify<
+								Member & {
+									user: {
+										id: string;
+										name: string;
+										email: string;
+										image: string;
+									};
+								}
+							>[];
+							invitations: Invitation[];
+						}
+					>,
+					Organization: {} as Organization,
+					Invitation: {} as Invitation,
+					Member: {} as Member,
+				},
 				setActive(orgId: string | null) {
 					activeOrgId.set(orgId);
 				},
