@@ -6,15 +6,15 @@ const SectionSvg = ({
 	return (
 		<>
 			<PlusSvg
-				className={`hidden absolute -top-[0.3125rem] left-[1.5625rem] ${
+				className={`hidden absolute -top-[0.3125rem] left-[-20px] ${
 					crossesOffset && crossesOffset
-				} pointer-events-none lg:block xl:left-[3.6825rem]`}
+				} pointer-events-none lg:block xl:left-[-5px]`}
 			/>
 
 			<PlusSvg
-				className={`hidden absolute  -top-[0.3125rem] right-[1.4625rem] ${
+				className={`hidden absolute  -top-[0.3125rem] right-[0] ${
 					crossesOffset && crossesOffset
-				} pointer-events-none lg:block xl:right-[3.25rem]`}
+				} pointer-events-none lg:block xl:right-[-5px]`}
 			/>
 		</>
 	);
