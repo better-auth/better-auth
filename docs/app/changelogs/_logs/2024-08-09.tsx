@@ -10,14 +10,14 @@ const ChangelogOne = () => {
                         Commit message suggestions
                     </h2>
                 </div>
-                <p className="text-gray-300 text-[0.855rem]">
+                <p className="text-gray-600 dark:text-gray-300 text-[0.855rem]">
                     In the latest release, I've added support for commit message and description suggestions via an integration with OpenAI. Commit looks at all of your changes, and feeds that into the machine with a bit of prompt-tuning to get back a commit message that does a surprisingly good job at describing the intent of your changes.
                     It's also been a pretty helpful way to remind myself what the hell I was working on at the end of the day yesterday when I get back to my computer and realize I didn't commit any of my work.
                 </p>
                 <div className="flex flex-col gap-2">
                     <h4 className="text-xl tracking-tighter"> Improvement</h4>
                 </div>
-                <ul className="list-disc ml-10 text-[0.855rem]">
+                <ul className="list-disc ml-10 text-[0.855rem] text-gray-600 dark:text-gray-300">
                     <li>
                         Added commit message and description suggestions powered by OpenAI
                     </li>
