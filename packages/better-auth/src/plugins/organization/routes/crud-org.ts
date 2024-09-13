@@ -246,21 +246,28 @@ export const setActiveOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			orgId: z.string().nullable(),
+			orgId: z.string().nullable().optional(),
 		}),
 		use: [orgSessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
 		const session = ctx.context.session;
-		const orgId = ctx.body.orgId;
-		if (!orgId) {
+		let orgId = ctx.body.orgId;
+		if (orgId === null) {
 			const sessionOrgId = session.session.activeOrganizationId;
 			if (!sessionOrgId) {
 				return ctx.json(null);
 			}
 			await adapter.setActiveOrganization(session.session.id, null);
 			return ctx.json(null);
+		}
+		if (!orgId) {
+			const sessionOrgId = session.session.activeOrganizationId;
+			if (!sessionOrgId) {
+				return ctx.json(null);
+			}
+			orgId = sessionOrgId;
 		}
 		await adapter.setActiveOrganization(session.session.id, orgId);
 		const organization = await adapter.findFullOrganization(

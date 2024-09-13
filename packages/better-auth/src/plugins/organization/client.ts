@@ -24,7 +24,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 	const activeOrgId = atom<string | null>(null);
 	const _listOrg = atom<boolean>(false);
 	const _activeOrgSignal = atom<boolean>(false);
-	const _activeISignal = atom<string | null>(null);
+	const _activeISignal = atom<string | null | undefined>();
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
