@@ -197,6 +197,28 @@ describe("organization", async (it) => {
 		expect(org.data?.members.length).toBe(1);
 	});
 
+	it("shouldn't allow removing owner from organization", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFull({
+			query: {
+				orgId,
+			},
+			options: {
+				headers,
+			},
+		});
+		if (!org.data) throw new Error("Organization not found");
+		expect(org.data.members[0].role).toBe("owner");
+		const removedMember = await client.organization.removeMember({
+			organizationId: org.data.id,
+			memberIdOrEmail: org.data.members[0].id,
+			options: {
+				headers,
+			},
+		});
+		expect(removedMember.error?.status).toBe(400);
+	});
+
 	it("should validate permissions", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.activate({

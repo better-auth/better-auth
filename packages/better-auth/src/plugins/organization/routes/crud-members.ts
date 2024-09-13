@@ -51,9 +51,10 @@ export const removeMember = createAuthEndpoint(
 				},
 			});
 		}
+
 		if (
 			(session.user.email === ctx.body.memberIdOrEmail ||
-				session.user.id === ctx.body.memberIdOrEmail) &&
+				member.id === ctx.body.memberIdOrEmail) &&
 			member.role === (ctx.context.orgOptions?.creatorRole || "owner")
 		) {
 			return ctx.json(null, {
