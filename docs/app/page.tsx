@@ -3,7 +3,7 @@ import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
 export default function HomePage() {
 	return (
-		<main className="h-min max-w-[84%] mx-auto ">
+		<main className="h-min mx-auto ">
 			<Section
 				className="-z-1 mb-1  overflow-y-clip"
 				crosses

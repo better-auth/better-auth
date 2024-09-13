@@ -92,7 +92,7 @@ export default function Hero() {
 	const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
 	93
 	return (
-		<section className="w-full flex min-h-full py-16 items-center justify-center gap-20 p-5">
+		<section className="w-full mx-auto px-10 flex min-h-full py-16 items-center justify-center gap-20">
 			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
 				<div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
 					<div className="relative z-10 md:text-center lg:text-left">
