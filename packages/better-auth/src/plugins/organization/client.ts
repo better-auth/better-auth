@@ -21,10 +21,10 @@ interface OrganizationClientOptions {
 export const organizationClient = <O extends OrganizationClientOptions>(
 	options?: O,
 ) => {
-	const activeOrgId = atom<string | null>(null);
+	const activeOrgId = atom<string | null | undefined>(undefined);
 	const _listOrg = atom<boolean>(false);
 	const _activeOrgSignal = atom<boolean>(false);
-	const _activeISignal = atom<string | null | undefined>();
+	const _activeISignal = atom<string | null>(null);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
