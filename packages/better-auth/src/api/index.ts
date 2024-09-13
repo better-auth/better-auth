@@ -68,6 +68,10 @@ export function getEndpoints<
 			.filter((plugin) => plugin !== undefined)
 			.flat() || [];
 
+	/**
+	 * Helper function to type the session output
+	 * TODO: find a better way to do this
+	 */
 	async function typedSession(
 		ctx: Context<
 			"/session",
@@ -88,6 +92,27 @@ export function getEndpoints<
 	typedSession.options = getSession.options;
 	typedSession.headers = getSession.headers;
 
+	/**
+	 * Helper function to type the list sessions output
+	 * TODO: find a better way to do this
+	 */
+	async function typeListSessions(
+		ctx: Context<
+			"/user/sessions",
+			{
+				method: "GET";
+				requireHeaders: true;
+			}
+		>,
+	) {
+		const handler = await listSessions(ctx);
+		return handler as unknown as Prettify<InferSession<Option>>[];
+	}
+	typeListSessions.path = listSessions.path;
+	typeListSessions.method = listSessions.method;
+	typeListSessions.options = listSessions.options;
+	typeListSessions.headers = listSessions.headers;
+
 	const baseEndpoints = {
 		signInOAuth,
 		callbackOAuth,
@@ -102,7 +127,7 @@ export function getEndpoints<
 		sendVerificationEmail,
 		changePassword,
 		updateUser,
-		listSessions,
+		listSessions: typeListSessions,
 		revokeSession,
 		revokeSessions,
 	};
