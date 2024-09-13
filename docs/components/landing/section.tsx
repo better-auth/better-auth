@@ -28,14 +28,14 @@ const Section = ({
 		>
 			{children}
 
-			<div className="hidden absolute top-0 left-5 w-[0.0625rem] h-[calc(100%_+_30px)] dark:bg-[#26242C] bg-stone-200  pointer-events-none md:block lg:left-7.5 xl:left-16" />
-			<div className="hidden absolute top-0 right-5 w-[0.0625rem] h-[calc(100%_+_30px)]  dark:bg-[#26242C] bg-stone-200  pointer-events-none md:block lg:right-7.5 xl:right-14" />
+			<div className="hidden absolute top-0 left-5 w-[0.0625rem] h-[calc(100%_+_30px)] dark:bg-[#26242C] bg-stone-200  pointer-events-none md:block lg:left-0 xl:left-0" />
+			<div className="hidden absolute top-0 right-5 w-[0.0625rem] h-[calc(100%_+_30px)]  dark:bg-[#26242C] bg-stone-200  pointer-events-none md:block lg:right-0 xl:right-0" />
 
 			{crosses && (
 				<>
 					<div
-						className={`hidden absolute top-0 left-7.5 right-7.5 h-0.25 bg-[#26242C] ${crossesOffset && crossesOffset
-							} pointer-events-none lg:block xl:left-16 right-16`}
+						className={`hidden absolute top-0 left-0 right-0 h-0.25 bg-[#26242C] ${crossesOffset && crossesOffset
+							} pointer-events-none lg:block xl:left-0 right-0`}
 					/>
 					<SectionSvg crossesOffset={crossesOffset} />
 				</>

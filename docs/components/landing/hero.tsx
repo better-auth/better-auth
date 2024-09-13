@@ -90,9 +90,9 @@ export default function Hero() {
 	const theme = useTheme();
 	const [activeTab, setActiveTab] = useState("auth.ts");
 	const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
-
+	93
 	return (
-		<section className="flex mt-1 min-h-screen items-center justify-center gap-20 p-5">
+		<section className="w-full flex min-h-full py-16 items-center justify-center gap-20 p-5">
 			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
 				<div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
 					<div className="relative z-10 md:text-center lg:text-left">
@@ -108,7 +108,7 @@ export default function Hero() {
 							<p className="mt-3 md:text-2xl font-mono tracking-tight dark:text-zinc-300 text-zinc-800">
 								The most comprehensive authentication library for typescript.
 							</p>
-							<div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
+							<div className="mt-8 flex gap-4 font-sans text-center md:text-left items-center lg:justify-start flex-col md:flex-row">
 								<Link
 									href="/docs"
 									className="px-4 md:px-8 py-0.5  border-2 border-black dark:border-stone-100 uppercase bg-white text-black transition duration-200 text-sm shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] dark:hover:shadow-sm hover:shadow-sm"
