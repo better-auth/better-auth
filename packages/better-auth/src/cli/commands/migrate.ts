@@ -38,7 +38,7 @@ export const migrate = new Command("migrate")
 		});
 		if (!config) {
 			logger.error(
-				"No configuration file found. Add a `auth.ts` or `auth.config.ts` file to your project.",
+				"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 			);
 			return;
 		}
