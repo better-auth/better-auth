@@ -164,6 +164,7 @@ export const acceptInvitation = createAuthEndpoint(
 			userId: session.user.id,
 			email: invitation.email,
 			role: invitation.role,
+			createdAt: new Date(),
 		});
 		await adapter.setActiveOrganization(
 			session.session.id,

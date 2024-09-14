@@ -9,6 +9,11 @@ export const organizationSchema = z.object({
 	name: z.string(),
 	slug: z.string(),
 	logo: z.string().optional(),
+	metadata: z
+		.record(z.string())
+		.or(z.string().transform((v) => JSON.parse(v)))
+		.optional(),
+	createdAt: z.date(),
 });
 
 export const memberSchema = z.object({
@@ -17,6 +22,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
 	role,
+	createdAt: z.date(),
 });
 
 export const invitationSchema = z.object({

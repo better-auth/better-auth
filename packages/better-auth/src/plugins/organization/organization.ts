@@ -1,4 +1,4 @@
-import { APIError, type Prettify } from "better-call";
+import { APIError } from "better-call";
 import {
 	type ZodArray,
 	type ZodLiteral,
@@ -132,11 +132,9 @@ export interface OrganizationOptions {
 		/**
 		 * the member who is inviting the user
 		 */
-		inviter: Prettify<
-			Member & {
-				user: User;
-			}
-		>;
+		inviter: Member & {
+			user: User;
+		};
 	}) => Promise<void>;
 }
 
@@ -257,6 +255,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: false,
 					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
+					metadata: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			member: {
@@ -277,6 +283,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 						defaultValue: "member",
+					},
+					createdAt: {
+						type: "date",
+						required: true,
 					},
 				},
 			},

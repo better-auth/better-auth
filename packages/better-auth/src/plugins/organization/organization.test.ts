@@ -24,19 +24,18 @@ describe("organization", async (it) => {
 		const organization = await client.organization.create({
 			name: "test",
 			slug: "test",
+			metadata: {
+				test: "test",
+			},
 			options: {
 				headers,
 			},
 		});
 		orgId = organization.data?.id as string;
-		it("should allow creating organization", () => {
-			expect(organization.data?.name).toBeDefined();
-		});
-
-		it("should create a member with the logged in user as owner", async () => {
-			expect(organization.data?.members.length).toBe(1);
-			expect(organization.data?.members[0].role).toBe("owner");
-		});
+		expect(organization.data?.name).toBeDefined();
+		expect(organization.data?.metadata).toBeDefined();
+		expect(organization.data?.members.length).toBe(1);
+		expect(organization.data?.members[0].role).toBe("owner");
 	});
 
 	it("should allow listing organizations", async () => {

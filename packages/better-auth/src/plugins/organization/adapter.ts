@@ -29,7 +29,12 @@ export const getOrgAdapter = (
 		}) => {
 			const organization = await adapter.create<Organization>({
 				model: "organization",
-				data: data.organization,
+				data: {
+					...data.organization,
+					metadata: data.organization.metadata
+						? JSON.stringify(data.organization.metadata)
+						: undefined,
+				},
 			});
 			const member = await adapter.create<Member>({
 				model: "member",
@@ -37,12 +42,16 @@ export const getOrgAdapter = (
 					id: generateId(),
 					organizationId: organization.id,
 					userId: data.user.id,
+					createdAt: new Date(),
 					email: data.user.email,
 					role: options?.creatorRole || "owner",
 				},
 			});
 			return {
 				...organization,
+				metadata: organization.metadata
+					? JSON.parse(organization.metadata)
+					: undefined,
 				members: [
 					{
 						...member,
@@ -276,9 +285,13 @@ export const getOrgAdapter = (
 					"organization.id as org_id",
 					"organization.name as org_name",
 					"organization.slug as org_slug",
+					"organization.logo as org_logo",
+					"organization.metadata as org_metadata",
+					"organization.createdAt as org_createdAt",
 					"member.id as member_id",
 					"member.userId as member_user_id",
 					"member.role as member_role",
+					"member.createdAt as member_createdAt",
 					"invitation.id as invitation_id",
 					"invitation.email as invitation_email",
 					"invitation.status as invitation_status",
@@ -303,6 +316,11 @@ export const getOrgAdapter = (
 				id: rows[0].org_id,
 				name: rows[0].org_name,
 				slug: rows[0].org_slug,
+				logo: rows[0].org_logo,
+				metadata: rows[0].org_metadata
+					? JSON.parse(rows[0].org_metadata)
+					: undefined,
+				createdAt: rows[0].org_createdAt,
 				members: [],
 				invitations: [],
 			};
@@ -317,6 +335,7 @@ export const getOrgAdapter = (
 							id: row.member_id,
 							userId: row.member_user_id,
 							role: row.member_role,
+							createdAt: row.member_createdAt,
 							// Add other member fields
 							user: {
 								id: row.user_id,
