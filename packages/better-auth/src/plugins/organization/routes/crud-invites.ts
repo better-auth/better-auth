@@ -107,16 +107,19 @@ export const createInvitation = createAuthEndpoint(
 			});
 		}
 
-		await ctx.context.orgOptions.sendInvitationEmail?.({
-			id: invitation.id,
-			role: invitation.role,
-			email: invitation.email,
-			organization: organization,
-			inviter: {
-				...member,
-				user: session.user,
+		await ctx.context.orgOptions.sendInvitationEmail?.(
+			{
+				id: invitation.id,
+				role: invitation.role,
+				email: invitation.email,
+				organization: organization,
+				inviter: {
+					...member,
+					user: session.user,
+				},
 			},
-		});
+			ctx.request,
+		);
 		return ctx.json(invitation);
 	},
 );

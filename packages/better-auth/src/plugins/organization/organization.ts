@@ -112,30 +112,36 @@ export interface OrganizationOptions {
 	 * }
 	 * ```
 	 */
-	sendInvitationEmail?: (data: {
+	sendInvitationEmail?: (
+		data: {
+			/**
+			 * the invitation id
+			 */
+			id: string;
+			/**
+			 * the role of the user
+			 */
+			role: "admin" | "owner" | "member";
+			/**
+			 * the email of the user
+			 */
+			email: string;
+			/**
+			 * the organization the user is invited to
+			 */
+			organization: Organization;
+			/**
+			 * the member who is inviting the user
+			 */
+			inviter: Member & {
+				user: User;
+			};
+		},
 		/**
-		 * the invitation id
+		 * The request object
 		 */
-		id: string;
-		/**
-		 * the role of the user
-		 */
-		role: "admin" | "owner" | "member";
-		/**
-		 * the email of the user
-		 */
-		email: string;
-		/**
-		 * the organization the user is invited to
-		 */
-		organization: Organization;
-		/**
-		 * the member who is inviting the user
-		 */
-		inviter: Member & {
-			user: User;
-		};
-	}) => Promise<void>;
+		request?: Request,
+	) => Promise<void>;
 }
 
 export const organization = <O extends OrganizationOptions>(options?: O) => {
