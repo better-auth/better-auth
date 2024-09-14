@@ -22,18 +22,31 @@ export async function getConfig({
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
-			const config = (await jiti(cwd).import(
-				path.join(cwd, configPath),
-				{},
-			)) as {
-				auth: {
-					options: BetterAuthOptions;
+			if (configPath.endsWith(".tsx")) {
+				logger.error(
+					"[#better-auth]: Only .ts files are supported for custom config paths.",
+				);
+				process.exit(1);
+			} else {
+				const config = (await jiti(cwd).import(
+					path.join(cwd, configPath),
+					{},
+				)) as {
+					auth: {
+						options: BetterAuthOptions;
+					};
+					default?: {
+						options: BetterAuthOptions;
+					};
 				};
-			};
-			if (!config) {
-				return null;
+				if (!config.auth && !config.default) {
+					logger.error(
+						"[#better-auth]: Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+					);
+					process.exit(1);
+				}
+				configFile = config.auth?.options || config.default?.options || null;
 			}
-			configFile = config.auth.options;
 		}
 
 		if (!configFile) {
@@ -75,7 +88,8 @@ export async function getConfig({
 		}
 		return configFile;
 	} catch (e) {
-		return null;
+		logger.error("Error while reading your auth config.", e);
+		process.exit(1);
 	}
 }
 
