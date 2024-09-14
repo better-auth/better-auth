@@ -401,6 +401,7 @@ export const getOrgAdapter = (
 					inviterId: user.id,
 				},
 			});
+
 			return invite;
 		},
 		findInvitationById: async (id: string) => {

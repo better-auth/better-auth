@@ -95,10 +95,28 @@ export const createInvitation = createAuthEndpoint(
 			},
 			user: session.user,
 		});
-		await ctx.context.orgOptions.sendInvitationEmail?.(
-			invitation,
-			ctx.body.email,
-		);
+
+		const organization = await adapter.findOrganizationById(orgId);
+
+		if (!organization) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Organization not found!",
+				},
+			});
+		}
+
+		await ctx.context.orgOptions.sendInvitationEmail?.({
+			id: invitation.id,
+			role: invitation.role,
+			email: invitation.email,
+			organization: organization,
+			inviter: {
+				...member,
+				user: session.user,
+			},
+		});
 		return ctx.json(invitation);
 	},
 );

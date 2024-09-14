@@ -9,8 +9,8 @@ import type { InferSession } from "../types";
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createFetch({
 		baseURL: getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL),
-		...options?.fetchOptions,
 		credentials: "include",
+		...options?.fetchOptions,
 		plugins: [
 			csrfPlugin,
 			redirectPlugin,
