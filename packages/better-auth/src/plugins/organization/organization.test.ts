@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, expectTypeOf } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -246,5 +246,10 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organization.data).toBe(orgId);
+	});
+
+	it("should have server side methods", async () => {
+		expectTypeOf(auth.api.createOrganization).toBeFunction();
+		expectTypeOf(auth.api.getInvitation).toBeFunction();
 	});
 });

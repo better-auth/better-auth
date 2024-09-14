@@ -283,7 +283,7 @@ export const cancelInvitation = createAuthEndpoint(
 	},
 );
 
-export const getActiveInvitation = createAuthEndpoint(
+export const getInvitation = createAuthEndpoint(
 	"/organization/get-active-invitation",
 	{
 		method: "GET",

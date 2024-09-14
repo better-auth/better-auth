@@ -6,7 +6,7 @@ import {
 } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions, InferSession, InferUser } from "../types";
-import type { Prettify } from "../types/helper";
+import type { Prettify, UnionToIntersection } from "../types/helper";
 import { csrfMiddleware } from "./middlewares/csrf";
 import {
 	callbackOAuth,
@@ -28,6 +28,7 @@ import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
 import { changePassword, updateUser } from "./routes/update-user";
+import type { BetterAuthPlugin } from "../plugins";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -42,6 +43,14 @@ export function getEndpoints<
 		},
 		{} as Record<string, any>,
 	);
+
+	type PluginEndpoint = UnionToIntersection<
+		Option["plugins"] extends Array<infer T>
+			? T extends BetterAuthPlugin
+				? T["endpoints"]
+				: {}
+			: {}
+	>;
 
 	const middlewares =
 		ctx.options.plugins
@@ -200,7 +209,7 @@ export function getEndpoints<
 		api[key].headers = value.headers;
 	}
 	return {
-		api: api as typeof endpoints,
+		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
@@ -212,7 +221,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
-	return createRouter(api as Omit<typeof api, "error" | "ok" | "welcome">, {
+	return createRouter(api, {
 		extraContext: ctx,
 		basePath,
 		routerMiddleware: [

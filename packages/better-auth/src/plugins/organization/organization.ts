@@ -24,7 +24,7 @@ import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
-	getActiveInvitation,
+	getInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import { removeMember, updateMemberRole } from "./routes/crud-members";
@@ -155,7 +155,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		createInvitation,
 		cancelInvitation,
 		acceptInvitation,
-		getActiveInvitation,
+		getInvitation,
 		rejectInvitation,
 		removeMember,
 		updateMemberRole,

@@ -19,6 +19,13 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
 	type API = typeof api;
+	type X = API extends { [key in infer K]: Endpoint }
+		? K extends string
+			? API[K]["options"]["metadata"] extends { isAction: false }
+				? K
+				: never
+			: never
+		: never;
 	return {
 		handler: async (request: Request) => {
 			const basePath = authContext.options.basePath;
@@ -38,6 +45,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			return handler(request);
 		},
 		api: api as InferAPI<typeof api>,
+		s: api as X,
 		options: authContext.options as O,
 		$infer: {} as {
 			session: {
