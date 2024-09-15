@@ -24,8 +24,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 	const activeOrgId = atom<string | null | undefined>(undefined);
 	const _listOrg = atom<boolean>(false);
 	const _activeOrgSignal = atom<boolean>(false);
-	const _activeISignal = atom<string | null>(null);
-	const _memberSignal = atom<Member | null>(null);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -61,9 +59,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				setActive(orgId: string | null) {
 					activeOrgId.set(orgId);
 				},
-				setInvitationId: (id: string | null) => {
-					_activeISignal.set(id);
-				},
 				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
@@ -82,22 +77,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const invitation = useAuthQuery<
-				Prettify<
-					Invitation & {
-						organizationName: string;
-						organizationSlug: string;
-						inviterEmail: string;
-						inviterName: string;
-					}
-				>
-			>(_activeISignal, "/organization/get-active-invitation", $fetch, () => ({
-				method: "GET",
-				query: {
-					id: _activeISignal.get(),
-				},
-			}));
-
 			const listOrganizations = useAuthQuery<Organization[]>(
 				_listOrg,
 				"/organization/list",
@@ -106,7 +85,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					method: "GET",
 				},
 			);
-
 			const activeOrganization = useAuthQuery<
 				Prettify<
 					Organization & {
@@ -139,7 +117,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				_activeOrgSignal,
 				activeOrganization,
 				listOrganizations,
-				invitation,
 			};
 		},
 		atomListeners: [

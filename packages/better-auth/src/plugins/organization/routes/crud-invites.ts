@@ -288,6 +288,7 @@ export const getInvitation = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware],
+		requireHeaders: true,
 		query: z.object({
 			id: z.string(),
 		}),

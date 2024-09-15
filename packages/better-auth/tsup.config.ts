@@ -1,5 +1,4 @@
 import { defineConfig } from "tsup";
-
 export default defineConfig({
 	entry: {
 		index: "./src/index.ts",
@@ -20,7 +19,6 @@ export default defineConfig({
 	},
 	splitting: false,
 	sourcemap: true,
-	treeshake: true,
 	format: ["esm"],
 	dts: true,
 	external: [
@@ -36,6 +34,12 @@ export default defineConfig({
 		"@node-rs/argon2",
 		"@node-rs/bcrypt",
 		"better-sqlite3",
+		"@babel/core",
+		"commander",
+		"chalk",
+		"@babel/preset-typescript",
+		"@babel/preset-react",
 	],
+	noExternal: ["arctic"],
 	target: "es2022",
 });

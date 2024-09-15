@@ -69,12 +69,12 @@ export type Passkey = {
 	createdAt: Date;
 };
 
-export const passkey = (options: PasskeyOptions) => {
+export const passkey = (options?: PasskeyOptions) => {
 	const baseURL = process.env.BETTER_AUTH_URL;
 	const rpID =
 		process.env.NODE_ENV === "development"
 			? "localhost"
-			: options.rpID || baseURL;
+			: options?.rpID || baseURL;
 	if (!rpID) {
 		throw new BetterAuthError(
 			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
@@ -86,7 +86,7 @@ export const passkey = (options: PasskeyOptions) => {
 		rpID,
 		advanced: {
 			webAuthnChallengeCookie: "better-auth-passkey",
-			...options.advanced,
+			...options?.advanced,
 		},
 	};
 	const webAuthnChallengeCookieExpiration = 60 * 60 * 24; // 24 hours
@@ -238,7 +238,7 @@ export const passkey = (options: PasskeyOptions) => {
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
-					const origin = options.origin || ctx.headers?.get("origin") || "";
+					const origin = options?.origin || ctx.headers?.get("origin") || "";
 					if (!origin) {
 						return ctx.json(null, {
 							status: 400,
@@ -269,7 +269,7 @@ export const passkey = (options: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: options.rpID,
+							expectedRPID: options?.rpID,
 						});
 						const { verified, registrationInfo } = verification;
 						if (!verified || !registrationInfo) {
@@ -324,7 +324,7 @@ export const passkey = (options: PasskeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					const origin = options.origin || ctx.headers?.get("origin") || "";
+					const origin = options?.origin || ctx.headers?.get("origin") || "";
 					if (!origin) {
 						return ctx.json(null, {
 							status: 400,

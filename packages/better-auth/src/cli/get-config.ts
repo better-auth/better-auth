@@ -1,9 +1,14 @@
-import path from "node:path";
-import jiti from "jiti";
+import { loadConfig } from "c12";
 import type { BetterAuthOptions } from "../types";
 import { logger } from "../utils/logger";
+import path from "path";
+import swc from "@swc/core";
+// @ts-ignore
+import babelPresetTypescript from "@babel/preset-typescript";
+// @ts-ignore
+import babelPresetReact from "@babel/preset-react";
 
-let possiblePaths = ["auth.ts"];
+let possiblePaths = ["auth.ts", "auth.tsx"];
 
 possiblePaths = [
 	...possiblePaths,
@@ -12,6 +17,20 @@ possiblePaths = [
 ];
 possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`)];
 
+/**
+ * .tsx files are not supported by Jiti.
+ */
+const jitiOptions = {
+	transformOptions: {
+		babel: {
+			presets: [
+				[babelPresetTypescript, { isTSX: true, allExtensions: true }],
+				[babelPresetReact, { runtime: "automatic" }],
+			],
+		},
+	},
+	extensions: [".ts", ".tsx", ".js", ".jsx"],
+};
 export async function getConfig({
 	cwd,
 	configPath,
@@ -22,48 +41,43 @@ export async function getConfig({
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
-			if (configPath.endsWith(".tsx")) {
+			const { config } = await loadConfig<{
+				auth: {
+					options: BetterAuthOptions;
+				};
+				default?: {
+					options: BetterAuthOptions;
+				};
+			}>({
+				configFile: path.join(cwd, configPath),
+				dotenv: true,
+				jitiOptions,
+			});
+			if (!config.auth && !config.default) {
 				logger.error(
-					"[#better-auth]: Only .ts files are supported for custom config paths.",
+					"[#better-auth]: Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
 				);
 				process.exit(1);
-			} else {
-				const config = (await jiti(cwd).import(
-					path.join(cwd, configPath),
-					{},
-				)) as {
-					auth: {
-						options: BetterAuthOptions;
-					};
-					default?: {
-						options: BetterAuthOptions;
-					};
-				};
-				if (!config.auth && !config.default) {
-					logger.error(
-						"[#better-auth]: Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
-					);
-					process.exit(1);
-				}
-				configFile = config.auth?.options || config.default?.options || null;
 			}
+			configFile = config.auth?.options || config.default?.options || null;
 		}
 
 		if (!configFile) {
 			for (const possiblePath of possiblePaths) {
 				try {
-					const config = (await jiti(path.join(cwd, possiblePath)).import(
-						path.join(cwd, possiblePath),
-						{},
-					)) as {
-						auth?: {
+					const { config } = await loadConfig<{
+						auth: {
 							options: BetterAuthOptions;
 						};
 						default?: {
 							options: BetterAuthOptions;
 						};
-					};
-					if (config) {
+					}>({
+						configFile: possiblePath,
+						jitiOptions,
+					});
+					const hasConfig = Object.keys(config).length > 0;
+					if (hasConfig) {
 						configFile =
 							config.auth?.options || config.default?.options || null;
 						if (!configFile) {
@@ -77,12 +91,8 @@ export async function getConfig({
 						break;
 					}
 				} catch (e) {
-					if (
-						!(e instanceof Error && e.message.includes("Cannot find module"))
-					) {
-						logger.error(e);
-						process.exit(1);
-					}
+					logger.error(e);
+					process.exit(1);
 				}
 			}
 		}

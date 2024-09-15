@@ -27,7 +27,8 @@
 		"**/*.tsx",
 		".next/types/**/*.ts",
 		"next.config.mjs",
-		"next.config.mjs"
+		"next.config.mjs",
+		"src/lib/permissions.ts"
 	],
 	"exclude": ["node_modules"]
 }
