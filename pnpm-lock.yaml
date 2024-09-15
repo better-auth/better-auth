@@ -742,6 +742,12 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@babel/preset-react':
+        specifier: ^7.24.7
+        version: 7.24.7(@babel/core@7.25.2)
+      '@babel/preset-typescript':
+        specifier: ^7.24.7
+        version: 7.24.7(@babel/core@7.25.2)
       '@better-fetch/fetch':
         specifier: ^1.1.8
         version: 1.1.8
@@ -845,9 +851,6 @@ importers:
         specifier: ^3.22.5
         version: 3.23.8
     devDependencies:
-      '@babel/preset-typescript':
-        specifier: ^7.24.7
-        version: 7.24.7(@babel/core@7.25.2)
       '@simplewebauthn/types':
         specifier: ^10.0.0
         version: 10.0.0

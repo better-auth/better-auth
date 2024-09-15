@@ -2,7 +2,6 @@ import { loadConfig } from "c12";
 import type { BetterAuthOptions } from "../types";
 import { logger } from "../utils/logger";
 import path from "path";
-import swc from "@swc/core";
 // @ts-ignore
 import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
