@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.0.9-beta.30",
+    "version": "0.0.9-beta.31",
     "description": "Framework-agnostic, batteries included authentication library for typescript",
     "type": "module",
     "scripts": {
