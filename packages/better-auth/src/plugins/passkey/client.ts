@@ -162,7 +162,7 @@ export const passkeyClient = () => {
 			const _listPasskeys = atom();
 			const listPasskeys = useAuthQuery<Passkey[]>(
 				_listPasskeys,
-				"/passkey/list-passkeys",
+				"/passkey/list-user-passkeys",
 				$fetch,
 				{
 					method: "GET",

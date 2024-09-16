@@ -45,6 +45,11 @@ describe("passkey", async () => {
 		const client = createAuthClient({
 			plugins: [passkeyClient()],
 			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (input, init) => {
+					return new Response(null);
+				},
+			},
 		});
 		expectTypeOf(client.useListPasskeys.get).toBeFunction();
 	});
