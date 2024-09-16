@@ -12,6 +12,7 @@ import type { Session } from "inspector";
 import type { User } from "../../adapters/schema";
 import type { passkey as passkeyPl, Passkey } from "../../plugins";
 import type { AuthClientPlugin } from "../../client/types";
+import { logger } from "../../utils/logger";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {
@@ -92,7 +93,25 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 						},
 					};
 				}
+				logger.error(e, "passkey registration error");
+				return {
+					data: null,
+					error: {
+						message: e.message,
+						status: 400,
+						statusText: "BAD_REQUEST",
+					},
+				};
 			}
+			logger.error(e, "passkey registration error");
+			return {
+				data: null,
+				error: {
+					message: e instanceof Error ? e.message : "unknown error",
+					status: 500,
+					statusText: "INTERNAL_SERVER_ERROR",
+				},
+			};
 		}
 	};
 	return {
