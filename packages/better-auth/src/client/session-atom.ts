@@ -45,8 +45,8 @@ export function getSessionAtom<Option extends ClientOptions>(
 	return {
 		$session: session,
 		_sessionSignal: $signal,
-		$infer: {} as {
-			session: {
+		$Infer: {} as {
+			Session: {
 				session: Prettify<SessionWithAdditionalFields>;
 				user: Prettify<UserWithAdditionalFields>;
 			};

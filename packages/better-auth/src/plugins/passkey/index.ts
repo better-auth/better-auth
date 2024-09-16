@@ -437,16 +437,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						model: "passkey",
 						where: [{ field: "userId", value: ctx.context.session.user.id }],
 					});
-					const passkeysToReturn = passkeys.map((passkey) => ({
-						name: passkey.name,
-						id: passkey.id,
-						counter: passkey.counter,
-						deviceType: passkey.deviceType,
-						backedUp: passkey.backedUp,
-						transports: passkey.transports,
-						createdAt: passkey.createdAt,
-					}));
-					return ctx.json(passkeysToReturn, {
+					return ctx.json(passkeys, {
 						status: 200,
 					});
 				},

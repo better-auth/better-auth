@@ -144,6 +144,12 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			 */
 			addPasskey: registerPasskey,
 		},
+		/**
+		 * Inferred Internal Types
+		 */
+		$Infer: {} as {
+			Passkey: Passkey;
+		},
 	};
 };
 
@@ -154,7 +160,7 @@ export const passkeyClient = () => {
 		getActions: ($fetch) => getPasskeyActions($fetch),
 		getAtoms($fetch) {
 			const _listPasskeys = atom();
-			const listPasskeys = useAuthQuery(
+			const listPasskeys = useAuthQuery<Passkey[]>(
 				_listPasskeys,
 				"/passkey/list-passkeys",
 				$fetch,
