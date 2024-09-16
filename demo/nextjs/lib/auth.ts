@@ -1,12 +1,11 @@
 import { betterAuth } from "better-auth";
 import { organization, passkey, twoFactor } from "better-auth/plugins";
-import { Resend } from "resend";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { github, google } from "better-auth/social-providers";
 import { reactResetPasswordEmail } from "./email/rest-password";
+import { resend } from "./email/resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 
 export const auth = betterAuth({
