@@ -796,6 +796,15 @@ importers:
       better-sqlite3:
         specifier: ^11.1.2
         version: 11.1.2
+      c12:
+        specifier: ^1.11.2
+        version: 1.11.2(magicast@0.3.5)
+      chalk:
+        specifier: ^5.3.0
+        version: 5.3.0
+      commander:
+        specifier: ^12.1.0
+        version: 12.1.0
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -866,15 +875,6 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.3
-      c12:
-        specifier: ^1.11.2
-        version: 1.11.2(magicast@0.3.5)
-      chalk:
-        specifier: ^5.3.0
-        version: 5.3.0
-      commander:
-        specifier: ^12.1.0
-        version: 12.1.0
       h3:
         specifier: ^1.12.0
         version: 1.12.0

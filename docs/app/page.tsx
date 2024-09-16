@@ -10,7 +10,6 @@ export default function HomePage() {
 				crossesOffset="lg:translate-y-[5.25rem]"
 				customPaddings
 				id="hero"
-
 			>
 				<Hero />
 				<Features />

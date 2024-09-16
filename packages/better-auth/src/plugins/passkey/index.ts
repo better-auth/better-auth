@@ -53,7 +53,7 @@ export interface PasskeyOptions {
 
 export type WebAuthnCookieType = {
 	expectedChallenge: string;
-	userData: { id: string; email: string };
+	userData: { id: string };
 	callbackURL?: string;
 };
 
@@ -71,10 +71,7 @@ export type Passkey = {
 
 export const passkey = (options?: PasskeyOptions) => {
 	const baseURL = process.env.BETTER_AUTH_URL;
-	const rpID =
-		process.env.NODE_ENV === "development"
-			? "localhost"
-			: options?.rpID || baseURL;
+	const rpID = options?.rpID || baseURL || "localhost";
 	if (!rpID) {
 		throw new BetterAuthError(
 			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
@@ -141,8 +138,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					const data: WebAuthnCookieType = {
 						expectedChallenge: options.challenge,
 						userData: {
-							...session.user,
-							email: session.user.email || session.user.id,
+							id: session.user.id,
 						},
 					};
 
@@ -207,7 +203,6 @@ export const passkey = (options?: PasskeyOptions) => {
 					const data: WebAuthnCookieType = {
 						expectedChallenge: options.challenge,
 						userData: {
-							email: session?.user.email || session?.user.id || "",
 							id: session?.user.id || "",
 						},
 						callbackURL: ctx.body?.callbackURL,

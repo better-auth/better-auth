@@ -1,4 +1,4 @@
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import {
 	WebAuthnError,
 	startAuthentication,
@@ -53,11 +53,14 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		}
 	};
 
-	const registerPasskey = async () => {
+	const registerPasskey = async (opts?: {
+		options?: BetterFetchOption;
+	}) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
 			{
 				method: "GET",
+				...opts?.options,
 			},
 		);
 		if (!options.data) {
@@ -72,6 +75,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 					response: res,
 					type: "register",
 				},
+				...opts?.options,
 			});
 			if (!verified.data) {
 				return verified;
