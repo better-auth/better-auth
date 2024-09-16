@@ -16,7 +16,14 @@ import { logger } from "../../utils/logger";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
 
-export const getPasskeyActions = ($fetch: BetterFetch) => {
+export const getPasskeyActions = (
+	$fetch: BetterFetch,
+	{
+		_listPasskeys,
+	}: {
+		_listPasskeys: ReturnType<typeof atom<any>>;
+	},
+) => {
 	const signInPasskey = async (opts?: {
 		autoFill?: boolean;
 		email?: string;
@@ -88,6 +95,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			if (!verified.data) {
 				return verified;
 			}
+			_listPasskeys.set(Math.random());
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -154,12 +162,15 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 };
 
 export const passkeyClient = () => {
+	const _listPasskeys = atom<any>();
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
-		getActions: ($fetch) => getPasskeyActions($fetch),
+		getActions: ($fetch) =>
+			getPasskeyActions($fetch, {
+				_listPasskeys,
+			}),
 		getAtoms($fetch) {
-			const _listPasskeys = atom();
 			const listPasskeys = useAuthQuery<Passkey[]>(
 				_listPasskeys,
 				"/passkey/list-user-passkeys",
@@ -173,6 +184,7 @@ export const passkeyClient = () => {
 				listPasskeys,
 				_listPasskeys,
 			};
+			444;
 		},
 		pathMethods: {
 			"/passkey/register": "POST",
@@ -181,7 +193,10 @@ export const passkeyClient = () => {
 		atomListeners: [
 			{
 				matcher(path) {
-					return path.startsWith("/passkey");
+					return (
+						path === "/passkey/verify-registration" ||
+						path === "/passkey/delete-passkey"
+					);
 				},
 				signal: "_listPasskeys",
 			},

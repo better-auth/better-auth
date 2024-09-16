@@ -3,3 +3,4 @@ packages:
   - dev/**
   - docs
   - examples/*
+  - demo/*
