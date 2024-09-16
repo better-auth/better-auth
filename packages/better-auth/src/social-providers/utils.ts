@@ -1,6 +1,7 @@
-import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
+import { OAuth2Tokens } from "arctic";
 import type { ProviderOptions } from ".";
 import { getBaseURL } from "../utils/base-url";
+import { betterFetch } from "@better-fetch/fetch";
 
 export function getRedirectURI(providerId: string, redirectURI?: string) {
 	return redirectURI || `${getBaseURL()}/callback/${providerId}`;
@@ -26,7 +27,19 @@ export async function validateAuthorizationCode({
 	body.set("redirect_uri", redirectURI);
 	body.set("client_id", options.clientId);
 	body.set("client_secret", options.clientSecret);
-	const request = createOAuth2Request(tokenEndpoint, body);
-	const tokens = await sendTokenRequest(request);
+	const { data, error } = await betterFetch<object>(tokenEndpoint, {
+		method: "POST",
+		body: body,
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			accept: "application/json",
+			"user-agent": "better-auth",
+		},
+	});
+	console.log({ data, error, body });
+	if (error) {
+		throw error;
+	}
+	const tokens = new OAuth2Tokens(data);
 	return tokens;
 }

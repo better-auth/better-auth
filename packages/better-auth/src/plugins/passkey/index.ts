@@ -203,11 +203,12 @@ export const passkey = (options?: PasskeyOptions) => {
 					 */
 					const data: WebAuthnCookieType = {
 						expectedChallenge: options.challenge,
+						callbackURL: ctx.body?.callbackURL,
 						userData: {
 							id: session?.user.id || "",
 						},
-						callbackURL: ctx.body?.callbackURL,
 					};
+
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						JSON.stringify(data),
@@ -337,6 +338,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							status: 400,
 						});
 					}
+					console.log({ challengeString });
 					const { expectedChallenge, callbackURL } = JSON.parse(
 						challengeString,
 					) as WebAuthnCookieType;
@@ -400,6 +402,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							ctx.request,
 						);
 						await setSessionCookie(ctx, s.id);
+
 						if (callbackURL) {
 							return ctx.json({
 								url: callbackURL,

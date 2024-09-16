@@ -37,7 +37,7 @@ export default function InvitationPage({
                 setError(res.error.message || "An error occurred")
             } else {
                 setInvitationStatus("accepted");
-                router.push(`/organizations/${invitation?.organizationSlug}`)
+                router.push(`/dashboard`)
             }
         })
     };

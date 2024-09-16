@@ -38,6 +38,7 @@ describe("two factor", async () => {
 	}
 	it("should enable two factor", async () => {
 		const res = await client.twoFactor.enable({
+			password: testUser.password,
 			options: {
 				headers,
 			},
@@ -183,6 +184,7 @@ describe("two factor", async () => {
 
 	it("should disable two factor", async () => {
 		const res = await client.twoFactor.disable({
+			password: testUser.password,
 			options: {
 				headers,
 			},

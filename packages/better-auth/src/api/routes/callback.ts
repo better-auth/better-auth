@@ -39,10 +39,6 @@ export const callbackOAuth = createAuthEndpoint(
 		);
 		let tokens: OAuth2Tokens;
 		try {
-			console.log({
-				data: c.query.code,
-				codeVerifier,
-			});
 			tokens = await provider.validateAuthorizationCode(
 				c.query.code,
 				codeVerifier,

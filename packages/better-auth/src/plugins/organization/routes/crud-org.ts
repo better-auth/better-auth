@@ -272,6 +272,19 @@ export const setActiveOrganization = createAuthEndpoint(
 			}
 			orgId = sessionOrgId;
 		}
+		const isMember = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: orgId,
+		});
+		if (!isMember) {
+			await adapter.setActiveOrganization(session.session.id, null);
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "You are not a member of this organization",
+				},
+			});
+		}
 		await adapter.setActiveOrganization(session.session.id, orgId);
 		const organization = await adapter.findFullOrganization(
 			orgId,

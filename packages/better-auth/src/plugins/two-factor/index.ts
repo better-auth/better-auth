@@ -11,6 +11,7 @@ import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import type { Session } from "../../adapters/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
+import { validatePassword } from "../../utils/password";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const totp = totp2fa({
@@ -29,10 +30,29 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
+					body: z.object({
+						password: z.string().min(8),
+					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
+					const { password } = ctx.body;
+					const isPasswordValid = await validatePassword(ctx, {
+						password,
+						userId: user.id,
+					});
+					if (!isPasswordValid) {
+						return ctx.json(
+							{ status: false },
+							{
+								status: 400,
+								body: {
+									message: "Invalid password",
+								},
+							},
+						);
+					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
 					const encryptedSecret = symmetricEncrypt({
 						key: ctx.context.secret,
@@ -63,10 +83,29 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
+					body: z.object({
+						password: z.string().min(8),
+					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
+					const { password } = ctx.body;
+					const isPasswordValid = await validatePassword(ctx, {
+						password,
+						userId: user.id,
+					});
+					if (!isPasswordValid) {
+						return ctx.json(
+							{ status: false },
+							{
+								status: 400,
+								body: {
+									message: "Invalid password",
+								},
+							},
+						);
+					}
 					await ctx.context.adapter.update({
 						model: "user",
 						update: {

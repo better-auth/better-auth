@@ -77,25 +77,27 @@ export default function SignIn() {
             <Label>Remember me</Label>
           </div>
 
-          <Button type="submit" className="w-full" onClick={async () => {
-            await signIn.email({
-              email: email,
-              password: password,
-              callbackURL: "/dashboard",
-              dontRememberMe: !rememberMe,
-              options: {
-                onRequest: () => {
-                  setLoading(true)
-                },
-                onResponse: () => {
-                  setLoading(false)
-                },
-                onError: (ctx) => {
-                  toast.error(ctx.error.message)
+          <Button type="submit" className="w-full"
+            disabled={loading}
+            onClick={async () => {
+              await signIn.email({
+                email: email,
+                password: password,
+                callbackURL: "/dashboard",
+                dontRememberMe: !rememberMe,
+                options: {
+                  onRequest: () => {
+                    setLoading(true)
+                  },
+                  onResponse: () => {
+                    setLoading(false)
+                  },
+                  onError: (ctx) => {
+                    toast.error(ctx.error.message)
+                  }
                 }
-              }
-            })
-          }}>
+              })
+            }}>
             {
               loading ? <Loader2 size={16} className="animate-spin" /> : "Login"
             }
@@ -103,7 +105,12 @@ export default function SignIn() {
           <Button
             variant="outline"
             className="w-full gap-2"
-            onClick={async () => { }}
+            onClick={async () => {
+              await signIn.social({
+                provider: "github",
+                callbackURL: "/dashboard",
+              })
+            }}
           >
             <GitHubLogoIcon />
             Continue with Github
@@ -112,7 +119,10 @@ export default function SignIn() {
             variant="outline"
             className="w-full gap-2"
             onClick={async () => {
-
+              await signIn.social({
+                provider: "google",
+                callbackURL: "/dashboard",
+              })
             }}
           >
             <svg
@@ -140,7 +150,11 @@ export default function SignIn() {
             </svg>
             Continue with Google
           </Button>
-          <Button variant="outline" className="gap-2" onClick={async () => { }}>
+          <Button variant="outline" className="gap-2" onClick={async () => {
+            await signIn.passkey({
+              callbackURL: "/dashboard",
+            })
+          }}>
             <Key size={16} />
             Sign-in with Passkey
           </Button>

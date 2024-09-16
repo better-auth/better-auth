@@ -20,7 +20,7 @@ export default async function DashboardPage() {
     return (
         <div className="w-full">
             <div className="flex gap-4 flex-col">
-                <UserCard session={JSON.parse(JSON.stringify(session))} activeSessions={activeSessions} />
+                <UserCard session={JSON.parse(JSON.stringify(session))} activeSessions={JSON.parse(JSON.stringify(activeSessions))} />
                 <OrganizationCard session={JSON.parse(JSON.stringify(session))} />
             </div>
         </div>

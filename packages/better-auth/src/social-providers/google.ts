@@ -55,7 +55,12 @@ export const google = (options: GoogleOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
 			const _scopes = scopes || ["email", "profile"];
-			return googleArctic.createAuthorizationURL(state, codeVerifier, _scopes);
+			const url = googleArctic.createAuthorizationURL(
+				state,
+				codeVerifier,
+				_scopes,
+			);
+			return url;
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
 			return validateAuthorizationCode({

@@ -148,7 +148,13 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const id = ctx.body.id;
-		await ctx.context.internalAdapter.deleteSession(id);
+		console.log(id);
+		try {
+			await ctx.context.internalAdapter.deleteSession(id);
+		} catch (error) {
+			ctx.context.logger.error(error);
+			return ctx.json(null, { status: 500 });
+		}
 		return ctx.json({
 			status: true,
 		});
@@ -165,9 +171,14 @@ export const revokeSessions = createAuthEndpoint(
 		requireHeaders: true,
 	},
 	async (ctx) => {
-		await ctx.context.internalAdapter.deleteSessions(
-			ctx.context.session.user.id,
-		);
+		try {
+			await ctx.context.internalAdapter.deleteSessions(
+				ctx.context.session.user.id,
+			);
+		} catch (error) {
+			ctx.context.logger.error(error);
+			return ctx.json(null, { status: 500 });
+		}
 		return ctx.json({
 			status: true,
 		});

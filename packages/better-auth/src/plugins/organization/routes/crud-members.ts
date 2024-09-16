@@ -51,23 +51,27 @@ export const removeMember = createAuthEndpoint(
 				},
 			});
 		}
-
-		if (
-			(session.user.email === ctx.body.memberIdOrEmail ||
-				member.id === ctx.body.memberIdOrEmail) &&
-			member.role === (ctx.context.orgOptions?.creatorRole || "owner")
-		) {
+		const isLeaving =
+			session.user.email === ctx.body.memberIdOrEmail ||
+			member.id === ctx.body.memberIdOrEmail;
+		const isOwnerLeaving =
+			isLeaving &&
+			member.role === (ctx.context.orgOptions?.creatorRole || "owner");
+		if (isOwnerLeaving) {
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "You cannot delete yourself",
+					message: "You cannot leave the organization as the owner",
 				},
 			});
 		}
-		const canDeleteMember = role.authorize({
-			member: ["delete"],
-		});
-		if (canDeleteMember.error) {
+
+		const canDeleteMember =
+			isLeaving ||
+			role.authorize({
+				member: ["delete"],
+			}).success;
+		if (!canDeleteMember) {
 			return ctx.json(null, {
 				body: {
 					message: "You are not allowed to delete this member",

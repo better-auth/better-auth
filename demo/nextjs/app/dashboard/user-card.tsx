@@ -17,7 +17,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { client, signOut, user, useSession } from "@/lib/auth-client";
 import { Session } from "@/lib/auth-types";
 import { MobileIcon } from "@radix-ui/react-icons";
-import { Edit, Fingerprint, Laptop, Loader2, LogOut, Plus, Trash, X } from "lucide-react";
+import { Edit, Fingerprint, Laptop, Loader2, LogOut, Plus, QrCode, ShieldCheck, ShieldOff, Trash, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import QRCode from "react-qr-code";
+import CopyButton from "@/components/ui/copy-button";
 
 
 export default function UserCard(props: {
@@ -40,6 +42,24 @@ export default function UserCard(props: {
     useEffect(() => {
         setUa(new UAParser(session?.session.userAgent))
     }, [session?.session.userAgent])
+
+    const [isTerminating, setIsTerminating] = useState<string>();
+
+    const { data: qr } = useQuery({
+        queryKey: ["two-factor-qr"],
+        queryFn: async () => {
+            const res = await client.twoFactor.getTotpUri()
+            if (res.error) {
+                throw res.error
+            }
+            return res.data
+        },
+        enabled: !!session?.user.twoFactorSecret
+    })
+
+    const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
+    const [twoFaPassword, setTwoFaPassword] = useState<string>("");
+    const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
 
     return (
         <Card>
@@ -71,11 +91,30 @@ export default function UserCard(props: {
                     {
                         props.activeSessions.filter((session) => session.userAgent).map((session) => {
                             return (
-                                <div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white" key={session.id}>
-                                    {
-                                        new UAParser(session.userAgent).getDevice().type === "mobile" ? <MobileIcon /> : <Laptop size={16} />
-                                    }
-                                    {new UAParser(session.userAgent).getOS().name}, {new UAParser(session.userAgent).getBrowser().name}
+                                <div key={session.id}>
+                                    <div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white">
+                                        {
+                                            new UAParser(session.userAgent).getDevice().type === "mobile" ? <MobileIcon /> : <Laptop size={16} />
+                                        }
+                                        {new UAParser(session.userAgent).getOS().name}, {new UAParser(session.userAgent).getBrowser().name}
+                                        <button className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline " onClick={async () => {
+                                            setIsTerminating(session.id)
+                                            const res = await client.user.revokeSession({
+                                                id: session.id,
+                                            })
+                                            if (res.error) {
+                                                toast.error(res.error.message)
+                                            } else {
+                                                toast.success("Session terminated successfully")
+                                            }
+                                            router.refresh()
+                                            setIsTerminating(undefined)
+                                        }}>
+                                            {
+                                                isTerminating === session.id ? <Loader2 size={15} className="animate-spin" /> : session.id === props.session?.session.id ? "Sign Out" : "Terminate"
+                                            }
+                                        </button>
+                                    </div>
                                 </div>
                             )
                         })
@@ -93,35 +132,128 @@ export default function UserCard(props: {
                     </div>
                     <div className="flex flex-col gap-2">
                         <p className="text-sm">
-                            2FA Authentication
+                            Two Factor
                         </p>
-                        {session?.user.twoFactorEnabled ? (
-                            <Button
-                                variant="secondary"
-                                className="gap-2"
-                                onClick={async () => {
-                                    const res = await client.twoFactor.disable();
-                                    if (res.error) {
-                                        toast.error(res.error.message);
-                                    }
-                                }}
-                            >
-                                Disable 2FA
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="outline"
-                                className="gap-2"
-                                onClick={async () => {
-                                    const res = await client.twoFactor.enable();
-                                    if (res.error) {
-                                        toast.error(res.error.message);
-                                    }
-                                }}
-                            >
-                                <p>Enable 2FA</p>
-                            </Button>
-                        )}
+                        <div className="flex gap-2">
+                            {
+                                session?.user.twoFactorEnabled && (
+                                    <Dialog >
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline" className="gap-2">
+                                                <QrCode size={16} />
+                                                <span className="text-sm">
+                                                    Scan QR Code
+                                                </span>
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>
+                                                    Scan QR Code
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Scan the QR code with your TOTP app
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="flex items-center justify-center">
+                                                <QRCode value={qr?.totpURI || ""} />
+                                            </div>
+                                            <div className="flex gap-2 items-center justify-center">
+                                                <p className="text-sm text-muted-foreground">
+                                                    Copy URI to clipboard
+                                                </p>
+                                                <CopyButton textToCopy={qr?.totpURI || ""} />
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                )
+                            }
+                            <Dialog open={twoFactorDialog} onOpenChange={setTwoFactorDialog}>
+                                <DialogTrigger asChild>
+                                    <Button
+                                        variant={
+                                            session?.user.twoFactorEnabled ? "destructive" : "outline"
+                                        }
+                                        className="gap-2"
+                                    >
+                                        {
+                                            session?.user.twoFactorEnabled ? <ShieldOff size={16} /> : <ShieldCheck size={16} />
+                                        }
+                                        <span className="text-sm">
+                                            {
+                                                session?.user.twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"
+                                            }
+                                        </span>
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            {
+                                                session?.user.twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"
+                                            }
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            {
+                                                session?.user.twoFactorEnabled ? "Disable the second factor authentication from your account" : "Enable 2FA to secure your account"
+                                            }
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex flex-col gap-2">
+                                        <Label htmlFor="password">Password</Label>
+                                        <PasswordInput id="password" placeholder="Password" value={twoFaPassword} onChange={(e) => setTwoFaPassword(e.target.value)} />
+                                    </div>
+                                    <DialogFooter>
+
+                                        <Button
+                                            disabled={isPendingTwoFa}
+                                            onClick={async () => {
+                                                if (twoFaPassword.length < 8) {
+                                                    toast.error("Password must be at least 8 characters");
+                                                    return;
+                                                }
+                                                setIsPendingTwoFa(true);
+                                                if (session?.user.twoFactorEnabled) {
+                                                    const res = await client.twoFactor.disable({
+                                                        //@ts-ignore
+                                                        password: twoFaPassword,
+                                                        options: {
+                                                            onError(context) {
+                                                                toast.error(context.error.message);
+                                                            },
+                                                            onSuccess() {
+                                                                toast("2FA disabled successfully");
+                                                                setTwoFactorDialog(false);
+                                                            }
+                                                        }
+                                                    })
+                                                } else {
+                                                    const res = await client.twoFactor.enable({
+                                                        password: twoFaPassword,
+                                                        options: {
+                                                            onError(context) {
+                                                                toast.error(context.error.message);
+                                                            },
+                                                            onSuccess() {
+                                                                toast.success("2FA enabled successfully");
+                                                                setTwoFactorDialog(false);
+                                                            }
+                                                        }
+                                                    })
+                                                }
+                                                setIsPendingTwoFa(false);
+                                                setTwoFaPassword("");
+                                            }}>
+                                            {
+                                                isPendingTwoFa ? <Loader2 size={15} className="animate-spin" /> : session?.user.twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"
+                                            }
+                                        </Button>
+
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+
+                        </div>
                     </div>
                 </div>
             </CardContent>

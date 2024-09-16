@@ -35,6 +35,7 @@ export const getPasskeyActions = (
 				method: "POST",
 				body: {
 					email: opts?.email,
+					callbackURL: opts?.callbackURL,
 				},
 			},
 		);

@@ -145,7 +145,9 @@ export function OrganizationCard(props: {
                                                         memberIdOrEmail: member.id
                                                     })
                                                 }}>
-                                                    Remove
+                                                    {
+                                                        currentMember?.id === member.id ? "Leave" : "Remove"
+                                                    }
                                                 </Button>
                                             )}
                                     </div>

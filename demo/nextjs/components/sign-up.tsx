@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
-import { signUp } from "@/lib/auth-client";
+import { client, signIn, signUp } from "@/lib/auth-client";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -139,26 +139,28 @@ export function SignUp() {
               </div>
             </div>
           </div>
-          <Button type="submit" className="w-full" onClick={async () => {
-            await signUp.email({
-              email,
-              password,
-              name: `${firstName} ${lastName}`,
-              image: image ? await convertImageToBase64(image) : "",
-              callbackURL: "/dashboard",
-              options: {
-                onResponse: () => {
-                  setLoading(false)
-                },
-                onRequest: () => {
-                  setLoading(true)
-                },
-                onError: (ctx) => {
-                  toast.error(ctx.error.message)
-                },
-              }
-            })
-          }}>
+          <Button type="submit" className="w-full"
+            disabled={loading}
+            onClick={async () => {
+              await signUp.email({
+                email,
+                password,
+                name: `${firstName} ${lastName}`,
+                image: image ? await convertImageToBase64(image) : "",
+                callbackURL: "/dashboard",
+                options: {
+                  onResponse: () => {
+                    setLoading(false)
+                  },
+                  onRequest: () => {
+                    setLoading(true)
+                  },
+                  onError: (ctx) => {
+                    toast.error(ctx.error.message)
+                  },
+                }
+              })
+            }}>
             {
               loading ? <Loader2 size={16} className="animate-spin" /> : "Create an account"
             }
@@ -166,7 +168,21 @@ export function SignUp() {
           <Button
             variant="outline"
             className="w-full gap-2"
-            onClick={async () => { }}
+            onClick={async () => {
+              const res = await client.signIn.social({
+                provider: "google",
+                callbackURL: "/dashboard",
+                options: {
+                  onRequest: () => {
+                    setLoading(true)
+                  },
+                  onResponse: () => {
+                    setLoading(false)
+                  },
+                }
+              })
+            }}
+            disabled={loading}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -196,7 +212,21 @@ export function SignUp() {
           <Button
             variant="outline"
             className="w-full gap-2"
-            onClick={async () => { }}
+            onClick={async () => {
+              await signIn.social({
+                provider: "github",
+                callbackURL: "/dashboard",
+                options: {
+                  onRequest: () => {
+                    setLoading(true)
+                  },
+                  onResponse: () => {
+                    setLoading(false)
+                  },
+                }
+              })
+            }}
+            disabled={loading}
           >
             <GitHubLogoIcon />
             Continue with Github
