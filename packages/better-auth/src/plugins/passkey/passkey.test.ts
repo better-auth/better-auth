@@ -37,6 +37,7 @@ describe("passkey", async () => {
 		const options = await auth.api.generatePasskeyAuthenticationOptions({
 			headers: headers,
 		});
+
 		expect(options).toBeDefined();
 	});
 });

@@ -43,7 +43,6 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			}>("/passkey/verify-authentication", {
 				body: {
 					response: res,
-					type: "authenticate",
 				},
 			});
 			if (!verified.data) {
@@ -56,6 +55,11 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 
 	const registerPasskey = async (opts?: {
 		options?: BetterFetchOption;
+		/**
+		 * The name of the passkey. This is used to
+		 * identify the passkey in the UI.
+		 */
+		name?: string;
 	}) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
@@ -74,7 +78,8 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			}>("/passkey/verify-registration", {
 				body: {
 					response: res,
-					type: "register",
+
+					name: opts?.name,
 				},
 				...opts?.options,
 			});
@@ -93,7 +98,16 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 						},
 					};
 				}
-				logger.error(e, "passkey registration error");
+				if (e.code === "ERROR_CEREMONY_ABORTED") {
+					return {
+						data: null,
+						error: {
+							message: "registration cancelled",
+							status: 400,
+							statusText: "BAD_REQUEST",
+						},
+					};
+				}
 				return {
 					data: null,
 					error: {
@@ -116,10 +130,16 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 	};
 	return {
 		signIn: {
+			/**
+			 * Sign in with a registered passkey
+			 */
 			passkey: signInPasskey,
 		},
 		passkey: {
-			register: registerPasskey,
+			/**
+			 * Add a passkey to the user account
+			 */
+			addPasskey: registerPasskey,
 		},
 	};
 };

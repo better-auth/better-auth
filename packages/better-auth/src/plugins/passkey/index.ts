@@ -59,6 +59,7 @@ export type WebAuthnCookieType = {
 
 export type Passkey = {
 	id: string;
+	name?: string;
 	publicKey: string;
 	userId: string;
 	webauthnUserID: string;
@@ -229,6 +230,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					method: "POST",
 					body: z.object({
 						response: z.any(),
+						name: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 				},
@@ -424,10 +426,63 @@ export const passkey = (options?: PasskeyOptions) => {
 					}
 				},
 			),
+			listPasskeys: createAuthEndpoint(
+				"/passkey/list-user-passkeys",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const passkeys = await ctx.context.adapter.findMany<Passkey>({
+						model: "passkey",
+						where: [{ field: "userId", value: ctx.context.session.user.id }],
+					});
+					const passkeysToReturn = passkeys.map((passkey) => ({
+						name: passkey.name,
+						id: passkey.id,
+						counter: passkey.counter,
+						deviceType: passkey.deviceType,
+						backedUp: passkey.backedUp,
+						transports: passkey.transports,
+						createdAt: passkey.createdAt,
+					}));
+					return ctx.json(passkeysToReturn, {
+						status: 200,
+					});
+				},
+			),
+			deletePasskey: createAuthEndpoint(
+				"/passkey/delete-passkey",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					await ctx.context.adapter.delete<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+					});
+					return ctx.json(null, {
+						status: 200,
+					});
+				},
+			),
 		},
 		schema: {
 			passkey: {
 				fields: {
+					name: {
+						type: "string",
+						required: false,
+					},
 					publicKey: {
 						type: "string",
 					},
