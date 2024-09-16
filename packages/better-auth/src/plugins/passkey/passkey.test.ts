@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { passkey, passkeyClient } from ".";
 import { createAuthClient } from "../../client";
@@ -39,5 +39,13 @@ describe("passkey", async () => {
 		});
 
 		expect(options).toBeDefined();
+	});
+
+	it("should have useListPasskeys", async () => {
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+		});
+		expectTypeOf(client.useListPasskeys.get).toBeFunction();
 	});
 });

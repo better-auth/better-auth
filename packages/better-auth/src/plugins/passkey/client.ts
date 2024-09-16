@@ -13,6 +13,8 @@ import type { User } from "../../adapters/schema";
 import type { passkey as passkeyPl, Passkey } from "../../plugins";
 import type { AuthClientPlugin } from "../../client/types";
 import { logger } from "../../utils/logger";
+import { useAuthQuery } from "../../client";
+import { atom } from "nanostores";
 
 export const getPasskeyActions = ($fetch: BetterFetch) => {
 	const signInPasskey = async (opts?: {
@@ -128,6 +130,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			};
 		}
 	};
+
 	return {
 		signIn: {
 			/**
@@ -149,9 +152,33 @@ export const passkeyClient = () => {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
 		getActions: ($fetch) => getPasskeyActions($fetch),
+		getAtoms($fetch) {
+			const _listPasskeys = atom();
+			const listPasskeys = useAuthQuery(
+				_listPasskeys,
+				"/passkey/list-passkeys",
+				$fetch,
+				{
+					method: "GET",
+					credentials: "include",
+				},
+			);
+			return {
+				listPasskeys,
+				_listPasskeys,
+			};
+		},
 		pathMethods: {
 			"/passkey/register": "POST",
 			"/passkey/authenticate": "POST",
 		},
+		atomListeners: [
+			{
+				matcher(path) {
+					return path.startsWith("/passkey");
+				},
+				signal: "_listPasskeys",
+			},
+		],
 	} satisfies AuthClientPlugin;
 };
