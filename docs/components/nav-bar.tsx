@@ -4,6 +4,7 @@ import Image from "next/image";
 import { NavbarMobileBtn } from "./nav-mobile";
 import { NavLink } from "./nav-link";
 import { Logo } from "./logo";
+import { PulicBetaBadge } from "./beta/badge";
 
 export const Navbar = () => {
 	return (
@@ -15,6 +16,7 @@ export const Navbar = () => {
 				<div className="flex items-center gap-2">
 					<Logo />
 					<p>BETTER-AUTH.</p>
+					<PulicBetaBadge />
 				</div>
 			</Link>
 			<div className="md:col-span-9 lg:col-span-10 flex items-center justify-end  ">
