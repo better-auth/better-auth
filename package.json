@@ -6,8 +6,8 @@
     "packageManager": "pnpm@9.1.1",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
-        "dev": "turbo --filter \"./packages/*\" dev",
-        "dev:example": "turbo --filter next-js-example dev",
+        "dev": "dotenv turbo --filter \"./packages/*\" dev",
+        "dev:example": "dotenv turbo --filter next-js-example dev",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
         "format": "biome format . --write",
         "lint": "biome check .",
@@ -20,7 +20,8 @@
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
-        "bumpp": "^9.4.1"
+        "bumpp": "^9.4.1",
+        "dotenv-cli": "^7.4.2"
     },
     "devDependencies": {
         "@types/node": "^20.12.12",
