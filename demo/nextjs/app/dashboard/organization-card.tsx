@@ -123,8 +123,8 @@ export function OrganizationCard(props: {
                                 optimisticOrg?.members.map((member) => (
                                     <div key={member.id} className="flex justify-between items-center">
                                         <div className="flex items-center gap-2">
-                                            <Avatar className="w-8 h-8">
-                                                <AvatarImage src={member.user.image} className="object-cover w-full h-full" />
+                                            <Avatar className="sm:flex w-9 h-9">
+                                                <AvatarImage src={member.user.image} className="object-cover" />
                                                 <AvatarFallback>
                                                     {member.user.name?.charAt(0)}
                                                 </AvatarFallback>

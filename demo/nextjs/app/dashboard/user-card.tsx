@@ -63,7 +63,7 @@ export default function UserCard(props: {
     const [isSignOut, setIsSignOut] = useState<boolean>(false);
 
     return (
-        <Card className="rounded-none md:rounded-sm">
+        <Card className="rounded-none md:rounded-sm !bg-none border-none">
             <CardHeader>
                 <CardTitle>User</CardTitle>
             </CardHeader>
