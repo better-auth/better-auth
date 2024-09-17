@@ -23,7 +23,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 			<head>
 				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
 			</head>
-			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans`}>
+			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans overflow-x-hidden`}>
 				<RootProvider>
 					<NavbarProvider>
 						<Navbar />

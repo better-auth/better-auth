@@ -22,7 +22,7 @@ export const TechStackDisplay = ({
   className?: string;
 }) => {
   return (
-    <div className={cn("flex gap-7 flex-wrap mt-3 items-center max-w-4xl", className)}>
+    <div className={cn("flex gap-7 flex-wrap mt-3 justify-center items-center max-w-4xl", className)}>
       {skills.map((icon) => {
         return (
           <TooltipProvider key={icon} >

@@ -23,10 +23,10 @@ import { Ripple } from "./ripple";
 export default function Features() {
 
     return (
-        <div className="md:max-w-[1300px] font-geist relative mx-auto md:border-[1.2px] rounded-none">
+        <div className="md:max-w-[1300px] mt-10 mx-auto font-geist relative md:border-l-0 md:border-[1.2px] rounded-none -pr-2">
             <Plus className="absolute top-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
-            <div className="grid grid-cols-1 md:grid-cols-3 grid-rows-10 md:grid-rows-4 w-full">
-                <div className="relative items-start justify-start border-l-[1.2px] transform-gpu  flex flex-col p-10 overflow-clip">
+            <div className="grid grid-cols-1 md:grid-cols-3 md:mx-0 grid-rows-4 md:grid-rows-4 w-full">
+                <div className="relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0  transform-gpu  flex flex-col p-10 overflow-clip">
                     <Plus className="absolute bottom-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
 
                     <div className="flex gap-2 items-center my-1">
@@ -53,7 +53,7 @@ export default function Features() {
                         </p>
                     </div>
                 </div>
-                <div className="relative items-start justify-start border-l-[1.2px] transform-gpu  flex flex-col p-10">
+                <div className="relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0  transform-gpu  flex flex-col p-10">
                     <Plus className="absolute bottom-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
 
                     <div className="flex gap-2 items-center my-1">
@@ -80,7 +80,7 @@ export default function Features() {
                         </p>
                     </div>
                 </div>
-                <div className="relative items-start justify-start md:border-l-[0.2px]  flex flex-col p-10">
+                <div className="relative items-start justify-start md:border-l-[0.2px] border-t-[1.2px] md:border-t-0  flex flex-col p-10">
                     <Plus className="absolute bottom-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
 
                     <div className="flex gap-2 items-center my-1">
@@ -131,6 +131,7 @@ export default function Features() {
                                 Learn more
                             </Link>
                         </p>
+
                     </div>
                 </div>
                 <div className="items-start justify-staart  border-l-[1.2px] border-t-[1.2px] flex flex-col p-10  ">
@@ -184,13 +185,15 @@ export default function Features() {
                         </p>
                     </div>
                 </div>
-                <div className="relative md:grid md:col-span-3 grid-cols-2 row-span-2 border-t-[1.2px]  md:border-b-[1.2px] dark:border-b-0  h-full overflow-visible py-20 ">
+                <div className="relative md:grid md:col-span-3 grid-cols-2 row-span-2 border-t-[1.2px] border-l-[1.2px]  md:border-b-[1.2px] dark:border-b-0  h-full py-20 ">
+                    <Plus className="absolute top-[-15px] left-[-15px] text-black/20 dark:text-black/20  w-8 h-8 " />
+                    <Plus className="absolute top-[-15px] right-[-15px] text-black/20 dark:text-black/20  w-8 h-8 " />
                     <div className="p-16 pt-10 md:px-10 h-full md:absolute top-0 left-0  w-full">
                         <div className="flex flex-col gap-3 justify-center h-full items-center w-full">
                             <div className="flex gap-2 items-center">
                                 <Globe2Icon className="w-4 h-4" />
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    own your auth
+                                    Own your auth
                                 </p>
                             </div>
                             <p className="text-4xl md:text-4xl mt-4 tracking-tighter font-normal max-w-md mx-auto text-center">
@@ -198,7 +201,7 @@ export default function Features() {
                                     Roll your own auth with confidence in minutes!
                                 </strong>
                             </p>
-                            <div className="flex mt-[10px] z-20">
+                            <div className="flex mt-[10px] z-20 justify-center items-start">
                                 <TechStackDisplay
                                     skills={[
                                         "nextJs",
@@ -219,9 +222,8 @@ export default function Features() {
                             <Ripple />
                         </div>
                     </div>
-                    <Plus className="absolute bottom-[-15px] left-[-15px] text-black/20 dark:text-black/20  w-8 h-8" />
-                    <Plus className="absolute bottom-[-15px] right-[-15px] text-black/20 dark:text-black/20 w-8 h-8" />
-                    <Plus className="absolute top-[-15px] left-[-15px] text-black/20 dark:text-black/20  w-8 h-8" />
+
+
                 </div>
             </div>
         </div>
