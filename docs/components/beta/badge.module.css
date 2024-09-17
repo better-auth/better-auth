@@ -11,7 +11,7 @@
     margin: 0;
     outline: none;
     overflow: visible;
-    padding: 0.3em 2em;
+    padding: 0.7em 3em;
     position: relative;
     text-align: center;
     text-decoration: none;
@@ -76,20 +76,30 @@
     transition: width 0.5s ease-out, right 0.3s ease-out;
   }
   
-  .beta:hover {
+  .beta {
     color: white;
     background: white;
   }
+
+  .beta:hover {
+    background: none;
+  }
+
+  .beta:hover .text {
+    color: white;
+  }
   
-  .beta:hover::before {
+  .beta::before {
     width: 0.9375rem;
     background: black;
   }
   
-  .beta:hover .text {
+  .beta .text {
     color: black;
     padding-left: 1.5em;
   }
+
+
   
   .beta:hover .top_key {
     left: -2px;

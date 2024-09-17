@@ -112,7 +112,7 @@ export default function Hero() {
 								The most comprehensive authentication library for typescript.
 							</p>
 							{
-								env === "production" ? <div className="flex items-center gap-2 mt-4">
+								env !== "production" ? <div className="flex items-center gap-2 mt-4">
 									<PulicBetaBadge text="Coming Soon" />
 								</div> : (
 									<>
