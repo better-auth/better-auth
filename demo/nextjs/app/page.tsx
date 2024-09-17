@@ -1,23 +1,20 @@
 import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
-import { Button } from "@/components/ui/button";
 import { headers } from "next/headers";
-import Link from "next/link";
 import { Suspense } from "react";
 
 export default async function Home() {
   const features = [
     "Email & Password", "Organization | Teams", "Passkeys", "TwoFactor", "Multi Factor", "Password Reset", "Session Management"
   ]
-  const guessIsSignIn = headers().get("cookie")?.includes("better-auth.session")
   return (
     <div className="min-h-[80vh] flex items-center justify-center">
       <main className="flex flex-col gap-4 row-start-2 items-center justify-center">
         <div className="flex flex-col gap-1">
-          <h3 className="font-bold text-5xl text-black dark:text-white text-center">
+          <h3 className="font-bold text-4xl text-black dark:text-white text-center">
             Better Auth.
           </h3>
           <p className="text-center break-words">
-            Official demo to showcase <span className="italic underline">better-auth.</span> features and capabilities. <br />
+            Official demo to showcase <a href="https://better-auth.com" target="_blank" className="italic underline">better-auth.</a> features and capabilities. <br />
           </p>
         </div>
         <div className="md:w-10/12 w-full flex flex-col gap-4">
