@@ -18,7 +18,7 @@
     text-transform: none;
     transition: all 0.3s ease-in-out;
     user-select: none;
-    font-size: 13px;
+    font-size: 10px;
   }
   
   .beta::before {
