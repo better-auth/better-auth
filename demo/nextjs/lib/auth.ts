@@ -66,9 +66,7 @@ export const auth = betterAuth({
 				},
 			},
 		}),
-		passkey({
-			rpID: "localhost",
-		}),
+		passkey(),
 	],
 	socialProvider: [
 		github({

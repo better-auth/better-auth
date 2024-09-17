@@ -72,7 +72,10 @@ export type Passkey = {
 
 export const passkey = (options?: PasskeyOptions) => {
 	const baseURL = process.env.BETTER_AUTH_URL;
-	const rpID = options?.rpID || baseURL || "localhost";
+	const rpID =
+		options?.rpID ||
+		baseURL?.replace("http://", "").replace("https://", "") ||
+		"localhost";
 	if (!rpID) {
 		throw new BetterAuthError(
 			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
