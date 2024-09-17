@@ -584,11 +584,13 @@ function ListPasskeys() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 text-xs md:text-sm">
+                <Button variant="outline" className="text-xs md:text-sm">
                     <Fingerprint className="mr-2 h-4 w-4" />
-                    Passkeys {
-                        data?.length ? `[${data?.length}]` : ""
-                    }
+                    <span>
+                        Passkeys {
+                            data?.length ? `[${data?.length}]` : ""
+                        }
+                    </span>
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] w-11/12">
