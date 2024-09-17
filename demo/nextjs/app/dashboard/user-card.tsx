@@ -10,7 +10,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -60,6 +60,7 @@ export default function UserCard(props: {
     const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
     const [twoFaPassword, setTwoFaPassword] = useState<string>("");
     const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
+    const [isSignOut, setIsSignOut] = useState<boolean>(false);
 
     return (
         <Card>
@@ -259,21 +260,28 @@ export default function UserCard(props: {
             </CardContent>
             <CardFooter className="gap-2 justify-between items-center">
                 <ChangePassword />
-                <Button className="gap-2 z-10" variant="secondary">
-                    <LogOut size={16} />
+                <Button className="gap-2 z-10" variant="secondary" onClick={async () => {
+                    setIsSignOut(true)
+                    await signOut({
+                        options: {
+                            body: {
+                                callbackURL: "/",
+                            }
+                        }
+                    })
+                    setIsSignOut(false)
+                }} disabled={isSignOut}>
+
                     <span
                         className="text-sm"
-                        onClick={async () => {
-                            await signOut({
-                                options: {
-                                    body: {
-                                        callbackURL: "/",
-                                    }
-                                }
-                            })
-                        }}
+
                     >
-                        Sign Out
+                        {
+                            isSignOut ? <Loader2 size={15} className="animate-spin" /> : <div className="flex items-center gap-2">
+                                <LogOut size={16} />
+                                Sign Out
+                            </div>
+                        }
                     </span>
                 </Button>
             </CardFooter>
