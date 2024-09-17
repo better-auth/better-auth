@@ -63,11 +63,11 @@ export default function UserCard(props: {
     const [isSignOut, setIsSignOut] = useState<boolean>(false);
 
     return (
-        <Card>
+        <Card className="rounded-none md:rounded-sm">
             <CardHeader>
                 <CardTitle>User</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-8">
+            <CardContent className="grid gap-8 grid-cols-1">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                         <Avatar className="hidden h-9 w-9 sm:flex ">
@@ -121,12 +121,12 @@ export default function UserCard(props: {
                         })
                     }
                 </div>
-                <div className="border-y py-4 flex items-center justify-between gap-2">
+                <div className="border-y py-4 flex items-center flex-wrap justify-between gap-2">
                     <div className="flex flex-col gap-2">
                         <p className="text-sm">
                             Passkeys
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                             <AddPasskey />
                             <ListPasskeys />
                         </div>
@@ -142,12 +142,12 @@ export default function UserCard(props: {
                                         <DialogTrigger asChild>
                                             <Button variant="outline" className="gap-2">
                                                 <QrCode size={16} />
-                                                <span className="text-sm">
+                                                <span className="md:text-sm text-xs">
                                                     Scan QR Code
                                                 </span>
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent className="sm:max-w-[425px] w-11/12">
                                             <DialogHeader>
                                                 <DialogTitle>
                                                     Scan QR Code
@@ -180,14 +180,14 @@ export default function UserCard(props: {
                                         {
                                             session?.user.twoFactorEnabled ? <ShieldOff size={16} /> : <ShieldCheck size={16} />
                                         }
-                                        <span className="text-sm">
+                                        <span className="md:text-sm text-xs">
                                             {
                                                 session?.user.twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"
                                             }
                                         </span>
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent>
+                                <DialogContent className="sm:max-w-[425px] w-11/12">
                                     <DialogHeader>
                                         <DialogTitle>
                                             {
@@ -323,7 +323,7 @@ function ChangePassword() {
                     </span>
                 </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>
                         Change Password
@@ -420,7 +420,7 @@ function EditUserDialog(props: { session: Session | null }) {
                     Edit User
                 </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>
                         Edit User
@@ -526,12 +526,12 @@ function AddPasskey() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 text-xs md:text-sm">
                     <Plus size={15} />
                     Add New Passkey
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>Add New Passkey</DialogTitle>
                     <DialogDescription>
@@ -584,14 +584,14 @@ function ListPasskeys() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="gap-2 text-xs md:text-sm">
                     <Fingerprint className="mr-2 h-4 w-4" />
                     Passkeys {
                         data?.length ? `[${data?.length}]` : ""
                     }
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>Passkeys</DialogTitle>
                     <DialogDescription>

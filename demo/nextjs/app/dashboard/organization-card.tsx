@@ -41,7 +41,7 @@ export function OrganizationCard(props: {
     const currentMember = optimisticOrg?.members.find((member) => member.userId === session?.user.id)
 
     return (
-        <Card>
+        <Card className="rounded-none md:rounded-sm !bg-none border-none">
             <CardHeader>
                 <CardTitle>
                     Organization
@@ -111,9 +111,9 @@ export function OrganizationCard(props: {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent >
 
-                <div className="flex gap-8">
+                <div className="flex gap-8 flex-col md:flex-row">
                     <div className="flex flex-col gap-2 flex-grow">
                         <p className="font-medium border-b-2 border-b-foreground/10">
                             Members
@@ -276,9 +276,6 @@ export function OrganizationCard(props: {
                     </div>
                 </div>
             </CardContent>
-            {/* <CardFooter className="flex justify-between">
-
-            </CardFooter> */}
         </Card>
     )
 }
@@ -328,7 +325,7 @@ function CreateOrganizationDialog() {
                     </p>
                 </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>
                         New Organization
@@ -374,7 +371,7 @@ function CreateOrganizationDialog() {
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={async () => {
+                    <Button disabled={loading} onClick={async () => {
                         setLoading(true);
                         await organization.create({
                             name: name,
@@ -418,7 +415,7 @@ function InviteMemberDialog({ setOptimisticOrg, optimisticOrg }: { setOptimistic
                     </p>
                 </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px] w-11/12">
                 <DialogHeader>
                     <DialogTitle>
                         Invite Member
