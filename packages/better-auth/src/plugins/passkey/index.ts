@@ -288,6 +288,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
 						const userID = generateRandomString(32, alphabet("a-z", "0-9"));
 						const newPasskey: Passkey = {
+							name: ctx.body.name,
 							userId: userData.id,
 							webauthnUserID: userID,
 							id: credentialID,

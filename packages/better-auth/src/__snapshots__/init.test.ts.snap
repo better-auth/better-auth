@@ -9,6 +9,7 @@ exports[`init > should match config 1`] = `
     "findOne": [Function],
     "update": [Function],
   },
+  "appName": "Better Auth",
   "authCookies": {
     "csrfToken": {
       "name": "better-auth.csrf_token",
@@ -78,10 +79,13 @@ exports[`init > should match config 1`] = `
     "createSession": [Function],
     "createUser": [Function],
     "deleteSession": [Function],
+    "deleteSessions": [Function],
+    "findAccounts": [Function],
     "findSession": [Function],
     "findUserByEmail": [Function],
     "findUserById": [Function],
     "linkAccount": [Function],
+    "updateAccount": [Function],
     "updatePassword": [Function],
     "updateSession": [Function],
     "updateUserByEmail": [Function],
@@ -112,6 +116,105 @@ exports[`init > should match config 1`] = `
   "session": {
     "expiresIn": 604800,
     "updateAge": 86400,
+  },
+  "tables": {
+    "account": {
+      "fields": {
+        "accessToken": {
+          "required": false,
+          "type": "string",
+        },
+        "accessTokenExpiresAt": {
+          "required": false,
+          "type": "date",
+        },
+        "accountId": {
+          "type": "string",
+        },
+        "idToken": {
+          "required": false,
+          "type": "string",
+        },
+        "password": {
+          "required": false,
+          "type": "string",
+        },
+        "providerId": {
+          "type": "string",
+        },
+        "refreshToken": {
+          "required": false,
+          "type": "string",
+        },
+        "refreshTokenExpiresAt": {
+          "required": false,
+          "type": "date",
+        },
+        "userId": {
+          "references": {
+            "field": "id",
+            "model": "user",
+            "onDelete": "cascade",
+          },
+          "type": "string",
+        },
+      },
+      "order": 2,
+      "tableName": "account",
+    },
+    "session": {
+      "fields": {
+        "expiresAt": {
+          "type": "date",
+        },
+        "ipAddress": {
+          "required": false,
+          "type": "string",
+        },
+        "userAgent": {
+          "required": false,
+          "type": "string",
+        },
+        "userId": {
+          "references": {
+            "field": "id",
+            "model": "user",
+            "onDelete": "cascade",
+          },
+          "type": "string",
+        },
+      },
+      "order": 1,
+      "tableName": "session",
+    },
+    "user": {
+      "fields": {
+        "createdAt": {
+          "defaultValue": [Function],
+          "type": "date",
+        },
+        "email": {
+          "type": "string",
+        },
+        "emailVerified": {
+          "defaultValue": [Function],
+          "type": "boolean",
+        },
+        "image": {
+          "required": false,
+          "type": "string",
+        },
+        "name": {
+          "type": "string",
+        },
+        "updatedAt": {
+          "defaultValue": [Function],
+          "type": "date",
+        },
+      },
+      "order": 0,
+      "tableName": "user",
+    },
   },
 }
 `;
