@@ -51,7 +51,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
-	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
+	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
 
 	function useSession() {
 		return useStore($session);
@@ -76,5 +76,6 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
+			$Infer: typeof $Infer;
 		};
 }

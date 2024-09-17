@@ -4,7 +4,7 @@ import { parseSetCookieHeader } from "../../utils/cookies";
 import { getDate } from "../../utils/date";
 
 describe("session", async () => {
-	const { client, testUser } = await getTestInstance();
+	const { client, testUser, sessionSetter } = await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
 		await client.signIn.email({
@@ -146,5 +146,61 @@ describe("session", async () => {
 			},
 		});
 		expect(response.data);
+	});
+
+	it("should list sessions", async () => {
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			options: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		const response = await client.user.listSessions({
+			options: {
+				headers,
+			},
+		});
+
+		expect(response.data?.length).toBeGreaterThan(1);
+	});
+
+	it("should revoke session", async () => {
+		const headers = new Headers();
+		const headers2 = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			options: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			options: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+		await client.user.revokeSession({
+			options: {
+				headers,
+			},
+			id: res.data?.session?.id || "",
+		});
+		const session = await client.session({
+			options: {
+				headers,
+			},
+		});
+		expect(session.data).toBeNull();
+		const revokeRes = await client.user.revokeSessions({
+			options: {
+				headers: headers2,
+			},
+		});
+		expect(revokeRes.data?.status).toBe(true);
 	});
 });

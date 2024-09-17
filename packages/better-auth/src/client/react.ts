@@ -49,25 +49,11 @@ export function createAuthClient<Option extends ClientOptions>(
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
-	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
+	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
 
 	type InitialValue = ReturnType<(typeof $session)["get"]>["data"] | null;
 	function useSession(initialValue?: InitialValue) {
-		const [isClient, setIsClient] = useState(false);
 		const storeValue = useStore($session);
-
-		useEffect(() => {
-			setIsClient(true);
-		}, []);
-
-		if (!isClient && initialValue !== undefined) {
-			return {
-				data: initialValue || undefined,
-				loading: false,
-				error: undefined,
-				promise: () => Promise.resolve(),
-			} as unknown as typeof storeValue;
-		}
 		return storeValue;
 	}
 	const routes = {
@@ -89,6 +75,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
+			$Infer: typeof $Infer;
 		};
 }
 

@@ -11,7 +11,13 @@ export const useAuthQuery = <T>(
 		| PreinitializedWritableAtom<any>[],
 	path: string,
 	$fetch: BetterFetch,
-	options?: (() => BetterFetchOption) | BetterFetchOption,
+	options?:
+		| ((value: {
+				data: null | T;
+				error: null | BetterFetchError;
+				isPending: boolean;
+		  }) => BetterFetchOption)
+		| BetterFetchOption,
 ) => {
 	const value = atom<{
 		data: null | T;
@@ -24,7 +30,14 @@ export const useAuthQuery = <T>(
 	});
 
 	const fn = () => {
-		const opts = typeof options === "function" ? options() : options;
+		const opts =
+			typeof options === "function"
+				? options({
+						data: value.get().data,
+						error: value.get().error,
+						isPending: value.get().isPending,
+					})
+				: options;
 		return $fetch<T>(path, {
 			...opts,
 			onSuccess: async (context) => {
@@ -61,7 +74,7 @@ export const useAuthQuery = <T>(
 	let firstRun = true;
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe((value) => {
-			if (value && !firstRun) {
+			if (!firstRun) {
 				fn();
 			}
 		});

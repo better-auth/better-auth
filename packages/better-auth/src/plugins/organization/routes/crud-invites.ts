@@ -95,9 +95,30 @@ export const createInvitation = createAuthEndpoint(
 			},
 			user: session.user,
 		});
+
+		const organization = await adapter.findOrganizationById(orgId);
+
+		if (!organization) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Organization not found!",
+				},
+			});
+		}
+
 		await ctx.context.orgOptions.sendInvitationEmail?.(
-			invitation,
-			ctx.body.email,
+			{
+				id: invitation.id,
+				role: invitation.role,
+				email: invitation.email,
+				organization: organization,
+				inviter: {
+					...member,
+					user: session.user,
+				},
+			},
+			ctx.request,
 		);
 		return ctx.json(invitation);
 	},
@@ -146,7 +167,7 @@ export const acceptInvitation = createAuthEndpoint(
 			userId: session.user.id,
 			email: invitation.email,
 			role: invitation.role,
-			name: session.user.name,
+			createdAt: new Date(),
 		});
 		await adapter.setActiveOrganization(
 			session.session.id,
@@ -262,11 +283,12 @@ export const cancelInvitation = createAuthEndpoint(
 	},
 );
 
-export const getActiveInvitation = createAuthEndpoint(
+export const getInvitation = createAuthEndpoint(
 	"/organization/get-active-invitation",
 	{
 		method: "GET",
 		use: [orgMiddleware],
+		requireHeaders: true,
 		query: z.object({
 			id: z.string(),
 		}),
@@ -331,7 +353,6 @@ export const getActiveInvitation = createAuthEndpoint(
 			organizationName: organization.name,
 			organizationSlug: organization.slug,
 			inviterEmail: member.email,
-			inviterName: member.name,
 		});
 	},
 );

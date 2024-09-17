@@ -9,6 +9,7 @@ import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../adapters/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
+import { twoFactorClient } from "../plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -149,14 +150,6 @@ describe("type", () => {
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
 
-	it("should infer from multiple plugins", () => {
-		const client = createSolidClient({
-			plugins: [testClientPlugin(), testClientPlugin2()],
-			baseURL: "http://localhost:3000",
-		});
-		const res = client.useAnotherAtom();
-	});
-
 	it("should infer actions", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
@@ -164,5 +157,36 @@ describe("type", () => {
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
+	});
+
+	it("should infer session", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin(), testClientPlugin2(), twoFactorClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const $infer = client.$infer;
+		expectTypeOf($infer.session).toEqualTypeOf<{
+			session: {
+				id: string;
+				userId: string;
+				expiresAt: Date;
+				ipAddress?: string | undefined;
+				userAgent?: string | undefined;
+			};
+			user: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+				name: string;
+				createdAt: Date;
+				updatedAt: Date;
+				image?: string | undefined;
+				testField?: string | undefined;
+				testField2?: number | undefined;
+				testField4: string;
+				twoFactorEnabled?: boolean | undefined;
+				twoFactorSecret?: string | undefined;
+			};
+		}>();
 	});
 });

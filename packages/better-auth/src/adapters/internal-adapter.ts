@@ -4,9 +4,11 @@ import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User } from "./schema";
+import type { Kysely } from "kysely";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
+	db: Kysely<any>,
 	options: BetterAuthOptions,
 ) => {
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
@@ -40,9 +42,10 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request?: Request,
+			request?: Request | Headers,
 			dontRememberMe?: boolean,
 		) => {
+			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId,
@@ -54,8 +57,8 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
 					: getDate(sessionExpiration, true),
-				ipAddress: request?.headers.get("x-forwarded-for") || "",
-				userAgent: request?.headers.get("user-agent") || "",
+				ipAddress: headers?.get("x-forwarded-for") || "",
+				userAgent: headers?.get("user-agent") || "",
 			};
 			const session = adapter.create<Session>({
 				model: tables.session.tableName,
@@ -117,6 +120,16 @@ export const createInternalAdapter = (
 				],
 			});
 			return session;
+		},
+		/**
+		 * @requires
+		 */
+		deleteSessions: async (userId: string) => {
+			const sessions = await db
+				.deleteFrom(tables.session.tableName)
+				.where("userId", "=", userId)
+				.execute();
+			return sessions;
 		},
 		findUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({
@@ -194,6 +207,31 @@ export const createInternalAdapter = (
 				update: {
 					password,
 				},
+			});
+			return account;
+		},
+		findAccounts: async (userId: string) => {
+			const accounts = await adapter.findMany<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+			return accounts;
+		},
+		updateAccount: async (accountId: string, data: Partial<Account>) => {
+			const account = await adapter.update<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: "id",
+						value: accountId,
+					},
+				],
+				update: data,
 			});
 			return account;
 		},

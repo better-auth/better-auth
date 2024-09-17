@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { Auth } from "../auth";
-import type { Session } from "../adapters/schema";
+import type { Session, User } from "../adapters/schema";
 import { NextRequest, NextResponse } from "next/server";
 
 export function toNextJsHandler(auth: Auth | Auth["handler"]) {
@@ -19,19 +19,32 @@ export function toNextJsHandler(auth: Auth | Auth["handler"]) {
  */
 export function authMiddleware(options: {
 	baePath?: string;
-	redirectTo: string;
+	redirectTo?: string;
+	customRedirect?: (
+		session: {
+			user: User;
+			session: Session;
+		} | null,
+		request: NextRequest,
+	) => Promise<any>;
 }) {
-	return async (request: Request) => {
+	return async (request: NextRequest) => {
 		const url = new URL(request.url).origin;
 		const basePath = options?.baePath || "/api/auth";
 		const fullURL = `${url}${basePath}/session`;
+
 		const res = await betterFetch<{
 			session: Session;
+			user: User;
 		}>(fullURL, {
 			headers: request.headers,
 		});
-		if (!res.data) {
-			return NextResponse.redirect(new URL(options.redirectTo, url));
+		const session = res.data || null;
+		if (options.customRedirect) {
+			return options.customRedirect(session, request);
+		}
+		if (!session) {
+			return NextResponse.redirect(new URL(options.redirectTo || "/", url));
 		}
 		return NextResponse.next();
 	};

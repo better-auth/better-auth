@@ -12,15 +12,16 @@
         "format": "biome format . --write",
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
-        "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public",
-        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag beta",
+        "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
+        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag beta --no-git-checks",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck",
         "knip": "turbo --filter \"./packages/*\" knip"
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
-        "bumpp": "^9.4.1"
+        "bumpp": "^9.4.1",
+        "dotenv-cli": "^7.4.2"
     },
     "devDependencies": {
         "@types/node": "^20.12.12",

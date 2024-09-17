@@ -2,10 +2,7 @@ import type { Primitive } from "zod";
 
 export type LiteralString = "" | (string & Record<never, never>);
 
-export type Prettify<T> = {
-	[key in keyof T]: T[key];
-} & {};
-
+export type Prettify<T> = Omit<T, never>;
 export type LiteralUnion<LiteralType, BaseType extends Primitive> =
 	| LiteralType
 	| (BaseType & Record<never, never>);

@@ -1,12 +1,31 @@
-import type { Endpoint } from "better-call";
+import type { Endpoint, Prettify } from "better-call";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
+import type { InferSession, InferUser } from "./types";
+
+type InferAPI<API> = Omit<
+	API,
+	API extends { [key in infer K]: Endpoint }
+		? K extends string
+			? API[K]["options"]["metadata"] extends { isAction: false }
+				? K
+				: never
+			: never
+		: never
+>;
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
 	type API = typeof api;
+	type X = API extends { [key in infer K]: Endpoint }
+		? K extends string
+			? API[K]["options"]["metadata"] extends { isAction: false }
+				? K
+				: never
+			: never
+		: never;
 	return {
 		handler: async (request: Request) => {
 			const basePath = authContext.options.basePath;
@@ -25,22 +44,20 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			const { handler } = router(authContext, options);
 			return handler(request);
 		},
-		api: api as Omit<
-			API,
-			API extends { [key in infer K]: Endpoint }
-				? K extends string
-					? API[K]["options"]["metadata"] extends { isAction: false }
-						? K
-						: never
-					: never
-				: never
-		>,
+		api: api as InferAPI<typeof api>,
+		s: api as X,
 		options: authContext.options as O,
+		$infer: {} as {
+			session: {
+				session: Prettify<InferSession<O>>;
+				user: Prettify<InferUser<O>>;
+			};
+		},
 	};
 };
 
 export type Auth = {
 	handler: (request: Request) => Promise<Response>;
-	api: ReturnType<typeof router>["endpoints"];
+	api: InferAPI<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
 };

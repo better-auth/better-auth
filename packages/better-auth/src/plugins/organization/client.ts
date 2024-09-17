@@ -21,10 +21,9 @@ interface OrganizationClientOptions {
 export const organizationClient = <O extends OrganizationClientOptions>(
 	options?: O,
 ) => {
-	const activeOrgId = atom<string | null>(null);
+	const activeOrgId = atom<string | null | undefined>(undefined);
 	const _listOrg = atom<boolean>(false);
 	const _activeOrgSignal = atom<boolean>(false);
-	const _activeISignal = atom<string | null>(null);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -37,11 +36,28 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		$InferServerPlugin: {} as ReturnType<typeof organization>,
 		getActions: ($fetch) => ({
 			organization: {
+				$Infer: {
+					ActiveOrganization: {} as Prettify<
+						Organization & {
+							members: Prettify<
+								Member & {
+									user: {
+										id: string;
+										name: string;
+										email: string;
+										image: string;
+									};
+								}
+							>[];
+							invitations: Invitation[];
+						}
+					>,
+					Organization: {} as Organization,
+					Invitation: {} as Invitation,
+					Member: {} as Member,
+				},
 				setActive(orgId: string | null) {
 					activeOrgId.set(orgId);
-				},
-				setInvitationId: (id: string | null) => {
-					_activeISignal.set(id);
 				},
 				hasPermission: async (data: {
 					permission: Partial<{
@@ -61,22 +77,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const invitation = useAuthQuery<
-				Prettify<
-					Invitation & {
-						organizationName: string;
-						organizationSlug: string;
-						inviterEmail: string;
-						inviterName: string;
-					}
-				>
-			>(_activeISignal, "/organization/get-active-invitation", $fetch, () => ({
-				method: "GET",
-				query: {
-					id: _activeISignal.get(),
-				},
-			}));
-
 			const listOrganizations = useAuthQuery<Organization[]>(
 				_listOrg,
 				"/organization/list",
@@ -85,11 +85,17 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					method: "GET",
 				},
 			);
-
 			const activeOrganization = useAuthQuery<
 				Prettify<
 					Organization & {
-						members: Member[];
+						members: (Member & {
+							user: {
+								id: string;
+								name: string;
+								email: string;
+								image: string;
+							};
+						})[];
 						invitations: Invitation[];
 					}
 				>
@@ -111,7 +117,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				_activeOrgSignal,
 				activeOrganization,
 				listOrganizations,
-				invitation,
 			};
 		},
 		atomListeners: [

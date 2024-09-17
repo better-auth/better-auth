@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { z } from "zod";
-import { userSchema } from "../../adapters/schema";
+import { parseData, userSchema } from "../../adapters/schema";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
@@ -15,11 +15,22 @@ export const callbackOAuth = createAuthEndpoint(
 		method: "GET",
 		query: z.object({
 			state: z.string(),
-			code: z.string(),
+			code: z.string().optional(),
+			error: z.string().optional(),
 		}),
 		metadata: HIDE_METADATA,
 	},
 	async (c) => {
+		if (c.query.error || !c.query.code) {
+			const parsedState = parseState(c.query.state);
+			const callbackURL =
+				parsedState.data?.callbackURL || `${c.context.baseURL}/error`;
+			c.context.logger.error(c.query.error, c.params.id);
+			throw c.redirect(
+				`${callbackURL}?error=${c.query.error || "oAuth_code_missing"}`,
+			);
+		}
+
 		const provider = c.context.options.socialProvider?.find(
 			(p) => p.id === c.params.id,
 		);
@@ -39,10 +50,6 @@ export const callbackOAuth = createAuthEndpoint(
 		);
 		let tokens: OAuth2Tokens;
 		try {
-			console.log({
-				data: c.query.code,
-				codeVerifier,
-			});
 			tokens = await provider.validateAuthorizationCode(
 				c.query.code,
 				codeVerifier,
@@ -54,7 +61,6 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_code_verification_failed`,
 			);
 		}
-
 		const user = await provider.getUserInfo(tokens).then((res) => res?.user);
 		const id = generateId();
 		const data = userSchema.safeParse({
@@ -95,13 +101,20 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			if (!hasBeenLinked && user.emailVerified) {
-				await c.context.internalAdapter.linkAccount({
-					providerId: provider.id,
-					accountId: user.id,
-					id: `${provider.id}:${user.id}`,
-					userId: dbUser.user.id,
-					...getAccountTokens(tokens),
-				});
+				try {
+					await c.context.internalAdapter.linkAccount({
+						providerId: provider.id,
+						accountId: user.id,
+						id: `${provider.id}:${user.id}`,
+						userId: dbUser.user.id,
+						...getAccountTokens(tokens),
+					});
+				} catch (e) {
+					console.log(e);
+					throw c.redirect(
+						`${c.context.baseURL}/error?error=failed_linking_account`,
+					);
+				}
 			}
 		} else {
 			try {

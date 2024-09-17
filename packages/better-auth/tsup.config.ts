@@ -1,5 +1,4 @@
 import { defineConfig } from "tsup";
-
 export default defineConfig({
 	entry: {
 		index: "./src/index.ts",
@@ -12,7 +11,7 @@ export default defineConfig({
 		svelte: "./src/client/svelte.ts",
 		solid: "./src/client/solid.ts",
 		plugins: "./src/plugins/index.ts",
-		"client/plugins": "./src/client/plugins.ts",
+		"client/plugins": "./src/client/plugins/index.ts",
 		"svelte-kit": "./src/integrations/svelte-kit.ts",
 		access: "./src/plugins/organization/access/index.ts",
 		"solid-start": "./src/integrations/solid-start.ts",
@@ -20,7 +19,6 @@ export default defineConfig({
 	},
 	splitting: false,
 	sourcemap: true,
-	treeshake: true,
 	format: ["esm"],
 	dts: true,
 	external: [
@@ -36,6 +34,13 @@ export default defineConfig({
 		"@node-rs/argon2",
 		"@node-rs/bcrypt",
 		"better-sqlite3",
+		"@babel/core",
+		"commander",
+		"chalk",
+		"@babel/preset-typescript",
+		"@babel/preset-react",
 	],
+	skipNodeModulesBundle: true,
+	noExternal: ["arctic"],
 	target: "es2022",
 });

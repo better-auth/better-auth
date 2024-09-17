@@ -2,6 +2,9 @@ import type { Context } from "better-call";
 import { createAuthEndpoint } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
+import { sessionMiddleware } from "../middlewares/session";
+import type { Session } from "../../adapters/schema";
+import { z } from "zod";
 
 export const getSession = createAuthEndpoint(
 	"/session",
@@ -102,3 +105,82 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 	});
 	return session;
 };
+
+/**
+ * user active sessions list
+ */
+export const listSessions = createAuthEndpoint(
+	"/user/list-sessions",
+	{
+		method: "GET",
+		use: [sessionMiddleware],
+		requireHeaders: true,
+	},
+	async (ctx) => {
+		const sessions = await ctx.context.adapter.findMany<Session>({
+			model: ctx.context.tables.session.tableName,
+			where: [
+				{
+					field: "userId",
+					value: ctx.context.session.user.id,
+				},
+			],
+		});
+		const activeSessions = sessions.filter((session) => {
+			return session.expiresAt > new Date();
+		});
+		return ctx.json(activeSessions);
+	},
+);
+
+/**
+ * revoke a single session
+ */
+export const revokeSession = createAuthEndpoint(
+	"/user/revoke-session",
+	{
+		method: "POST",
+		body: z.object({
+			id: z.string(),
+		}),
+		use: [sessionMiddleware],
+		requireHeaders: true,
+	},
+	async (ctx) => {
+		const id = ctx.body.id;
+		console.log(id);
+		try {
+			await ctx.context.internalAdapter.deleteSession(id);
+		} catch (error) {
+			ctx.context.logger.error(error);
+			return ctx.json(null, { status: 500 });
+		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+/**
+ * revoke all user sessions
+ */
+export const revokeSessions = createAuthEndpoint(
+	"/user/revoke-sessions",
+	{
+		method: "POST",
+		use: [sessionMiddleware],
+		requireHeaders: true,
+	},
+	async (ctx) => {
+		try {
+			await ctx.context.internalAdapter.deleteSessions(
+				ctx.context.session.user.id,
+			);
+		} catch (error) {
+			ctx.context.logger.error(error);
+			return ctx.json(null, { status: 500 });
+		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);

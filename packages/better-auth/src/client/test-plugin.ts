@@ -59,7 +59,7 @@ export const testClientPlugin = () => {
 		return testValue++;
 	});
 	return {
-		id: "test",
+		id: "test" as const,
 		getActions($fetch) {
 			return {
 				setTestAtom(value: boolean) {

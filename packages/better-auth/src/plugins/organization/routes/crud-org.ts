@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { sessionMiddleware } from "../../../api/middlewares/session";
 import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -13,6 +12,8 @@ export const createOrganization = createAuthEndpoint(
 			name: z.string(),
 			slug: z.string(),
 			userId: z.string().optional(),
+			logo: z.string().optional(),
+			metadata: z.record(z.string()).optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
@@ -55,6 +56,9 @@ export const createOrganization = createAuthEndpoint(
 				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
+				logo: ctx.body.logo,
+				createdAt: new Date(),
+				metadata: ctx.body.metadata,
 			},
 			user,
 		});
@@ -224,7 +228,10 @@ export const getFullOrganization = createAuthEndpoint(
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
-		const organization = await adapter.findFullOrganization(orgId);
+		const organization = await adapter.findFullOrganization(
+			orgId,
+			ctx.context.db,
+		);
 		if (!organization) {
 			return ctx.json(null, {
 				status: 404,
@@ -242,15 +249,15 @@ export const setActiveOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			orgId: z.string().nullable(),
+			orgId: z.string().nullable().optional(),
 		}),
 		use: [orgSessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
 		const session = ctx.context.session;
-		const orgId = ctx.body.orgId;
-		if (!orgId) {
+		let orgId = ctx.body.orgId;
+		if (orgId === null) {
 			const sessionOrgId = session.session.activeOrganizationId;
 			if (!sessionOrgId) {
 				return ctx.json(null);
@@ -258,8 +265,31 @@ export const setActiveOrganization = createAuthEndpoint(
 			await adapter.setActiveOrganization(session.session.id, null);
 			return ctx.json(null);
 		}
+		if (!orgId) {
+			const sessionOrgId = session.session.activeOrganizationId;
+			if (!sessionOrgId) {
+				return ctx.json(null);
+			}
+			orgId = sessionOrgId;
+		}
+		const isMember = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: orgId,
+		});
+		if (!isMember) {
+			await adapter.setActiveOrganization(session.session.id, null);
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "You are not a member of this organization",
+				},
+			});
+		}
 		await adapter.setActiveOrganization(session.session.id, orgId);
-		const organization = await adapter.findFullOrganization(orgId);
+		const organization = await adapter.findFullOrganization(
+			orgId,
+			ctx.context.db,
+		);
 		return ctx.json(organization);
 	},
 );

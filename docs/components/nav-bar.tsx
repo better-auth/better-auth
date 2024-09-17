@@ -6,9 +6,12 @@ import { NavLink } from "./nav-link";
 import { Logo } from "./logo";
 import { PulicBetaBadge } from "./beta/badge";
 
+
+const hideNavbar = process.env.NODE_ENV === "production"
+
 export const Navbar = () => {
 	return (
-		<nav className="md:grid grid-cols-12 border-b pb-1 sticky top-0 flex items-center justify-end bg-background backdrop-blur-md z-50">
+		<nav className="md:grid grid-cols-12 border-b sticky top-0 flex items-center justify-end bg-background backdrop-blur-md z-50">
 			<Link
 				href="/"
 				className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-4 lg:col-span-2 shrink-0 transition-colors min-w-[--fd-sidebar-width]"
@@ -21,11 +24,13 @@ export const Navbar = () => {
 			</Link>
 			<div className="md:col-span-9 lg:col-span-10 flex items-center justify-end  ">
 				<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
-					{navMenu.map((menu, i) => (
-						<NavLink key={menu.name} href={menu.path}>
-							{menu.name}
-						</NavLink>
-					))}
+					{
+						hideNavbar ? null : navMenu.map((menu, i) => (
+							<NavLink key={menu.name} href={menu.path}>
+								{menu.name}
+							</NavLink>
+						))
+					}
 				</ul>
 				<ThemeToggle />
 				<NavbarMobileBtn />
@@ -46,6 +51,14 @@ export const navMenu = [
 	// {
 	// 	name: "plugins",
 	// 	path: "/plugins",
+	// },
+	// {
+	// 	name: "pre-made ui",
+	// 	path: "/ui",
+	// },
+	// {
+	// 	name: "security",
+	// 	path: "/security",
 	// },
 	{
 		name: "changelogs",

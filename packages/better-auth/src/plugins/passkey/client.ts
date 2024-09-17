@@ -1,4 +1,4 @@
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import {
 	WebAuthnError,
 	startAuthentication,
@@ -12,8 +12,18 @@ import type { Session } from "inspector";
 import type { User } from "../../adapters/schema";
 import type { passkey as passkeyPl, Passkey } from "../../plugins";
 import type { AuthClientPlugin } from "../../client/types";
+import { logger } from "../../utils/logger";
+import { useAuthQuery } from "../../client";
+import { atom } from "nanostores";
 
-export const getPasskeyActions = ($fetch: BetterFetch) => {
+export const getPasskeyActions = (
+	$fetch: BetterFetch,
+	{
+		_listPasskeys,
+	}: {
+		_listPasskeys: ReturnType<typeof atom<any>>;
+	},
+) => {
 	const signInPasskey = async (opts?: {
 		autoFill?: boolean;
 		email?: string;
@@ -25,6 +35,7 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 				method: "POST",
 				body: {
 					email: opts?.email,
+					callbackURL: opts?.callbackURL,
 				},
 			},
 		);
@@ -42,7 +53,6 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			}>("/passkey/verify-authentication", {
 				body: {
 					response: res,
-					type: "authenticate",
 				},
 			});
 			if (!verified.data) {
@@ -53,11 +63,19 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 		}
 	};
 
-	const registerPasskey = async () => {
+	const registerPasskey = async (opts?: {
+		options?: BetterFetchOption;
+		/**
+		 * The name of the passkey. This is used to
+		 * identify the passkey in the UI.
+		 */
+		name?: string;
+	}) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
 			{
 				method: "GET",
+				...opts?.options,
 			},
 		);
 		if (!options.data) {
@@ -70,12 +88,15 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 			}>("/passkey/verify-registration", {
 				body: {
 					response: res,
-					type: "register",
+
+					name: opts?.name,
 				},
+				...opts?.options,
 			});
 			if (!verified.data) {
 				return verified;
 			}
+			_listPasskeys.set(Math.random());
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -88,27 +109,98 @@ export const getPasskeyActions = ($fetch: BetterFetch) => {
 						},
 					};
 				}
+				if (e.code === "ERROR_CEREMONY_ABORTED") {
+					return {
+						data: null,
+						error: {
+							message: "registration cancelled",
+							status: 400,
+							statusText: "BAD_REQUEST",
+						},
+					};
+				}
+				return {
+					data: null,
+					error: {
+						message: e.message,
+						status: 400,
+						statusText: "BAD_REQUEST",
+					},
+				};
 			}
+			logger.error(e, "passkey registration error");
+			return {
+				data: null,
+				error: {
+					message: e instanceof Error ? e.message : "unknown error",
+					status: 500,
+					statusText: "INTERNAL_SERVER_ERROR",
+				},
+			};
 		}
 	};
+
 	return {
 		signIn: {
+			/**
+			 * Sign in with a registered passkey
+			 */
 			passkey: signInPasskey,
 		},
 		passkey: {
-			register: registerPasskey,
+			/**
+			 * Add a passkey to the user account
+			 */
+			addPasskey: registerPasskey,
+		},
+		/**
+		 * Inferred Internal Types
+		 */
+		$Infer: {} as {
+			Passkey: Passkey;
 		},
 	};
 };
 
 export const passkeyClient = () => {
+	const _listPasskeys = atom<any>();
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
-		getActions: ($fetch) => getPasskeyActions($fetch),
+		getActions: ($fetch) =>
+			getPasskeyActions($fetch, {
+				_listPasskeys,
+			}),
+		getAtoms($fetch) {
+			const listPasskeys = useAuthQuery<Passkey[]>(
+				_listPasskeys,
+				"/passkey/list-user-passkeys",
+				$fetch,
+				{
+					method: "GET",
+					credentials: "include",
+				},
+			);
+			return {
+				listPasskeys,
+				_listPasskeys,
+			};
+			444;
+		},
 		pathMethods: {
 			"/passkey/register": "POST",
 			"/passkey/authenticate": "POST",
 		},
+		atomListeners: [
+			{
+				matcher(path) {
+					return (
+						path === "/passkey/verify-registration" ||
+						path === "/passkey/delete-passkey"
+					);
+				},
+				signal: "_listPasskeys",
+			},
+		],
 	} satisfies AuthClientPlugin;
 };

@@ -37,7 +37,9 @@ export const migrate = new Command("migrate")
 			configPath: options.config,
 		});
 		if (!config) {
-			logger.error("No configuration file found.");
+			logger.error(
+				"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
+			);
 			return;
 		}
 		const db = createKyselyAdapter(config);
@@ -59,7 +61,7 @@ export const migrate = new Command("migrate")
 		spinner.stop();
 		logger.info(`🔑 The migration will affect the following:`);
 
-		for (const table of [...toBeAdded, ...toBeCreated]) {
+		for (const table of [...toBeCreated, ...toBeAdded]) {
 			logger.info(
 				"->",
 				chalk.magenta(Object.keys(table.fields).join(", ")),

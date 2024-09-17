@@ -54,10 +54,10 @@ export default function ArticleLayout() {
 										<Suspense fallback={<>Loading...</>}>
 											{listItem.group ? (
 												<div className="flex flex-row gap-2 items-center mx-5 my-1  ">
-													<p className="text-sm bg-gradient-to-tr from-gray-200 to-stone-500 bg-clip-text text-transparent">
+													<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
 														{listItem.title}
 													</p>
-													<line className="flex-grow h-px bg-gradient-to-r from-orange-500/40 to-stone-600/60" />
+													<line className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
 												</div>
 											) : (
 												<AsideLink
@@ -65,7 +65,7 @@ export default function ArticleLayout() {
 													startWith="/docs"
 													title={listItem.title}
 												>
-													<listItem.icon className="w-4 h-4 text-white" />
+													<listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
 													{listItem.title}
 												</AsideLink>
 											)}

@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, expectTypeOf } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
@@ -24,19 +24,18 @@ describe("organization", async (it) => {
 		const organization = await client.organization.create({
 			name: "test",
 			slug: "test",
+			metadata: {
+				test: "test",
+			},
 			options: {
 				headers,
 			},
 		});
 		orgId = organization.data?.id as string;
-		it("should allow creating organization", () => {
-			expect(organization.data?.name).toBeDefined();
-		});
-
-		it("should create a member with the logged in user as owner", async () => {
-			expect(organization.data?.members.length).toBe(1);
-			expect(organization.data?.members[0].role).toBe("owner");
-		});
+		expect(organization.data?.name).toBeDefined();
+		expect(organization.data?.metadata).toBeDefined();
+		expect(organization.data?.members.length).toBe(1);
+		expect(organization.data?.members[0].role).toBe("owner");
 	});
 
 	it("should allow listing organizations", async () => {
@@ -71,6 +70,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
+
 		expect(organization.data?.id).toBe(orgId);
 		const session = await client.session({
 			options: {
@@ -196,6 +196,28 @@ describe("organization", async (it) => {
 		expect(org.data?.members.length).toBe(1);
 	});
 
+	it("shouldn't allow removing owner from organization", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFull({
+			query: {
+				orgId,
+			},
+			options: {
+				headers,
+			},
+		});
+		if (!org.data) throw new Error("Organization not found");
+		expect(org.data.members[0].role).toBe("owner");
+		const removedMember = await client.organization.removeMember({
+			organizationId: org.data.id,
+			memberIdOrEmail: org.data.members[0].id,
+			options: {
+				headers,
+			},
+		});
+		expect(removedMember.error?.status).toBe(400);
+	});
+
 	it("should validate permissions", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.activate({
@@ -224,5 +246,10 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organization.data).toBe(orgId);
+	});
+
+	it("should have server side methods", async () => {
+		expectTypeOf(auth.api.createOrganization).toBeFunction();
+		expectTypeOf(auth.api.getInvitation).toBeFunction();
 	});
 });

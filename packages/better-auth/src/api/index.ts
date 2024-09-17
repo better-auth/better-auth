@@ -6,13 +6,16 @@ import {
 } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions, InferSession, InferUser } from "../types";
-import type { Prettify } from "../types/helper";
+import type { Prettify, UnionToIntersection } from "../types/helper";
 import { csrfMiddleware } from "./middlewares/csrf";
 import {
 	callbackOAuth,
 	forgetPassword,
 	getSession,
+	listSessions,
 	resetPassword,
+	revokeSession,
+	revokeSessions,
 	sendVerificationEmail,
 	signInEmail,
 	signInOAuth,
@@ -24,6 +27,8 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
+import { changePassword, updateUser } from "./routes/update-user";
+import type { BetterAuthPlugin } from "../plugins";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -38,6 +43,14 @@ export function getEndpoints<
 		},
 		{} as Record<string, any>,
 	);
+
+	type PluginEndpoint = UnionToIntersection<
+		Option["plugins"] extends Array<infer T>
+			? T extends BetterAuthPlugin
+				? T["endpoints"]
+				: {}
+			: {}
+	>;
 
 	const middlewares =
 		ctx.options.plugins
@@ -64,6 +77,10 @@ export function getEndpoints<
 			.filter((plugin) => plugin !== undefined)
 			.flat() || [];
 
+	/**
+	 * Helper function to type the session output
+	 * TODO: find a better way to do this
+	 */
 	async function typedSession(
 		ctx: Context<
 			"/session",
@@ -84,6 +101,27 @@ export function getEndpoints<
 	typedSession.options = getSession.options;
 	typedSession.headers = getSession.headers;
 
+	/**
+	 * Helper function to type the list sessions output
+	 * TODO: find a better way to do this
+	 */
+	async function typeListSessions(
+		ctx: Context<
+			"/user/sessions",
+			{
+				method: "GET";
+				requireHeaders: true;
+			}
+		>,
+	) {
+		const handler = await listSessions(ctx);
+		return handler as unknown as Prettify<InferSession<Option>>[];
+	}
+	typeListSessions.path = listSessions.path;
+	typeListSessions.method = listSessions.method;
+	typeListSessions.options = listSessions.options;
+	typeListSessions.headers = listSessions.headers;
+
 	const baseEndpoints = {
 		signInOAuth,
 		callbackOAuth,
@@ -96,6 +134,11 @@ export function getEndpoints<
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
+		changePassword,
+		updateUser,
+		listSessions: typeListSessions,
+		revokeSession,
+		revokeSessions,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -166,19 +209,19 @@ export function getEndpoints<
 		api[key].headers = value.headers;
 	}
 	return {
-		api: api as typeof endpoints,
+		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
 
 export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	ctx: C,
-	_options: Option,
+	options: Option,
 ) => {
-	const { api, middlewares } = getEndpoints(ctx, _options);
+	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
-	return createRouter(api as Omit<typeof api, "error" | "ok" | "welcome">, {
+	return createRouter(api, {
 		extraContext: ctx,
 		basePath,
 		routerMiddleware: [
@@ -189,10 +232,11 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
-			console.log(e);
-			if (e instanceof APIError) {
-				if (e.status === "INTERNAL_SERVER_ERROR") {
-					logger.error(e);
+			if (options.disableLog !== true) {
+				if (e instanceof APIError) {
+					logger.warn(e);
+				} else {
+					logger.warn(e);
 				}
 			}
 		},

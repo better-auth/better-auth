@@ -53,12 +53,13 @@ export interface PasskeyOptions {
 
 export type WebAuthnCookieType = {
 	expectedChallenge: string;
-	userData: { id: string; email: string };
+	userData: { id: string };
 	callbackURL?: string;
 };
 
 export type Passkey = {
 	id: string;
+	name?: string;
 	publicKey: string;
 	userId: string;
 	webauthnUserID: string;
@@ -69,12 +70,12 @@ export type Passkey = {
 	createdAt: Date;
 };
 
-export const passkey = (options: PasskeyOptions) => {
+export const passkey = (options?: PasskeyOptions) => {
 	const baseURL = process.env.BETTER_AUTH_URL;
 	const rpID =
-		process.env.NODE_ENV === "development"
-			? "localhost"
-			: options.rpID || baseURL;
+		options?.rpID ||
+		baseURL?.replace("http://", "").replace("https://", "") ||
+		"localhost";
 	if (!rpID) {
 		throw new BetterAuthError(
 			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
@@ -86,7 +87,7 @@ export const passkey = (options: PasskeyOptions) => {
 		rpID,
 		advanced: {
 			webAuthnChallengeCookie: "better-auth-passkey",
-			...options.advanced,
+			...options?.advanced,
 		},
 	};
 	const webAuthnChallengeCookieExpiration = 60 * 60 * 24; // 24 hours
@@ -141,8 +142,7 @@ export const passkey = (options: PasskeyOptions) => {
 					const data: WebAuthnCookieType = {
 						expectedChallenge: options.challenge,
 						userData: {
-							...session.user,
-							email: session.user.email || session.user.id,
+							id: session.user.id,
 						},
 					};
 
@@ -206,12 +206,12 @@ export const passkey = (options: PasskeyOptions) => {
 					 */
 					const data: WebAuthnCookieType = {
 						expectedChallenge: options.challenge,
+						callbackURL: ctx.body?.callbackURL,
 						userData: {
-							email: session?.user.email || session?.user.id || "",
 							id: session?.user.id || "",
 						},
-						callbackURL: ctx.body?.callbackURL,
 					};
+
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						JSON.stringify(data),
@@ -234,11 +234,12 @@ export const passkey = (options: PasskeyOptions) => {
 					method: "POST",
 					body: z.object({
 						response: z.any(),
+						name: z.string().optional(),
 					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
-					const origin = options.origin || ctx.headers?.get("origin") || "";
+					const origin = options?.origin || ctx.headers?.get("origin") || "";
 					if (!origin) {
 						return ctx.json(null, {
 							status: 400,
@@ -269,7 +270,7 @@ export const passkey = (options: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: options.rpID,
+							expectedRPID: options?.rpID,
 						});
 						const { verified, registrationInfo } = verification;
 						if (!verified || !registrationInfo) {
@@ -287,6 +288,7 @@ export const passkey = (options: PasskeyOptions) => {
 						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
 						const userID = generateRandomString(32, alphabet("a-z", "0-9"));
 						const newPasskey: Passkey = {
+							name: ctx.body.name,
 							userId: userData.id,
 							webauthnUserID: userID,
 							id: credentialID,
@@ -324,7 +326,7 @@ export const passkey = (options: PasskeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					const origin = options.origin || ctx.headers?.get("origin") || "";
+					const origin = options?.origin || ctx.headers?.get("origin") || "";
 					if (!origin) {
 						return ctx.json(null, {
 							status: 400,
@@ -340,6 +342,7 @@ export const passkey = (options: PasskeyOptions) => {
 							status: 400,
 						});
 					}
+					console.log({ challengeString });
 					const { expectedChallenge, callbackURL } = JSON.parse(
 						challengeString,
 					) as WebAuthnCookieType;
@@ -403,6 +406,7 @@ export const passkey = (options: PasskeyOptions) => {
 							ctx.request,
 						);
 						await setSessionCookie(ctx, s.id);
+
 						if (callbackURL) {
 							return ctx.json({
 								url: callbackURL,
@@ -429,10 +433,54 @@ export const passkey = (options: PasskeyOptions) => {
 					}
 				},
 			),
+			listPasskeys: createAuthEndpoint(
+				"/passkey/list-user-passkeys",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const passkeys = await ctx.context.adapter.findMany<Passkey>({
+						model: "passkey",
+						where: [{ field: "userId", value: ctx.context.session.user.id }],
+					});
+					return ctx.json(passkeys, {
+						status: 200,
+					});
+				},
+			),
+			deletePasskey: createAuthEndpoint(
+				"/passkey/delete-passkey",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					await ctx.context.adapter.delete<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+					});
+					return ctx.json(null, {
+						status: 200,
+					});
+				},
+			),
 		},
 		schema: {
 			passkey: {
 				fields: {
+					name: {
+						type: "string",
+						required: false,
+					},
 					publicKey: {
 						type: "string",
 					},

@@ -7,6 +7,7 @@ export type BetterAuthDbSchema = Record<
 		tableName: string;
 		fields: Record<string, FieldAttribute>;
 		disableMigrations?: boolean;
+		order?: number;
 	}
 >;
 
@@ -32,8 +33,9 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 		>,
 	);
 
+	const { user, session, account, ...pluginTables } = pluginSchema || {};
+
 	return {
-		...pluginSchema,
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
@@ -59,8 +61,9 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "date",
 					defaultValue: () => new Date(),
 				},
-				...pluginSchema?.user?.fields,
+				...user?.fields,
 			},
+			order: 0,
 		},
 		session: {
 			tableName: options.session?.modelName || "session",
@@ -84,8 +87,9 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						onDelete: "cascade",
 					},
 				},
-				...pluginSchema?.session?.fields,
+				...session?.fields,
 			},
+			order: 1,
 		},
 		account: {
 			tableName: options.account?.modelName || "account",
@@ -128,8 +132,10 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "string",
 					required: false,
 				},
-				...pluginSchema?.account?.fields,
+				...account?.fields,
 			},
+			order: 2,
 		},
+		...pluginTables,
 	} satisfies BetterAuthDbSchema;
 };

@@ -14,6 +14,7 @@ export const getCSRFToken = createAuthEndpoint(
 			ctx.context.authCookies.csrfToken.name,
 			ctx.context.secret,
 		);
+
 		if (csrfToken) {
 			return {
 				csrfToken,

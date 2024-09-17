@@ -28,10 +28,10 @@ export function getSchema(config: BetterAuthOptions) {
 	const baseSchema = getAuthTables(config);
 	const pluginSchema = getPluginTable(config);
 	const schema = [
-		...pluginSchema,
 		baseSchema.user,
 		baseSchema.session,
 		baseSchema.account,
+		...pluginSchema,
 	].reduce((acc, curr) => {
 		//@ts-expect-error
 		acc[curr.tableName] = {

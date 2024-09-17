@@ -1,3 +1,5 @@
+import type { Kysely } from "kysely";
+import { getAuthTables } from "./adapters/get-tables";
 import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
@@ -15,6 +17,9 @@ import { createLogger } from "./utils/logger";
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
+	if (!db) {
+		throw new Error("No database adapter found");
+	}
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -24,7 +29,7 @@ export const init = (options: BetterAuthOptions) => {
 		DEFAULT_SECRET;
 
 	const cookies = getCookies(options);
-
+	const tables = getAuthTables(options);
 	return {
 		appName: options.appName || "Better Auth",
 		options: {
@@ -32,6 +37,7 @@ export const init = (options: BetterAuthOptions) => {
 			baseURL: baseURL ? new URL(baseURL).origin : "",
 			basePath: options.basePath || "/api/auth",
 		},
+		tables,
 		baseURL: baseURL || "",
 		session: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
@@ -48,7 +54,7 @@ export const init = (options: BetterAuthOptions) => {
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
 		},
 		adapter: adapter,
-		internalAdapter: createInternalAdapter(adapter, options),
+		internalAdapter: createInternalAdapter(adapter, db, options),
 		createAuthCookie: createCookieGetter(options),
 	};
 };
@@ -59,7 +65,7 @@ export type AuthContext = {
 	baseURL: string;
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: ReturnType<typeof createKyselyAdapter>;
+	db: Kysely<any>;
 	adapter: ReturnType<typeof getAdapter>;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;
@@ -70,6 +76,7 @@ export type AuthContext = {
 	};
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (password: string, hash: string) => Promise<boolean>;
+		verify: (hash: string, password: string) => Promise<boolean>;
 	};
+	tables: ReturnType<typeof getAuthTables>;
 };

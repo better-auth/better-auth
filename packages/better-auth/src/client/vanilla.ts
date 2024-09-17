@@ -5,6 +5,8 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
+	InferSessionFromClient,
+	InferUserFromClient,
 	IsSignal,
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
@@ -66,5 +68,11 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferActions<Option> & {
 			useSession: typeof $session;
 			$fetch: typeof $fetch;
+			$Infer: {
+				Session: {
+					session: InferSessionFromClient<Option>;
+					user: InferUserFromClient<Option>;
+				};
+			};
 		};
 }

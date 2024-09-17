@@ -75,6 +75,11 @@ export const totp2fa = (options: TOTPOptions) => {
 				});
 			}
 			const user = ctx.context.session.user as UserWithTwoFactor;
+			if (!user.twoFactorSecret) {
+				throw new APIError("BAD_REQUEST", {
+					message: "totp isn't enabled",
+				});
+			}
 			return {
 				totpURI: createTOTPKeyURI(
 					options?.issuer || "BetterAuth",

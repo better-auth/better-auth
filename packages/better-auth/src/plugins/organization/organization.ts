@@ -24,7 +24,7 @@ import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
-	getActiveInvitation,
+	getInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
 import { removeMember, updateMemberRole } from "./routes/crud-members";
@@ -36,7 +36,7 @@ import {
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
-import type { Invitation } from "./schema";
+import type { Invitation, Member, Organization } from "./schema";
 
 export interface OrganizationOptions {
 	/**
@@ -89,20 +89,58 @@ export interface OrganizationOptions {
 	 */
 	invitationExpiresIn?: number;
 	/**
-	 * @param invitation  the invitation object
-	 * @param email  the email of the user to be invited
+	 * Send an email with the
+	 * invitation link to the user.
 	 *
-	 * Make sure to construct the invitation link using the invitation id.
+	 * Note: Better Auth doesn't
+	 * generate invitation URLs.
+	 * You'll need to construct the
+	 * URL using the invitation ID
+	 * and pass it to the
+	 * acceptInvitation endpoint for
+	 * the user to accept the
+	 * invitation.
+	 *
 	 * @example
 	 * ```ts
-	 * const invitationLink = `${ctx.origin}/organization/accept-invitation?invitationId=$
-	 * {invitation.id}`
-	 *
+	 * sendInvitationEmail: async (data) => {
+	 * 	const url = `https://yourapp.com/organization/
+	 * accept-invitation?id=${data.id}`;
+	 * 	await sendEmail(data.email, "Invitation to join
+	 * organization", `Click the link to join the
+	 * organization: ${url}`);
+	 * }
 	 * ```
 	 */
 	sendInvitationEmail?: (
-		invitation: Invitation,
-		email: string,
+		data: {
+			/**
+			 * the invitation id
+			 */
+			id: string;
+			/**
+			 * the role of the user
+			 */
+			role: "admin" | "owner" | "member";
+			/**
+			 * the email of the user
+			 */
+			email: string;
+			/**
+			 * the organization the user is invited to
+			 */
+			organization: Organization;
+			/**
+			 * the member who is inviting the user
+			 */
+			inviter: Member & {
+				user: User;
+			};
+		},
+		/**
+		 * The request object
+		 */
+		request?: Request,
 	) => Promise<void>;
 }
 
@@ -117,7 +155,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		createInvitation,
 		cancelInvitation,
 		acceptInvitation,
-		getActiveInvitation,
+		getInvitation,
 		rejectInvitation,
 		removeMember,
 		updateMemberRole,
@@ -219,6 +257,18 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						unique: true,
 					},
+					logo: {
+						type: "string",
+						required: false,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
+					metadata: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			member: {
@@ -235,13 +285,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 					},
-					name: {
-						type: "string",
-					},
 					role: {
 						type: "string",
 						required: true,
 						defaultValue: "member",
+					},
+					createdAt: {
+						type: "date",
+						required: true,
 					},
 				},
 			},

@@ -170,7 +170,7 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
-			ctx.request,
+			ctx.headers,
 			ctx.body.dontRememberMe,
 		);
 		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
