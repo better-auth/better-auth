@@ -23,7 +23,7 @@ export async function validateAuthorizationCode({
 	const body = new URLSearchParams();
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
-	body.set("code_verifier", codeVerifier || "");
+	codeVerifier && body.set("code_verifier", codeVerifier);
 	body.set("redirect_uri", redirectURI);
 	body.set("client_id", options.clientId);
 	body.set("client_secret", options.clientSecret);
@@ -36,7 +36,6 @@ export async function validateAuthorizationCode({
 			"user-agent": "better-auth",
 		},
 	});
-	console.log({ data, error, body });
 	if (error) {
 		throw error;
 	}

@@ -7,16 +7,15 @@ import { OrganizationCard } from "./organization-card"
 
 export default async function DashboardPage() {
     const [session, activeSessions] = await Promise.all([
-        await auth.api.getSession({
+        auth.api.getSession({
             headers: headers()
         }),
-        await auth.api.listSessions({
+        auth.api.listSessions({
             headers: headers()
         })
-    ])
-    if (!session) {
+    ]).catch(e => {
         throw redirect("/sign-in")
-    }
+    })
     return (
         <div className="w-full">
             <div className="flex gap-4 flex-col">
