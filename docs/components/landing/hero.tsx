@@ -10,6 +10,7 @@ import { Fragment, useEffect, useId, useState } from "react";
 import { LayoutGroup, motion } from "framer-motion";
 import { Icons } from "../icons";
 import { Cover } from "../ui/cover";
+import { PulicBetaBadge } from "../beta/badge";
 
 function Glow() {
 	const id = useId();
@@ -111,11 +112,9 @@ export default function Hero() {
 								The most comprehensive authentication library for typescript.
 							</p>
 							{
-								env === "production" ? <>
-									<p className="text-orange-500 mt-3">
-										Coming Soon
-									</p>
-								</> : (
+								env !== "production" ? <div className="flex items-center gap-2 mt-4">
+									<PulicBetaBadge text="Coming Soon" />
+								</div> : (
 									<>
 										<div className="mt-8 flex gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
 											<Link
