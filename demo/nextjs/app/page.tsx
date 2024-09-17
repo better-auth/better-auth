@@ -18,9 +18,14 @@ export default async function Home() {
           <p className="text-center break-words">
             Official demo to showcase <span className="italic underline">better-auth.</span> features and capabilities. <br />
             <span className="text-xs text-muted-foreground text-center">
-              * All auth related features implemented on this demo are natively supported by <span className="italic">better-auth. (btw)</span>
+              * All auth related features implemented on this demo are natively supported by <span className="italic">better-auth. (
+                no custom backend code is written
+                )</span>
             </span>
           </p>
+        </div>
+        <div>
+
         </div>
 
         <div className="gap-4 w-full flex items-center justify-center">

@@ -6,8 +6,8 @@
     "packageManager": "pnpm@9.1.1",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
-        "dev": "dotenv turbo --filter \"./packages/*\" dev",
-        "dev:example": "dotenv turbo --filter next-js-example dev",
+        "dev": "turbo --filter \"./packages/*\" dev",
+        "dev:example": "turbo --filter next-js-example dev",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
         "format": "biome format . --write",
         "lint": "biome check .",
