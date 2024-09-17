@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
 	webpack: (config) => {
-		config.externals.push("better-sqlite3", "@libsql/client");
+		config.externals.push("@libsql/client", "better-sqlite3");
 		return config;
 	},
 	/* config options here */
