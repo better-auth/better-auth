@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-	serverExternalPackages: ["@libsql/client"],
-	/* config options here */
+	webpack: (config) => {
+		config.externals.push("@libsql/client");
+		return config;
+	},
 };
 
 export default nextConfig;

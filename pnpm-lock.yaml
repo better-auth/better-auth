@@ -42,12 +42,15 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.9.0(react-hook-form@7.53.0(react@19.0.0-rc-7771d3a7-20240827))
+      '@libsql/client':
+        specifier: ^0.12.0
+        version: 0.12.0
       '@libsql/kysely-libsql':
         specifier: ^0.4.1
         version: 0.4.1(kysely@0.27.4)
       '@prisma/adapter-libsql':
         specifier: ^5.19.1
-        version: 5.19.1(@libsql/client@0.8.1)
+        version: 5.19.1(@libsql/client@0.12.0)
       '@prisma/client':
         specifier: ^5.19.1
         version: 5.19.1(prisma@5.19.1)
@@ -181,8 +184,8 @@ importers:
         specifier: ^1.4.4
         version: 1.4.4
       next:
-        specifier: 15.0.0-canary.149
-        version: 15.0.0-canary.149(@babel/core@7.25.2)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@0.0.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
+        specifier: 15.0.0-canary.157
+        version: 15.0.0-canary.157(@babel/core@7.25.2)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@0.0.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
@@ -213,6 +216,9 @@ importers:
       resend:
         specifier: ^4.0.0
         version: 4.0.0(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
       sonner:
         specifier: ^1.5.0
         version: 1.5.0(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
@@ -429,10 +435,10 @@ importers:
         version: 2.1.1
       drizzle-orm:
         specifier: 0.31.2
-        version: 0.31.2(@libsql/client@0.8.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0)
+        version: 0.31.2(@libsql/client@0.12.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0)
       drizzle-zod:
         specifier: ^0.5.1
-        version: 0.5.1(drizzle-orm@0.31.2(@libsql/client@0.8.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0))(zod@3.23.8)
+        version: 0.5.1(drizzle-orm@0.31.2(@libsql/client@0.12.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0))(zod@3.23.8)
       expo:
         specifier: ^51.0.0
         version: 51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))
@@ -3096,8 +3102,14 @@ packages:
   '@levischuck/tiny-cbor@0.2.2':
     resolution: {integrity: sha512-f5CnPw997Y2GQ8FAvtuVVC19FX8mwNNC+1XJcIi16n/LTJifKO6QBgGLgN3YEmqtGMk17SKSuoWES3imJVxAVw==}
 
+  '@libsql/client@0.12.0':
+    resolution: {integrity: sha512-Jt9ijfzlmswZzxRRksEv8Igbw7ER9IX/RSrwzEIRyzwwQLcpeZGGrnDQP9S7UPCJ90uFDiaICFiyhvwO+60DmA==}
+
   '@libsql/client@0.8.1':
     resolution: {integrity: sha512-xGg0F4iTDFpeBZ0r4pA6icGsYa5rG6RAG+i/iLDnpCAnSuTqEWMDdPlVseiq4Z/91lWI9jvvKKiKpovqJ1kZWA==}
+
+  '@libsql/core@0.12.0':
+    resolution: {integrity: sha512-PZJF4qvPbDWZfXk0Tr+O5xaMhFoetA1gIVPgYLH6Bc6gAeyYxhGw268p+95SkADZDjB5CYPcVLvfQEjSVeR3Zw==}
 
   '@libsql/core@0.8.1':
     resolution: {integrity: sha512-u6nrj6HZMTPsgJ9EBhLzO2uhqhlHQJQmVHV+0yFLvfGf3oSP8w7TjZCNUgu1G8jHISx6KFi7bmcrdXW9lRt++A==}
@@ -3107,16 +3119,33 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@libsql/darwin-arm64@0.4.5':
+    resolution: {integrity: sha512-xLdnn0NrgSk6OMi716FFs/27Hs33jtSd2fkKi/72Ey/qBtPWcB1BMurDQekzi0yAcfQTjGqIz7tpOibyjiEPyQ==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@libsql/darwin-x64@0.3.19':
     resolution: {integrity: sha512-q9O55B646zU+644SMmOQL3FIfpmEvdWpRpzubwFc2trsa+zoBlSkHuzU9v/C+UNoPHQVRMP7KQctJ455I/h/xw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@libsql/darwin-x64@0.4.5':
+    resolution: {integrity: sha512-rZsEWj0H7oCqd5Y2pe0RzKmuQXC2OB1RbnFy4CvjeAjT6MP6mFp+Vx9mTCAUuJMhuoSVMsFPUJRpAQznl9E3Tg==}
     cpu: [x64]
     os: [darwin]
 
   '@libsql/hrana-client@0.6.2':
     resolution: {integrity: sha512-MWxgD7mXLNf9FXXiM0bc90wCjZSpErWKr5mGza7ERy2FJNNMXd7JIOv+DepBA1FQTIfI8TFO4/QDYgaQC0goNw==}
 
+  '@libsql/hrana-client@0.7.0':
+    resolution: {integrity: sha512-OF8fFQSkbL7vJY9rfuegK1R7sPgQ6kFMkDamiEccNUvieQ+3urzfDFI616oPl8V7T9zRmnTkSjMOImYCAVRVuw==}
+
   '@libsql/isomorphic-fetch@0.2.5':
     resolution: {integrity: sha512-8s/B2TClEHms2yb+JGpsVRTPBfy1ih/Pq6h6gvyaNcYnMVJvgQRY7wAa8U2nD0dppbCuDU5evTNMEhrQ17ZKKg==}
+    engines: {node: '>=18.0.0'}
+
+  '@libsql/isomorphic-fetch@0.3.1':
+    resolution: {integrity: sha512-6kK3SUK5Uu56zPq/Las620n5aS9xJq+jMBcNSOmjhNf/MUvdyji4vrMTqD7ptY7/4/CAVEAYDeotUz60LNQHtw==}
     engines: {node: '>=18.0.0'}
 
   '@libsql/isomorphic-ws@0.1.5':
@@ -3132,8 +3161,18 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@libsql/linux-arm64-gnu@0.4.5':
+    resolution: {integrity: sha512-VR09iu6KWGJ6fauCn59u/jJ9OA+/A2yQ0dr2HDN2zkRueLC6D2oGYt4gPfLZPFKf+WJpVMtIhNfd+Ru9MMaFkA==}
+    cpu: [arm64]
+    os: [linux]
+
   '@libsql/linux-arm64-musl@0.3.19':
     resolution: {integrity: sha512-VEZtxghyK6zwGzU9PHohvNxthruSxBEnRrX7BSL5jQ62tN4n2JNepJ6SdzXp70pdzTfwroOj/eMwiPt94gkVRg==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@libsql/linux-arm64-musl@0.4.5':
+    resolution: {integrity: sha512-74hvD5ej4rBshhxFGNYU16a3m8B/NjIPvhlZ/flG1Oeydfo6AuUXSSNFi+H5+zi9/uWuzyz5TLVeQcraoUV10A==}
     cpu: [arm64]
     os: [linux]
 
@@ -3142,13 +3181,28 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@libsql/linux-x64-gnu@0.4.5':
+    resolution: {integrity: sha512-gb5WObGO3+rbuG8h9font1N02iF+zgYAgY0wNa8BNiZ5A9UolZKFxiqGFS7eHaAYfemHJKKTT+aAt3X2p5TibA==}
+    cpu: [x64]
+    os: [linux]
+
   '@libsql/linux-x64-musl@0.3.19':
     resolution: {integrity: sha512-BLsXyJaL8gZD8+3W2LU08lDEd9MIgGds0yPy5iNPp8tfhXx3pV/Fge2GErN0FC+nzt4DYQtjL+A9GUMglQefXQ==}
     cpu: [x64]
     os: [linux]
 
+  '@libsql/linux-x64-musl@0.4.5':
+    resolution: {integrity: sha512-JfyE6OVC5X4Nr4cFF77VhB1o+hBRxAqYT9YdeqnWdAQSYc/ASi5HnRALLAQEsGacFPZZ32pixfraQmPE3iJFfw==}
+    cpu: [x64]
+    os: [linux]
+
   '@libsql/win32-x64-msvc@0.3.19':
     resolution: {integrity: sha512-ay1X9AobE4BpzG0XPw1gplyLZPGHIgJOovvW23gUrukRegiUP62uzhpRbKNogLlUOynyXeq//prHgPXiebUfWg==}
+    cpu: [x64]
+    os: [win32]
+
+  '@libsql/win32-x64-msvc@0.4.5':
+    resolution: {integrity: sha512-57GGurNJhOhq3XIopLdGnCoQ4kQAcmbmzzFoC4tpvDE/KSbwZ/13zqJWhQA41nMGk/PKM1XKfKmbIybKx1+eqA==}
     cpu: [x64]
     os: [win32]
 
@@ -3231,8 +3285,8 @@ packages:
   '@next/env@14.2.8':
     resolution: {integrity: sha512-L44a+ynqkolyNBnYfF8VoCiSrjSZWgEHYKkKLGcs/a80qh7AkfVUD/MduVPgdsWZ31tgROR+yJRA0PZjSVBXWQ==}
 
-  '@next/env@15.0.0-canary.149':
-    resolution: {integrity: sha512-HdN5lsPFjyL43Ju5eOrKa5UyLBZkoL07mJ5427rIDT7gKu39QvwFXOUdVfOgNz6GWSQxdVaBv8elfQ0825tjzg==}
+  '@next/env@15.0.0-canary.157':
+    resolution: {integrity: sha512-JG1IOVcaD2d6Xe3KU+r4GT01zpIBaodcQzOYr14VNRwRs2p1n94m3s/QxhptBV7ZxddnzjGujFBECr5pEQlf/A==}
 
   '@next/eslint-plugin-next@15.0.0-canary.149':
     resolution: {integrity: sha512-luututuveL0xzHMFfuyVyfctC/7jdNS/iGrVqGbEvHqvW7W4yydwieasELkC4uY10onGoKGxg1PV8QciqMJqWQ==}
@@ -3249,8 +3303,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@next/swc-darwin-arm64@15.0.0-canary.149':
-    resolution: {integrity: sha512-GWxB6Fe/8n8H7+KJcIAV0LmUALCLaj+6FkjiWebYGVVnbxAaMJslXbjWqxm2w3DLaZND71FU/z+Eo8H4Lm/riA==}
+  '@next/swc-darwin-arm64@15.0.0-canary.157':
+    resolution: {integrity: sha512-kVTZLz1QtgY2dMh4Ew+kqP59pobrdjHFeCc34irjPl6yzNwYEqmdzAfD8oIUoejkEHeatmkPE6AB3NV4QLW9YQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -3267,8 +3321,8 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@next/swc-darwin-x64@15.0.0-canary.149':
-    resolution: {integrity: sha512-n2JO6/AFlgHM8DUTtWOZmYKEoMcrzRY/xtXLWNCeYp3JP5uaDJK1hUBwiREpc0tUIX/6LeZSSMP/HvBxjceVlw==}
+  '@next/swc-darwin-x64@15.0.0-canary.157':
+    resolution: {integrity: sha512-LwFvV8uqxAtHRXF7tqXRS5hUXi0KKpZInomi+/Z9VNaR0KzPzKwn2G2t7Wc7f9e558jawj9jRfgkUQKLJdRqvg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -3285,8 +3339,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-gnu@15.0.0-canary.149':
-    resolution: {integrity: sha512-ATnMcmI9S0o8AZedV1Ri80iK1OYjBm/BKvpayvjlKIWCXDLSpVV1Ak/gscDppXH9lCbTBz2QqmcXKmAc7wC2OA==}
+  '@next/swc-linux-arm64-gnu@15.0.0-canary.157':
+    resolution: {integrity: sha512-IEQUgTqU8AZLZoL31y40I1Ue8rp+umeB+ai1M8qN5UydNyv+Wnhd55M/3I3mE7njcdmoP7VV89uN24Flspp1fg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -3303,8 +3357,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-musl@15.0.0-canary.149':
-    resolution: {integrity: sha512-cm+xRS+tIk72kGWAEt3X5XuOiJoIjWJS85LJehD+YkF081xaqAZMI6g3fOJDzuZDJDbG4q6bvQ5tQ4Qpd2VQSw==}
+  '@next/swc-linux-arm64-musl@15.0.0-canary.157':
+    resolution: {integrity: sha512-7+fLDWuZCzQFpADe/qvYRcOLij1Djlqn88kA/lZKJQw1CU7pgSJagMagc+UsRpSxffqKC+FbdAgtJ627fGhnYQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -3321,8 +3375,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-gnu@15.0.0-canary.149':
-    resolution: {integrity: sha512-j9vf7tCLXF2lAimG36tf9D40IGE/GuqHX0eIxQJXjMhmajPSi83Ag9FP+xHNtWQlVH1qyXQlS+Q1OXnC34VJ2A==}
+  '@next/swc-linux-x64-gnu@15.0.0-canary.157':
+    resolution: {integrity: sha512-gtzY91hys7q3AX2+0h03dUBM3M0TVSksLd0EwfGC/uKHVgt6ZVxMzuQ56SHdlKPjJeLAyEmsYHtnFn9Q2EG82w==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -3339,8 +3393,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-musl@15.0.0-canary.149':
-    resolution: {integrity: sha512-Va9BYJ+QLbArD97kzHvnHdnFuA/SmYQlj4/8lWSWHxVHhKguBSde/Un+HjCAbbNONvaitWKRBli5qLx46IULgw==}
+  '@next/swc-linux-x64-musl@15.0.0-canary.157':
+    resolution: {integrity: sha512-d+1lkZT+jW4yGCirdkzvXCb56Tqldt0W3dlmQQUbg943cNQ0ipa/V5A34vROTCV8iAUT621zDr8vOtTFM3Y6Wg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -3357,8 +3411,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@next/swc-win32-arm64-msvc@15.0.0-canary.149':
-    resolution: {integrity: sha512-6UoypCg2aldslelYALnHs6KjWYao9P5IAbH1/OgEIcgaik6f970WOA9c+GPLUEvrgfu2KN42NggVTfXiNs09hw==}
+  '@next/swc-win32-arm64-msvc@15.0.0-canary.157':
+    resolution: {integrity: sha512-cY2U1aEOvqU0aoyKl8auaIfzvpguNNoN2oBN5otlgiWnQVz59+9N24+GqB6/kNdAgNH2yK8zyR5RXFdRvYo96Q==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
@@ -3375,8 +3429,8 @@ packages:
     cpu: [ia32]
     os: [win32]
 
-  '@next/swc-win32-ia32-msvc@15.0.0-canary.149':
-    resolution: {integrity: sha512-DjbHTbQFPs1AmH5nWJ711shKXHgg/0XvQ7U3JgXDUNCFrY1OE8jPHKM+HZwlc7O+kkzmoKVErrCBPnp0/fx1xQ==}
+  '@next/swc-win32-ia32-msvc@15.0.0-canary.157':
+    resolution: {integrity: sha512-TB5MXPwk3N/UOD1GAkQdze1Ftxr9ODp8Lj384O0s8wSMk+KKNIBUph8r3vuwxdIzpLaJugH/6EAxQZAQHSH1FA==}
     engines: {node: '>= 10'}
     cpu: [ia32]
     os: [win32]
@@ -3393,8 +3447,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@next/swc-win32-x64-msvc@15.0.0-canary.149':
-    resolution: {integrity: sha512-8wka7sSJzZqdwKBPrvHND3adO1y0dxA6gwExs1ipdgrEBLR0iHjugZbbTOvVmL/vvm2LIwCxSEyW/Vd9L1shNg==}
+  '@next/swc-win32-x64-msvc@15.0.0-canary.157':
+    resolution: {integrity: sha512-UhGT4O60gOuiwQNXwwUIHEHeyzsn5J3n+7+DFAvT/iJApHpDISl8tjvlurtH69wJGKMA5/4FCTguAk/47W/tKA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -9218,6 +9272,11 @@ packages:
     cpu: [x64, arm64, wasm32]
     os: [darwin, linux, win32]
 
+  libsql@0.4.5:
+    resolution: {integrity: sha512-sorTJV6PNt94Wap27Sai5gtVLIea4Otb2LUiAUyr3p6BPOScGMKGt5F1b5X/XgkNtcsDKeX5qfeBDj+PdShclQ==}
+    cpu: [x64, arm64, wasm32]
+    os: [darwin, linux, win32]
+
   lighthouse-logger@1.4.2:
     resolution: {integrity: sha512-gPWxznF6TKmUHrOQjlVo2UbaL2EJ71mb2CCeRs/2qBpi4L/g4LUVc9+3lKQ6DTUZwJswfM7ainGrLO1+fOqa2g==}
 
@@ -10129,16 +10188,16 @@ packages:
       sass:
         optional: true
 
-  next@15.0.0-canary.149:
-    resolution: {integrity: sha512-OReGlZ6t2tUVay68h6frsnOCVRPwf4xtcsSx9ctpnHIWtvSg1jb8DUIMB4bwN5zp8pRDHRZttMzyJTNInPnIEA==}
+  next@15.0.0-canary.157:
+    resolution: {integrity: sha512-dwo71Owf2W274o68/OMNbjHxo2l3jgFR49qDJCivYB0/AYKJ62t8cKKPCNjFVhUwcP0gJDp9xFwhgPubi1lQxQ==}
     engines: {node: '>=18.18.0'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
       '@playwright/test': ^1.41.2
       babel-plugin-react-compiler: '*'
-      react: 19.0.0-rc-7771d3a7-20240827
-      react-dom: 19.0.0-rc-7771d3a7-20240827
+      react: 19.0.0-rc-206df66e-20240912
+      react-dom: 19.0.0-rc-206df66e-20240912
       sass: ^1.3.0
     peerDependenciesMeta:
       '@opentelemetry/api':
@@ -11676,6 +11735,9 @@ packages:
   serve-static@1.15.0:
     resolution: {integrity: sha512-XGuRDNjXUijsUL0vl6nSD7cwURuzEgglbOaFuZM9g3kwDXOWVTck0jLzjPzGD+TazWbboZYu52/9/XPdUgne9g==}
     engines: {node: '>= 0.8.0'}
+
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   set-blocking@2.0.0:
     resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
@@ -15439,6 +15501,17 @@ snapshots:
 
   '@levischuck/tiny-cbor@0.2.2': {}
 
+  '@libsql/client@0.12.0':
+    dependencies:
+      '@libsql/core': 0.12.0
+      '@libsql/hrana-client': 0.7.0
+      js-base64: 3.7.7
+      libsql: 0.4.5
+      promise-limit: 2.7.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@libsql/client@0.8.1':
     dependencies:
       '@libsql/core': 0.8.1
@@ -15450,6 +15523,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@libsql/core@0.12.0':
+    dependencies:
+      js-base64: 3.7.7
+
   '@libsql/core@0.8.1':
     dependencies:
       js-base64: 3.7.7
@@ -15457,7 +15534,13 @@ snapshots:
   '@libsql/darwin-arm64@0.3.19':
     optional: true
 
+  '@libsql/darwin-arm64@0.4.5':
+    optional: true
+
   '@libsql/darwin-x64@0.3.19':
+    optional: true
+
+  '@libsql/darwin-x64@0.4.5':
     optional: true
 
   '@libsql/hrana-client@0.6.2':
@@ -15470,7 +15553,19 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@libsql/hrana-client@0.7.0':
+    dependencies:
+      '@libsql/isomorphic-fetch': 0.3.1
+      '@libsql/isomorphic-ws': 0.1.5
+      js-base64: 3.7.7
+      node-fetch: 3.3.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@libsql/isomorphic-fetch@0.2.5': {}
+
+  '@libsql/isomorphic-fetch@0.3.1': {}
 
   '@libsql/isomorphic-ws@0.1.5':
     dependencies:
@@ -15491,16 +15586,31 @@ snapshots:
   '@libsql/linux-arm64-gnu@0.3.19':
     optional: true
 
+  '@libsql/linux-arm64-gnu@0.4.5':
+    optional: true
+
   '@libsql/linux-arm64-musl@0.3.19':
+    optional: true
+
+  '@libsql/linux-arm64-musl@0.4.5':
     optional: true
 
   '@libsql/linux-x64-gnu@0.3.19':
     optional: true
 
+  '@libsql/linux-x64-gnu@0.4.5':
+    optional: true
+
   '@libsql/linux-x64-musl@0.3.19':
     optional: true
 
+  '@libsql/linux-x64-musl@0.4.5':
+    optional: true
+
   '@libsql/win32-x64-msvc@0.3.19':
+    optional: true
+
+  '@libsql/win32-x64-msvc@0.4.5':
     optional: true
 
   '@mapbox/node-pre-gyp@1.0.11':
@@ -15639,7 +15749,7 @@ snapshots:
 
   '@next/env@14.2.8': {}
 
-  '@next/env@15.0.0-canary.149': {}
+  '@next/env@15.0.0-canary.157': {}
 
   '@next/eslint-plugin-next@15.0.0-canary.149':
     dependencies:
@@ -15651,7 +15761,7 @@ snapshots:
   '@next/swc-darwin-arm64@14.2.8':
     optional: true
 
-  '@next/swc-darwin-arm64@15.0.0-canary.149':
+  '@next/swc-darwin-arm64@15.0.0-canary.157':
     optional: true
 
   '@next/swc-darwin-x64@14.2.5':
@@ -15660,7 +15770,7 @@ snapshots:
   '@next/swc-darwin-x64@14.2.8':
     optional: true
 
-  '@next/swc-darwin-x64@15.0.0-canary.149':
+  '@next/swc-darwin-x64@15.0.0-canary.157':
     optional: true
 
   '@next/swc-linux-arm64-gnu@14.2.5':
@@ -15669,7 +15779,7 @@ snapshots:
   '@next/swc-linux-arm64-gnu@14.2.8':
     optional: true
 
-  '@next/swc-linux-arm64-gnu@15.0.0-canary.149':
+  '@next/swc-linux-arm64-gnu@15.0.0-canary.157':
     optional: true
 
   '@next/swc-linux-arm64-musl@14.2.5':
@@ -15678,7 +15788,7 @@ snapshots:
   '@next/swc-linux-arm64-musl@14.2.8':
     optional: true
 
-  '@next/swc-linux-arm64-musl@15.0.0-canary.149':
+  '@next/swc-linux-arm64-musl@15.0.0-canary.157':
     optional: true
 
   '@next/swc-linux-x64-gnu@14.2.5':
@@ -15687,7 +15797,7 @@ snapshots:
   '@next/swc-linux-x64-gnu@14.2.8':
     optional: true
 
-  '@next/swc-linux-x64-gnu@15.0.0-canary.149':
+  '@next/swc-linux-x64-gnu@15.0.0-canary.157':
     optional: true
 
   '@next/swc-linux-x64-musl@14.2.5':
@@ -15696,7 +15806,7 @@ snapshots:
   '@next/swc-linux-x64-musl@14.2.8':
     optional: true
 
-  '@next/swc-linux-x64-musl@15.0.0-canary.149':
+  '@next/swc-linux-x64-musl@15.0.0-canary.157':
     optional: true
 
   '@next/swc-win32-arm64-msvc@14.2.5':
@@ -15705,7 +15815,7 @@ snapshots:
   '@next/swc-win32-arm64-msvc@14.2.8':
     optional: true
 
-  '@next/swc-win32-arm64-msvc@15.0.0-canary.149':
+  '@next/swc-win32-arm64-msvc@15.0.0-canary.157':
     optional: true
 
   '@next/swc-win32-ia32-msvc@14.2.5':
@@ -15714,7 +15824,7 @@ snapshots:
   '@next/swc-win32-ia32-msvc@14.2.8':
     optional: true
 
-  '@next/swc-win32-ia32-msvc@15.0.0-canary.149':
+  '@next/swc-win32-ia32-msvc@15.0.0-canary.157':
     optional: true
 
   '@next/swc-win32-x64-msvc@14.2.5':
@@ -15723,7 +15833,7 @@ snapshots:
   '@next/swc-win32-x64-msvc@14.2.8':
     optional: true
 
-  '@next/swc-win32-x64-msvc@15.0.0-canary.149':
+  '@next/swc-win32-x64-msvc@15.0.0-canary.157':
     optional: true
 
   '@noble/ciphers@0.6.0': {}
@@ -16209,9 +16319,9 @@ snapshots:
 
   '@polka/url@1.0.0-next.25': {}
 
-  '@prisma/adapter-libsql@5.19.1(@libsql/client@0.8.1)':
+  '@prisma/adapter-libsql@5.19.1(@libsql/client@0.12.0)':
     dependencies:
-      '@libsql/client': 0.8.1
+      '@libsql/client': 0.12.0
       '@prisma/driver-adapter-utils': 5.19.1
       async-mutex: 0.5.0
 
@@ -20154,7 +20264,7 @@ snapshots:
       '@vue/shared': 3.5.5
       entities: 4.5.0
       estree-walker: 2.0.2
-      source-map-js: 1.2.0
+      source-map-js: 1.2.1
 
   '@vue/compiler-core@3.5.6':
     dependencies:
@@ -20200,8 +20310,8 @@ snapshots:
       '@vue/shared': 3.5.5
       estree-walker: 2.0.2
       magic-string: 0.30.11
-      postcss: 8.4.44
-      source-map-js: 1.2.0
+      postcss: 8.4.47
+      source-map-js: 1.2.1
 
   '@vue/compiler-sfc@3.5.6':
     dependencies:
@@ -21475,7 +21585,7 @@ snapshots:
   css-tree@2.2.1:
     dependencies:
       mdn-data: 2.0.28
-      source-map-js: 1.2.0
+      source-map-js: 1.2.1
 
   css-tree@2.3.1:
     dependencies:
@@ -21994,9 +22104,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.31.2(@libsql/client@0.8.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0):
+  drizzle-orm@0.31.2(@libsql/client@0.12.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0):
     optionalDependencies:
-      '@libsql/client': 0.8.1
+      '@libsql/client': 0.12.0
       '@opentelemetry/api': 1.9.0
       '@types/better-sqlite3': 7.6.11
       '@types/pg': 8.11.6
@@ -22012,9 +22122,9 @@ snapshots:
       react: 18.2.0
       sql.js: 1.11.0
 
-  drizzle-zod@0.5.1(drizzle-orm@0.31.2(@libsql/client@0.8.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0))(zod@3.23.8):
+  drizzle-zod@0.5.1(drizzle-orm@0.31.2(@libsql/client@0.12.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0))(zod@3.23.8):
     dependencies:
-      drizzle-orm: 0.31.2(@libsql/client@0.8.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0)
+      drizzle-orm: 0.31.2(@libsql/client@0.12.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.11)(@types/pg@8.11.6)(@types/react@18.2.0)(@types/sql.js@1.4.9)(better-sqlite3@11.1.2)(bun-types@1.1.27)(expo-sqlite@14.0.6(expo@51.0.32(@babel/core@7.25.2)(@babel/preset-env@7.25.4(@babel/core@7.25.2))))(kysely@0.27.4)(mysql2@3.11.0)(pg@8.12.0)(postgres@3.4.4)(react@18.2.0)(sql.js@1.11.0)
       zod: 3.23.8
 
   duplexer@0.1.2: {}
@@ -24261,6 +24371,19 @@ snapshots:
       '@libsql/linux-x64-musl': 0.3.19
       '@libsql/win32-x64-msvc': 0.3.19
 
+  libsql@0.4.5:
+    dependencies:
+      '@neon-rs/load': 0.0.4
+      detect-libc: 2.0.2
+    optionalDependencies:
+      '@libsql/darwin-arm64': 0.4.5
+      '@libsql/darwin-x64': 0.4.5
+      '@libsql/linux-arm64-gnu': 0.4.5
+      '@libsql/linux-arm64-musl': 0.4.5
+      '@libsql/linux-x64-gnu': 0.4.5
+      '@libsql/linux-x64-musl': 0.4.5
+      '@libsql/win32-x64-msvc': 0.4.5
+
   lighthouse-logger@1.4.2:
     dependencies:
       debug: 2.6.9
@@ -25634,9 +25757,9 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.0.0-canary.149(@babel/core@7.25.2)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@0.0.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827):
+  next@15.0.0-canary.157(@babel/core@7.25.2)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@0.0.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827):
     dependencies:
-      '@next/env': 15.0.0-canary.149
+      '@next/env': 15.0.0-canary.157
       '@swc/counter': 0.1.3
       '@swc/helpers': 0.5.13
       busboy: 1.6.0
@@ -25647,15 +25770,15 @@ snapshots:
       react-dom: 19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827)
       styled-jsx: 5.1.6(@babel/core@7.25.2)(react@19.0.0-rc-7771d3a7-20240827)
     optionalDependencies:
-      '@next/swc-darwin-arm64': 15.0.0-canary.149
-      '@next/swc-darwin-x64': 15.0.0-canary.149
-      '@next/swc-linux-arm64-gnu': 15.0.0-canary.149
-      '@next/swc-linux-arm64-musl': 15.0.0-canary.149
-      '@next/swc-linux-x64-gnu': 15.0.0-canary.149
-      '@next/swc-linux-x64-musl': 15.0.0-canary.149
-      '@next/swc-win32-arm64-msvc': 15.0.0-canary.149
-      '@next/swc-win32-ia32-msvc': 15.0.0-canary.149
-      '@next/swc-win32-x64-msvc': 15.0.0-canary.149
+      '@next/swc-darwin-arm64': 15.0.0-canary.157
+      '@next/swc-darwin-x64': 15.0.0-canary.157
+      '@next/swc-linux-arm64-gnu': 15.0.0-canary.157
+      '@next/swc-linux-arm64-musl': 15.0.0-canary.157
+      '@next/swc-linux-x64-gnu': 15.0.0-canary.157
+      '@next/swc-linux-x64-musl': 15.0.0-canary.157
+      '@next/swc-win32-arm64-msvc': 15.0.0-canary.157
+      '@next/swc-win32-ia32-msvc': 15.0.0-canary.157
+      '@next/swc-win32-x64-msvc': 15.0.0-canary.157
       '@opentelemetry/api': 1.9.0
       babel-plugin-react-compiler: 0.0.0
       sharp: 0.33.5
@@ -26620,8 +26743,8 @@ snapshots:
   postcss@8.4.31:
     dependencies:
       nanoid: 3.3.7
-      picocolors: 1.0.1
-      source-map-js: 1.2.0
+      picocolors: 1.1.0
+      source-map-js: 1.2.1
 
   postcss@8.4.41:
     dependencies:
@@ -27724,6 +27847,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  server-only@0.0.1: {}
+
   set-blocking@2.0.0: {}
 
   set-cookie-parser@2.7.0: {}
@@ -28257,7 +28382,7 @@ snapshots:
       css-tree: 2.3.1
       css-what: 6.1.0
       csso: 5.0.5
-      picocolors: 1.0.1
+      picocolors: 1.1.0
 
   swr@2.2.5(react@18.3.1):
     dependencies:
