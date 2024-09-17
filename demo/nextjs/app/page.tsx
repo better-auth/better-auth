@@ -4,7 +4,7 @@ import { Suspense } from "react";
 
 export default async function Home() {
   const features = [
-    "Email & Password", "Organization | Teams", "Passkeys", "TwoFactor", "Multi Factor", "Password Reset", "Session Management"
+    "Email & Password", "Organization | Teams", "Passkeys", "Multi Factor", "Password Reset", "Roles & Permissions", "Rate Limiting", "Session Management",
   ]
   return (
     <div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
