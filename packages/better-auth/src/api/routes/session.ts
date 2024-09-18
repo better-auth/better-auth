@@ -3,8 +3,39 @@ import { createAuthEndpoint } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
 import { sessionMiddleware } from "../middlewares/session";
-import type { Session } from "../../adapters/schema";
+import type { Session, User } from "../../adapters/schema";
 import { z } from "zod";
+import { getIp } from "../../utils/get-request-ip";
+
+const sessionCache = new Map<
+	string,
+	{
+		data: {
+			session: Session;
+			user: User;
+		};
+		expiresAt: number;
+	}
+>();
+
+/**
+ * Generate a unique key for the request to cache the
+ * request for 5 seconds for this specific request.
+ *
+ * This is to prevent reaching to database if getSession is
+ * called multiple times for the same request
+ */
+function getRequestUniqueKey(ctx: Context<any, any>, token: string): string {
+	if (!ctx.request) {
+		return "";
+	}
+	const { method, url, headers } = ctx.request;
+	const userAgent = ctx.request.headers.get("User-Agent") || "";
+	const ip = getIp(ctx.request) || "";
+	const headerString = JSON.stringify(headers);
+	const uniqueString = `${method}:${url}:${headerString}:${userAgent}:${ip}:${token}`;
+	return uniqueString;
+}
 
 export const getSession = createAuthEndpoint(
 	"/session",
@@ -24,6 +55,16 @@ export const getSession = createAuthEndpoint(
 					status: 401,
 				});
 			}
+
+			const key = getRequestUniqueKey(ctx, sessionCookieToken);
+			const cachedSession = sessionCache.get(key);
+			if (cachedSession) {
+				if (cachedSession.expiresAt > Date.now()) {
+					return ctx.json(cachedSession.data);
+				}
+				sessionCache.delete(key);
+			}
+
 			const session =
 				await ctx.context.internalAdapter.findSession(sessionCookieToken);
 
@@ -89,6 +130,10 @@ export const getSession = createAuthEndpoint(
 					user: session.user,
 				});
 			}
+			sessionCache.set(key, {
+				data: session,
+				expiresAt: Date.now() + 5000,
+			});
 			return ctx.json(session);
 		} catch (error) {
 			ctx.context.logger.error(error);

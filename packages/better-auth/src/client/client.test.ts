@@ -95,6 +95,11 @@ describe("type", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		type ReturnedSession = ReturnType<typeof client.useSession>;
 		expectTypeOf<ReturnedSession>().toMatchTypeOf<{
@@ -121,6 +126,11 @@ describe("type", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
 	});
@@ -128,6 +138,11 @@ describe("type", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Accessor<number>
@@ -137,6 +152,11 @@ describe("type", () => {
 		const client = createVueClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
 			() => Readonly<Ref<number>>
@@ -146,6 +166,11 @@ describe("type", () => {
 		const client = createSvelteClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
 	});
@@ -154,6 +179,11 @@ describe("type", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
@@ -163,9 +193,14 @@ describe("type", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2(), twoFactorClient()],
 			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
 		});
-		const $infer = client.$infer;
-		expectTypeOf($infer.session).toEqualTypeOf<{
+		const $infer = client.$Infer;
+		expectTypeOf($infer.Session).toEqualTypeOf<{
 			session: {
 				id: string;
 				userId: string;

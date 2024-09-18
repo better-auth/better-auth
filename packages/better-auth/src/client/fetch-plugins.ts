@@ -30,6 +30,7 @@ export const addCurrentURL = {
 	},
 } satisfies BetterFetchPlugin;
 
+const cache = new Map<string, string>();
 export const csrfPlugin = {
 	id: "csrf",
 	name: "CSRF Check",
@@ -42,27 +43,39 @@ export const csrfPlugin = {
 
 		if (options?.method !== "GET") {
 			options = options || {};
-			const { data, error } = await betterFetch<{
-				csrfToken: string;
-			}>("/csrf", {
-				body: undefined,
-				baseURL: options.baseURL,
-				plugins: [],
-				method: "GET",
-				credentials: "include",
-				customFetchImpl: options.customFetchImpl,
-			});
-			if (error?.status === 404) {
-				throw new BetterAuthError(
-					"Route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
-				);
-			}
-			if (error) {
-				throw new BetterAuthError(error.message || "Failed to get CSRF token.");
+			const csrfToken = cache.get("CSRF_TOKEN");
+			if (!csrfToken) {
+				const { data, error } = await betterFetch<{
+					csrfToken: string;
+				}>("/csrf", {
+					body: undefined,
+					baseURL: options.baseURL,
+					plugins: [],
+					method: "GET",
+					credentials: "include",
+					customFetchImpl: options.customFetchImpl,
+				});
+				if (error) {
+					if (error.status === 404) {
+						throw new BetterAuthError(
+							"CSRF route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
+						);
+					}
+					if (error.status === 429) {
+						return new Response(null, {
+							status: 429,
+							statusText: "Too Many Requests",
+						});
+					}
+					throw new BetterAuthError(
+						"Failed to fetch CSRF token: " + error.message,
+					);
+				}
+				cache.set("CSRF_TOKEN", data.csrfToken);
 			}
 			options.body = {
 				...options?.body,
-				csrfToken: data.csrfToken,
+				csrfToken: csrfToken,
 			};
 		}
 		options.credentials = "include";

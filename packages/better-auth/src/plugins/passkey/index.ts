@@ -74,7 +74,10 @@ export const passkey = (options?: PasskeyOptions) => {
 	const baseURL = process.env.BETTER_AUTH_URL;
 	const rpID =
 		options?.rpID ||
-		baseURL?.replace("http://", "").replace("https://", "") ||
+		baseURL
+			?.replace("http://", "")
+			.replace("https://", "")
+			.replace(":3000", "") ||
 		"localhost";
 	if (!rpID) {
 		throw new BetterAuthError(

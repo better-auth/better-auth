@@ -32,10 +32,15 @@ export async function SignInButton() {
 }
 
 
+function checkOptimisticSession(headers: Headers) {
+    const guessIsSignIn = headers.get("cookie")?.includes("better-auth.session") || headers.get("cookie")?.includes("__Secure-better-auth.session-token")
+    return !!guessIsSignIn;
+}
+
 
 export function SignInFallback() {
     //to avoid flash of unauthenticated state
-    const guessIsSignIn = headers().get("cookie")?.includes("better-auth.session") || headers().get("cookie")?.includes("__Secure-better-auth.session-token")
+    const guessIsSignIn = checkOptimisticSession(headers())
     return (
         <Link href={
             guessIsSignIn ? "/dashboard" : "/sign-in"

@@ -86,12 +86,11 @@ export const getPasskeyActions = (
 			const verified = await $fetch<{
 				passkey: Passkey;
 			}>("/passkey/verify-registration", {
+				...opts?.options,
 				body: {
 					response: res,
-
 					name: opts?.name,
 				},
-				...opts?.options,
 			});
 			if (!verified.data) {
 				return verified;
