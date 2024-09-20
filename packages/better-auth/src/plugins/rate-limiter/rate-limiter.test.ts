@@ -7,7 +7,9 @@ describe("rate-limiter", async () => {
 		plugins: [
 			rateLimiter({
 				enabled: true,
-				storage: "memory",
+				storage: {
+					provider: "memory",
+				},
 				max: 10,
 				window: 10,
 			}),

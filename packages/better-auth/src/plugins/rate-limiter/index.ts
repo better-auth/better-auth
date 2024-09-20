@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "../../api/call";
 import type { GenericEndpointContext } from "../../types/context";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { getRateLimitKey } from "./get-key";
+import { logger } from "../../utils/logger";
 
 interface RateLimit {
 	key: string;
@@ -34,13 +35,22 @@ export interface RateLimitOptions {
 	 * @default "ip" or "userId" if the user is logged in.
 	 */
 	getKey?: (request: Request) => string | Promise<string>;
-	storage?:
-		| "database"
-		| "memory"
-		| {
-				get: (key: string) => Promise<RateLimit | undefined>;
-				set: (key: string, value: RateLimit) => Promise<void>;
-		  };
+	storage?: {
+		custom?: {
+			get: (key: string) => Promise<RateLimit | undefined>;
+			set: (key: string, value: RateLimit) => Promise<void>;
+		};
+		/**
+		 * The provider to use for rate limiting.
+		 * @default "database"
+		 */
+		provider?: "database" | "memory";
+		/**
+		 * The name of the table to use for rate limiting. Only used if provider is "database".
+		 * @default "rateLimit"
+		 */
+		tableName?: string;
+	};
 	/**
 	 * Custom rate limiting function.
 	 */
@@ -91,7 +101,10 @@ export interface RateLimitOptions {
  */
 export const rateLimiter = (options: RateLimitOptions) => {
 	const opts = {
-		storage: "database",
+		storage: {
+			provider: "database",
+			tableName: "rateLimit",
+		},
 		max: 100,
 		window: 15 * 60,
 		specialRules: [
@@ -105,7 +118,7 @@ export const rateLimiter = (options: RateLimitOptions) => {
 		...options,
 	} satisfies RateLimitOptions;
 	const schema =
-		opts.storage === "database"
+		opts.storage.provider === "database"
 			? ({
 					rateLimit: {
 						fields: {
@@ -135,24 +148,28 @@ export const rateLimiter = (options: RateLimitOptions) => {
 				return result as RateLimit | undefined;
 			},
 			set: async (key: string, value: RateLimit, isNew: boolean = true) => {
-				if (isNew) {
-					await db
-						.insertInto("rateLimit")
-						.values({
-							key,
-							count: value.count,
-							lastRequest: value.lastRequest,
-						})
-						.execute();
-				} else {
-					await db
-						.updateTable("rateLimit")
-						.set({
-							count: value.count,
-							lastRequest: value.lastRequest,
-						})
-						.where("key", "=", key)
-						.execute();
+				try {
+					if (isNew) {
+						await db
+							.insertInto(opts.storage.tableName ?? "rateLimit")
+							.values({
+								key,
+								count: value.count,
+								lastRequest: value.lastRequest,
+							})
+							.execute();
+					} else {
+						await db
+							.updateTable(opts.storage.tableName ?? "rateLimit")
+							.set({
+								count: value.count,
+								lastRequest: value.lastRequest,
+							})
+							.where("key", "=", key)
+							.execute();
+					}
+				} catch (e) {
+					logger.error("Error setting rate limit", e);
 				}
 			},
 		};
@@ -188,12 +205,11 @@ export const rateLimiter = (options: RateLimitOptions) => {
 						return;
 					}
 					const key = await getRateLimitKey(ctx.request);
-					const storage =
-						opts.storage === "database"
+					const storage = opts.storage.custom
+						? opts.storage.custom
+						: opts.storage.provider === "database"
 							? createDBStorage(ctx)
-							: opts.storage === "memory"
-								? createMemoryStorage()
-								: opts.storage;
+							: createMemoryStorage();
 					const rateLimit = await storage.get(key);
 					if (!rateLimit) {
 						await storage.set(key, {
@@ -209,8 +225,21 @@ export const rateLimiter = (options: RateLimitOptions) => {
 						rateLimit.lastRequest >= windowStart &&
 						rateLimit.count >= opts.max
 					) {
-						throw new APIError("TOO_MANY_REQUESTS", {
-							message: "Too many requests",
+						return new Response(null, {
+							status: 429,
+							statusText: "Too Many Requests",
+							headers: {
+								"X-RateLimit-Window": opts.window.toString(),
+								"X-RateLimit-Max": opts.max.toString(),
+								"X-RateLimit-Remaining": (
+									opts.max - rateLimit.count
+								).toString(),
+								"X-RateLimit-Reset": (
+									rateLimit.lastRequest +
+									opts.window * 1000 -
+									now
+								).toString(),
+							},
 						});
 					}
 

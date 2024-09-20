@@ -1,5 +1,10 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	twoFactor,
+	rateLimiter,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { github, google } from "better-auth/social-providers";
@@ -7,7 +12,6 @@ import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
-
 export const auth = betterAuth({
 	database: new LibsqlDialect({
 		url: process.env.TURSO_DATABASE_URL || "",
@@ -35,6 +39,9 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
+		rateLimiter({
+			enabled: true,
+		}),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({

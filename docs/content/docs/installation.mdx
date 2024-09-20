@@ -15,7 +15,7 @@ better-auth
 ```
 
 <Callout type="info">
-If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project.
+If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project. (currnelty better auth only supports web platforms more clients will be added soon)
 </Callout>
 </Step>
 
@@ -42,7 +42,7 @@ BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
 <Step>
 ### Create A Better Auth Instance
 
-Create a file named `auth.ts` or `auth.config.ts` in one of these locations:
+Create a file named `auth.ts` in one of these locations:
    - Project root
    - `lib/` folder
    - `utils/` folder
@@ -67,9 +67,8 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
         
-Better Auth requires a database to store user data. It currently only supports `sqlite`, `postgresql` and `mysql`. 
-
-You can pass a database provider (sqlite, mysql, postgresql) and connection string directly to the auth instance.
+Better Auth requires a database to store user data. It uses <Link href="https://kysely.dev/">Kysely </Link> under the hood to connect to your database. 
+`postgresql`, `mysql`, and `sqlite` are supported out of the box.
         
 ```ts  title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -83,8 +82,22 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-Better auth uses <Link href="https://kysely.dev/">Kysely</Link> under the hood to connect to your database. You can also pass any dialect that is supported by Kysely to the database configration.
+You can also pass any dialect that is supported by Kysely to the database configration.
 </Callout>
+
+**Example with LibsqlDialect:**
+
+```ts  title="auth.ts" 
+import { betterAuth } from "better-auth";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+
+export const auth = betterAuth({
+	database: new LibsqlDialect({
+		url: process.env.TURSO_DATABASE_URL || "",
+		authToken: process.env.TURSO_AUTH_TOKEN || "",
+	}),
+});
+```
 
 </Step>
 
@@ -131,9 +144,13 @@ You can use even more authentication methods like passkey, username, magic link 
 ### Mount Handler
 To handle api requests, you need to set up a route handler on your server. 
         
-Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
+Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path). 
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "solid-start", "hono"]} defaultValue="react">
+<Callout>
+Better auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
+</Callout>
+
+<Tabs items={["next-js", "nuxt", "svelte-kit", "solid-start", "hono", "express"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/[...auth]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -192,17 +209,34 @@ Create a new file or route in your framework's designated catch-all route handle
     serve(app);
     ```
     </Tab>
+
+    <Tab value="express">
+    ```ts title="server.ts"
+    import express from "express";
+    import { toNodeHandler } from "better-auth/node";
+    import { auth } from "./auth";
+
+    const app = express();
+    const port = 8000;
+
+    app.get("/api/auth/*", toNodeHandler(auth));
+    app.listen(port, () => {
+        console.log(`Better Auth app listening on port ${port}`);
+    });
+    ``` 
+    This also works for any other node server framework like express, fastify, hapi, etc.
+    </Tab>
 </Tabs>
 </Step>
 
 <Step>
 ### Create Client Instance
 
-The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular frameworks inlcuding for vanilla javascript.
+The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular web frameworks inlcuding for vanilla javascript. 
 
 1. Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React).
 2. Call the function to create your client.
-3. Pass the base url of your auth server to the client.
+3. Pass the base url of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
 
 <Callout type="info">
 If you're using a differnt base path other than `/api/auth` make sure to pass the whole url inlcuding the path. (e.g. `http://localhost:3000/custom-path/auth`)

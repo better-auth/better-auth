@@ -77,7 +77,7 @@ export interface OrganizationOptions {
 	 */
 	ac?: AccessControl;
 	/**
-	 *
+	 * Custom permissions for roles.
 	 */
 	roles?: {
 		[key in "admin" | "member" | "owner"]?: Role<any>;
@@ -143,7 +143,21 @@ export interface OrganizationOptions {
 		request?: Request,
 	) => Promise<void>;
 }
-
+/**
+ * Organization plugin for Better Auth. Organization allows you to create teams, members,
+ * and manage access control for your users.
+ *
+ * @example
+ * ```ts
+ * const auth = createAuth({
+ * 	plugins: [
+ * 		organization({
+ * 			allowUserToCreateOrganization: true,
+ * 		}),
+ * 	],
+ * });
+ * ```
+ */
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,

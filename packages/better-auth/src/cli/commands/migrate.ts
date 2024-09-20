@@ -20,6 +20,7 @@ export const migrate = new Command("migrate")
 		"--config <config>",
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
+	.option("--y", "")
 	.action(async (opts) => {
 		const options = z
 			.object({

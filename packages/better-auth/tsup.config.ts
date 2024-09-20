@@ -16,6 +16,7 @@ export default defineConfig({
 		access: "./src/plugins/organization/access/index.ts",
 		"solid-start": "./src/integrations/solid-start.ts",
 		"next-js": "./src/integrations/next-js.ts",
+		node: "./src/integrations/node.ts",
 	},
 	splitting: false,
 	sourcemap: true,

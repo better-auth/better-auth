@@ -1,0 +1,347 @@
+---
+title: Basic Usage
+description: Getting started with Better Auth
+---
+
+## Authentication
+
+Better Auth provides built-in authentication support for:
+
+- **Email and password**
+- **Social provider (Google, Github, Apple, and more)**
+
+You can extend authentication options using plugins, such as: Username-based login, Passkeys, Email magic links, and more.
+
+### Email and Password Authentication
+
+To enable email and password authentication:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //...rest of the options
+    emailAndPassword: {    // [!code highlight]
+        enabled: true // [!code highlight]
+    } // [!code highlight]
+})
+```
+
+### Signup
+
+To signup a user, you can use the `signUp.email` function provided by the client. The `signUp` function takes an object with the following properties:
+
+```ts title="sign-up.ts" twoslash
+// @filename: client.ts
+import { createAuthClient } from "better-auth/client"
+
+export const client = createAuthClient()
+
+// ---cut---
+// @filename: signup.ts
+// ---cut---
+import { client } from "./client";
+
+const res = await client.signUp.email({
+        email: "test@example.com", // The email address of the user.
+        password: "password1234", // The password of the user.
+        name: "test", // The name of the user.
+        image: "https://example.com/image.png", // The image of the user. (optional)
+        callbackURL: "/" // The url to redirect to after the user has signed up. (optional)
+})
+```
+
+The function returns a promise that resolves an object with `data` and `error` properties. The `data` property contains the user object that was created, and the `error` property contains any error that occurred during the signup process.
+
+<Callout type="info">
+    If you want to use username instead of email, you can use <Link href="/docs/plugins/username">username Plugin</Link>.
+</Callout>
+
+### Signin
+
+To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
+
+```ts title="sing-in.ts" twoslash
+// @filename: client.ts
+import { createAuthClient } from "better-auth/client"
+
+export const client = createAuthClient()
+
+// ---cut---
+// @filename: signup.ts
+// ---cut---
+import { client } from "./client";
+
+const data = await client.signIn.email({
+    email: "test@example.com", // The email address of the user.
+    password: "password1234", // The password of the user.
+    callbackURL: "/" // The url to redirect to after the user has signed in. (optional)
+})
+```
+
+
+### Authentication with Social Providers
+
+Better Auth supports multiple social providers, including Google, Github, Apple, Discord, and more. To use a social provider, you need to configure the ones you need in the `socialProvider` option on your `auth` object.
+
+### Configure Social Providers
+
+To configure social providers, you need to import the provider you want to use and pass it to the `socialProvider` option. For example, to configure the Github provider, you can use the following code:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { github } from "better-auth/social-providers"
+
+export const auth = betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite",
+    },
+    socialProvider: [ // [!code highlight]
+        github({ // [!code highlight]
+            clientId: GITHUB_CLIENT_ID, // [!code highlight]
+            clientSecret: GITHUB_CLIENT_SECRET, // [!code highlight] 
+        }), // [!code highlight]
+    ], // [!code highlight]
+})
+```
+
+<Callout type="info">
+    See the <Link href="/docs/providers">Provider</Link> section for more information on how to configure each provider.
+</Callout>
+
+### Signin with social providers
+
+```ts title="signin.ts"  
+import { client } from "./client"
+
+const signin = async () => {
+    const data = await client.signIn.social({
+        provider: "github"
+    })
+}
+```
+
+
+## Session
+
+Once a user is signed in, you'll want to access their session. Better auth allows you easily to access the session data from the server and client side.
+
+### Client Side
+
+Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented in a reactive way for each supported framework, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
+
+<Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="React">
+    <Tab value="React">
+        ```tsx title="user.tsx"
+        //make sure you're using the react client
+        import { createAuthClient } from "better-auth/react"
+        const { useSession } = createAuthClient() // [!code highlight]
+    
+        export function User(){
+            const {
+                data: session,
+                isPending, //loading state
+                error //error object 
+            } = useSession()
+            returns (
+                //...
+            )
+        }
+        ```
+    </Tab>
+
+    <Tab value="Vue">
+        ```vue title="user.vue"
+        <template>
+            <div>
+                <button v-if="!client.useSession().value" @click="() => client.signIn.social({
+                    provider: 'github'
+                })">
+                    Continue with github
+                </button>
+                <div>
+                    <pre>{{ client.useSession().value }}</pre>
+                    <button v-if="client.useSession().value" @click="client.signOut()">
+                        Sign out
+                    </button>
+                </div>
+            </div>
+        </template>
+        ```
+        </Tab>
+
+        <Tab value="Svelte">
+            ```svelte title="user.svelte"
+            <script lang="ts">
+            import { client } from "$lib/client";
+            const session = client.useSsession;
+            </script>
+
+            <div
+                style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
+            >
+                <div>
+                {#if $session}
+                    <div>
+                    <p>
+                        {$session?.user.name}
+                    </p>
+                    <p>
+                        {$session?.user.email}
+                    </p>
+                    <button
+                        on:click={async () => {
+                        await client.signOut();
+                        }}
+                    >
+                        Signout
+                    </button>
+                    </div>
+                {:else}
+                    <button
+                    on:click={async () => {
+                        await client.signIn.social({
+                        provider: "github",
+                        });
+                    }}
+                    >
+                    Continue with github
+                    </button>
+                {/if}
+                </div>
+            </div>
+            ```
+        </Tab>
+
+        <Tab value="Solid">
+            ```tsx title="user.tsx"
+            import { client } from "~/lib/client";
+            import { Show } from 'solid-js';
+
+            export default function Home() {
+                const session = client.useSession()
+                return (
+                    <Show
+                        when={session()}
+                        fallback={<button onClick={toggle}>Log in</button>}
+                    >
+                        <button onClick={toggle}>Log out</button>
+                    </Show>
+                ); 
+            }
+            ```
+            </Tab>
+</Tabs>
+
+### Server Side
+The server provides a `session` object that you can use to access the session data.
+
+```ts title="server.ts" 
+// somewhere in your server code
+import { auth } from "./auth"
+async function addToCart(request: Request){
+    const session = await auth.api.getSession({
+        headers: request.headers, //it requies a header to be passed
+    })
+}
+```
+
+<Callout type="info">
+    For next js on RSC and server actions you can use import `headers` from `next/headers` and pass it to the `getSession` function.
+</Callout>
+
+## Two Factor
+
+### Introduction to plugins
+
+One of the unique features of better auth is a plugins ecosystem. It allows you to add complex auth realted functionilty with small lines of code. Better auth come with many 1st party plugins, but you can also create your own plugins. 
+
+Below is an example of how to add two factor authentication using two factor plugin.
+
+<Steps>
+
+<Step>
+### Server Configuration
+
+To add a plugin, you need to import the plugin and pass it to the `plugins` option of the auth instance. For example, to add two facor authentication, you can use the following code:
+
+```ts title="auth.ts"  
+import { betterAuth } from "better-auth"
+import { twoFactor } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite",
+    },
+    //...rest of the options
+    plugins: [ // [!code highlight]
+        twoFactor({ // [!code highlight]
+            issuer: "my-app" // [!code highlight] 
+        }) // [!code highlight]
+    ] // [!code highlight]
+})
+```
+now two factor related routes and method will be available on the server.
+
+</Step>
+<Step>
+### Migrate Database
+
+once you have added the plugin, you need to migrate your database to add the necessary tables and fields. You can do this by running the following command:
+
+```bash
+npx better-auth migrate
+```
+
+</Step>
+<Step>
+### Client Configuration
+
+Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `plugins` option of the auth client. For example, to add two facor authentication, you can use the following code:
+
+```ts title="client.ts"  /
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+const client = createAuthClient({
+    plugins: [ // [!code highlight]
+        twoFactorClient({ // [!code highlight]
+            twoFactorPage: "/two-factor" // [!code highlight] 
+        }) // [!code highlight]
+    ] // [!code highlight]
+})
+```
+
+now two factor related methods will be available on the client.
+
+```ts title="profile.ts" 
+// @filename: client.ts
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+export const client = createAuthClient({
+    plugins: [ // [!code highlight]
+        twoFactorClient({ // [!code highlight]
+            twoFactorPage: "/two-factor" // [!code highlight] 
+        }) // [!code highlight]
+    ] // [!code highlight]
+}) 
+
+// ---cut---
+
+// @filename: profile.ts
+// ---cut---
+import { client } from "./client"
+
+const enableTwoFactor = async() => {
+    const data = await client.twoFactor.enable() // this will enable two factor authentication for the signed in user
+}
+```
+</Step>
+
+<Step>
+Next Setp: See the <Link href="/docs/plugins/2fa">the two factor plugin documentation</Link>.
+</Step>
+</Steps>

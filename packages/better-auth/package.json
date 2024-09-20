@@ -41,7 +41,8 @@
         "./solid-start": "./dist/solid-start.js",
         "./svelte": "./dist/svelte.js",
         "./next-js": "./dist/next-js.js",
-        "./package.json": "./package.json"
+        "./package.json": "./package.json",
+        "./node": "./dist/node.js"
     },
     "devDependencies": {
         "@simplewebauthn/types": "^10.0.0",
