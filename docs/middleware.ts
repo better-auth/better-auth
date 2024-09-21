@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export default function middleware(req: NextRequest) {
 	if (
-		req.nextUrl.pathname.startsWith("/docs") &&
+		req.nextUrl.pathname.startsWith("/docs") && !req.nextUrl.searchParams.has("allow_docs") &&
 		process.env.NODE_ENV === "production"
 	) {
 		return NextResponse.redirect(new URL("/", req.url));
