@@ -1,4 +1,235 @@
 ---
-title: Rate Limit
-description: The rate limit plugin allows you to limit the number of requests a user can make to your auth server.
+title: Rate Limiter
+description: better auth rate limit plugin
 ---
+
+The rate limit plugin allows you to limit the number of requests a user can make to the server in a given time period. 
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        Add the rate limit plugin to your auth configuration and pass `enabled` to `true` to enable rate limiting.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { rateLimiter } from "better-auth/plugins"
+        
+        export const auth = await betterAuth({
+            //... other config options
+            plugins: [ 
+                rateLimit({ // [!code highlight]
+                   	enabled: true, // [!code highlight]
+                }), // [!code highlight]
+            ],
+        })
+        ```
+    </Step>
+    <Step>
+    ### Migrate your database (optional)
+    If you are using the default database storage, you need to run the migration to add the required fields to the rate limit table.
+
+    This will add the following fields to the **rateLimit** table:
+    - `key`: The key used for rate limiting.
+    - `count`: The number of requests made in the given time window.
+    - `lastRequest`: The timestamp of the last request made.
+
+    <Callout>
+    You can change the table name by providing table name on the storage configuration of the rate limit plugin.
+    </Callout>
+
+    ```bash
+    npx better-auth migrate
+    ```
+    </Step>
+</Steps>
+
+## Configuration
+
+The rate limit plugin accepts the following options:
+
+### Enabled
+
+enable rate limiting. You can also pass a function to enable rate limiting for specific endpoints.
+
+```ts title="auth.ts"
+
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [
+        rateLimit({
+            enabled: true, // [!code highlight]
+        }), // [!code highlight]
+    ], 
+})
+```
+
+### Window
+
+The time window in seconds for which the rate limit is enforced. Default is 15 minutes (15 * 60).
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            window: 60 * 10, // [!code highlight]
+        }), 
+    ], 
+})
+```
+
+### Max 
+
+The maximum number of requests a user can make in the given time window. Default is 100.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            window: 60 * 10,
+            max: 50, // [!code highlight]
+        }), 
+    ], 
+})
+```
+
+### Get Key 
+
+A function that returns the key to use for rate limiting. By default, it uses the user's IP address if the user is not authenticated and the user's ID if the user is authenticated.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            window: 60 * 10,
+            max: 50,
+            getKey: (req) => req.headers['x-forwarded-for'] || req.connection.remoteAddress, // [!code highlight]
+        }), 
+    ], 
+})
+```
+
+### Storage
+
+The storage to use for rate limiting. By default, it uses database storage.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            window: 60 * 10,
+            max: 50,
+            getKey: (req) => req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+            storage: { // [!code highlight]
+                provider: "memeory" // [!code highlight]
+            }, // [!code highlight]
+        }), 
+    ], 
+})
+```
+
+#### Custom Storage
+
+You can also pass a custom storage provider to the rate limit plugin.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            window: 60 * 10,
+            max: 50,
+            getKey: (req) => req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+            storage: { // [!code highlight]
+                provider: "custom", // [!code highlight]
+                customStorage: { // [!code highlight]
+                    get: async (key) => {}, // [!code highlight]
+                    set: async (key, value) => {}, // [!code highlight]
+                }, // [!code highlight]
+            }, // [!code highlight]
+        }), 
+    ], 
+})
+```
+
+### Sepcial Rules
+
+Special rules are rules that allows yous to define custom rate limit counter for specific paths. 
+By default, `sign-in` and `sign-up` paths are rate limited have a count of `2` for each request as supposed to the default `1` for other paths.
+
+`matcher`: A function that returns a boolean value indicating whether the rule should be applied to the given path.
+
+`countValue`: The number of requests allowed for the given path.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            specialRules: 	specialRules: [
+			{
+				matcher(path) {
+					return path.startsWith("/sign-in") || path.startsWith("/sign-up");
+				},
+				countValue: 2,
+			},
+		],
+        }), 
+    ], 
+})
+```
+
+### Custom Rate Limiter
+
+you can also pass a custom rate limiter that'll overtake the default plugins rate llimiting implementation. 
+
+The custom rate limiter function should accept a Request object and return a boolean value indicating whether the request should be allowed or not.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { rateLimiter } from "better-auth/plugins"
+
+export const auth = await betterAuth({
+    //
+    plugins: [ 
+        rateLimit({
+            enabled: true,
+            rateLimiter: async (request) => { // [!code highlight]
+                return true; // [!code highlight]
+            }, // [!code highlight]
+        }), 
+    ], 
+})
+```

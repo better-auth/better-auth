@@ -406,12 +406,12 @@ export const contents: Content[] = [
         icon: Key,
         href: "/docs/plugins/bearer",
       },
-      {
-        title: "Guide",
-        group: true,
-        href: "/docs/plugins/guide",
-        icon: LucideAArrowDown,
-      },
+      // {
+      //   title: "Guide",
+      //   group: true,
+      //   href: "/docs/plugins/guide",
+      //   icon: LucideAArrowDown,
+      // },
     ],
   },
   // {

@@ -44,7 +44,7 @@ export interface RateLimitOptions {
 		 * The provider to use for rate limiting.
 		 * @default "database"
 		 */
-		provider?: "database" | "memory";
+		provider?: "database" | "memory" | "custom";
 		/**
 		 * The name of the table to use for rate limiting. Only used if provider is "database".
 		 * @default "rateLimit"
