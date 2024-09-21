@@ -12,6 +12,7 @@ describe("rate-limiter", async () => {
 				},
 				max: 10,
 				window: 10,
+				specialRules: [],
 			}),
 		],
 	});
@@ -22,9 +23,11 @@ describe("rate-limiter", async () => {
 				email: testUser.email,
 				password: testUser.password,
 			});
+
 			if (i === 9) {
 				expect(response.error?.status).toBe(429);
 			} else {
+				console.log(response.error);
 				expect(response.error).toBeNull();
 			}
 		}
