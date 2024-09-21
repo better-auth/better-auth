@@ -1,6 +1,6 @@
 .beta {
     background-color: transparent;
-    border: 0.2px solid #e2d0fe;
+    border: 0.2px solid #eae2f6;
     border-radius: 0;
     box-sizing: border-box;
     color: #970bf5;
@@ -78,7 +78,7 @@
   
   .beta {
     color: white;
-    background: rgb(225, 228, 255);
+    background: rgb(242, 216, 246);
   }
 
   .beta:hover {
