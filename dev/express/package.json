@@ -1,5 +1,6 @@
 {
-  "name": "express",
+  "name": "@better-auth/dev-express",
+  "private": true,
   "module": "index.ts",
   "type": "module",
   "devDependencies": {

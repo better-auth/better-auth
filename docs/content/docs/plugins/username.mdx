@@ -1,0 +1,119 @@
+---
+title: Username
+description: Username plugin
+---
+
+The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
+
+## Qiuck setup
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts" twoslash
+        import { betterAuth } from "better-auth"
+        import { username } from "better-auth/plugins"
+
+        const auth = await betterAuth({
+            database: {
+                provider: "sqlite",
+                url: "./db.sqlite",
+            },
+            plugins: [ // [!code highlight]
+                username() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Add the client plugin
+        
+        ```ts title="client.ts" twoslash
+        import { createAuthClient } from "better-auth/client"
+        import { usernameClient } from "better-auth/client/plugins"
+        
+        const client = createAuthClient({
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Signup with username
+
+        To signup a user with username, you can use the `signUp.username` function provided by the client. The `signUp` function takes an object with the following properties:
+
+        - `username`: The username of the user.
+        - `email`: The email address of the user.
+        - `password`: The password of the user. It should be at least 8 characters long and max 32 by default. 
+        - `name`: The name of the user.
+        - `image`: The image of the user. (optional)
+        - `callbackURL`: The url to redirect to after the user has signed up. (optional)
+
+        ```ts title="client.ts" twoslash
+        import { createAuthClient } from "better-auth/client"
+        import { usernameClient } from "better-auth/client/plugins"
+        const client = createAuthClient({
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        // ---cut---
+        
+        const data = await client.signUp.username({
+            username: "test",
+            email: "test@email.com",
+            password: "password1234",
+            name: "test",
+            image: "https://example.com/image.png",
+        })
+        ```
+    </Step>
+    <Step>
+        ### Signin with username
+
+        To signin a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+
+        - `username`: The username of the user.
+        - `password`: The password of the user.
+        - `callbackURL`: The url to redirect to after the user has signed in. (optional)
+
+        ```ts title="client.ts" twoslash
+        import { createAuthClient } from "better-auth/client"
+        import { usernameClient } from "better-auth/client/plugins"
+        const client = createAuthClient({
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        // ---cut---
+        
+        const data = await client.signIn.username({
+            username: "test",
+            password: "password1234",
+        })
+        ```
+    </Step>
+</Steps>
+
+## Configuration
+
+The username plugin doesn't require any configuration. It just needs to be added to the server and client.
+
+## Database Schema
+
+The username plugin requires a `username` field in the user table. If you're using better auth migration tool it will automatically add the `username` field to the user table. If not you can add it manually.
+
+```ts
+const shcmea = {
+    user: {
+        username: {
+            type: "string",
+            unique: true,
+            required: false
+        }
+    }
+}
+```

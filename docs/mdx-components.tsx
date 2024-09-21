@@ -11,25 +11,26 @@ import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "./components/blocks/features";
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
-	return {
-		...defaultComponents,
-		...components,
-		Link: ({ className, ...props }: React.ComponentProps<typeof Link>) => (
-			<Link
-				className={cn("font-medium underline underline-offset-4", className)}
-				{...props}
-			/>
-		),
-		Step,
-		Steps,
-		Tab,
-		Tabs,
-		GenerateSecret,
-		Popup,
-		PopupTrigger,
-		PopupContent,
-		AnimatePresence,
-		TypeTable,
-		Features,
-	};
+  return {
+    ...defaultComponents,
+    ...components,
+    Link: ({ className, ...props }: React.ComponentProps<typeof Link>) => (
+      <Link
+        className={cn("font-medium underline underline-offset-4", className)}
+        {...props}
+      />
+    ),
+    Step,
+    Steps,
+    Tab,
+    Tabs,
+    GenerateSecret,
+    Popup,
+    PopupTrigger,
+    PopupContent,
+    AnimatePresence,
+    TypeTable,
+    Features,
+    iframe: (props) => <iframe {...props} className="w-full h-[500px]" />,
+  };
 }
