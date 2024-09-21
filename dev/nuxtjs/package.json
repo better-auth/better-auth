@@ -11,7 +11,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "better-auth": "^0.0.4",
+    "better-auth": "workspace:*",
     "nuxt": "^3.13.0",
     "vue": "latest"
   }

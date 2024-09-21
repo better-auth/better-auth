@@ -4,6 +4,7 @@ import {
   Key,
   LucideAArrowDown,
   LucideIcon,
+  PlusCircle,
   ScanFace,
   Users2,
   UserSquare2,
@@ -405,17 +406,23 @@ export const contents: Content[] = [
         icon: Key,
         href: "/docs/plugins/bearer",
       },
-    ],
-  },
-  {
-    title: "Examples",
-    list: [
       {
-        title: "Next JS",
-        href: "/docs/examples/next-js",
-        icon: Icons.nextJS,
+        title: "Guide",
+        group: true,
+        href: "/docs/plugins/guide",
+        icon: LucideAArrowDown,
       },
     ],
-    Icon: AppWindow,
   },
+  // {
+  //   title: "Examples",
+  //   list: [
+  //     {
+  //       title: "Next JS",
+  //       href: "/docs/examples/next-js",
+  //       icon: Icons.nextJS,
+  //     },
+  //   ],
+  //   Icon: AppWindow,
+  // },
 ];

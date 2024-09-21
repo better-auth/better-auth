@@ -7,7 +7,7 @@ Passkeys are a secure, passwordless authentication method using cryptographic ke
 
 The passkey plugin implementation is powered by [simple-web-authn](https://simplewebauthn.dev/) behind the scenes.
 
-## Quick setup
+## Installation 
 
 <Steps>
     <Step>
@@ -32,11 +32,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
                 url: "./db.sqlite",
             },
             plugins: [ // [!code highlight]
-                passkey({ // [!code highlight]
-                    rpID: "localhost", // [!code highlight]
-                    rpName: "BetterAuth", // [!code highlight]
-                    origin: "http://localhost:3000", // [!code highlight]
-                }), // [!code highlight]
+                passkey(), // [!code highlight]
             ], // [!code highlight]
         })
         ```
@@ -55,56 +51,54 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
             })
             ```
     </Step>
-    
-    <Step>
-        ### Add a passkey
-
-        To add a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
-
-        ```ts title="client.ts" twoslash
-          import { createAuthClient } from "better-auth/client"
-          import { passkeyClient } from "better-auth/client/plugins"
-            
-            const client = createAuthClient({
-                plugins: [ // [!code highlight]
-                    passkeyClient() // [!code highlight]
-                ] // [!code highlight]
-            })
-        // ---cut---
-        const data = await client.passkey.addPasskey()
-        ```
-        This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
-    </Step>
-
-    <Step>
-        ### Signin with a passkey
-
-        To signin with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
-        
-        Signin method accepts:
-
-        `autoFill`: Browser autofill, a.k.a. Conditional UI. [read more](https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui)
-
-        `callbackURL`: The URL to redirect to after the user has signed in. (optional)
-
-        ```ts title="client.ts" twoslash
-         import { createAuthClient } from "better-auth/client"
-            import { passkeyClient } from "better-auth/client/plugins"
-            
-            const client = createAuthClient({
-                plugins: [ // [!code highlight]
-                    passkeyClient() // [!code highlight]
-                ] // [!code highlight]
-            })
-        // ---cut---
-        const data = await client.signIn.passkey()
-        ```
-        
-    </Step>
 </Steps>
 
 
-## Passkey Configuration
+## Usage
+
+### Add/Register a passkey
+
+To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
+
+```ts title="client.ts" twoslash
+    import { createAuthClient } from "better-auth/client"
+    import { passkeyClient } from "better-auth/client/plugins"
+    
+    const client = createAuthClient({
+        plugins: [ // [!code highlight]
+            passkeyClient() // [!code highlight]
+        ] // [!code highlight]
+    })
+// ---cut---
+const data = await client.passkey.addPasskey()
+```
+This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
+
+### Signin with a passkey
+
+To signin with a passkey you can use the passkeySignIn method. This will prompt the user to sign in with their passkey.
+
+Signin method accepts:
+
+`autoFill`: Browser autofill, a.k.a. Conditional UI. [read more](https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui)
+
+`callbackURL`: The URL to redirect to after the user has signed in. (optional)
+
+```ts title="client.ts" twoslash
+    import { createAuthClient } from "better-auth/client"
+    import { passkeyClient } from "better-auth/client/plugins"
+    
+    const client = createAuthClient({
+        plugins: [ // [!code highlight]
+            passkeyClient() // [!code highlight]
+        ] // [!code highlight]
+    })
+// ---cut---
+const data = await client.signIn.passkey()
+```
+
+
+## Options
 
 **rpID**: A unique identifier for your website. 'localhost' is okay for local dev.
 
@@ -112,47 +106,3 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 **origin**: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do NOT include any trailing /.
 
-
-## Database Schema
-
-Passkey requires a database table called `passkey` with the following fields. If you use better auth's migration system, it will automatically create this table for you.
-
-```ts
-const schema = {
-    passkey: {
-        fields: {
-            publicKey: {
-                type: "string",
-            },
-            userId: {
-                type: "string",
-                references: {
-                    model: "user",
-                    field: "id",
-                },
-            },
-            webauthnUserID: {
-                type: "string",
-            },
-            counter: {
-                type: "number",
-            },
-            deviceType: {
-                type: "string",
-            },
-            backedUp: {
-                type: "boolean",
-            },
-            transports: {
-                type: "string",
-                required: false,
-            },
-            createdAt: {
-                type: "date",
-                defaultValue: new Date(),
-                required: false,
-            },
-        },
-    },
-}
-```

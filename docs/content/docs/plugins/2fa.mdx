@@ -20,39 +20,47 @@ This plugin offers two main methods of 2FA:
 - Managing trusted devices
 
 
-## Initial Setup
-
-To get started with Two-Factor Authentication, follow these steps:
+## Installation
 
 <Steps>
     <Step>
-        ###  Add the plugin to your auth config:
+        ###  Add the plugin to your auth config
+
+        Add the two-factor plugin to your auth configuration and specify your app name as the issuer.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { twoFactor } from "better-auth/plugins"
+        import { twoFactor } from "better-auth/plugins" // [!code highlight]
         
         export const auth = await betterAuth({
             // ... other config options
             plugins: [
-                twoFactor({ 
-                    issuer: "my-app"
-                })
+                twoFactor({  // [!code highlight]
+                    issuer: "my-app" // [!code highlight]
+                }) // [!code highlight]
             ]
         })
         ```
     </Step>
         <Step>
+            ### Migrate your database:
+            Run the migration to add the required fields to the user table.
 
-                ### Migrate your database:
+            this will add the following fields to the **user** table:
 
-                ```bash
-                npx better-auth migrate
-                ```
+            - `twoFactorEnabled`: A boolean field to indicate if 2FA is enabled for the user.
+            - `twoFactorSecret`: The secret key used to generate TOTP codes.
+            - `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+
+            ```bash
+            npx better-auth migrate
+            ```
         </Step>
 
         <Step>
-        ### Add the client plugin:
+        ### Add the client Plugin
+        
+        Add the client plugin and Specify where to redirect the user after enabling 2FA:
 
         ```ts title="client.ts"
         import { createAuthClient } from "better-auth/client"
@@ -83,7 +91,6 @@ const enableTwoFactor = async() => {
     }
 }
 ```
-
 
 ### Sign In with 2FA
 
@@ -250,28 +257,9 @@ When `trustDevice` is set to `true`, the current device will be remembered for 6
     Trusted devices enhance user convenience but should be used carefully, as they slightly reduce security. Encourage users to only trust personal, secure devices.
 </Callout>
 
-## Configuration
+## Options
 
 ### Server
-
-To configure the two factor plugin, you need to add the following code to your better auth instance.
-
-```ts title="auth.ts" twoslash
-import { betterAuth } from "better-auth"
-import { twoFactor } from "better-auth/plugins"
-
-export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
-    plugins: [ // [!code highlight]
-        twoFactor({ // [!code highlight]
-            issuer: "my-app" // [!code highlight] 
-        }) // [!code highlight]
-    ] // [!code highlight]
-})
-```
 
 **Issuer**: The issuer is the name of your application. It's used to generate totp codes. It'll be displayed in the authenticator apps.
 
@@ -357,31 +345,3 @@ const client = createAuthClient({
 `twoFactorPage`: The page to redirect the user to after they have enabled 2-Factor. This is the page where the user will be redirected to verify their 2-Factor code.
 
 `redirect`: If set to `false`, the user will not be redirected to the `twoFactorPage` after they have enabled 2-Factor.
-
-
-## Database Schema
-
-Two factores requires additional fields on the user table. If you use better auth's migration system, it will automatically create this table for you.
-
-```ts
-const schema = {
-    user: {
-        fields: {
-            twoFactorEnabled: {
-                type: "boolean",
-                required: false,
-                defaultValue: false,
-            },
-            twoFactorSecret: {
-                type: "string",
-                required: false,
-            },
-            twoFactorBackupCodes: {
-                type: "string",
-                required: false,
-                returned: false,
-            },
-        },
-    },
-}
-```

@@ -56,9 +56,11 @@ export interface OrganizationOptions {
 		| boolean
 		| ((user: User) => Promise<boolean> | boolean);
 	/**
+	 * The maximum number of organizations a user can create.
 	 *
+	 * You can also pass a function that returns a boolean
 	 */
-	organizationLimit?: number;
+	organizationLimit?: number | ((user: User) => Promise<boolean> | boolean);
 	/**
 	 * The role that is assigned to the creator of the organization.
 	 *

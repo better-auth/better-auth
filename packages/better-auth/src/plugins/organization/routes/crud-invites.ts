@@ -284,7 +284,7 @@ export const cancelInvitation = createAuthEndpoint(
 );
 
 export const getInvitation = createAuthEndpoint(
-	"/organization/get-active-invitation",
+	"/organization/get-invitation",
 	{
 		method: "GET",
 		use: [orgMiddleware],

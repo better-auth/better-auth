@@ -31,6 +31,7 @@ export const createOrganization = createAuthEndpoint(
 				: options?.allowUserToCreateOrganization === undefined
 					? true
 					: options.allowUserToCreateOrganization;
+
 		if (!canCreateOrg) {
 			return ctx.json(null, {
 				status: 403,
@@ -40,6 +41,24 @@ export const createOrganization = createAuthEndpoint(
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context.adapter, options);
+
+		const userOrganizations = await adapter.listOrganizations(user.id);
+		const hasReachedOrgLimit =
+			typeof options.organizationLimit === "number"
+				? userOrganizations.length >= options.organizationLimit
+				: typeof options.organizationLimit === "function"
+					? await options.organizationLimit(user)
+					: false;
+
+		if (hasReachedOrgLimit) {
+			return ctx.json(null, {
+				status: 403,
+				body: {
+					message: "You have reached the maximum number of organizations",
+				},
+			});
+		}
+
 		const existingOrganization = await adapter.findOrganizationBySlug(
 			ctx.body.slug,
 		);

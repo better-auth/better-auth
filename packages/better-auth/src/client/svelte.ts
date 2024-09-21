@@ -22,7 +22,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: Atoms[key];
+								: never]:()=>Atoms[key];
 					}
 				: {}
 			: {}
@@ -41,13 +41,13 @@ export function createAuthClient<Option extends ClientOptions>(
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
+		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = () => value;
 	}
 	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
-		useSession: $session,
+		useSession: ()=>$session,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,

@@ -1,9 +1,9 @@
 .beta {
     background-color: transparent;
-    border: 0.2px solid #e2dddd;
+    border: 0.2px solid #e2d0fe;
     border-radius: 0;
     box-sizing: border-box;
-    color: #000;
+    color: #970bf5;
     cursor: pointer;
     display: inline-block;
     float: right;
@@ -11,7 +11,7 @@
     margin: 0;
     outline: none;
     overflow: visible;
-    padding: 0.7em 3em;
+    padding: 0.4em 2em;
     position: relative;
     text-align: center;
     text-decoration: none;
@@ -78,7 +78,7 @@
   
   .beta {
     color: white;
-    background: white;
+    background: rgb(225, 228, 255);
   }
 
   .beta:hover {
@@ -91,7 +91,7 @@
   
   .beta::before {
     width: 0.9375rem;
-    background: black;
+    background: rgb(39, 37, 42);
   }
   
   .beta .text {

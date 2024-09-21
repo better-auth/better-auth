@@ -3,6 +3,7 @@ import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
 import { remarkInstall } from "fumadocs-docgen";
 import { transformerTwoslash } from "fumadocs-twoslash";
 import { JsxEmit, ModuleResolutionKind } from "typescript";
+
 const withMDX = createMDX({
 	mdxOptions: {
 		rehypeCodeOptions: {
