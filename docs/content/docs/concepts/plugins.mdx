@@ -1,0 +1,324 @@
+---
+title: Plugins
+description: Learn how to use plugins with BetterAuth
+---
+
+Plugins are a key part of Better Auth, letting you extend its functionality. Use them to add new authentication methods, features, or customize behavior.
+
+Better Auth offers many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
+
+## Using a Plugin
+
+Plugins can be a server-side plugin, a client-side plugin, or both.
+
+To add a plugin on the server, include it in the `plugins` array in the Better Auth configuration. The plugin will initialize with the provided options.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = await betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite",
+    },
+    plugins: [
+        // Add your plugins here
+    ]
+})
+```
+
+Client plugins are added when creating the client. Include the plugin in the `plugins` array when creating the client. Most clients require both server and client plugins to work correctly.
+
+```ts title="client.ts"
+import { createAuthClient } from "better-auth/client";
+
+const client = createAuthClient({
+    plugins: [
+        // Add your client plugins here
+    ]
+})
+```
+
+## Creating a Plugin
+
+To create a plugin you need to pass an object that satsfies the `BetterAuthPlugin` interface.
+
+The only required key is `id`, which is a unique identifier for the plugin.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+}
+```
+
+### Endpoints
+
+To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and teh value being `AuthEndpoint`. 
+
+To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
+
+Better auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple web framework made by the same author of Better Auth.
+
+```ts title="plugin.ts"
+import { createAuthEndpoint } from "better-auth";
+
+const myPlugin = {
+    id: "my-plugin",
+    endpoints: {
+        getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
+            method: "GET",
+        }, async(req)=>{
+
+        })
+    }
+}
+```
+
+Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the `req` object, it'll provide you with an object called `context` that give you access better-auth specefic contexts including `options`, `db`, `baseURL` and more.
+
+**Context Object**
+
+- `appName`: The name of the application. Defaults to "Better Auth".
+- `options`: The options passed to the Better Auth instance.
+- `tables`:  Core tables defination. It is an object which has the table name as the key and the schema defination as the value.
+- `baseURL`: the baseURL of the auth server. This includes the path. For example, if the server is running on `http://localhost:3000`, the baseURL will be `http://localhost:3000/api/auth` by default unless changed by the user.
+- `session`: The session configuration. Includes `updateAge` and `expiresIn` values.
+- `secret`: The secret key used for various purposes. This is defined by the user.
+- `authCookie`: The defualt cookie configuration for core auth cookies.
+- `logger`: The logger instance used by Better Auth.
+- `db`: The kysely instance used by Better Auth to interact with the database.
+- `password`: The password configuration. Includes `hash` and `verify` values for hashing and verifying passwords.
+- `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for peroframnce reasons)
+- `intenralAdapter`: this are intenral db calls that are used by better auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
+- `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on 
+
+For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation.
+
+**Rules**
+
+- Makes sure you use kebab-case for the endpoint path.
+- Make sure to only use `POST` or `GET` methods for the endpoints.
+- Any function that modifies a data should be a `POST` method.
+- Any function that fetches data should be a `GET` method.
+- Make sure to use the `createAuthEndpoint` function to create the endpoint.
+- Make sure your paths are unique to avoid conflicts with other plugins.
+
+### Schema
+
+You can define a database schema for your plugin by passing a `schema` object. The schema object should have the table name as the key and the schema definition as the value.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    schema: {
+        myTable: {
+            fields: {
+                name: {
+                    type: "string"
+                }
+            }
+        }
+    }
+}
+```
+
+**Fields**
+
+By default better-auth will create an `id` field for each table. You can add additional fields to the table by adding them to the `fields` object.
+
+The key is the column name and the value is the column definition. The column definition can have the following properties:
+
+`type`: The type of the filed. It can be `string`, `number`, `boolean`, `date`. 
+
+`required`:  if the field should be required on a new record. (default: `false`)
+
+`returned`: if the field should be returned when fetching records. (default: `true`)
+
+`unique`: if the field should be unique. (default: `false`)
+
+`reference`: if the field is a reference to another table. (default: `null`) It takes an object with the following properties:
+    - `model`: The table name to reference.
+    - `field`: The field name to reference.
+    - `onDelete`: The action to take when the referenced record is deleted. (default: `null`)
+
+**Other Schema Properties**
+
+`disableMigration`: if the table should not be migrated. (default: `false`)
+
+```ts title="plugin.ts"
+const myPlugin = (opts: PluginOptions)=>{
+    return {
+        id: "my-plugin",
+        schema: {
+            rateLimit: {
+                fields: {
+                    key: {
+                        type: "string",
+                    },
+                },
+                disableMigration: opts.storage.provider !== "database", // [!code highlight]
+            },
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+### Middleware
+
+You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware functions created by `createAuthMiddelware`. 
+
+`createAuthMiddelware` wraps around `createMiddleware` from Better Call. It takes a function that returns a middleware function. The function will be called with the context object.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    middleware: [
+        createAuthMiddelware(async(ctx)=>{
+            //do something
+        })
+    ]
+}
+```
+
+If you throw an `APIError` from the middleware or returned a `Response` object, the request will be stopped and the response will be sent to the client.
+
+### Hooks
+
+Hooks and middleware are similar but middlewares are handled by better-call and hooks are handled by better-auth. Hooks allows you to execture a code `before` or `after` a specific action. Hooks takes an array of `after` or `before` hooks. 
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    hooks: {
+        before: {
+            [{
+                matcher: (context)=>{
+                    return context.req.method === "POST"
+                },
+                handler: createAuthMiddelware(async(ctx)=>{
+                    //do something before the request
+                })
+            }]
+        },
+        after: [{
+            matcher: (context)=>{
+                return context.req.method === "POST"
+            },
+            handler: createAuthMiddelware(async(ctx)=>{
+                //this is the returned response object from the actual endpoint
+                const returned = ctx.context.returned
+                //do something after the request
+            })
+        }]
+    }
+} satisfies BetterAuthPlugin
+```
+
+### Client
+
+If your endpoints needs to be called from the client, you'll need to also create a client plugin. Better auth clients can infer the endpoints from the server plugins. You can also add additional client side logic.
+
+**Endpoint Inference**
+
+Endpoints are inferred from the server plugin by adding a `$InferServerPlugin` key to the client plugin. 
+
+The client infers the `path` as an object and converts kebab-case to camelCase. For example, `/my-plugin/hello-world` becomes `myPlugin.helloWorld`.
+
+```ts title="client-plugin.ts"
+import type { AuthClientPlugin } from "better-auth/client";
+import type { myPlugin } from ".//plugin";
+
+const myPluginClient = {
+    id: "my-plugin",
+    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+} satisfies AuthClientPlugin
+```
+
+**getActions**
+
+If you need to add additional methods or what not to the client you can use the `getActions` function. This function is called with the `fetch` function from the client.
+
+Better auth uses <Link href="https://bette-fetch.vercel.app"> Better fetch </Link> to make requests. Better fetch is a simple fetch wrapper made by the same author of Better Auth.
+
+```ts title="client-plugin.ts"
+import type { AuthClientPlugin } from "better-auth/client";
+import type { myPlugin } from "./plugin";
+import { BetteFetchOptions } from "better-fetch";
+
+const myPluginClient = {
+    id: "my-plugin",
+    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+    getActions: ($fetch)=>{
+        return {
+            myCustomAction: async (data: {
+                foo: string,
+                fetchOptions?: BetteFetchOptions
+            })=>{
+                const res = $fetch("/custom/action", {
+                    method: "POST",
+                    body: {
+                        foo: data.foo
+                    }
+                    ...data.fetchOptions
+                })
+                return res
+            }
+        }
+    }
+} satisfies AuthClientPlugin
+```
+
+<Callout>
+    As a general rule, make sure to accept only one argument in the function and make sure you also optionally accept a `fetchOptions` object. This is to make sure the user can pass additional options to the fetch call. And return and object with the `data` and `error` key.
+</Callout>
+
+**getAtoms**
+
+This is only useful if you want to provide `hooks` like `useSession`. 
+
+Get atoms is called with the `fetch` function from better fetch and it should return an object with the atoms. This atoms should be created using <Link href="https://github.com/nanostores/nanostores">nanostore</Link>. The atoms will be resolved by each framework `useStore` hook provided by nanostore.
+
+```ts title="client-plugin.ts"
+import { atom } from "nanostores";
+import type { AuthClientPlugin } from "better-auth/client";
+
+const myPluginClient = {
+    id: "my-plugin",
+    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+    getAtoms: ($fetch)=>{
+        const myAtom = atom<null>()
+        return {
+            myAtom
+        }
+    }
+} satisfies AuthClientPlugin
+```
+
+See built in plugins for examples of how to use atoms properly.
+
+**pathMethods**
+
+by default, infered paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
+
+```ts title="client-plugin.ts"
+import type { AuthClientPlugin } from "better-auth/client";
+import type { myPlugin } from "./plugin";
+
+const myPluginClient = {
+    id: "my-plugin",
+    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+    pathMethods: {
+        "/my-plugin/hello-world": "POST"
+    }
+} satisfies AuthClientPlugin
+```
+
+**fetchPlugins**
+
+If you need to use better fetch plugins you can pass them to the `fetchPlugins` array. You can read more about better fetch plugins in the <Link href="https://better-fetch.vercel.app/docs/plugins">better fetch documentation</Link>.
+
+**atomListners**
+
+This is only useful if you want to provide `hooks` like `useSession` and you want to listen to the atoms and re-evalue the atoms when the atom changes.
+
+You can see how this is used in the built in plugins.

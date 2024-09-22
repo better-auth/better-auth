@@ -1,0 +1,67 @@
+---
+title: API
+description: Better Auth API
+---
+
+When you create a new Better Auth instance, you get an object called `api` with a set of functions that you can use to interact with the server.
+
+Any endpoint added on the server will be available on the `api` object.
+
+## Calling API on the Server
+
+Better auth uses a library called [better-call](https://github.com/bekacru/better-call) to make API endpoints. It's a library made by the same team behind Better Auth and is designed to work seamlessly with it.Better call endpoints allow you to call `rest` api handlers as if they were normal functions.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = await betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "./db.sqlite",
+    },
+    plugins: [
+        // add your plugins here
+    ]
+})
+
+// calling sign in email on the server
+await auth.api.signInEmail({
+    body: {
+        email: "",
+        password: ""
+    }
+})
+```
+
+**Example: Getting the current Session**
+
+```ts title="server.ts"
+import { headers } from "next/server";
+
+// calling get session on the server
+await auth.api.getSession({
+    headers: headers()
+})
+```
+
+
+## Handling Errors
+
+Unlike the client, the server doesn't return error as a value, instead it throws an error. You can use a try/catch block to handle errors.
+
+```ts title="server.ts"
+try {
+    await auth.api.signInEmail({
+        body: {
+            email: "",
+            password: ""
+        }
+    })
+} catch (error) {
+    console.error(error)
+}
+```
+
+<Callout>
+    On some cases, the server will return an error object or just a value that indicates non successful value. Mostly, the server will throw an error.
+</Callout>

@@ -24,7 +24,7 @@ This plugin offers two main methods of 2FA:
 
 <Steps>
     <Step>
-        ###  Add the plugin to your auth config
+        ### Add the plugin to your auth config
 
         Add the two-factor plugin to your auth configuration and specify your app name as the issuer.
 
@@ -161,9 +161,7 @@ const verifyTotp = async (code: string) => {
 
 ### OTP
 
-OTP is a one-time password algorithm that generates a code based on the current time. It's a more secure method than TOTP because it takes into account the time it takes to generate the code.
-
-
+OTP is a one-time password sent to the user's email or phone.
 Before using OTP, you need to setup `sendOTP` function.
 
 ```ts title="auth.ts" twoslash
@@ -179,7 +177,7 @@ export const auth = await betterAuth({
         twoFactor({
           	otpOptions: {
 				async sendOTP(user, otp) {
-					console.log({ user, otp });
+                    // send otp to user
 				},
 			},
         })

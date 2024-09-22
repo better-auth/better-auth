@@ -7,14 +7,15 @@ import { magicLinkClient } from "./client";
 describe("magic link", async () => {
 	let verificationEmail = {
 		email: "",
+		token: "",
 		url: "",
 	};
 	const { auth, customFetchImpl, testUser, sessionSetter } =
 		await getTestInstance({
 			plugins: [
 				magicLink({
-					async sendMagicLink(email, url) {
-						verificationEmail = { email, url };
+					async sendMagicLink(data) {
+						verificationEmail = data;
 					},
 				}),
 			],

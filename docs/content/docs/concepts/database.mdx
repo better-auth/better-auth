@@ -1,0 +1,123 @@
+---
+title: Database
+description: Learn how to use a database with BetterAuth
+---
+
+Better auth requires a database connection to store data. Better auth comes with a built in database mangment using <Link href="https://kysely.dev/"> Kysley </Link> to manage the database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+
+You can pass a database connection to better auth by passing a `database` object to the `betterAuth` function. The `database` object should have a `provider` key that specifies the database provider to use. By default, better auth support `postgres`, `mysql` and `sqlite`. You can also pass a kysley dialect directly to use other databases supported by kysley. The `database` object can also have a `url` key that specifies the database connection to use. If you're using `sqlite`, you can pass a file path in the `url` key.
+
+**Example: Sqlite**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+export const auth = await betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "path/to/database.sqlite"
+    }
+})
+```
+
+**Example: Postgres**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth
+export const auth = await betterAuth({
+    database: {
+        provider: "postgres",
+        url: "postgres://user:password@localhost:5432/database"
+    }
+})
+```
+
+**Exmaple: Mysql**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth
+export const auth = await betterAuth({
+    database: {
+        provider: "mysql",
+        url: "mysql://user:password@localhost:3306/database"
+    }
+})
+```
+
+**Exmaple: Custom Dialect using libsql**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+
+export const auth = await betterAuth({
+   	database: new LibsqlDialect({
+		url: process.env.TURSO_DATABASE_URL || "",
+		authToken: process.env.TURSO_AUTH_TOKEN || "",
+	}),
+})
+```
+
+<Callout>
+See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialects </Link> for more dialects supported by kysley.
+</Callout>
+
+
+## Running Migrations
+
+Better auth includes a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed.
+
+The cli checks your database and prompts you to add missing tables or update existing ones with new columns.
+
+```bash
+npx better-auth migrate
+```
+
+## Core Schema
+
+Better auth requires the following tables to be present in the database:
+
+**user**:
+
+- `id`: The unique identifier of the user.
+- `email`: The email address of the user.
+- `name`: The name of the user.
+- `image`: The image of the user.
+
+**session**:
+- `id`: The unique identifier of the session. Also used as the session token.
+- `userId`: The id of the user.
+- `expiresAt`: The time when the session expires.
+- `ipAddress`: The IP address of the user.
+- `userAgent`: The user agent of the user.
+
+**account**: 
+- `id`: The unique identifier of the account.
+- `userId`: The id of the user.
+- `accountId`: The id of the account. (optional)
+- `providerId`: The id of the provider. (optional)
+- `accessToken`: The access token of the account. Returned by the provider. (optional)
+- `refreshToken`: The refresh token of the account. Returned by the provider. (optional)
+- `accessTokenExpiresAt`: The time when the access token expires. (optional)
+- `refreshTokenExpiresAt`: The time when the refresh token expires. (optional)
+- `password`: The password of the account. Mainly used for email and password authentication. (optional)
+
+
+## Plugins Schema
+
+Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
+
+- `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
+- `twoFactorSecret`: The secret key used to generate TOTP codes.
+- `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+
+To add additional tables and columns to the database, you can run the `migrate` command provided by better auth. The `migrate` command will run the migrations defined by the plugins to add the required tables and columns to the database.
+
+```bash
+npx better-auth migrate
+```
+
+<Callout>
+The `migrate` command should be run whenever you add plugins that require additional tables or columns in the database.
+</Callout>
+
+## Extending the Schema
+
+Better auth currently does not provide a direct method to extend the core schema. However, you can add extra columns to the database and manage them independently. For instance, to store additional user data, you can either create a new table or add columns to the `user` table.
+
+We suggest creating a new table for additional data to keep the core tables clean and maintainable. You can link this new table to the `user` table using a foreign key.

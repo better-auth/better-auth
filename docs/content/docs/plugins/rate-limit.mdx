@@ -210,26 +210,3 @@ export const auth = await betterAuth({
     ], 
 })
 ```
-
-### Custom Rate Limiter
-
-you can also pass a custom rate limiter that'll overtake the default plugins rate llimiting implementation. 
-
-The custom rate limiter function should accept a Request object and return a boolean value indicating whether the request should be allowed or not.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { rateLimiter } from "better-auth/plugins"
-
-export const auth = await betterAuth({
-    //
-    plugins: [ 
-        rateLimit({
-            enabled: true,
-            rateLimiter: async (request) => { // [!code highlight]
-                return true; // [!code highlight]
-            }, // [!code highlight]
-        }), 
-    ], 
-})
-```

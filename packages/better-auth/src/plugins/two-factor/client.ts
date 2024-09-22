@@ -28,7 +28,6 @@ export const twoFactorClient = (
 			},
 		],
 		pathMethods: {
-			"enable/totp": "POST",
 			"/two-factor/disable": "POST",
 			"/two-factor/enable": "POST",
 			"/two-factor/send-otp": "POST",

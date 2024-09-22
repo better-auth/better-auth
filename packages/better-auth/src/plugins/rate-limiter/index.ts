@@ -117,24 +117,6 @@ export const rateLimiter = (options: RateLimitOptions) => {
 		],
 		...options,
 	} satisfies RateLimitOptions;
-	const schema =
-		opts.storage.provider === "database"
-			? ({
-					rateLimit: {
-						fields: {
-							key: {
-								type: "string",
-							},
-							count: {
-								type: "number",
-							},
-							lastRequest: {
-								type: "number",
-							},
-						},
-					},
-				} as const)
-			: undefined;
 
 	function createDBStorage(ctx: GenericEndpointContext) {
 		const db = ctx.context.db;
@@ -263,6 +245,21 @@ export const rateLimiter = (options: RateLimitOptions) => {
 				}),
 			},
 		],
-		schema,
+		schema: {
+			rateLimit: {
+				fields: {
+					key: {
+						type: "string",
+					},
+					count: {
+						type: "number",
+					},
+					lastRequest: {
+						type: "number",
+					},
+				},
+				disableMigration: opts.storage.provider !== "database",
+			},
+		},
 	} satisfies BetterAuthPlugin;
 };

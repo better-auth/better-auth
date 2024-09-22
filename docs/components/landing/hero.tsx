@@ -199,7 +199,10 @@ export default function Hero() {
                         code={code}
                         language={"javascript"}
                         theme={{
-                          ...themes.synthwave84,
+                          ...(theme.resolvedTheme === "dark"
+                            ? themes.synthwave84
+                            : themes.oneLight),
+
                           plain: {
                             backgroundColor: "transparent",
                           },

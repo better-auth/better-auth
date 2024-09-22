@@ -1,0 +1,13 @@
+---
+title: Account Linking
+description: Account linking allows users to link multiple authentication methods to the same account
+---
+
+Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
+
+Better auth automatically handles account linking when users sign in using different methods. This works by checking if the provider returns `emailVerified` field. If the field is present, Better Auth will link the account to the existing user account.
+
+
+<Callout>
+more sophisticated account linking feature will be added in the future.
+</Callout>

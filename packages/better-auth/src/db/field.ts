@@ -92,3 +92,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 */
 	validator?: ZodSchema;
 };
+
+export type PluginFieldAttribute = Omit<
+	FieldAttribute,
+	"transform" | "defaultValue" | "hashValue"
+>;

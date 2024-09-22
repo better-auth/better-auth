@@ -7,17 +7,22 @@ import { createEmailVerificationToken } from "../../api/routes";
 import { logger } from "../../utils/logger";
 import { validateJWT, type JWT } from "oslo/jwt";
 import { setSessionCookie } from "../../utils/cookies";
+import { off } from "process";
 
 interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
-	 * @default (60 * 60) // 1 hour
+	 * @default (60 * 5) // 5 minutes
 	 */
 	expiresIn?: number;
 	/**
 	 * Send magic link implementation.
 	 */
-	sendMagicLink: (email: string, url: string) => Promise<void> | void;
+	sendMagicLink: (data: {
+		email: string;
+		url: string;
+		token: string;
+	}) => Promise<void> | void;
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
@@ -53,7 +58,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.body.callbackURL || ctx.body.currentURL
 					}`;
 					try {
-						await options.sendMagicLink(email, url);
+						await options.sendMagicLink({
+							email,
+							url,
+							token,
+						});
 					} catch (e) {
 						ctx.context.logger.error("Failed to send magic link", e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -86,6 +95,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						);
 					} catch (e) {
 						ctx.context.logger.error("Failed to verify email", e);
+						if (callbackURL) {
+							throw ctx.redirect(`${callbackURL}?error=INVALID_TOKEN`);
+						}
 						return ctx.json(null, {
 							status: 400,
 							statusText: "INVALID_TOKEN",
@@ -102,6 +114,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						parsed.email,
 					);
 					if (!user) {
+						if (callbackURL) {
+							throw ctx.redirect(`${callbackURL}?error=USER_NOT_FOUND`);
+						}
 						return ctx.json(null, {
 							status: 400,
 							statusText: "USER_NOT_FOUND",
@@ -115,6 +130,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.headers,
 					);
 					if (!session) {
+						if (callbackURL) {
+							throw ctx.redirect(`${callbackURL}?error=SESSION_NOT_CREATED`);
+						}
 						return ctx.json(null, {
 							status: 400,
 							statusText: "SESSION NOT CREATED",
