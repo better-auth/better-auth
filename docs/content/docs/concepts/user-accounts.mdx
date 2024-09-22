@@ -43,7 +43,28 @@ await user.changePassword({
 });
 ```
 
-## Account linking
+## Accounts
+
+Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.
+
+When a user signs in using a provider, an account is created for the user. The account stores the authentication data returned by the provider. This data includes the access token, refresh token, and other information returned by the provider.
+
+### Account table
+
+The account table stores the authentication data of the user. The account table has the following fields:
+
+- `id`: The unique identifier of the account.
+- `userId`: The id of the user.
+- `accountId`: The id of the account. (optional)
+- `providerId`: The id of the provider. (optional)
+- `accessToken`: The access token of the account. Returned by the provider. (optional)
+- `refreshToken`: The refresh token of the account. Returned by the provider. (optional)
+- `accessTokenExpiresAt`: The time when the access token expires. (optional)
+- `refreshTokenExpiresAt`: The time when the refresh token expires. (optional)
+- `password`: The password of the account. Mainly used for email and password authentication. (optional)
+
+
+### Account linking
 
 Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
 
