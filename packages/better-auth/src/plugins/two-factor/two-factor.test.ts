@@ -29,7 +29,7 @@ describe("two factor", async () => {
 	const session = await client.signIn.email({
 		email: testUser.email,
 		password: testUser.password,
-		options: {
+		fetchOptions: {
 			onSuccess: sessionSetter(headers),
 		},
 	});
@@ -39,7 +39,7 @@ describe("two factor", async () => {
 	it("should enable two factor", async () => {
 		const res = await client.twoFactor.enable({
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -64,7 +64,7 @@ describe("two factor", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -80,7 +80,7 @@ describe("two factor", async () => {
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
 		const otpRes = await client.twoFactor.sendOtp({
-			options: {
+			fetchOptions: {
 				body: {
 					returnOTP: true,
 				},
@@ -101,7 +101,7 @@ describe("two factor", async () => {
 		expect(otpRes.data?.OTP).toBeDefined();
 		const verifyRes = await client.twoFactor.verifyOtp({
 			code: otpRes.data?.OTP as string,
-			options: {
+			fetchOptions: {
 				headers,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
@@ -118,7 +118,7 @@ describe("two factor", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -134,7 +134,7 @@ describe("two factor", async () => {
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
 		const otpRes = await client.twoFactor.sendOtp({
-			options: {
+			fetchOptions: {
 				body: {
 					returnOTP: true,
 				},
@@ -156,7 +156,7 @@ describe("two factor", async () => {
 		await client.twoFactor.verifyOtp({
 			trustDevice: true,
 			code: otpRes.data?.OTP as string,
-			options: {
+			fetchOptions: {
 				headers,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
@@ -175,7 +175,7 @@ describe("two factor", async () => {
 		const signInRes = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				headers: newHeaders,
 			},
 		});
@@ -185,7 +185,7 @@ describe("two factor", async () => {
 	it("should disable two factor", async () => {
 		const res = await client.twoFactor.disable({
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});

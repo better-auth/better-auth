@@ -18,7 +18,7 @@ describe("bearer", async () => {
 			},
 		);
 		const session = await client.session({
-			options: {
+			fetchOptions: {
 				headers: {
 					authorization: `Bearer ${res.data?.session.id}`,
 				},

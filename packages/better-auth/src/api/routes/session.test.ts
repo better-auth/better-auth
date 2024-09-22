@@ -10,7 +10,7 @@ describe("session", async () => {
 		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -36,7 +36,7 @@ describe("session", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -45,6 +45,7 @@ describe("session", async () => {
 				},
 			},
 		});
+
 		if (!res.data?.session) {
 			throw new Error("No session found");
 		}
@@ -54,14 +55,11 @@ describe("session", async () => {
 			new Date(res.data?.session.expiresAt).getTime(),
 		).toBeGreaterThanOrEqual(after7Days.getTime());
 
-		if (!res.data?.session) {
-			throw new Error("No session found");
-		}
 		const nearExpiryDate = new Date();
 		nearExpiryDate.setDate(nearExpiryDate.getDate() + 6);
 		vi.setSystemTime(nearExpiryDate);
 		const response = await client.session({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -80,7 +78,7 @@ describe("session", async () => {
 			email: testUser.email,
 			password: testUser.password,
 			dontRememberMe: true,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -103,7 +101,7 @@ describe("session", async () => {
 			getDate(1000 * 60 * 60 * 24).valueOf(),
 		);
 		const response = await client.session({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -122,7 +120,7 @@ describe("session", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -136,12 +134,12 @@ describe("session", async () => {
 		}
 		expect(res.data.session).not.toBeNull();
 		await client.signOut({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
 		const response = await client.session({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -153,13 +151,13 @@ describe("session", async () => {
 		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess: sessionSetter(headers),
 			},
 		});
 
 		const response = await client.user.listSessions({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -173,31 +171,31 @@ describe("session", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess: sessionSetter(headers),
 			},
 		});
 		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess: sessionSetter(headers2),
 			},
 		});
 		await client.user.revokeSession({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 			id: res.data?.session?.id || "",
 		});
 		const session = await client.session({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
 		expect(session.data).toBeNull();
 		const revokeRes = await client.user.revokeSessions({
-			options: {
+			fetchOptions: {
 				headers: headers2,
 			},
 		});

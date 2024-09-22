@@ -27,7 +27,7 @@
         "@types/node": "^20.12.12",
         "simple-git-hooks": "^2.11.1",
         "turbo": "^2.0.4",
-        "typescript": "5.5.0-dev.20240520"
+        "typescript": "5.6.1-rc"
     },
     "pnpm": {
         "overrides": {

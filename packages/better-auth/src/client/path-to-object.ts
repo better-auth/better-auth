@@ -28,18 +28,18 @@ type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 	any
 >
 	? C["body"] & {
-			options?: BetterFetchOption<undefined, C["query"], C["params"]>;
+			fetchOptions?: BetterFetchOption<undefined, C["query"], C["params"]>;
 		}
 	: C["query"] extends Record<string, any>
 		? {
 				query: C["query"];
-				options?: Omit<
+				fetchOptions?: Omit<
 					BetterFetchOption<C["body"], C["query"], C["params"]>,
 					"query"
 				>;
 			}
 		: {
-				options?: BetterFetchOption<C["body"], C["query"], C["params"]>;
+				fetchOptions?: BetterFetchOption<C["body"], C["query"], C["params"]>;
 			};
 
 type MergeRoutes<T> = UnionToIntersection<T>;

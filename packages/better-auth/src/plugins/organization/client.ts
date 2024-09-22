@@ -64,14 +64,16 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						//@ts-expect-error fix this later
 						[key in keyof Statements]: Statements[key][number][];
 					}>;
-					options?: BetterFetchOption;
+					fetchOptions?: BetterFetchOption;
 				}) => {
-					return await $fetch<boolean>("/organization/has-permission", {
+					return await $fetch<{
+						success: boolean;
+					}>("/organization/has-permission", {
 						method: "POST",
 						body: {
 							permission: data.permission,
 						},
-						...data.options,
+						...data.fetchOptions,
 					});
 				},
 			},

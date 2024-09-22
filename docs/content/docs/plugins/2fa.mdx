@@ -112,7 +112,7 @@ const signin = async () => {
     const { data, error } = await client.signIn.email({
         email: "user@example.com",
         password: "password123",
-        options: {
+        fetchOptions: {
             async onSuccess(context) {
                 if (context.data.twoFactorRedirect) {
                     // Handle the 2FA verification in place

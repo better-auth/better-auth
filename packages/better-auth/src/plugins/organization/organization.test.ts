@@ -27,7 +27,7 @@ describe("organization", async (it) => {
 			metadata: {
 				test: "test",
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -41,7 +41,7 @@ describe("organization", async (it) => {
 	it("should allow listing organizations", async () => {
 		const { headers } = await signInWithTestUser();
 		const organizations = await client.organization.list({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -55,7 +55,7 @@ describe("organization", async (it) => {
 			data: {
 				name: "test2",
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -66,14 +66,14 @@ describe("organization", async (it) => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.activate({
 			orgId,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
 
 		expect(organization.data?.id).toBe(orgId);
 		const session = await client.session({
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -91,7 +91,7 @@ describe("organization", async (it) => {
 			organizationId: orgId,
 			email: newUser.email,
 			role: "member",
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -110,7 +110,7 @@ describe("organization", async (it) => {
 
 		const wrongInvitation = await client.organization.acceptInvitation({
 			invitationId: "123",
-			options: {
+			fetchOptions: {
 				headers: headers2,
 			},
 		});
@@ -118,7 +118,7 @@ describe("organization", async (it) => {
 
 		const wrongPerson = await client.organization.acceptInvitation({
 			invitationId: invite.data.id,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -126,13 +126,13 @@ describe("organization", async (it) => {
 
 		const invitation = await client.organization.acceptInvitation({
 			invitationId: invite.data.id,
-			options: {
+			fetchOptions: {
 				headers: headers2,
 			},
 		});
 		expect(invitation.data?.invitation.status).toBe("accepted");
 		const invitedUserSession = await client.session({
-			options: {
+			fetchOptions: {
 				headers: headers2,
 			},
 		});
@@ -147,7 +147,7 @@ describe("organization", async (it) => {
 			query: {
 				orgId,
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -157,7 +157,7 @@ describe("organization", async (it) => {
 			organizationId: org.data.id,
 			memberId: org.data.members[1].id,
 			role: "admin",
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -170,7 +170,7 @@ describe("organization", async (it) => {
 			query: {
 				orgId,
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -179,7 +179,7 @@ describe("organization", async (it) => {
 		const removedMember = await client.organization.removeMember({
 			organizationId: orgId,
 			memberIdOrEmail: "test2@test.com",
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -189,7 +189,7 @@ describe("organization", async (it) => {
 			query: {
 				orgId,
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -202,7 +202,7 @@ describe("organization", async (it) => {
 			query: {
 				orgId,
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -211,7 +211,7 @@ describe("organization", async (it) => {
 		const removedMember = await client.organization.removeMember({
 			organizationId: org.data.id,
 			memberIdOrEmail: org.data.members[0].id,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -222,7 +222,7 @@ describe("organization", async (it) => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.activate({
 			orgId,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -230,7 +230,7 @@ describe("organization", async (it) => {
 			permission: {
 				member: ["update"],
 			},
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -241,7 +241,7 @@ describe("organization", async (it) => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.delete({
 			orgId,
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});

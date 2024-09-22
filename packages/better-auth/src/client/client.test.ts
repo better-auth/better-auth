@@ -172,7 +172,9 @@ describe("type", () => {
 				},
 			},
 		});
-		expectTypeOf(client.useComputedAtom).toEqualTypeOf<ReadableAtom<number>>();
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
+			() => ReadableAtom<number>
+		>();
 	});
 
 	it("should infer actions", () => {

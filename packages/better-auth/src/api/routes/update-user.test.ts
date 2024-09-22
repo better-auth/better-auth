@@ -10,7 +10,7 @@ describe("updateUser", async () => {
 	const session = await client.signIn.email({
 		email: testUser.email,
 		password: testUser.password,
-		options: {
+		fetchOptions: {
 			onSuccess: sessionSetter(headers),
 			onRequest(context) {
 				return context;
@@ -24,7 +24,7 @@ describe("updateUser", async () => {
 	it("should update the user's name", async () => {
 		const updated = await client.user.update({
 			name: "newName",
-			options: {
+			fetchOptions: {
 				headers,
 			},
 		});
@@ -36,7 +36,7 @@ describe("updateUser", async () => {
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
 			revokeOtherSessions: true,
-			options: {
+			fetchOptions: {
 				headers: headers,
 			},
 		});
@@ -59,7 +59,7 @@ describe("updateUser", async () => {
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
 			revokeOtherSessions: true,
-			options: {
+			fetchOptions: {
 				headers: headers,
 				onSuccess: sessionSetter(newHeaders),
 			},
@@ -68,7 +68,7 @@ describe("updateUser", async () => {
 		const oldCookie = headers.get("cookie");
 		expect(cookie).not.toBe(oldCookie);
 		const sessionAttempt = await client.session({
-			options: {
+			fetchOptions: {
 				headers: headers,
 			},
 		});

@@ -6,7 +6,7 @@
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
         "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch",
-        "test": "vitest",
+        "test": "pnpm typecheck && vitest",
         "bump": "bumpp",
         "typecheck": "tsc --noEmit"
     },
@@ -59,7 +59,7 @@
         "solid-js": "^1.8.18",
         "swr": "^2.2.5",
         "tsup": "^8.2.4",
-        "typescript": "5.6.0-beta",
+        "typescript": "5.6.1-rc",
         "vitest": "^1.6.0",
         "vue": "^3.5.0"
     },

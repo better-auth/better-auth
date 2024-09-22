@@ -9,12 +9,12 @@ function getMethod(
 	args?: ProxyRequest,
 ) {
 	const method = knownPathMethods[path];
-	const { options, query, ...body } = args || {};
+	const { fetchOptions, query, ...body } = args || {};
 	if (method) {
 		return method;
 	}
-	if (options?.method) {
-		return options.method;
+	if (fetchOptions?.method) {
+		return fetchOptions.method;
 	}
 	if (body && Object.keys(body).length > 0) {
 		return "POST";
@@ -64,7 +64,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 
 				const arg = (args[0] || {}) as ProxyRequest;
 				const method = getMethod(routePath, knownPathMethods, arg);
-				const { query, options, ...body } = arg;
+				const { query, fetchOptions: options, ...body } = arg;
 
 				return await client(routePath, {
 					...options,

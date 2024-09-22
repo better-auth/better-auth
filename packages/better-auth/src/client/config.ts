@@ -2,9 +2,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/base-url";
 import { type Atom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
-
 import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
-import type { InferSession } from "../types";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createFetch({
@@ -15,7 +13,8 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 			csrfPlugin,
 			redirectPlugin,
 			addCurrentURL,
-			...(options?.fetchOptions?.plugins || []),
+			...(options?.fetchOptions?.plugins?.filter((pl) => pl !== undefined) ||
+				[]),
 			...(options?.plugins
 				?.flatMap((plugin) => plugin.fetchPlugins)
 				.filter((pl) => pl !== undefined) || []),

@@ -45,7 +45,7 @@ describe("magic link", async () => {
 			query: {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
 			},
-			options: {
+			fetchOptions: {
 				onSuccess: sessionSetter(headers),
 			},
 		});

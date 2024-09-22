@@ -53,7 +53,8 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		name: "test",
 	};
 	async function createTestUser() {
-		await auth.api.signUpEmail({
+		//@ts-expect-error
+		const res = await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -71,7 +72,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -90,7 +91,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		const res = await client.signIn.email({
 			email,
 			password,
-			options: {
+			fetchOptions: {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
