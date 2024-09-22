@@ -1,6 +1,6 @@
 ---
-title: User Management
-description: User management concepts
+title: User & Accounts
+description: user and account management
 ---
 
 Beyond authenticating users, Better auth also provides a set of functions to manage users. This includes, updating user information, changing passwords, and more.
@@ -42,3 +42,14 @@ await user.changePassword({
     revokeOtherSessions: true, // revoke all other sessions the user is signed into
 });
 ```
+
+## Account linking
+
+Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
+
+Better auth automatically handles account linking when users sign in using different methods. This works by checking if the provider returns `emailVerified` field. If the field is present, Better Auth will link the account to the existing user account.
+
+
+<Callout>
+more sophisticated account linking feature will be added in the future.
+</Callout>
