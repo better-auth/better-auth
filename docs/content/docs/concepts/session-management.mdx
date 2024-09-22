@@ -1,0 +1,81 @@
+---
+title: Session Management
+description: Better Auth Session Management
+---
+
+Better auth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid. 
+
+## Session table
+
+The session table stores the session data. The session table has the following fields:
+
+- `id`: The session id. Which is also used as the session cookie.
+- `userId`: The user id of the user.
+- `expiresAt`: The expiration date of the session.
+- `ipAddress`: The IP address of the user.
+- `userAgent`: The user agent of the user. It stores the user agent header from the request.
+
+## Session Expiration
+
+The session expires after 7 days by default. But whenever the session is used, and the `updateAge` is reached the session expiration is updated to the current time plus the `expiresIn` value. 
+
+You can change both the `expiresIn` and `updateAge` values by passing the `session` object to the `auth` configuration.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = await betterAuth({
+    //... other config options
+    session: {
+        expiresIn: 1000 * 60 * 60 * 24 * 7 // 7 days,
+        updateAge: 1000 * 60 * 60 * 24 // 1 day (every 1 day the session expiration is updated)
+    }
+})
+```
+
+## Session Management
+
+Better Auth provides a set of functions to manage sessions. 
+
+### List Sessions
+
+The `listSessions` function returns a list of sessions that are active for the user.
+
+```ts title="client.ts"
+import { client } from "@/lib/client"
+
+const sessions = await client.user.listSessions()
+```
+
+### Revoke Session
+
+When a user signs out of a device, the session is automatically ended. However, you can also end a session manually from any device the user is signed into.
+
+To end a session, use the `revokeSession` function. Just pass the session ID as a parameter.
+
+```ts title="client.ts"
+await client.user.revokeSession({
+    id: session.id,
+})
+```
+
+### Revoke All Sessions
+
+To revoke all sessions, you can use the `revokeSessions` function.
+
+```ts title="client.ts"
+await client.user.revokeSessions()
+```
+
+### Revoking Sessions on Password Change
+
+You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePAssword` function.
+
+```ts title="auth.ts"
+await user.changePassword({
+    newPassword: newPassword,
+    currentPassword: currentPassword,
+    revokeOtherSessions: signOutDevices,
+})
+```
+

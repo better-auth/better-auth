@@ -1,0 +1,44 @@
+---
+title: User Management
+description: User management concepts
+---
+
+Beyond authenticating users, Better auth also provides a set of functions to manage users. This includes, updating user information, changing passwords, and more.
+
+## User table
+
+The user table stores the user data. The user table has the following fields:
+
+- `id`: The user id.
+- `email`: The email of the user.
+- `name`: The name of the user.
+- `image`: The image of the user.
+- `createdAt`: The creation date of the user.
+- `updatedAt`: The last update date of the user.
+
+The user table can be extended by plugins to store additional data. When a plugin extends a user table it's infered by the type system and can be used in the client.
+
+## Update User
+
+### Update User Information
+
+To update user information, you can use the `updateUser` function provided by the client. The `updateUser` function takes an object with the following properties:
+
+```ts
+await user.update({
+    image: "https://example.com/image.jpg",
+    name: "John Doe",
+})
+```
+
+### Change Password
+
+Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
+
+```ts
+await user.changePassword({
+    newPassword: "newPassword123",
+    currentPassword: "oldPassword123",
+    revokeOtherSessions: true, // revoke all other sessions the user is signed into
+});
+```
