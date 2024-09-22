@@ -10,6 +10,8 @@
 [ ] add callback url on otp and backup code verification
 [ ] fix bun problem
 [x] fix the issue with the client triggers not working fot 2 consecutive calls
+[ ] add a way to specify on the client to use the base path as the whole path
+[ ] implement magic links
 
 
 ## Docs

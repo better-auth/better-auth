@@ -45,7 +45,6 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			return handler(request);
 		},
 		api: api as InferAPI<typeof api>,
-		s: api as X,
 		options: authContext.options as O,
 		$infer: {} as {
 			session: {

@@ -1,5 +1,5 @@
 ---
-title: Getting Started with Better Auth
+title: Gettig Started with Better Auth
 description: A friendly guide to installing and setting up Better Auth
 ---
 
@@ -161,18 +161,11 @@ Better auth supports any backend framework with standard Request and Response ob
     </Tab>
     <Tab value="nuxt">
     ```ts title="/server/api/[...auth].ts"
-    import { Hono } from "hono";
-    import { auth } from "./auth"; // path to your auth file
-    import { serve } from "@hono/node-server";
-    import { cors } from "hono/cors";
+    import { auth } from "~/utils/auth"; // path to your auth file
 
-    const app = new Hono();
-
-    app.on(["POST", "GET"], "/api/auth/**", (c) => {
-        return auth.handler(c.req.raw);
+    export default defineEventHandler((event) => {
+        return auth.handler(toWebRequest(event));
     });
-
-    serve(app);
     ```
     </Tab>
     <Tab value="svelte-kit">

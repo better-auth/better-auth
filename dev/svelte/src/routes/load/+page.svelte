@@ -20,3 +20,11 @@
 {/if}
 
 <h2>Active Organization</h2>
+
+{#if $activeOrganization.isPending}
+  <p>Loading...</p>
+{:else if $activeOrganization.data === null}
+  <p>No active organization found.</p>
+{:else}
+  <p>{$activeOrganization.data.name}</p>
+{/if}

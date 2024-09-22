@@ -1,0 +1,54 @@
+---
+title: Database
+description: Learn how to use a database with BetterAuth
+---
+
+Better auth requires a database connection to store data. Better auth comes with a built in database mangment using <Link href="https://kysely.dev/"> Kysley </Link> to manage the database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+
+You can pass a database connection to better auth by passing a `database` object to the `betterAuth` function. The `database` object should have a `provider` key that specifies the database provider to use. By default, better auth support `postgres`, `mysql` and `sqlite`. You can also pass a kysley dialect directly to use other databases supported by kysley. The `database` object can also have a `url` key that specifies the database connection to use. If you're using `sqlite`, you can pass a file path in the `url` key.
+
+**Example: Sqlite**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+export const auth = await betterAuth({
+    database: {
+        provider: "sqlite",
+        url: "path/to/database.sqlite"
+    }
+})
+```
+
+**Example: Postgres**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth
+export const auth = await betterAuth({
+    database: {
+        provider: "postgres",
+        url: "postgres://user:password@localhost:5432/database"
+    }
+})
+```
+
+**Exmaple: Mysql**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth
+export const auth = await betterAuth({
+    database: {
+        provider: "mysql",
+        url: "mysql://user:password@localhost:3306/database"
+    }
+})
+```
+
+**Exmaple: Custom Dialect**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+
+export const auth = await betterAuth({
+   	database: new LibsqlDialect({
+		url: process.env.TURSO_DATABASE_URL || "",
+		authToken: process.env.TURSO_AUTH_TOKEN || "",
+	}),
+})
+```
