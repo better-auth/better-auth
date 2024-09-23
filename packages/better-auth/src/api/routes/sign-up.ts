@@ -2,6 +2,7 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
+import { setSessionCookie } from "../../utils";
 
 export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",
@@ -79,12 +80,7 @@ export const signUpEmail = createAuthEndpoint(
 			createdUser.id,
 			ctx.request,
 		);
-		await ctx.setSignedCookie(
-			ctx.context.authCookies.sessionToken.name,
-			session.id,
-			ctx.context.secret,
-			ctx.context.authCookies.sessionToken.options,
-		);
+		await setSessionCookie(ctx, session.id);
 		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,

@@ -67,7 +67,6 @@ export const useAuthQuery = <T>(
 			},
 		});
 	};
-	fn();
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];

@@ -8,7 +8,7 @@ import { useAuthQuery } from "./query";
 import type { BetterAuthPlugin } from "../plugins";
 
 export function getSessionAtom<Option extends ClientOptions>(
-	client: BetterFetch,
+	$fetch: BetterFetch,
 ) {
 	type Plugins = Option["plugins"] extends Array<BetterAuthClientPlugin>
 		? Array<
@@ -39,7 +39,7 @@ export function getSessionAtom<Option extends ClientOptions>(
 	const session = useAuthQuery<{
 		user: Prettify<UserWithAdditionalFields>;
 		session: Prettify<SessionWithAdditionalFields>;
-	}>($signal, "/session", client, {
+	}>($signal, "/session", $fetch, {
 		method: "GET",
 	});
 	return {

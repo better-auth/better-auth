@@ -98,10 +98,16 @@ export const callbackOAuth = createAuthEndpoint(
 			const isTrustedProvider = trustedProviders
 				? trustedProviders.includes(provider.id as "apple")
 				: false;
-
 			if (!hasBeenLinked && (!user.emailVerified || !isTrustedProvider)) {
-				const url = new URL(currentURL || callbackURL);
-				url.searchParams.set("error", "user_already_exists");
+				let url: URL;
+				try {
+					url = new URL(currentURL || callbackURL);
+					url.searchParams.set("error", "user_already_exists");
+				} catch (e) {
+					throw c.redirect(
+						`${c.context.baseURL}/error?error=user_already_exists`,
+					);
+				}
 				throw c.redirect(url.toString());
 			}
 

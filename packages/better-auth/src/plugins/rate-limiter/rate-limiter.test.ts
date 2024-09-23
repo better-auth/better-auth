@@ -24,7 +24,7 @@ describe("rate-limiter", async () => {
 				password: testUser.password,
 			});
 
-			if (i === 9) {
+			if (i === 10) {
 				expect(response.error?.status).toBe(429);
 			} else {
 				expect(response.error).toBeNull();

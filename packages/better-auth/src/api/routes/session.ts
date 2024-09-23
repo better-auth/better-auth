@@ -1,4 +1,4 @@
-import type { Context } from "better-call";
+import type { Context, InferUse } from "better-call";
 import { createAuthEndpoint } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
@@ -6,6 +6,12 @@ import { sessionMiddleware } from "../middlewares/session";
 import type { Session, User } from "../../adapters/schema";
 import { z } from "zod";
 import { getIp } from "../../utils/get-request-ip";
+import type {
+	BetterAuthOptions,
+	InferSession,
+	InferUser,
+	Prettify,
+} from "../../types";
 
 const sessionCache = new Map<
 	string,
@@ -37,113 +43,124 @@ function getRequestUniqueKey(ctx: Context<any, any>, token: string): string {
 	return uniqueString;
 }
 
-export const getSession = createAuthEndpoint(
-	"/session",
-	{
-		method: "GET",
-		requireHeaders: true,
-	},
-	async (ctx) => {
-		try {
-			const sessionCookieToken = await ctx.getSignedCookie(
-				ctx.context.authCookies.sessionToken.name,
-				ctx.context.secret,
-			);
+export const getSession = <Option extends BetterAuthOptions>() =>
+	createAuthEndpoint(
+		"/session",
+		{
+			method: "GET",
+			requireHeaders: true,
+		},
+		async (ctx) => {
+			console.log("called");
+			try {
+				const sessionCookieToken = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionToken.name,
+					ctx.context.secret,
+				);
 
-			if (!sessionCookieToken) {
-				return ctx.json(null, {
-					status: 401,
-				});
-			}
-
-			const key = getRequestUniqueKey(ctx, sessionCookieToken);
-			const cachedSession = sessionCache.get(key);
-			if (cachedSession) {
-				if (cachedSession.expiresAt > Date.now()) {
-					return ctx.json(cachedSession.data);
+				if (!sessionCookieToken) {
+					return ctx.json(null, {
+						status: 401,
+					});
 				}
-				sessionCache.delete(key);
-			}
 
-			const session =
-				await ctx.context.internalAdapter.findSession(sessionCookieToken);
-
-			if (!session || session.session.expiresAt < new Date()) {
-				deleteSessionCookie(ctx);
-				if (session) {
-					/**
-					 * if session expired clean up the session
-					 */
-					await ctx.context.internalAdapter.deleteSession(session.session.id);
+				const key = getRequestUniqueKey(ctx, sessionCookieToken);
+				const cachedSession = sessionCache.get(key);
+				if (cachedSession) {
+					if (cachedSession.expiresAt > Date.now()) {
+						return ctx.json(cachedSession.data);
+					}
+					sessionCache.delete(key);
 				}
-				return ctx.json(null, {
-					status: 401,
-				});
-			}
-			const dontRememberMe = await ctx.getSignedCookie(
-				ctx.context.authCookies.dontRememberToken.name,
-				ctx.context.secret,
-			);
-			/**
-			 * We don't need to update the session if the user doesn't want to be remembered
-			 */
-			if (dontRememberMe) {
-				return ctx.json(session);
-			}
-			const expiresIn = ctx.context.session.expiresIn;
-			const updateAge = ctx.context.session.updateAge;
-			/**
-			 * Calculate last updated date to throttle write updates to database
-			 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
-			 *
-			 * e.g. ({expiry date} - 30 days) + 1 hour
-			 *
-			 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/
-			 * actions/session.ts
-			 */
-			const sessionIsDueToBeUpdatedDate =
-				session.session.expiresAt.valueOf() -
-				expiresIn * 1000 +
-				updateAge * 1000;
-			const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
-			if (shouldBeUpdated) {
-				const updatedSession = await ctx.context.internalAdapter.updateSession(
-					session.session.id,
-					{
-						expiresAt: getDate(ctx.context.session.expiresIn, true),
+				const session =
+					await ctx.context.internalAdapter.findSession(sessionCookieToken);
+
+				if (!session || session.session.expiresAt < new Date()) {
+					deleteSessionCookie(ctx);
+					if (session) {
+						/**
+						 * if session expired clean up the session
+						 */
+						await ctx.context.internalAdapter.deleteSession(session.session.id);
+					}
+					return ctx.json(null, {
+						status: 401,
+					});
+				}
+				const dontRememberMe = await ctx.getSignedCookie(
+					ctx.context.authCookies.dontRememberToken.name,
+					ctx.context.secret,
+				);
+				/**
+				 * We don't need to update the session if the user doesn't want to be remembered
+				 */
+				if (dontRememberMe) {
+					return ctx.json(session);
+				}
+				const expiresIn = ctx.context.session.expiresIn;
+				const updateAge = ctx.context.session.updateAge;
+				/**
+				 * Calculate last updated date to throttle write updates to database
+				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
+				 *
+				 * e.g. ({expiry date} - 30 days) + 1 hour
+				 *
+				 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/
+				 * actions/session.ts
+				 */
+				const sessionIsDueToBeUpdatedDate =
+					session.session.expiresAt.valueOf() -
+					expiresIn * 1000 +
+					updateAge * 1000;
+				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
+
+				if (shouldBeUpdated) {
+					const updatedSession =
+						await ctx.context.internalAdapter.updateSession(
+							session.session.id,
+							{
+								expiresAt: getDate(ctx.context.session.expiresIn, true),
+							},
+						);
+					if (!updatedSession) {
+						/**
+						 * Handle case where session update fails (e.g., concurrent deletion)
+						 */
+						deleteSessionCookie(ctx);
+						return ctx.json(null, { status: 401 });
+					}
+					const maxAge =
+						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+					await setSessionCookie(ctx, updatedSession.id, false, {
+						maxAge,
+					});
+					return ctx.json({
+						session: updatedSession as unknown as Prettify<
+							InferSession<Option>
+						>,
+						user: session.user as unknown as Prettify<InferUser<Option>>,
+					});
+				}
+				sessionCache.set(key, {
+					data: session,
+					expiresAt: Date.now() + 5000,
+				});
+				return ctx.json(
+					session as unknown as {
+						session: Prettify<InferSession<Option>>;
+						user: Prettify<InferUser<Option>>;
 					},
 				);
-				if (!updatedSession) {
-					/**
-					 * Handle case where session update fails (e.g., concurrent deletion)
-					 */
-					deleteSessionCookie(ctx);
-					return ctx.json(null, { status: 401 });
-				}
-				const maxAge = (updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
-				await setSessionCookie(ctx, updatedSession.id, false, {
-					maxAge,
-				});
-				return ctx.json({
-					session: updatedSession,
-					user: session.user,
-				});
+			} catch (error) {
+				ctx.context.logger.error(error);
+				return ctx.json(null, { status: 500 });
 			}
-			sessionCache.set(key, {
-				data: session,
-				expiresAt: Date.now() + 5000,
-			});
-			return ctx.json(session);
-		} catch (error) {
-			ctx.context.logger.error(error);
-			return ctx.json(null, { status: 500 });
-		}
-	},
-);
+		},
+	);
 
 export const getSessionFromCtx = async (ctx: Context<any, any>) => {
-	const session = await getSession({
+	const session = await getSession()({
 		...ctx,
 		//@ts-expect-error: By default since this request context comes from a router it'll have a `router` flag which force it to be a request object
 		_flag: undefined,
@@ -154,29 +171,32 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 /**
  * user active sessions list
  */
-export const listSessions = createAuthEndpoint(
-	"/user/list-sessions",
-	{
-		method: "GET",
-		use: [sessionMiddleware],
-		requireHeaders: true,
-	},
-	async (ctx) => {
-		const sessions = await ctx.context.adapter.findMany<Session>({
-			model: ctx.context.tables.session.tableName,
-			where: [
-				{
-					field: "userId",
-					value: ctx.context.session.user.id,
-				},
-			],
-		});
-		const activeSessions = sessions.filter((session) => {
-			return session.expiresAt > new Date();
-		});
-		return ctx.json(activeSessions);
-	},
-);
+export const listSessions = <Option extends BetterAuthOptions>() =>
+	createAuthEndpoint(
+		"/user/list-sessions",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			requireHeaders: true,
+		},
+		async (ctx) => {
+			const sessions = await ctx.context.adapter.findMany<Session>({
+				model: ctx.context.tables.session.tableName,
+				where: [
+					{
+						field: "userId",
+						value: ctx.context.session.user.id,
+					},
+				],
+			});
+			const activeSessions = sessions.filter((session) => {
+				return session.expiresAt > new Date();
+			});
+			return ctx.json(
+				activeSessions as unknown as Prettify<InferSession<Option>>[],
+			);
+		},
+	);
 
 /**
  * revoke a single session

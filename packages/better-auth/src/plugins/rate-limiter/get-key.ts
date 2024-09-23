@@ -6,7 +6,7 @@ import { logger } from "../../utils/logger";
 export async function getRateLimitKey(req: Request) {
 	if (req.headers.get("Authorization") || req.headers.get("cookie")) {
 		try {
-			const session = await getSession({
+			const session = await getSession()({
 				headers: req.headers,
 				// @ts-ignore
 				_flag: undefined,

@@ -5,8 +5,8 @@ import {
 	createRouter,
 } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions, InferSession, InferUser } from "../types";
-import type { Prettify, UnionToIntersection } from "../types/helper";
+import type { BetterAuthOptions } from "../types";
+import type { UnionToIntersection } from "../types/helper";
 import { csrfMiddleware } from "./middlewares/csrf";
 import {
 	callbackOAuth,
@@ -78,56 +78,11 @@ export function getEndpoints<
 			.filter((plugin) => plugin !== undefined)
 			.flat() || [];
 
-	/**
-	 * Helper function to type the session output
-	 * TODO: find a better way to do this
-	 */
-	async function typedSession(
-		ctx: Context<
-			"/session",
-			{
-				method: "GET";
-				requireHeaders: true;
-			}
-		>,
-	) {
-		const handler = await getSession(ctx);
-		return handler as {
-			session: Prettify<InferSession<Option>>;
-			user: Prettify<InferUser<Option>>;
-		} | null;
-	}
-	typedSession.path = getSession.path;
-	typedSession.method = getSession.method;
-	typedSession.options = getSession.options;
-	typedSession.headers = getSession.headers;
-
-	/**
-	 * Helper function to type the list sessions output
-	 * TODO: find a better way to do this
-	 */
-	async function typeListSessions(
-		ctx: Context<
-			"/user/sessions",
-			{
-				method: "GET";
-				requireHeaders: true;
-			}
-		>,
-	) {
-		const handler = await listSessions(ctx);
-		return handler as unknown as Prettify<InferSession<Option>>[];
-	}
-	typeListSessions.path = listSessions.path;
-	typeListSessions.method = listSessions.method;
-	typeListSessions.options = listSessions.options;
-	typeListSessions.headers = listSessions.headers;
-
 	const baseEndpoints = {
 		signInOAuth,
 		callbackOAuth,
 		getCSRFToken,
-		getSession: typedSession,
+		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail,
 		signInEmail,
@@ -137,7 +92,7 @@ export function getEndpoints<
 		sendVerificationEmail,
 		changePassword,
 		updateUser,
-		listSessions: typeListSessions,
+		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
 	};
@@ -232,6 +187,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+
 		onError(e) {
 			if (options.disableLog !== true) {
 				if (e instanceof APIError) {

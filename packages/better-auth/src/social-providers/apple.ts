@@ -3,7 +3,7 @@ import type { OAuthProvider } from ".";
 import { parseJWT } from "oslo/jwt";
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -53,41 +53,30 @@ export interface AppleOptions {
 	redirectURI?: string;
 }
 
-export const apple = ({
-	clientId,
-	clientSecret,
-	redirectURI,
-}: AppleOptions) => {
+export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
-	redirectURI = getRedirectURI("apple", redirectURI);
 	return {
 		id: "apple",
 		name: "Apple",
-		createAuthorizationURL({ state, scopes }) {
+		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scope = scopes || ["email", "name", "openid"];
 			return new URL(
-				`https://appleid.apple.com/auth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectURI}&scope=${_scope.join(
-					" ",
-				)}&state=${state}`,
+				`https://appleid.apple.com/auth/authorize?client_id=${
+					options.clientId
+				}&response_type=code&redirect_uri=${
+					redirectURI || options.redirectURI
+				}&scope=${_scope.join(" ")}&state=${state}`,
 			);
 		},
-		validateAuthorizationCode: async (code) => {
-			const data = await betterFetch<OAuth2Tokens>(tokenEndpoint, {
-				method: "POST",
-				body: new URLSearchParams({
-					client_id: clientId,
-					client_secret: clientSecret,
-					grant_type: "authorization_code",
-					code,
-				}),
-				headers: {
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
+		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+			return validateAuthorizationCode({
+				code,
+				codeVerifier,
+				redirectURI:
+					redirectURI || getRedirectURI("apple", options.redirectURI),
+				options,
+				tokenEndpoint,
 			});
-			if (data.error) {
-				throw new BetterAuthError(data.error?.message || "");
-			}
-			return data.data;
 		},
 		async getUserInfo(token) {
 			const data = parseJWT(token.idToken())?.payload as AppleProfile | null;

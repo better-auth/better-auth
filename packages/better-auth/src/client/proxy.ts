@@ -47,7 +47,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						break;
 					}
 				}
-
 				if (typeof current === "function") {
 					return current;
 				}
@@ -61,7 +60,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
 						)
 						.join("/");
-
 				const arg = (args[0] || {}) as ProxyRequest;
 				const method = getMethod(routePath, knownPathMethods, arg);
 				const { query, fetchOptions: options, ...body } = arg;
