@@ -39,8 +39,7 @@ export function SignUp() {
       reader.readAsDataURL(file);
     }
   };
-  const [loading, setLoading] = useState(false)
-
+  const [loading, setLoading] = useState(false);
 
   return (
     <Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -132,14 +131,21 @@ export function SignUp() {
                   onChange={handleImageChange}
                   className="w-full"
                 />
-                {imagePreview && <X className="cursor-pointer" onClick={() => {
-                  setImage(null);
-                  setImagePreview(null);
-                }} />}
+                {imagePreview && (
+                  <X
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setImage(null);
+                      setImagePreview(null);
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>
-          <Button type="submit" className="w-full"
+          <Button
+            type="submit"
+            className="w-full"
             disabled={loading}
             onClick={async () => {
               await signUp.email({
@@ -148,22 +154,25 @@ export function SignUp() {
                 name: `${firstName} ${lastName}`,
                 image: image ? await convertImageToBase64(image) : "",
                 callbackURL: "/dashboard",
-                options: {
+                fetchOptions: {
                   onResponse: () => {
-                    setLoading(false)
+                    setLoading(false);
                   },
                   onRequest: () => {
-                    setLoading(true)
+                    setLoading(true);
                   },
                   onError: (ctx) => {
-                    toast.error(ctx.error.message)
+                    toast.error(ctx.error.message);
                   },
-                }
-              })
-            }}>
-            {
-              loading ? <Loader2 size={16} className="animate-spin" /> : "Create an account"
-            }
+                },
+              });
+            }}
+          >
+            {loading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              "Create an account"
+            )}
           </Button>
           <Button
             variant="outline"
@@ -172,15 +181,15 @@ export function SignUp() {
               const res = await client.signIn.social({
                 provider: "google",
                 callbackURL: "/dashboard",
-                options: {
+                fetchOptions: {
                   onRequest: () => {
-                    setLoading(true)
+                    setLoading(true);
                   },
                   onResponse: () => {
-                    setLoading(false)
+                    setLoading(false);
                   },
-                }
-              })
+                },
+              });
             }}
             disabled={loading}
           >
@@ -216,15 +225,15 @@ export function SignUp() {
               await signIn.social({
                 provider: "github",
                 callbackURL: "/dashboard",
-                options: {
+                fetchOptions: {
                   onRequest: () => {
-                    setLoading(true)
+                    setLoading(true);
                   },
                   onResponse: () => {
-                    setLoading(false)
+                    setLoading(false);
                   },
-                }
-              })
+                },
+              });
             }}
             disabled={loading}
           >
@@ -243,7 +252,6 @@ export function SignUp() {
     </Card>
   );
 }
-
 
 async function convertImageToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

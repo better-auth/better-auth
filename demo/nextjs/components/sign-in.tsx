@@ -26,7 +26,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const router = useRouter();
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
   return (
     <Card className="z-50 rounded-md rounded-t-none max-w-md">
       <CardHeader>
@@ -77,7 +77,9 @@ export default function SignIn() {
             <Label>Remember me</Label>
           </div>
 
-          <Button type="submit" className="w-full"
+          <Button
+            type="submit"
+            className="w-full"
             disabled={loading}
             onClick={async () => {
               await signIn.email({
@@ -85,22 +87,21 @@ export default function SignIn() {
                 password: password,
                 callbackURL: "/dashboard",
                 dontRememberMe: !rememberMe,
-                options: {
+                fetchOptions: {
                   onRequest: () => {
-                    setLoading(true)
+                    setLoading(true);
                   },
                   onResponse: () => {
-                    setLoading(false)
+                    setLoading(false);
                   },
                   onError: (ctx) => {
-                    toast.error(ctx.error.message)
-                  }
-                }
-              })
-            }}>
-            {
-              loading ? <Loader2 size={16} className="animate-spin" /> : "Login"
-            }
+                    toast.error(ctx.error.message);
+                  },
+                },
+              });
+            }}
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
           </Button>
           <Button
             variant="outline"
@@ -109,7 +110,7 @@ export default function SignIn() {
               await signIn.social({
                 provider: "github",
                 callbackURL: "/dashboard",
-              })
+              });
             }}
           >
             <GitHubLogoIcon />
@@ -122,7 +123,7 @@ export default function SignIn() {
               await signIn.social({
                 provider: "google",
                 callbackURL: "/dashboard",
-              })
+              });
             }}
           >
             <svg
@@ -150,11 +151,15 @@ export default function SignIn() {
             </svg>
             Continue with Google
           </Button>
-          <Button variant="outline" className="gap-2" onClick={async () => {
-            await signIn.passkey({
-              callbackURL: "/dashboard",
-            })
-          }}>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={async () => {
+              await signIn.passkey({
+                callbackURL: "/dashboard",
+              });
+            }}
+          >
             <Key size={16} />
             Sign-in with Passkey
           </Button>
