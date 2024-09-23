@@ -120,11 +120,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 					type: "string",
 					required: false,
 				},
-				accessTokenExpiresAt: {
-					type: "date",
-					required: false,
-				},
-				refreshTokenExpiresAt: {
+				expiresAt: {
 					type: "date",
 					required: false,
 				},

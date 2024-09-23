@@ -27,7 +27,6 @@ describe("rate-limiter", async () => {
 			if (i === 9) {
 				expect(response.error?.status).toBe(429);
 			} else {
-				console.log(response.error);
 				expect(response.error).toBeNull();
 			}
 		}

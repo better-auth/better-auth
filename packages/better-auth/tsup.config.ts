@@ -22,13 +22,12 @@ export default defineConfig((env) => {
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 		},
-		sourcemap: false,
+		sourcemap: isBuild,
 		format: ["esm"],
 		dts: true,
 		minify: isBuild,
 		minifyWhitespace: isBuild,
 		minifyIdentifiers: isBuild,
 		skipNodeModulesBundle: true,
-		target: "es2022",
 	};
 });

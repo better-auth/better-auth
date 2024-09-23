@@ -124,12 +124,12 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
-        "accessTokenExpiresAt": {
-          "required": false,
-          "type": "date",
-        },
         "accountId": {
           "type": "string",
+        },
+        "expiresAt": {
+          "required": false,
+          "type": "date",
         },
         "idToken": {
           "required": false,
@@ -145,10 +145,6 @@ exports[`init > should match config 1`] = `
         "refreshToken": {
           "required": false,
           "type": "string",
-        },
-        "refreshTokenExpiresAt": {
-          "required": false,
-          "type": "date",
         },
         "userId": {
           "references": {

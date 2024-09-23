@@ -1,4 +1,3 @@
-import { getSessionFromCtx } from "./routes/session";
 import {
 	APIError,
 	type Context,

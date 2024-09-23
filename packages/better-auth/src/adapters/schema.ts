@@ -10,8 +10,10 @@ export const accountSchema = z.object({
 	accessToken: z.string().nullable().optional(),
 	refreshToken: z.string().nullable().optional(),
 	idToken: z.string().nullable().optional(),
-	accessTokenExpiresAt: z.date().nullable().optional(),
-	refreshTokenExpiresAt: z.date().nullable().optional(),
+	/**
+	 * Access token expires at
+	 */
+	expiresAt: z.date().nullable().optional(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
