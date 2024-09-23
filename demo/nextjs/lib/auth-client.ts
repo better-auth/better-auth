@@ -28,3 +28,5 @@ export const {
 	useListOrganizations,
 	useActiveOrganization,
 } = client;
+
+client.$Infer;

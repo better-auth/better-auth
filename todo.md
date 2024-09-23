@@ -11,13 +11,13 @@
 [ ] fix bun problem
 [x] fix the issue with the client triggers not working fot 2 consecutive calls
 [ ] add a way to specify on the client to use the base path as the whole path
-[ ] implement magic links
+[x] implement magic links
 
 
 ## Docs
 [x] specify everywhere `auth` should be exported
 [-] add a note about better-sqlite3 requiring to be added to webpack externals or find alternative that doesn't require it
-[ ] add a section about updating user and changing password
+[x] add a section about updating user and changing password
 [ ] mention how users can get user and session types
 [ ] add a doc about account linking
 [ ] remove the section about using useSession in next with initialValue
