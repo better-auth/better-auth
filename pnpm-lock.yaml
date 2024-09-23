@@ -764,8 +764,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1
       arctic:
-        specifier: 2.0.0-next.5
-        version: 2.0.0-next.5
+        specifier: 2.0.0-next.9
+        version: 2.0.0-next.9
       better-call:
         specifier: 0.2.3-beta.3
         version: 0.2.3-beta.3
@@ -4036,6 +4036,12 @@ packages:
 
   /@oslojs/encoding@1.0.0:
     resolution: {integrity: sha512-dyIB0SdZgMm5BhGwdSp8rMxEFIopLKxDG1vxIBaiogyom6ZqH2aXPb6DEC2WzOOWKdPSq1cxdNeRx2wAn1Z+ZQ==}
+    dev: false
+
+  /@oslojs/jwt@0.1.0:
+    resolution: {integrity: sha512-g6JHWeCl9OkHLeoaaKUZoQUfCzhn2U5hYnyoT7/Uh/HY0AGpf0odmFViW6AhPKaOOVXKITvoOArEhec1vEd6GA==}
+    dependencies:
+      '@oslojs/encoding': 0.4.1
     dev: false
 
   /@oslojs/oauth2@0.5.0:
@@ -9634,6 +9640,14 @@ packages:
       '@oslojs/crypto': 0.6.0
       '@oslojs/encoding': 0.3.0
       '@oslojs/oauth2': 0.5.0
+    dev: false
+
+  /arctic@2.0.0-next.9:
+    resolution: {integrity: sha512-VUi47ekY8oWEa+NE4AcEl5fwZF5lMn0/PCQUsPieLP8wFVXVFR+vxDKESkMQg+d8Ffd7LBLXWW/DTIgvD8zRtw==}
+    dependencies:
+      '@oslojs/crypto': 0.6.0
+      '@oslojs/encoding': 0.4.1
+      '@oslojs/jwt': 0.1.0
     dev: false
 
   /are-we-there-yet@2.0.0:
