@@ -37,6 +37,7 @@ import {
 	updateOrganization,
 } from "./routes/crud-org";
 import type { Invitation, Member, Organization } from "./schema";
+import type { Prettify } from "../../types/helper";
 
 export interface OrganizationOptions {
 	/**
@@ -344,6 +345,26 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 			},
+		},
+		$Infer: {
+			Organization: {} as Organization,
+			Invitation: {} as Invitation,
+			Member: {} as Member,
+			ActiveOrganization: {} as Prettify<
+				Organization & {
+					members: Prettify<
+						Member & {
+							user: {
+								id: string;
+								name: string;
+								email: string;
+								image: string;
+							};
+						}
+					>[];
+					invitations: Invitation[];
+				}
+			>,
 		},
 	} satisfies BetterAuthPlugin;
 };

@@ -81,4 +81,5 @@ export type BetterAuthPlugin = {
 	 * The options of the plugin
 	 */
 	options?: Record<string, any>;
+	$Infer?: Record<string, any>;
 };

@@ -2,7 +2,9 @@ import type { Endpoint, Prettify } from "better-call";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
-import type { InferSession, InferUser } from "./types";
+import type { InferPluginTypes, InferSession, InferUser } from "./types";
+import type { BetterAuthPlugin } from "./plugins";
+import type { UnionToIntersection } from "./types/helper";
 
 type InferAPI<API> = Omit<
 	API,
@@ -26,6 +28,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				: never
 			: never
 		: never;
+
 	return {
 		handler: async (request: Request) => {
 			const basePath = authContext.options.basePath;
@@ -51,7 +54,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				session: Prettify<InferSession<O>>;
 				user: Prettify<InferUser<O>>;
 			};
-		},
+		} & InferPluginTypes<O>,
 	};
 };
 

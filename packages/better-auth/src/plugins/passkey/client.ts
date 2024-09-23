@@ -184,7 +184,6 @@ export const passkeyClient = () => {
 				listPasskeys,
 				_listPasskeys,
 			};
-			444;
 		},
 		pathMethods: {
 			"/passkey/register": "POST",

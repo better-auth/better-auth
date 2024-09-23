@@ -3,6 +3,7 @@ import type { Session, User } from "../adapters/schema";
 import type { Auth } from "../auth";
 import type { FieldAttribute, InferFieldOutput } from "../db";
 import type { Prettify, UnionToIntersection } from "./helper";
+import type { BetterAuthPlugin } from "./plugins";
 
 type AdditionalSessionFields<Options extends BetterAuthOptions> =
 	Options["plugins"] extends Array<infer T>
@@ -70,3 +71,14 @@ export type InferSession<O extends BetterAuthOptions | Auth> =
 					? AdditionalSessionFields<O["options"]>
 					: {})
 	>;
+
+export type InferPluginTypes<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? UnionToIntersection<
+				P extends BetterAuthPlugin
+					? P["$Infer"] extends Record<string, any>
+						? P["$Infer"]
+						: {}
+					: {}
+			>
+		: {};
