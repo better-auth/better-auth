@@ -2,7 +2,6 @@ import { betterFetch } from "@better-fetch/fetch";
 import { Facebook } from "arctic";
 import type { OAuthProvider } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
-import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
 
 export interface FacebookProfile {
 	id: string;

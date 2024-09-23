@@ -2,7 +2,6 @@ import { betterFetch } from "@better-fetch/fetch";
 import { Discord } from "arctic";
 import type { OAuthProvider } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
-import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
 
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
