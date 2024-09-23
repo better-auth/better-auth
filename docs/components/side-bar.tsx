@@ -64,6 +64,7 @@ export default function ArticleLayout() {
                           href={listItem.href}
                           startWith="/docs"
                           title={listItem.title}
+                          className="break-words w-[--fd-sidebar-width]"
                         >
                           <listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
                           {listItem.title}

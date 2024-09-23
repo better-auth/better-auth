@@ -93,8 +93,13 @@ export const callbackOAuth = createAuthEndpoint(
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
 			);
-			if (!hasBeenLinked && !user.emailVerified) {
-				c.context.logger.error("User already exists");
+			const trustedProviders =
+				c.context.options.account?.accountLinking?.trustedProviders;
+			const isTrustedProvider = trustedProviders
+				? trustedProviders.includes(provider.id as "apple")
+				: false;
+
+			if (!hasBeenLinked && (!user.emailVerified || !isTrustedProvider)) {
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "user_already_exists");
 				throw c.redirect(url.toString());

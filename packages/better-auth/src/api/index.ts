@@ -1,3 +1,4 @@
+import { getSessionFromCtx } from "./routes/session";
 import {
 	APIError,
 	type Context,
@@ -278,3 +279,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		},
 	});
 };
+
+export * from "./routes";
+export * from "./middlewares";
+export * from "./call";

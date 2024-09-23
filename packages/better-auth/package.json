@@ -34,6 +34,7 @@
         "./react": "./dist/react.js",
         "./preact": "./dist/preact.js",
         "./solid": "./dist/solid.js",
+        "./api": "./dist/api.js",
         "./vue": "./dist/vue.js",
         "./plugins": "./dist/plugins.js",
         "./plugins/access": "./dist/access.js",
@@ -42,7 +43,8 @@
         "./svelte": "./dist/svelte.js",
         "./next-js": "./dist/next-js.js",
         "./package.json": "./package.json",
-        "./node": "./dist/node.js"
+        "./node": "./dist/node.js",
+        "./utils": "./dist/utils.js"
     },
     "devDependencies": {
         "@simplewebauthn/types": "^10.0.0",
@@ -68,7 +70,6 @@
         "@babel/preset-typescript": "^7.24.7",
         "@better-fetch/fetch": "^1.1.8",
         "@better-fetch/logger": "^1.1.3",
-        "@chronark/access-policies": "^0.0.2",
         "@nanostores/query": "^0.3.4",
         "@nanostores/react": "^0.7.3",
         "@nanostores/solid": "^0.4.2",
@@ -79,7 +80,6 @@
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "arctic": "2.0.0-next.5",
-        "argon2": "^0.31.2",
         "better-call": "0.2.3-beta.3",
         "better-sqlite3": "^11.1.2",
         "c12": "^1.11.2",

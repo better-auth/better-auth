@@ -1,5 +1,5 @@
 import { atom, computed } from "nanostores";
-import type { AuthClientPlugin } from "./types";
+import type { BetterAuthClientPlugin } from "./types";
 import type { BetterAuthPlugin } from "../types/plugins";
 import { createAuthEndpoint } from "../api/call";
 import { useAuthQuery } from "./query";
@@ -93,7 +93,7 @@ export const testClientPlugin = () => {
 				signal: "_sessionSignal",
 			},
 		],
-	} satisfies AuthClientPlugin;
+	} satisfies BetterAuthClientPlugin;
 };
 export const testClientPlugin2 = () => {
 	const _test2 = atom(false);
@@ -119,5 +119,5 @@ export const testClientPlugin2 = () => {
 				signal: "_sessionSignal",
 			},
 		],
-	} satisfies AuthClientPlugin;
+	} satisfies BetterAuthClientPlugin;
 };

@@ -1,7 +1,7 @@
 import { getClientConfig } from "./config";
 import { capitalizeFirstLetter } from "../utils/misc";
 import type {
-	AuthClientPlugin,
+	BetterAuthClientPlugin,
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
@@ -14,7 +14,7 @@ import type { UnionToIntersection } from "../types/helper";
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
 >
-	? Plugin extends AuthClientPlugin
+	? Plugin extends BetterAuthClientPlugin
 		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
 			? Atoms extends Record<string, any>
 				? {
@@ -22,7 +22,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]:()=>Atoms[key];
+								: never]: () => Atoms[key];
 					}
 				: {}
 			: {}
@@ -47,7 +47,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
-		useSession: ()=>$session,
+		useSession: () => $session,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,

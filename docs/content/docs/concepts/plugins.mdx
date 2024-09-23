@@ -225,13 +225,13 @@ Endpoints are inferred from the server plugin by adding a `$InferServerPlugin` k
 The client infers the `path` as an object and converts kebab-case to camelCase. For example, `/my-plugin/hello-world` becomes `myPlugin.helloWorld`.
 
 ```ts title="client-plugin.ts"
-import type { AuthClientPlugin } from "better-auth/client";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from ".//plugin";
 
 const myPluginClient = {
     id: "my-plugin",
     $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
-} satisfies AuthClientPlugin
+} satisfies BetterAuthClientPlugin
 ```
 
 **getActions**
@@ -241,7 +241,7 @@ If you need to add additional methods or what not to the client you can use the 
 Better auth uses <Link href="https://bette-fetch.vercel.app"> Better fetch </Link> to make requests. Better fetch is a simple fetch wrapper made by the same author of Better Auth.
 
 ```ts title="client-plugin.ts"
-import type { AuthClientPlugin } from "better-auth/client";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from "./plugin";
 import { BetteFetchOptions } from "better-fetch";
 
@@ -265,7 +265,7 @@ const myPluginClient = {
             }
         }
     }
-} satisfies AuthClientPlugin
+} satisfies BetterAuthClientPlugin
 ```
 
 <Callout>
@@ -280,7 +280,7 @@ Get atoms is called with the `fetch` function from better fetch and it should re
 
 ```ts title="client-plugin.ts"
 import { atom } from "nanostores";
-import type { AuthClientPlugin } from "better-auth/client";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 
 const myPluginClient = {
     id: "my-plugin",
@@ -291,7 +291,7 @@ const myPluginClient = {
             myAtom
         }
     }
-} satisfies AuthClientPlugin
+} satisfies BetterAuthClientPlugin
 ```
 
 See built in plugins for examples of how to use atoms properly.
@@ -301,7 +301,7 @@ See built in plugins for examples of how to use atoms properly.
 by default, infered paths use `GET` method if they don't require a body and `POST` if they do. You can override this by passing a `pathMethods` object. The key should be the path and the value should be the method ("POST" | "GET").
 
 ```ts title="client-plugin.ts"
-import type { AuthClientPlugin } from "better-auth/client";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from "./plugin";
 
 const myPluginClient = {
@@ -310,7 +310,7 @@ const myPluginClient = {
     pathMethods: {
         "/my-plugin/hello-world": "POST"
     }
-} satisfies AuthClientPlugin
+} satisfies BetterAuthClientPlugin
 ```
 
 **fetchPlugins**

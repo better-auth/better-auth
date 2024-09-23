@@ -11,7 +11,7 @@ import type {
 import type { Session } from "inspector";
 import type { User } from "../../adapters/schema";
 import type { passkey as passkeyPl, Passkey } from "../../plugins";
-import type { AuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin } from "../../client/types";
 import { logger } from "../../utils/logger";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
@@ -200,5 +200,5 @@ export const passkeyClient = () => {
 				signal: "_listPasskeys",
 			},
 		],
-	} satisfies AuthClientPlugin;
+	} satisfies BetterAuthClientPlugin;
 };

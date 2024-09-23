@@ -3,17 +3,17 @@ import { atom } from "nanostores";
 import type { Auth as BetterAuth } from "../auth";
 import type { Prettify, UnionToIntersection } from "../types/helper";
 import type { InferSession, InferUser } from "../types/models";
-import type { AuthClientPlugin, ClientOptions } from "./types";
+import type { BetterAuthClientPlugin, ClientOptions } from "./types";
 import { useAuthQuery } from "./query";
 import type { BetterAuthPlugin } from "../plugins";
 
 export function getSessionAtom<Option extends ClientOptions>(
 	client: BetterFetch,
 ) {
-	type Plugins = Option["plugins"] extends Array<AuthClientPlugin>
+	type Plugins = Option["plugins"] extends Array<BetterAuthClientPlugin>
 		? Array<
 				Option["plugins"][number] extends infer T
-					? T extends AuthClientPlugin
+					? T extends BetterAuthClientPlugin
 						? T["$InferServerPlugin"] extends infer U
 							? U extends BetterAuthPlugin
 								? U

@@ -82,3 +82,5 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 					: {}
 			>
 		: {};
+
+export type { User, Session };

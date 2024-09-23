@@ -1,4 +1,4 @@
-import type { AuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin } from "../../client/types";
 import type { twoFactor as twoFa } from "../../plugins/two-factor";
 
 export const twoFactorClient = (
@@ -49,5 +49,5 @@ export const twoFactorClient = (
 				},
 			},
 		],
-	} satisfies AuthClientPlugin;
+	} satisfies BetterAuthClientPlugin;
 };

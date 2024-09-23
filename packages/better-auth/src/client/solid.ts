@@ -3,7 +3,7 @@ import { getClientConfig } from "./config";
 import { createDynamicPathProxy } from "./proxy";
 import { capitalizeFirstLetter } from "../utils/misc";
 import type {
-	AuthClientPlugin,
+	BetterAuthClientPlugin,
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
@@ -20,7 +20,7 @@ function getAtomKey(str: string) {
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
 >
-	? Plugin extends AuthClientPlugin
+	? Plugin extends BetterAuthClientPlugin
 		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
 			? Atoms extends Record<string, any>
 				? {

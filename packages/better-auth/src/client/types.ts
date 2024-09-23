@@ -15,7 +15,7 @@ export type AtomListener = {
 	signal: string;
 };
 
-export interface AuthClientPlugin {
+export interface BetterAuthClientPlugin {
 	id: LiteralString;
 	/**
 	 * only used for type inference. don't pass the
@@ -50,7 +50,7 @@ export interface AuthClientPlugin {
 
 export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
-	plugins?: AuthClientPlugin[];
+	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
 }
 
@@ -75,7 +75,7 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
 >
 	? UnionToIntersection<
-			Plugin extends AuthClientPlugin
+			Plugin extends BetterAuthClientPlugin
 				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
 					? Actions
 					: {}
@@ -89,7 +89,7 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 export type IsSignal<T> = T extends `_${infer _}` ? true : false;
 
 export type InferPluginsFromClient<O extends ClientOptions> =
-	O["plugins"] extends Array<AuthClientPlugin>
+	O["plugins"] extends Array<BetterAuthClientPlugin>
 		? Array<O["plugins"][number]["$InferServerPlugin"]>
 		: undefined;
 

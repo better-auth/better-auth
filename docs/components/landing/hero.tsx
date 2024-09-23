@@ -237,7 +237,7 @@ export default function Hero() {
                       <Link
                         href="https://demo.better-auth.com"
                         target="_blank"
-                        className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 cursor-pointer bg-background border px-3 py-1 shadow-md shadow-primary-foreground hover:opacity-70 transition-all ease-in-out"
+                        className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 cursor-pointer px-3 py-1 shadow-md shadow-primary-foreground hover:opacity-70 transition-all ease-in-out"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"

@@ -2,7 +2,7 @@ import type { Dialect } from "kysely";
 import type { User } from "../adapters/schema";
 import type { FieldAttribute } from "../db/field";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProvider } from "./provider";
+import type { OAuthProvider, OAuthProviderList } from "./provider";
 
 export interface BetterAuthOptions {
 	/**
@@ -123,6 +123,25 @@ export interface BetterAuthOptions {
 	};
 	account?: {
 		modelName?: string;
+		accountLinking?: {
+			/**
+			 * Enable account linking
+			 *
+			 * @default true
+			 */
+			enabled?: boolean;
+			/**
+			 * List of trusted providers. If the
+			 * provider is not in this list
+			 * `emailVerified` field is ignored.
+			 */
+			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
+			/**
+			 * Require email verified field
+			 * to be true to link the account
+			 */
+			requireEmailVerified?: boolean;
+		};
 	};
 	/**
 	 * Email and password authentication
@@ -168,8 +187,8 @@ export interface BetterAuthOptions {
 			token: string,
 		) => Promise<void>;
 		/**
-		 * Send a verification email automatically after
-		 * sign up
+		 * Send a verification email automatically
+		 * after sign up
 		 *
 		 * @default false
 		 */

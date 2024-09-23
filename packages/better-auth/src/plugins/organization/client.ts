@@ -6,7 +6,7 @@ import type {
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import { defaultStatements, type AccessControl, type Role } from "./access";
-import type { AuthClientPlugin } from "../../client/types";
+import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 import { useAuthQuery } from "../../client";
@@ -137,5 +137,5 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				signal: "_activeOrgSignal",
 			},
 		],
-	} satisfies AuthClientPlugin;
+	} satisfies BetterAuthClientPlugin;
 };
