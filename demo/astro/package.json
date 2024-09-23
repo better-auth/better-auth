@@ -1,5 +1,6 @@
 {
-  "name": "",
+  "name": "@dev/astro",
+  "private": true,
   "type": "module",
   "version": "0.0.1",
   "scripts": {
