@@ -29,18 +29,12 @@ description: Twitter Provider
                 provider: "sqlite",
                 url: "./db.sqlite",
             },
-                ocialProvider: [ // [!code highlight]
-                twitter({ // [!code highlight]
+            socialProvider: {// [!code highlight]
+                twitter: { // [!code highlight]
                     clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]
                     clientSecret: process.env.TWITTER_CLIENT_SECRET, // [!code highlight]
-                    /** // [!code highlight]
-                     * this is optional.  // [!code highlight]
-                     * only needed if you passed a custom basePath from `/api/auth` to `betterAuth`  // [!code highlight]
-                     * or if you're using a custom domain. // [!code highlight]
-                     */ // [!code highlight]
-                    redirectURI: "https://example.com/api/auth/callback/apple", // [!code highlight]
-                }), // [!code highlight]
-            ], // [!code highlight]
+                }, // [!code highlight]
+            }, // [!code highlight]
         })
         ```
     </Step>

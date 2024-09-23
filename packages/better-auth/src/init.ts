@@ -4,7 +4,7 @@ import { createKyselyAdapter } from "./adapters/kysely";
 import { getAdapter } from "./adapters/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import type { BetterAuthOptions } from "./types";
+import type { BetterAuthOptions, OAuthProvider } from "./types";
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
@@ -13,6 +13,7 @@ import {
 	getCookies,
 } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
+import { oAuthProviderList, oAuthProviders } from "./social-providers";
 
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
@@ -30,8 +31,19 @@ export const init = (options: BetterAuthOptions) => {
 
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
+
+	const socialProviders = Object.keys(options.socialProviders || {})
+		.map((key) => {
+			const value = options.socialProviders?.[key as "github"]!;
+			if (value.enabled === false) {
+				return null;
+			}
+			return oAuthProviders[key as (typeof oAuthProviderList)[number]](value);
+		})
+		.filter((x) => x !== null);
 	return {
 		appName: options.appName || "Better Auth",
+		socialProviders,
 		options: {
 			...options,
 			baseURL: baseURL ? new URL(baseURL).origin : "",
@@ -63,6 +75,7 @@ export type AuthContext = {
 	options: BetterAuthOptions;
 	appName: string;
 	baseURL: string;
+	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
 	db: Kysely<any>;

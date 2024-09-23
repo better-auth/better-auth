@@ -37,7 +37,7 @@ export const signInOAuth = createAuthEndpoint(
 		}),
 	},
 	async (c) => {
-		const provider = c.context.options.socialProvider?.find(
+		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.body.provider,
 		);
 		if (!provider) {

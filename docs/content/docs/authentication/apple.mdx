@@ -33,18 +33,12 @@ description: Apple
                 provider: "sqlite",
                 url: "./db.sqlite",
             },
-            socialProvider: [ // [!code highlight]
-                apple({ // [!code highlight]
+            socialProvider: { // [!code highlight]
+                apple: { // [!code highlight]
                     clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.APPLE_CLIENT_SECRET as string, // [!code highlight]
-                    /** // [!code highlight]
-                     * this is optional.  // [!code highlight]
-                     * only needed if you passed a custom basePath from `/api/auth` to `betterAuth`  // [!code highlight]
-                     * or if you're using a custom domain. // [!code highlight]
-                     */ // [!code highlight]
-                    redirectURI: "https://example.com/api/auth/callback/apple", // [!code highlight]
-                }), // [!code highlight]
-            ], // [!code highlight]
+                } // [!code highlight]
+            }, // [!code highlight]
         })
         ```
     </Step>

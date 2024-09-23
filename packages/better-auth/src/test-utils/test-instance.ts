@@ -1,14 +1,12 @@
 import fs from "fs/promises";
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { afterAll, beforeAll } from "vitest";
+import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import { github, google } from "../social-providers";
 import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../utils/cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { createKyselyAdapter } from "../adapters/kysely";
 import { getAdapter } from "../adapters/utils";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
@@ -22,16 +20,16 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	const randomStr = generateRandomString(4, alphabet("a-z"));
 	const dbName = `./.db/test-${randomStr}.db`;
 	const opts = {
-		socialProvider: [
-			github({
+		socialProviders: {
+			github: {
 				clientId: "test",
 				clientSecret: "test",
-			}),
-			google({
+			},
+			google: {
 				clientId: "test",
 				clientSecret: "test",
-			}),
-		],
+			},
+		},
 		secret: "better-auth.secret",
 		database: {
 			provider: "sqlite",

@@ -1,3 +1,4 @@
+import type { Prettify } from "../types";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";
@@ -22,6 +23,14 @@ export const oAuthProviderList = Object.keys(oAuthProviders) as [
 	"github",
 	...(keyof typeof oAuthProviders)[],
 ];
+
+export type SocialProviders = typeof oAuthProviders extends {
+	[key in infer K]: infer V;
+}
+	? V extends (options: infer V) => any
+		? Partial<Record<K, Prettify<V & { enabled?: boolean }>>>
+		: never
+	: never;
 
 export * from "./github";
 export * from "./google";

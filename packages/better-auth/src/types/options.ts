@@ -2,7 +2,8 @@ import type { Dialect } from "kysely";
 import type { User } from "../adapters/schema";
 import type { FieldAttribute } from "../db/field";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProvider, OAuthProviderList } from "./provider";
+import type { OAuthProviderList } from "./provider";
+import type { SocialProviders } from "../social-providers";
 
 export interface BetterAuthOptions {
 	/**
@@ -57,9 +58,9 @@ export interface BetterAuthOptions {
 	/**
 	 * list of social providers
 	 */
-	socialProvider?: OAuthProvider[];
+	socialProviders?: SocialProviders;
 	/**
-	 * Plugins
+	 * List of Better Auth plugins
 	 */
 	plugins?: BetterAuthPlugin[];
 	/**

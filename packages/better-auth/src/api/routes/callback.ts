@@ -31,7 +31,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 
-		const provider = c.context.options.socialProvider?.find(
+		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
 		);
 		if (!provider) {
