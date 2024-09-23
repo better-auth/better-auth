@@ -3,7 +3,6 @@ import { parseJWT } from "oslo/jwt";
 import type { OAuthProvider, ProviderOptions } from ".";
 import { BetterAuthError } from "../error/better-auth-error";
 import { logger } from "../utils/logger";
-import { createOAuth2Request, sendTokenRequest } from "arctic/dist/request";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface GoogleProfile {

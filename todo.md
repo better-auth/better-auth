@@ -18,7 +18,7 @@
 [x] specify everywhere `auth` should be exported
 [-] add a note about better-sqlite3 requiring to be added to webpack externals or find alternative that doesn't require it
 [x] add a section about updating user and changing password
-[ ] mention how users can get user and session types
-[ ] add a doc about account linking
-[ ] remove the section about using useSession in next with initialValue
-[ ] rate limiting docs
+[x] mention how users can get user and session types
+[x] add a doc about account linking
+[x] remove the section about using useSession in next with initialValue
+[x] rate limiting docs
