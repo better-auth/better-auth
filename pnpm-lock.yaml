@@ -148,8 +148,8 @@ importers:
         specifier: ^5.56.2
         version: 5.56.2(react@19.0.0-rc-7771d3a7-20240827)
       better-auth:
-        specifier: 0.0.9-beta.38
-        version: 0.0.9-beta.38(@babel/core@7.25.2)(react@19.0.0-rc-7771d3a7-20240827)(solid-js@1.8.22)(vue@3.5.8)
+        specifier: workspace:*
+        version: link:../../packages/better-auth
       better-call:
         specifier: 0.2.3-beta.2
         version: 0.2.3-beta.2
@@ -188,7 +188,7 @@ importers:
         version: 1.4.4
       next:
         specifier: 15.0.0-canary.157
-        version: 15.0.0-canary.157(@babel/core@7.25.2)(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
+        version: 15.0.0-canary.157(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
@@ -5291,17 +5291,6 @@ packages:
     dependencies:
       nanostores: 0.11.3
       react: 18.3.1
-    dev: false
-
-  /@nanostores/react@0.7.3(nanostores@0.11.3)(react@19.0.0-rc-7771d3a7-20240827):
-    resolution: {integrity: sha512-/XuLAMENRu/Q71biW4AZ4qmU070vkZgiQ28gaTSNRPm2SZF5zGAR81zPE1MaMB4SeOp6ZTst92NBaG75XSspNg==}
-    engines: {node: ^18.0.0 || >=20.0.0}
-    peerDependencies:
-      nanostores: ^0.9.0 || ^0.10.0 || ^0.11.0
-      react: '>=18.0.0'
-    dependencies:
-      nanostores: 0.11.3
-      react: 19.0.0-rc-7771d3a7-20240827
     dev: false
 
   /@nanostores/solid@0.4.2(nanostores@0.11.3)(solid-js@1.8.22):
@@ -13826,76 +13815,10 @@ packages:
       - vue
     dev: false
 
-  /better-auth@0.0.9-beta.38(@babel/core@7.25.2)(react@19.0.0-rc-7771d3a7-20240827)(solid-js@1.8.22)(vue@3.5.8):
-    resolution: {integrity: sha512-LLbbHiIWLPohYIbwf9CCSpTZ0JhFvf1Cd11+CgvmvDQrPO44sOFhHPqM4zGQi2k0KQgUo/21/nKYWgPSV6JyLA==}
-    hasBin: true
-    dependencies:
-      '@babel/preset-react': 7.24.7(@babel/core@7.25.2)
-      '@babel/preset-typescript': 7.24.7(@babel/core@7.25.2)
-      '@better-fetch/fetch': 1.1.8
-      '@better-fetch/logger': 1.1.3
-      '@chronark/access-policies': 0.0.2
-      '@nanostores/query': 0.3.4(nanostores@0.11.3)
-      '@nanostores/react': 0.7.3(nanostores@0.11.3)(react@19.0.0-rc-7771d3a7-20240827)
-      '@nanostores/solid': 0.4.2(nanostores@0.11.3)(solid-js@1.8.22)
-      '@nanostores/vue': 0.10.0(nanostores@0.11.3)(vue@3.5.8)
-      '@noble/ciphers': 0.6.0
-      '@noble/hashes': 1.5.0
-      '@paralleldrive/cuid2': 2.2.2
-      '@simplewebauthn/browser': 10.0.0
-      '@simplewebauthn/server': 10.0.1
-      arctic: 2.0.0-next.5
-      argon2: 0.31.2
-      better-call: 0.2.3-beta.1
-      better-sqlite3: 11.3.0
-      c12: 1.11.2(magicast@0.3.5)
-      chalk: 5.3.0
-      commander: 12.1.0
-      consola: 3.2.3
-      defu: 6.1.4
-      dotenv: 16.4.5
-      jose: 5.9.2
-      kysely: 0.27.4
-      kysely-postgres-js: 2.0.0(kysely@0.27.4)(postgres@3.4.4)
-      mysql2: 3.11.3
-      nanoquery: 1.3.0
-      nanostores: 0.11.3
-      oauth4webapi: 2.16.0
-      ora: 8.1.0
-      oslo: 1.2.1
-      pg: 8.13.0
-      postgres: 3.4.4
-      prompts: 2.4.2
-      tiny-glob: 0.2.9
-      ts-morph: 23.0.0
-      zod: 3.23.8
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@nanostores/logger'
-      - '@vue/devtools-api'
-      - encoding
-      - magicast
-      - pg-native
-      - react
-      - solid-js
-      - supports-color
-      - vue
-    dev: false
-
   /better-call@0.1.38(typescript@5.6.2):
     resolution: {integrity: sha512-Dx/T6/l1C1yDialymI+q3YN85lFPSwD35BvfsJxwD9G30lfwRSDS3uNKyYlykwacWBNLYrizmuMXnCxxu7oCBA==}
     peerDependencies:
       typescript: ^5.6.0-beta
-    dependencies:
-      '@better-fetch/fetch': 1.1.8
-      '@types/set-cookie-parser': 2.4.10
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.0
-      typescript: 5.6.2
-    dev: false
-
-  /better-call@0.2.3-beta.1:
-    resolution: {integrity: sha512-I4+sm4OIgbnUdbtI5anc5Hd9dSCRnuy3pb2WdA2guLHwzjCEHlg7bTBlP6usG50FIRBceDrxfCnFBo4I85Iazg==}
     dependencies:
       '@better-fetch/fetch': 1.1.8
       '@types/set-cookie-parser': 2.4.10
@@ -18250,7 +18173,7 @@ packages:
     peerDependencies:
       next: '>=13.2.0'
     dependencies:
-      next: 15.0.0-canary.157(@babel/core@7.25.2)(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
+      next: 15.0.0-canary.157(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
     dev: false
 
   /generate-function@2.3.1:
@@ -22373,7 +22296,7 @@ packages:
       - '@babel/core'
       - babel-plugin-macros
 
-  /next@15.0.0-canary.157(@babel/core@7.25.2)(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827):
+  /next@15.0.0-canary.157(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827):
     resolution: {integrity: sha512-dwo71Owf2W274o68/OMNbjHxo2l3jgFR49qDJCivYB0/AYKJ62t8cKKPCNjFVhUwcP0gJDp9xFwhgPubi1lQxQ==}
     engines: {node: '>=18.18.0'}
     hasBin: true
@@ -22403,7 +22326,7 @@ packages:
       postcss: 8.4.31
       react: 19.0.0-rc-7771d3a7-20240827
       react-dom: 19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827)
-      styled-jsx: 5.1.6(@babel/core@7.25.2)(react@19.0.0-rc-7771d3a7-20240827)
+      styled-jsx: 5.1.6(react@19.0.0-rc-7771d3a7-20240827)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.0.0-canary.157
       '@next/swc-darwin-x64': 15.0.0-canary.157
@@ -26656,7 +26579,7 @@ packages:
       client-only: 0.0.1
       react: 18.3.1
 
-  /styled-jsx@5.1.6(@babel/core@7.25.2)(react@19.0.0-rc-7771d3a7-20240827):
+  /styled-jsx@5.1.6(react@19.0.0-rc-7771d3a7-20240827):
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
     engines: {node: '>= 12.0.0'}
     peerDependencies:
@@ -26669,7 +26592,6 @@ packages:
       babel-plugin-macros:
         optional: true
     dependencies:
-      '@babel/core': 7.25.2
       client-only: 0.0.1
       react: 19.0.0-rc-7771d3a7-20240827
     dev: false

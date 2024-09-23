@@ -45,7 +45,7 @@
     "@react-email/components": "^0.0.25",
     "@react-three/fiber": "^8.17.7",
     "@tanstack/react-query": "^5.56.2",
-    "better-auth": "0.0.9-beta.38",
+    "better-auth": "workspace:*",
     "better-call": "0.2.3-beta.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

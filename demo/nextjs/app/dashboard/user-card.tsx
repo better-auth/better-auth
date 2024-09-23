@@ -252,7 +252,7 @@ export default function UserCard(props: {
                           const res = await client.twoFactor.disable({
                             //@ts-ignore
                             password: twoFaPassword,
-                            options: {
+                            fetchOptions: {
                               onError(context) {
                                 toast.error(context.error.message);
                               },
@@ -265,7 +265,7 @@ export default function UserCard(props: {
                         } else {
                           const res = await client.twoFactor.enable({
                             password: twoFaPassword,
-                            options: {
+                            fetchOptions: {
                               onError(context) {
                                 toast.error(context.error.message);
                               },
@@ -303,7 +303,7 @@ export default function UserCard(props: {
           onClick={async () => {
             setIsSignOut(true);
             await signOut({
-              options: {
+              fetchOptions: {
                 body: {
                   callbackURL: "/",
                 },
@@ -528,7 +528,7 @@ function EditUserDialog(props: { session: Session | null }) {
               await user.update({
                 image: image ? await convertImageToBase64(image) : undefined,
                 name: name ? name : undefined,
-                options: {
+                fetchOptions: {
                   onSuccess: () => {
                     toast.success("User updated successfully");
                   },
@@ -681,7 +681,7 @@ function ListPasskeys() {
                       onClick={async () => {
                         const res = await client.passkey.deletePasskey({
                           id: passkey.id,
-                          options: {
+                          fetchOptions: {
                             onRequest: () => {
                               setIsDeletePasskey(true);
                             },

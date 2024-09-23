@@ -154,12 +154,6 @@ export default function Hero() {
                       {tabs.map((tab) => (
                         <motion.div
                           key={tab.name}
-                          layoutId={`tab-${tab.name}`}
-                          whileHover={{
-                            scale: 1.05,
-                            transition: { duration: 1 },
-                          }}
-                          whileTap={{ scale: 0.1 }}
                           onClick={() => setActiveTab(tab.name)}
                           className={clsx(
                             "flex h-6 rounded-full cursor-pointer",
@@ -243,19 +237,17 @@ export default function Hero() {
                       <Link
                         href="https://demo.better-auth.com"
                         target="_blank"
-                        className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 hover:underline cursor-pointer"
+                        className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 cursor-pointer bg-background border px-3 py-1 shadow-md shadow-primary-foreground hover:opacity-70 transition-all ease-in-out"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="1em"
                           height="1em"
-                          viewBox="0 0 14 14"
+                          viewBox="0 0 24 24"
                         >
                           <path
                             fill="currentColor"
-                            fillRule="evenodd"
-                            d="M2.676.02a1.74 1.74 0 0 0-.845.218a1.64 1.64 0 0 0-.895 1.433v10.677a1.64 1.64 0 0 0 .895 1.433a1.74 1.74 0 0 0 1.718-.016l8.63-5.338a1.61 1.61 0 0 0-.001-2.876L3.548.253A1.74 1.74 0 0 0 2.676.02"
-                            clipRule="evenodd"
+                            d="M10 20H8V4h2v2h2v3h2v2h2v2h-2v2h-2v3h-2z"
                           ></path>
                         </svg>
                         <p className="text-sm">Demo</p>
