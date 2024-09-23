@@ -76,6 +76,7 @@
         "@nanostores/vue": "^0.10.0",
         "@noble/ciphers": "^0.6.0",
         "@noble/hashes": "^1.4.0",
+        "@oslojs/encoding": "^1.0.0",
         "@paralleldrive/cuid2": "^2.2.2",
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",

@@ -43,7 +43,7 @@ export default defineConfig({
 		"@babel/preset-typescript",
 		"@babel/preset-react",
 	],
-	noExternal: ["arctic", "oslo"],
+	noExternal: ["arctic"],
 	skipNodeModulesBundle: true,
 	target: "es2022",
 });
