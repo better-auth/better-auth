@@ -12,6 +12,7 @@
 [x] fix the issue with the client triggers not working fot 2 consecutive calls
 [ ] add a way to specify on the client to use the base path as the whole path
 [x] implement magic links
+[ ] rate limiter error handling
 
 
 ## Docs

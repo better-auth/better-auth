@@ -51,7 +51,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			requireHeaders: true,
 		},
 		async (ctx) => {
-			console.log("called");
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
@@ -213,7 +212,6 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const id = ctx.body.id;
-		console.log(id);
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {

@@ -41,6 +41,8 @@ export const auth = betterAuth({
 	plugins: [
 		rateLimiter({
 			enabled: true,
+
+			max: 1000,
 		}),
 		organization({
 			async sendInvitationEmail(data) {

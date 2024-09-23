@@ -20,6 +20,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 				.filter((pl) => pl !== undefined) || []),
 		],
 	});
+
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {} as Record<string, Atom<any>>;

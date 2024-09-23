@@ -74,7 +74,7 @@ export function OrganizationCard(props: { session: Session | null }) {
   );
 
   return (
-    <Card className="rounded-none md:rounded-sm !bg-none border-none">
+    <Card>
       <CardHeader>
         <CardTitle>Organization</CardTitle>
         <div className="flex justify-between">

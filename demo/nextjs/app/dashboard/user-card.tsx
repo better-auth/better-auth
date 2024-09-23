@@ -89,7 +89,7 @@ export default function UserCard(props: {
   const [isSignOut, setIsSignOut] = useState<boolean>(false);
 
   return (
-    <Card className="rounded-none md:rounded-sm !bg-none border-none">
+    <Card>
       <CardHeader>
         <CardTitle>User</CardTitle>
       </CardHeader>
@@ -407,6 +407,7 @@ function ChangePassword() {
                 toast.error("Passwords do not match");
                 return;
               }
+              a;
               if (newPassword.length < 8) {
                 toast.error("Password must be at least 8 characters");
                 return;

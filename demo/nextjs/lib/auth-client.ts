@@ -4,6 +4,7 @@ import {
 	passkeyClient,
 	twoFactorClient,
 } from "better-auth/client/plugins";
+import { toast } from "sonner";
 
 export const client = createAuthClient({
 	plugins: [
@@ -14,7 +15,11 @@ export const client = createAuthClient({
 		passkeyClient(),
 	],
 	fetchOptions: {
-		credentials: "include",
+		onError(e) {
+			if (e.error.status === 429) {
+				toast.error("Too many requests. Please try again later.");
+			}
+		},
 	},
 });
 

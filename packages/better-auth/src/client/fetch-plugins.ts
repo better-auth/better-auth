@@ -61,11 +61,17 @@ export const csrfPlugin = {
 							"CSRF route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
 						);
 					}
+
 					if (error.status === 429) {
-						return new Response(null, {
-							status: 429,
-							statusText: "Too Many Requests",
-						});
+						return new Response(
+							JSON.stringify({
+								message: "Too many requests. Please try again later.",
+							}),
+							{
+								status: 429,
+								statusText: "Too Many Requests",
+							},
+						);
 					}
 					throw new BetterAuthError(
 						"Failed to fetch CSRF token: " + error.message,

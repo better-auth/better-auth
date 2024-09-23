@@ -207,22 +207,27 @@ export const rateLimiter = (options: RateLimitOptions) => {
 						rateLimit.lastRequest >= windowStart &&
 						rateLimit.count >= opts.max
 					) {
-						return new Response(null, {
-							status: 429,
-							statusText: "Too Many Requests",
-							headers: {
-								"X-RateLimit-Window": opts.window.toString(),
-								"X-RateLimit-Max": opts.max.toString(),
-								"X-RateLimit-Remaining": (
-									opts.max - rateLimit.count
-								).toString(),
-								"X-RateLimit-Reset": (
-									rateLimit.lastRequest +
-									opts.window * 1000 -
-									now
-								).toString(),
+						return new Response(
+							JSON.stringify({
+								message: "Too many requests. Please try again later.",
+							}),
+							{
+								status: 429,
+								statusText: "Too Many Requests",
+								headers: {
+									"X-RateLimit-Window": opts.window.toString(),
+									"X-RateLimit-Max": opts.max.toString(),
+									"X-RateLimit-Remaining": (
+										opts.max - rateLimit.count
+									).toString(),
+									"X-RateLimit-Reset": (
+										rateLimit.lastRequest +
+										opts.window * 1000 -
+										now
+									).toString(),
+								},
 							},
-						});
+						);
 					}
 
 					if (rateLimit.lastRequest < windowStart) {
