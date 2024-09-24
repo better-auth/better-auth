@@ -62,6 +62,14 @@ export const init = (options: BetterAuthOptions) => {
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 		},
 		secret,
+		rateLimit: {
+			...options.rateLimit,
+			enabled:
+				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
+			window: options.rateLimit?.window || 60,
+			max: options.rateLimit?.max || 100,
+			storage: options.rateLimit?.storage || "memory",
+		},
 		authCookies: cookies,
 		logger: createLogger({
 			disabled: options.disableLog,
@@ -85,6 +93,12 @@ export type AuthContext = {
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
 	db: Kysely<any>;
+	rateLimit: {
+		enabled: boolean;
+		window: number;
+		max: number;
+		storage: "memory" | "database";
+	} & BetterAuthOptions["rateLimit"];
 	adapter: ReturnType<typeof getAdapter>;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;

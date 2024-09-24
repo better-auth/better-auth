@@ -1,22 +1,10 @@
 ---
-
+import RootLayout from "@/layouts/root-layout.astro";
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
-    <title>Astro</title>
-  </head>
-  <body>
-    <div
-      class="min-h-[80vh] flex flex-col items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0"
-      <div
-      class="flex flex-col gap-2"
-    >
-      <h3 class="font-bold text-4xl text-black dark:text-white text-center">
+<RootLayout>
+    <div class="min-h-[80vh] flex flex-col items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
+      <h3 class="font-bold text-xl text-black dark:text-white text-center">
         Better Auth.
       </h3>
       <p class="text-center break-words text-sm md:text-base">
@@ -29,63 +17,37 @@
           better-auth
         </a>{" "}
         example. <br />
-      </p>
-      <div id="user" class="w-1/2 flex gap-2 justify-center items-center mt-2">
-        <img src="" alt="" id="img" class="w-12 h-12">
-        <div>
-          <p id="name">
-          </p>
-          <p id="email">
-          </p>
-        </div>
-      </div>
-      <button
+      </p> 
+      <a href="/sign-in">
+        <button
         id="login"
         class="bg-black mt-3 flex items-center gap-2 rounded-sm py-2 px-3 text-white text-sm"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          ><path
-            fill="currentColor"
-            d="M3.064 7.51A10 10 0 0 1 12 2c2.695 0 4.959.991 6.69 2.605l-2.867 2.868C14.786 6.482 13.468 5.977 12 5.977c-2.605 0-4.81 1.76-5.595 4.123c-.2.6-.314 1.24-.314 1.9s.114 1.3.314 1.9c.786 2.364 2.99 4.123 5.595 4.123c1.345 0 2.49-.355 3.386-.955a4.6 4.6 0 0 0 1.996-3.018H12v-3.868h9.418c.118.654.182 1.336.182 2.045c0 3.046-1.09 5.61-2.982 7.35C16.964 21.105 14.7 22 12 22A9.996 9.996 0 0 1 2 12c0-1.614.386-3.14 1.064-4.49"
-          ></path></svg
-        >
-        Continue with Google
-      </button>
-      <button id="sign-out" class="bg-black mt-3 flex items-center gap-2 rounded-sm py-2 px-3 text-white text-sm">
-        Sign Out
-      </button>
-    </div>
-  </body>
-</html>
-<script>
-  import { signIn, useSession, signOut } from "../lib/auth-client";
-  document.getElementById("login")!.addEventListener("click", () => {
-    signIn.social({
-      provider: "google",
-    });
-  });
-  useSession.get();
-  useSession.subscribe((val) => {
-    if (val.data) {
-      document.getElementById("name")!.textContent = val.data?.user.name || "";
-      document.getElementById("email")!.textContent = val.data?.user.email || "";
-      document.getElementById("img")!.src = val.data?.user.image || "";
-      document.getElementById("login")!.style.display = "none";
-    } else {
-      if(val.error){
-        document.getElementById("login")!.style.display = "flex";
-        document.getElementById("sign-out")!.style.display = "none";
-        document.getElementById("img")!.style.display = "none";
-        document.getElementById("name")!.textContent = "";
-        document.getElementById("email")!.textContent = "";
+        Sign In
+      </button>  
+  </a>    
+
+  <a href="/dashboard">
+    <button
+    id="dashboard"
+    class="bg-black mt-3 flex items-center gap-2 rounded-sm py-2 px-3 text-white text-sm"
+  >
+    Dashboard
+  </button> 
+</a>
+  </div>
+  <script>
+    import { useVanillaSession } from "../libs/auth-client";
+    useVanillaSession.subscribe((val) => {
+      if (val.data) {
+        document.getElementById("login")!.style.display = "none";
+        document.getElementById("dashboard")!.style.display = "flex";
+      } else {
+        if(val.error){
+          document.getElementById("login")!.style.display = "flex";
+          document.getElementById("dashboard")!.style.display = "none";
+        }
       }
-    }
-  });
-  document.getElementById("sign-out")!.addEventListener("click", () => {
-    signOut();
-  });
-</script>
+    });
+  </script>  
+</RootLayout>

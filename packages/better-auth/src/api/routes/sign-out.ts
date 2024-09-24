@@ -6,11 +6,11 @@ export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
-		body: z
-			.object({
+		body: z.optional(
+			z.object({
 				callbackURL: z.string().optional(),
-			})
-			.optional(),
+			}),
+		),
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(

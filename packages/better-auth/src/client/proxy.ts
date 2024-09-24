@@ -91,7 +91,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						setTimeout(() => {
 							//@ts-expect-error
 							signal.set(!val);
-						}, 0);
+						}, 10);
 					},
 				});
 			},

@@ -10,12 +10,31 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@ark-ui/solid": "^3.12.1",
     "@astrojs/check": "^0.9.3",
+    "@astrojs/solid-js": "^4.4.2",
     "@astrojs/tailwind": "^5.1.1",
+    "@corvu/drawer": "^0.2.2",
+    "@corvu/otp-field": "^0.1.2",
+    "@corvu/resizable": "^0.2.3",
+    "@kobalte/core": "^0.13.6",
     "@oslojs/encoding": "^1.0.0",
     "astro": "^4.15.9",
     "better-auth": "workspace:*",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "cmdk-solid": "^1.1.0",
+    "embla-carousel-solid": "^8.3.0",
+    "lucide-solid": "^0.445.0",
+    "solid-js": "^1.8.23",
+    "solid-sonner": "^0.2.8",
+    "tailwind-merge": "^2.5.2",
     "tailwindcss": "^3.4.13",
-    "typescript": "^5.6.2"
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.6.2",
+    "ua-parser-js": "^0.7.39"
+  },
+  "devDependencies": {
+    "@types/ua-parser-js": "^0.7.39"
   }
 }

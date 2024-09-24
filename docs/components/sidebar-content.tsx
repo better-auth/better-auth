@@ -157,7 +157,6 @@ export const contents: Content[] = [
         ),
         href: "/docs/concepts/database",
       },
-
       {
         href: "/docs/concepts/plugins",
         title: "Plugins",
@@ -178,6 +177,11 @@ export const contents: Content[] = [
             </g>
           </svg>
         ),
+      },
+      {
+        title: "Rate Limit",
+        icon: Clock,
+        href: "/docs/concepts/rate-limit",
       },
       {
         title: "Session Management",
@@ -556,11 +560,7 @@ export const contents: Content[] = [
         href: "/docs/plugins/1st-party-plugins",
         icon: LucideAArrowDown,
       },
-      {
-        title: "Rate Limit",
-        icon: Clock,
-        href: "/docs/plugins/rate-limit",
-      },
+
       {
         title: "Bearer",
         icon: Key,

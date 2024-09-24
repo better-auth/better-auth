@@ -28,6 +28,7 @@ export const getPasskeyActions = (
 		autoFill?: boolean;
 		email?: string;
 		callbackURL?: string;
+		fetchOptions?: BetterFetchOption;
 	}) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
@@ -54,6 +55,7 @@ export const getPasskeyActions = (
 				body: {
 					response: res,
 				},
+				...opts?.fetchOptions,
 			});
 			if (!verified.data) {
 				return verified;
@@ -64,7 +66,7 @@ export const getPasskeyActions = (
 	};
 
 	const registerPasskey = async (opts?: {
-		options?: BetterFetchOption;
+		fetchOptions?: BetterFetchOption;
 		/**
 		 * The name of the passkey. This is used to
 		 * identify the passkey in the UI.
@@ -75,7 +77,6 @@ export const getPasskeyActions = (
 			"/passkey/generate-register-options",
 			{
 				method: "GET",
-				...opts?.options,
 			},
 		);
 		if (!options.data) {
@@ -86,7 +87,7 @@ export const getPasskeyActions = (
 			const verified = await $fetch<{
 				passkey: Passkey;
 			}>("/passkey/verify-registration", {
-				...opts?.options,
+				...opts?.fetchOptions,
 				body: {
 					response: res,
 					name: opts?.name,
@@ -127,7 +128,6 @@ export const getPasskeyActions = (
 					},
 				};
 			}
-			logger.error(e, "passkey registration error");
 			return {
 				data: null,
 				error: {

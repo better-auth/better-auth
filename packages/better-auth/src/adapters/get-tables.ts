@@ -33,6 +33,24 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 		>,
 	);
 
+	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";
+	const rateLimitTable = {
+		rateLimit: {
+			tableName: options.rateLimit?.tableName || "rateLimit",
+			fields: {
+				key: {
+					type: "string",
+				},
+				count: {
+					type: "number",
+				},
+				lastRequest: {
+					type: "number",
+				},
+			},
+		},
+	} satisfies BetterAuthDbSchema;
+
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
 
 	return {
@@ -133,5 +151,6 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			order: 2,
 		},
 		...pluginTables,
+		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDbSchema;
 };

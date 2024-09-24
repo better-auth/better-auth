@@ -1,0 +1,132 @@
+---
+title: Rate Limit
+description: How to limit the number of requests a user can make to the server in a given time period.
+---
+
+Better Auth includes a built-in rate limiter to help manage traffic and prevent abuse. By default, in production mode, the rate limiter is set to:
+
+- Window: 60 seconds
+- Max Requests: 100 requests
+
+You can easily customize these settings by passing the rateLimit plugin to the betterAuth function.
+
+In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
+
+"/sign-in/email": Limited to 7 requests within 10 seconds.
+
+In addition to that, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has the following custom rules:
+- "/two-factor/verify": Limited to 3 requests within 10 seconds.
+
+These custom rules ensure that sensitive operations are protected with stricter limits.
+
+## Configuring Rate Limit
+
+### Rate Limit Window
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        window: 60, // time window in seconds
+        max: 100, // max requests in the window
+        customRules: { // custom rules for specific paths
+            "/sign-in/email": {
+                window: 10,
+                max: 7, 
+            },
+        },
+    },
+})
+```
+
+### Storage
+
+By default, rate limit data is stored in memory. However, you can either use your database or custom storage to store rate limit data.
+
+**Using Database**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        storage: "database",
+        tableName: "rateLimit", //optional by default "rateLimit" is used
+    },
+})
+```
+
+make sure to run `migrate` to create the rate limit table in your database.
+
+```bash
+npx better-auth migrate
+```
+
+**Custom Storage**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        customStorage: {
+            get: async (key) => {
+                // get rate limit data
+            },
+            set: async (key, value) => {
+                // set rate limit data
+            },
+        },
+    },
+})
+```
+
+## Handling Rate Limit Errors
+
+When a request exceeds the rate limit, Better Auth returns the following header:
+
+- `X-Retry-After`: The number of seconds until the user can make another request.
+
+To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass fetchOptions to handle rate limit errors
+
+**Global Handling**
+
+```ts title="client.ts"
+import { createAuthClient } from "better-auth/client";
+
+export const client = createAuthClient({
+    fetchOptions: {
+        onError: async (context) => {
+            const { response } = context;
+            if (response.status === 429) {
+                const retryAfter = response.headers.get("X-Retry-After");
+                console.log(`Rate limit exceeded. Retry after ${retryAfter} seconds`);
+            }
+        },
+    }
+})
+```
+
+
+**Per Request Handling**
+
+```ts title="client.ts"
+import { client } from "./client";
+
+await client.signIn.email({
+    fetchOptions: {
+        onError: async (context) => {
+            const { response } = context;
+            if (response.status === 429) {
+                const retryAfter = response.headers.get("X-Retry-After");
+                console.log(`Rate limit exceeded. Retry after ${retryAfter} seconds`);
+            }
+        },
+    }
+})
+```
+

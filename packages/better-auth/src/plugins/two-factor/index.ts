@@ -244,6 +244,15 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			},
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path.startsWith("/two-factor/");
+				},
+				window: 10,
+				max: 3,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };
 

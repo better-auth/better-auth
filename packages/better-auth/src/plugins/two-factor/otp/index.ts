@@ -50,7 +50,7 @@ export const otp2fa = (options?: OTPOptions) => {
 		async (ctx) => {
 			if (!options || !options.sendOTP) {
 				ctx.context.logger.error(
-					"otp isn't configured. please pass otp option on two factor plugin to enable otp",
+					"send otp isn't configured. Please configure the send otp function on otp options.",
 				);
 				throw new APIError("BAD_REQUEST", {
 					message: "otp isn't configured",

@@ -30,6 +30,14 @@ import { logger } from "../utils/logger";
 import { changePassword, updateUser } from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
 import chalk from "chalk";
+import { getIp } from "../utils";
+import {
+	getRateLimitStorage,
+	getRetryAfter,
+	onRequestRateLimit,
+	rateLimitResponse,
+	shouldRateLimit,
+} from "./rate-limiter";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -167,6 +175,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		async onRequest(req) {
+			return onRequestRateLimit(req, ctx);
+		},
 		onError(e) {
 			const log = options.verboseLog ? logger : undefined;
 			if (options.disableLog !== true) {
@@ -180,7 +191,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 							return;
 						}
 						if (errorMessage.includes("no such table")) {
-							log?.error(
+							logger?.error(
 								`Please run ${chalk.green(
 									"npx better-auth migrate",
 								)} to create the tables. There are missing tables in your SQLite database.`,
@@ -198,7 +209,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 							errorMessage.includes("Table") &&
 							errorMessage.includes("doesn't exist")
 						) {
-							log?.error(
+							logger?.error(
 								`Please run ${chalk.green(
 									"npx better-auth migrate",
 								)} to create the tables. There are missing tables in your MySQL database.`,

@@ -1,5 +1,5 @@
 export class BetterAuthError extends Error {
-	constructor(message: string, cause?: string) {
+	constructor(message: string, cause?: string, docsLink?: string) {
 		super(message);
 		this.name = "BetterAuthError";
 		this.message = message;

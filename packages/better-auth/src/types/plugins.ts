@@ -82,4 +82,12 @@ export type BetterAuthPlugin = {
 	 */
 	options?: Record<string, any>;
 	$Infer?: Record<string, any>;
+	/**
+	 * The rate limit rules to apply to specific paths.
+	 */
+	rateLimit?: {
+		window: number;
+		max: number;
+		pathMatcher: (path: string) => boolean;
+	}[];
 };

@@ -52,7 +52,10 @@ export const Tabs = ({
             }}
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
-            className={cn("relative px-4 py-2 rounded-full opacity-80 hover:opacity-100", tabClassName)}
+            className={cn(
+              "relative px-4 py-2 rounded-full opacity-80 hover:opacity-100",
+              tabClassName
+            )}
             style={{
               transformStyle: "preserve-3d",
             }}
@@ -63,21 +66,26 @@ export const Tabs = ({
                   duration: 0.2,
                   delay: 0.1,
 
-                  type: "keyframes"
+                  type: "keyframes",
                 }}
                 animate={{
                   x: tabs.indexOf(tab) === 0 ? [0, 0, 0] : [0, 0, 0],
                 }}
                 className={cn(
                   "absolute inset-0 bg-gray-200 dark:bg-zinc-900/90 opacity-100",
-                  activeTabClassName,
+                  activeTabClassName
                 )}
               />
             )}
 
-            <span className={
-              cn("relative block text-black dark:text-white", active.value === tab.value ? "text-opacity-100 font-medium" : "opacity-40 ")
-            }>
+            <span
+              className={cn(
+                "relative block text-black dark:text-white",
+                active.value === tab.value
+                  ? "text-opacity-100 font-medium"
+                  : "opacity-40 "
+              )}
+            >
               {tab.title}
             </span>
           </button>
@@ -121,10 +129,14 @@ export const FadeInDiv = ({
             transition: {
               duration: 0.2,
               delay: 0.1,
-              type: "keyframes"
-            }
+              type: "keyframes",
+            },
           }}
-          className={cn("w-50 h-full", isActive(tab) ? "" : "hidden", className)}
+          className={cn(
+            "w-50 h-full",
+            isActive(tab) ? "" : "hidden",
+            className
+          )}
         >
           {tab.content}
         </motion.div>

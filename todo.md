@@ -13,7 +13,7 @@
 [ ] add a way to specify on the client to use the base path as the whole path
 [x] implement magic links
 [ ] rate limiter error handling
-
+[ ] microsoft oauth
 
 ## Docs
 [x] specify everywhere `auth` should be exported
@@ -23,3 +23,4 @@
 [x] add a doc about account linking
 [x] remove the section about using useSession in next with initialValue
 [x] rate limiting docs
+[ ] add that passkey login won't require 2fa

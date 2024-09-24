@@ -3,8 +3,6 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type { InferPluginTypes, InferSession, InferUser } from "./types";
-import type { BetterAuthPlugin } from "./plugins";
-import type { UnionToIntersection } from "./types/helper";
 
 type InferAPI<API> = Omit<
 	API,

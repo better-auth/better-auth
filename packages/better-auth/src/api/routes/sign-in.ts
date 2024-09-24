@@ -113,7 +113,9 @@ export const signInEmail = createAuthEndpoint(
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
-			ctx.context.logger.error("Email and password is not enabled");
+			ctx.context.logger.error(
+				"Email and password is not enabled. Make sure to enable it in the options on you `auth.ts` file. Check `https://better-auth.com/docs/authentication/email-password` for more!",
+			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Email and password is not enabled",
 			});

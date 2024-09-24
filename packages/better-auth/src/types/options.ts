@@ -4,6 +4,7 @@ import type { FieldAttribute } from "../db/field";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
+import type { RateLimit } from "./models";
 
 export interface BetterAuthOptions {
 	/**
@@ -215,4 +216,66 @@ export interface BetterAuthOptions {
 	 * List of trusted origins.
 	 */
 	trustedOrigins?: string[];
+	/**
+	 * Rate limiting configuration
+	 */
+	rateLimit?: {
+		/**
+		 * By default, rate limiting is only
+		 * enabled on production.
+		 */
+		enabled?: boolean;
+		/**
+		 * Default window to use for rate limiting. The value
+		 * should be in seconds.
+		 *
+		 * @default 60 sec
+		 */
+		window: number;
+		/**
+		 * Custom rate limit rules to apply to
+		 * specific paths.
+		 */
+		customRules?: {
+			[key: string]: {
+				/**
+				 * The window to use for the custom rule.
+				 */
+				window: number;
+				/**
+				 * The maximum number of requests allowed within the window.
+				 */
+				max: number;
+			};
+		};
+		/**
+		 * The default maximum number of requests allowed within the window.
+		 *
+		 * @default 100
+		 */
+		max: number;
+		/**
+		 * Storage configuration
+		 *
+		 * @default "memory"
+		 */
+		storage?: "memory" | "database";
+		/**
+		 * If database is used as storage, the name of the table to
+		 * use for rate limiting.
+		 *
+		 * @default "rateLimit"
+		 */
+		tableName?: string;
+		/**
+		 * custom storage configuration.
+		 *
+		 * NOTE: If custom storage is used storage
+		 * is ignored
+		 */
+		customStorage?: {
+			get: (key: string) => Promise<RateLimit | undefined>;
+			set: (key: string, value: RateLimit) => Promise<void>;
+		};
+	};
 }
