@@ -70,14 +70,10 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
-	let firstRun = true;
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe((value) => {
-			if (!firstRun) {
-				fn();
-			}
+			fn();
 		});
 	}
-	firstRun = false;
 	return value;
 };

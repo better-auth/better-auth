@@ -37,24 +37,6 @@ importers:
         specifier: 5.6.1-rc
         version: 5.6.1-rc
 
-  demo/astro:
-    dependencies:
-      '@astrojs/check':
-        specifier: ^0.9.3
-        version: 0.9.3(typescript@5.6.2)
-      '@astrojs/vercel':
-        specifier: ^7.8.1
-        version: 7.8.1(astro@4.15.8)
-      astro:
-        specifier: ^4.15.8
-        version: 4.15.8(@types/node@20.16.5)(typescript@5.6.2)
-      better-auth:
-        specifier: workspace:*
-        version: link:../../packages/better-auth
-      typescript:
-        specifier: ^5.6.2
-        version: 5.6.2
-
   demo/nextjs:
     dependencies:
       '@hookform/resolvers':
@@ -719,6 +701,30 @@ importers:
         specifier: ^5.5.4
         version: 5.6.2
 
+  examples/astro-example:
+    dependencies:
+      '@astrojs/check':
+        specifier: ^0.9.3
+        version: 0.9.3(typescript@5.6.2)
+      '@astrojs/tailwind':
+        specifier: ^5.1.1
+        version: 5.1.1(astro@4.15.9)(tailwindcss@3.4.13)
+      '@oslojs/encoding':
+        specifier: ^1.0.0
+        version: 1.0.0
+      astro:
+        specifier: ^4.15.9
+        version: 4.15.9(@types/node@20.16.5)(typescript@5.6.2)
+      better-auth:
+        specifier: workspace:*
+        version: link:../../packages/better-auth
+      tailwindcss:
+        specifier: ^3.4.13
+        version: 3.4.13
+      typescript:
+        specifier: ^5.6.2
+        version: 5.6.2
+
   packages/better-auth:
     dependencies:
       '@babel/preset-react':
@@ -997,6 +1003,21 @@ packages:
       prismjs: 1.29.0
     dev: false
 
+  /@astrojs/tailwind@5.1.1(astro@4.15.9)(tailwindcss@3.4.13):
+    resolution: {integrity: sha512-LwurA10uIKcGRxQP2R81RvAnBT0WPKzBntXZBF4hrAefDgM5Uumn0nsGr6tdIjSARgYz4X+Cq/Vh78t3bql3yw==}
+    peerDependencies:
+      astro: ^3.0.0 || ^4.0.0 || ^5.0.0-beta.0
+      tailwindcss: ^3.0.24
+    dependencies:
+      astro: 4.15.9(@types/node@20.16.5)(typescript@5.6.2)
+      autoprefixer: 10.4.20(postcss@8.4.47)
+      postcss: 8.4.47
+      postcss-load-config: 4.0.2(postcss@8.4.47)
+      tailwindcss: 3.4.13
+    transitivePeerDependencies:
+      - ts-node
+    dev: false
+
   /@astrojs/telemetry@3.1.0:
     resolution: {integrity: sha512-/ca/+D8MIKEC8/A9cSaPUqQNZm+Es/ZinRv0ZAzvu2ios7POQSsVD+VOj7/hypWNsNM3T7RpfgNq7H2TU1KEHA==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=21.0.0}
@@ -1009,26 +1030,6 @@ packages:
       is-wsl: 3.1.0
       which-pm-runs: 1.1.0
     transitivePeerDependencies:
-      - supports-color
-    dev: false
-
-  /@astrojs/vercel@7.8.1(astro@4.15.8):
-    resolution: {integrity: sha512-2PIVmv2/nI527DQsaZnf2jeUr+ddJjaQLXwqnVPXQn0LfIE8mi8BgYC5SUU9hJWIaFwEWTwJh90POaA2L3RpWQ==}
-    peerDependencies:
-      astro: ^4.2.0
-    dependencies:
-      '@astrojs/internal-helpers': 0.4.1
-      '@vercel/analytics': 1.3.1
-      '@vercel/edge': 1.1.2
-      '@vercel/nft': 0.27.4
-      astro: 4.15.8(@types/node@20.16.5)(typescript@5.6.2)
-      esbuild: 0.21.5
-      fast-glob: 3.3.2
-      web-vitals: 3.5.2
-    transitivePeerDependencies:
-      - encoding
-      - next
-      - react
       - supports-color
     dev: false
 
@@ -8884,48 +8885,8 @@ packages:
       vue: 3.5.7(typescript@5.6.1-rc)
     dev: false
 
-  /@vercel/analytics@1.3.1:
-    resolution: {integrity: sha512-xhSlYgAuJ6Q4WQGkzYTLmXwhYl39sWjoMA3nHxfkvG+WdBT25c563a7QhwwKivEOZtPJXifYHR1m2ihoisbWyA==}
-    peerDependencies:
-      next: '>= 13'
-      react: ^18 || ^19
-    peerDependenciesMeta:
-      next:
-        optional: true
-      react:
-        optional: true
-    dependencies:
-      server-only: 0.0.1
-    dev: false
-
-  /@vercel/edge@1.1.2:
-    resolution: {integrity: sha512-wt5SnhsMahWX8U9ZZhFUQoiXhMn/CUxA5xeMdZX1cwyOL1ZbDR3rNI8HRT9RSU73nDxeF6jlnqJyp/0Jy0VM2A==}
-    dev: false
-
   /@vercel/nft@0.26.5:
     resolution: {integrity: sha512-NHxohEqad6Ra/r4lGknO52uc/GrWILXAMs1BB4401GTqww0fw1bAqzpG1XHuDO+dprg4GvsD9ZLLSsdo78p9hQ==}
-    engines: {node: '>=16'}
-    hasBin: true
-    dependencies:
-      '@mapbox/node-pre-gyp': 1.0.11
-      '@rollup/pluginutils': 4.2.1
-      acorn: 8.12.1
-      acorn-import-attributes: 1.9.5(acorn@8.12.1)
-      async-sema: 3.1.1
-      bindings: 1.5.0
-      estree-walker: 2.0.2
-      glob: 7.2.3
-      graceful-fs: 4.2.11
-      micromatch: 4.0.8
-      node-gyp-build: 4.8.2
-      resolve-from: 5.0.0
-    transitivePeerDependencies:
-      - encoding
-      - supports-color
-    dev: false
-
-  /@vercel/nft@0.27.4:
-    resolution: {integrity: sha512-Rioz3LJkEKicKCi9BSyc1RXZ5R6GmXosFMeBSThh6msWSOiArKhb7c75MiWwZEgPL7x0/l3TAfH/l0cxKNuUFA==}
     engines: {node: '>=16'}
     hasBin: true
     dependencies:
@@ -9160,7 +9121,7 @@ packages:
       emmet: 2.4.11
       jsonc-parser: 2.3.1
       vscode-languageserver-textdocument: 1.0.12
-      vscode-languageserver-types: 3.16.0
+      vscode-languageserver-types: 3.17.5
       vscode-uri: 2.1.2
     dev: false
 
@@ -9830,8 +9791,8 @@ packages:
     hasBin: true
     dev: false
 
-  /astro@4.15.8(@types/node@20.16.5)(typescript@5.6.2):
-    resolution: {integrity: sha512-pdXjtRF6O1xChiPAUF32R7oVRTW7AK1/Oy/JqPNhLfbelO0l6C7cLdSEuSLektwOEnMhOVXqccetjBs7HPaoxA==}
+  /astro@4.15.9(@types/node@20.16.5)(typescript@5.6.2):
+    resolution: {integrity: sha512-51oXq9qrZ5OPWYmEXt1kGrvWmVeWsx28SgBTzi2XW6iwcnW/wC5ONm6ol6qBGSCF93tQvZplXvuzpaw1injECA==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=21.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
     dependencies:
@@ -9842,7 +9803,7 @@ packages:
       '@babel/core': 7.25.2
       '@babel/plugin-transform-react-jsx': 7.25.2(@babel/core@7.25.2)
       '@babel/types': 7.25.6
-      '@oslojs/encoding': 0.4.1
+      '@oslojs/encoding': 1.0.0
       '@rollup/pluginutils': 5.1.0(rollup@4.22.2)
       '@types/babel__core': 7.20.5
       '@types/cookie': 0.6.0
@@ -20588,6 +20549,37 @@ packages:
     transitivePeerDependencies:
       - ts-node
 
+  /tailwindcss@3.4.13:
+    resolution: {integrity: sha512-KqjHOJKogOUt5Bs752ykCeiwvi0fKVkr5oqsFNt/8px/tA8scFPIlkygsf6jXrfCqGHz7VflA6+yytWuM+XhFw==}
+    engines: {node: '>=14.0.0'}
+    hasBin: true
+    dependencies:
+      '@alloc/quick-lru': 5.2.0
+      arg: 5.0.2
+      chokidar: 3.6.0
+      didyoumean: 1.2.2
+      dlv: 1.1.3
+      fast-glob: 3.3.2
+      glob-parent: 6.0.2
+      is-glob: 4.0.3
+      jiti: 1.21.6
+      lilconfig: 2.1.0
+      micromatch: 4.0.8
+      normalize-path: 3.0.0
+      object-hash: 3.0.0
+      picocolors: 1.1.0
+      postcss: 8.4.47
+      postcss-import: 15.1.0(postcss@8.4.47)
+      postcss-js: 4.0.1(postcss@8.4.47)
+      postcss-load-config: 4.0.2(postcss@8.4.47)
+      postcss-nested: 6.2.0(postcss@8.4.47)
+      postcss-selector-parser: 6.1.2
+      resolve: 1.22.8
+      sucrase: 3.35.0
+    transitivePeerDependencies:
+      - ts-node
+    dev: false
+
   /tapable@2.2.1:
     resolution: {integrity: sha512-GNzQvQTOIP6RyTfE2Qxb8ZVlNmw0n88vp1szwWRimP02mnTsx3Wtn5qRdqY9w2XduFNUgvOwhNnQsjwCp+kqaQ==}
     engines: {node: '>=6'}
@@ -22303,7 +22295,7 @@ packages:
     dependencies:
       jsonc-parser: 3.3.1
       vscode-languageserver-textdocument: 1.0.12
-      vscode-languageserver-types: 3.16.0
+      vscode-languageserver-types: 3.17.5
       vscode-nls: 5.2.0
       vscode-uri: 3.0.8
     dev: false
@@ -22440,10 +22432,6 @@ packages:
   /web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
-    dev: false
-
-  /web-vitals@3.5.2:
-    resolution: {integrity: sha512-c0rhqNcHXRkY/ogGDJQxZ9Im9D19hDihbzSQJrsioex+KnFgmMzBiy57Z1EjkhX/+OjyBpclDCzz2ITtjokFmg==}
     dev: false
 
   /web-worker@1.3.0:
@@ -22704,7 +22692,7 @@ packages:
       vscode-json-languageservice: 4.1.8
       vscode-languageserver: 7.0.0
       vscode-languageserver-textdocument: 1.0.12
-      vscode-languageserver-types: 3.16.0
+      vscode-languageserver-types: 3.17.5
       vscode-nls: 5.2.0
       vscode-uri: 3.0.8
       yaml: 2.2.2

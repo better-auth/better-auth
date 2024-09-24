@@ -62,7 +62,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: typeof $session;
+			useSession: () => typeof $session;
 			$Infer: typeof $Infer;
 		};
 }
