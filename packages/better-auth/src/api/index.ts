@@ -105,30 +105,6 @@ export function getEndpoints<
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {
 		api[key] = async (context: any) => {
-			// for (const plugin of ctx.options.plugins || []) {
-			// 	if (plugin.hooks?.before) {
-			// 		for (const hook of plugin.hooks.before) {
-			// 			const match = hook.matcher({
-			// 				...context,
-			// 				...value,
-			// 			});
-			// 			if (match) {
-			// 				const hookRes = await hook.handler(context);
-			// 				if (hookRes && "context" in hookRes) {
-			// 					context = {
-			// 						...context,
-			// 						...hookRes.context,
-			// 						...value,
-			// 					};
-			// 				}
-			// 			}
-			// 		}
-			// 	}
-			// }
-			if (context.path === "/user/update") {
-				const res = await api[key].options.use[1](context);
-				console.log(res);
-			}
 			/**
 			 * TODO: move this to respond a json response
 			 * instead of response object.
@@ -192,18 +168,19 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		onError(e) {
+			const log = options.verboseLog ? logger : undefined;
 			if (options.disableLog !== true) {
 				if (e instanceof APIError) {
-					logger.warn(e);
+					log?.warn(e);
 				} else {
 					if (typeof e === "object" && e !== null && "message" in e) {
 						const errorMessage = e.message as string;
 						if (!errorMessage || typeof errorMessage !== "string") {
-							logger.error(e);
+							log?.error(e);
 							return;
 						}
 						if (errorMessage.includes("no such table")) {
-							logger.error(
+							log?.error(
 								`Please run ${chalk.green(
 									"npx better-auth migrate",
 								)} to create the tables. There are missing tables in your SQLite database.`,
@@ -221,16 +198,16 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 							errorMessage.includes("Table") &&
 							errorMessage.includes("doesn't exist")
 						) {
-							logger.error(
+							log?.error(
 								`Please run ${chalk.green(
 									"npx better-auth migrate",
 								)} to create the tables. There are missing tables in your MySQL database.`,
 							);
 						} else {
-							logger.error(e);
+							log?.error(e);
 						}
 					} else {
-						logger.error(e);
+						log?.error(e);
 					}
 				}
 			}

@@ -85,6 +85,10 @@ export interface BetterAuthOptions {
 	 */
 	disableLog?: boolean;
 	/**
+	 * log verbose information
+	 */
+	verboseLog?: boolean;
+	/**
 	 * Database configuration
 	 */
 	database:

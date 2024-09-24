@@ -14,12 +14,13 @@ import {
 } from "./utils/cookies";
 import { createLogger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
+import { BetterAuthError } from "./error/better-auth-error";
 
 export const init = (options: BetterAuthOptions) => {
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
 	if (!db) {
-		throw new Error("No database adapter found");
+		throw new BetterAuthError("No database adapter found");
 	}
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
@@ -37,6 +38,11 @@ export const init = (options: BetterAuthOptions) => {
 			const value = options.socialProviders?.[key as "github"]!;
 			if (value.enabled === false) {
 				return null;
+			}
+			if (!value.clientId || !value.clientSecret) {
+				throw new BetterAuthError(
+					`Social provider ${key} is missing clientId or clientSecret`,
+				);
 			}
 			return oAuthProviders[key as (typeof oAuthProviderList)[number]](value);
 		})

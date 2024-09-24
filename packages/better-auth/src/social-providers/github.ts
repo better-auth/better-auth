@@ -78,7 +78,6 @@ export const github = ({
 			return await githubArctic.validateAuthorizationCode(state);
 		},
 		async getUserInfo(token) {
-			console.log(`Bearer ${token.accessToken()}`);
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{

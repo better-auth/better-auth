@@ -46,9 +46,9 @@ export const google = (options: GoogleOptions) => {
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
-					"clientId and clientSecret is required for Google. Make sure to you have provided them in the options",
+					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
-				throw new BetterAuthError("clientId is required for Google");
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
