@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../call";
-import { sessionMiddleware } from "../middlewares/session";
+import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { setSessionCookie } from "../../utils/cookies";
+import { getSessionFromCtx, sessionMiddleware } from "./session";
+import { APIError } from "better-call";
 
 export const updateUser = createAuthEndpoint(
 	"/user/update",
@@ -17,6 +18,9 @@ export const updateUser = createAuthEndpoint(
 	async (ctx) => {
 		const { name, image } = ctx.body;
 		const session = ctx.context.session;
+		if (!image && !name) {
+			return ctx.json(session.user);
+		}
 		const user = await ctx.context.internalAdapter.updateUserByEmail(
 			session.user.email,
 			{

@@ -1,7 +1,7 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { sessionMiddleware } from "../../../api/middlewares/session";
+import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";

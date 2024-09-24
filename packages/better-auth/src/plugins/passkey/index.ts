@@ -14,7 +14,7 @@ import { APIError } from "better-call";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
-import { sessionMiddleware } from "../../api/middlewares/session";
+import { sessionMiddleware } from "../../api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../utils/cookies";

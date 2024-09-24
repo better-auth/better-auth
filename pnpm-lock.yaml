@@ -767,8 +767,8 @@ importers:
         specifier: 2.0.0-next.9
         version: 2.0.0-next.9
       better-call:
-        specifier: 0.2.3-beta.3
-        version: 0.2.3-beta.3
+        specifier: 0.2.3-beta.8
+        version: 0.2.3-beta.8
       better-sqlite3:
         specifier: ^11.1.2
         version: 11.3.0
@@ -10102,8 +10102,8 @@ packages:
       typescript: 5.6.2
     dev: false
 
-  /better-call@0.2.3-beta.3:
-    resolution: {integrity: sha512-1W0HB1aJ1adhbkVAi5gBQE/0uhdz+Y1Nrg3I0xZDFQx1R6vocBq7R+bVDrI5eNX+HmbzrXdY6O+Q/CfhhczJcg==}
+  /better-call@0.2.3-beta.8:
+    resolution: {integrity: sha512-cFD9x116voPbe9LSJFPIihY+2zDdhnEiVijQb8YWmXQXdC3PEZ7+lWyptJHBdtmLbao7xPt/JesH96/tm/o3wQ==}
     dependencies:
       '@better-fetch/fetch': 1.1.8
       '@types/set-cookie-parser': 2.4.10

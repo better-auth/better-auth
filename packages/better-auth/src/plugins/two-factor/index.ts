@@ -1,7 +1,7 @@
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { z } from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import { sessionMiddleware } from "../../api/middlewares/session";
+import { sessionMiddleware } from "../../api";
 import { hs256, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";

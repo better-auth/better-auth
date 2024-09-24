@@ -3,7 +3,7 @@ import { TimeSpan } from "oslo";
 import { TOTPController, createTOTPKeyURI } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { sessionMiddleware } from "../../../api/middlewares/session";
+import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";

@@ -25,6 +25,7 @@ export default defineConfig((env) => {
 		sourcemap: isBuild,
 		format: ["esm"],
 		dts: true,
+		splitting: false,
 		minify: isBuild,
 		minifyWhitespace: isBuild,
 		minifyIdentifiers: isBuild,

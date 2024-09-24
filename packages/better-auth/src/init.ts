@@ -51,7 +51,7 @@ export const init = (options: BetterAuthOptions) => {
 		},
 		tables,
 		baseURL: baseURL || "",
-		session: {
+		sessionConfig: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 		},
@@ -83,7 +83,7 @@ export type AuthContext = {
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;
 	secret: string;
-	session: {
+	sessionConfig: {
 		updateAge: number;
 		expiresIn: number;
 	};

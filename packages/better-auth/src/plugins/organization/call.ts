@@ -1,7 +1,7 @@
 import { APIError, type Context, createEndpointCreator } from "better-call";
 import type { Session, User } from "../../adapters/schema";
 import { createAuthMiddleware, optionsMiddleware } from "../../api/call";
-import { sessionMiddleware } from "../../api/middlewares/session";
+import { sessionMiddleware } from "../../api";
 import type { Role, defaultRoles } from "./access";
 import type { OrganizationOptions } from "./organization";
 

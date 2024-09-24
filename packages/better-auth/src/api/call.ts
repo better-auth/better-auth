@@ -21,8 +21,7 @@ export const createAuthMiddleware = createMiddlewareCreator({
 	use: [
 		optionsMiddleware,
 		/**
-		 * This of for hooks. to tell ts there will a
-		 * return response object
+		 * Only use for post hooks
 		 */
 		createMiddleware(async () => {
 			return {} as {

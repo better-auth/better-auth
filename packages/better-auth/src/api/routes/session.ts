@@ -1,8 +1,7 @@
-import type { Context, InferUse } from "better-call";
-import { createAuthEndpoint } from "../call";
+import { APIError, type Context, type InferUse } from "better-call";
+import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
-import { sessionMiddleware } from "../middlewares/session";
 import type { Session, User } from "../../adapters/schema";
 import { z } from "zod";
 import { getIp } from "../../utils/get-request-ip";
@@ -67,14 +66,18 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				const cachedSession = sessionCache.get(key);
 				if (cachedSession) {
 					if (cachedSession.expiresAt > Date.now()) {
-						return ctx.json(cachedSession.data);
+						return ctx.json(
+							cachedSession.data as unknown as {
+								session: Prettify<InferSession<Option>>;
+								user: Prettify<InferUser<Option>>;
+							},
+						);
 					}
 					sessionCache.delete(key);
 				}
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
 					if (session) {
@@ -95,10 +98,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 */
 				if (dontRememberMe) {
-					return ctx.json(session);
+					return ctx.json(
+						session as unknown as {
+							session: Prettify<InferSession<Option>>;
+							user: Prettify<InferUser<Option>>;
+						},
+					);
 				}
-				const expiresIn = ctx.context.session.expiresIn;
-				const updateAge = ctx.context.session.updateAge;
+				const expiresIn = ctx.context.sessionConfig.expiresIn;
+				const updateAge = ctx.context.sessionConfig.updateAge;
 				/**
 				 * Calculate last updated date to throttle write updates to database
 				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
@@ -119,7 +127,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						await ctx.context.internalAdapter.updateSession(
 							session.session.id,
 							{
-								expiresAt: getDate(ctx.context.session.expiresIn, true),
+								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, true),
 							},
 						);
 					if (!updatedSession) {
@@ -167,6 +175,16 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 	return session;
 };
 
+export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
+	const session = await getSessionFromCtx(ctx);
+	if (!session?.session) {
+		throw new APIError("UNAUTHORIZED");
+	}
+	return {
+		session,
+	};
+});
+
 /**
  * user active sessions list
  */
@@ -212,6 +230,13 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const id = ctx.body.id;
+		const findSession = await ctx.context.internalAdapter.findSession(id);
+		if (!findSession) {
+			return ctx.json(null, { status: 400 });
+		}
+		if (findSession.session.userId !== ctx.context.session.user.id) {
+			return ctx.json(null, { status: 403 });
+		}
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {
