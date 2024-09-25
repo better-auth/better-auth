@@ -11,6 +11,7 @@ import { csrfMiddleware } from "./middlewares/csrf";
 import {
 	callbackOAuth,
 	forgetPassword,
+	forgetPasswordCallback,
 	getSession,
 	listSessions,
 	resetPassword,
@@ -94,6 +95,7 @@ export function getEndpoints<
 		changePassword,
 		setPassword,
 		updateUser,
+		forgetPasswordCallback,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,

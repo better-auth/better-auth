@@ -34,7 +34,6 @@ export default function ResetPassword({
     setIsSubmitting(true);
     setError("");
     const res = await client.resetPassword({
-      token,
       newPassword: password,
     });
     if (res.error) {

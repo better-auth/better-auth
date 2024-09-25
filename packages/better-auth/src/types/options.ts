@@ -89,12 +89,8 @@ export interface BetterAuthOptions {
 		minPasswordLength?: number;
 		/**
 		 * send reset password email
-		 *
-		 * @param token the token to send to the email. Make sure to include the token as a
-		 * parameter in the URL. You'll need to send it back to reset the password.
-		 * @param user the user to send the email to
 		 */
-		sendResetPasswordToken?: (token: string, user: User) => Promise<void>;
+		sendResetPassword?: (url: string, user: User) => Promise<void>;
 		/**
 		 * @param email the email to send the verification email to
 		 * @param url the url to send the verification

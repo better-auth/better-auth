@@ -1,5 +1,5 @@
 import { TimeSpan } from "oslo";
-import { createJWT } from "oslo/jwt";
+import { createJWT, type JWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
@@ -13,10 +13,17 @@ export const forgetPassword = createAuthEndpoint(
 			 * The email address of the user to send a password reset email to.
 			 */
 			email: z.string().email(),
+			/**
+			 * The URL to redirect the user to reset their password.
+			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
+			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
+			 * token=VALID_TOKEN
+			 */
+			redirectTo: z.string(),
 		}),
 	},
 	async (ctx) => {
-		if (!ctx.context.options.emailAndPassword?.sendResetPasswordToken) {
+		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
 			ctx.context.logger.error(
 				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPasswordToken function to your auth config!",
 			);
@@ -49,6 +56,7 @@ export const forgetPassword = createAuthEndpoint(
 			Buffer.from(ctx.context.secret),
 			{
 				email: user.user.email,
+				redirectTo: ctx.body.redirectTo,
 			},
 			{
 				expiresIn: new TimeSpan(1, "h"),
@@ -58,8 +66,9 @@ export const forgetPassword = createAuthEndpoint(
 				includeIssuedTimestamp: true,
 			},
 		);
-		await ctx.context.options.emailAndPassword.sendResetPasswordToken(
-			token,
+		const url = `${ctx.context.baseURL}/reset-password/${token}`;
+		await ctx.context.options.emailAndPassword.sendResetPassword(
+			url,
 			user.user,
 		);
 		return ctx.json({
@@ -68,18 +77,64 @@ export const forgetPassword = createAuthEndpoint(
 	},
 );
 
+export const forgetPasswordCallback = createAuthEndpoint(
+	"/reset-password/:token",
+	{
+		method: "GET",
+	},
+	async (ctx) => {
+		const { token } = ctx.params;
+		let decodedToken: JWT;
+		try {
+			decodedToken = await validateJWT(
+				"HS256",
+				Buffer.from(ctx.context.secret),
+				token,
+			);
+		} catch (e) {
+			return ctx.json(null, {
+				status: 400,
+				statusText: "INVALID_TOKEN",
+				body: {
+					message: "Invalid token",
+				},
+			});
+		}
+		const schema = z.object({
+			email: z.string(),
+			redirectTo: z.string(),
+		});
+		const { redirectTo } = schema.parse(decodedToken.payload);
+		throw ctx.redirect(`${redirectTo}?token=${token}`);
+	},
+);
+
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
 		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string(),
+			})
+			.optional(),
 		body: z.object({
-			token: z.string(),
 			newPassword: z.string(),
 			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
-		const { token, newPassword } = ctx.body;
+		const token = ctx.query?.currentURL.split("?token=")[1];
+		if (!token) {
+			return ctx.json(null, {
+				status: 400,
+				statusText: "INVALID_TOKEN",
+				body: {
+					message: "Invalid token",
+				},
+			});
+		}
+		const { newPassword } = ctx.body;
 		try {
 			const jwt = await validateJWT(
 				"HS256",
@@ -121,10 +176,10 @@ export const resetPassword = createAuthEndpoint(
 			);
 			if (!updatedUser) {
 				return ctx.json(null, {
-					status: 500,
-					statusText: "INTERNAL_SERVER_ERROR",
+					status: 400,
+					statusText: "USER_NOT_FOUND",
 					body: {
-						message: "Internal server error",
+						message: "User doesn't have a credential account",
 					},
 				});
 			}

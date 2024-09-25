@@ -2,5 +2,5 @@ packages:
   - packages/**
   - dev/**
   - docs
-  - examples/*
+  - examples/**
   - demo/*

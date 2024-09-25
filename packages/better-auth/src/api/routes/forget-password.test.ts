@@ -7,8 +7,8 @@ describe("forget password", async (it) => {
 	const { client, testUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
-			async sendResetPasswordToken(_token, user) {
-				token = _token;
+			async sendResetPassword(url, user) {
+				token = url.split("/").pop() || "";
 				await mockSendEmail();
 			},
 		},
@@ -16,6 +16,7 @@ describe("forget password", async (it) => {
 	it("should send a reset password email when enabled", async () => {
 		await client.forgetPassword({
 			email: testUser.email,
+			redirectTo: "http://localhost:3000",
 		});
 		expect(token.length).toBeGreaterThan(10);
 	});
@@ -23,7 +24,11 @@ describe("forget password", async (it) => {
 	it("should verify the token", async () => {
 		const newPassword = "new-password";
 		const res = await client.resetPassword({
-			token,
+			fetchOptions: {
+				query: {
+					currentURL: `http://localhost:3000/reset-password?token=${token}`,
+				},
+			},
 			newPassword,
 		});
 		expect(res.data).toMatchObject({
