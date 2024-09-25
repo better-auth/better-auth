@@ -8,7 +8,7 @@ interface RippleProps {
 
 export const Ripple = React.memo(function Ripple({
   mainCircleSize = 180,
-  mainCircleOpacity = 0.20,
+  mainCircleOpacity = 0.2,
   numCircles = 10,
 }: RippleProps) {
   return (

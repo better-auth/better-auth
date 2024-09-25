@@ -4,7 +4,8 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "dev": "astro dev --port 3000",
+    "dev": "pnpm migrate:auth && astro dev --port 3000",
+    "migrate:auth": "pnpm better-auth migrate",
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",

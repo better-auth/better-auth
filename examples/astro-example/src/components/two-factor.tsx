@@ -95,12 +95,14 @@ export function TwoFactorEmail() {
 
   createEffect(() => {
     if (otp().length === 6) {
-      twoFactorActions.verifyTotp({
+      twoFactorActions.verifyOtp({
         code: otp(),
-        callbackURL: "/dashboard",
         fetchOptions: {
           onError(context) {
             alert(context.error.message);
+          },
+          onSuccess(context) {
+            window.location.href = "/dashboard";
           },
         },
       });

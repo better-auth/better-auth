@@ -1,15 +1,17 @@
 import { APIError } from "better-call";
 import { generateRandomInteger } from "oslo/crypto";
-import { generateHOTP } from "oslo/otp";
+import { generateHOTP, TOTPController } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { OTP_RANDOM_NUMBER_COOKIE_NAME } from "../constant";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import { TimeSpan } from "oslo";
 
 export interface OTPOptions {
 	/**
-	 * How long the opt will be valid for
+	 * How long the opt will be valid for in
+	 * minutes
 	 *
 	 * @default "5 mins"
 	 */
@@ -28,6 +30,13 @@ export interface OTPOptions {
  * The otp adapter is created from the totp adapter.
  */
 export const otp2fa = (options?: OTPOptions) => {
+	const opts = {
+		period: new TimeSpan(options?.period || 5, "m"),
+	};
+	const totp = new TOTPController({
+		digits: 6,
+		period: opts.period,
+	});
 	/**
 	 * Generate OTP and send it to the user.
 	 */
@@ -46,24 +55,9 @@ export const otp2fa = (options?: OTPOptions) => {
 					message: "otp isn't configured",
 				});
 			}
-			const randomNumber = generateRandomInteger(100000);
-			const otp = await generateHOTP(
-				Buffer.from(ctx.context.secret),
-				randomNumber,
-			);
-			await options.sendOTP(ctx.context.session.user as UserWithTwoFactor, otp);
-			const cookie = ctx.context.createAuthCookie(
-				OTP_RANDOM_NUMBER_COOKIE_NAME,
-				{
-					maxAge: options.period,
-				},
-			);
-			await ctx.setSignedCookie(
-				cookie.name,
-				randomNumber.toString(),
-				ctx.context.secret,
-				cookie.options,
-			);
+			const user = ctx.context.session.user as UserWithTwoFactor;
+			const code = await totp.generate(Buffer.from(user.twoFactorSecret));
+			await options.sendOTP(user, code);
 			return ctx.json({ status: true, OTP: undefined });
 		},
 	);
@@ -84,30 +78,8 @@ export const otp2fa = (options?: OTPOptions) => {
 					message: "two factor isn't enabled",
 				});
 			}
-			const cookie = ctx.context.createAuthCookie(
-				OTP_RANDOM_NUMBER_COOKIE_NAME,
-			);
-			const randomNumber = await ctx.getSignedCookie(
-				cookie.name,
-				ctx.context.secret,
-			);
-			if (!randomNumber) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "OTP is expired",
-				});
-			}
-			const toCheckOtp = await generateHOTP(
-				Buffer.from(ctx.context.secret),
-				parseInt(randomNumber),
-			);
+			const toCheckOtp = await totp.generate(Buffer.from(user.twoFactorSecret));
 			if (toCheckOtp === ctx.body.code) {
-				ctx.setCookie(cookie.name, "", {
-					path: "/",
-					sameSite: "lax",
-					httpOnly: true,
-					secure: false,
-					maxAge: 0,
-				});
 				return ctx.context.valid();
 			} else {
 				return ctx.context.invalid();

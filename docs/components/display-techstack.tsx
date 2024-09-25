@@ -7,13 +7,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-
-type TechStackIconType = {
-  [key: string]: {
-    name: string;
-    icon: any;
-  };
-};
 export const TechStackDisplay = ({
   skills,
   className,
@@ -22,10 +15,15 @@ export const TechStackDisplay = ({
   className?: string;
 }) => {
   return (
-    <div className={cn("flex gap-7 flex-wrap mt-3 justify-center items-center max-w-4xl", className)}>
+    <div
+      className={cn(
+        "flex gap-7 flex-wrap mt-3 justify-center items-center max-w-4xl",
+        className
+      )}
+    >
       {skills.map((icon) => {
         return (
-          <TooltipProvider key={icon} >
+          <TooltipProvider key={icon}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="transform duration-300 hover:rotate-12 transition-transform">

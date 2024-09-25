@@ -41,9 +41,9 @@ export default function Features() {
             </div>
             <p className="text-left text-sm mt-2 text-muted-foreground">
               Supports your favorite frontend, backend and meta frameworks,
-              including React, Vue, Svelte, Solid, Next.js, Nuxt.js, Hono, and
-              more{" "}
-              <a className="text-gray-50" href=".docs" target="_blank">
+              including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt.js,
+              Hono, and more{" "}
+              <a className="text-gray-50" href="/docs" target="_blank">
                 Learn more
               </a>
             </p>
@@ -188,6 +188,7 @@ export default function Features() {
                     "nextJs",
                     "nuxt",
                     "svelteKit",
+                    "astro",
                     "solidStart",
                     "react",
                     "hono",

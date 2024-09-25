@@ -135,6 +135,7 @@ export function UserCard(props: {
             class="gap-2"
             onClick={async () => {
               await signOut();
+              window.location.reload();
             }}
           >
             <svg
