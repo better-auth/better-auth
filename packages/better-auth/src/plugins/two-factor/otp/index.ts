@@ -58,7 +58,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			const user = ctx.context.session.user as UserWithTwoFactor;
 			const code = await totp.generate(Buffer.from(user.twoFactorSecret));
 			await options.sendOTP(user, code);
-			return ctx.json({ status: true, OTP: undefined });
+			return ctx.json({ status: true });
 		},
 	);
 

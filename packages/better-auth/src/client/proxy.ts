@@ -73,7 +73,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 									...body,
 									...(options?.body || {}),
 								},
-					query: query,
+					query: query || options?.query,
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);

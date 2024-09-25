@@ -8,6 +8,11 @@ export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",
 	{
 		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			name: z.string(),
 			email: z.string(),
@@ -95,7 +100,11 @@ export const signUpEmail = createAuthEndpoint(
 				ctx.context.secret,
 				createdUser.email,
 			);
-			const url = `${ctx.context.baseURL}/verify-email?token=${token}?callbackURL=${ctx.body.callbackURL}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${
+				ctx.body.callbackURL || ctx.query?.currentURL || "/"
+			}`;
 			await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
 				createdUser.email,
 				url,

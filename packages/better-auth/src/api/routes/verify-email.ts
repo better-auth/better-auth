@@ -28,6 +28,11 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			email: z.string().email(),
 			callbackURL: z.string().optional(),
@@ -35,6 +40,9 @@ export const sendVerificationEmail = createAuthEndpoint(
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendVerificationEmail) {
+			ctx.context.logger.error(
+				"Verification email isn't enabled. Pass `sendVerificationEmail` in `emailAndPassword` options to enable it.",
+			);
 			return ctx.json(null, {
 				status: 400,
 				statusText: "VERIFICATION_EMAIL_NOT_SENT",
@@ -45,7 +53,11 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}
 		const { email } = ctx.body;
 		const token = await createEmailVerificationToken(ctx.context.secret, email);
-		const url = `${ctx.context.baseURL}/verify-email?token=${token}?callbackURL=${ctx.body.callbackURL}`;
+		const url = `${
+			ctx.context.baseURL
+		}/verify-email?token=${token}&callbackURL=${
+			ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		}`;
 		await ctx.context.options.emailAndPassword.sendVerificationEmail(
 			email,
 			url,
@@ -100,19 +112,14 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		const account = user.accounts.find((a) => a.providerId === "credential");
 		if (!account) {
-			return ctx.json(null, {
-				status: 400,
-				statusText: "ACCOUNT_NOT_FOUND",
-				body: {
-					message: "Account not found",
-				},
-			});
+			throw ctx.redirect;
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
 		});
 		if (ctx.query.callbackURL) {
-			throw ctx.redirect(ctx.query.callbackURL);
+			console.log("Redirecting to", ctx.query.callbackURL);
+			throw ctx.redirect("/");
 		}
 		return ctx.json({
 			status: true,

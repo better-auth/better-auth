@@ -1,5 +1,5 @@
 import { TimeSpan } from "oslo";
-import { createJWT, type JWT } from "oslo/jwt";
+import { createJWT, parseJWT, type JWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
@@ -85,25 +85,28 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		let decodedToken: JWT;
+		const schema = z.object({
+			email: z.string(),
+			redirectTo: z.string(),
+		});
 		try {
 			decodedToken = await validateJWT(
 				"HS256",
 				Buffer.from(ctx.context.secret),
 				token,
 			);
+			if (!decodedToken.expiresAt || decodedToken.expiresAt < new Date()) {
+				throw Error("Token expired");
+			}
 		} catch (e) {
-			return ctx.json(null, {
-				status: 400,
-				statusText: "INVALID_TOKEN",
-				body: {
-					message: "Invalid token",
-				},
-			});
+			const decoded = parseJWT(token);
+			const jwt = schema.safeParse(decoded?.payload);
+			if (jwt.success) {
+				throw ctx.redirect(`${jwt.data?.redirectTo}?error=invalid_token`);
+			} else {
+				throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_token`);
+			}
 		}
-		const schema = z.object({
-			email: z.string(),
-			redirectTo: z.string(),
-		});
 		const { redirectTo } = schema.parse(decodedToken.payload);
 		throw ctx.redirect(`${redirectTo}?token=${token}`);
 	},

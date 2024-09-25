@@ -783,14 +783,14 @@ importers:
         specifier: ^0.7.39
         version: 0.7.39
 
-  examples/svelte/social-sign-in:
+  examples/svelte-kit-example:
     dependencies:
       '@internationalized/date':
         specifier: ^3.5.5
         version: 3.5.5
       better-auth:
         specifier: workspace:0.0.10-beta.18
-        version: link:../../../packages/better-auth
+        version: link:../../packages/better-auth
       bits-ui:
         specifier: ^0.21.15
         version: 0.21.15(svelte@4.2.19)
@@ -8482,7 +8482,7 @@ packages:
     peerDependencies:
       '@sveltejs/kit': ^2.0.0
     dependencies:
-      '@sveltejs/kit': 2.5.28(@sveltejs/vite-plugin-svelte@3.1.2)(svelte@4.2.19)(vite@5.4.8)
+      '@sveltejs/kit': 2.5.28(@sveltejs/vite-plugin-svelte@3.1.2)(svelte@4.2.19)(vite@5.4.7)
       import-meta-resolve: 4.1.0
     dev: true
 

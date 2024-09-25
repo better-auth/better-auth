@@ -7,6 +7,7 @@ import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
+const to = process.env.TEST_EMAIL || "";
 export const auth = betterAuth({
 	database: new LibsqlDialect({
 		url: process.env.TURSO_DATABASE_URL || "",
@@ -30,7 +31,16 @@ export const auth = betterAuth({
 					}/reset-password/${token}`,
 				}),
 			});
-			console.log(res, user.email);
+		},
+		sendEmailVerificationOnSignUp: true,
+		async sendVerificationEmail(email, url) {
+			const res = await resend.emails.send({
+				from,
+				to: to || email,
+				subject: "Verify your email address",
+				html: `<a href="${url}">Verify your email address</a>`,
+			});
+			console.log(res, email);
 		},
 	},
 	plugins: [

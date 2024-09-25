@@ -6,12 +6,15 @@ import { parseSetCookieHeader } from "../../utils/cookies";
 import type { UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
+	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			plugins: [
 				twoFactor({
 					otpOptions: {
-						sendOTP() {},
+						sendOTP(user, OTP) {
+							OTP = OTP;
+						},
 					},
 				}),
 			],
@@ -81,9 +84,6 @@ describe("two factor", async () => {
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
 		const otpRes = await client.twoFactor.sendOtp({
 			fetchOptions: {
-				body: {
-					returnOTP: true,
-				},
 				headers,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
@@ -98,9 +98,8 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		expect(otpRes.data?.OTP).toBeDefined();
 		const verifyRes = await client.twoFactor.verifyOtp({
-			code: otpRes.data?.OTP as string,
+			code: OTP,
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -135,9 +134,6 @@ describe("two factor", async () => {
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
 		const otpRes = await client.twoFactor.sendOtp({
 			fetchOptions: {
-				body: {
-					returnOTP: true,
-				},
 				headers,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
@@ -155,7 +151,7 @@ describe("two factor", async () => {
 		const newHeaders = new Headers();
 		await client.twoFactor.verifyOtp({
 			trustDevice: true,
-			code: otpRes.data?.OTP as string,
+			code: OTP,
 			fetchOptions: {
 				headers,
 				onSuccess(context) {

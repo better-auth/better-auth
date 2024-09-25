@@ -4,11 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardDescription,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -87,7 +89,8 @@ export default function UserCard(props: {
   const [twoFaPassword, setTwoFaPassword] = useState<string>("");
   const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
   const [isSignOut, setIsSignOut] = useState<boolean>(false);
-
+  const [emailVerificationPending, setEmailVerificationPending] =
+    useState<boolean>(false);
   return (
     <Card>
       <CardHeader>
@@ -113,6 +116,47 @@ export default function UserCard(props: {
           </div>
           <EditUserDialog session={session} />
         </div>
+
+        {session?.user.emailVerified ? null : (
+          <Alert>
+            <AlertTitle>Verify Your Email Address</AlertTitle>
+            <AlertDescription className="text-muted-foreground">
+              Please verify your email address. Check your inbox for the
+              verification email. If you haven't received the email, click the
+              button below to resend.
+            </AlertDescription>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2"
+              onClick={async () => {
+                await client.sendVerificationEmail({
+                  email: session?.user.email || "",
+                  fetchOptions: {
+                    onRequest(context) {
+                      setEmailVerificationPending(true);
+                    },
+                    onError(context) {
+                      toast.error(context.error.message);
+                      setEmailVerificationPending(false);
+                    },
+                    onSuccess() {
+                      toast.success("Verification email sent successfully");
+                      setEmailVerificationPending(false);
+                    },
+                  },
+                });
+              }}
+            >
+              {emailVerificationPending ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                "Resend Verification Email"
+              )}
+            </Button>
+          </Alert>
+        )}
+
         <div className="border-l-2 px-2 w-max gap-1 flex flex-col">
           <p className="text-xs font-medium ">Active Sessions</p>
           {props.activeSessions
