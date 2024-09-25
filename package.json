@@ -21,7 +21,8 @@
     "dependencies": {
         "@biomejs/biome": "1.7.3",
         "bumpp": "^9.4.1",
-        "dotenv-cli": "^7.4.2"
+        "dotenv-cli": "^7.4.2",
+        "fast-glob": "^3.3.2"
     },
     "devDependencies": {
         "@types/node": "^20.12.12",

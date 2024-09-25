@@ -9,7 +9,7 @@ import { AsideLink } from "@/components/ui/aside-link";
 import { FadeIn, FadeInStagger } from "@/components/ui/fade-in";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { contents, examples } from "./sidebar-content";
 import { Search } from "lucide-react";
 import {
@@ -32,7 +32,6 @@ export default function ArticleLayout() {
   }
 
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [group, setGroup] = useState("docs");
 
   useEffect(() => {

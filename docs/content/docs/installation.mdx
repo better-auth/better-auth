@@ -150,7 +150,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "solid-start", "hono", "express"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "astro", "solid-start", "hono", "express"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/[...auth]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -216,6 +216,21 @@ Better auth supports any backend framework with standard Request and Response ob
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });
+    ``` 
+    This also works for any other node server framework like express, fastify, hapi, etc.
+    </Tab>
+    <Tab value="astro">
+    ```ts title="/pages/api/auth/[...all].ts"
+    import type { APIRoute } from "astro";
+    import { auth } from "../../../auth";
+
+    export const GET: APIRoute = async (ctx) => {
+        return auth.handler(ctx.request);
+    };
+
+    export const ALL: APIRoute = async (ctx) => {
+        return auth.handler(ctx.request);
+    };
     ``` 
     This also works for any other node server framework like express, fastify, hapi, etc.
     </Tab>

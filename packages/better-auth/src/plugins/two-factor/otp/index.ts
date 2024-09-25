@@ -64,7 +64,6 @@ export const otp2fa = (options?: OTPOptions) => {
 				ctx.context.secret,
 				cookie.options,
 			);
-
 			return ctx.json({ status: true, OTP: undefined });
 		},
 	);

@@ -1,6 +1,7 @@
 {
   "name": "@examples/astro",
   "type": "module",
+  "private": true,
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev --port 3000",
