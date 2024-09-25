@@ -17,7 +17,9 @@ export default {
 		"./mdx-components.{ts,tsx}",
 		"./node_modules/fumadocs-ui/dist/**/*.js",
 	],
-	presets: [createPreset()],
+	presets: [createPreset({
+		preset: "dusk"
+	})],
 	plugins: [
 		require("tailwindcss-animate"),
 		addVariablesForColors,
@@ -104,12 +106,12 @@ export default {
 			keyframes: {
 				ripple: {
 					"0% , 100%": {
-					  transform: "translate(-50% , -50%) scale(1)",
+						transform: "translate(-50% , -50%) scale(1)",
 					},
 					"50%": {
-					  transform: "translate(-50% , -50%) scale(0.9)",
+						transform: "translate(-50% , -50%) scale(0.9)",
 					},
-				  },
+				},
 				"accordion-down": {
 					from: {
 						height: "0",

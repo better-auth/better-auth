@@ -27,17 +27,10 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
-import { changePassword, updateUser } from "./routes/update-user";
+import { changePassword, setPassword, updateUser } from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
 import chalk from "chalk";
-import { getIp } from "../utils";
-import {
-	getRateLimitStorage,
-	getRetryAfter,
-	onRequestRateLimit,
-	rateLimitResponse,
-	shouldRateLimit,
-} from "./rate-limiter";
+import { onRequestRateLimit } from "./rate-limiter";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -99,6 +92,7 @@ export function getEndpoints<
 		verifyEmail,
 		sendVerificationEmail,
 		changePassword,
+		setPassword,
 		updateUser,
 		listSessions: listSessions<Option>(),
 		revokeSession,
@@ -179,8 +173,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return onRequestRateLimit(req, ctx);
 		},
 		onError(e) {
-			const log = options.verboseLog ? logger : undefined;
-			if (options.disableLog !== true) {
+			const log = options.logger?.verboseLogging ? logger : undefined;
+			if (options.logger?.disabled !== true) {
 				if (e instanceof APIError) {
 					log?.warn(e);
 				} else {

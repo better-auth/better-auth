@@ -4,14 +4,14 @@ import { docsOptions } from "../layout.config";
 import ArticleLayout from "@/components/side-bar";
 
 export default function Layout({ children }: { children: ReactNode }) {
-	return (
-		<DocsLayout
-			{...docsOptions}
-			sidebar={{
-				component: <ArticleLayout />,
-			}}
-		>
-			{children}
-		</DocsLayout>
-	);
+  return (
+    <DocsLayout
+      {...docsOptions}
+      sidebar={{
+        component: <ArticleLayout />,
+      }}
+    >
+      {children}
+    </DocsLayout>
+  );
 }

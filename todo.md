@@ -7,12 +7,12 @@
 [x] add tests
 [x] implement the ac check on the client to for organization
 [x] add delete organization endpoint
-[ ] add callback url on otp and backup code verification
+[-] add callback url on otp and backup code verification
 [ ] fix bun problem
 [x] fix the issue with the client triggers not working fot 2 consecutive calls
 [ ] add a way to specify on the client to use the base path as the whole path
 [x] implement magic links
-[ ] rate limiter error handling
+[x] rate limiter error handling
 [ ] microsoft oauth
 
 ## Docs

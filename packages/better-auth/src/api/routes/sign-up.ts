@@ -35,8 +35,8 @@ export const signUpEmail = createAuthEndpoint(
 				},
 			});
 		}
-		const minPasswordLength =
-			ctx.context.options?.emailAndPassword?.minPasswordLength || 8;
+
+		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (password.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
 			return ctx.json(null, {
@@ -44,6 +44,15 @@ export const signUpEmail = createAuthEndpoint(
 				body: { message: "Password is too short" },
 			});
 		}
+		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+		if (password.length > maxPasswordLength) {
+			ctx.context.logger.error("Password is too long");
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Password is too long" },
+			});
+		}
+
 		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 		/**
 		 * hash first to avoid timing attacks

@@ -6,5 +6,4 @@ export * from "./bearer";
 export * from "../types/plugins";
 export * from "../api/call";
 export * from "../utils/hide-metadata";
-export * from "./rate-limiter";
 export * from "./magic-link";

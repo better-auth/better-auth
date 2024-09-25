@@ -72,12 +72,16 @@ export const init = (options: BetterAuthOptions) => {
 		},
 		authCookies: cookies,
 		logger: createLogger({
-			disabled: options.disableLog,
+			disabled: options.logger?.disabled || false,
 		}),
 		db,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
+			config: {
+				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
+				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
+			},
 		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, db, options),
@@ -110,6 +114,10 @@ export type AuthContext = {
 	password: {
 		hash: (password: string) => Promise<string>;
 		verify: (hash: string, password: string) => Promise<boolean>;
+		config: {
+			minPasswordLength: number;
+			maxPasswordLength: number;
+		};
 	};
 	tables: ReturnType<typeof getAuthTables>;
 };

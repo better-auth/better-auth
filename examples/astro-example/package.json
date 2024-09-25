@@ -26,6 +26,7 @@
     "cmdk-solid": "^1.1.0",
     "embla-carousel-solid": "^8.3.0",
     "lucide-solid": "^0.445.0",
+    "resend": "^4.0.0",
     "solid-js": "^1.8.23",
     "solid-sonner": "^0.2.8",
     "tailwind-merge": "^2.5.2",

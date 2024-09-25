@@ -3,7 +3,7 @@ import {
 	type BetterFetch,
 	type BetterFetchOption,
 } from "@better-fetch/fetch";
-import { atom, type PreinitializedWritableAtom } from "nanostores";
+import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -70,9 +70,21 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
+	let isMounted = false;
 	for (const initAtom of initializedAtom) {
-		initAtom.subscribe((value) => {
-			fn();
+		initAtom.subscribe(() => {
+			if (isMounted) {
+				fn();
+			} else {
+				onMount(value, () => {
+					fn();
+					isMounted = true;
+					return () => {
+						value.off();
+						initAtom.off();
+					};
+				});
+			}
 		});
 	}
 	return value;

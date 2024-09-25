@@ -40,13 +40,12 @@ import {
 } from "./ui/table";
 import type { ActiveSession } from "@/libs/types";
 
-export function UserCard({
-  activeSessions,
-  initialSession,
-}: {
+export function UserCard(props: {
   activeSessions: Session[];
   initialSession: ActiveSession | null;
 }) {
+  const activeSessions = props.activeSessions;
+  const initialSession = props.initialSession;
   const [session, setSession] = createSignal(initialSession);
   const res = useSession();
   createEffect(() => {

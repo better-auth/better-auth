@@ -101,7 +101,16 @@ export function SignInCard() {
               </svg>
               Continue with Github
             </Button>
-            <Button class="gap-2" variant="outline">
+            <Button
+              class="gap-2"
+              variant="outline"
+              onClick={async () => {
+                await signIn.social({
+                  provider: "google",
+                  callbackURL: "/dashboard",
+                });
+              }}
+            >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="1.2em"

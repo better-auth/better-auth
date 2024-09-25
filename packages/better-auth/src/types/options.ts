@@ -57,39 +57,6 @@ export interface BetterAuthOptions {
 	 */
 	secret?: string;
 	/**
-	 * list of social providers
-	 */
-	socialProviders?: SocialProviders;
-	/**
-	 * List of Better Auth plugins
-	 */
-	plugins?: BetterAuthPlugin[];
-	/**
-	 * Advanced options
-	 */
-	advanced?: {
-		/**
-		 * Use secure cookies
-		 *
-		 * @default false
-		 */
-		useSecureCookies?: boolean;
-		/**
-		 * Disable CSRF check
-		 */
-		disableCSRFCheck?: boolean;
-	};
-	/**
-	 * Disable logging
-	 *
-	 * @default false
-	 */
-	disableLog?: boolean;
-	/**
-	 * log verbose information
-	 */
-	verboseLog?: boolean;
-	/**
 	 * Database configuration
 	 */
 	database:
@@ -98,57 +65,6 @@ export interface BetterAuthOptions {
 				url: string;
 		  }
 		| Dialect;
-	/**
-	 * User configuration
-	 */
-	user?: {
-		/**
-		 * The model name for the user. Defaults to "user".
-		 */
-		modelName?: string;
-		/**
-		 * Additional fields to add to the user model
-		 */
-		additionalFields?: Record<string, FieldAttribute>;
-	};
-	session?: {
-		modelName?: string;
-		/**
-		 * Expiration time for the session token. The value
-		 * should be in seconds.
-		 * @default 7 days (60 * 60 * 24 * 7)
-		 */
-		expiresIn?: number;
-		/**
-		 * How often the session should be refreshed. The value
-		 * should be in seconds.
-		 * If set 0 the session will be refreshed every time it is used.
-		 * @default 1 day (60 * 60 * 24)
-		 */
-		updateAge?: number;
-	};
-	account?: {
-		modelName?: string;
-		accountLinking?: {
-			/**
-			 * Enable account linking
-			 *
-			 * @default true
-			 */
-			enabled?: boolean;
-			/**
-			 * List of trusted providers. If the
-			 * provider is not in this list
-			 * `emailVerified` field is ignored.
-			 */
-			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
-			/**
-			 * Require email verified field
-			 * to be true to link the account
-			 */
-			requireEmailVerified?: boolean;
-		};
-	};
 	/**
 	 * Email and password authentication
 	 */
@@ -162,13 +78,13 @@ export interface BetterAuthOptions {
 		/**
 		 * The maximum length of the password.
 		 *
-		 * @default 8
+		 * @default 128
 		 */
 		maxPasswordLength?: number;
 		/**
 		 * The minimum length of the password.
 		 *
-		 * @default 32
+		 * @default 8
 		 */
 		minPasswordLength?: number;
 		/**
@@ -213,6 +129,61 @@ export interface BetterAuthOptions {
 		};
 	};
 	/**
+	 * list of social providers
+	 */
+	socialProviders?: SocialProviders;
+	/**
+	 * List of Better Auth plugins
+	 */
+	plugins?: BetterAuthPlugin[];
+	/**
+	 * User configuration
+	 */
+	user?: {
+		/**
+		 * The model name for the user. Defaults to "user".
+		 */
+		modelName?: string;
+	};
+	session?: {
+		modelName?: string;
+		/**
+		 * Expiration time for the session token. The value
+		 * should be in seconds.
+		 * @default 7 days (60 * 60 * 24 * 7)
+		 */
+		expiresIn?: number;
+		/**
+		 * How often the session should be refreshed. The value
+		 * should be in seconds.
+		 * If set 0 the session will be refreshed every time it is used.
+		 * @default 1 day (60 * 60 * 24)
+		 */
+		updateAge?: number;
+	};
+	account?: {
+		modelName?: string;
+		accountLinking?: {
+			/**
+			 * Enable account linking
+			 *
+			 * @default true
+			 */
+			enabled?: boolean;
+			/**
+			 * List of trusted providers. If the
+			 * provider is not in this list
+			 * `emailVerified` field is ignored.
+			 */
+			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
+			/**
+			 * Require email verified field
+			 * to be true to link the account
+			 */
+			requireEmailVerified?: boolean;
+		};
+	};
+	/**
 	 * List of trusted origins.
 	 */
 	trustedOrigins?: string[];
@@ -231,7 +202,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default 60 sec
 		 */
-		window: number;
+		window?: number;
 		/**
 		 * Custom rate limit rules to apply to
 		 * specific paths.
@@ -253,7 +224,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default 100
 		 */
-		max: number;
+		max?: number;
 		/**
 		 * Storage configuration
 		 *
@@ -277,5 +248,32 @@ export interface BetterAuthOptions {
 			get: (key: string) => Promise<RateLimit | undefined>;
 			set: (key: string, value: RateLimit) => Promise<void>;
 		};
+	};
+	/**
+	 * Advanced options
+	 */
+	advanced?: {
+		/**
+		 * Use secure cookies
+		 *
+		 * @default false
+		 */
+		useSecureCookies?: boolean;
+		/**
+		 * Disable CSRF check
+		 */
+		disableCSRFCheck?: boolean;
+	};
+	logger?: {
+		/**
+		 * Disable logging
+		 *
+		 * @default false
+		 */
+		disabled?: boolean;
+		/**
+		 * log verbose information
+		 */
+		verboseLogging?: boolean;
 	};
 }

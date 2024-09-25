@@ -35,16 +35,6 @@ export const otp2fa = (options?: OTPOptions) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
-			body: z
-				.object({
-					/**
-					 * should only be used for testing
-					 * purposes. This will return the otp
-					 * on the response body.
-					 */
-					returnOTP: z.boolean().default(false),
-				})
-				.optional(),
 			use: [verifyTwoFactorMiddleware],
 		},
 		async (ctx) => {
@@ -74,12 +64,7 @@ export const otp2fa = (options?: OTPOptions) => {
 				ctx.context.secret,
 				cookie.options,
 			);
-			/**
-			 * only used for testing purposes
-			 */
-			if (ctx.body?.returnOTP) {
-				return ctx.json({ OTP: otp, status: true });
-			}
+
 			return ctx.json({ status: true, OTP: undefined });
 		},
 	);

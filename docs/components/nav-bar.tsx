@@ -13,7 +13,7 @@ export const Navbar = () => {
     <nav className="md:grid grid-cols-12 border-b sticky top-0 flex items-center justify-end bg-background backdrop-blur-md z-50">
       <Link
         href="/"
-        className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-4 lg:col-span-2 shrink-0 transition-colors min-w-[--fd-sidebar-width]"
+        className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors w-[--fd-sidebar-width]"
       >
         <div className="flex flex-col gap-2 w-full">
           <div className="flex items-center gap-2">
@@ -23,7 +23,7 @@ export const Navbar = () => {
           {/* <PulicBetaBadge /> */}
         </div>
       </Link>
-      <div className="md:col-span-9 lg:col-span-10 flex items-center justify-end  ">
+      <div className="md:col-span-10 flex items-center justify-end  ">
         <ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
           {hideNavbar
             ? null
@@ -49,24 +49,13 @@ export const navMenu = [
     name: "docs",
     path: "/docs",
   },
-  // {
-  // 	name: "plugins",
-  // 	path: "/plugins",
-  // },
-  // {
-  // 	name: "pre-made ui",
-  // 	path: "/ui",
-  // },
-  // {
-  // 	name: "security",
-  // 	path: "/security",
-  // },
+
   {
     name: "changelogs",
     path: "/changelogs",
   },
-  // {
-  // 	name: "resources",
-  // 	path: "/resources",
-  // },
+  {
+    name: "community",
+    path: "https://discord.gg/GYC3W7tZzb",
+  },
 ];

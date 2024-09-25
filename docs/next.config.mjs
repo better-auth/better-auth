@@ -42,6 +42,11 @@ const config = {
 				destination: "/docs/introduction",
 				permanent: true,
 			},
+			{
+				source: "/docs/examples",
+				destination: "/docs/examples/next-js",
+				permanent: true,
+			}
 		];
 	},
 	images: {

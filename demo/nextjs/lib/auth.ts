@@ -1,10 +1,5 @@
 import { betterAuth } from "better-auth";
-import {
-	organization,
-	passkey,
-	twoFactor,
-	rateLimiter,
-} from "better-auth/plugins";
+import { organization, passkey, twoFactor } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { github, google } from "better-auth/social-providers";
@@ -39,10 +34,6 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
-		// rateLimiter({
-		// 	enabled: true,
-		// 	max: 1000,
-		// }),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({
@@ -82,7 +73,7 @@ export const auth = betterAuth({
 			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
 		},
 		google: {
-			clientId: "",
+			clientId: process.env.GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
 		},
 	},

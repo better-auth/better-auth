@@ -56,8 +56,7 @@ export const changePassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength =
-			ctx.context.options?.emailAndPassword?.minPasswordLength || 8;
+		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
 			return ctx.json(null, {
@@ -65,6 +64,90 @@ export const changePassword = createAuthEndpoint(
 				body: { message: "Password is too short" },
 			});
 		}
+
+		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+
+		if (newPassword.length > maxPasswordLength) {
+			ctx.context.logger.error("Password is too long");
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Password is too long" },
+			});
+		}
+
+		const accounts = await ctx.context.internalAdapter.findAccounts(
+			session.user.id,
+		);
+		const account = accounts.find(
+			(account) => account.providerId === "credential" && account.password,
+		);
+		if (!account || !account.password) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User does not have a password" },
+			});
+		}
+		const passwordHash = await ctx.context.password.hash(newPassword);
+		const verify = await ctx.context.password.verify(
+			account.password,
+			currentPassword,
+		);
+		if (!verify) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Invalid password" },
+			});
+		}
+		await ctx.context.internalAdapter.updateAccount(account.id, {
+			password: passwordHash,
+		});
+		if (revokeOtherSessions) {
+			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			const newSession = await ctx.context.internalAdapter.createSession(
+				session.user.id,
+				ctx.headers,
+			);
+			// set the new session cookie
+			await setSessionCookie(ctx, newSession.id);
+		}
+		return ctx.json(session.user);
+	},
+);
+
+export const setPassword = createAuthEndpoint(
+	"/user/set-password",
+	{
+		method: "POST",
+		body: z.object({
+			/**
+			 * The new password to set
+			 */
+			newPassword: z.string(),
+		}),
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const { newPassword } = ctx.body;
+		const session = ctx.context.session;
+		const minPasswordLength = ctx.context.password.config.minPasswordLength;
+		if (newPassword.length < minPasswordLength) {
+			ctx.context.logger.error("Password is too short");
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Password is too short" },
+			});
+		}
+
+		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+
+		if (newPassword.length > maxPasswordLength) {
+			ctx.context.logger.error("Password is too long");
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Password is too long" },
+			});
+		}
+
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			session.user.id,
 		);
@@ -82,30 +165,9 @@ export const changePassword = createAuthEndpoint(
 			});
 			return ctx.json(session.user);
 		}
-		if (account.password) {
-			const verify = await ctx.context.password.verify(
-				account.password,
-				currentPassword,
-			);
-			if (!verify) {
-				return ctx.json(null, {
-					status: 400,
-					body: { message: "Invalid password" },
-				});
-			}
-		}
-		await ctx.context.internalAdapter.updateAccount(account.id, {
-			password: passwordHash,
+		return ctx.json(null, {
+			status: 400,
+			body: { message: "User already has a password" },
 		});
-		if (revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteSessions(session.user.id);
-			const newSession = await ctx.context.internalAdapter.createSession(
-				session.user.id,
-				ctx.headers,
-			);
-			// set the new session cookie
-			await setSessionCookie(ctx, newSession.id);
-		}
-		return ctx.json(session.user);
 	},
 );

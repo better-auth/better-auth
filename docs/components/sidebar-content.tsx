@@ -1,11 +1,8 @@
 import {
-  AppWindow,
-  Clock,
   Key,
   LucideAArrowDown,
   LucideIcon,
   Mailbox,
-  PlusCircle,
   ScanFace,
   Users2,
   UserSquare2,
@@ -106,12 +103,12 @@ export const contents: Content[] = [
         icon: () => (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="1em"
-            height="1em"
+            width="1.2em"
+            height="1.2em"
             viewBox="0 0 24 24"
           >
             <path
-              className="fill-foreground"
+              className="fill-current"
               fillRule="evenodd"
               d="M2.6 13.25a1.35 1.35 0 0 0-1.35 1.35v6.8c0 .746.604 1.35 1.35 1.35h18.8a1.35 1.35 0 0 0 1.35-1.35v-6.8a1.35 1.35 0 0 0-1.35-1.35zm3.967 5.25a.75.75 0 0 0-1.114-1.003l-.01.011a.75.75 0 0 0 1.114 1.004zM2.6 1.25A1.35 1.35 0 0 0 1.25 2.6v6.8c0 .746.604 1.35 1.35 1.35h18.8a1.35 1.35 0 0 0 1.35-1.35V2.6a1.35 1.35 0 0 0-1.35-1.35zM6.567 6.5a.75.75 0 0 0-1.114-1.003l-.01.011a.75.75 0 1 0 1.114 1.004z"
               clipRule="evenodd"
@@ -125,16 +122,13 @@ export const contents: Content[] = [
         icon: () => (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="1em"
-            height="1em"
+            width="1.2em"
+            height="1.2em"
             viewBox="0 0 24 24"
           >
             <path
-              className="stroke-foreground"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M3 17h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4zm0-7h4v4h-4zm0-7h4v4h-4zm-7 7h4v4h-4zm0-7h4v4h-4zM3 3h4v4H3z"
+              fill="currentColor"
+              d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6-10v4h4V4zm-6 4h4V4h-4zm6 6h4v-4h-4zm0 6h4v-4h-4z"
             ></path>
           </svg>
         ),
@@ -143,16 +137,17 @@ export const contents: Content[] = [
         title: "Database",
         icon: (props?: SVGProps<any>) => (
           <svg
-            {...props}
             xmlns="http://www.w3.org/2000/svg"
-            width="1.4em"
-            height="1.4em"
-            viewBox="0 0 24 24"
+            width="1.2em"
+            height="1.2em"
+            viewBox="0 0 16 16"
           >
-            <path
-              fill="currentColor"
-              d="M12 11q-3.75 0-6.375-1.175T3 7q0-1.65 2.625-2.825Q8.25 3 12 3t6.375 1.175Q21 5.35 21 7q0 1.65-2.625 2.825Q15.75 11 12 11Zm0 5q-3.75 0-6.375-1.175T3 12V9.5q0 1.1 1.025 1.863q1.025.762 2.45 1.237q1.425.475 2.963.687q1.537.213 2.562.213t2.562-.213q1.538-.212 2.963-.687q1.425-.475 2.45-1.237Q21 10.6 21 9.5V12q0 1.65-2.625 2.825Q15.75 16 12 16Zm0 5q-3.75 0-6.375-1.175T3 17v-2.5q0 1.1 1.025 1.863q1.025.762 2.45 1.237q1.425.475 2.963.688q1.537.212 2.562.212t2.562-.212q1.538-.213 2.963-.688t2.45-1.237Q21 15.6 21 14.5V17q0 1.65-2.625 2.825Q15.75 21 12 21Z"
-            ></path>
+            <g fill="currentColor">
+              <path d="M3.904 1.777C4.978 1.289 6.427 1 8 1s3.022.289 4.096.777C13.125 2.245 14 2.993 14 4s-.875 1.755-1.904 2.223C11.022 6.711 9.573 7 8 7s-3.022-.289-4.096-.777C2.875 5.755 2 5.007 2 4s.875-1.755 1.904-2.223"></path>
+              <path d="M2 6.161V7c0 1.007.875 1.755 1.904 2.223C4.978 9.71 6.427 10 8 10s3.022-.289 4.096-.777C13.125 8.755 14 8.007 14 7v-.839c-.457.432-1.004.751-1.49.972C11.278 7.693 9.682 8 8 8s-3.278-.307-4.51-.867c-.486-.22-1.033-.54-1.49-.972"></path>
+              <path d="M2 9.161V10c0 1.007.875 1.755 1.904 2.223C4.978 12.711 6.427 13 8 13s3.022-.289 4.096-.777C13.125 11.755 14 11.007 14 10v-.839c-.457.432-1.004.751-1.49.972c-1.232.56-2.828.867-4.51.867s-3.278-.307-4.51-.867c-.486-.22-1.033-.54-1.49-.972"></path>
+              <path d="M2 12.161V13c0 1.007.875 1.755 1.904 2.223C4.978 15.711 6.427 16 8 16s3.022-.289 4.096-.777C13.125 14.755 14 14.007 14 13v-.839c-.457.432-1.004.751-1.49.972c-1.232.56-2.828.867-4.51.867s-3.278-.307-4.51-.867c-.486-.22-1.033-.54-1.49-.972"></path>
+            </g>
           </svg>
         ),
         href: "/docs/concepts/database",
@@ -162,25 +157,35 @@ export const contents: Content[] = [
         title: "Plugins",
         icon: (props?: SVGProps<any>) => (
           <svg
-            {...props}
             xmlns="http://www.w3.org/2000/svg"
             width="1.2em"
             height="1.2em"
-            viewBox="0 0 24 24"
+            viewBox="0 0 20 20"
           >
-            <g fill="none">
-              <path d="M24 0v24H0V0zM12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035q-.016-.005-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z"></path>
-              <path
-                fill="currentColor"
-                d="M2 9a3 3 0 0 1 3-3h2.853c.297 0 .48-.309.366-.583A2.5 2.5 0 0 1 8.083 5c-.331-1.487.792-3 2.417-3c1.626 0 2.748 1.513 2.417 3a2.5 2.5 0 0 1-.136.417c-.115.274.069.583.366.583H15a3 3 0 0 1 3 3v1.853c0 .297.308.48.583.366c.135-.056.273-.104.417-.136c1.487-.331 3 .791 3 2.417s-1.513 2.748-3 2.417a2.5 2.5 0 0 1-.417-.136c-.274-.115-.583.069-.583.366V19a3 3 0 0 1-3 3h-1.893c-.288 0-.473-.291-.39-.566q.063-.21.085-.434a2.31 2.31 0 1 0-4.604 0q.021.224.086.434c.082.275-.103.566-.39.566H5a3 3 0 0 1-3-3v-2.893c0-.288.291-.473.566-.39q.21.063.434.085a2.31 2.31 0 1 0 0-4.604q-.224.021-.434.086c-.275.082-.566-.103-.566-.39z"
-              ></path>
-            </g>
+            <path
+              fill="currentColor"
+              d="M20 14v4a2 2 0 0 1-2 2h-4v-2a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2H6a2 2 0 0 1-2-2v-4H2a2 2 0 0 1-2-2a2 2 0 0 1 2-2h2V6c0-1.1.9-2 2-2h4V2a2 2 0 0 1 2-2a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v4h-2a2 2 0 0 0-2 2a2 2 0 0 0 2 2z"
+            ></path>
           </svg>
         ),
       },
       {
         title: "Rate Limit",
-        icon: Clock,
+        icon: () => {
+          return (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="1.2em"
+              height="1.2em"
+              viewBox="0 0 24 24"
+            >
+              <path
+                className="fill-current"
+                d="M13 12.6V9q0-.425-.288-.712T12 8t-.712.288T11 9v3.975q0 .2.075.388t.225.337l2.8 2.8q.275.275.7.275t.7-.275t.275-.7t-.275-.7zM12 22q-1.875 0-3.512-.712t-2.85-1.925t-1.925-2.85T3 13t.713-3.512t1.924-2.85t2.85-1.925T12 4t3.513.713t2.85 1.925t1.925 2.85T21 13t-.712 3.513t-1.925 2.85t-2.85 1.925T12 22M2.05 7.3q-.275-.275-.275-.7t.275-.7L4.9 3.05q.275-.275.7-.275t.7.275t.275.7t-.275.7L3.45 7.3q-.275.275-.7.275t-.7-.275m19.9 0q-.275.275-.7.275t-.7-.275L17.7 4.45q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l2.85 2.85q.275.275.275.7t-.275.7"
+              ></path>
+            </svg>
+          );
+        },
         href: "/docs/concepts/rate-limit",
       },
       {
@@ -191,11 +196,13 @@ export const contents: Content[] = [
             xmlns="http://www.w3.org/2000/svg"
             width="1.2em"
             height="1.2em"
-            viewBox="0 0 20 20"
+            viewBox="0 0 24 24"
           >
             <path
-              className="fill-foreground"
-              d="M16 5c0 1.657-2.686 3-6 3S4 6.657 4 5s2.686-3 6-3s6 1.343 6 3m-1.31 3.016a6 6 0 0 0 .81-.485c0 .811-.696 1.439-1.412 1.821a3 3 0 0 0-.815 4.658A2.5 2.5 0 0 0 11 16.5c0 .485.106.974.33 1.426Q10.687 18 10 18c-3.314 0-6-1.343-6-3V7.12c.383.362.84.661 1.31.896C6.562 8.642 8.222 9 10 9s3.438-.358 4.69-.984M17.5 12a2 2 0 1 1-4 0a2 2 0 0 1 4 0m1.5 4.5c0 1.245-1 2.5-3.5 2.5S12 17.75 12 16.5a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5"
+              className="fill-current"
+              fillRule="evenodd"
+              d="M3 10.417c0-3.198 0-4.797.378-5.335c.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991zM14 9a2 2 0 1 1-4 0a2 2 0 0 1 4 0m-2 8c4 0 4-.895 4-2s-1.79-2-4-2s-4 .895-4 2s0 2 4 2"
+              clipRule="evenodd"
             ></path>
           </svg>
         ),
@@ -211,7 +218,7 @@ export const contents: Content[] = [
             viewBox="0 0 128 128"
           >
             <path
-              className="fill-foreground"
+              className="fill-current"
               d="M2 63.91v62.5h125v-125H2zm100.73-5a15.56 15.56 0 0 1 7.82 4.5a20.6 20.6 0 0 1 3 4c0 .16-5.4 3.81-8.69 5.85c-.12.08-.6-.44-1.13-1.23a7.09 7.09 0 0 0-5.87-3.53c-3.79-.26-6.23 1.73-6.21 5a4.6 4.6 0 0 0 .54 2.34c.83 1.73 2.38 2.76 7.24 4.86c8.95 3.85 12.78 6.39 15.16 10c2.66 4 3.25 10.46 1.45 15.24c-2 5.2-6.9 8.73-13.83 9.9a38.3 38.3 0 0 1-9.52-.1A23 23 0 0 1 80 109.19c-1.15-1.27-3.39-4.58-3.25-4.82a9 9 0 0 1 1.15-.73l4.6-2.64l3.59-2.08l.75 1.11a16.8 16.8 0 0 0 4.74 4.54c4 2.1 9.46 1.81 12.16-.62a5.43 5.43 0 0 0 .69-6.92c-1-1.39-3-2.56-8.59-5c-6.45-2.78-9.23-4.5-11.77-7.24a16.5 16.5 0 0 1-3.43-6.25a25 25 0 0 1-.22-8c1.33-6.23 6-10.58 12.82-11.87a31.7 31.7 0 0 1 9.49.26zm-29.34 5.24v5.12H57.16v46.23H45.65V69.26H29.38v-5a49 49 0 0 1 .14-5.16c.06-.08 10-.12 22-.1h21.81z"
             ></path>
           </svg>
@@ -228,7 +235,7 @@ export const contents: Content[] = [
             viewBox="0 0 24 24"
           >
             <path
-              className="fill-foreground"
+              className="fill-current"
               d="M17 15q-1.05 0-1.775-.725T14.5 12.5t.725-1.775T17 10t1.775.725t.725 1.775t-.725 1.775T17 15m-4 5q-.425 0-.712-.288T12 19v-.4q0-.6.313-1.112t.887-.738q.9-.375 1.863-.562T17 16t1.938.188t1.862.562q.575.225.888.738T22 18.6v.4q0 .425-.288.713T21 20zm-3-8q-1.65 0-2.825-1.175T6 8t1.175-2.825T10 4t2.825 1.175T14 8t-1.175 2.825T10 12m-8 5.2q0-.85.425-1.562T3.6 14.55q1.5-.75 3.113-1.15T10 13q.875 0 1.75.15t1.75.35l-1.7 1.7q-.625.625-1.213 1.275T10 18v.975q0 .3.113.563t.362.462H4q-.825 0-1.412-.587T2 18z"
             ></path>
           </svg>
@@ -454,10 +461,16 @@ export const contents: Content[] = [
     list: [
       {
         group: true,
-        title: "Frameworks",
+        title: "Full Stack",
         href: "/docs/integrations",
         icon: LucideAArrowDown,
       },
+      {
+        title: "Astro",
+        icon: Icons.astro,
+        href: "/docs/integrations/astro",
+      },
+
       {
         title: "Next",
         icon: Icons.nextJS,
@@ -473,15 +486,27 @@ export const contents: Content[] = [
         icon: Icons.svelteKit,
         href: "/docs/integrations/svelte-kit",
       },
+
+      {
+        title: "Solid Start",
+        icon: Icons.solidStart,
+        href: "/docs/integrations/solid-start",
+      },
+      {
+        group: true,
+        title: "Backend",
+        href: "/docs/integrations",
+        icon: LucideAArrowDown,
+      },
       {
         title: "Hono",
         icon: Icons.hono,
         href: "/docs/integrations/hono",
       },
       {
-        title: "Solid Start",
-        icon: Icons.solidStart,
-        href: "/docs/integrations/solid-start",
+        title: "Node",
+        icon: Icons.node,
+        href: "/docs/integrations/node",
       },
     ],
   },
@@ -565,6 +590,104 @@ export const contents: Content[] = [
         title: "Bearer",
         icon: Key,
         href: "/docs/plugins/bearer",
+      },
+    ],
+  },
+  {
+    title: "Reference",
+    Icon: () => (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="1.3em"
+        height="1.3em"
+        viewBox="0 0 20 20"
+      >
+        <path
+          fill="currentColor"
+          d="M0 3v16h5V3zm4 12H1v-1h3zm0-3H1v-1h3zm2-9v16h5V3zm4 12H7v-1h3zm0-3H7v-1h3zm1-8.5l4.1 15.4l4.8-1.3l-4-15.3zm7 10.6l-2.9.8l-.3-1l2.9-.8zm-.8-2.9l-2.9.8l-.2-1l2.9-.8z"
+        ></path>
+      </svg>
+    ),
+    list: [
+      {
+        title: "Options",
+        href: "/docs/reference/options",
+        icon: () => (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="1.2em"
+            height="1.2em"
+            viewBox="0 0 24 24"
+          >
+            <path
+              fill="currentColor"
+              d="M6.5 16q1.175 0 2.288.263T11 17.05V7.2q-1.025-.6-2.175-.9T6.5 6q-.9 0-1.788.175T3 6.7v9.9q.875-.3 1.738-.45T6.5 16m6.5 1.05q1.1-.525 2.213-.787T17.5 16q.9 0 1.763.15T21 16.6V6.7q-.825-.35-1.713-.525T17.5 6q-1.175 0-2.325.3T13 7.2zm-1 2.425q-.35 0-.663-.087t-.587-.238q-.975-.575-2.05-.862T6.5 18q-1.05 0-2.062.275T2.5 19.05q-.525.275-1.012-.025T1 18.15V6.1q0-.275.138-.525T1.55 5.2q1.15-.6 2.4-.9T6.5 4q1.45 0 2.838.375T12 5.5q1.275-.75 2.663-1.125T17.5 4q1.3 0 2.55.3t2.4.9q.275.125.413.375T23 6.1v12.05q0 .575-.487.875t-1.013.025q-.925-.5-1.937-.775T17.5 18q-1.125 0-2.2.288t-2.05.862q-.275.15-.587.238t-.663.087m2-10.7q0-.225.163-.462T14.525 8q.725-.25 1.45-.375T17.5 7.5q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112T17.5 9q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025T14 8.775m0 5.5q0-.225.163-.462t.362-.313q.725-.25 1.45-.375T17.5 13q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112T17.5 14.5q-.65 0-1.275.113t-1.2.312q-.45.175-.737-.012T14 14.275m0-2.75q0-.225.163-.462t.362-.313q.725-.25 1.45-.375t1.525-.125q.5 0 .988.063t.962.162q.225.05.388.25t.162.45q0 .425-.275.625t-.7.1q-.35-.075-.737-.112t-.788-.038q-.65 0-1.275.125t-1.2.325q-.45.175-.737-.025t-.288-.65"
+            ></path>
+          </svg>
+        ),
+      },
+    ],
+  },
+];
+
+export const examples: Content[] = [
+  {
+    title: "Next JS",
+    href: "/docs/examples/next",
+    Icon: Icons.nextJS,
+    list: [
+      {
+        title: "Full Demo",
+        href: "/docs/examples/next-js",
+        icon: Icons.book,
+      },
+    ],
+  },
+  {
+    title: "Astro",
+    href: "/docs/examples/astro",
+    Icon: Icons.astro,
+    list: [
+      {
+        title: "Astro + SolidJs",
+        href: "/docs/examples/astro",
+        icon: Icons.book,
+      },
+    ],
+  },
+  {
+    title: "Nuxt",
+    href: "/docs/examples/nuxt",
+    Icon: Icons.nuxt,
+    list: [
+      {
+        title: "Basic Auth",
+        href: "/docs/examples/nuxt-basic-auth",
+        icon: Icons.book,
+      },
+    ],
+  },
+  {
+    title: "Svelte Kit",
+    href: "/docs/examples/svelte-kit",
+    Icon: Icons.svelteKit,
+    list: [
+      {
+        title: "Basic Auth",
+        href: "/docs/examples/svelte-kit-basic-auth",
+        icon: Icons.book,
+      },
+    ],
+  },
+  {
+    title: "Solid Start",
+    href: "/docs/examples/solid-start",
+    Icon: Icons.solidStart,
+    list: [
+      {
+        title: "Github OAuth",
+        icon: Icons.book,
+        href: "/docs/examples/solid-start/github-oauth",
       },
     ],
   },

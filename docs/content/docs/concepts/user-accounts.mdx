@@ -43,6 +43,16 @@ await user.changePassword({
 });
 ```
 
+### Set Password
+
+If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
+
+```ts
+await user.setPassword({
+    password,
+});
+```
+
 ## Accounts
 
 Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.
@@ -94,9 +104,9 @@ const auth = new BetterAuth({
 
 By defualt the provider needs to returned `emailVerified` field in the user data to link the account. You can change this behavior by setting `requireEmailVerified` to `false`.
 
-<Callback type="warn">
+<Callout type="warn">
     We strongly recommend you only link accounts that have verified emails to prevent account hijacking.
-</Callback>
+</Callout>
 
 ```ts
 const auth = new BetterAuth({

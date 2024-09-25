@@ -182,6 +182,26 @@ const myPlugin = {
 
 If you throw an `APIError` from the middleware or returned a `Response` object, the request will be stopped and the response will be sent to the client.
 
+### Rate Limit
+
+You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    rateLimit: [
+        {
+            pathMatcher: (path)=>{
+                return path === "/my-plugin/hello-world"
+            },
+            limit: 10,
+            window: 60,
+        }
+    ]
+}
+```
+
+
 ### Hooks
 
 Hooks and middleware are similar but middlewares are handled by better-call and hooks are handled by better-auth. Hooks allows you to execture a code `before` or `after` a specific action. Hooks takes an array of `after` or `before` hooks. 
