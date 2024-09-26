@@ -1,0 +1,55 @@
+---
+title: Sign In & Sign Up
+description: Learn how to sign in and sign up users using email and password with Better Auth
+---
+
+Once you have enabled the email and password authenticator, you can start signing in and signing up users using email and password.
+
+## Sign Up
+
+Before a user can sign in, they need to sign up. To sign up a user using email and password, you need to call the client method `signUp.email` with the user's information.
+
+**Example: Using React**
+
+```tsx title="SignUp.tsx"
+import { authClient } from '@/auth'; //import the auth client
+
+export default function SignUp() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [image, setImage] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const signUp = async () => {
+    const res = await authClient.signUp.email({ 
+        email, 
+        password, 
+        name, 
+        image: image ? convertImageToBase64(image) : undefined,
+     }, {
+        onRequest: (ctx) => {
+          setLoading(true);          
+        },
+        onsSuccess: (ctx) => {
+          setLoading(false);
+          //redirect to the dashboard
+        },
+        onError: (ctx) => {
+          setLoading(false);
+          alert(ctx.error.message);
+        },
+      });
+  };
+
+  return (
+    <div>
+      <input type="name" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input type="file" onChange={(e) => setImage(e.target.files?.[0])} />
+      <button onClick={signUp}>Sign Up</button>
+    </div>
+  );
+}
+```

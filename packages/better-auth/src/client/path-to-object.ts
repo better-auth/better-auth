@@ -57,8 +57,14 @@ export type InferRoute<API> = API extends {
 						? C extends Context<any, any>
 							? (
 									...data: HasRequiredKeys<InferCtx<C>> extends true
-										? [Prettify<InferCtx<C>>]
-										: [Prettify<InferCtx<C>>?]
+										? [
+												Prettify<InferCtx<C>>,
+												BetterFetchOption<C["body"], C["query"], C["params"]>?,
+											]
+										: [
+												Prettify<InferCtx<C>>?,
+												BetterFetchOption<C["body"], C["query"], C["params"]>?,
+											]
 								) => Promise<BetterFetchResponse<Awaited<R>>>
 							: never
 						: never

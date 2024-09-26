@@ -108,6 +108,13 @@ export const auth = betterAuth({
     ```bash title="Terminal"
     npx better-auth migrate
     ```
+
+   Better Auth automatically sets up the following tables in your database if they don't already exist:
+    - `user`
+    - `session`
+    - `account`
+
+    For more details head over to [schema](/docs/concepts/database#core-schema) section.
 </Step>
 
 <Step>

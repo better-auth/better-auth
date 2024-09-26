@@ -1,5 +1,5 @@
 {
-	"name": "social-sign-in",
+	"name": "@example/svelte-kit",
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
@@ -24,7 +24,7 @@
 	"type": "module",
 	"dependencies": {
 		"@internationalized/date": "^3.5.5",
-		"better-auth": "workspace:0.0.10-beta.18",
+		"better-auth": "workspace:*",
 		"bits-ui": "^0.21.15",
 		"clsx": "^2.1.1",
 		"cmdk-sv": "^0.0.18",

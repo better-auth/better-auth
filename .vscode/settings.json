@@ -8,7 +8,7 @@
 		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[svelte]": {
-		"editor.defaultFormatter": "svelte.svelte-vscode"
+		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[vue]": {
 		"editor.defaultFormatter": "Vue.volar"

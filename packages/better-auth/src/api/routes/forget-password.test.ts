@@ -23,14 +23,16 @@ describe("forget password", async (it) => {
 
 	it("should verify the token", async () => {
 		const newPassword = "new-password";
-		const res = await client.resetPassword({
-			fetchOptions: {
+		const res = await client.resetPassword(
+			{
+				newPassword,
+			},
+			{
 				query: {
 					currentURL: `http://localhost:3000/reset-password?token=${token}`,
 				},
 			},
-			newPassword,
-		});
+		);
 		expect(res.data).toMatchObject({
 			status: true,
 		});

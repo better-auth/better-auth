@@ -7,10 +7,12 @@ describe("session", async () => {
 	const { client, testUser, sessionSetter } = await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
-		await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -23,7 +25,7 @@ describe("session", async () => {
 					});
 				},
 			},
-		});
+		);
 	});
 
 	it("should return null when not authenticated", async () => {
@@ -33,10 +35,12 @@ describe("session", async () => {
 
 	it("should update session when close to expiry", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
+		const res = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -44,7 +48,7 @@ describe("session", async () => {
 					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
 				},
 			},
-		});
+		);
 
 		if (!res.data?.session) {
 			throw new Error("No session found");
@@ -74,11 +78,13 @@ describe("session", async () => {
 
 	it("should handle 'don't remember me' option", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			dontRememberMe: true,
-			fetchOptions: {
+		const res = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				dontRememberMe: true,
+			},
+			{
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -92,7 +98,7 @@ describe("session", async () => {
 					);
 				},
 			},
-		});
+		);
 		if (!res.data?.session) {
 			throw new Error("No session found");
 		}
@@ -117,10 +123,12 @@ describe("session", async () => {
 
 	it("should clear session on sign out", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
+		const res = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -128,7 +136,7 @@ describe("session", async () => {
 					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
 				},
 			},
-		});
+		);
 		if (!res.data?.session) {
 			throw new Error("No session found");
 		}
@@ -148,13 +156,15 @@ describe("session", async () => {
 
 	it("should list sessions", async () => {
 		const headers = new Headers();
-		await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
 				onSuccess: sessionSetter(headers),
 			},
-		});
+		);
 
 		const response = await client.user.listSessions({
 			fetchOptions: {

@@ -10,16 +10,18 @@ const email = writable("");
 const password = writable("");
 
 const handleSignIn = async () => {
-	await signIn.email({
-		email: $email,
-		password: $password,
-		callbackURL: "/",
-		fetchOptions: {
+	await signIn.email(
+		{
+			email: $email,
+			password: $password,
+			callbackURL: "/",
+		},
+		{
 			onError(context) {
 				alert(context.error.message);
 			},
 		},
-	});
+	);
 };
 </script>
 
@@ -73,3 +75,9 @@ const handleSignIn = async () => {
     </div>
   </Card.Content>
 </Card.Root>
+
+
+
+
+   
+  

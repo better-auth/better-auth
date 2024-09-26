@@ -43,15 +43,17 @@ describe("rate-limiter", async () => {
 		vi.useFakeTimers();
 		vi.advanceTimersByTime(3000);
 		let retryAfter = "";
-		await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
 				onError(context) {
 					retryAfter = context.response.headers.get("X-Retry-After") ?? "";
 				},
 			},
-		});
+		);
 		expect(retryAfter).toBe("7");
 	});
 

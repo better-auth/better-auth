@@ -1,4 +1,4 @@
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
 import type { ProxyRequest } from "./path-to-object";
 import type { BetterAuthClientPlugin } from "./types";
@@ -61,8 +61,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						)
 						.join("/");
 				const arg = (args[0] || {}) as ProxyRequest;
+				const fetchOptions = (arg[1] || {}) as BetterFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
-				const { query, fetchOptions: options, ...body } = arg;
+				const { query, fetchOptions: argFetchOptions, ...body } = arg;
+				const options = {
+					...fetchOptions,
+					...argFetchOptions,
+				};
 
 				return await client(routePath, {
 					...options,

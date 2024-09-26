@@ -242,7 +242,6 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-
 		expect(organization.data).toBe(orgId);
 	});
 

@@ -68,7 +68,7 @@
     "dependencies": {
         "@babel/preset-react": "^7.24.7",
         "@babel/preset-typescript": "^7.24.7",
-        "@better-fetch/fetch": "^1.1.8",
+        "@better-fetch/fetch": "^1.1.9",
         "@better-fetch/logger": "^1.1.3",
         "@nanostores/query": "^0.3.4",
         "@nanostores/react": "^0.7.3",

@@ -3,16 +3,16 @@ title: Basic Usage
 description: Getting started with Better Auth
 ---
 
-## Authentication
-
 Better Auth provides built-in authentication support for:
 
 - **Email and password**
 - **Social provider (Google, Github, Apple, and more)**
 
+<Callout>
 You can extend authentication options using plugins, such as: Username-based login, Passkeys, Email magic links, and more.
+</Callout>
 
-### Email and Password Authentication
+## Email & Password
 
 To enable email and password authentication:
 
@@ -29,74 +29,102 @@ export const auth = betterAuth({
 
 ### Signup
 
-To signup a user, you can use the `signUp.email` function provided by the client. The `signUp` function takes an object with the following properties:
+Before a user can sign in, they need to sign up. To sign up a user using email and password, you need to call the client method `signUp.email` with the user's information.
 
-```ts title="sign-up.ts" twoslash
-// @filename: client.ts
-import { createAuthClient } from "better-auth/client"
 
-export const client = createAuthClient()
+**Example: Using React**
 
-// ---cut---
-// @filename: signup.ts
-// ---cut---
-import { client } from "./client";
+```tsx title="SignUp.tsx"
+import { authClient } from '@/auth'; //import the auth client
 
-const res = await client.signUp.email({
-        email: "test@example.com", // The email address of the user.
-        password: "password1234", // The password of the user.
-        name: "test", // The name of the user.
-        image: "https://example.com/image.png", // The image of the user. (optional)
-        callbackURL: "/" // The url to redirect to after the user has signed up. (optional)
-})
+export default function SignUp() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [image, setImage] = useState<File | null>(null);
+
+  const signUp = async () => {
+    const res = await authClient.signUp.email({ 
+        email, 
+        password, 
+        name, 
+        image: image ? convertImageToBase64(image) : undefined,
+     }, {
+        onRequest: (ctx) => {
+         //show loading     
+        },
+        onsSuccess: (ctx) => {
+          //redirect to the dashboard
+        },
+        onError: (ctx) => {
+          alert(ctx.error.message);
+        },
+      });
+  };
+
+  return (
+    <div>
+      <input type="name" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input type="file" onChange={(e) => setImage(e.target.files?.[0])} />
+      <button onClick={signUp}>Sign Up</button>
+    </div>
+  );
+}
 ```
-
-The function returns a promise that resolves an object with `data` and `error` properties. The `data` property contains the user object that was created, and the `error` property contains any error that occurred during the signup process.
-
-<Callout type="info">
-    If you want to use username instead of email, you can use <Link href="/docs/plugins/username">username Plugin</Link>.
-</Callout>
 
 ### Signin
 
 To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
 
-```ts title="sing-in.ts" twoslash
-// @filename: client.ts
-import { createAuthClient } from "better-auth/client"
+**Example: Using Svlete**
 
-export const client = createAuthClient()
+```svelte title="signin.svelte"
+<script lang="ts">
+import { client } from "$lib/auth-client"; //import the auth client
+import { writable } from "svelte/store";
 
-// ---cut---
-// @filename: signup.ts
-// ---cut---
-import { client } from "./client";
+const email = writable("");
+const password = writable("");
 
-const data = await client.signIn.email({
-    email: "test@example.com", // The email address of the user.
-    password: "password1234", // The password of the user.
-    callbackURL: "/" // The url to redirect to after the user has signed in. (optional)
-})
+const handleSignIn = async () => {
+    await client.signIn.email({
+        email: $email,
+        password: $password
+    }, {
+        onRequest: () => {
+            //show loading
+        },
+        onSuccess: () => {
+            //redirect to dashboard
+        },
+        onError: (ctx) => {
+            alert(ctx.error.message)
+        }
+    })
+}
+</script>
+
+<div>
+    <input type="email" bind:value={$email} />
+    <input type="password" bind:value={$password} />
+    <button on:click={handleSignIn}>
+      Sign In
+    </button>
+</div>
 ```
 
-
-### Authentication with Social Providers
+## Social Sign-On
 
 Better Auth supports multiple social providers, including Google, Github, Apple, Discord, and more. To use a social provider, you need to configure the ones you need in the `socialProvider` option on your `auth` object.
-
-### Configure Social Providers
-
-To configure social providers, you need to import the provider you want to use and pass it to the `socialProvider` option. For example, to configure the Github provider, you can use the following code:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { github } from "better-auth/social-providers"
 
 export const auth = betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
+    //...rest of the options
     socialProvider: { // [!code highlight]
        github: { // [!code highlight]
         clientId: GITHUB_CLIENT_ID, // [!code highlight]
@@ -106,24 +134,36 @@ export const auth = betterAuth({
 })
 ```
 
-<Callout type="info">
-    See the <Link href="/docs/providers">Provider</Link> section for more information on how to configure each provider.
-</Callout>
-
 ### Signin with social providers
 
-```ts title="signin.ts"  
-import { client } from "./client"
+**Example: Using Vue**
 
-const signin = async () => {
-    const data = await client.signIn.social({
-        provider: "github"
-    })
-}
+```vue title="signin.vue"
+<template>
+  <div>
+    <h2>Sign In</h2>
+    <button @click="handleSignIn">Sign In with GitHub</button>
+  </div>
+</template>
+
+<script>
+import { client } from "@/auth-client"; //import the auth client
+
+export default {
+  name: "SignIn",
+  methods: {
+    async handleSignIn() {
+    await client.signIn.social({
+          provider: "github",
+          callbackURL: "/dashboard", //redirect to dashboard after sign in
+    });
+    }
+  }
+};
+</script>
 ```
 
-
-## Session
+## Session Mangemnt
 
 Once a user is signed in, you'll want to access their session. Better auth allows you easily to access the session data from the server and client side.
 
@@ -131,7 +171,12 @@ Once a user is signed in, you'll want to access their session. Better auth allow
 
 Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented in a reactive way for each supported framework, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
 
-<Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="React">
+It has the following properties:
+- **data**: the actual session data which includes `session` and `user` object.
+- **isPending**: a boolean that indicates whether the session is being loaded.
+- **error**: an error object that contains any errors that occurred while loading the session.
+
+<Tabs items={["Vanilla","React", "Vue","Svelte", "Solid"]} defaultValue="React">
     <Tab value="React">
         ```tsx title="user.tsx"
         //make sure you're using the react client
@@ -175,7 +220,7 @@ Better Auth provides a `useSession` hook to easily access session data on the cl
             ```svelte title="user.svelte"
             <script lang="ts">
             import { client } from "$lib/client";
-            const session = client.useSsession;
+            const session = client.useSsession();
             </script>
 
             <div
@@ -214,6 +259,15 @@ Better Auth provides a `useSession` hook to easily access session data on the cl
             ```
         </Tab>
 
+         <Tab value="Vanilla">
+            ```ts title="user.svelte"
+            import { client } from "~/lib/client";
+            clinet.useSession.subscribe((value)=>{
+                //do something with the session
+            })
+            ```
+        </Tab>
+
         <Tab value="Solid">
             ```tsx title="user.tsx"
             import { client } from "~/lib/client";
@@ -234,28 +288,85 @@ Better Auth provides a `useSession` hook to easily access session data on the cl
             </Tab>
 </Tabs>
 
-### Server Side
-The server provides a `session` object that you can use to access the session data.
-
-```ts title="server.ts" 
-// somewhere in your server code
-import { auth } from "./auth"
-async function addToCart(request: Request){
-    const session = await auth.api.getSession({
-        headers: request.headers, //it requies a header to be passed
-    })
-}
-```
-
-<Callout type="info">
-    For next js on RSC and server actions you can use import `headers` from `next/headers` and pass it to the `getSession` function.
+<Callout>
+For more details check [session-management](/docs/concepts/session-management) documentation.
 </Callout>
 
-## Two Factor
+### Server Side
 
-### Introduction to plugins
+The server provides a `session` object that you can use to access the session data. It requires request headers object to be passed to the `getSession` method.
 
-One of the unique features of better auth is a plugins ecosystem. It allows you to add complex auth realted functionilty with small lines of code. Better auth come with many 1st party plugins, but you can also create your own plugins. 
+**Example: Using some popular frameworks**
+
+<Tabs items={["NextJs", "NuxtJs", "Svelte", "Astro", "Hono"]}>
+    <Tab value="NextJs">
+    ```ts title="server.ts"
+    import { auth } from "./auth";
+    import { headers } from "next/headers";
+
+    const session = await auth.api.getSession({
+        headers: headers() // you need to pass the headers object. 
+    })
+    ```
+    </Tab>
+    <Tab value="Astro">
+    ```astro title="index.astro"
+    ---
+    import { auth } from "./auth";
+
+   const session = await auth.api.getSession({
+	headers: Astro.request.headers,
+    });
+    ---
+    <!-- Your Astro Template -->
+    ```
+    </Tab>
+    <Tab value="Svelte">
+    ```ts title="+page.ts"
+    import { auth } from "./auth";
+
+    export async function load({ request }) {
+        const session = await auth.api.getSession({
+            headers: request.headers
+        })
+        return {
+            props: {
+                session
+            }
+        }
+    }
+    ```
+    </Tab>
+    <Tab value="Hono">
+    ```ts title="index.ts"
+    import { auth } from "./auth";
+
+    const app = new Hono();
+
+    app.get("/path", async (c) => {
+        const session = auth.api.getSession({
+            headers: c.req.raw.headers
+        })
+    });
+    ```
+    </Tab>
+
+    <Tab value="Nuxt">
+    ```ts title="server/session.ts"
+    import { auth } from "~/utils/auth";
+
+    export default defineEventHandler((event) => {
+        const session = await auth.api.getSession({
+            headers: event.headers,
+        })
+    });
+    ```
+    </Tab>
+</Tabs>
+
+## Using Plugins
+
+One of the unique features of better auth is a plugins ecosystem. It allows you to add complex auth realted functionilty with small lines of code. 
 
 Below is an example of how to add two factor authentication using two factor plugin.
 
@@ -271,15 +382,9 @@ import { betterAuth } from "better-auth"
 import { twoFactor } from "better-auth/plugins"
 
 export const auth = betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
     //...rest of the options
     plugins: [ // [!code highlight]
-        twoFactor({ // [!code highlight]
-            issuer: "my-app" // [!code highlight] 
-        }) // [!code highlight]
+        twoFactor() // [!code highlight]
     ] // [!code highlight]
 })
 ```
@@ -317,26 +422,36 @@ const client = createAuthClient({
 now two factor related methods will be available on the client.
 
 ```ts title="profile.ts" 
-// @filename: client.ts
-import { createAuthClient } from "better-auth/client";
-import { twoFactorClient } from "better-auth/client/plugins";
-
-export const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // [!code highlight] 
-        }) // [!code highlight]
-    ] // [!code highlight]
-}) 
-
-// ---cut---
-
-// @filename: profile.ts
-// ---cut---
 import { client } from "./client"
 
 const enableTwoFactor = async() => {
-    const data = await client.twoFactor.enable() // this will enable two factor authentication for the signed in user
+    const data = await client.twoFactor.enable({
+        password // the user password is required
+    }) // this will enable two factor
+}
+
+const disableTwoFactor = async() => {
+    const data = await client.twoFactor.disable({
+        password // the user password is required 
+    }) // this will disable two factor
+}
+
+const signInWith2Factor = async() => {
+    const data = await client.signIn.email({
+        //...
+    })
+    //if the user has two factor enabled, it will redirect to the two factor page
+}
+
+const verifyTOTP = async() => {
+    const data = await client.twoFactor.verifyTOTP({
+        code: "123456", // the code entered by the user
+        /**
+         * If the device is trusted, the user won't 
+         * need to pass 2FA again on the same device
+         */
+        trustDevice: true
+    })
 }
 ```
 </Step>
