@@ -23,6 +23,7 @@
 [![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
 
+> **Note:** 🚧 This project is currently in beta. Features and APIs may change.
 
 ## About the Project
 
