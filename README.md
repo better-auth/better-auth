@@ -16,7 +16,6 @@
     <a href="https://better-auth.com">Website</a>
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
-    ·
   </p>
 </p>
 

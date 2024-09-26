@@ -23,4 +23,16 @@
 [x] add a doc about account linking
 [x] remove the section about using useSession in next with initialValue
 [x] rate limiting docs
-[ ] add that passkey login won't require 2fa
+[-] add that passkey login won't require 2fa
+
+## Before a release
+
+[ ] clean up the codebase
+[ ] fix the nextjs demo
+[ ] finish example for nuxt
+[ ] check them to be working properly inside the docs
+[ ] make a release 0.1.0 release
+[ ] write a release note
+[ ] write a changelog
+[ ] add analytics for the docs (loglib)
+[ ] add contribution guide
