@@ -19,4 +19,22 @@ Better auth is born out of these frustrations. It aims to provides a comprehensi
 
 ## Features
 
+- Framework Agnostic
+- Email & Password
+- Account & Session Management
+- Built In Rate Limiter
+- Automatic Database Management
+- Social Sign-on
+- Organization & Access Control
+- Two Factor Authentication
+- Plugin Ecosystem and more...
 
+## Installation
+
+```bash
+npm i better-auth
+```
+
+## Documentation
+
+https://better-auth.com/docs
