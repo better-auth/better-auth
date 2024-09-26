@@ -19,7 +19,7 @@ import { Ripple } from "./ripple";
 
 export default function Features() {
 	return (
-		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-[1.2px] rounded-none -pr-2">
+		<div className="md:w-10/12 overflow-x-hidden mt-10 mx-auto font-geist relative md:border-l-0 md:border-[1.2px] rounded-none -pr-2">
 			<Plus className="absolute top-[-17px] left-[-17px] text-black/20 dark:text-white/30  w-8 h-8" />
 			<div className="grid grid-cols-1 md:grid-cols-3 md:mx-0 grid-rows-4 md:grid-rows-4 w-full">
 				<div className="relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0  transform-gpu  flex flex-col p-10 overflow-clip">
