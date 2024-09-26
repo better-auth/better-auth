@@ -1,15 +1,36 @@
 # Better Auth
+<p align="center">
+  <a href="https://github.com/better-auth/better-auth">
+   <img src="https://better-auth.vercel.app/og.png" alt="Logo">
+  </a>
+  <h3 align="center">
+    Better Auth
+  </h3>
 
-The most comprehensive, framework-agnostic authentication library for TypeScript
+  <p align="center">
+    The most comprehensive authentication library
+    <br />
+    <a href="https://better-auth.com"><strong>Learn more »</strong></a>
+    <br />
+    <br />
+    <a href="https://github.com/better-auth/better-auth/discussions">Discussions</a>
+    ·
+    <a href="https://better-auth.com">Website</a>
+    ·
+    <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
+    ·
+  </p>
+</p>
 
-![Image](https://better-auth.vercel.app/og.png)
 
-## Why Better Auth?
+## About the Project
+
+### Why Better Auth?
 
 > Authentication feels like a partially solved problem, existing open-source libraries often require a lot of additional code for anything beyond a simple login. Third-party services, while convenient, force you to store user data on their servers, which in some ways strips you of ownership and it also comes with its own set of problems. And obviously, these services aren't free and can get really expensive. 
 Better auth is born out of these frustrations. It aims to provides a comprehensive authentication library from the core accompanied by a growings plugin ecosystem, that allows you to add many auth related features in short amount of time.
 
-## General Goals
+### General Goals
 
 - **Be Comprehensive**: The goal is to save users from reinventing the wheel for anything realted auth.
 - **Prioritize Best Practices**: provide best practices rather than overwhelming users with configuration options.
@@ -17,7 +38,7 @@ Better auth is born out of these frustrations. It aims to provides a comprehensi
 - **Consistance**: Provide a consistent and predictable API.
 - **Embrace Type Safety**: Value type-safety. Embrace typescript magic when necessary.
 
-## Features
+### Features
 
 - Framework Agnostic
 - Email & Password
@@ -29,7 +50,7 @@ Better auth is born out of these frustrations. It aims to provides a comprehensi
 - Two Factor Authentication
 - Plugin Ecosystem and more...
 
-## Installation
+### Installation
 
 ```bash
 npm i better-auth
