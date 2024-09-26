@@ -9,7 +9,7 @@
   </h2>
 
   <p align="center">
-    The most comprehensive authentication library for typescript
+    The most comprehensive authentication library for TypeScript
     <br />
     <a href="https://better-auth.com"><strong>Learn more »</strong></a>
     <br />
