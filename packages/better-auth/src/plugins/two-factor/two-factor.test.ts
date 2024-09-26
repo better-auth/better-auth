@@ -12,8 +12,8 @@ describe("two factor", async () => {
 			plugins: [
 				twoFactor({
 					otpOptions: {
-						sendOTP(user, OTP) {
-							OTP = OTP;
+						sendOTP(_, otp) {
+							OTP = otp;
 						},
 					},
 				}),
@@ -82,7 +82,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		const otpRes = await client.twoFactor.sendOtp({
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -98,6 +98,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
+
 		const verifyRes = await client.twoFactor.verifyOtp({
 			code: OTP,
 			fetchOptions: {

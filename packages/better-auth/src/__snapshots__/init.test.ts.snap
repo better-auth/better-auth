@@ -109,14 +109,25 @@ exports[`init > should match config 1`] = `
     },
   },
   "password": {
+    "config": {
+      "maxPasswordLength": 128,
+      "minPasswordLength": 8,
+    },
     "hash": [Function],
     "verify": [Function],
   },
+  "rateLimit": {
+    "enabled": true,
+    "max": 100,
+    "storage": "memory",
+    "window": 60,
+  },
   "secret": "better-auth-secret-123456789",
-  "session": {
+  "sessionConfig": {
     "expiresIn": 604800,
     "updateAge": 86400,
   },
+  "socialProviders": [],
   "tables": {
     "account": {
       "fields": {

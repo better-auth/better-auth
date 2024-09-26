@@ -8,6 +8,8 @@ describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
 		plugins: [organization()],
 	});
+
+	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [organizationClient()],
 		baseURL: "http://localhost:3000/api/auth",
@@ -20,7 +22,6 @@ describe("organization", async (it) => {
 
 	let orgId: string;
 	it("create organization", async () => {
-		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.create({
 			name: "test",
 			slug: "test",
@@ -39,7 +40,6 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow listing organizations", async () => {
-		const { headers } = await signInWithTestUser();
 		const organizations = await client.organization.list({
 			fetchOptions: {
 				headers,
@@ -63,7 +63,6 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow activating organization and set session", async () => {
-		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.activate({
 			orgId,
 			fetchOptions: {
@@ -219,7 +218,6 @@ describe("organization", async (it) => {
 	});
 
 	it("should validate permissions", async () => {
-		const { headers } = await signInWithTestUser();
 		await client.organization.activate({
 			orgId,
 			fetchOptions: {
@@ -238,13 +236,13 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow deleting organization", async () => {
-		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.delete({
 			orgId,
 			fetchOptions: {
 				headers,
 			},
 		});
+
 		expect(organization.data).toBe(orgId);
 	});
 
