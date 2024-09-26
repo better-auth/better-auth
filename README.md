@@ -1,13 +1,9 @@
-<p align="center">
-  <a href="https://github.com/better-auth/better-auth">
-   <img src="https://better-auth.vercel.app/logo.svg" alt="Logo">
-  </a>
-  <h2 align="center">
-    Better Auth
-  </h2>
+![banner](./banner.png)  
+
+<p align="center">  
 
   <p align="center">
-    The most comprehensive authentication library
+    The most comprehensive authentication library for typescript
     <br />
     <a href="https://better-auth.com"><strong>Learn more »</strong></a>
     <br />
@@ -20,6 +16,10 @@
     ·
   </p>
 </p>
+
+
+[![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
+[![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
 
 
 ## About the Project
