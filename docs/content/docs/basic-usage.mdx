@@ -388,7 +388,9 @@ import { twoFactor } from "better-auth/plugins"
 export const auth = betterAuth({
     //...rest of the options
     plugins: [ // [!code highlight]
-        twoFactor() // [!code highlight]
+        twoFactor({
+            issuer: "my app" //your application name
+       }) // [!code highlight]
     ] // [!code highlight]
 })
 ```

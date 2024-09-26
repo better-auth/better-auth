@@ -235,6 +235,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					twoFactorSecret: {
 						type: "string",
 						required: false,
+						returned: false,
 					},
 					twoFactorBackupCodes: {
 						type: "string",

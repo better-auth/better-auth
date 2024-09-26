@@ -13,7 +13,7 @@ export interface OTPOptions {
 	 * How long the opt will be valid for in
 	 * minutes
 	 *
-	 * @default "5 mins"
+	 * @default "3 mins"
 	 */
 	period?: number;
 	/**
@@ -31,7 +31,7 @@ export interface OTPOptions {
  */
 export const otp2fa = (options?: OTPOptions) => {
 	const opts = {
-		period: new TimeSpan(options?.period || 5, "m"),
+		period: new TimeSpan(options?.period || 3, "m"),
 	};
 	const totp = new TOTPController({
 		digits: 6,

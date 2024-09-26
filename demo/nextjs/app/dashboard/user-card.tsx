@@ -82,7 +82,7 @@ export default function UserCard(props: {
 			}
 			return res.data;
 		},
-		enabled: !!session?.user.twoFactorSecret,
+		enabled: !!session?.user.twoFactorEnabled,
 	});
 
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
