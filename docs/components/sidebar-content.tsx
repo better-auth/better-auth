@@ -225,8 +225,8 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "User & Accounts",
-				href: "/docs/concepts/user-accounts",
+				title: "Users & Accounts",
+				href: "/docs/concepts/users-accounts",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -263,45 +263,7 @@ export const contents: Content[] = [
 		),
 	},
 	{
-		title: "Email & Password",
-		Icon: () => (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="1.4em"
-				height="1.4em"
-				viewBox="0 0 24 24"
-			>
-				<path
-					fill="currentColor"
-					fillRule="evenodd"
-					d="M3.172 5.172C2 6.343 2 8.229 2 12c0 3.771 0 5.657 1.172 6.828C4.343 20 6.229 20 10 20h4c3.771 0 5.657 0 6.828-1.172C22 17.657 22 15.771 22 12c0-3.771 0-5.657-1.172-6.828C19.657 4 17.771 4 14 4h-4C6.229 4 4.343 4 3.172 5.172M8 13a1 1 0 1 0 0-2a1 1 0 0 0 0 2m5-1a1 1 0 1 1-2 0a1 1 0 0 1 2 0m3 1a1 1 0 1 0 0-2a1 1 0 0 0 0 2"
-					clipRule="evenodd"
-				/>
-			</svg>
-		),
-		href: "/docs/authentication/email-password",
-		list: [
-			{
-				title: "Introduction",
-				href: "/docs/authentication/email-password",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-					>
-						<path
-							fill="currentColor"
-							d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h4.2q.35-.9 1.1-1.45T12 1t1.7.55T14.8 3H19q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm7-16.75q.325 0 .538-.213t.212-.537t-.213-.537T12 2.75t-.537.213t-.213.537t.213.538t.537.212M12 13q1.45 0 2.475-1.025T15.5 9.5t-1.025-2.475T12 6T9.525 7.025T8.5 9.5t1.025 2.475T12 13m-7 6h14v-1.15q-1.35-1.325-3.137-2.087T12 15t-3.863.763T5 17.85z"
-						></path>
-					</svg>
-				),
-			},
-		],
-	},
-	{
-		title: "Social Sign-On",
+		title: "Authentication",
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -318,25 +280,31 @@ export const contents: Content[] = [
 			</svg>
 		),
 		list: [
-			// {
-			// 	title: "Email & Password",
-			// 	href: "/docs/authentication/email-password",
-			// 	icon: () => (
-			// 		<svg
-			// 			xmlns="http://www.w3.org/2000/svg"
-			// 			width="1.2em"
-			// 			height="1.2em"
-			// 			viewBox="0 0 24 24"
-			// 		>
-			// 			<path
-			// 				fill="currentColor"
-			// 				fillRule="evenodd"
-			// 				d="M3.172 5.172C2 6.343 2 8.229 2 12c0 3.771 0 5.657 1.172 6.828C4.343 20 6.229 20 10 20h4c3.771 0 5.657 0 6.828-1.172C22 17.657 22 15.771 22 12c0-3.771 0-5.657-1.172-6.828C19.657 4 17.771 4 14 4h-4C6.229 4 4.343 4 3.172 5.172M8 13a1 1 0 1 0 0-2a1 1 0 0 0 0 2m5-1a1 1 0 1 1-2 0a1 1 0 0 1 2 0m3 1a1 1 0 1 0 0-2a1 1 0 0 0 0 2"
-			// 				clipRule="evenodd"
-			// 			/>
-			// 		</svg>
-			// 	),
-			// },
+			{
+				title: "Email & Password",
+				href: "/docs/authentication/email-password",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M3.172 5.172C2 6.343 2 8.229 2 12c0 3.771 0 5.657 1.172 6.828C4.343 20 6.229 20 10 20h4c3.771 0 5.657 0 6.828-1.172C22 17.657 22 15.771 22 12c0-3.771 0-5.657-1.172-6.828C19.657 4 17.771 4 14 4h-4C6.229 4 4.343 4 3.172 5.172M8 13a1 1 0 1 0 0-2a1 1 0 0 0 0 2m5-1a1 1 0 1 1-2 0a1 1 0 0 1 2 0m3 1a1 1 0 1 0 0-2a1 1 0 0 0 0 2"
+							clipRule="evenodd"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Social Sign-On",
+				group: true,
+				icon: LucideAArrowDown,
+				href: "/",
+			},
 			{
 				title: "Apple",
 				href: "/docs/authentication/apple",

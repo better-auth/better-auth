@@ -68,33 +68,35 @@ The cli checks your database and prompts you to add missing tables or update exi
 npx better-auth migrate
 ```
 
+If you prefer adding tables manually, you can do that as well. The core schema required by better auth is described below and you can find additional schema required by plugins in the plugin documentation.
+
 ## Core Schema
 
 Better auth requires the following tables to be present in the database:
 
 **user**:
 
-- `id`: The unique identifier of the user.
-- `email`: The email address of the user.
-- `name`: The name of the user.
-- `image`: The image of the user.
+- `id`: (string) - The unique identifier of the user.
+- `email`: (string) - The email address of the user.
+- `name`: (string) - The name of the user.
+- `image`: (string) - The image of the user. (optional)
 
 **session**:
-- `id`: The unique identifier of the session. Also used as the session token.
-- `userId`: The id of the user.
-- `expiresAt`: The time when the session expires.
-- `ipAddress`: The IP address of the user.
-- `userAgent`: The user agent of the user.
+- `id`: (string) - The unique identifier of the session. Also used as the session token.
+- `userId`: (foregin-key: `user.id`) - The id of the user.
+- `expiresAt`: (Date) - The time when the session expires.
+- `ipAddress`: (string) - The IP address of the device. (optional)
+- `userAgent`: (string) - The user agent information of the device. (optional)
 
 **account**: 
-- `id`: The unique identifier of the account.
-- `userId`: The id of the user.
-- `accountId`: The id of the account. (optional)
-- `providerId`: The id of the provider. (optional)
-- `accessToken`: The access token of the account. Returned by the provider. (optional)
-- `refreshToken`: The refresh token of the account. Returned by the provider. (optional)
-- `expiresAt`: The time when the access token expires. (optional)
-- `password`: The password of the account. Mainly used for email and password authentication. (optional)
+- `id`: (string) - The unique identifier of the account.
+- `userId`: (foregin-key: `user.id`) - The id of the user.
+- `accountId`: (string) - The id of the account. (optional)
+- `providerId`: (string) - The id of the provider. (optional)
+- `accessToken`: (string) - The access token of the account. Returned by the provider. (optional)
+- `refreshToken`: (string) - The refresh token of the account. Returned by the provider. (optional)
+- `expiresAt`: (Date) - The time when the access token expires. (optional)
+- `password`: (string) - The password of the account. Mainly used for email and password authentication. (optional)
 
 
 ## Plugins Schema

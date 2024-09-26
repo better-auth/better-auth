@@ -3,7 +3,7 @@ title: Client
 description: Better Auth client library for authentication
 ---
 
-Better auth provides a client library that you can use with different popular frontend frameworks such as React, Vue, Svelte, and more. The client library provides a set of functions to interact with the Better Auth server.
+Better Auth offers a client library compatible with popular frontend frameworks like React, Vue, Svelte, and more. This client library includes a set of functions for interacting with the Better Auth server. Each framework's client library is built on top of a core client library that is framework-agnostic, so that all methods and hooks are consistently available across all client libraries.
 
 ## Installation
 
@@ -68,7 +68,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
 
 ## Usage
 
-Once you've created your client instance, you can use the client to interact with the Better Auth server. The client provides a set of functions by default and they can be extended with plugins. 
+Once you've created your client instance, you can use the client to interact with the Better Auth server. The client provides a set of functions by default and they can be extended with plugins.
 
 **Example: Sign In**
 
@@ -82,12 +82,13 @@ await client.signIn.email({
 })
 ```
 
-### Session
+### Hooks
 
-The client provides a `useSession` hook to access the current user session. The `useSession` hook returns the current user session and updates automatically when the session changes.
+on top of normal methods, the client provides hooks to easily access differnt reactive data. Every hook is avaliable in the root object of the client and they all start with `use`.
 
 
-Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented in a reactive way for each supported framework, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
+**Example: useSession**
+
 
 <Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="React">
     <Tab value="React">
@@ -198,7 +199,7 @@ The client uses a libray called [better fetch](https://better-fetch.vercel.app) 
 
 Better fetch is a wrapper around the native fetch API that provides a more convenient way to make requests. It's created by the same team behind Better Auth and is designed to work seamlessly with it.
 
-You can pass any defualt fetch options to the client by passing `fetchOptions` object to the `createAuthClient` function.
+You can pass any defualt fetch options to the client by passing `fetchOptions` object to the `createAuthClient`.
 
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/client"
@@ -210,9 +211,20 @@ const client = createAuthClient({
 })
 ```         
 
-You can also pass fetch options to most of the client functions. For example, you can pass `fetchOptions` to the `signIn` function to customize the request.
+You can also pass fetch options to most of the client functions. Either as the second argument or as a property in the object.
 
 ```ts title="client.ts"
+await client.signIn.email({
+    email: "email@email.com",
+    password: "password1234",
+}, {
+    onSuccess(ctx){
+            //      
+    }
+})
+
+//or
+
 await client.signIn.email({
     email: "email@email.com",
     password: "password1234",
@@ -249,6 +261,17 @@ if(error){
 If the functions accepte a `fetchOptions` object, you can pass an `onError` function to handle errors.
 
 ```ts title="client.ts"
+
+await client.signIn.email({
+    email: "email@email.com",
+    password: "password1234",
+}, {
+    onError(ctx){
+        //handle error
+    }
+})
+
+//or
 await client.signIn.email({
     email: "email@email.com",
     password: "password1234",
@@ -282,5 +305,13 @@ const client = createAuthClient({
     plugins: [
         magicLinkClient()
     ]
+})
+```
+
+once you've added the plugin, you can use the new functions provided by the plugin.
+
+```ts title="client.ts"
+await client.signIn.magicLink({
+    email: "test@email.com"
 })
 ```

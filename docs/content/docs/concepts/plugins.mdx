@@ -43,7 +43,7 @@ const client = createAuthClient({
 
 To create a plugin you need to pass an object that satsfies the `BetterAuthPlugin` interface.
 
-The only required key is `id`, which is a unique identifier for the plugin.
+The only required property is `id`, which is a unique identifier for the plugin.
 
 ```ts title="plugin.ts"
 const myPlugin = {
@@ -87,14 +87,14 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `authCookie`: The defualt cookie configuration for core auth cookies.
 - `logger`: The logger instance used by Better Auth.
 - `db`: The kysely instance used by Better Auth to interact with the database.
-- `password`: The password configuration. Includes `hash` and `verify` values for hashing and verifying passwords.
 - `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for peroframnce reasons)
 - `intenralAdapter`: this are intenral db calls that are used by better auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
 - `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on 
 
-For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation.
+For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/init.ts">source code </Link>.
 
-**Rules**
+
+**Rules for Endpoints**
 
 - Makes sure you use kebab-case for the endpoint path.
 - Make sure to only use `POST` or `GET` methods for the endpoints.
