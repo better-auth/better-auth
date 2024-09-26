@@ -38,15 +38,15 @@ export const forgetPassword = createAuthEndpoint(
 		const { email } = ctx.body;
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
+			//only on the server status is false for the client it's always true
+			//to avoid leaking information
 			return ctx.json(
 				{
-					error: "User not found",
+					status: false,
 				},
 				{
-					status: 400,
-					statusText: "USER_NOT_FOUND",
 					body: {
-						message: "User not found",
+						status: true,
 					},
 				},
 			);
@@ -129,13 +129,19 @@ export const resetPassword = createAuthEndpoint(
 	async (ctx) => {
 		const token = ctx.query?.currentURL.split("?token=")[1];
 		if (!token) {
-			return ctx.json(null, {
-				status: 400,
-				statusText: "INVALID_TOKEN",
-				body: {
-					message: "Invalid token",
+			return ctx.json(
+				{
+					error: "Invalid token",
+					data: null,
 				},
-			});
+				{
+					status: 400,
+					statusText: "INVALID_TOKEN",
+					body: {
+						message: "Invalid token",
+					},
+				},
+			);
 		}
 		const { newPassword } = ctx.body;
 		try {
@@ -150,13 +156,18 @@ export const resetPassword = createAuthEndpoint(
 				.parse((jwt.payload as { email: string }).email);
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				return ctx.json(null, {
-					status: 400,
-					statusText: "USER_NOT_FOUND",
-					body: {
-						message: "User not found",
+				return ctx.json(
+					{
+						error: "User not found",
+						data: null,
 					},
-				});
+					{
+						status: 400,
+						body: {
+							message: "failed to reset password",
+						},
+					},
+				);
 			}
 			if (
 				newPassword.length <
@@ -164,13 +175,19 @@ export const resetPassword = createAuthEndpoint(
 				newPassword.length >
 					(ctx.context.options.emailAndPassword?.maxPasswordLength || 32)
 			) {
-				return ctx.json(null, {
-					status: 400,
-					statusText: "INVALID_PASSWORD_LENGTH",
-					body: {
-						message: "Password length must be between 8 and 32",
+				return ctx.json(
+					{
+						data: null,
+						error: "password is too short or too long",
 					},
-				});
+					{
+						status: 400,
+						statusText: "INVALID_PASSWORD_LENGTH",
+						body: {
+							message: "password is too short or too long",
+						},
+					},
+				);
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
 			const updatedUser = await ctx.context.internalAdapter.updatePassword(
@@ -186,20 +203,38 @@ export const resetPassword = createAuthEndpoint(
 					},
 				});
 			}
-			return ctx.json({
-				status: true,
-				url: ctx.body.callbackURL,
-				redirect: !!ctx.body.callbackURL,
-			});
+			return ctx.json(
+				{
+					error: null,
+					data: {
+						status: true,
+						url: ctx.body.callbackURL,
+						redirect: !!ctx.body.callbackURL,
+					},
+				},
+				{
+					body: {
+						status: true,
+						url: ctx.body.callbackURL,
+						redirect: !!ctx.body.callbackURL,
+					},
+				},
+			);
 		} catch (e) {
 			console.log(e);
-			return ctx.json(null, {
-				status: 400,
-				statusText: "INVALID_TOKEN",
-				body: {
-					message: "Invalid token",
+			return ctx.json(
+				{
+					error: "Invalid token",
+					data: null,
 				},
-			});
+				{
+					status: 400,
+					statusText: "INVALID_TOKEN",
+					body: {
+						message: "Invalid token",
+					},
+				},
+			);
 		}
 	},
 );
