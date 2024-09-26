@@ -136,6 +136,10 @@ export const auth = betterAuth({
 
 ### Signin with social providers
 
+To sign in using a social provider you need to calle `signIn.social` method and pass the `provider`.
+
+It also takes `callbackURL` property which is the url the user will be redirected after they signIn.
+
 **Example: Using Vue**
 
 ```vue title="signin.vue"
