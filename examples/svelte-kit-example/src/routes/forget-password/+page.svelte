@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { client } from "$lib/auth-client";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Card from "$lib/components/ui/card/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Label } from "$lib/components/ui/label/index.js";
-  import { writable } from "svelte/store";
+import { client } from "$lib/auth-client";
+import { Button } from "$lib/components/ui/button/index.js";
+import * as Card from "$lib/components/ui/card/index.js";
+import { Input } from "$lib/components/ui/input/index.js";
+import { Label } from "$lib/components/ui/label/index.js";
+import { writable } from "svelte/store";
 
-  const email = writable("");
+const email = writable("");
 </script>
 
 <Card.Root class="mx-auto max-w-sm">
