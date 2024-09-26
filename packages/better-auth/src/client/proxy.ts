@@ -6,7 +6,9 @@ import type { BetterAuthClientPlugin } from "./types";
 function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
-	args?: ProxyRequest,
+	args:
+		| { fetchOptions?: BetterFetchOption; query?: Record<string, any> }
+		| undefined,
 ) {
 	const method = knownPathMethods[path];
 	const { fetchOptions, query, ...body } = args || {};
@@ -62,12 +64,12 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						.join("/");
 				const arg = (args[0] || {}) as ProxyRequest;
 				const fetchOptions = (arg[1] || {}) as BetterFetchOption;
-				const method = getMethod(routePath, knownPathMethods, arg);
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;
 				const options = {
 					...fetchOptions,
 					...argFetchOptions,
 				};
+				const method = getMethod(routePath, knownPathMethods, arg);
 
 				return await client(routePath, {
 					...options,

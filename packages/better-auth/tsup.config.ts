@@ -1,6 +1,5 @@
 import { defineConfig } from "tsup";
 export default defineConfig((env) => {
-	const isBuild = !env.watch;
 	return {
 		entry: {
 			index: "./src/index.ts",
@@ -22,13 +21,10 @@ export default defineConfig((env) => {
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 		},
-		sourcemap: isBuild,
 		format: ["esm"],
 		dts: true,
 		splitting: false,
-		minify: isBuild,
-		minifyWhitespace: isBuild,
-		minifyIdentifiers: isBuild,
 		skipNodeModulesBundle: true,
+		target: "es6",
 	};
 });

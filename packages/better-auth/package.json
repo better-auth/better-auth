@@ -4,8 +4,8 @@
     "description": "Framework-agnostic, batteries included authentication library for typescript",
     "type": "module",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
-        "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch",
+        "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean --minify",
+        "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch --sourcemap",
         "test": "pnpm typecheck && vitest",
         "bump": "bumpp",
         "typecheck": "tsc --noEmit"
@@ -107,6 +107,7 @@
         "zod": "^3.22.5"
     },
     "files": [
-        "dist/*"
+        "dist/*",
+        "./package.json"
     ]
 }
