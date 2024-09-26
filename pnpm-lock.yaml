@@ -916,7 +916,7 @@ importers:
         specifier: 0.2.3-beta.10
         version: 0.2.3-beta.10
       better-sqlite3:
-        specifier: ^11.1.2
+        specifier: ^11.3.0
         version: 11.3.0
       c12:
         specifier: ^1.11.2
