@@ -200,18 +200,23 @@ It has the following properties:
         ```
     </Tab>
 
-    <Tab value="Vue">
-        ```vue title="user.vue"
+     <Tab value="Vue">
+        ```vue title="index.vue"
+        <script setup lang="ts">
+        import { client } from "~/lib/client"
+        const session = client.useSession()
+        </script>
+
         <template>
             <div>
-                <button v-if="!client.useSession().value" @click="() => client.signIn.social({
+                <button v-if="!session?.data" @click="() => client.signIn.social({
                     provider: 'github'
                 })">
                     Continue with github
                 </button>
                 <div>
-                    <pre>{{ client.useSession().value }}</pre>
-                    <button v-if="client.useSession().value" @click="client.signOut()">
+                    <pre>{{ session.data }}</pre>
+                    <button v-if="session.data" @click="client.signOut()">
                         Sign out
                     </button>
                 </div>
@@ -262,7 +267,6 @@ It has the following properties:
             </div>
             ```
         </Tab>
-
          <Tab value="Vanilla">
             ```ts title="user.svelte"
             import { client } from "~/lib/client";
