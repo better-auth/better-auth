@@ -31,9 +31,10 @@
 
 ### Why Better Auth?
 
-Auth feels like a partially solved problem in the ecosystem, existing open-source libraries often require a lot of additional code for anything beyond a simple login. Third-party services, while convenient, comes with its own set of problems. And obviously, these services aren't free and can get really expensive. 
+> Auth feels like a partially solved problem in the ecosystem. Existing open-source libraries often require a lot of additional code for anything beyond a simple login. Third-party services, while convenient, comes with their own set of problems. And obviously, these services aren't free and can get really expensive. 
 
-Better auth is born out of these frustrations. It aims to provides a comprehensive authentication library from the core accompanied by a growings plugin ecosystem, that allows you to add many auth related features in short amount of time.
+> Better auth is born out of these frustrations. It aims to provides a comprehensive authentication library from the core accompanied by a growings plugin ecosystem, that allows you to add many auth related features in short amount of time.
+
 
 ### General Goals
 
