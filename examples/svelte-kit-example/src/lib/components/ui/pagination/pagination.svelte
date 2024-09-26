@@ -1,19 +1,19 @@
 <script lang="ts">
-	import { Pagination as PaginationPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+import { Pagination as PaginationPrimitive } from "bits-ui";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = PaginationPrimitive.Props;
-	type $$Events = PaginationPrimitive.Events;
+type $$Props = PaginationPrimitive.Props;
+type $$Events = PaginationPrimitive.Events;
 
-	let className: $$Props["class"] = undefined;
-	export let count: $$Props["count"] = 0;
-	export let perPage: $$Props["perPage"] = 10;
-	export let page: $$Props["page"] = 1;
-	export let siblingCount: $$Props["siblingCount"] = 1;
+let className: $$Props["class"] = undefined;
+export let count: $$Props["count"] = 0;
+export let perPage: $$Props["perPage"] = 10;
+export let page: $$Props["page"] = 1;
+export let siblingCount: $$Props["siblingCount"] = 1;
 
-	export { className as class };
+export { className as class };
 
-	$: currentPage = page;
+$: currentPage = page;
 </script>
 
 <PaginationPrimitive.Root

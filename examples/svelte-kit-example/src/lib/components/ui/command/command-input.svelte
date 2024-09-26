@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { Command as CommandPrimitive } from "cmdk-sv";
-	import MagnifyingGlass from "svelte-radix/MagnifyingGlass.svelte";
-	import { cn } from "$lib/utils.js";
+import { Command as CommandPrimitive } from "cmdk-sv";
+import MagnifyingGlass from "svelte-radix/MagnifyingGlass.svelte";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = CommandPrimitive.InputProps;
+type $$Props = CommandPrimitive.InputProps;
 
-	let className: string | undefined | null = undefined;
-	export { className as class };
-	export let value: string = "";
+let className: string | undefined | null = undefined;
+export { className as class };
+export let value: string = "";
 </script>
 
 <div class="flex items-center border-b px-3" data-cmdk-input-wrapper="">

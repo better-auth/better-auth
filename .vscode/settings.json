@@ -19,5 +19,8 @@
 	"typescript.tsdk": "node_modules/typescript/lib",
 	"[astro]": {
 		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
 	}
 }

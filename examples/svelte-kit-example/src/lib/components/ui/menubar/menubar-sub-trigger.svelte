@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { Menubar as MenubarPrimitive } from "bits-ui";
-	import ChevronRight from "svelte-radix/ChevronRight.svelte";
-	import { cn } from "$lib/utils.js";
+import { Menubar as MenubarPrimitive } from "bits-ui";
+import ChevronRight from "svelte-radix/ChevronRight.svelte";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = MenubarPrimitive.SubTriggerProps & {
-		inset?: boolean;
-	};
-	type $$Events = MenubarPrimitive.SubTriggerEvents;
+type $$Props = MenubarPrimitive.SubTriggerProps & {
+	inset?: boolean;
+};
+type $$Events = MenubarPrimitive.SubTriggerEvents;
 
-	let className: $$Props["class"] = undefined;
-	export let inset: $$Props["inset"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let inset: $$Props["inset"] = undefined;
+export { className as class };
 </script>
 
 <MenubarPrimitive.SubTrigger

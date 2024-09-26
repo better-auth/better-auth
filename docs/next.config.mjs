@@ -46,7 +46,7 @@ const config = {
 				source: "/docs/examples",
 				destination: "/docs/examples/next-js",
 				permanent: true,
-			}
+			},
 		];
 	},
 	images: {

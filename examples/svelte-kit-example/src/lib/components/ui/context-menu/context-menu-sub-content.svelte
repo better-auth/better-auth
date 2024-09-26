@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
-	import { cn, flyAndScale } from "$lib/utils.js";
+import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
+import { cn, flyAndScale } from "$lib/utils.js";
 
-	type $$Props = ContextMenuPrimitive.SubContentProps;
+type $$Props = ContextMenuPrimitive.SubContentProps;
 
-	let className: $$Props["class"] = undefined;
-	export let transition: $$Props["transition"] = flyAndScale;
-	export let transitionConfig: $$Props["transitionConfig"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let transition: $$Props["transition"] = flyAndScale;
+export let transitionConfig: $$Props["transitionConfig"] = undefined;
+export { className as class };
 </script>
 
 <ContextMenuPrimitive.SubContent

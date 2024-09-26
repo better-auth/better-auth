@@ -1,37 +1,37 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Card from "$lib/components/ui/card/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Label } from "$lib/components/ui/label/index.js";
-  import { signUp } from "$lib/auth-client";
-  import { writable } from "svelte/store";
+import { Button } from "$lib/components/ui/button/index.js";
+import * as Card from "$lib/components/ui/card/index.js";
+import { Input } from "$lib/components/ui/input/index.js";
+import { Label } from "$lib/components/ui/label/index.js";
+import { signUp } from "$lib/auth-client";
+import { writable } from "svelte/store";
 
-  // Create writable stores for form fields
-  const firstName = writable("");
-  const lastName = writable("");
-  const email = writable("");
-  const password = writable("");
+// Create writable stores for form fields
+const firstName = writable("");
+const lastName = writable("");
+const email = writable("");
+const password = writable("");
 
-  // Function to handle form submission
-  const handleSignUp = async () => {
-    const user = {
-      firstName: $firstName,
-      lastName: $lastName,
-      email: $email,
-      password: $password,
-    };
-    await signUp.email({
-      email: user.email,
-      password: user.password,
-      name: `${user.firstName} ${user.lastName}`,
-      callbackURL: "/",
-      fetchOptions: {
-        onError(context) {
-          alert(context.error.message);
-        },
-      },
-    });
-  };
+// Function to handle form submission
+const handleSignUp = async () => {
+	const user = {
+		firstName: $firstName,
+		lastName: $lastName,
+		email: $email,
+		password: $password,
+	};
+	await signUp.email({
+		email: user.email,
+		password: user.password,
+		name: `${user.firstName} ${user.lastName}`,
+		callbackURL: "/",
+		fetchOptions: {
+			onError(context) {
+				alert(context.error.message);
+			},
+		},
+	});
+};
 </script>
 
 <Card.Root class="mx-auto max-w-sm">

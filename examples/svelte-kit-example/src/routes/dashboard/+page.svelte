@@ -1,10 +1,10 @@
 <script>
-  import * as Card from "$lib/components/ui/card/index";
-  import * as Avatar from "$lib/components/ui/avatar/index";
-  import { client } from "$lib/auth-client";
-  import Button from "$lib/components/ui/button/button.svelte";
+import * as Card from "$lib/components/ui/card/index";
+import * as Avatar from "$lib/components/ui/avatar/index";
+import { client } from "$lib/auth-client";
+import Button from "$lib/components/ui/button/button.svelte";
 
-  const session = client.useSession();
+const session = client.useSession();
 </script>
 
 <Card.Root class="w-[350px]">

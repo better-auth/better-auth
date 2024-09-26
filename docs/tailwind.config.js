@@ -17,9 +17,11 @@ export default {
 		"./mdx-components.{ts,tsx}",
 		"./node_modules/fumadocs-ui/dist/**/*.js",
 	],
-	presets: [createPreset({
-		preset: "dusk"
-	})],
+	presets: [
+		createPreset({
+			preset: "dusk",
+		}),
+	],
 	plugins: [
 		require("tailwindcss-animate"),
 		addVariablesForColors,

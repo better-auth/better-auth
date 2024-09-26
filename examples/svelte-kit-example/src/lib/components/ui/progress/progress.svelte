@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { Progress as ProgressPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+import { Progress as ProgressPrimitive } from "bits-ui";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = ProgressPrimitive.Props;
+type $$Props = ProgressPrimitive.Props;
 
-	let className: $$Props["class"] = undefined;
-	export let max: $$Props["max"] = 100;
-	export let value: $$Props["value"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let max: $$Props["max"] = 100;
+export let value: $$Props["value"] = undefined;
+export { className as class };
 </script>
 
 <ProgressPrimitive.Root

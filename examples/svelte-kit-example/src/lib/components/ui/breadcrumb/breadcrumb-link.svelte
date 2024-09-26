@@ -1,25 +1,25 @@
 <script lang="ts">
-	import type { HTMLAnchorAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+import type { HTMLAnchorAttributes } from "svelte/elements";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = HTMLAnchorAttributes & {
-		el?: HTMLAnchorElement;
-		asChild?: boolean;
-	};
+type $$Props = HTMLAnchorAttributes & {
+	el?: HTMLAnchorElement;
+	asChild?: boolean;
+};
 
-	export let href: $$Props["href"] = undefined;
-	export let el: $$Props["el"] = undefined;
-	export let asChild: $$Props["asChild"] = false;
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+export let href: $$Props["href"] = undefined;
+export let el: $$Props["el"] = undefined;
+export let asChild: $$Props["asChild"] = false;
+let className: $$Props["class"] = undefined;
+export { className as class };
 
-	let attrs: Record<string, unknown>;
+let attrs: Record<string, unknown>;
 
-	$: attrs = {
-		class: cn("hover:text-foreground transition-colors", className),
-		href,
-		...$$restProps,
-	};
+$: attrs = {
+	class: cn("hover:text-foreground transition-colors", className),
+	href,
+	...$$restProps,
+};
 </script>
 
 {#if asChild}

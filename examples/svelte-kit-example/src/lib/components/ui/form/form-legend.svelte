@@ -1,11 +1,11 @@
 <script lang="ts">
-	import * as FormPrimitive from "formsnap";
-	import { cn } from "$lib/utils.js";
+import * as FormPrimitive from "formsnap";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = FormPrimitive.LegendProps;
+type $$Props = FormPrimitive.LegendProps;
 
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export { className as class };
 </script>
 
 <FormPrimitive.Legend

@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
-	import { buttonVariants } from "$lib/components/ui/button/index.js";
-	import { cn } from "$lib/utils.js";
+import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
+import { buttonVariants } from "$lib/components/ui/button/index.js";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = RangeCalendarPrimitive.DayProps;
-	type $$Events = RangeCalendarPrimitive.DayEvents;
+type $$Props = RangeCalendarPrimitive.DayProps;
+type $$Events = RangeCalendarPrimitive.DayEvents;
 
-	export let date: $$Props["date"];
-	export let month: $$Props["month"];
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+export let date: $$Props["date"];
+export let month: $$Props["month"];
+let className: $$Props["class"] = undefined;
+export { className as class };
 </script>
 
 <RangeCalendarPrimitive.Day

@@ -13,8 +13,7 @@ export default function HomePage() {
 			>
 				<Hero />
 				<Features />
-				<hr className="h-px bg-gray-200"/>
-
+				<hr className="h-px bg-gray-200" />
 			</Section>
 		</main>
 	);

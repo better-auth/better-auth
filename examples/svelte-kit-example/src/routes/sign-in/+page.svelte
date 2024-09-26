@@ -1,26 +1,26 @@
 <script lang="ts">
-  import { signIn } from "$lib/auth-client";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Card from "$lib/components/ui/card/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Label } from "$lib/components/ui/label/index.js";
-  import { writable } from "svelte/store";
+import { signIn } from "$lib/auth-client";
+import { Button } from "$lib/components/ui/button/index.js";
+import * as Card from "$lib/components/ui/card/index.js";
+import { Input } from "$lib/components/ui/input/index.js";
+import { Label } from "$lib/components/ui/label/index.js";
+import { writable } from "svelte/store";
 
-  const email = writable("");
-  const password = writable("");
+const email = writable("");
+const password = writable("");
 
-  const handleSignIn = async () => {
-    await signIn.email({
-      email: $email,
-      password: $password,
-      callbackURL: "/",
-      fetchOptions: {
-        onError(context) {
-          alert(context.error.message);
-        },
-      },
-    });
-  };
+const handleSignIn = async () => {
+	await signIn.email({
+		email: $email,
+		password: $password,
+		callbackURL: "/",
+		fetchOptions: {
+			onError(context) {
+				alert(context.error.message);
+			},
+		},
+	});
+};
 </script>
 
 <Card.Root class="mx-auto max-w-sm">

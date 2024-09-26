@@ -1,23 +1,23 @@
 <script lang="ts">
-	import ArrowRight from "svelte-radix/ArrowRight.svelte";
-	import type { VariantProps } from "tailwind-variants";
-	import { getEmblaContext } from "./context.js";
-	import { cn } from "$lib/utils.js";
-	import {
-		Button,
-		type Props,
-		type buttonVariants,
-	} from "$lib/components/ui/button/index.js";
+import ArrowRight from "svelte-radix/ArrowRight.svelte";
+import type { VariantProps } from "tailwind-variants";
+import { getEmblaContext } from "./context.js";
+import { cn } from "$lib/utils.js";
+import {
+	Button,
+	type Props,
+	type buttonVariants,
+} from "$lib/components/ui/button/index.js";
 
-	type $$Props = Props;
+type $$Props = Props;
 
-	let className: $$Props["class"] = undefined;
-	export { className as class };
-	export let variant: VariantProps<typeof buttonVariants>["variant"] = "outline";
-	export let size: VariantProps<typeof buttonVariants>["size"] = "icon";
+let className: $$Props["class"] = undefined;
+export { className as class };
+export let variant: VariantProps<typeof buttonVariants>["variant"] = "outline";
+export let size: VariantProps<typeof buttonVariants>["size"] = "icon";
 
-	const { orientation, canScrollNext, scrollNext, handleKeyDown } =
-		getEmblaContext("<Carousel.Next/>");
+const { orientation, canScrollNext, scrollNext, handleKeyDown } =
+	getEmblaContext("<Carousel.Next/>");
 </script>
 
 <Button

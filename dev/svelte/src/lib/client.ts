@@ -5,5 +5,3 @@ export const client = createAuthClient({
 	baseURL: "http://localhost:3000/api/auth",
 	plugins: [organizationClient()],
 });
-
-

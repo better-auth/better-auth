@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { RadioGroup as RadioGroupPrimitive } from "bits-ui";
-	import Check from "svelte-radix/Check.svelte";
-	import { cn } from "$lib/utils.js";
+import { RadioGroup as RadioGroupPrimitive } from "bits-ui";
+import Check from "svelte-radix/Check.svelte";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = RadioGroupPrimitive.ItemProps & {
-		value: string;
-	};
-	type $$Events = RadioGroupPrimitive.ItemEvents;
+type $$Props = RadioGroupPrimitive.ItemProps & {
+	value: string;
+};
+type $$Events = RadioGroupPrimitive.ItemEvents;
 
-	let className: $$Props["class"] = undefined;
-	export let value: $$Props["value"];
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let value: $$Props["value"];
+export { className as class };
 </script>
 
 <RadioGroupPrimitive.Item

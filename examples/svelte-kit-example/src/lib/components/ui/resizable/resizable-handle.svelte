@@ -1,16 +1,16 @@
 <script lang="ts">
-	import DragHandleDots2 from "svelte-radix/DragHandleDots2.svelte";
-	import * as ResizablePrimitive from "paneforge";
-	import { cn } from "$lib/utils.js";
+import DragHandleDots2 from "svelte-radix/DragHandleDots2.svelte";
+import * as ResizablePrimitive from "paneforge";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = ResizablePrimitive.PaneResizerProps & {
-		withHandle?: boolean;
-	};
+type $$Props = ResizablePrimitive.PaneResizerProps & {
+	withHandle?: boolean;
+};
 
-	export let withHandle: $$Props["withHandle"] = false;
-	export let el: $$Props["el"] = undefined;
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+export let withHandle: $$Props["withHandle"] = false;
+export let el: $$Props["el"] = undefined;
+let className: $$Props["class"] = undefined;
+export { className as class };
 </script>
 
 <ResizablePrimitive.PaneResizer

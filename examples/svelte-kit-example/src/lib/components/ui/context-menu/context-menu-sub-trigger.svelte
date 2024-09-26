@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
-	import ChevronRight from "svelte-radix/ChevronRight.svelte";
-	import { cn } from "$lib/utils.js";
+import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
+import ChevronRight from "svelte-radix/ChevronRight.svelte";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = ContextMenuPrimitive.SubTriggerProps & {
-		inset?: boolean;
-	};
-	type $$Events = ContextMenuPrimitive.SubTriggerEvents;
+type $$Props = ContextMenuPrimitive.SubTriggerProps & {
+	inset?: boolean;
+};
+type $$Events = ContextMenuPrimitive.SubTriggerEvents;
 
-	let className: $$Props["class"] = undefined;
-	export let inset: $$Props["inset"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let inset: $$Props["inset"] = undefined;
+export { className as class };
 </script>
 
 <ContextMenuPrimitive.SubTrigger

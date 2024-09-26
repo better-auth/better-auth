@@ -21,9 +21,7 @@ const Section = ({
 			id={id}
 			className={`
       relative 
-      ${customPaddings ||
-				`py-10 lg:py-16  ${crosses ? "" : ""}`
-				} 
+      ${customPaddings || `py-10 lg:py-16  ${crosses ? "" : ""}`} 
       ${className || " "}`}
 		>
 			{children}
@@ -34,8 +32,9 @@ const Section = ({
 			{crosses && (
 				<>
 					<div
-						className={`hidden absolute top-0 left-7.5 right-7.5 h-0.25 bg-[#26242C] ${crossesOffset && crossesOffset
-							} pointer-events-none lg:block xl:left-16 right-16`}
+						className={`hidden absolute top-0 left-7.5 right-7.5 h-0.25 bg-[#26242C] ${
+							crossesOffset && crossesOffset
+						} pointer-events-none lg:block xl:left-16 right-16`}
 					/>
 					<SectionSvg crossesOffset={crossesOffset} />
 				</>

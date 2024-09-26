@@ -34,7 +34,6 @@ export const OTPFieldGroup = (props: ComponentProps<"div">) => {
 
 export const OTPFieldSeparator = (props: ComponentProps<"div">) => {
 	return (
-		// biome-ignore lint/a11y/useAriaPropsForRole: []
 		<div role="separator" {...props}>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

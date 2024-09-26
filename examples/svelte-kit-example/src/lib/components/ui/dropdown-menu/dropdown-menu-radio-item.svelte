@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-	import DotFilled from "svelte-radix/DotFilled.svelte";
-	import { cn } from "$lib/utils.js";
+import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
+import DotFilled from "svelte-radix/DotFilled.svelte";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = DropdownMenuPrimitive.RadioItemProps;
-	type $$Events = DropdownMenuPrimitive.RadioItemEvents;
+type $$Props = DropdownMenuPrimitive.RadioItemProps;
+type $$Events = DropdownMenuPrimitive.RadioItemEvents;
 
-	let className: $$Props["class"] = undefined;
-	export let value: DropdownMenuPrimitive.RadioItemProps["value"];
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let value: DropdownMenuPrimitive.RadioItemProps["value"];
+export { className as class };
 </script>
 
 <DropdownMenuPrimitive.RadioItem

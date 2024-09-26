@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { LinkPreview as HoverCardPrimitive } from "bits-ui";
-	import { cn, flyAndScale } from "$lib/utils.js";
+import { LinkPreview as HoverCardPrimitive } from "bits-ui";
+import { cn, flyAndScale } from "$lib/utils.js";
 
-	type $$Props = HoverCardPrimitive.ContentProps;
+type $$Props = HoverCardPrimitive.ContentProps;
 
-	let className: $$Props["class"] = undefined;
-	export let align: $$Props["align"] = "center";
-	export let sideOffset: $$Props["sideOffset"] = 4;
-	export let transition: $$Props["transition"] = flyAndScale;
-	export let transitionConfig: $$Props["transitionConfig"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export let align: $$Props["align"] = "center";
+export let sideOffset: $$Props["sideOffset"] = 4;
+export let transition: $$Props["transition"] = flyAndScale;
+export let transitionConfig: $$Props["transitionConfig"] = undefined;
+export { className as class };
 </script>
 
 <HoverCardPrimitive.Content

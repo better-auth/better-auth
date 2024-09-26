@@ -1,12 +1,12 @@
 <script lang="ts">
-	import DotsHorizontal from "svelte-radix/DotsHorizontal.svelte";
-	import type { HTMLAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+import DotsHorizontal from "svelte-radix/DotsHorizontal.svelte";
+import type { HTMLAttributes } from "svelte/elements";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = HTMLAttributes<HTMLSpanElement>;
+type $$Props = HTMLAttributes<HTMLSpanElement>;
 
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export { className as class };
 </script>
 
 <span

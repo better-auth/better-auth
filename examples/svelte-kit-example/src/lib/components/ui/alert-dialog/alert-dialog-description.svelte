@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { AlertDialog as AlertDialogPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+import { AlertDialog as AlertDialogPrimitive } from "bits-ui";
+import { cn } from "$lib/utils.js";
 
-	type $$Props = AlertDialogPrimitive.DescriptionProps;
+type $$Props = AlertDialogPrimitive.DescriptionProps;
 
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+let className: $$Props["class"] = undefined;
+export { className as class };
 </script>
 
 <AlertDialogPrimitive.Description

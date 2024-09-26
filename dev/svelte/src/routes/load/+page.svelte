@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { client } from "$lib/client";
+import { client } from "$lib/client";
 
-  const organizations = client.useListOrganizations();
-  const activeOrganization = client.useActiveOrganization();
+const organizations = client.useListOrganizations();
+const activeOrganization = client.useActiveOrganization();
 </script>
 
 <h1>Organizations</h1>
