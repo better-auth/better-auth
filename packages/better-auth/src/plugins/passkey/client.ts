@@ -24,12 +24,15 @@ export const getPasskeyActions = (
 		_listPasskeys: ReturnType<typeof atom<any>>;
 	},
 ) => {
-	const signInPasskey = async (opts?: {
-		autoFill?: boolean;
-		email?: string;
-		callbackURL?: string;
-		fetchOptions?: BetterFetchOption;
-	}) => {
+	const signInPasskey = async (
+		opts?: {
+			autoFill?: boolean;
+			email?: string;
+			callbackURL?: string;
+			fetchOptions?: BetterFetchOption;
+		},
+		options?: BetterFetchOption,
+	) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
@@ -56,6 +59,7 @@ export const getPasskeyActions = (
 					response: res,
 				},
 				...opts?.fetchOptions,
+				...options,
 			});
 			if (!verified.data) {
 				return verified;
@@ -65,14 +69,17 @@ export const getPasskeyActions = (
 		}
 	};
 
-	const registerPasskey = async (opts?: {
-		fetchOptions?: BetterFetchOption;
-		/**
-		 * The name of the passkey. This is used to
-		 * identify the passkey in the UI.
-		 */
-		name?: string;
-	}) => {
+	const registerPasskey = async (
+		opts?: {
+			fetchOptions?: BetterFetchOption;
+			/**
+			 * The name of the passkey. This is used to
+			 * identify the passkey in the UI.
+			 */
+			name?: string;
+		},
+		fetchOpts?: BetterFetchOption,
+	) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
 			{
@@ -88,6 +95,7 @@ export const getPasskeyActions = (
 				passkey: Passkey;
 			}>("/passkey/verify-registration", {
 				...opts?.fetchOptions,
+				...fetchOpts,
 				body: {
 					response: res,
 					name: opts?.name,

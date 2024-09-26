@@ -10,7 +10,6 @@ function checkHasPath(url: string): boolean {
 		);
 	}
 }
-a;
 
 function withPath(url: string, path = "/api/auth") {
 	const hasPath = checkHasPath(url);
