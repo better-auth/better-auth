@@ -88,6 +88,28 @@ describe("run time proxy", async () => {
 			isPending: false,
 		});
 	});
+
+	it("should allow second argument fetch options", async () => {
+		let called = false;
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+		await client.test(
+			{},
+			{
+				onSuccess(context) {
+					called = true;
+				},
+			},
+		);
+		expect(called).toBe(true);
+	});
 });
 
 describe("type", () => {
@@ -207,8 +229,8 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
-				ipAddress?: string | undefined;
-				userAgent?: string | undefined;
+				ipAddress?: string;
+				userAgent?: string;
 			};
 			user: {
 				id: string;
@@ -222,7 +244,6 @@ describe("type", () => {
 				testField2?: number | undefined;
 				testField4: string;
 				twoFactorEnabled?: boolean | undefined;
-				twoFactorSecret?: string | undefined;
 			};
 		}>();
 	});

@@ -63,7 +63,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						)
 						.join("/");
 				const arg = (args[0] || {}) as ProxyRequest;
-				const fetchOptions = (arg[1] || {}) as BetterFetchOption;
+				const fetchOptions = (args[1] || {}) as BetterFetchOption;
+
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;
 				const options = {
 					...fetchOptions,
