@@ -1,11 +1,10 @@
-# Better Auth
 <p align="center">
   <a href="https://github.com/better-auth/better-auth">
    <img src="https://better-auth.vercel.app/og.png" alt="Logo">
   </a>
-  <h3 align="center">
+  <h2 align="center">
     Better Auth
-  </h3>
+  </h2>
 
   <p align="center">
     The most comprehensive authentication library
