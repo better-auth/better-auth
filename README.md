@@ -34,10 +34,7 @@
 
 ### Why Better Auth?
 
-Auth is a partly solved problem. Open-source libraries often need extra code for anything beyond basic login, while third-party services, though convenient, bring their own challenges—and can get expensive fast.
-
-Better Auth was built to tackle these frustrations. It offers a robust core authentication library, supported by a growing plugin ecosystem, allowing you to quickly add advanced auth features with minimal effort.
-
+Currently, most open-source libraries handle basic authentication, but when you need something more, they often require a lot of additional code. When that happens, instead of just suggesting 3rd party services (which are the right choice in some cases), I think we can do better as a community—hence, Better Auth.
 
 ### Goals
 ****
@@ -52,9 +49,9 @@ Better Auth was built to tackle these frustrations. It offers a robust core auth
 ****
 
 - **JWT-Based Authentication**: We won’t support JWT-based auth unless provided by a third-party plugin.
-- **Support for Non-Relational Databases**: No plans to support MongoDB or other non-relational databases.
-- **Deep Customization**: Our focus is on delivering opinionated, best-practice defaults, rather than enabling deep customization.
-  
+- **Extensive Customization**: Our focus is on giving you opinionated, best-practice defaults, rather than enabling deep customization.
+- **Supporting Every Non-Node Runtime**: While we aim to support all JavaScript runtimes when possible, we won't sacrifice features and functionality just to accommodate non-Node runtimes.
+
 ## Contribution
 
 Better Auth is free and open source project licensed under the [MIT License](./LICENSE.md). You are free to do whatever you want with it.

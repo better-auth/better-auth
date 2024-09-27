@@ -35,28 +35,6 @@ export interface Adapter {
 		update: Record<string, any>;
 	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
-	/**
-	 * adapter specific configuration
-	 */
-	config?: {
-		/**
-		 * the format of the date fields
-		 */
-		dateFormat?: "number" | "date";
-		/**
-		 * if the adapter will throw an error when a
-		 * record already exists. If this is set to
-		 * false, there will be a check if the record
-		 * exists or not before creating a new one.
-		 */
-		failsOnRecordExist?: boolean;
-	};
-	createSchema?: (
-		data: {
-			model: string;
-			fields: Record<string, FieldAttribute>;
-		}[],
-	) => Promise<void>;
 }
 
 export interface SessionAdapter {

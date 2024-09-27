@@ -47,6 +47,7 @@
         "./utils": "./dist/utils.js"
     },
     "devDependencies": {
+        "@prisma/client": "^5.19.1",
         "@simplewebauthn/types": "^10.0.0",
         "@types/better-sqlite3": "^7.6.11",
         "@types/pg": "^8.11.6",

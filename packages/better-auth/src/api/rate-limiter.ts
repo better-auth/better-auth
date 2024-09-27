@@ -34,36 +34,36 @@ export function getRetryAfter(lastRequest: number, window: number) {
 }
 
 function createDBStorage(ctx: AuthContext, tableName?: string) {
-	const db = ctx.db;
+	const model = tableName ?? "rateLimit";
+	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
-			const result = await db
-				.selectFrom(tableName ?? "rateLimit")
-				.where("key", "=", key)
-				.selectAll()
-				.executeTakeFirst();
-			return result as RateLimit | undefined;
+			const res = await db.findOne<RateLimit>({
+				model,
+				where: [{ field: "key", value: key }],
+			});
+			return res;
 		},
 		set: async (key: string, value: RateLimit, _update?: boolean) => {
 			try {
 				if (_update) {
-					await db
-						.updateTable(tableName ?? "rateLimit")
-						.set({
+					await db.update({
+						model: tableName ?? "rateLimit",
+						where: [{ field: "key", value: key }],
+						update: {
 							count: value.count,
 							lastRequest: value.lastRequest,
-						})
-						.where("key", "=", key)
-						.execute();
+						},
+					});
 				} else {
-					await db
-						.insertInto(tableName ?? "rateLimit")
-						.values({
+					await db.create({
+						model: tableName ?? "rateLimit",
+						data: {
 							key,
 							count: value.count,
 							lastRequest: value.lastRequest,
-						})
-						.execute();
+						},
+					});
 				}
 			} catch (e) {
 				logger.error("Error setting rate limit", e);
