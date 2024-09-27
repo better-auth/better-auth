@@ -1,75 +1,18 @@
-# Nuxt 3 Minimal Starter
+# Nuxt Js Better Auth Example
 
-Look at the [Nuxt 3 documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
-## Setup
+This is an example of how to use Better Auth with Nuxt
 
-Make sure to install the dependencies:
+**Implements the following features:**
+Email & Password . Social Sign-in with Google 
 
-```bash
-# npm
-npm install
+## How to run
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm run dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm run build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm run preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+1. Clone the code sandbox (or the repo) and open it in your code editor
+2. Move .env.example to .env and provide necessary variables
+3. Run the following commands
+   ```bash
+   pnpm install
+   pnpm dev
+   ```
+4. Open the browser and navigate to `http://localhost:3000`

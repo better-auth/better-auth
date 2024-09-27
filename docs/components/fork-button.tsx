@@ -9,7 +9,7 @@ export function ForkButton({ url }: { url: string }) {
 			<Link href={`https://codesandbox.io/p/github/${url}`} target="_blank">
 				<Button className="gap-2" variant="outline" size="sm">
 					<ExternalLink size={12} />
-					Fork
+					Open in Stackblitz
 				</Button>
 			</Link>
 			<Link href={`https://github.com/${url}`} target="_blank">
