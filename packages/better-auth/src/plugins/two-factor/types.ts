@@ -1,4 +1,4 @@
-import type { User } from "../../adapters/schema";
+import type { User } from "../../db/schema";
 import type { AuthEndpoint } from "../../api/call";
 import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";

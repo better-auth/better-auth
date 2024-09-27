@@ -1,7 +1,7 @@
 import type { Kysely } from "kysely";
-import { getAuthTables } from "./adapters/get-tables";
-import { createKyselyAdapter } from "./adapters/kysely";
-import { getAdapter } from "./adapters/utils";
+import { getAuthTables } from "./db/get-tables";
+import { createKyselyAdapter } from "./db/kysely";
+import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import type { BetterAuthOptions, OAuthProvider } from "./types";

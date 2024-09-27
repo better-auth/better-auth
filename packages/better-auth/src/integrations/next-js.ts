@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { Auth } from "../auth";
-import type { Session, User } from "../adapters/schema";
+import type { Session, User } from "../db/schema";
 import { NextRequest, NextResponse } from "next/server";
 
 export function toNextJsHandler(auth: Auth | Auth["handler"]) {

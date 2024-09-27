@@ -1,4 +1,4 @@
-import type { User } from "../adapters/schema";
+import type { User } from "../db/schema";
 import type { oAuthProviderList } from "../social-providers";
 import type { LiteralString } from "./helper";
 import { OAuth2Tokens } from "arctic";

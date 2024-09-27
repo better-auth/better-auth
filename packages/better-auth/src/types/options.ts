@@ -1,5 +1,5 @@
 import type { Dialect } from "kysely";
-import type { User } from "../adapters/schema";
+import type { User } from "../db/schema";
 import type { FieldAttribute } from "../db/field";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";

@@ -1,4 +1,4 @@
-import type { FieldAttribute } from "../db";
+import type { FieldAttribute } from ".";
 import type { BetterAuthOptions } from "../types";
 
 export type BetterAuthDbSchema = Record<

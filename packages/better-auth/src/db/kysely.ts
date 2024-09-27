@@ -7,7 +7,7 @@ import {
 	SqliteDialect,
 } from "kysely";
 import { createPool } from "mysql2";
-import type { FieldAttribute } from "../db";
+import type { FieldAttribute } from ".";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import pg from "pg";

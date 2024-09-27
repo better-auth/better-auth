@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import type { Session } from "../../adapters/schema";
+import type { Session } from "../../db/schema";
 import { createAuthMiddleware } from "../../api/call";
 import { hs256 } from "../../crypto";
 import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";

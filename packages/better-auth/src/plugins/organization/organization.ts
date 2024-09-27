@@ -6,7 +6,7 @@ import {
 	type ZodOptional,
 	z,
 } from "zod";
-import type { User } from "../../adapters/schema";
+import type { User } from "../../db/schema";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";

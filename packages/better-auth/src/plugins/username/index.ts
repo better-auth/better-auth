@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../adapters/schema";
+import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
 
 export const username = () => {

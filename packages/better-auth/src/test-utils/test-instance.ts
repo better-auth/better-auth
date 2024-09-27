@@ -7,7 +7,7 @@ import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../utils/cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { getAdapter } from "../adapters/utils";
+import { getAdapter } from "../db/utils";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,

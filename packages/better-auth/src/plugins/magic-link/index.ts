@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
-import type { User } from "../../adapters/schema";
+import type { User } from "../../db/schema";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "../../api/routes";
 import { logger } from "../../utils/logger";

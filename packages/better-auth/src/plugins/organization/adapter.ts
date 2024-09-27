@@ -1,5 +1,5 @@
 import type { Kysely } from "kysely";
-import type { Session, User } from "../../adapters/schema";
+import type { Session, User } from "../../db/schema";
 import type { Adapter } from "../../types/adapter";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils/id";

@@ -1,4 +1,4 @@
-import type { Session } from "../adapters/schema";
+import type { Session } from "../db/schema";
 import type { FieldAttribute } from "../db";
 
 /**

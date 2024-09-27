@@ -2,7 +2,7 @@ import { APIError, type Context, type InferUse } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
-import type { Session, User } from "../../adapters/schema";
+import type { Session, User } from "../../db/schema";
 import { z } from "zod";
 import { getIp } from "../../utils/get-request-ip";
 import type {

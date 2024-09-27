@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from ".";
-import type { Session, User } from "../adapters/schema";
+import type { Session, User } from "../db/schema";
 import type { Auth } from "../auth";
 import type { FieldAttribute, InferFieldOutput } from "../db";
 import type { Prettify, UnionToIntersection } from "./helper";

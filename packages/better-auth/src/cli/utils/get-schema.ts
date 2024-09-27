@@ -1,7 +1,4 @@
-import {
-	getAuthTables,
-	type BetterAuthDbSchema,
-} from "../../adapters/get-tables";
+import { getAuthTables, type BetterAuthDbSchema } from "../../db/get-tables";
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthOptions } from "../../types";
 

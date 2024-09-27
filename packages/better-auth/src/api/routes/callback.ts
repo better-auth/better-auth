@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { z } from "zod";
-import { userSchema } from "../../adapters/schema";
+import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
