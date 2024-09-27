@@ -36,7 +36,7 @@ Better Auth is framework-agnostic authentication (and authorization) library for
 
 ### Why Better Auth
 
-Currently, the open-source libraries in the ecosystem often require a lot of additional code if you want anything beyond a basic login. Instead of just suggesting 3rd party services when that happens (which can be still be the right choice at times), I think we can do better as a community—hence, Better Auth.
+Authentication in the TypeScript ecosystem feels like a half-solved problem right now. Open-source libraries often requires a lot of additional code for anything beyond basic authentication. Rather than just pushing third-party services as the solution, I believe we can do better as a community—hence, Better Auth.
 
 ### Goals
 ****
