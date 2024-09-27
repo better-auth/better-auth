@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useSession, signOut } from "~/lib/auth-client";
 const session = useSession();
+const router = useRouter();
 </script>
 
 
@@ -27,12 +28,12 @@ const session = useSession();
                         </p>
                     </div>
                 </div>
-             
             </CardContent>
             <CardFooter>
                 <Button @click="async()=>{
                     await signOut()
-                }">
+                    router.push('/')
+                }" variant="secondary" >
                     Sing Out
                 </Button>
              </CardFooter>
