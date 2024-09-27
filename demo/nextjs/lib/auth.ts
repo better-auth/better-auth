@@ -15,7 +15,7 @@ export const auth = betterAuth({
 	}),
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPasswordToken(token, user) {
+		async sendResetPassword(token, user) {
 			const res = await resend.emails.send({
 				from,
 				to: user.email,
