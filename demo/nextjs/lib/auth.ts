@@ -70,8 +70,13 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			otpOptions: {
-				sendOTP(user, otp) {
-					console.log({ otp });
+				async sendOTP(user, otp) {
+					await resend.emails.send({
+						from,
+						to: user.email,
+						subject: "Your OTP",
+						html: `Your OTP is ${otp}`,
+					});
 				},
 			},
 		}),
