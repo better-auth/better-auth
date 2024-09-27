@@ -25,15 +25,16 @@
 [![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
 
+> [!IMPORTANT]
 > **Note:** 🚧 This project is currently in beta. Features and APIs may change.
 
 ## About the Project
 
 ### Why Better Auth?
 
-> Auth feels like a partially solved problem in the ecosystem. Existing open-source libraries often require a lot of additional code for anything beyond a simple login. Third-party services, while convenient, comes with their own set of problems. And obviously, these services aren't free and can get really expensive. 
+Auth is a partly solved problem. Open-source libraries often need extra code for anything beyond basic login, while third-party services, though convenient, bring their own challenges—and can get expensive fast.
 
-> Better auth is born out of these frustrations. It aims to provides a comprehensive authentication library from the core accompanied by a growings plugin ecosystem, that allows you to add many auth related features in short amount of time.
+Better Auth was built to tackle these frustrations. It offers a robust core authentication library, supported by a growing plugin ecosystem, allowing you to quickly add advanced auth features with minimal effort.
 
 
 ### Goals
