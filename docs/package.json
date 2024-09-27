@@ -42,6 +42,7 @@
     "@tsparticles/engine": "^3.5.0",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.5.0",
+    "@vercel/og": "^0.6.3",
     "better-auth": "workspace:*",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

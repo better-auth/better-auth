@@ -1,4 +1,4 @@
-use client";
+"use client";
 import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
 import clsx from "clsx";
@@ -91,7 +91,6 @@ export default function Hero() {
 	const theme = useTheme();
 	const [activeTab, setActiveTab] = useState("auth.ts");
 	const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
-	93;
 	return (
 		<section className="w-full mx-auto px-10 flex min-h-[85vh] py-16 items-center justify-center gap-20">
 			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">

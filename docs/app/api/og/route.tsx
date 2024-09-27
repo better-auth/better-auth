@@ -7,6 +7,7 @@ const ogSchema = z.object({
   mode: z.string(),
   type: z.string(),
 });
+<<<<<<< HEAD
 // Use this example object to work with og image generator
 
 // const ogData = {

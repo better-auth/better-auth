@@ -7,6 +7,7 @@ import { Logo } from "./logo";
 import { PulicBetaBadge } from "./beta/badge";
 
 const hideNavbar = false;
+
 export const Navbar = () => {
   return (
     <nav className="md:grid grid-cols-12 border-b sticky top-0 flex items-center justify-between bg-background backdrop-blur-md z-30">
