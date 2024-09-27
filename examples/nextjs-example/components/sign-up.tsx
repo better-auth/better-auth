@@ -222,10 +222,12 @@ export function SignUp() {
 						variant="outline"
 						className="w-full gap-2"
 						onClick={async () => {
-							await signIn.social({
-								provider: "github",
-								callbackURL: "/dashboard",
-								fetchOptions: {
+							await signIn.social(
+								{
+									provider: "github",
+									callbackURL: "/dashboard",
+								},
+								{
 									onRequest: () => {
 										setLoading(true);
 									},
@@ -233,7 +235,7 @@ export function SignUp() {
 										setLoading(false);
 									},
 								},
-							});
+							);
 						}}
 						disabled={loading}
 					>

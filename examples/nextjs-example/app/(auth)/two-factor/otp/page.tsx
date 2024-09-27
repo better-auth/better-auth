@@ -22,20 +22,12 @@ export default function Component() {
 	const [message, setMessage] = useState("");
 	const [isError, setIsError] = useState(false);
 	const [isValidated, setIsValidated] = useState(false);
-	const [OTP, setOTP] = useState("");
 
 	// In a real app, this email would come from your authentication context
 	const userEmail = "user@example.com";
 
 	const requestOTP = async () => {
-		const res = await client.twoFactor.sendOtp({
-			fetchOptions: {
-				body: {
-					returnOTP: true,
-				},
-			},
-		});
-		setOTP(res.data?.OTP || "");
+		const res = await client.twoFactor.sendOtp();
 		// In a real app, this would call your backend API to send the OTP
 		setMessage("OTP sent to your email");
 		setIsError(false);
@@ -77,11 +69,7 @@ export default function Component() {
 								<div className="flex flex-col space-y-1.5">
 									<Label htmlFor="otp">One-Time Password</Label>
 									<Label className="py-2">
-										Use{" "}
-										<span className="text-blue-100 bg-slate-800 px-2">
-											{OTP}
-										</span>{" "}
-										(on real app, this would be sent to your email)
+										Check your email at {userEmail} for the OTP
 									</Label>
 									<Input
 										id="otp"

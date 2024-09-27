@@ -130,9 +130,11 @@ export default function UserCard(props: {
 							variant="secondary"
 							className="mt-2"
 							onClick={async () => {
-								await client.sendVerificationEmail({
-									email: session?.user.email || "",
-									fetchOptions: {
+								await client.sendVerificationEmail(
+									{
+										email: session?.user.email || "",
+									},
+									{
 										onRequest(context) {
 											setEmailVerificationPending(true);
 										},
@@ -145,7 +147,7 @@ export default function UserCard(props: {
 											setEmailVerificationPending(false);
 										},
 									},
-								});
+								);
 							}}
 						>
 							{emailVerificationPending ? (
