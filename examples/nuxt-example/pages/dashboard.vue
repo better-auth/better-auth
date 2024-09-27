@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useSession } from "~/lib/auth-client";
+import { useSession, signOut } from "~/lib/auth-client";
 const session = useSession();
 </script>
 
@@ -15,7 +15,7 @@ const session = useSession();
             <CardContent>
                 <div class="flex gap-2 items-center">
                     <Avatar>
-                        <AvatarImage src="" alt="@radix-vue" />
+                        <AvatarImage :src="session.data?.user.image || ''" alt="@radix-vue" />
                         <AvatarFallback>CN</AvatarFallback>
                     </Avatar>
                     <div>
@@ -27,7 +27,15 @@ const session = useSession();
                         </p>
                     </div>
                 </div>
+             
             </CardContent>
+            <CardFooter>
+                <Button @click="async()=>{
+                    await signOut()
+                }">
+                    Sing Out
+                </Button>
+             </CardFooter>
         </Card>
     </div>
 </template>

@@ -14,7 +14,7 @@
     <a href="https://better-auth.com"><strong>Learn more »</strong></a>
     <br />
     <br />
-    <a href="https://discord.com/invite/GYC3W7tZzb">Discussions</a>
+    <a href="https://discord.com/invite/GYC3W7tZzb">Discord</a>
     ·
     <a href="https://better-auth.com">Website</a>
     ·
