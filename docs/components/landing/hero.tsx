@@ -121,14 +121,16 @@ export default function Hero() {
 											Get Started
 										</Link>
 
-										<Button
-											variant="outline"
-											size="lg"
-											className="flex rounded-none items-center gap-2"
-										>
-											<Github size={16} />
-											View on GitHub
-										</Button>
+										<Link href="https://github.com/better-auth/better-auth">
+											<Button
+												variant="outline"
+												size="lg"
+												className="flex rounded-none items-center gap-2"
+											>
+												<Github size={16} />
+												View on GitHub
+											</Button>
+										</Link>
 									</div>
 								</>
 							}
