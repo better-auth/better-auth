@@ -80,10 +80,7 @@ export const auth = betterAuth({
     } // [!code highlight]
 })
 ```
-
-<Callout type="info">
 You can also pass any dialect that is supported by Kysely to the database configration.
-</Callout>
 
 **Example with LibsqlDialect:**
 
@@ -99,6 +96,9 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout>
+    Currently, Better Auth only support databases that are supported by Kysely. [vote this issue if you like to see non sql db support](https://github.com/better-auth/better-auth/issues/5)
+</Callout>
 </Step>
 
 <Step>

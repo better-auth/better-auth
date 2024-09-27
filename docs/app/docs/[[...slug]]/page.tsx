@@ -50,7 +50,7 @@ export async function generateStaticParams() {
 export function generateMetadata({ params }: { params: { slug?: string[] } }) {
 	const page = getPage(params.slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_APP_PUBLIC_URL;
+	const baseUrl = process.env.NEXT_APP_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;
 	const pageSlug = page.file.path;
@@ -64,7 +64,7 @@ export function generateMetadata({ params }: { params: { slug?: string[] } }) {
 		openGraph: {
 			title,
 			description,
-			type: "Documentation",
+			type: "website",
 			url: absoluteUrl(`docs/${pageSlug}`),
 			images: [
 				{
