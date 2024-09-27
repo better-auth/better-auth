@@ -20,7 +20,6 @@ export const Navbar = () => {
 						<Logo />
 						<p>BETTER-AUTH.</p>
 					</div>
-					{/* <PulicBetaBadge /> */}
 				</div>
 			</Link>
 			<div className="md:col-span-10 flex items-center justify-end">

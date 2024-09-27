@@ -28,11 +28,11 @@
 ## Before a release
 
 [x] clean up the codebase
-[ ] fix the nextjs demo
-[ ] finish example for nuxt
+[x] fix the nextjs demo
+[x] finish example for nuxt
 [ ] check them to be working properly inside the docs
 [ ] make a release 0.1.0 release
 [ ] write a release note
 [ ] write a changelog
-[ ] add analytics for the docs (loglib)
+[x] add analytics for the docs (loglib)
 [x] add contribution guide

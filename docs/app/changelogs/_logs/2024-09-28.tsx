@@ -1,8 +1,16 @@
 import { AnimatePresence } from "@/components/ui/fade-in";
 
-const listOfFeatures = ["The first better-auth public beta release"];
-
-const bugFixes = [""];
+const listOfFeatures = [
+	"Multiple framework support",
+	"Email & Password Authentication",
+	"OAuth Authentication",
+	"Account & Session Management",
+	"Rate Limiting",
+	"Multiple Plugins",
+	"Migration CLI",
+	"Multiple Plugins",
+	"And more...",
+];
 
 const ChangelogOne = () => {
 	return (
@@ -12,10 +20,7 @@ const ChangelogOne = () => {
 					<h2 className="text-2xl font-bold tracking-tighter">
 						Public Beta Release
 					</h2>
-					<p>
-						The first public beta release of better-auth is now available. This
-						release includes a lot of new features and improvements.
-					</p>
+					<p>The first public beta release of better-auth is now available!</p>
 				</div>
 				<p className="text-gray-600 dark:text-gray-300 text-[0.855rem]"></p>
 				<div className="flex flex-col gap-2">

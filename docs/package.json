@@ -11,6 +11,7 @@
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.19.8",
     "@hookform/resolvers": "^3.9.0",
+    "@loglib/tracker": "^0.8.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",

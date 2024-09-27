@@ -1,9 +1,9 @@
 import Link from "next/link";
-
-import { Button } from "@/components/ui/button";
 import { useId } from "react";
 
 import clsx from "clsx";
+import { Logo } from "@/components/logo";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
 
 function BookIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 	return (
@@ -44,18 +44,14 @@ function XIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 export function Intro() {
 	return (
 		<>
-			<div className="">
-				<Link href="/">
-					{/* <Logo className="inline-block h-8 w-auto" /> */}
-				</Link>
-			</div>
 			<h1 className="mt-14  font-sans  font-semibold tracking-tighter text-5xl">
 				All of the changes made will be{" "}
 				<span className="">available here.</span>
 			</h1>
 			<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-				Better Auth is advanced authentication library for typescript packed by
-				customizable and extendible plugin ecosystem
+				Better Auth is comprehensive authentication library for TypeScript that
+				provides a wide range of features to make authentication easier and more
+				secure.
 			</p>
 			<hr className="h-px bg-gray-300 mt-5" />
 			<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300  justify-center gap-x-1 gap-y-3 sm:gap-x-2 lg:justify-start">
@@ -74,11 +70,11 @@ export function Intro() {
 					GitHub
 				</IconLink>
 				<IconLink
-					href="/feed.xml"
-					icon={FeedIcon}
+					href="https://discord.gg/GYC3W7tZzb"
+					icon={DiscordLogoIcon}
 					className="flex-none text-gray-600 dark:text-gray-300"
 				>
-					RSS
+					Community
 				</IconLink>
 			</div>
 		</>

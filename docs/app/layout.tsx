@@ -8,12 +8,14 @@ import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import { Banner } from "fumadocs-ui/components/banner";
 import Link from "next/link";
+import Loglib from "@loglib/tracker/react";
+
 export const metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
-	description: "The authentication library for typescript",
+	description: "The most comprehensive authentication library for TypeScript.",
 	metadataBase: baseUrl,
 });
 
@@ -47,6 +49,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 						{children}
 					</NavbarProvider>
 				</RootProvider>
+				<Loglib
+					config={{
+						id: "better-auth",
+						consent: "granted",
+					}}
+				/>
 			</body>
 		</html>
 	);

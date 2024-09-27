@@ -10,7 +10,7 @@ const ChangelogPage = () => {
 						<div className="relative my-5 h-auto">
 							<div className="sticky top-2 flex-1 h-full">
 								<FormattedDate
-									className="absolute md:-left-32 left-0 text-sm -top-8 md:top-0 font-light"
+									className="absolute md:-left-36 left-0 text-sm -top-8 md:top-0 font-light"
 									date={log.date}
 								/>
 							</div>

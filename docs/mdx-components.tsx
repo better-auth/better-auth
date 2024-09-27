@@ -9,6 +9,7 @@ import { AnimatePresence } from "./components/ui/fade-in";
 import { Popup, PopupContent, PopupTrigger } from "fumadocs-ui/twoslash/popup";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "./components/blocks/features";
+import { ForkButton } from "./components/fork-button";
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
 	return {
@@ -31,6 +32,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 		AnimatePresence,
 		TypeTable,
 		Features,
+		ForkButton,
 		iframe: (props) => <iframe {...props} className="w-full h-[500px]" />,
 	};
 }

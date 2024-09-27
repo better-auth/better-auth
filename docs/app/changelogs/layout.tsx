@@ -32,7 +32,7 @@ function Glow() {
 	let id = useId();
 
 	return (
-		<div className="absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent via-stone-950/5 to-transparent/10 lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[32rem]">
+		<div className="absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10 lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[32rem]">
 			<svg
 				className="absolute -bottom-48 left-[-40%] h-[80rem] w-[180%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-[80rem]"
 				aria-hidden="true"
@@ -62,7 +62,7 @@ function Glow() {
 					className="lg:hidden"
 				/>
 			</svg>
-			<div className="absolute inset-x-0 bottom-0 right-0 h-px bg-white/5 mix-blend-overlay lg:left-auto lg:top-0 lg:h-auto lg:w-px" />
+			<div className="absolute inset-x-0 bottom-0 right-0 h-px dark:bg-white/5 mix-blend-overlay lg:left-auto lg:top-0 lg:h-auto lg:w-px" />
 		</div>
 	);
 }

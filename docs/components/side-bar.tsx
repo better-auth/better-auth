@@ -19,6 +19,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "./ui/select";
+import { loglib } from "@loglib/tracker";
 
 export default function ArticleLayout() {
 	const { setOpenSearch } = useSearchContext();
@@ -47,6 +48,7 @@ export default function ArticleLayout() {
 				defaultValue="docs"
 				value={group}
 				onValueChange={(val) => {
+					loglib.track("sidebar-group-change", { group: val });
 					setGroup(val);
 					if (val === "docs") {
 						router.push("/docs");
@@ -80,7 +82,7 @@ export default function ArticleLayout() {
 							Docs
 						</div>
 						<p className="text-xs text-muted-foreground">
-							getting started, concepts, and plugins
+							get started, concepts, and plugins
 						</p>
 					</SelectItem>
 					<SelectItem value="examples">
@@ -112,7 +114,7 @@ export default function ArticleLayout() {
 							</svg>
 							Examples
 						</div>
-						<p className="text-xs">examples and use cases</p>
+						<p className="text-xs">examples and guides</p>
 					</SelectItem>
 				</SelectContent>
 			</Select>
@@ -120,6 +122,7 @@ export default function ArticleLayout() {
 				className="flex items-center gap-2 p-2 px-4 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
 				onClick={() => {
 					setOpenSearch(true);
+					loglib.track("sidebar-search-open");
 				}}
 			>
 				<Search className="h-4 w-4" />
@@ -144,7 +147,15 @@ export default function ArticleLayout() {
 						<AccordionContent className=" space-y-1  p-0">
 							<FadeInStagger faster>
 								{item.list.map((listItem, j) => (
-									<FadeIn key={listItem.title}>
+									<FadeIn
+										key={listItem.title}
+										onClick={() => {
+											loglib.track("sidebar-link-click", {
+												title: listItem.title,
+												href: listItem.href,
+											});
+										}}
+									>
 										<Suspense fallback={<>Loading...</>}>
 											{listItem.group ? (
 												<div className="flex flex-row gap-2 items-center mx-5 my-1  ">
