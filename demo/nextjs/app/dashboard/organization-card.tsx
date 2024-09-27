@@ -236,9 +236,11 @@ export function OrganizationCard(props: { session: Session | null }) {
 													size="sm"
 													variant="destructive"
 													onClick={() => {
-														organization.cancelInvitation({
-															invitationId: invitation.id,
-															fetchOptions: {
+														organization.cancelInvitation(
+															{
+																invitationId: invitation.id,
+															},
+															{
 																onRequest: () => {
 																	setIsRevoking([...isRevoking, invitation.id]);
 																},
@@ -268,7 +270,7 @@ export function OrganizationCard(props: { session: Session | null }) {
 																	);
 																},
 															},
-														});
+														);
 													}}
 												>
 													{isRevoking.includes(invitation.id) ? (
@@ -412,11 +414,13 @@ function CreateOrganizationDialog() {
 						disabled={loading}
 						onClick={async () => {
 							setLoading(true);
-							await organization.create({
-								name: name,
-								slug: slug,
-								logo: logo || undefined,
-								fetchOptions: {
+							await organization.create(
+								{
+									name: name,
+									slug: slug,
+									logo: logo || undefined,
+								},
+								{
 									onResponse: () => {
 										setLoading(false);
 									},
@@ -429,7 +433,7 @@ function CreateOrganizationDialog() {
 										setLoading(false);
 									},
 								},
-							});
+							);
 						}}
 					>
 						{loading ? (

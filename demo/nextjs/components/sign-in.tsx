@@ -82,12 +82,14 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							await signIn.email({
-								email: email,
-								password: password,
-								callbackURL: "/dashboard",
-								dontRememberMe: !rememberMe,
-								fetchOptions: {
+							await signIn.email(
+								{
+									email: email,
+									password: password,
+									callbackURL: "/dashboard",
+									dontRememberMe: !rememberMe,
+								},
+								{
 									onRequest: () => {
 										setLoading(true);
 									},
@@ -98,7 +100,7 @@ export default function SignIn() {
 										toast.error(ctx.error.message);
 									},
 								},
-							});
+							);
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
