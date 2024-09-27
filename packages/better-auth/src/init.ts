@@ -22,7 +22,7 @@ export const init = (options: BetterAuthOptions) => {
 	if (!db) {
 		throw new BetterAuthError("No database adapter found");
 	}
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
 	const secret =
 		options.secret ||
@@ -56,7 +56,7 @@ export const init = (options: BetterAuthOptions) => {
 			basePath: options.basePath || "/api/auth",
 		},
 		tables,
-		baseURL: baseURL || "",
+		baseURL: baseURL,
 		sessionConfig: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days

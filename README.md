@@ -1,4 +1,4 @@
-<p align="center">
+<!-- <p align="center">
   <picture>
     <source srcset="./banner-dark.png" media="(prefers-color-scheme: dark)">
     <source srcset="./banner.png" media="(prefers-color-scheme: light)">
@@ -20,7 +20,7 @@
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
   </p>
-</p>
+</p> -->
 
 [![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
@@ -36,7 +36,8 @@
 > Better auth is born out of these frustrations. It aims to provides a comprehensive authentication library from the core accompanied by a growings plugin ecosystem, that allows you to add many auth related features in short amount of time.
 
 
-### General Goals
+### Goals
+****
 
 - **Be Comprehensive**: The goal is to save users from reinventing the wheel for anything related auth.
 - **Prioritize Best Practices**: provide best practices rather than overwhelming users with configuration options.
@@ -44,24 +45,36 @@
 - **Consistency**: Provide a consistent and predictable API across all platforms
 - **Type Safety**: Value type-safety and embrace typescript magic when necessary.
 
-### Features
+### Non Goals
+****
 
-- Framework Agnostic
-- Email & Password
-- Account & Session Management
-- Built In Rate Limiter
-- Automatic Database Management
-- Social Sign-on
-- Organization & Access Control
-- Two Factor Authentication
-- Plugin Ecosystem and more...
+- **JWT Based Authentication**:  Unless implemented by 3rd party plugin we wont be supporting jwt based auth.
+- **Supporting Non Relational Databases**: No plan to support mongo db or other no relational dbs.
+- **Deep Customization**: Focus instead on providing opinionated, best-practice defaults.
 
-### Installation
 
-```bash
-npm i better-auth
-```
+### Planned Before v1.0
+****
 
-## Documentation
+When something is started being worked on they will have "-" status and "x" where we're done.
 
-https://better-auth.com/docs
+- [ ] Address any potential security issues
+- [ ] Add guides and integration for more frameworks
+- [ ] Pre Made UI Components
+- [ ] User Management UI
+- [ ] Email Templates
+- [ ] Open API Spec and Docs for all endpoints
+- [ ] Expo/React-Native Client
+- [ ] Optimized Queries
+- [ ] Extensive Testing
+- [ ] Enhancements on existing features
+
+## Contribution
+
+We welcome contributions from the community! If you would like to contribute to Better Auth, please read our contribution guide first.
+
+## Security
+If you discover any security vulnerabilities or have concerns regarding the security of our project, you can reach out at security@better-auth.com.
+
+
+
