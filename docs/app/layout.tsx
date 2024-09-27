@@ -2,13 +2,14 @@ import { Navbar } from "@/components/nav-bar";
 import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
 import type { ReactNode } from "react";
-import { NavbarProvider } from "@/components/nav-mobile";
+import { NavbarMobile, NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import { Banner } from "fumadocs-ui/components/banner";
 import Link from "next/link";
 import Loglib from "@loglib/tracker/react";
+import { BetaNotice } from "@/components/banner";
 
 export const metadata = createMetadata({
 	title: {
@@ -26,27 +27,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
 			</head>
 			<body
-				className={`${GeistSans.variable} ${GeistMono.variable} font-sans overflow-x-hidden`}
+				className={`${GeistSans.variable} ${GeistMono.variable} font-sans relative`}
 			>
-				<Banner
-					id="public-beta"
-					className="lg:text-sm tracking-tight text-xs hidden md:flex bg-gradient-to-tr from-white to-stone-100 border dark:from-stone-900 dark:to-stone-950"
-				>
-					🚧 Heads up! We're still in beta. It isn't quite production-ready just
-					yet. If you run into any bugs or quirks, please report them on{" "}
-					<Link
-						target="_blank"
-						className="mx-1 underline pb-px hover:opacity-80 transition-all"
-						href="https://github.com/better-auth/better-auth/issues"
-					>
-						{" "}
-						Github.
-					</Link>{" "}
-				</Banner>
 				<RootProvider>
 					<NavbarProvider>
+						<BetaNotice />
 						<Navbar />
 						{children}
+						<NavbarMobile />
 					</NavbarProvider>
 				</RootProvider>
 				<Loglib

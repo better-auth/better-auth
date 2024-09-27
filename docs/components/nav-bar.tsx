@@ -6,8 +6,6 @@ import { NavLink } from "./nav-link";
 import { Logo } from "./logo";
 import { PulicBetaBadge } from "./beta/badge";
 
-const hideNavbar = false;
-
 export const Navbar = () => {
 	return (
 		<nav className="md:grid grid-cols-12 border-b sticky top-0 flex items-center justify-between bg-background backdrop-blur-md z-30">
@@ -22,15 +20,13 @@ export const Navbar = () => {
 					</div>
 				</div>
 			</Link>
-			<div className="md:col-span-10 flex items-center justify-end">
+			<div className="md:col-span-10 flex items-center justify-end relative">
 				<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
-					{hideNavbar
-						? null
-						: navMenu.map((menu, i) => (
-								<NavLink key={menu.name} href={menu.path}>
-									{menu.name}
-								</NavLink>
-							))}
+					{navMenu.map((menu, i) => (
+						<NavLink key={menu.name} href={menu.path}>
+							{menu.name}
+						</NavLink>
+					))}
 				</ul>
 				<ThemeToggle />
 				<NavbarMobileBtn />

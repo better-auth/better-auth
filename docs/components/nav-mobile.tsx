@@ -66,7 +66,7 @@ export const NavbarMobile = () => {
 			{isOpen && (
 				<FadeIn
 					fromTopToBottom
-					className="absolute top-[57px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-50 p-5 divide-y overflow-y-auto"
+					className="absolute top-[57px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-[1000] p-5 divide-y overflow-y-auto"
 				>
 					{navMenu.map((menu, i) => (
 						<Fragment key={menu.name}>
@@ -107,47 +107,29 @@ export const NavbarMobile = () => {
 	);
 };
 
-export const navMenu = [
+export const navMenu: {
+	name: string;
+	path: string;
+	child?: {
+		name: string;
+		path: string;
+	}[];
+}[] = [
 	{
-		name: "_hello",
+		name: "_helo",
 		path: "/",
 	},
 
 	{
-		name: "_blogs",
-		path: "/blogs",
+		name: "_docs",
+		path: "/docs",
 	},
 	{
-		name: "_docs",
-		child: [
-			{
-				name: "Introduction to better-auth",
-				path: "/docs/index",
-			},
-			{
-				name: "Setting up the better-auth",
-				path: "/docs/setting-up",
-			},
-			{
-				name: "Adding a plug",
-				path: "/docs/plugins",
-			},
-			{
-				name: "Org support",
-				path: "/docs/org-support",
-			},
-			{
-				name: "Compoent UI libs",
-				path: "/docs/lib-ui-componnts",
-			},
-			{
-				name: "Adapter Suppor",
-				path: "/docs/adapter-support",
-			},
-			{
-				name: "Framework Support",
-				path: "/docs/framework-support",
-			},
-		],
+		name: "_changelogs",
+		path: "/changelogs",
+	},
+	{
+		name: "_community",
+		path: "https://discord.gg/GYC3W7tZzb",
 	},
 ];
