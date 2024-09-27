@@ -19,7 +19,6 @@
 				"noDelete": "error"
 			},
 			"complexity": {
-				"noForEach": "warn",
 				"noUselessSwitchCase": "warn",
 				"noUselessTypeConstraint": "warn"
 			}

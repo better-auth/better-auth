@@ -324,7 +324,6 @@ export const getOrgAdapter = (
 				members: [],
 				invitations: [],
 			};
-			// biome-ignore lint/complexity/noForEach: <explanation>
 			rows.forEach((row) => {
 				if (row.member_id) {
 					const existingMember = organization.members.find(

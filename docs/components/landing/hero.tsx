@@ -98,8 +98,8 @@ export default function Hero() {
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
-							<PulicBetaBadge text="Public Beta" />
-							<div className="flex mt-2 items-center gap-2 relative">
+								<PulicBetaBadge text="Public Beta" />
+								<div className="flex mt-2 items-center gap-2 relative">
 									<Cover>
 										<p className="inline  dark:text-white opacity-90 2xl md:text-3xl lg:text-5xl tracking-tight  relative">
 											Better Auth.
