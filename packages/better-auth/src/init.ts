@@ -12,7 +12,7 @@ import {
 	createCookieGetter,
 	getCookies,
 } from "./utils/cookies";
-import { createLogger } from "./utils/logger";
+import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
 import { BetterAuthError } from "./error/better-auth-error";
 
@@ -40,7 +40,7 @@ export const init = (options: BetterAuthOptions) => {
 				return null;
 			}
 			if (!value.clientId || !value.clientSecret) {
-				throw new BetterAuthError(
+				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
