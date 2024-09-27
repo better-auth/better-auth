@@ -91,7 +91,6 @@ export default function Hero() {
 	const theme = useTheme();
 	const [activeTab, setActiveTab] = useState("auth.ts");
 	const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
-	93;
 	return (
 		<section className="w-full mx-auto px-10 flex min-h-[85vh] py-16 items-center justify-center gap-20">
 			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
@@ -99,14 +98,14 @@ export default function Hero() {
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
-								<div className="flex items-center gap-2 relative">
+							<PulicBetaBadge text="Public Beta" />
+							<div className="flex mt-2 items-center gap-2 relative">
 									<Cover>
 										<p className="inline  dark:text-white opacity-90 2xl md:text-3xl lg:text-5xl tracking-tight  relative">
 											Better Auth.
 										</p>
 									</Cover>
 								</div>
-								<PulicBetaBadge text="Public Beta" />
 							</div>
 
 							<p className="mt-3 md:text-2xl tracking-tight dark:text-zinc-300 text-zinc-800">

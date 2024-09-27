@@ -19,9 +19,9 @@
     transition: all 0.3s ease-in-out;
     user-select: none;
     font-size: 10px;
-  }
-  
-  .beta::before {
+}
+
+.beta::before {
     content: " ";
     width: 1.5625rem;
     height: 2px;
@@ -31,10 +31,12 @@
     position: absolute;
     transform: translateY(-50%);
     transform-origin: center;
-    transition: background 0.3s linear, width 0.3s linear;
-  }
-  
-  .beta .text {
+    transition:
+        background 0.3s linear,
+        width 0.3s linear;
+}
+
+.beta .text {
     font-size: 1.125em;
     line-height: 1.33333em;
     padding-left: 2em;
@@ -44,70 +46,74 @@
     text-transform: uppercase;
     text-decoration: none;
     color: white;
-  }
-  
-  .beta .top_key {
+}
+
+.beta .top_key {
     height: 2px;
     width: 1.5625rem;
     top: -2px;
     left: 0.625rem;
     position: absolute;
     background: #0c0a09;
-    transition: width 0.5s ease-out, left 0.3s ease-out;
-  }
-  
-  .beta .bottom_key_1 {
+    transition:
+        width 0.5s ease-out,
+        left 0.3s ease-out;
+}
+
+.beta .bottom_key_1 {
     height: 2px;
     width: 1.5625rem;
     right: 1.875rem;
     bottom: -2px;
     position: absolute;
     background: #0c0a09;
-    transition: width 0.5s ease-out, right 0.3s ease-out;
-  }
-  
-  .beta .bottom_key_2 {
+    transition:
+        width 0.5s ease-out,
+        right 0.3s ease-out;
+}
+
+.beta .bottom_key_2 {
     height: 2px;
     width: 0.625rem;
     right: 0.625rem;
     bottom: -2px;
     position: absolute;
     background: #0c0a09;
-    transition: width 0.5s ease-out, right 0.3s ease-out;
-  }
-  
-  .beta {
+    transition:
+        width 0.5s ease-out,
+        right 0.3s ease-out;
+}
+
+.beta {
     color: white;
     background: rgb(247, 247, 255);
-  }
+}
 
-  .beta:hover {
+.beta:hover {
     background: none;
-  }
+}
 
-  .beta:hover .text {
+.beta:hover .text {
     color: white;
-  }
-  
-  .beta::before {
+}
+
+.beta::before {
     width: 0.9375rem;
     background: rgb(39, 37, 42);
-  }
-  
-  .beta .text {
+}
+
+.beta .text {
     color: black;
     padding-left: 1.5em;
-  }
+}
 
-
-  
-  .beta:hover .top_key {
+.beta:hover .top_key {
     left: -2px;
     width: 0px;
-  }
-  
-  .beta:hover .bottom_key_1,
-   .beta:hover .bottom_key_2 {
+}
+
+.beta:hover .bottom_key_1,
+.beta:hover .bottom_key_2 {
     right: 0;
     width: 0;
-  }
+}

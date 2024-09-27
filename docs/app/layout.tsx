@@ -41,6 +41,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 						Github.
 					</Link>{" "}
 				</Banner>
+			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans overflow-x-hidden`}>
 				<RootProvider>
 					<NavbarProvider>
 						<Navbar />

@@ -1,3 +1,4 @@
+
 const SectionSvg = ({
 	crossesOffset,
 }: {
