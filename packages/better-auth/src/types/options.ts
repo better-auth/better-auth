@@ -167,16 +167,9 @@ export interface BetterAuthOptions {
 			 */
 			enabled?: boolean;
 			/**
-			 * List of trusted providers. If the
-			 * provider is not in this list
-			 * `emailVerified` field is ignored.
+			 * List of trusted providers
 			 */
 			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
-			/**
-			 * Require email verified field
-			 * to be true to link the account
-			 */
-			requireEmailVerified?: boolean;
 		};
 	};
 	/**

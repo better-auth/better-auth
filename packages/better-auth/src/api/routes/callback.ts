@@ -97,21 +97,24 @@ export const callbackOAuth = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider = trustedProviders
 				? trustedProviders.includes(provider.id as "apple")
-				: false;
-			if (!hasBeenLinked && (!user.emailVerified || !isTrustedProvider)) {
+				: true;
+
+			const shouldLink =
+				!hasBeenLinked && user.emailVerified && isTrustedProvider;
+			if (!shouldLink) {
 				let url: URL;
 				try {
 					url = new URL(currentURL || callbackURL);
-					url.searchParams.set("error", "user_already_exists");
+					url.searchParams.set("error", "account_not_linked");
 				} catch (e) {
 					throw c.redirect(
-						`${c.context.baseURL}/error?error=user_already_exists`,
+						`${c.context.baseURL}/error?error=account_not_linked`,
 					);
 				}
 				throw c.redirect(url.toString());
 			}
 
-			if (!hasBeenLinked && user.emailVerified) {
+			if (shouldLink) {
 				try {
 					await c.context.internalAdapter.linkAccount({
 						providerId: provider.id,

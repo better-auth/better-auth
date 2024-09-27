@@ -77,19 +77,18 @@ The account table stores the authentication data of the user. The account table 
 
 Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
 
-By default better auth doesn't allow account linking. To enable account linking, you must pass `enabled: true` in `account` options when initializing better auth.
-
+By default better auth allows account linking for all providers. You can disable account linking by setting `accountLinking.enabled` to `false`.
 ```ts
 const auth = new BetterAuth({
     account: {
        accountLinking: {
-            enabled: true,
+            enabled: false,
        }
     },
 });
 ```
 
-You can also specify, the list of providers that should be trusted. Trusted providers are providers that can be linked to the account without verifying the user's email.
+You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns the `emailVerified` field in the user data, the account will be linked to the user.
 
 ```ts
 const auth = new BetterAuth({
@@ -97,23 +96,6 @@ const auth = new BetterAuth({
        accountLinking: {
             enabled: true,
             trustedProviders: ["email-password", "google"],
-       }
-    },
-});
-```
-
-By defualt the provider needs to returned `emailVerified` field in the user data to link the account. You can change this behavior by setting `requireEmailVerified` to `false`.
-
-<Callout type="warn">
-    We strongly recommend you only link accounts that have verified emails to prevent account hijacking.
-</Callout>
-
-```ts
-const auth = new BetterAuth({
-    account: {
-       accountLinking: {
-            enabled: true,
-            requireEmailVerified: false,
        }
     },
 });
