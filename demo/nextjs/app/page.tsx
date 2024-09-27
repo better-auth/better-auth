@@ -9,6 +9,7 @@ export default async function Home() {
 		"Passkeys",
 		"Multi Factor",
 		"Password Reset",
+		"Email Verification",
 		"Roles & Permissions",
 		"Rate Limiting",
 		"Session Management",

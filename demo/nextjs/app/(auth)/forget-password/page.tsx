@@ -32,6 +32,7 @@ export default function Component() {
 		try {
 			const res = await client.forgetPassword({
 				email,
+				redirectTo: "/reset-password",
 			});
 			// If the API call is successful, set isSubmitted to true
 			setIsSubmitted(true);
