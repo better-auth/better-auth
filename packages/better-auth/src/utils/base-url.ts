@@ -24,12 +24,7 @@ export function getBaseURL(url?: string, path?: string) {
 	if (url) {
 		return withPath(url, path);
 	}
-	const env: any =
-		typeof process !== "undefined"
-			? process.env
-			: (import.meta as any)?.env
-				? (import.meta as any).env
-				: {};
+	const env: any = process?.env || {};
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
