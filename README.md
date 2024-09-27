@@ -1,4 +1,4 @@
-<!-- <p align="center">
+<p align="center">
   <picture>
     <source srcset="./banner-dark.png" media="(prefers-color-scheme: dark)">
     <source srcset="./banner.png" media="(prefers-color-scheme: light)">
@@ -20,7 +20,7 @@
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
   </p>
-</p> -->
+</p>
 
 [![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
@@ -39,42 +39,32 @@
 ### Goals
 ****
 
-- **Be Comprehensive**: The goal is to save users from reinventing the wheel for anything related auth.
-- **Prioritize Best Practices**: provide best practices rather than overwhelming users with configuration options.
-- **Framework Agnostic**: Support most frameworks.
+- **Be Comprehensive**: Save users from reinventing the wheel for anything related auth.
+- **Prioritize Best Practices**: provide best practices rather than overwhelming configuration options.
+- **Framework Agnostic**: Support most frameworks and avoid framework specific features and solutions if possible.
 - **Consistency**: Provide a consistent and predictable API across all platforms
 - **Type Safety**: Value type-safety and embrace typescript magic when necessary.
 
-### Non Goals
+### Non-Goals
 ****
 
-- **JWT Based Authentication**:  Unless implemented by 3rd party plugin we wont be supporting jwt based auth.
-- **Supporting Non Relational Databases**: No plan to support mongo db or other no relational dbs.
-- **Deep Customization**: Focus instead on providing opinionated, best-practice defaults.
+- **JWT-Based Authentication**: We won’t support JWT-based auth unless provided by a third-party plugin.
+- **Support for Non-Relational Databases**: No plans to support MongoDB or other non-relational databases.
+- **Deep Customization**: Our focus is on delivering opinionated, best-practice defaults, rather than enabling deep customization.
+- **Frontend UI Components**: We don’t provide frontend UI components. However, feel free to use our examples for quick UI integration.
 
-
-### Planned Before v1.0
-****
-
-When something is started being worked on they will have "-" status and "x" where we're done.
-
-- [ ] Address any potential security issues
-- [ ] Add guides and integration for more frameworks
-- [ ] Pre Made UI Components
-- [ ] User Management UI
-- [ ] Email Templates
-- [ ] Open API Spec and Docs for all endpoints
-- [ ] Expo/React-Native Client
-- [ ] Optimized Queries
-- [ ] Extensive Testing
-- [ ] Enhancements on existing features
+> Some of these non-goals might change after we hit v1
 
 ## Contribution
 
-We welcome contributions from the community! If you would like to contribute to Better Auth, please read our contribution guide first.
+Better Auth is free and open source project licensed under the MIT License. You are free to do whatever you want with it.
+
+You could help continuing its development by:
+
+- [Contribute to the source code](./CONTRIBUTING.md)
+- [Suggest new features and report issues](https://github.com/better-auth/better-auth/issues)
 
 ## Security
-If you discover any security vulnerabilities or have concerns regarding the security of our project, you can reach out at security@better-auth.com.
+If you discover a security vulnerability within Better AUth, please send an e-mail to support at better-auth.com.
 
-
-
+All reports will be promptly addressed, and you'll be credited accordingly.
