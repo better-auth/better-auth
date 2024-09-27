@@ -20,10 +20,12 @@
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
   </p>
-</p>
 
 [![npm](https://img.shields.io/npm/dm/better-auth)](https://www.npmjs.com/package/better-auth)
+[![npm version](https://img.shields.io/npm/v/better-auth.svg)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth)](https://github.com/better-auth/better-auth/stargazers)
+</p>
+
 
 > [!IMPORTANT]
 > **Note:** 🚧 This project is currently in beta. Features and APIs may change.
@@ -52,10 +54,7 @@ Better Auth was built to tackle these frustrations. It offers a robust core auth
 - **JWT-Based Authentication**: We won’t support JWT-based auth unless provided by a third-party plugin.
 - **Support for Non-Relational Databases**: No plans to support MongoDB or other non-relational databases.
 - **Deep Customization**: Our focus is on delivering opinionated, best-practice defaults, rather than enabling deep customization.
-- **Frontend UI Components**: We don’t provide frontend UI components. However, feel free to use our examples for quick UI integration.
-
-> Some of these non-goals might change after we hit v1
-
+  
 ## Contribution
 
 Better Auth is free and open source project licensed under the [MIT License](./LICENSE.md). You are free to do whatever you want with it.
@@ -66,6 +65,6 @@ You could help continuing its development by:
 - [Suggest new features and report issues](https://github.com/better-auth/better-auth/issues)
 
 ## Security
-If you discover a security vulnerability within Better AUth, please send an e-mail to support at better-auth.com.
+If you discover a security vulnerability within Better Auth, please send an e-mail to security@better-auth.com.
 
 All reports will be promptly addressed, and you'll be credited accordingly.

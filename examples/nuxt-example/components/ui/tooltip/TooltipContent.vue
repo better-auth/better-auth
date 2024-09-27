@@ -1,25 +1,34 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
-import { TooltipContent, type TooltipContentEmits, type TooltipContentProps, TooltipPortal, useForwardPropsEmits } from 'radix-vue'
-import { cn } from '@/lib/utils'
+import { type HTMLAttributes, computed } from "vue";
+import {
+	TooltipContent,
+	type TooltipContentEmits,
+	type TooltipContentProps,
+	TooltipPortal,
+	useForwardPropsEmits,
+} from "radix-vue";
+import { cn } from "@/lib/utils";
 
 defineOptions({
-  inheritAttrs: false,
-})
+	inheritAttrs: false,
+});
 
-const props = withDefaults(defineProps<TooltipContentProps & { class?: HTMLAttributes['class'] }>(), {
-  sideOffset: 4,
-})
+const props = withDefaults(
+	defineProps<TooltipContentProps & { class?: HTMLAttributes["class"] }>(),
+	{
+		sideOffset: 4,
+	},
+);
 
-const emits = defineEmits<TooltipContentEmits>()
+const emits = defineEmits<TooltipContentEmits>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>

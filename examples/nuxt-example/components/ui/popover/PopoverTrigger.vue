@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { PopoverTrigger, type PopoverTriggerProps } from 'radix-vue'
+import { PopoverTrigger, type PopoverTriggerProps } from "radix-vue";
 
-const props = defineProps<PopoverTriggerProps>()
+const props = defineProps<PopoverTriggerProps>();
 </script>
 
 <template>

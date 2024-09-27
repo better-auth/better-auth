@@ -1,13 +1,13 @@
 <script setup lang="ts">
-const features = ["social sign-in", "email and password", "two-factor"]
-import { Button } from '@/components/ui/button';
+const features = ["social sign-in", "email and password", "two-factor"];
+import { Button } from "@/components/ui/button";
 import { useSession } from "~/lib/auth-client";
 
 definePageMeta({
-    layout: "default"
-})
+	layout: "default",
+});
 
-const session = useSession()
+const session = useSession();
 </script>
 
 <template>

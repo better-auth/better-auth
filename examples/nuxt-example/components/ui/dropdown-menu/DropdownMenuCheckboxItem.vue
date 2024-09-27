@@ -1,25 +1,27 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
+import { type HTMLAttributes, computed } from "vue";
 import {
-  DropdownMenuCheckboxItem,
-  type DropdownMenuCheckboxItemEmits,
-  type DropdownMenuCheckboxItemProps,
-  DropdownMenuItemIndicator,
-  useForwardPropsEmits,
-} from 'radix-vue'
-import { CheckIcon } from '@radix-icons/vue'
-import { cn } from '@/lib/utils'
+	DropdownMenuCheckboxItem,
+	type DropdownMenuCheckboxItemEmits,
+	type DropdownMenuCheckboxItemProps,
+	DropdownMenuItemIndicator,
+	useForwardPropsEmits,
+} from "radix-vue";
+import { CheckIcon } from "@radix-icons/vue";
+import { cn } from "@/lib/utils";
 
-const props = defineProps<DropdownMenuCheckboxItemProps & { class?: HTMLAttributes['class'] }>()
-const emits = defineEmits<DropdownMenuCheckboxItemEmits>()
+const props = defineProps<
+	DropdownMenuCheckboxItemProps & { class?: HTMLAttributes["class"] }
+>();
+const emits = defineEmits<DropdownMenuCheckboxItemEmits>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>

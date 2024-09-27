@@ -1,19 +1,21 @@
 <script lang="ts" setup>
-import { type HTMLAttributes, computed } from 'vue'
-import type { StepperSeparatorProps } from 'radix-vue'
-import { StepperSeparator, useForwardProps } from 'radix-vue'
+import { type HTMLAttributes, computed } from "vue";
+import type { StepperSeparatorProps } from "radix-vue";
+import { StepperSeparator, useForwardProps } from "radix-vue";
 
-import { cn } from '@/lib/utils'
+import { cn } from "@/lib/utils";
 
-const props = defineProps<StepperSeparatorProps & { class?: HTMLAttributes['class'] }>()
+const props = defineProps<
+	StepperSeparatorProps & { class?: HTMLAttributes["class"] }
+>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 
-const forwarded = useForwardProps(delegatedProps)
+const forwarded = useForwardProps(delegatedProps);
 </script>
 
 <template>

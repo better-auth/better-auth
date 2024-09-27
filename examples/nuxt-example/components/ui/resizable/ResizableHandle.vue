@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
-import { SplitterResizeHandle, type SplitterResizeHandleEmits, type SplitterResizeHandleProps, useForwardPropsEmits } from 'radix-vue'
-import { DragHandleDots2Icon } from '@radix-icons/vue'
-import { cn } from '@/lib/utils'
+import { type HTMLAttributes, computed } from "vue";
+import {
+	SplitterResizeHandle,
+	type SplitterResizeHandleEmits,
+	type SplitterResizeHandleProps,
+	useForwardPropsEmits,
+} from "radix-vue";
+import { DragHandleDots2Icon } from "@radix-icons/vue";
+import { cn } from "@/lib/utils";
 
-const props = defineProps<SplitterResizeHandleProps & { class?: HTMLAttributes['class'], withHandle?: boolean }>()
-const emits = defineEmits<SplitterResizeHandleEmits>()
+const props = defineProps<
+	SplitterResizeHandleProps & {
+		class?: HTMLAttributes["class"];
+		withHandle?: boolean;
+	}
+>();
+const emits = defineEmits<SplitterResizeHandleEmits>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
-  return delegated
-})
+	const { class: _, ...delegated } = props;
+	return delegated;
+});
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>

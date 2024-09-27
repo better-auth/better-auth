@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ToastProvider, type ToastProviderProps } from 'radix-vue'
+import { ToastProvider, type ToastProviderProps } from "radix-vue";
 
-const props = defineProps<ToastProviderProps>()
+const props = defineProps<ToastProviderProps>();
 </script>
 
 <template>

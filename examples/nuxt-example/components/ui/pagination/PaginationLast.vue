@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
-import { PaginationLast, type PaginationLastProps } from 'radix-vue'
-import { DoubleArrowRightIcon } from '@radix-icons/vue'
-import {
-  Button,
-} from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { type HTMLAttributes, computed } from "vue";
+import { PaginationLast, type PaginationLastProps } from "radix-vue";
+import { DoubleArrowRightIcon } from "@radix-icons/vue";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-const props = withDefaults(defineProps<PaginationLastProps & { class?: HTMLAttributes['class'] }>(), {
-  asChild: true,
-})
+const props = withDefaults(
+	defineProps<PaginationLastProps & { class?: HTMLAttributes["class"] }>(),
+	{
+		asChild: true,
+	},
+);
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 </script>
 
 <template>

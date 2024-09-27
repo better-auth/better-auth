@@ -1,21 +1,31 @@
 <script setup lang="ts">
-import { DateFormatter, getLocalTimeZone } from '@internationalized/date'
-import { CalendarIcon } from '@radix-icons/vue'
-import { beautifyObjectName } from './utils'
-import AutoFormLabel from './AutoFormLabel.vue'
-import type { FieldProps } from './interface'
-import { FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form'
+import { DateFormatter, getLocalTimeZone } from "@internationalized/date";
+import { CalendarIcon } from "@radix-icons/vue";
+import { beautifyObjectName } from "./utils";
+import AutoFormLabel from "./AutoFormLabel.vue";
+import type { FieldProps } from "./interface";
+import {
+	FormControl,
+	FormDescription,
+	FormField,
+	FormItem,
+	FormMessage,
+} from "@/components/ui/form";
 
-import { Calendar } from '@/components/ui/calendar'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { Calendar } from "@/components/ui/calendar";
+import { Button } from "@/components/ui/button";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
-defineProps<FieldProps>()
+defineProps<FieldProps>();
 
-const df = new DateFormatter('en-US', {
-  dateStyle: 'long',
-})
+const df = new DateFormatter("en-US", {
+	dateStyle: "long",
+});
 </script>
 
 <template>

@@ -36,8 +36,8 @@ export function getBaseURL(url?: string, path?: string) {
 		env.PUBLIC_BETTER_AUTH_URL ||
 		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
 		env.NUXT_PUBLIC_AUTH_URL ||
-		(env.BASE_URL !== "/" ? env.BASE_URL : undefined)
-		
+		(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
+
 	if (fromEnv) {
 		return withPath(fromEnv, path);
 	}
@@ -45,5 +45,5 @@ export function getBaseURL(url?: string, path?: string) {
 	if (typeof window !== "undefined") {
 		return withPath(window.location.origin, path);
 	}
-	return undefined
+	return undefined;
 }

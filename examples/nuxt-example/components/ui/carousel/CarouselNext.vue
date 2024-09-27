@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ArrowRightIcon } from '@radix-icons/vue'
-import { useCarousel } from './useCarousel'
-import type { WithClassAsProps } from './interface'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { ArrowRightIcon } from "@radix-icons/vue";
+import { useCarousel } from "./useCarousel";
+import type { WithClassAsProps } from "./interface";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
-const props = defineProps<WithClassAsProps>()
+const props = defineProps<WithClassAsProps>();
 
-const { orientation, canScrollNext, scrollNext } = useCarousel()
+const { orientation, canScrollNext, scrollNext } = useCarousel();
 </script>
 
 <template>

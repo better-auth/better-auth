@@ -1,25 +1,27 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
+import { type HTMLAttributes, computed } from "vue";
 import {
-  MenubarPortal,
-  MenubarSubContent,
-  type MenubarSubContentEmits,
-  type MenubarSubContentProps,
-  useForwardPropsEmits,
-} from 'radix-vue'
-import { cn } from '@/lib/utils'
+	MenubarPortal,
+	MenubarSubContent,
+	type MenubarSubContentEmits,
+	type MenubarSubContentProps,
+	useForwardPropsEmits,
+} from "radix-vue";
+import { cn } from "@/lib/utils";
 
-const props = defineProps<MenubarSubContentProps & { class?: HTMLAttributes['class'] }>()
+const props = defineProps<
+	MenubarSubContentProps & { class?: HTMLAttributes["class"] }
+>();
 
-const emits = defineEmits<MenubarSubContentEmits>()
+const emits = defineEmits<MenubarSubContentEmits>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>

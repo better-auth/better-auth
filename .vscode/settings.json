@@ -11,7 +11,7 @@
 		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[vue]": {
-		"editor.defaultFormatter": "Vue.volar"
+		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[json]": {
 		"editor.defaultFormatter": "biomejs.biome"

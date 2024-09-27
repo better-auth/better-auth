@@ -12,4 +12,3 @@ describe("init", async () => {
 		expect(res).toMatchSnapshot();
 	});
 });
-

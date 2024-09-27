@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useSession } from "~/lib/auth-client";
-
-const session = useSession()
+const session = useSession();
 </script>
 
 

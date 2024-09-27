@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import AutoFormLabel from './AutoFormLabel.vue'
-import { beautifyObjectName } from './utils'
-import type { FieldProps } from './interface'
-import { FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { computed } from "vue";
+import AutoFormLabel from "./AutoFormLabel.vue";
+import { beautifyObjectName } from "./utils";
+import type { FieldProps } from "./interface";
+import {
+	FormControl,
+	FormDescription,
+	FormField,
+	FormItem,
+	FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
-const props = defineProps<FieldProps>()
-const inputComponent = computed(() => props.config?.component === 'textarea' ? Textarea : Input)
+const props = defineProps<FieldProps>();
+const inputComponent = computed(() =>
+	props.config?.component === "textarea" ? Textarea : Input,
+);
 </script>
 
 <template>

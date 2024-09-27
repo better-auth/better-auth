@@ -1,25 +1,27 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
+import { type HTMLAttributes, computed } from "vue";
 import {
-  MenubarCheckboxItem,
-  type MenubarCheckboxItemEmits,
-  type MenubarCheckboxItemProps,
-  MenubarItemIndicator,
-  useForwardPropsEmits,
-} from 'radix-vue'
-import { CheckIcon } from '@radix-icons/vue'
-import { cn } from '@/lib/utils'
+	MenubarCheckboxItem,
+	type MenubarCheckboxItemEmits,
+	type MenubarCheckboxItemProps,
+	MenubarItemIndicator,
+	useForwardPropsEmits,
+} from "radix-vue";
+import { CheckIcon } from "@radix-icons/vue";
+import { cn } from "@/lib/utils";
 
-const props = defineProps<MenubarCheckboxItemProps & { class?: HTMLAttributes['class'] }>()
-const emits = defineEmits<MenubarCheckboxItemEmits>()
+const props = defineProps<
+	MenubarCheckboxItemProps & { class?: HTMLAttributes["class"] }
+>();
+const emits = defineEmits<MenubarCheckboxItemEmits>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+	const { class: _, ...delegated } = props;
 
-  return delegated
-})
+	return delegated;
+});
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>
