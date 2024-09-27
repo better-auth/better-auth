@@ -15,7 +15,7 @@
     "@unovis/vue": "1.4.3-beta.0",
     "@vee-validate/zod": "^4.13.2",
     "@vueuse/core": "^11.1.0",
-    "better-auth": "workspace:0.0.10-beta.26",
+    "better-auth": "workspace:*",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "embla-carousel-vue": "^8.3.0",
