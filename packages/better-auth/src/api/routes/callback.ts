@@ -99,9 +99,7 @@ export const callbackOAuth = createAuthEndpoint(
 				? trustedProviders.includes(provider.id as "apple")
 				: true;
 
-			const shouldLink =
-				!hasBeenLinked && user.emailVerified && isTrustedProvider;
-			if (!shouldLink) {
+			if (!hasBeenLinked && (!user.emailVerified || !isTrustedProvider)) {
 				let url: URL;
 				try {
 					url = new URL(currentURL || callbackURL);
@@ -114,7 +112,7 @@ export const callbackOAuth = createAuthEndpoint(
 				throw c.redirect(url.toString());
 			}
 
-			if (shouldLink) {
+			if (!hasBeenLinked) {
 				try {
 					await c.context.internalAdapter.linkAccount({
 						providerId: provider.id,
