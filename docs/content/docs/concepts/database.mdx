@@ -3,9 +3,11 @@ title: Database
 description: Learn how to use a database with BetterAuth
 ---
 
-Better auth requires a database connection to store data. Better auth comes with a built in database mangment using <Link href="https://kysely.dev/"> Kysley </Link> to manage the database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysley </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-You can pass a database connection to better auth by passing a `database` object to the `betterAuth` function. The `database` object should have a `provider` key that specifies the database provider to use. By default, better auth support `postgres`, `mysql` and `sqlite`. You can also pass a kysley dialect directly to use other databases supported by kysley. The `database` object can also have a `url` key that specifies the database connection to use. If you're using `sqlite`, you can pass a file path in the `url` key.
+You can pass a database connection to better auth by passing a `database` object auth options. The `database` object takes `provider` key that specifies the database provider to use. By default, better auth support `postgres`, `mysql` and `sqlite` and a `url` key that specifies the database connection to use. If you're using `sqlite`, you can pass a file path in the `url` key.
+
+You can also pass a kysley dialect directly to use other databases supported by kysley.
 
 **Example: Sqlite**
 ```ts title="auth.ts"
@@ -60,7 +62,7 @@ See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialec
 
 ## Running Migrations
 
-Better auth includes a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed.
+Better auth comes with a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed.
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns.
 

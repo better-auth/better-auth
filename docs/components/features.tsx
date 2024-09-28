@@ -201,7 +201,10 @@ export default function Features() {
 										Start now
 									</Button>
 								</Link>
-								<Link href="/docs" className="z-50">
+								<Link
+									href="https://github.com/better-auth/better-auth"
+									className="z-50"
+								>
 									<Button
 										className="mt-4 rounded-none p-5 ml-auto gap-2"
 										variant="outline"
