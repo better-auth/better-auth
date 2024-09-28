@@ -1,5 +1,10 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	twoFactor,
+	crossSubdomain,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { github, google } from "better-auth/social-providers";
@@ -75,6 +80,7 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey(),
+		crossSubdomain(),
 	],
 	socialProviders: {
 		github: {
