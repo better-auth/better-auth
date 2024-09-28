@@ -24,6 +24,18 @@ export type BetterAuthPlugin = {
 		path: string;
 		middleware: Endpoint;
 	}[];
+	onRequest?: (
+		request: Request,
+		ctx: AuthContext,
+	) => Promise<
+		| {
+				response: Response;
+		  }
+		| {
+				request: Request;
+		  }
+		| void
+	>;
 	onResponse?: (
 		response: Response,
 		ctx: AuthContext,

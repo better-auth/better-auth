@@ -172,6 +172,14 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		async onRequest(req) {
+			for (const plugin of ctx.options.plugins || []) {
+				if (plugin.onRequest) {
+					const response = await plugin.onRequest(req, ctx);
+					if (response) {
+						return response;
+					}
+				}
+			}
 			return onRequestRateLimit(req, ctx);
 		},
 		async onResponse(res) {

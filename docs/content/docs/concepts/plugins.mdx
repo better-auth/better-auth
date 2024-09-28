@@ -163,6 +163,9 @@ const myPlugin = (opts: PluginOptions)=>{
 }
 ```
 
+
+
+
 ### Middleware
 
 You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware functions created by `createAuthMiddelware`. 
@@ -182,29 +185,56 @@ const myPlugin = {
 
 If you throw an `APIError` from the middleware or returned a `Response` object, the request will be stopped and the response will be sent to the client.
 
-### Rate Limit
 
-You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
+### On Request & On Response
+
+Additional to middlewares you can also hook into right before a request is made and right after a response is returned. This is mostly useful if you wnat to do something that affects all requests or responses.
+
+### On Request
+
+The `onRequest` function is called right before the request is made. It takes two parameters: the `request` and the `context` object. 
+
+Here’s how it works:
+
+- **Continue as Normal**: If you don't return anything, the request will proceed as usual.
+
+- **Interrupt the Request**: To stop the request and send a response, return an object with a `response` property that contains a `Response` object.
+
+- **Modify the Request**: You can also return a modified `request` object to change the request before it's sent.
 
 ```ts title="plugin.ts"
 const myPlugin = {
     id: "my-plugin",
-    rateLimit: [
-        {
-            pathMatcher: (path)=>{
-                return path === "/my-plugin/hello-world"
-            },
-            limit: 10,
-            window: 60,
-        }
-    ]
+    onRequest: async (requset, context) => {
+        //do something  
+    },
 }
 ```
 
+### On Response
+
+The `onResponse` function is executed immediately after a response is returned. It takes two parameters: the `response` and the `context` object.
+
+Here’s how to use it:
+
+- **Modify the Response**: You can return a modified response object to change the response before it is sent to the client.
+
+- **Continue Normally**: If you don’t return anything, the response will be sent as is.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    onResponse: async (response, context) => {
+        //do something
+    },
+}
+```
 
 ### Hooks
 
-Hooks and middleware are similar but middlewares are handled by better-call and hooks are handled by better-auth. Hooks allows you to execture a code `before` or `after` a specific action. Hooks takes an array of `after` or `before` hooks. 
+Hooks are similar to middlewares, as well as the `onRequest` and `onResponse` functions. However, unlike `onResponse` and `onRequest`, hooks provide the ability to use a `better-call` handler and include a `matcher` function that lets you target specific requests.
+
+YOu should use hooks when you need to hook into to a specific endpoint or request for more precise control.
 
 ```ts title="plugin.ts"
 const myPlugin = {
@@ -233,6 +263,35 @@ const myPlugin = {
     }
 } satisfies BetterAuthPlugin
 ```
+
+
+#### When to use Middelware, Hooks, On Request, On Response
+
+- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes. 
+
+- **Hooks**: You should use hooks when you want to target a specific route or request.
+
+- **On Request & On Response**: You should use on request and on response when you want to do something that affects all requests or responses.
+
+### Rate Limit
+
+You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
+
+```ts title="plugin.ts"
+const myPlugin = {
+    id: "my-plugin",
+    rateLimit: [
+        {
+            pathMatcher: (path)=>{
+                return path === "/my-plugin/hello-world"
+            },
+            limit: 10,
+            window: 60,
+        }
+    ]
+}
+```
+
 
 ### Client
 
