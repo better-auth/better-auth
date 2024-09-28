@@ -23,7 +23,7 @@ export const techStackIcons: TechStackIconType = {
 		icon: <Icons.solidStart className="w-10 h-10" />,
 	},
 	react: {
-		name: "Reaact",
+		name: "React",
 		icon: <Icons.react className="w-10 h-10" />,
 	},
 	hono: {
