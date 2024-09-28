@@ -1,11 +1,17 @@
 import type { DocsLayoutProps } from "fumadocs-ui/layout";
 import type { HomeLayoutProps } from "fumadocs-ui/home-layout";
 import { pageTree } from "@/app/source";
+import { DocsNavbarMobileBtn } from "@/components/nav-mobile";
 
 // shared configuration
 export const baseOptions: HomeLayoutProps = {
 	nav: {
-		title: "Better Auth",
+		component: (
+			<div className="flex items-center justify-between py-2 px-2.5">
+				<p className="font-mono text-sm border-l-2 px-2">Docs</p>
+				<DocsNavbarMobileBtn />
+			</div>
+		),
 	},
 	links: [
 		{
