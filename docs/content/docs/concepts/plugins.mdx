@@ -3,15 +3,15 @@ title: Plugins
 description: Learn how to use plugins with BetterAuth
 ---
 
-Plugins are a key part of Better Auth, letting you extend its functionality. Use them to add new authentication methods, features, or customize behavior.
+Plugins are a key part of Better Auth, they let you extend the base functionalities. You can use them to add new authentication methods, features, or customize behaviors.
 
-Better Auth offers many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
+Better Auth offers comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
 
 ## Using a Plugin
 
 Plugins can be a server-side plugin, a client-side plugin, or both.
 
-To add a plugin on the server, include it in the `plugins` array in the Better Auth configuration. The plugin will initialize with the provided options.
+To add a plugin on the server, include it in the `plugins` array in your auth configuration. The plugin will initialize with the provided options.
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";

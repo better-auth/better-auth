@@ -3,7 +3,7 @@ title: User & Accounts
 description: user and account management
 ---
 
-Beyond authenticating users, Better auth also provides a set of functions to manage users. This includes, updating user information, changing passwords, and more.
+Beyond authenticating users, better auth also provides a set of methods to manage users. This includes, updating user information, changing passwords, and more.
 
 ## User table
 
@@ -88,7 +88,7 @@ const auth = new BetterAuth({
 });
 ```
 
-You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns the `emailVerified` field in the user data, the account will be linked to the user.
+You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns a verfied email, the user is automatically signed in. 
 
 ```ts
 const auth = new BetterAuth({

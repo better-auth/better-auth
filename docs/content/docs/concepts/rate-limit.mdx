@@ -8,7 +8,18 @@ Better Auth includes a built-in rate limiter to help manage traffic and prevent 
 - Window: 60 seconds
 - Max Requests: 100 requests
 
-You can easily customize these settings by passing the rateLimit plugin to the betterAuth function.
+You can easily customize these settings by passing the rateLimit object to the betterAuth function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    rateLimit: {
+        window: 60, // time window in seconds
+        max: 100, // max requests in the window
+    },
+})
+```
 
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
 
