@@ -52,7 +52,6 @@ Authentication in the TypeScript ecosystem is a half-solved problem. Other open-
 
 - **JWT-Based Authentication**: We won’t support JWT-based auth unless provided by a third-party plugin.
 - **Extensive Customization**: Our focus is on giving you opinionated, best-practice defaults, rather than enabling deep customization.
-- **Supporting Every Non-Node Runtime**: While we aim to support all JavaScript runtimes when possible, we won't sacrifice features and functionality just to accommodate non-Node runtimes.
 
 ## Contribution
 
