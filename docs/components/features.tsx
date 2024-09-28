@@ -10,7 +10,7 @@ import {
 	Webhook,
 	XIcon,
 } from "lucide-react";
-import { LockClosedIcon } from "@radix-ui/react-icons";
+import { GitHubLogoIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import React, { useState } from "react";
@@ -192,11 +192,25 @@ export default function Features() {
 									]}
 								/>
 							</div>
-							<Link href="/docs" className="z-50">
-								<Button className="mt-4 rounded-none p-5 ml-auto">
-									Start now!
-								</Button>
-							</Link>
+							<div className="flex items-center gap-2">
+								<Link href="/docs" className="z-50">
+									<Button
+										className="mt-4 rounded-none p-5 ml-auto"
+										variant="secondary"
+									>
+										Start now
+									</Button>
+								</Link>
+								<Link href="/docs" className="z-50">
+									<Button
+										className="mt-4 rounded-none p-5 ml-auto gap-2"
+										variant="outline"
+									>
+										<GitHubLogoIcon />
+										Github
+									</Button>
+								</Link>
+							</div>
 							<Ripple />
 						</div>
 					</div>

@@ -17,6 +17,9 @@ importers:
       '@biomejs/biome':
         specifier: 1.7.3
         version: 1.7.3
+      '@types/node':
+        specifier: ^20.12.12
+        version: 20.16.9
       bumpp:
         specifier: ^9.4.1
         version: 9.5.2
@@ -26,10 +29,6 @@ importers:
       fast-glob:
         specifier: ^3.3.2
         version: 3.3.2
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.12
-        version: 20.16.9
       simple-git-hooks:
         specifier: ^2.11.1
         version: 2.11.1
@@ -3453,7 +3452,7 @@ packages:
     peerDependencies:
       react-hook-form: ^7.0.0
     dependencies:
-      react-hook-form: 7.53.0(react@19.0.0-rc-7771d3a7-20240827)
+      react-hook-form: 7.53.0(react@18.3.1)
     dev: false
 
   /@humanwhocodes/config-array@0.13.0:
@@ -22963,7 +22962,7 @@ packages:
     resolution: {integrity: sha512-tgqwPUMDcNDhuf1Xf6KTUsyeqGdgKMhzaH4PAZZuzguOgTl5uuyeYe/8mWgAr6IBxB5V06uqEf6Dy37gIWDtDg==}
     hasBin: true
     requiresBuild: true
-    dev: true
+    dev: false
 
   /simple-git@3.27.0:
     resolution: {integrity: sha512-ivHoFS9Yi9GY49ogc6/YAi3Fl9ROnF4VyubNylgCkA+RVqLaKWnDSzXOVzya8csELIaWaYNutsEuAhZrtOjozA==}
@@ -24265,7 +24264,7 @@ packages:
     cpu: [x64]
     os: [darwin]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo-darwin-arm64@2.1.2:
@@ -24273,7 +24272,7 @@ packages:
     cpu: [arm64]
     os: [darwin]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo-linux-64@2.1.2:
@@ -24281,7 +24280,7 @@ packages:
     cpu: [x64]
     os: [linux]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo-linux-arm64@2.1.2:
@@ -24289,7 +24288,7 @@ packages:
     cpu: [arm64]
     os: [linux]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo-windows-64@2.1.2:
@@ -24297,7 +24296,7 @@ packages:
     cpu: [x64]
     os: [win32]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo-windows-arm64@2.1.2:
@@ -24305,7 +24304,7 @@ packages:
     cpu: [arm64]
     os: [win32]
     requiresBuild: true
-    dev: true
+    dev: false
     optional: true
 
   /turbo@2.1.2:
@@ -24318,7 +24317,7 @@ packages:
       turbo-linux-arm64: 2.1.2
       turbo-windows-64: 2.1.2
       turbo-windows-arm64: 2.1.2
-    dev: true
+    dev: false
 
   /twoslash-protocol@0.2.11:
     resolution: {integrity: sha512-rp+nkOWbKfJnBTDZtnIaBGjnU+4CaMhqu6db2UU7byU96rH8X4hao4BOxYw6jdZc85Lhv5pOfcjgfHeQyLzndQ==}
