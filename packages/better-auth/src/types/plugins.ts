@@ -4,6 +4,7 @@ import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
 import type { LiteralString } from "./helper";
+import type { AuthContext } from ".";
 
 export type PluginSchema = {
 	[table: string]: {
@@ -23,6 +24,24 @@ export type BetterAuthPlugin = {
 		path: string;
 		middleware: Endpoint;
 	}[];
+	onRequest?: (
+		request: Request,
+		ctx: AuthContext,
+	) => Promise<
+		| {
+				response: Response;
+		  }
+		| {
+				request: Request;
+		  }
+		| void
+	>;
+	onResponse?: (
+		response: Response,
+		ctx: AuthContext,
+	) => Promise<{
+		response: Response;
+	} | void>;
 	hooks?: {
 		before?: {
 			matcher: (context: HookEndpointContext) => boolean;
@@ -33,9 +52,9 @@ export type BetterAuthPlugin = {
 		after?: {
 			matcher: (context: HookEndpointContext) => boolean;
 			handler: (
-				context: HookEndpointContext & {
+				context: HookEndpointContext<{
 					returned: EndpointResponse;
-				},
+				}>,
 			) => Promise<void | {
 				response: EndpointResponse;
 			}>;
