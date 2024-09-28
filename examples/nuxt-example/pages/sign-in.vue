@@ -9,7 +9,27 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn } from "@/lib/auth-client.js";
+import { signIn } from "~/lib/auth-client.js";
+
+const email = ref("");
+const password = ref("");
+
+const handleSignIn = async() => {
+    await signIn.email(
+		{
+			email: email.value,
+			password: password.value,
+			callbackURL: "/",
+		},
+		{
+			onError(context) {
+				alert(context.error.message);
+			},
+		},
+	);
+    
+}
+
 </script>
 
 <template>
@@ -27,18 +47,18 @@ import { signIn } from "@/lib/auth-client.js";
                 <div class="grid gap-4">
                     <div class="grid gap-2">
                         <Label for="email">Email</Label>
-                        <Input id="email" type="email" placeholder="m@example.com" required />
+                        <Input id="email" type="email" placeholder="m@example.com" v-model="email" required />
                     </div>
                     <div class="grid gap-2">
                         <div class="flex items-center">
                             <Label for="password">Password</Label>
-                            <a href="#" class="ml-auto inline-block text-sm underline">
+                            <a href="/forget-password" class="ml-auto inline-block text-sm underline">
                                 Forgot your password?
                             </a>
                         </div>
-                        <Input id="password" type="password" required placeholder="password" />
+                        <Input id="password" type="password" placeholder="password" v-model="password" required />
                     </div>
-                    <Button type="submit" class="w-full">
+                    <Button type="submit" class="w-full" @click="handleSignIn">
                         Login
                     </Button>
                     <Button variant="outline" class="w-full" @click="async () => {
@@ -52,7 +72,7 @@ import { signIn } from "@/lib/auth-client.js";
                 </div>
                 <div class="mt-4 text-center text-sm">
                     Don't have an account?
-                    <a href="#" class="underline">
+                    <a href="/sign-up" class="underline">
                         Sign up
                     </a>
                 </div>

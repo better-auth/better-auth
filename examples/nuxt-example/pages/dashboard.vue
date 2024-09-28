@@ -16,8 +16,8 @@ const router = useRouter();
             <CardContent>
                 <div class="flex gap-2 items-center">
                     <Avatar>
-                        <AvatarImage :src="session.data?.user.image || ''" alt="@radix-vue" />
-                        <AvatarFallback>CN</AvatarFallback>
+                        <AvatarImage :src="session.data?.user.image || ''" alt="User profile" />
+                        <AvatarFallback>{{ session.data?.user.name[0] }}</AvatarFallback>
                     </Avatar>
                     <div>
                         <p class="text-sm">
@@ -30,13 +30,13 @@ const router = useRouter();
                 </div>
             </CardContent>
             <CardFooter>
-                <Button @click="async()=>{
+                <Button @click="async () => {
                     await signOut()
                     router.push('/')
-                }" variant="secondary" >
+                }" variant="secondary">
                     Sing Out
                 </Button>
-             </CardFooter>
+            </CardFooter>
         </Card>
     </div>
 </template>
