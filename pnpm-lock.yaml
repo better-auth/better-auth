@@ -1213,18 +1213,12 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.4.5
-      i:
-        specifier: ^0.3.7
-        version: 0.3.7
       jose:
         specifier: ^5.7.0
         version: 5.9.3
       kysely:
         specifier: ^0.27.4
         version: 0.27.4
-      kysely-postgres-js:
-        specifier: ^2.0.0
-        version: 2.0.0(kysely@0.27.4)(postgres@3.4.4)
       mysql2:
         specifier: ^3.11.0
         version: 3.11.3
@@ -1246,18 +1240,9 @@ importers:
       pg:
         specifier: ^8.12.0
         version: 8.13.0
-      postgres:
-        specifier: ^3.4.4
-        version: 3.4.4
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
-      tiny-glob:
-        specifier: ^0.2.9
-        version: 0.2.9
-      ts-morph:
-        specifier: ^23.0.0
-        version: 23.0.0
       zod:
         specifier: ^3.22.5
         version: 3.23.8
@@ -1280,9 +1265,6 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.9
-      h3:
-        specifier: ^1.12.0
-        version: 1.12.0
       happy-dom:
         specifier: ^15.7.3
         version: 15.7.4
@@ -1301,9 +1283,6 @@ importers:
       solid-js:
         specifier: ^1.8.18
         version: 1.9.1
-      swr:
-        specifier: ^2.2.5
-        version: 2.2.5(react@18.3.1)
       tsup:
         specifier: ^8.2.4
         version: 8.3.0(typescript@5.6.1-rc)
@@ -3474,7 +3453,7 @@ packages:
     peerDependencies:
       react-hook-form: ^7.0.0
     dependencies:
-      react-hook-form: 7.53.0(react@18.3.1)
+      react-hook-form: 7.53.0(react@19.0.0-rc-7771d3a7-20240827)
     dev: false
 
   /@humanwhocodes/config-array@0.13.0:
@@ -17020,11 +16999,6 @@ packages:
     resolution: {integrity: sha512-E0eIbrFWUhwfXJmsbdjRQFQPrl5pTEoKlz163j1mTqqUnU9PgR4AgB8AIITzuB3vLBdxZXyZ9TDIrwB2OASz4g==}
     dev: false
 
-  /i@0.3.7:
-    resolution: {integrity: sha512-FYz4wlXgkQwIPqhzC5TdNMLSE5+GS1IIDJZY/1ZiEPCT2S3COUVZeT5OW4BmW4r5LHLQuOosSwsvnroG9GR59Q==}
-    engines: {node: '>=0.4'}
-    dev: false
-
   /iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
     engines: {node: '>=0.10.0'}
@@ -18021,16 +17995,6 @@ packages:
 
   /kolorist@1.8.0:
     resolution: {integrity: sha512-Y+60/zizpJ3HRH8DCss+q95yr6145JXZo46OTpFvDZWLfRCE4qChOyk1b26nMaNpfHHgxagk9dXT5OP0Tfe+dQ==}
-    dev: false
-
-  /kysely-postgres-js@2.0.0(kysely@0.27.4)(postgres@3.4.4):
-    resolution: {integrity: sha512-R1tWx6/x3tSatWvsmbHJxpBZYhNNxcnMw52QzZaHKg7ZOWtHib4iZyEaw4gb2hNKVctWQ3jfMxZT/ZaEMK6kBQ==}
-    peerDependencies:
-      kysely: '>= 0.24.0 < 1'
-      postgres: '>= 3.4.0 < 4'
-    dependencies:
-      kysely: 0.27.4
-      postgres: 3.4.4
     dev: false
 
   /kysely@0.27.4:
@@ -21349,11 +21313,6 @@ packages:
     resolution: {integrity: sha512-i/hbxIE9803Alj/6ytL7UHQxRvZkI9O4Sy+J3HGc4F4oo/2eQAjTSNJ0bfxyse3bH0nuVesCk+3IRLaMtG3H6w==}
     dev: true
 
-  /postgres@3.4.4:
-    resolution: {integrity: sha512-IbyN+9KslkqcXa8AO9fxpk97PA4pzewvpi2B3Dwy9u4zpV32QicaEdgmF3eSQUzdRk7ttDHQejNgAEr4XoeH4A==}
-    engines: {node: '>=12'}
-    dev: false
-
   /potpack@1.0.2:
     resolution: {integrity: sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ==}
     dev: false
@@ -23769,6 +23728,7 @@ packages:
       client-only: 0.0.1
       react: 18.3.1
       use-sync-external-store: 1.2.2(react@18.3.1)
+    dev: false
 
   /symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
@@ -25023,6 +24983,7 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0
     dependencies:
       react: 18.3.1
+    dev: false
 
   /util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}

@@ -1,7 +1,7 @@
 import type { AuthContext, RateLimit } from "../types";
 import { getIp, logger } from "../utils";
 
-export function shouldRateLimit(
+function shouldRateLimit(
 	max: number,
 	window: number,
 	rateLimitData: RateLimit,
@@ -12,7 +12,7 @@ export function shouldRateLimit(
 	return timeSinceLastRequest < windowInMs && rateLimitData.count >= max;
 }
 
-export function rateLimitResponse(retryAfter: number) {
+function rateLimitResponse(retryAfter: number) {
 	return new Response(
 		JSON.stringify({
 			message: "Too many requests. Please try again later.",
@@ -27,7 +27,7 @@ export function rateLimitResponse(retryAfter: number) {
 	);
 }
 
-export function getRetryAfter(lastRequest: number, window: number) {
+function getRetryAfter(lastRequest: number, window: number) {
 	const now = Date.now();
 	const windowInMs = window * 1000;
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
