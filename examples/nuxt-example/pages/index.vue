@@ -1,5 +1,4 @@
 <script setup lang="ts">
-const features = ["social sign-in", "email and password", "two-factor"];
 import { Button } from "@/components/ui/button";
 import { useSession } from "~/lib/auth-client";
 
@@ -7,6 +6,17 @@ definePageMeta({
 	layout: "default",
 });
 
+const features = [
+		"Email & Password",
+		"Organization | Teams",
+		"Passkeys",
+		"Multi Factor",
+		"Password Reset",
+		"Email Verification",
+		"Roles & Permissions",
+		"Rate Limiting",
+		"Session Management",
+];
 const session = useSession();
 </script>
 
@@ -18,8 +28,15 @@ const session = useSession();
                     Better Auth.
                 </h3>
 
-                <p class="text-center">
-                    Official <span class="italic underline">better-auth</span> Svelte-Kit demo
+                <p class="text-center break-words text-sm md:text-base">
+                    Official demo to showcase
+                    <a
+							href="https://better-auth.com"
+							target="_blank"
+							className="italic underline"
+						>better-auth
+                    </a>
+                    features and capabilities. <br />
                 </p>
 
                 <div class="flex flex-col gap-3 pt-2 flex-wrap">
@@ -46,8 +63,8 @@ const session = useSession();
                             Sign In
                         </Button>
                     </NuxtLink>
-                    <NuxtLink to="/dashboard">
-                        <Button variant="outline" class="rounded-none" v-if="session.data">
+                    <NuxtLink to="/dashboard" v-if="session.data">
+                        <Button variant="outline" class="rounded-none">
                             Dashboard
                         </Button>
                     </NuxtLink>
