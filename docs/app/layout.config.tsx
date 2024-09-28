@@ -7,7 +7,7 @@ import { DocsNavbarMobileBtn } from "@/components/nav-mobile";
 export const baseOptions: HomeLayoutProps = {
 	nav: {
 		component: (
-			<div className="flex items-center justify-between py-2 px-2.5">
+			<div className="flex items-center justify-between py-2 px-2.5 md:hidden">
 				<p className="font-mono text-sm border-l-2 px-2">Docs</p>
 				<DocsNavbarMobileBtn />
 			</div>
