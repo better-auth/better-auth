@@ -125,7 +125,7 @@ import { github } from "better-auth/social-providers"
 
 export const auth = betterAuth({
     //...rest of the options
-    socialProvider: { // [!code highlight]
+    socialProviders: { // [!code highlight]
        github: { // [!code highlight]
         clientId: GITHUB_CLIENT_ID, // [!code highlight]
         clientSecret: GITHUB_CLIENT_SECRET, // [!code highlight] 
