@@ -9,7 +9,7 @@ Core better auth cookies like `session` and `csrf` will follow `betterauth.${coo
 
 All cookies are `httpOnly` and `secure` if the server is running in production mode. 
 
-### Cross Subdomain Cookies (Expermental 🧪)
+### Cross Subdomain Cookies (🧪 Expiremental)
 
 By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To do this, set `crossSubDomainCookies` to `true` in the `advanced` object of the auth options.
 
@@ -28,7 +28,7 @@ export const auth = await betterAuth({
 })
 ```
 
-### Disable CSRF Cookie (Not Recommended)
+### Disable CSRF Cookie (⚠︎ Not Recommended)
 
 If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true` in the `advanced` object in the auth options.
 

@@ -32,15 +32,13 @@ export const auth = await betterAuth({
 
     Migrate your database to add the necessary tables and fields.
 
-    This will create the following tables:
-
-    - **organization**: Stores the organization's data. Includes the name, slug, logo, and other information.
-    - **member**: Stores the members of the organization. Includes the user id, organization id, role, and other information.
-    - **invitation**: Stores the invitations sent to users. Includes the email, role, organization, the status, and other information.
-
+    If you're using the CLI:
+  
     ```bash
     npx better-auth migrate
     ```
+
+    If you need to create the tables manually, see the [Schema](#schema) section.
 </Step>
 
 <Step>
