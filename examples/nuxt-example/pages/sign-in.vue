@@ -14,8 +14,8 @@ import { signIn } from "~/lib/auth-client.js";
 const email = ref("");
 const password = ref("");
 
-const handleSignIn = async() => {
-    await signIn.email(
+const handleSignIn = async () => {
+	await signIn.email(
 		{
 			email: email.value,
 			password: password.value,
@@ -27,9 +27,7 @@ const handleSignIn = async() => {
 			},
 		},
 	);
-    
-}
-
+};
 </script>
 
 <template>

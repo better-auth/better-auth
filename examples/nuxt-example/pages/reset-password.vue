@@ -9,7 +9,7 @@ const handleResetPassword = async () => {
 		alert("Please enter same passwords");
 		return;
 	}
-	
+
 	await resetPassword({
 		newPassword: password.value,
 		fetchOptions: {
@@ -20,8 +20,8 @@ const handleResetPassword = async () => {
 				alert(context.error.message);
 			},
 		},
-	})
-}
+	});
+};
 </script>
 
 <template>

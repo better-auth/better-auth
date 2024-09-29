@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { signUp } from "~/lib/auth-client.js"
+import { signUp } from "~/lib/auth-client.js";
 
-const firstName = ref("")
-const lastName = ref("")
-const email = ref("")
-const password = ref("")
+const firstName = ref("");
+const lastName = ref("");
+const email = ref("");
+const password = ref("");
 
 const handleSignUp = async () => {
 	const user = {
@@ -21,10 +21,10 @@ const handleSignUp = async () => {
 		fetchOptions: {
 			onError(context) {
 				alert(context.error.message);
-			}
-		}
-	})
-}
+			},
+		},
+	});
+};
 </script>
 
 <template>

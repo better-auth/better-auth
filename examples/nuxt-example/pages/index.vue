@@ -7,15 +7,15 @@ definePageMeta({
 });
 
 const features = [
-		"Email & Password",
-		"Organization | Teams",
-		"Passkeys",
-		"Multi Factor",
-		"Password Reset",
-		"Email Verification",
-		"Roles & Permissions",
-		"Rate Limiting",
-		"Session Management",
+	"Email & Password",
+	"Organization | Teams",
+	"Passkeys",
+	"Multi Factor",
+	"Password Reset",
+	"Email Verification",
+	"Roles & Permissions",
+	"Rate Limiting",
+	"Session Management",
 ];
 const session = useSession();
 </script>
