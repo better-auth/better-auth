@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { AnimatePresence } from "@/components/ui/fade-in";
+import Link from "next/link";
 
 const listOfFeatures = [
 	"Database adapters support including prisma, drizzle and mongo db.",
@@ -29,6 +30,13 @@ const ChangelogOne = () => {
 						<li key={i}>{change}</li>
 					))}
 				</ul>
+				<p>
+					see{" "}
+					<Link href="https://github.com/better-auth/better-auth/releases/tag/v0.2.0">
+						Changelog
+					</Link>
+					for full list of changes.
+				</p>
 				<Badge variant="secondary">
 					🚧 We still in beta and we don't recommend to use better-auth in
 					production just yet.
