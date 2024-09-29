@@ -15,7 +15,7 @@ better-auth
 ```
 
 <Callout type="info">
-If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project. (currnelty better auth only supports web platforms more clients will be added soon)
+If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project. (currently better auth only supports web platforms more clients will be added soon)
 </Callout>
 </Step>
 
@@ -67,7 +67,8 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
         
-Better Auth requires a database to store user data. By default, it uses <Link href="https://kysely.dev/">Kysely </Link> under the hood to connect and query your database. `postgresql`, `mysql`, and `sqlite` are supported out of the box. 
+Better Auth requires a database to store user data. It uses <Link href="https://kysely.dev/">Kysely </Link> under the hood to connect to your database. 
+`postgresql`, `mysql`, and `sqlite` are supported out of the box.
         
 ```ts  title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -95,32 +96,8 @@ export const auth = betterAuth({
 });
 ```
 
-**Adapters**
-
-If your database is not supported by Kysely, you can use an adapter to connect to your database.
-
-To use an adapter, import the adapter and pass it to the database option.
-
-Currently, 3 adapters are supported:
-- **Prisma**
-- **Drizzle**
-- **MongoDB**
-
-```ts  title="auth.ts"
-import { prismaAdapter } from "better-auth/adapters"; // [!code highlight]
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-export const auth = betterAuth({
-    database: {
-        provider: prismaAdapter(prisma), // [!code highlight]
-    }
-})
-```
-
 <Callout>
-We highly recommend using the built-in option if your database is supported by Kysely, as we use optimized queries for Kysely.
+    Currently, Better Auth only support databases that are supported by Kysely. [vote this issue if you like to see non sql db support](https://github.com/better-auth/better-auth/issues/5)
 </Callout>
 </Step>
 
@@ -128,14 +105,16 @@ We highly recommend using the built-in option if your database is supported by K
     ### Migrate Schema
 
     Better Auth includes a CLI tool to migrate the required schema to your database. It introspects the database and creates the required tables. Run the following command to perform the migration:
-
     ```bash title="Terminal"
     npx better-auth migrate
     ```
 
-   <Callout type="warn">
-    If you're using an adapter and your database is not supported by Kysely, you need to create required tables manually. You can find the core schema required in the [database section](/docs/concepts/database#core-schema).
-   </Callout>
+   Better Auth automatically sets up the following tables in your database if they don't already exist:
+    - `user`
+    - `session`
+    - `account`
+
+    For more details head over to [schema](/docs/concepts/database#core-schema) section.
 </Step>
 
 <Step>
