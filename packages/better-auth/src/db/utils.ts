@@ -9,6 +9,11 @@ export function getAdapter(options: BetterAuthOptions): Adapter {
 	if (!options.database) {
 		throw new BetterAuthError("Database configuration is required");
 	}
+
+	if ("create" in options.database) {
+		return options.database;
+	}
+
 	const db = createKyselyAdapter(options);
 	if (!db) {
 		throw new BetterAuthError("Failed to initialize database adapter");

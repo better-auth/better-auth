@@ -18,7 +18,6 @@ import {
 } from "./utils/cookies";
 import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
-import { BetterAuthError } from "./error/better-auth-error";
 import { crossSubdomainCookies } from "./internal-plugins";
 
 export const init = (opts: BetterAuthOptions) => {
@@ -30,9 +29,6 @@ export const init = (opts: BetterAuthOptions) => {
 	const internalPlugins = getInternalPlugins(options);
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
-	if (!db) {
-		throw new BetterAuthError("No database adapter found");
-	}
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
 	const secret =
@@ -97,7 +93,7 @@ export const init = (opts: BetterAuthOptions) => {
 			},
 		},
 		adapter: adapter,
-		internalAdapter: createInternalAdapter(adapter, db, options),
+		internalAdapter: createInternalAdapter(adapter, options),
 		createAuthCookie: createCookieGetter(options),
 		...context,
 	};
@@ -110,7 +106,7 @@ export type AuthContext = {
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: Kysely<any>;
+	db?: Kysely<any>;
 	rateLimit: {
 		enabled: boolean;
 		window: number;

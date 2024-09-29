@@ -4,6 +4,7 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
+import type { Adapter } from "./adapter";
 
 export interface BetterAuthOptions {
 	/**
@@ -63,7 +64,8 @@ export interface BetterAuthOptions {
 				provider: "postgres" | "sqlite" | "mysql";
 				url: string;
 		  }
-		| Dialect;
+		| Dialect
+		| Adapter;
 	/**
 	 * Email and password authentication
 	 */
