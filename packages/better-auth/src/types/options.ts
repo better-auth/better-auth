@@ -268,6 +268,13 @@ export interface BetterAuthOptions {
 			 * cookies will be shared across subdomains
 			 */
 			eligibleCookies?: string[];
+			/**
+			 * The domain to use for the cookies
+			 *
+			 * By default, the domain will be the root
+			 * domain from the base URL.
+			 */
+			domain?: string;
 		};
 	};
 	logger?: {
