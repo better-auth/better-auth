@@ -126,6 +126,85 @@ Better auth currently does not provide a direct method to extend the core schema
 We suggest creating a new table for additional data to keep the core tables clean and maintainable. You can link this new table to the `user` table using a foreign key.
 
 
-## Using Hooks
+## Database Hooks
 
-Better auth provides hooks to allow you to modify or execute code when a database operation is performed. You can use hooks to add additional functionality or modify the behavior of the database operations.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in BetterAuth. You can create hooks for the following models: **user**, **session**, and **account**.
+
+There are two types of hooks you can define:
+
+### 1. Before Hook
+
+- **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
+- **Behavior**: 
+  - If the hook returns `false`, the operation will be aborted.
+  - If it returns an object, that object will replace the original data.
+
+### 2. After Hook
+
+- **Purpose**: This hook is called after the respective entity is created or updated.
+- **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+
+
+**Example Usage**
+
+Here’s how you can define hooks for each model:
+
+```typescript
+const hooks: BetterAuthOptions['databaseHooks'] = {
+  user: {
+    create: {
+      before: async (user) => {
+        // Custom logic before user creation
+        return true; // or false to abort
+      },
+      after: async (user) => {
+        // Custom logic after user creation
+      },
+    },
+    update: {
+      before: async (user) => {
+        // Custom logic before user update
+      },
+      after: async (user) => {
+        // Custom logic after user update
+      },
+    },
+  },
+  session: {
+    create: {
+      before: async (session) => {
+        // Custom logic before session creation
+      },
+      after: async (session) => {
+        // Custom logic after session creation
+      },
+    },
+    update: {
+      before: async (session) => {
+        // Custom logic before session update
+      },
+      after: async (session) => {
+        // Custom logic after session update
+      },
+    },
+  },
+  account: {
+    create: {
+      before: async (account) => {
+        // Custom logic before account creation
+      },
+      after: async (account) => {
+        // Custom logic after account creation
+      },
+    },
+    update: {
+      before: async (account) => {
+        // Custom logic before account update
+      },
+      after: async (account) => {
+        // Custom logic after account update
+      },
+    },
+  },
+};
+```
