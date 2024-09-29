@@ -190,7 +190,6 @@ Better auth supports any backend framework with standard Request and Response ob
     <Tab value="remix">
     ```ts title="/app/routes/api.auth.$.ts"
     import { auth } from "@/lib/auth"; // path to your auth file
-    import { toRemixHandler } from "better-auth/remix";
 
     export async function loader({ request }) {
         return auth.handler(request);
