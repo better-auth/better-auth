@@ -5,7 +5,7 @@ const ChangelogPage = () => {
 	return (
 		<div>
 			<div className="mt-10 overflow-visible h-full flex flex-col gap-10">
-				{Logs.map((log) => {
+				{Logs.reverse().map((log) => {
 					return (
 						<div className="relative my-5 h-auto">
 							<div className="sticky top-2 flex-1 h-full">
