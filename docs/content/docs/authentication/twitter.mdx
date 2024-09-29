@@ -13,14 +13,7 @@ description: Twitter Provider
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts" twoslash 
-        const process = {
-            env: {
-                TWITTER_CLIENT_ID: "" as string,
-                TWITTER_CLIENT_SECRET: "" as string,
-            }
-        }
-        // ---cut---
+        ```ts title="auth.ts"  
         import { betterAuth } from "better-auth"
         import { twitter } from "better-auth/social-providers"
         
@@ -43,7 +36,7 @@ description: Twitter Provider
         To signin with Twitter, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `twitter`.
 
-        ```ts title="client.ts" twoslash 
+        ```ts title="client.ts"  
         import { createAuthClient } from "better-auth/client"
         const client = createAuthClient()
         

@@ -17,7 +17,7 @@ description: Apple
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts" twoslash
+        ```ts title="auth.ts" 
         const process = {
             env: {
                 APPLE_CLIENT_ID: "" as string,
@@ -47,7 +47,7 @@ description: Apple
         To signin with Apple, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `apple`.
 
-        ```ts title="client.ts" twoslash /
+        ```ts title="client.ts"  /
         import { createAuthClient } from "better-auth/client"
         const client = createAuthClient()
 
