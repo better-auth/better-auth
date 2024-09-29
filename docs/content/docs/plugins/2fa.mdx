@@ -284,9 +284,13 @@ When `trustDevice` is set to `true`, the current device will be remembered for 6
 
 The plugin requires 3 additional fields in the `user` table. 
 
-- `twoFactorEnabled`: (boolean) - a boolean value that will be set `true` or `false` when authenticated user enable or disable two factor.
-- `twoFactorSecret`: (string) - Encrypted secret used to generate totp and otp.
-- `twoFactorBackupCodes`: (string) - Encrypted list of backup codes stored as a string separted by comma.
+<DatabaseTable
+    fields={[
+        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user." },
+        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes." },
+        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery." },
+    ]}
+/>
 
 ## Options
 

@@ -4,11 +4,9 @@ import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User } from "./schema";
-import type { Kysely } from "kysely";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
-	db: Kysely<any>,
 	options: BetterAuthOptions,
 ) => {
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
@@ -146,15 +144,16 @@ export const createInternalAdapter = (
 			});
 			return session;
 		},
-		/**
-		 * @requires
-		 */
 		deleteSessions: async (userId: string) => {
-			const sessions = await db
-				.deleteFrom(tables.session.tableName)
-				.where("userId", "=", userId)
-				.execute();
-			return sessions;
+			return await adapter.delete({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
 		},
 		findUserByEmail: async (email: string) => {
 			const user = await adapter.findOne<User>({

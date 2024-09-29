@@ -111,6 +111,21 @@ const data = await client.signIn.username({
 })
 ```
 
+## Schema
+
+The plugin requires 1 field to be added to the user table:
+
+<DatabaseTable
+    fields={[
+        { 
+            name: "username", 
+            type: "string", 
+            description: "The username of the user",
+            isUnique: true
+        },
+    ]}
+/>
+
 ## Options
 
 The username plugin doesn't require any configuration. It just needs to be added to the server and client.

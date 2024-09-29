@@ -234,12 +234,12 @@ export const kyselyAdapter = (
 
 export const getDialect = (config: BetterAuthOptions) => {
 	if (!config.database) {
-		return null;
+		return undefined;
 	}
 	if ("createDriver" in config.database) {
 		return config.database;
 	}
-	let dialect: Dialect | null = null;
+	let dialect: Dialect | undefined = undefined;
 	if ("provider" in config.database) {
 		const provider = config.database.provider;
 		const connectionString = config.database?.url?.trim();
@@ -281,7 +281,7 @@ export const getDialect = (config: BetterAuthOptions) => {
 export const createKyselyAdapter = (config: BetterAuthOptions) => {
 	const dialect = getDialect(config);
 	if (!dialect) {
-		return null;
+		return dialect;
 	}
 	const db = new Kysely<any>({
 		dialect,
