@@ -53,7 +53,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import qrcode from 'qrcode';
+import qrcode from "qrcode";
 import CopyButton from "@/components/ui/copy-button";
 
 export default function UserCard(props: {
@@ -62,7 +62,7 @@ export default function UserCard(props: {
 }) {
 	const router = useRouter();
 	const { data } = useSession(props.session);
-    const [qrCode, setQrCode] = useState<string>("");
+	const [qrCode, setQrCode] = useState<string>("");
 
 	const session = data || props.session;
 
@@ -80,16 +80,16 @@ export default function UserCard(props: {
 		enabled: !!session?.user.twoFactorEnabled,
 	});
 
-    const genQRCode = async (uri: string) => {
-        const base64 = await qrcode.toDataURL(uri);
-        setQrCode(base64)
-    }
+	const genQRCode = async (uri: string) => {
+		const base64 = await qrcode.toDataURL(uri);
+		setQrCode(base64);
+	};
 
-    useEffect(() => {
-        if (qr?.totpURI) {
-            genQRCode(qr.totpURI)
-        }
-    }, [qr])
+	useEffect(() => {
+		if (qr?.totpURI) {
+			genQRCode(qr.totpURI);
+		}
+	}, [qr]);
 
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
@@ -128,8 +128,8 @@ export default function UserCard(props: {
 						<AlertTitle>Verify Your Email Address</AlertTitle>
 						<AlertDescription className="text-muted-foreground">
 							Please verify your email address. Check your inbox for the
-							verification email. If you haven&apos;t received the email, click the
-							button below to resend.
+							verification email. If you haven&apos;t received the email, click
+							the button below to resend.
 						</AlertDescription>
 						<Button
 							size="sm"
@@ -238,7 +238,13 @@ export default function UserCard(props: {
 											</DialogDescription>
 										</DialogHeader>
 										<div className="flex items-center justify-center">
-                                            <Image width={200} height={200} className="rounded-md" src={qrCode} alt="" />
+											<Image
+												width={200}
+												height={200}
+												className="rounded-md"
+												src={qrCode}
+												alt=""
+											/>
 										</div>
 										<div className="flex gap-2 items-center justify-center">
 											<p className="text-sm text-muted-foreground">
