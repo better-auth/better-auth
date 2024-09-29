@@ -85,6 +85,7 @@
     "@types/react-dom": "^18",
     "@types/three": "^0.168.0",
     "@types/ua-parser-js": "^0.7.39",
+    "@types/qrcode": "^1.5.5",
     "dotenv": "^16.4.5",
     "dotenv-cli": "^7.4.2",
     "eslint-config-next": "15.0.0-canary.149",

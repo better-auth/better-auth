@@ -197,6 +197,9 @@ importers:
       prisma:
         specifier: ^5.19.1
         version: 5.20.0
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       react:
         specifier: 19.0.0-rc-7771d3a7-20240827
         version: 19.0.0-rc-7771d3a7-20240827
@@ -249,6 +252,9 @@ importers:
       '@types/node':
         specifier: ^20
         version: 20.16.9
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.5
       '@types/react':
         specifier: ^18
         version: 18.3.9
@@ -934,6 +940,9 @@ importers:
       '@types/node':
         specifier: ^20
         version: 20.16.9
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.5
       '@types/react':
         specifier: ^18
         version: 18.3.9
@@ -5066,6 +5075,9 @@ packages:
 
   '@types/prop-types@15.7.13':
     resolution: {integrity: sha512-hCZTSvwbzWGvhqxp/RqVqwU999pBf2vp7hzIjiYOsl8wqOmUxkQ6ddw1cV3l8811+kdUFus/q4d1Y3E3SyEifA==}
+
+  '@types/qrcode@1.5.5':
+    resolution: {integrity: sha512-CdfBi/e3Qk+3Z/fXYShipBT13OJ2fDO2Q2w5CIP5anLTLIndQG9z6P1cnm+8zCWSpm5dnxMFd/uREtb0EXuQzg==}
 
   '@types/qs@6.9.16':
     resolution: {integrity: sha512-7i+zxXdPD0T4cKDuxCUXJ4wHcsJLwENa6Z3dCu8cfCK743OGy5Nu1RmAGqDPsoTDINVEcdXKRvR/zre+P2Ku1A==}
@@ -17868,6 +17880,10 @@ snapshots:
       kleur: 3.0.3
 
   '@types/prop-types@15.7.13': {}
+
+  '@types/qrcode@1.5.5':
+    dependencies:
+      '@types/node': 20.16.9
 
   '@types/qs@6.9.16': {}
 
