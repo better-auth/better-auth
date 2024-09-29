@@ -10,6 +10,7 @@ import { Popup, PopupContent, PopupTrigger } from "fumadocs-ui/twoslash/popup";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "./components/blocks/features";
 import { ForkButton } from "./components/fork-button";
+import DatabaseTable from "./components/mdx/database-tables";
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
 	return {
@@ -33,6 +34,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 		TypeTable,
 		Features,
 		ForkButton,
+		DatabaseTable,
 		iframe: (props) => <iframe {...props} className="w-full h-[500px]" />,
 	};
 }

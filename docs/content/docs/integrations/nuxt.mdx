@@ -3,49 +3,7 @@ title: Nuxt.js Integration
 description: Learn how to integrate Better Auth with Nuxt.js
 ---
 
-
-## Installation
-
-First, install Better Auth
-
-```package-install
-npm install better-auth
-```
-
-## Set Environment Variables
-
-Create a `.env` file in the root of your project and add the following environment variables:
-
-**Set Secret**
-
-Random value used by the library for encryption and generating hashes. You can generate one using the button below or you can use something like openssl.
-```txt title=".env"
-BETTER_AUTH_SECRET=
-```
-
-<GenerateSecret/>
-
-## Configure Server
-
-### Create Better Auth instance
-
-We recommend to create `auth.ts` file inside your `lib/` directory. This file will contain your Better Auth instance.
-
-```ts twoslash title="auth.ts"
-import { betterAuth } from "better-auth"
-
-export const auth = betterAuth({
-    database: {
-        provider: "sqlite", //change this to your database provider
-        url: "./db.sqlite", // path to your database or connection string
-    }
-    // Refer to the api documentation for more configuration options
-})
-```
-
-<Callout type="warn">
-Better Auth currently supports only SQLite, MySQL, and PostgreSQL. It uses Kysely under the hood, so you can also pass any Kysely dialect directly to the database object.
-</Callout>
+Before you start, make sure you have a better auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Create API Route
 

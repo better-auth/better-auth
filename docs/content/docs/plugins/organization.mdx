@@ -502,6 +502,133 @@ the plugin providers easy way to define your own set of permission for each role
 </Steps>
 
 
+## Schema
+
+The organization plugin adds the following tables to the database:
+
+### Organization
+
+Table Name: `organization`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each organization",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the organization" 
+    },
+    { 
+      name: "slug", 
+      type: "string", 
+      description: "The slug of the organization" 
+    },
+    { 
+      name: "logo", 
+      type: "string", 
+      description: "The logo of the organization" 
+    },   
+    { 
+      name: "metadata", 
+      type: "string",
+      description: "Additional metadata for the organization"
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the organization was created" 
+    },
+  ]}
+  />
+
+### Member
+
+Table Name: `member`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each member",
+      isPrimaryKey: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "The id of the user",
+      isForeignKey: true
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "role", 
+      type: "string", 
+      description: "The role of the user in the organization" 
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the member was added to the organization" 
+    },
+  ]}
+  />
+
+### Invitation
+
+Table Name: `invitation`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each invitation",
+      isPrimaryKey: true
+    },
+    { 
+      name: "email", 
+      type: "string", 
+      description: "The email address of the user" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "role", 
+      type: "string", 
+      description: "The role of the user in the organization" 
+    },
+    { 
+      name: "status", 
+      type: "string", 
+      description: "The status of the invitation" 
+    },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "Timestamp of when the invitation expires" 
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the invitation was created" 
+    },
+  ]}
+  />
+
 ## Options
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
@@ -515,3 +642,4 @@ the plugin providers easy way to define your own set of permission for each role
 **sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
 
 **invitationExpiresIn** : `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
+

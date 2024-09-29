@@ -74,31 +74,129 @@ If you prefer adding tables manually, you can do that as well. The core schema r
 
 ## Core Schema
 
-Better auth requires the following tables to be present in the database:
+Better auth requires the following tables to be present in the database. The types are in `typescript` format. You can use corresponding types in your database.
 
-**user**:
+### User
 
-- `id`: (string) - The unique identifier of the user.
-- `email`: (string) - The email address of the user.
-- `name`: (string) - The name of the user.
-- `image`: (string) - The image of the user. (optional)
+  Table Name: `user`
 
-**session**:
-- `id`: (string) - The unique identifier of the session. Also used as the session token.
-- `userId`: (foregin-key: `user.id`) - The id of the user.
-- `expiresAt`: (Date) - The time when the session expires.
-- `ipAddress`: (string) - The IP address of the device. (optional)
-- `userAgent`: (string) - The user agent information of the device. (optional)
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each user",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "User's chosen display name" 
+    },
+    { 
+      name: "email", 
+      type: "string", 
+      description: "User's email address for communication and login" 
+    },
+    { 
+      name: "created_at", 
+      type: "Date", 
+      description: "Timestamp of when the user account was created" 
+    },
+    { 
+      name: "updated_at", 
+      type: "Date",
+      description: "Timestamp of the last update to the user's information" 
+    },
+  ]}
+/>
 
-**account**: 
-- `id`: (string) - The unique identifier of the account.
-- `userId`: (foregin-key: `user.id`) - The id of the user.
-- `accountId`: (string) - The id of the account. (optional)
-- `providerId`: (string) - The id of the provider. (optional)
-- `accessToken`: (string) - The access token of the account. Returned by the provider. (optional)
-- `refreshToken`: (string) - The refresh token of the account. Returned by the provider. (optional)
-- `expiresAt`: (Date) - The time when the access token expires. (optional)
-- `password`: (string) - The password of the account. Mainly used for email and password authentication. (optional)
+### Session
+
+Table Name: `session`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each session",
+      isPrimaryKey: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "The id of the user",
+      isForeignKey: true
+    },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "The time when the session expires"
+    },
+    { 
+      name: "ipAddress", 
+      type: "string", 
+      description: "The IP address of the device"
+    },
+    { 
+      name: "userAgent", 
+      type: "string", 
+      description: "The user agent information of the device"
+    },
+  ]}
+  />
+
+### Account
+
+Table Name: `account`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each account",
+      isPrimaryKey: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "The id of the user",
+      isForeignKey: true
+    },
+    { 
+      name: "accountId", 
+      type: "string", 
+      description: "The id of the account",
+    },
+    { 
+      name: "providerId", 
+      type: "string", 
+      description: "The id of the provider",
+    },
+    { 
+      name: "accessToken", 
+      type: "string", 
+      description: "The access token of the account. Returned by the provider",
+    },
+    { 
+      name: "refreshToken", 
+      type: "string", 
+      description: "The refresh token of the account. Returned by the provider",
+    },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "The time when the access token expires",
+    },
+    { 
+      name: "password", 
+      type: "string", 
+      description: "The password of the account. Mainly used for email and password authentication",
+    },
+  ]}
+/>
 
 
 ## Plugins Schema

@@ -141,3 +141,33 @@ await client.signIn.email({
 })
 ```
 
+### Schema
+
+If you are using a database to store rate limit data you need this schema:
+
+Table Name: `rateLimit`
+
+<DatabaseTable
+    fields={[
+        { 
+        name: "key", 
+        type: "string", 
+        description: "Unique identifier for each rate limit key",
+        isPrimaryKey: true
+        },
+        { 
+        name: "window", 
+        type: "integer", 
+        description: "Time window in seconds" 
+        },
+        { 
+        name: "max", 
+        type: "integer", 
+        description: "Max requests in the window" 
+        },
+        { 
+        name: "count", 
+        type: "integer", 
+        description: "Number of requests made in the window" 
+        }]}
+    />

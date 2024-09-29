@@ -5,76 +5,7 @@ description: Integrate Better Auth with Node backend
 
 Better auth can be integrated with node based backed frameworks. The guide below will show you how to integrate better auth with express.
 
-## Installation
-
-First, install Better Auth
-
-```package-install
-npm install better-auth
-```
-
-
-
-## Set Environment Variables
-
-Create a `.env` file in the root of your project and add the following environment variables:
-
-**Set Base URL**
-```txt title=".env"
-BETTER_AUTH_URL=http://localhost:3000 # Base URL of your application 
-```
-
-<Callout>
-if you're using a custom path other than `/api/auth` make sure to provider the full path in the `BETTER_AUTH_URL` variable. For example, if you're using `/custom-path` as the path, you should set `BETTER_AUTH_URL=http://localhost:3000/custom-path`. You can also provide path directly in the better auth options.
-</Callout>
-
-
-**Set Secret**
-
-Random value used by the library for encryption and generating hashes. You can generate one using the button below or you can use something like openssl.
-
-```txt title=".env"
-BETTER_AUTH_SECRET=
-```
-
-<GenerateSecret/>
-
-## Configuring Better Auth
-
-### Create Better Auth instance
-
-Create a `auth.ts` file in one of these directories: 
-
-- `.` (root directory)
-- `lib/`
-- `src/`
-- `utils/`
-
-This file will contain your Better Auth instance.
-
-```ts title="auth.ts"
-import { BetterAuth } from "better-auth"
-
-export const auth = new BetterAuth({
-    database: {
-        provider: "sqlite", //change this to your database provider
-        url: "./db.sqlite", // path to your database or connection string
-    },
-})
-```
-
-<Callout>
-Refer to the [api documentation](/docs/api) on how to configure better auth.
-</Callout>
-
-### Migrate the database
-
-You'll need to run the migration command to create the necessary tables in the database.
-
-
-```bash
-npx better-auth migrate
-```
+Before you start, make sure you have a better auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Mount the handler
 
