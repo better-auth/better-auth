@@ -29,11 +29,20 @@ jobs:
             - name: Build
               run: pnpm build
             
-            - name: lint
+            - name: Start Docker Containers
+              run: |
+                docker-compose up -d
+                # Wait for services to be ready (optional)
+                sleep 10
+            
+            - name: Lint
               run: pnpm lint
             
-            - name: test
+            - name: Test
               run: pnpm test
 
-            - name: typecheck
+            - name: Typecheck
               run: pnpm typecheck
+
+            - name: Stop Docker Containers
+              run: docker-compose down

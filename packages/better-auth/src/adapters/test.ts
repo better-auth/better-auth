@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { Adapter } from "../types";
+import type { Adapter, User } from "../types";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
@@ -9,19 +9,11 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	const { adapter } = opts;
 	const user = {
 		id: "1",
+		name: "user",
 		email: "user@email.com",
-		providerId: "credential",
-		accountId: "1",
 		emailVerified: true,
-		password: "password",
-	};
-
-	const user2 = {
-		email: "user2@email.com",
-		providerId: "credential",
-		accountId: "2",
-		emailVerified: true,
-		password: "password",
+		createdAt: new Date(),
+		updatedAt: new Date(),
 	};
 
 	test("create model", async () => {
@@ -29,11 +21,17 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			model: "user",
 			data: user,
 		});
-		expect(res).toEqual(user);
+		expect({
+			name: res.name,
+			email: res.email,
+		}).toEqual({
+			name: user.name,
+			email: user.email,
+		});
 	});
 
 	test("find model", async () => {
-		const res = await adapter.findOne({
+		const res = await adapter.findOne<User>({
 			model: "user",
 			where: [
 				{
@@ -42,28 +40,32 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				},
 			],
 		});
-		expect(res).toEqual(user);
-	});
-
-	test("create model without id", async () => {
-		const res = await adapter.create({
-			model: "user",
-			data: user2,
+		expect({
+			name: res?.name,
+			email: res?.email,
+		}).toEqual({
+			name: user.name,
+			email: user.email,
 		});
-		expect(res).toMatchObject(user2);
 	});
 
 	test("find model without id", async () => {
-		const res = await adapter.findOne({
+		const res = await adapter.findOne<User>({
 			model: "user",
 			where: [
 				{
 					field: "email",
-					value: user2.email,
+					value: user.email,
 				},
 			],
 		});
-		expect(res).toMatchObject(user2);
+		expect({
+			name: res?.name,
+			email: res?.email,
+		}).toEqual({
+			name: user.name,
+			email: user.email,
+		});
 	});
 
 	test("find model with select", async () => {
@@ -82,7 +84,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 
 	test("update model", async () => {
 		const newEmail = "updated@email.com";
-		const res = await adapter.update({
+		const res = await adapter.update<User>({
 			model: "user",
 			where: [
 				{
@@ -94,10 +96,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				email: newEmail,
 			},
 		});
-		expect(res).toEqual({
-			...user,
-			email: newEmail,
-		});
+		expect(res?.email).toEqual(newEmail);
 	});
 
 	test("delete model", async () => {

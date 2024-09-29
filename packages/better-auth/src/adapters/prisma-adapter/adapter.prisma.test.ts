@@ -1,6 +1,6 @@
 import { beforeAll, describe, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { prismaAdapter } from "./prisma";
+import { prismaAdapter } from ".";
 import { runAdapterTest } from "../test";
 
 const db = new PrismaClient();
@@ -17,5 +17,4 @@ describe("adapter test", async () => {
 
 async function clearDb() {
 	await db.user.deleteMany();
-	await db.session.deleteMany();
 }

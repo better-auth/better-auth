@@ -8,18 +8,10 @@ datasource db {
 }
 
 model User {
-    id            String    @id @default(cuid())
-    email         String    @unique
-    emailVerified Boolean   @default(false)
-    providerId    String
-    accountId     String
-    password      String
-    Session       Session[]
-}
-
-model Session {
-    id        String   @id
-    userId    String
-    expiresAt DateTime
-    user      User     @relation(fields: [userId], references: [id])
+    id            String   @id @default(cuid())
+    email         String   @unique
+    emailVerified Boolean  @default(false)
+    name          String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @default(now()) @updatedAt
 }
