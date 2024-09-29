@@ -10,7 +10,7 @@ import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 
-describe.only("adapter test", async () => {
+describe("adapter test", async () => {
 	beforeEach(async () => {
 		const { runMigrations } = await getMigrations({
 			database: {
