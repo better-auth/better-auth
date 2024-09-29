@@ -5,7 +5,7 @@ export type Auth = {
 		provider: "sqlite";
 		url: "./db.sqlite";
 	};
-	socialProvider: [
+	socialProviders: [
 		{
 			id: "github";
 		},

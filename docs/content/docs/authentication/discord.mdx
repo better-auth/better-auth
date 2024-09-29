@@ -11,7 +11,7 @@ description: Discord Provider
 
   <Step>
         ### Configure the provider
-        To configure the provider, you need to import the provider and pass it to the `socialProvider` option of the auth instance.
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts" 
         import { betterAuth } from "better-auth"
@@ -22,7 +22,7 @@ description: Discord Provider
                 provider: "sqlite",
                 url: "./db.sqlite",
             },
-            socialProvider: { // [!code highlight]
+            socialProviders: { // [!code highlight]
                 discord: { // [!code highlight]
                     clientId: process.env.DISCORD_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.DISCORD_CLIENT_SECRET as string, // [!code highlight]

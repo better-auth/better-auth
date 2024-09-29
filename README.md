@@ -41,7 +41,7 @@ Authentication in the TypeScript ecosystem is a half-solved problem. Other open-
 ### Goals
 ****
 
-- **Be Comprehensive**: Save users from reinventing the wheel for anything related auth.
+- **Be Comprehensive**: save users from reinventing the wheel as much as possible.
 - **Prioritize Best Practices**: provide best practices rather than overwhelming configuration options.
 - **Framework Agnostic**: Support most frameworks and avoid framework specific features and solutions if possible.
 - **Consistency**: Provide a consistent and predictable API across all platforms

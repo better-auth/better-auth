@@ -5,7 +5,7 @@ export const auth = betterAuth({
 		provider: "sqlite",
 		url: "./db.sqlite",
 	},
-	socialProvider: {
+	socialProviders: {
 		clientId: process.env.GITHUB_CLIENT_ID as string,
 		clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
 	},
