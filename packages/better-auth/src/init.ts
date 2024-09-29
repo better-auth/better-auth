@@ -4,7 +4,11 @@ import { createKyselyAdapter } from "./db/kysely";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import type { BetterAuthOptions, OAuthProvider } from "./types";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	OAuthProvider,
+} from "./types";
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
@@ -15,8 +19,15 @@ import {
 import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
 import { BetterAuthError } from "./error/better-auth-error";
+import { crossSubdomainCookies } from "./internal-plugins";
 
-export const init = (options: BetterAuthOptions) => {
+export const init = (opts: BetterAuthOptions) => {
+	/**
+	 * Run plugins init to get the actual options
+	 */
+	const { options, context } = runPluginInit(opts);
+	const plugins = options.plugins || [];
+	const internalPlugins = getInternalPlugins(options);
 	const adapter = getAdapter(options);
 	const db = createKyselyAdapter(options);
 	if (!db) {
@@ -47,6 +58,7 @@ export const init = (options: BetterAuthOptions) => {
 			return oAuthProviders[key as (typeof oAuthProviderList)[number]](value);
 		})
 		.filter((x) => x !== null);
+
 	return {
 		appName: options.appName || "Better Auth",
 		socialProviders,
@@ -54,6 +66,7 @@ export const init = (options: BetterAuthOptions) => {
 			...options,
 			baseURL: baseURL ? new URL(baseURL).origin : "",
 			basePath: options.basePath || "/api/auth",
+			plugins: plugins.concat(internalPlugins),
 		},
 		tables,
 		baseURL: baseURL,
@@ -86,6 +99,7 @@ export const init = (options: BetterAuthOptions) => {
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, db, options),
 		createAuthCookie: createCookieGetter(options),
+		...context,
 	};
 };
 
@@ -121,3 +135,41 @@ export type AuthContext = {
 	};
 	tables: ReturnType<typeof getAuthTables>;
 };
+
+function runPluginInit(options: BetterAuthOptions) {
+	const plugins = options.plugins || [];
+	let context: Partial<AuthContext> = {};
+	for (const plugin of plugins) {
+		if (plugin.init) {
+			const result = plugin.init(options);
+			if (typeof result === "object") {
+				if (result.options) {
+					options = {
+						...options,
+						...result.options,
+					};
+				}
+				context = {
+					...result,
+				};
+			}
+		}
+	}
+	const { options: _, ...rest } = context;
+	return {
+		options,
+		context: rest,
+	};
+}
+
+function getInternalPlugins(options: BetterAuthOptions) {
+	const plugins: BetterAuthPlugin[] = [];
+	if (options.advanced?.crossSubDomainCookies?.enabled) {
+		plugins.push(
+			crossSubdomainCookies({
+				eligibleCookies: options.advanced.crossSubDomainCookies.eligibleCookies,
+			}),
+		);
+	}
+	return plugins;
+}

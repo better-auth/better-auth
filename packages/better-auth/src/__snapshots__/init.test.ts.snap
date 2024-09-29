@@ -107,6 +107,7 @@ exports[`init > should match config 1`] = `
       "provider": "sqlite",
       "url": ":memory:",
     },
+    "plugins": [],
   },
   "password": {
     "config": {

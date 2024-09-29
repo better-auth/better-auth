@@ -4,7 +4,7 @@ import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
 import type { LiteralString } from "./helper";
-import type { AuthContext } from ".";
+import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
 	[table: string]: {
@@ -17,6 +17,11 @@ export type PluginSchema = {
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
+	/**
+	 * The init function is called when the plugin is initialized.
+	 * You can return a new context or modify the existing context.
+	 */
+	init?: (options: BetterAuthOptions) => Partial<AuthContext> | void;
 	endpoints?: {
 		[key: string]: AuthEndpoint;
 	};
