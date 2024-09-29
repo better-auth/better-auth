@@ -44,10 +44,12 @@ interface PrismaClient {
 		findMany: (data: any) => Promise<any>;
 		update: (data: any) => Promise<any>;
 		delete: (data: any) => Promise<any>;
+		[key: string]: any;
 	};
 }
 
-export const prismaAdapter = <T extends PrismaClient>(db: T): Adapter => {
+export const prismaAdapter = (prisma: any): Adapter => {
+	const db: PrismaClient = prisma;
 	return {
 		async create(data) {
 			const { model, data: val, select } = data;

@@ -7,6 +7,8 @@
         "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean --minify",
         "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch --sourcemap",
         "test": "pnpm typecheck && vitest",
+        "prisma:push": "prisma db push --schema src/adapters/prisma/schema.prisma",
+        "test:adapters": "pnpm prisma:push && vitest adapters",
         "bump": "bumpp",
         "typecheck": "tsc --noEmit"
     },
@@ -57,6 +59,7 @@
         "hono": "^4.5.4",
         "listhen": "^1.7.2",
         "next": "^14.2.8",
+        "prisma": "^5.19.1",
         "react": "^18.3.1",
         "solid-js": "^1.8.18",
         "tsup": "^8.2.4",
