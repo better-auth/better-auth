@@ -240,7 +240,7 @@ Better auth supports any backend framework with standard Request and Response ob
     const app = express();
     const port = 8000;
 
-    app.get("/api/auth/*", toNodeHandler(auth));
+    app.all("/api/auth/*", toNodeHandler(auth));
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });
