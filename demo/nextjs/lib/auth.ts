@@ -1,13 +1,7 @@
 import { betterAuth } from "better-auth";
-import {
-	organization,
-	passkey,
-	twoFactor,
-	crossSubdomainCookies,
-} from "better-auth/plugins";
+import { organization, passkey, twoFactor } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { github, google } from "better-auth/social-providers";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 
@@ -80,7 +74,6 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey(),
-		crossSubdomainCookies(),
 	],
 	socialProviders: {
 		github: {
