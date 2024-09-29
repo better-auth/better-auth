@@ -242,65 +242,27 @@ There are two types of hooks you can define:
 - **Purpose**: This hook is called after the respective entity is created or updated.
 - **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
 
-
-**Example Usage**
-
-Here’s how you can define hooks for each model:
+**Example Usage: add a `before` hook to the `user` model to split the `name` field into `firstName` and `lastName` fields.**
 
 ```typescript
 const hooks: BetterAuthOptions['databaseHooks'] = {
   user: {
     create: {
       before: async (user) => {
-        // Custom logic before user creation
-        return true; // or false to abort
+          return {
+              ...user,
+              firstName: user.name.split(" ")[0],
+              lastName: user.name.split(" ")[1]
+          }
       },
+    },
+    update: {
       after: async (user) => {
-        // Custom logic after user creation
-      },
-    },
-    update: {
-      before: async (user) => {
-        // Custom logic before user update
-      },
-      after: async (user) => {
-        // Custom logic after user update
-      },
-    },
-  },
-  session: {
-    create: {
-      before: async (session) => {
-        // Custom logic before session creation
-      },
-      after: async (session) => {
-        // Custom logic after session creation
-      },
-    },
-    update: {
-      before: async (session) => {
-        // Custom logic before session update
-      },
-      after: async (session) => {
-        // Custom logic after session update
-      },
-    },
-  },
-  account: {
-    create: {
-      before: async (account) => {
-        // Custom logic before account creation
-      },
-      after: async (account) => {
-        // Custom logic after account creation
-      },
-    },
-    update: {
-      before: async (account) => {
-        // Custom logic before account update
-      },
-      after: async (account) => {
-        // Custom logic after account update
+          return {
+              ...user,
+              firstName: user.name.split(" ")[0],
+              lastName: user.name.split(" ")[1]
+          }
       },
     },
   },

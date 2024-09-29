@@ -11,6 +11,7 @@ import type { FieldAttribute } from ".";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import pg from "pg";
+import { BetterAuthError } from "../error/better-auth-error";
 
 const { Pool } = pg;
 
@@ -250,15 +251,21 @@ export const getDialect = (config: BetterAuthOptions) => {
 			});
 		}
 		if (provider === "mysql") {
-			const params = new URL(connectionString);
-			const pool = createPool({
-				host: params.hostname,
-				user: params.username,
-				password: params.password,
-				database: params.pathname.split("/")[1],
-				port: Number(params.port),
-			});
-			dialect = new MysqlDialect({ pool });
+			try {
+				const params = new URL(connectionString);
+				const pool = createPool({
+					host: params.hostname,
+					user: params.username,
+					password: params.password,
+					database: params.pathname.split("/")[1],
+					port: Number(params.port),
+				});
+				dialect = new MysqlDialect({ pool });
+			} catch (e) {
+				if (e instanceof TypeError) {
+					throw new BetterAuthError("Invalid database URL");
+				}
+			}
 		}
 
 		if (provider === "sqlite") {

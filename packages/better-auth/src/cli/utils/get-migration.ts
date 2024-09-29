@@ -1,6 +1,7 @@
-import type {
-	AlterTableColumnAlteringBuilder,
-	CreateTableBuilder,
+import {
+	sql,
+	type AlterTableColumnAlteringBuilder,
+	type CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from "../../db";
 import { logger } from "../../utils/logger";
@@ -134,21 +135,27 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
-	const typeMap = {
-		string: "text",
-		boolean: "boolean",
-		number: "integer",
-		date: "date",
-	} as const;
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
+	function getType(type: FieldType) {
+		const typeMap = {
+			string: "text",
+			boolean: "boolean",
+			number: "integer",
+			date: "date",
+		} as const;
+		if (dbType === "mysql" && type === "string") {
+			return "varchar(255)";
+		}
+		return typeMap[type];
+	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = typeMap[field.type];
+				const type = getType(field.type);
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
@@ -164,20 +171,23 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
-
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
 				.createTable(table.table)
-				.addColumn("id", "text", (col) => col.primaryKey());
+				.addColumn("id", getType("string"), (col) => col.primaryKey());
+
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = typeMap[field.type];
+				const type = getType(field.type);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col.references(
 							`${field.references.model}.${field.references.field}`,
 						);
+					}
+					if (field.unique) {
+						col = col.unique();
 					}
 					return col;
 				});
