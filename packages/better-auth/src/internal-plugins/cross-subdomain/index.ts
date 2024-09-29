@@ -21,6 +21,8 @@ interface Options {
  * that are eligible to be shared across subdomains
  * @param options
  * @category Plugins
+ *
+ * @internal plugin
  */
 export const crossSubdomainCookies = (options?: Options) => {
 	return {
