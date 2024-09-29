@@ -3,8 +3,7 @@ import { AnimatePresence } from "@/components/ui/fade-in";
 
 const listOfFeatures = [
 	"Database adapters support including prisma, drizzle and mongo db.",
-	"Generic OAuth Providers",
-	"database hooks",
+	"Database hooks",
 	"CrossDomain cookies",
 	"onRequest and onResponse plugin hooks",
 	"init interface for plugins",
