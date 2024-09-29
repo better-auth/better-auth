@@ -468,6 +468,11 @@ export const contents: Content[] = [
 			},
 
 			{
+				title: "Remix",
+				icon: Icons.remix,
+				href: "/docs/integrations/remix",
+			},
+			{
 				title: "Next",
 				icon: Icons.nextJS,
 				href: "/docs/integrations/next",
