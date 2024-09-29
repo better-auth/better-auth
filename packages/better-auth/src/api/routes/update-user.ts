@@ -107,9 +107,16 @@ export const changePassword = createAuthEndpoint(
 				session.user.id,
 				ctx.headers,
 			);
+			if (!newSession) {
+				return ctx.json(null, {
+					status: 500,
+					body: { message: "Failed to create session" },
+				});
+			}
 			// set the new session cookie
 			await setSessionCookie(ctx, newSession.id);
 		}
+
 		return ctx.json(session.user);
 	},
 );

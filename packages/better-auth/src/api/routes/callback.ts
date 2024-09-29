@@ -155,6 +155,11 @@ export const callbackOAuth = createAuthEndpoint(
 			c.request,
 			dontRememberMe,
 		);
+		if (!session) {
+			const url = new URL(currentURL || callbackURL);
+			url.searchParams.set("error", "unable_to_create_session");
+			throw c.redirect(url.toString());
+		}
 		try {
 			await setSessionCookie(c, session.id, dontRememberMe);
 		} catch (e) {

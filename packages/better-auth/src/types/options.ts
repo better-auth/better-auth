@@ -1,6 +1,5 @@
 import type { Dialect } from "kysely";
-import type { User } from "../db/schema";
-import type { FieldAttribute } from "../db/field";
+import type { Account, Session, User } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
@@ -252,6 +251,22 @@ export interface BetterAuthOptions {
 		 * Disable CSRF check
 		 */
 		disableCSRFCheck?: boolean;
+		/**
+		 * Configure cookies to be cross subdomains
+		 */
+		crossSubDomainCookies?: {
+			/**
+			 * Enable cross subdomain cookies
+			 */
+			enabled: boolean;
+			/**
+			 * List of cookies that should be shared across subdomains
+			 *
+			 * by default, only sessionToken, csrfToken and dontRememberToken
+			 * cookies will be shared across subdomains
+			 */
+			eligibleCookies?: string[];
+		};
 	};
 	logger?: {
 		/**
@@ -264,5 +279,72 @@ export interface BetterAuthOptions {
 		 * log verbose information
 		 */
 		verboseLogging?: boolean;
+	};
+	/**
+	 * allows you to define custom hooks that can be
+	 * executed during lifecycle of core database
+	 * operations.
+	 */
+	databaseHooks?: {
+		user: {
+			[key in "create" | "update"]: {
+				/**
+				 * Hook that is called before a user is created.
+				 * if the hook returns false, the user will not be created.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (user: User) => Promise<
+					| boolean
+					| void
+					| {
+							data: User & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is created.
+				 */
+				after?: (user: User) => Promise<void>;
+			};
+		};
+		session: {
+			[key in "create" | "update"]: {
+				/**
+				 * Hook that is called before a user is created.
+				 * if the hook returns false, the user will not be created.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (session: Session) => Promise<
+					| boolean
+					| void
+					| {
+							data: Session & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is created.
+				 */
+				after?: (session: Session) => Promise<void>;
+			};
+		};
+		account: {
+			[key in "create" | "update"]: {
+				/**
+				 * Hook that is called before a user is created.
+				 * If the hook returns false, the user will not be created.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (account: Account) => Promise<
+					| boolean
+					| void
+					| {
+							data: Account & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is created.
+				 */
+				after?: (account: Account) => Promise<void>;
+			};
+		};
 	};
 }

@@ -76,6 +76,15 @@ export const username = () => {
 						user.id,
 						ctx.request,
 					);
+					if (!session) {
+						return ctx.json(null, {
+							status: 500,
+							body: {
+								message: "Failed to create session",
+								status: 500,
+							},
+						});
+					}
 					await ctx.setSignedCookie(
 						ctx.context.authCookies.sessionToken.name,
 						session.id,

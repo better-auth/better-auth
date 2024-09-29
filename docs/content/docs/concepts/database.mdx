@@ -124,3 +124,8 @@ The `migrate` command should be run whenever you add plugins that require additi
 Better auth currently does not provide a direct method to extend the core schema. However, you can add extra columns to the database and manage them independently. For instance, to store additional user data, you can either create a new table or add columns to the `user` table.
 
 We suggest creating a new table for additional data to keep the core tables clean and maintainable. You can link this new table to the `user` table using a foreign key.
+
+
+## Using Hooks
+
+Better auth provides hooks to allow you to modify or execute code when a database operation is performed. You can use hooks to add additional functionality or modify the behavior of the database operations.

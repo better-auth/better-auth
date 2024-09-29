@@ -13,17 +13,38 @@ export const createInternalAdapter = (
 ) => {
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
+	const hooks = options.databaseHooks;
+
+	async function createWithHooks<T extends Record<string, any>>(
+		data: T,
+		model: "user" | "account" | "session",
+	) {
+		let actualData = data;
+		if (hooks?.[model]?.create?.before) {
+			const result = await hooks[model].create.before(data as any);
+			if (result === false) {
+				return null;
+			}
+			const isObject = typeof result === "object";
+			actualData = isObject ? (result as any).data : result;
+		}
+
+		const created = await adapter.create<T>({
+			model,
+			data,
+		});
+
+		if (hooks?.[model]?.create?.after && created) {
+			await hooks[model].create.after(created as any);
+		}
+		return created;
+	}
+
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
-				const createdUser = await adapter.create({
-					model: tables.user.tableName,
-					data: user,
-				});
-				const createdAccount = await adapter.create({
-					model: tables.account.tableName,
-					data: account,
-				});
+				const createdUser = await createWithHooks(user, "user");
+				const createdAccount = await createWithHooks(account, "account");
 				return {
 					user: createdUser,
 					account: createdAccount,
@@ -34,10 +55,7 @@ export const createInternalAdapter = (
 			}
 		},
 		createUser: async (user: User) => {
-			const createdUser = await adapter.create<User>({
-				model: tables.user.tableName,
-				data: user,
-			});
+			const createdUser = await createWithHooks(user, "user");
 			return createdUser;
 		},
 		createSession: async (
@@ -60,10 +78,7 @@ export const createInternalAdapter = (
 				ipAddress: headers?.get("x-forwarded-for") || "",
 				userAgent: headers?.get("user-agent") || "",
 			};
-			const session = adapter.create<Session>({
-				model: tables.session.tableName,
-				data,
-			});
+			const session = await createWithHooks(data, "session");
 			return session;
 		},
 		findSession: async (sessionId: string) => {
@@ -97,6 +112,13 @@ export const createInternalAdapter = (
 			};
 		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
+			if (hooks?.session?.update?.before) {
+				const result = await hooks.session.update.before(session as any);
+				if (result === false) {
+					return null;
+				}
+				session = typeof result === "object" ? (result as any).data : result;
+			}
 			const updatedSession = await adapter.update<Session>({
 				model: tables.session.tableName,
 				where: [
@@ -107,6 +129,9 @@ export const createInternalAdapter = (
 				],
 				update: session,
 			});
+			if (hooks?.session?.update?.after && updatedSession) {
+				await hooks.session.update.after(updatedSession);
+			}
 			return updatedSession;
 		},
 		deleteSession: async (id: string) => {
@@ -169,16 +194,20 @@ export const createInternalAdapter = (
 			return user;
 		},
 		linkAccount: async (account: Account) => {
-			const _account = await adapter.create<Account>({
-				model: tables.account.tableName,
-				data: account,
-			});
+			const _account = await createWithHooks(account, "account");
 			return _account;
 		},
 		updateUserByEmail: async (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 		) => {
+			if (hooks?.user?.update?.before) {
+				const result = await hooks.user.update.before(data as any);
+				if (result === false) {
+					return null;
+				}
+				data = typeof result === "object" ? (result as any).data : result;
+			}
 			const user = await adapter.update<User>({
 				model: tables.user.tableName,
 				where: [
@@ -189,6 +218,10 @@ export const createInternalAdapter = (
 				],
 				update: data,
 			});
+
+			if (hooks?.user?.update?.after && user) {
+				await hooks.user.update.after(user);
+			}
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
@@ -223,6 +256,13 @@ export const createInternalAdapter = (
 			return accounts;
 		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
+			if (hooks?.account?.update?.before) {
+				const result = await hooks.account.update.before(data as any);
+				if (result === false) {
+					return null;
+				}
+				data = typeof result === "object" ? (result as any).data : result;
+			}
 			const account = await adapter.update<Account>({
 				model: tables.account.tableName,
 				where: [
@@ -233,6 +273,9 @@ export const createInternalAdapter = (
 				],
 				update: data,
 			});
+			if (hooks?.account?.update?.after && account) {
+				await hooks.account.update.after(account);
+			}
 			return account;
 		},
 	};

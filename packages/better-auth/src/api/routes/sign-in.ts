@@ -175,6 +175,10 @@ export const signInEmail = createAuthEndpoint(
 			ctx.headers,
 			ctx.body.dontRememberMe,
 		);
+		if (!session) {
+			ctx.context.logger.error("Failed to create session");
+			throw new APIError("INTERNAL_SERVER_ERROR");
+		}
 		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
 		return ctx.json({
 			user: user.user,

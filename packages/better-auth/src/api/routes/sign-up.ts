@@ -80,6 +80,14 @@ export const signUpEmail = createAuthEndpoint(
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		});
+		if (!createdUser) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Could not create user",
+				},
+			});
+		}
 		/**
 		 * Link the account to the user
 		 */
@@ -94,6 +102,14 @@ export const signUpEmail = createAuthEndpoint(
 			createdUser.id,
 			ctx.request,
 		);
+		if (!session) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Could not create session",
+				},
+			});
+		}
 		await setSessionCookie(ctx, session.id);
 		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
 			const token = await createEmailVerificationToken(

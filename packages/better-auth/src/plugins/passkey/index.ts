@@ -407,6 +407,14 @@ export const passkey = (options?: PasskeyOptions) => {
 							passkey.userId,
 							ctx.request,
 						);
+						if (!s) {
+							return ctx.json(null, {
+								status: 500,
+								body: {
+									message: "Failed to create session",
+								},
+							});
+						}
 						await setSessionCookie(ctx, s.id);
 						if (callbackURL) {
 							return ctx.json({
