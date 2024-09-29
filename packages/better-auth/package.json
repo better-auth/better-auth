@@ -55,6 +55,7 @@
         "@types/pg": "^8.11.6",
         "@types/prompts": "^2.4.9",
         "@types/react": "^18.3.3",
+        "drizzle-orm": "^0.33.0",
         "happy-dom": "^15.7.3",
         "hono": "^4.5.4",
         "listhen": "^1.7.2",
