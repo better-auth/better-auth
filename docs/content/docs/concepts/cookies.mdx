@@ -9,9 +9,11 @@ Core better auth cookies like `session` and `csrf` will follow `betterauth.${coo
 
 All cookies are `httpOnly` and `secure` if the server is running in production mode. 
 
-### Cross Subdomain Cookies
+### Cross Subdomain Cookies (Expermental 🧪)
 
-By default, cookies aren't shared across subdomains. You can enable cross subdomain cookies by setting `crossSubDomainCookies.enabled` to `true` in the `advanced` object in the auth options.
+By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To do this, set `crossSubDomainCookies` to `true` in the `advanced` object of the auth options.
+
+Keep in mind that this does not imply that all cookies will be shared across subdomains; only a specific subset of cookies necessary for session sharing will be set.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
