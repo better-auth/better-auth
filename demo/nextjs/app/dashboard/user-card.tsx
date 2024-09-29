@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -45,7 +44,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
 	Table,
 	TableBody,
@@ -54,7 +53,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import QRCode from "react-qr-code";
+import qrcode from "qrcode";
 import CopyButton from "@/components/ui/copy-button";
 
 export default function UserCard(props: {
@@ -62,14 +61,10 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data, isPending, error } = useSession(props.session);
-	const [ua, setUa] = useState<UAParser.UAParserInstance>();
+	const { data } = useSession(props.session);
+	const [qrCode, setQrCode] = useState<string>("");
 
 	const session = data || props.session;
-
-	useEffect(() => {
-		setUa(new UAParser(session?.session.userAgent));
-	}, [session?.session.userAgent]);
 
 	const [isTerminating, setIsTerminating] = useState<string>();
 
@@ -84,6 +79,17 @@ export default function UserCard(props: {
 		},
 		enabled: !!session?.user.twoFactorEnabled,
 	});
+
+	const genQRCode = async (uri: string) => {
+		const base64 = await qrcode.toDataURL(uri);
+		setQrCode(base64);
+	};
+
+	useEffect(() => {
+		if (qr?.totpURI) {
+			genQRCode(qr.totpURI);
+		}
+	}, [qr]);
 
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
@@ -122,8 +128,8 @@ export default function UserCard(props: {
 						<AlertTitle>Verify Your Email Address</AlertTitle>
 						<AlertDescription className="text-muted-foreground">
 							Please verify your email address. Check your inbox for the
-							verification email. If you haven't received the email, click the
-							button below to resend.
+							verification email. If you haven&apos;t received the email, click
+							the button below to resend.
 						</AlertDescription>
 						<Button
 							size="sm"
@@ -135,7 +141,7 @@ export default function UserCard(props: {
 										email: session?.user.email || "",
 									},
 									{
-										onRequest(context) {
+										onRequest() {
 											setEmailVerificationPending(true);
 										},
 										onError(context) {
@@ -232,7 +238,13 @@ export default function UserCard(props: {
 											</DialogDescription>
 										</DialogHeader>
 										<div className="flex items-center justify-center">
-											<QRCode value={qr?.totpURI || ""} />
+											<Image
+												width={200}
+												height={200}
+												className="rounded-md"
+												src={qrCode}
+												alt=""
+											/>
 										</div>
 										<div className="flex gap-2 items-center justify-center">
 											<p className="text-sm text-muted-foreground">
@@ -295,8 +307,7 @@ export default function UserCard(props: {
 												}
 												setIsPendingTwoFa(true);
 												if (session?.user.twoFactorEnabled) {
-													const res = await client.twoFactor.disable({
-														//@ts-ignore
+													await client.twoFactor.disable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -309,7 +320,7 @@ export default function UserCard(props: {
 														},
 													});
 												} else {
-													const res = await client.twoFactor.enable({
+													await client.twoFactor.enable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -606,7 +617,6 @@ function EditUserDialog(props: { session: Session | null }) {
 function AddPasskey() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
-	const queryClient = useQueryClient();
 	const [isLoading, setIsLoading] = useState(false);
 
 	const handleAddPasskey = async () => {
@@ -673,7 +683,7 @@ function AddPasskey() {
 }
 
 function ListPasskeys() {
-	const { data, error } = client.useListPasskeys();
+	const { data } = client.useListPasskeys();
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
 
@@ -725,7 +735,7 @@ function ListPasskeys() {
 									<TableCell className="text-right">
 										<button
 											onClick={async () => {
-												const res = await client.passkey.deletePasskey({
+												await client.passkey.deletePasskey({
 													id: passkey.id,
 													fetchOptions: {
 														onRequest: () => {

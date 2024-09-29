@@ -61,6 +61,7 @@
     "next": "15.0.0-canary.157",
     "next-themes": "^0.3.0",
     "prisma": "^5.19.1",
+    "qrcode": "^1.5.4",
     "react": "19.0.0-rc-7771d3a7-20240827",
     "react-day-picker": "8.10.1",
     "react-dom": "19.0.0-rc-7771d3a7-20240827",
