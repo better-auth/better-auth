@@ -45,4 +45,4 @@ jobs:
               run: pnpm typecheck
 
             - name: Stop Docker Containers
-              run: docker-compose down
+              run: docker compose down
