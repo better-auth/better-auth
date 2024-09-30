@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.2.3-beta.5",
+    "version": "0.2.3-beta.6",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
@@ -22,7 +22,6 @@
     },
     "exports": {
         ".": "./dist/index.js",
-        "./adapters": "./dist/adapters.js",
         "./social-providers": "./dist/social.js",
         "./client": {
             "import": "./dist/client.js",
