@@ -36,9 +36,19 @@ export interface Adapter {
 		update: Record<string, any>;
 	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
-	createSchema?: (options: BetterAuthOptions) => Promise<{
+	/**
+	 *
+	 * @param options
+	 * @param file - file path if provided by the user
+	 * @returns
+	 */
+	createSchema?: (
+		options: BetterAuthOptions,
+		file?: string,
+	) => Promise<{
 		code: string;
 		fileName: string;
+		append?: boolean;
 	}>;
 }
 

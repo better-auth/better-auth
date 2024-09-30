@@ -61,13 +61,17 @@ export const getAuthTables = (
 			fields: {
 				name: {
 					type: "string",
+					required: true,
 				},
 				email: {
 					type: "string",
+					unique: true,
+					required: true,
 				},
 				emailVerified: {
 					type: "boolean",
 					defaultValue: () => false,
+					required: true,
 				},
 				image: {
 					type: "string",
@@ -76,10 +80,12 @@ export const getAuthTables = (
 				createdAt: {
 					type: "date",
 					defaultValue: () => new Date(),
+					required: true,
 				},
 				updatedAt: {
 					type: "date",
 					defaultValue: () => new Date(),
+					required: true,
 				},
 				...user?.fields,
 			},
@@ -90,6 +96,7 @@ export const getAuthTables = (
 			fields: {
 				expiresAt: {
 					type: "date",
+					required: true,
 				},
 				ipAddress: {
 					type: "string",
@@ -106,6 +113,7 @@ export const getAuthTables = (
 						field: "id",
 						onDelete: "cascade",
 					},
+					required: true,
 				},
 				...session?.fields,
 			},
@@ -116,9 +124,11 @@ export const getAuthTables = (
 			fields: {
 				accountId: {
 					type: "string",
+					required: true,
 				},
 				providerId: {
 					type: "string",
+					required: true,
 				},
 				userId: {
 					type: "string",
@@ -127,6 +137,7 @@ export const getAuthTables = (
 						field: "id",
 						onDelete: "cascade",
 					},
+					required: true,
 				},
 				accessToken: {
 					type: "string",

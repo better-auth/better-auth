@@ -492,6 +492,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					},
 					publicKey: {
 						type: "string",
+						required: true,
 					},
 					userId: {
 						type: "string",
@@ -499,18 +500,23 @@ export const passkey = (options?: PasskeyOptions) => {
 							model: "user",
 							field: "id",
 						},
+						required: true,
 					},
 					webauthnUserID: {
 						type: "string",
+						required: true,
 					},
 					counter: {
 						type: "number",
+						required: true,
 					},
 					deviceType: {
 						type: "string",
+						required: true,
 					},
 					backedUp: {
 						type: "boolean",
+						required: true,
 					},
 					transports: {
 						type: "string",

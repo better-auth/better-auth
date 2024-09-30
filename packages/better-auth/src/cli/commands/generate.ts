@@ -4,15 +4,13 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "../../utils/logger";
-import { createKyselyAdapter } from "../../db/kysely";
 import ora from "ora";
-import chalk from "chalk";
 import prompts from "prompts";
-import { getMigrations } from "../utils/get-migration";
 import { getAdapter } from "../../db/utils";
 import fs from "fs/promises";
+import chalk from "chalk";
 
-export const db = new Command("generate")
+export const generate = new Command("generate")
 	.option(
 		"-c, --cwd <cwd>",
 		"the working directory. defaults to the current directory.",
@@ -54,21 +52,41 @@ export const db = new Command("generate")
 			process.exit(1);
 		}
 		const spinner = ora("preparing schema...").start();
-		const { code, fileName } = await adapter.createSchema(config);
+		const { code, fileName, append } = await adapter.createSchema(
+			config,
+			options.out,
+		);
 		spinner.stop();
-		const fileExists = existsSync(path.join(cwd, fileName));
-		if (fileExists) {
-			const { overwrite } = await prompts({
+		if (append) {
+			const { append } = await prompts({
 				type: "confirm",
-				name: "overwrite",
-				message: `The file ${fileName} already exists. Do you want to overwrite it?`,
-				initial: false,
+				name: "append",
+				message: `The file ${fileName} already exists. Do you want to ${chalk.yellow(
+					"append",
+				)} the schema to the file?`,
 			});
-			if (!overwrite) {
-				logger.info("Schema generation cancelled.");
+			if (append) {
+				await fs.appendFile(path.join(cwd, fileName), code);
+				logger.success(`🚀 schema was appended successfully!`);
 				process.exit(0);
+			} else {
+				logger.error("Schema generation aborted.");
+				process.exit(1);
 			}
 		}
+
+		const { confirm } = await prompts({
+			type: "confirm",
+			name: "confirm",
+			message: `Do you want to generate the schema to ${chalk.yellow(
+				fileName,
+			)}?`,
+		});
+		if (!confirm) {
+			logger.error("Schema generation aborted.");
+			process.exit(1);
+		}
+
 		const dirExist = existsSync(path.dirname(path.join(cwd, fileName)));
 		if (!dirExist) {
 			await fs.mkdir(path.dirname(path.join(cwd, fileName)), {

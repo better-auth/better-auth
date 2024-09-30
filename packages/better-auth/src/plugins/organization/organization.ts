@@ -269,6 +269,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				fields: {
 					name: {
 						type: "string",
+						required: true,
 					},
 					slug: {
 						type: "string",
@@ -342,6 +343,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						required: true,
 					},
 				},
 			},

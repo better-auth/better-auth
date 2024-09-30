@@ -13,17 +13,8 @@ describe("adapter test", async () => {
 		provider: "sqlite",
 		db,
 	});
-	// await runAdapterTest({
-	// 	adapter,
-	// });
-
-	it("", async () => {
-		await adapter.createSchema?.({
-			database: {
-				provider: "sqlite",
-				url: ":memory:",
-			},
-		});
+	await runAdapterTest({
+		adapter,
 	});
 });
 

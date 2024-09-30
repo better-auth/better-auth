@@ -3,10 +3,10 @@
 import { Command } from "commander";
 import "dotenv/config";
 import { migrate } from "./commands/migrate";
-import { db } from "./commands/db";
+import { generate } from "./commands/generate";
 async function main() {
 	const program = new Command().name("better-auth");
-	program.addCommand(migrate).addCommand(db);
+	program.addCommand(migrate).addCommand(generate);
 	program.parse();
 }
 
