@@ -1,8 +1,11 @@
 import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters";
 
 export const auth = betterAuth({
-	database: {
-		provider: "sqlite",
-		url: "./db.db",
-	},
+	database: prismaAdapter(
+		{},
+		{
+			provider: "mysql",
+		},
+	),
 });

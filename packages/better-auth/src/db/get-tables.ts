@@ -109,7 +109,7 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: "user",
+						model: options.user?.modelName || "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -133,7 +133,7 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: "user",
+						model: options.user?.modelName || "user",
 						field: "id",
 						onDelete: "cascade",
 					},
