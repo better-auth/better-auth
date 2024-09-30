@@ -46,6 +46,7 @@
         "./next-js": "./dist/next-js.js",
         "./package.json": "./package.json",
         "./node": "./dist/node.js",
+        "./adapters": "./dist/adapters.js",
         "./utils": "./dist/utils.js"
     },
     "devDependencies": {
