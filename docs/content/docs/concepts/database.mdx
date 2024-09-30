@@ -67,7 +67,7 @@ If your database is managed by an ORM like Prisma or Drizzle, you can use the co
 **Example: Prisma**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { PrismaAdapter } from "better-auth/adapters";
+import { PrismaAdapter } from "better-auth/adapters/prisma";
 
 const prisma = new PrismaAdapter({
         prisma: prismaClient
@@ -84,7 +84,7 @@ export const auth = await betterAuth({
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./drizzle";
-import { drizzleAdapter } from "better-auth/adapters";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 export const auth = await betterAuth({
     database: drizzleAdapter(db, {
