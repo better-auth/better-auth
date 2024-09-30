@@ -169,7 +169,6 @@ export const prismaAdapter = (
 								name: field,
 								within: prismaModel.properties,
 							});
-							console.log(field, "exists");
 							if (isAlreadyExist) {
 								continue;
 							}
@@ -193,7 +192,11 @@ export const prismaAdapter = (
 								);
 						}
 					}
-					if (originalTable !== tableName) {
+					const hasAttribute = builder.findByType("attribute", {
+						name: "map",
+						within: prismaModel?.properties,
+					});
+					if (originalTable !== tableName && !hasAttribute) {
 						builder.model(tableName).blockAttribute("map", originalTable);
 					}
 				}
