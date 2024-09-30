@@ -9,9 +9,8 @@ describe("adapter test", async () => {
 	beforeAll(async () => {
 		await clearDb();
 	});
-	const adapter = prismaAdapter({
+	const adapter = prismaAdapter(db, {
 		provider: "sqlite",
-		db,
 	});
 	await runAdapterTest({
 		adapter,
