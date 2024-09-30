@@ -44,7 +44,6 @@ export const twitch = (options: TwitchOptions) => {
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
 			return validateAuthorizationCode({
 				code,
-				codeVerifier,
 				redirectURI:
 					redirectURI || getRedirectURI("twitch", options.redirectURI),
 				options,

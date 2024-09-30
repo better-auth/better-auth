@@ -1,5 +1,4 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { Discord } from "arctic";
 import type { OAuthProvider } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
@@ -82,22 +81,24 @@ export interface DiscordOptions {
 }
 
 export const discord = (options: DiscordOptions) => {
-	const discordArctic = new Discord(
-		options.clientId,
-		options.clientSecret,
-		getRedirectURI("discord", options.redirectURI),
-	);
 	return {
 		id: "discord",
 		name: "Discord",
 		createAuthorizationURL({ state, scopes }) {
-			const _scope = scopes || ["email"];
-			return discordArctic.createAuthorizationURL(state, _scope);
+			const _scopes = scopes || ["identify", "email"];
+			return new URL(
+				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
+					"+",
+				)}&response_type=code&client_id=${
+					options.clientId
+				}&redirect_uri=${encodeURIComponent(
+					getRedirectURI("discord", options.redirectURI),
+				)}&state=${state}`,
+			);
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
 			return validateAuthorizationCode({
 				code,
-				codeVerifier,
 				redirectURI:
 					redirectURI || getRedirectURI("discord", options.redirectURI),
 				options,
@@ -108,14 +109,24 @@ export const discord = (options: DiscordOptions) => {
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
 				"https://discord.com/api/users/@me",
 				{
-					auth: {
-						type: "Bearer",
-						token: token.accessToken(),
+					headers: {
+						authorization: `Bearer ${token.accessToken()}`,
 					},
 				},
 			);
+
 			if (error) {
 				return null;
+			}
+			if (profile.avatar === null) {
+				const defaultAvatarNumber =
+					profile.discriminator === "0"
+						? Number(BigInt(profile.id) >> BigInt(22)) % 6
+						: parseInt(profile.discriminator) % 5;
+				profile.image_url = `https://cdn.discordapp.com/embed/avatars/${defaultAvatarNumber}.png`;
+			} else {
+				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
+				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
 			}
 			return {
 				user: {
@@ -123,6 +134,7 @@ export const discord = (options: DiscordOptions) => {
 					name: profile.display_name || profile.username || "",
 					email: profile.email,
 					emailVerified: profile.verified,
+					image: profile.image_url,
 				},
 				data: profile,
 			};

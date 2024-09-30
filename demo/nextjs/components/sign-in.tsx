@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -117,6 +117,19 @@ export default function SignIn() {
 					>
 						<GitHubLogoIcon />
 						Continue with Github
+					</Button>
+					<Button
+						variant="outline"
+						className="w-full gap-2"
+						onClick={async () => {
+							await signIn.social({
+								provider: "discord",
+								callbackURL: "/dashboard",
+							});
+						}}
+					>
+						<DiscordLogoIcon />
+						Continue with Discord
 					</Button>
 					<Button
 						variant="outline"
