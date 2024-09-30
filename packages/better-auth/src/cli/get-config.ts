@@ -90,14 +90,12 @@ export async function getConfig({
 						break;
 					}
 				} catch (e) {
-					logger.error(e);
 					process.exit(1);
 				}
 			}
 		}
 		return configFile;
 	} catch (e) {
-		logger.error("Error while reading your auth config.", e);
 		process.exit(1);
 	}
 }

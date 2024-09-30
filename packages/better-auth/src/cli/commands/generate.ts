@@ -45,7 +45,10 @@ export const generate = new Command("generate")
 			);
 			return;
 		}
-		const adapter = await getAdapter(config);
+		const adapter = await getAdapter(config, true).catch((e) => {
+			logger.error(e.message);
+			process.exit(1);
+		});
 
 		if (!adapter.createSchema) {
 			logger.error("The adapter does not support schema generation.");
@@ -57,6 +60,10 @@ export const generate = new Command("generate")
 			options.out,
 		);
 		spinner.stop();
+		if (!code) {
+			logger.success("Your schema is already up to date.");
+			process.exit(0);
+		}
 		if (append) {
 			const { append } = await prompts({
 				type: "confirm",

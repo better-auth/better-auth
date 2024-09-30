@@ -194,7 +194,7 @@ export const prismaAdapter = ({
 				}
 			});
 			return {
-				code: schema,
+				code: schema.trim() === schemaPrisma.trim() ? "" : schema,
 				fileName: filePath,
 			};
 		},
