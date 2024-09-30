@@ -4,7 +4,6 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { user } from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
-import { getTestInstance } from "../../../test-utils/test-instance";
 import { getMigrations } from "../../../cli/utils/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -32,8 +31,7 @@ describe("adapter test", async () => {
 		},
 	});
 
-	const adapter = drizzleAdapter({
-		db: db,
+	const adapter = drizzleAdapter(db, {
 		schema: {
 			user,
 		},

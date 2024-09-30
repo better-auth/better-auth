@@ -8,6 +8,7 @@ export default defineConfig((env) => {
 			client: "./src/client/index.ts",
 			adapters: "./src/adapters/index.ts",
 			cli: "./src/cli/index.ts",
+			adapters: "./src/adapters/index.ts",
 			react: "./src/client/react.ts",
 			vue: "./src/client/vue.ts",
 			svelte: "./src/client/svelte.ts",
