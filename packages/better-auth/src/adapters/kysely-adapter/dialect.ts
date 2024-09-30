@@ -39,6 +39,7 @@ export const getDialect = async (config: BetterAuthOptions) => {
 						"Please install `mysql2` to use mysql database",
 					);
 				});
+
 				const params = new URL(connectionString);
 				const pool = createPool({
 					host: params.hostname,

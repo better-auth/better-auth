@@ -109,11 +109,9 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
-            database: {
-                provider: prismaAdapter(prisma, {
+            database: prismaAdapter(prisma, {
                     provider: "sqlite", // or "mysql", "postgresql", ...etc
-                }),
-            },
+            }),
         });
     ```
     </Tab>
@@ -125,11 +123,9 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     import { db } from "@/db"; // your drizzle instance
 
     export const auth = betterAuth({
-        database: {
-            provider: drizzleAdapter(db, {
+        database: drizzleAdapter(db, {
                 provider: "pg", // or "mysql", "sqlite"
-            }),
-        },
+        })
     });
     ```
     </Tab>
@@ -141,9 +137,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: {
-            provider: monogdbAdapter(client),
-        },
+        database: monogdbAdapter(client)
     });
     ```
     </Tab>
