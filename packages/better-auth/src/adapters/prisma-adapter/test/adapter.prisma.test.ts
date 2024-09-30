@@ -1,4 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { prismaAdapter } from "..";
 import { runAdapterTest } from "../../test";
@@ -12,6 +12,17 @@ describe("adapter test", async () => {
 	const adapter = prismaAdapter(db, {
 		provider: "sqlite",
 	});
+
+	it("should match", async () => {
+		const res = await adapter.createSchema!({
+			database: {
+				provider: "sqlite",
+				url: ":memory:",
+			},
+		});
+		expect(res.code).toMatchSnapshot("__snapshots__/adapter.prisma");
+	});
+
 	await runAdapterTest({
 		adapter,
 	});

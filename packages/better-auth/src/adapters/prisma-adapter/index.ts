@@ -139,7 +139,8 @@ export const prismaAdapter = (
 			const schema = produceSchema(schemaPrisma, (builder) => {
 				for (const table in tables) {
 					const fields = tables[table].fields;
-					const tableName = tables[table].tableName;
+					const originalTable = tables[table].tableName;
+					const tableName = capitalizeFirstLetter(originalTable);
 					function getType(type: FieldType, isOptional: boolean) {
 						if (type === "string") {
 							return isOptional ? "String?" : "String";
@@ -184,13 +185,16 @@ export const prismaAdapter = (
 							builder
 								.model(tableName)
 								.field(
+									`${attr.references.model.toLowerCase()}s`,
 									capitalizeFirstLetter(attr.references.model),
-									attr.references.model,
 								)
 								.attribute(
 									`relation(fields: [${field}], references: [${attr.references.field}], onDelete: Cascade)`,
 								);
 						}
+					}
+					if (originalTable !== tableName) {
+						builder.model(tableName).blockAttribute("map", originalTable);
 					}
 				}
 			});
