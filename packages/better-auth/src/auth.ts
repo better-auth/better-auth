@@ -29,24 +29,25 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 
 	return {
 		handler: async (request: Request) => {
-			const basePath = authContext.options.basePath;
+			const ctx = await authContext;
+			const basePath = ctx.options.basePath;
 			const url = new URL(request.url);
-			if (!authContext.options.baseURL) {
+			if (!ctx.options.baseURL) {
 				const baseURL = `${url.origin}/api/auth`;
-				authContext.options.baseURL = baseURL;
-				authContext.baseURL = baseURL;
+				ctx.options.baseURL = baseURL;
+				ctx.baseURL = baseURL;
 			}
-			if (!authContext.options.baseURL) {
+			if (!ctx.options.baseURL) {
 				return new Response("Base URL not set", { status: 400 });
 			}
 			if (url.pathname === basePath || url.pathname === `${basePath}/`) {
 				return new Response("Welcome to BetterAuth", { status: 200 });
 			}
-			const { handler } = router(authContext, options);
+			const { handler } = router(ctx, options);
 			return handler(request);
 		},
 		api: api as InferAPI<typeof api>,
-		options: authContext.options as O,
+		options: options as O,
 		$Infer: {} as {
 			Session: {
 				session: Prettify<InferSession<O>>;

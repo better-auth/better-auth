@@ -43,7 +43,7 @@ export const migrate = new Command("migrate")
 			);
 			return;
 		}
-		const db = createKyselyAdapter(config);
+		const db = await createKyselyAdapter(config);
 		if (!db) {
 			logger.error("Invalid database configuration.");
 			process.exit(1);

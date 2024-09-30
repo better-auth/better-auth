@@ -5,6 +5,7 @@ import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import type {
+	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	OAuthProvider,
@@ -20,15 +21,15 @@ import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
 import { crossSubdomainCookies } from "./internal-plugins";
 
-export const init = (opts: BetterAuthOptions) => {
+export const init = async (opts: BetterAuthOptions) => {
 	/**
 	 * Run plugins init to get the actual options
 	 */
 	const { options, context } = runPluginInit(opts);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
-	const adapter = getAdapter(options);
-	const db = createKyselyAdapter(options);
+	const adapter = await getAdapter(options);
+	const db = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
 	const secret =
@@ -113,7 +114,7 @@ export type AuthContext = {
 		max: number;
 		storage: "memory" | "database";
 	} & BetterAuthOptions["rateLimit"];
-	adapter: ReturnType<typeof getAdapter>;
+	adapter: Adapter;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
 	createAuthCookie: ReturnType<typeof createCookieGetter>;
 	secret: string;

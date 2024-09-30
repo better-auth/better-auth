@@ -45,7 +45,7 @@ export const generate = new Command("generate")
 			);
 			return;
 		}
-		const adapter = getAdapter(config);
+		const adapter = await getAdapter(config);
 
 		if (!adapter.createSchema) {
 			logger.error("The adapter does not support schema generation.");

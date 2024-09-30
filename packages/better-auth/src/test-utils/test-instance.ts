@@ -138,6 +138,6 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		signInWithUser,
 		customFetchImpl,
 		sessionSetter,
-		db: getAdapter(auth.options),
+		db: await getAdapter(auth.options),
 	};
 }

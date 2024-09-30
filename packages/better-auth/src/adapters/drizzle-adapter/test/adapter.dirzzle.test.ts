@@ -35,7 +35,7 @@ describe("adapter test", async () => {
 		schema: {
 			user,
 		},
-		databaseType: "sqlite",
+		provider: "pg",
 	});
 
 	await runAdapterTest({

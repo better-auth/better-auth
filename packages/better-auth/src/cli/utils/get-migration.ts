@@ -68,7 +68,7 @@ export function matchType(
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const dbType = getDatabaseType(config);
-	const db = createKyselyAdapter(config);
+	const db = await createKyselyAdapter(config);
 	if (!db) {
 		logger.error("Invalid database configuration.");
 		process.exit(1);

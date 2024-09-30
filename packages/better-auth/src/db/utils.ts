@@ -9,7 +9,7 @@ import {
 } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 
-export function getAdapter(options: BetterAuthOptions): Adapter {
+export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
 		throw new BetterAuthError("Database configuration is required");
 	}
@@ -18,7 +18,7 @@ export function getAdapter(options: BetterAuthOptions): Adapter {
 		return options.database;
 	}
 
-	const db = createKyselyAdapter(options);
+	const db = await createKyselyAdapter(options);
 	if (!db) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}

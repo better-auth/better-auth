@@ -14,6 +14,7 @@
   "dependencies": {
     "@noble/ciphers": "^0.6.0",
     "better-auth": "workspace:*",
+    "better-sqlite3": "^11.3.0",
     "oslo": "^1.2.1"
   }
 }
