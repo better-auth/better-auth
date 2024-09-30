@@ -9,5 +9,5 @@ export const auth = betterAuth({
 			provider: "mysql",
 		},
 	),
-	plugins: [twoFactor()]
+	plugins: [twoFactor()],
 });
