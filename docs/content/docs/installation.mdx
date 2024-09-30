@@ -104,7 +104,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     <Tab value="prisma">
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { prismaAdapter } from "better-auth/adapters";
+        import { prismaAdapter } from "better-auth/adapters/prisma";
         import { PrismaClient } from "@prisma/client";
 
         const prisma = new PrismaClient();
@@ -119,7 +119,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     <Tab value="drizzle">
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { drizzleAdapter } from "better-auth/adapters";
+    import { drizzleAdapter } from "better-auth/adapters/drizzle";
     import { db } from "@/db"; // your drizzle instance
 
     export const auth = betterAuth({
@@ -133,7 +133,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     <Tab value="mongodb">
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { monogdbAdapter } from "better-auth/adapters";
+    import { monogdbAdapter } from "better-auth/adapters/mongodb";
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
