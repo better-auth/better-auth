@@ -137,21 +137,11 @@ export const drizzleAdapter = (
 			const timestampAndBoolean =
 				databaseType !== "sqlite" ? "timestamp, boolean" : "";
 			const int = databaseType === "mysql" ? "int" : "integer";
-			let code = "";
+			let code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+			`;
 
 			const fileExist = existsSync(filePath);
-			if (fileExist) {
-				const file = await fs.readFile(filePath, "utf-8");
-				if (file.includes("import")) {
-					code = file;
-				} else {
-					code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-				`;
-				}
-			} else {
-				code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-			`;
-			}
+			let fileContent = await fs.readFile(filePath, "utf-8");
 
 			for (const table in tables) {
 				const tableName = tables[table].tableName;
@@ -196,6 +186,18 @@ export const drizzleAdapter = (
 						.join()}
 				});`;
 				code += `\n${schema}\n`;
+			}
+			if (fileExist) {
+				if (fileContent.includes(code)) {
+					return {
+						code: "",
+						fileName: filePath,
+						append: false,
+					};
+				}
+				if (fileContent.includes("import")) {
+					code = code.replace(/import {.*?} from "drizzle-orm\/.*?";/, "");
+				}
 			}
 			const formattedCode = await prettier.format(code, {
 				semi: true,

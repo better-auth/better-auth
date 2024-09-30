@@ -60,6 +60,10 @@ export const generate = new Command("generate")
 			options.out,
 		);
 		spinner.stop();
+		if (!code) {
+			logger.success("Your schema is already up to date.");
+			process.exit(0);
+		}
 		if (append) {
 			const { append } = await prompts({
 				type: "confirm",
