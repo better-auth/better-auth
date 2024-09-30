@@ -6,9 +6,19 @@ import {
 	SqliteDialect,
 } from "kysely";
 import type { BetterAuthOptions } from "../../types";
-import { BetterAuthError } from "../../error/better-auth-error";
+import {
+	BetterAuthError,
+	MissingDependencyError,
+} from "../../error/better-auth-error";
+import { execa } from "execa";
+import prompts from "prompts";
+import { getPackageManager } from "../../cli/utils/get-package-manager";
+import ora from "ora";
 
-export const getDialect = async (config: BetterAuthOptions) => {
+export const getDialect = async (
+	config: BetterAuthOptions,
+	isCli?: boolean,
+) => {
 	if (!config.database) {
 		return undefined;
 	}
@@ -20,25 +30,24 @@ export const getDialect = async (config: BetterAuthOptions) => {
 		const provider = config.database.provider;
 		const connectionString = config.database?.url?.trim();
 		if (provider === "postgres") {
-			const pg = await import("pg").catch((e) => {
-				throw new BetterAuthError(
-					"Please install `pg` to use postgres database",
-				);
+			const pg = await import("pg").catch(async (e) => {
+				throw new MissingDependencyError("pg");
 			});
-			const Pool = pg.Pool;
+			const Pool = pg.default?.Pool || pg.Pool;
+			const pool = new Pool({
+				connectionString,
+			});
 			dialect = new PostgresDialect({
-				pool: new Pool({
-					connectionString,
-				}),
+				pool,
 			});
 		}
 		if (provider === "mysql") {
 			try {
-				const { createPool } = await import("mysql2/promise").catch((e) => {
-					throw new BetterAuthError(
-						"Please install `mysql2` to use mysql database",
-					);
-				});
+				const { createPool } = await import("mysql2/promise").catch(
+					async (e) => {
+						throw new MissingDependencyError("mysql2");
+					},
+				);
 
 				const params = new URL(connectionString);
 				const pool = createPool({
@@ -59,13 +68,10 @@ export const getDialect = async (config: BetterAuthOptions) => {
 
 		if (provider === "sqlite") {
 			try {
-				const database = await import("better-sqlite3");
+				const database = await import("better-sqlite3").catch(async (e) => {
+					throw new MissingDependencyError("better-sqlite3");
+				});
 				const Database = database.default || database;
-				if (!Database) {
-					throw new BetterAuthError(
-						"Failed to import better-sqlite3. Make sure `better-sqlite3` is properly installed.",
-					);
-				}
 
 				const db = new Database(connectionString);
 				dialect = new SqliteDialect({
@@ -82,8 +88,11 @@ export const getDialect = async (config: BetterAuthOptions) => {
 	return dialect;
 };
 
-export const createKyselyAdapter = async (config: BetterAuthOptions) => {
-	const dialect = await getDialect(config);
+export const createKyselyAdapter = async (
+	config: BetterAuthOptions,
+	isCli?: boolean,
+) => {
+	const dialect = await getDialect(config, isCli);
 	if (!dialect) {
 		return dialect;
 	}

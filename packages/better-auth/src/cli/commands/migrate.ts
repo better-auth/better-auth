@@ -9,6 +9,8 @@ import ora from "ora";
 import chalk from "chalk";
 import prompts from "prompts";
 import { getMigrations } from "../utils/get-migration";
+import { MissingDependencyError } from "../../error/better-auth-error";
+import { installDependency } from "../utils/install-dep";
 
 export const migrate = new Command("migrate")
 	.option(
@@ -43,7 +45,10 @@ export const migrate = new Command("migrate")
 			);
 			return;
 		}
-		const db = await createKyselyAdapter(config);
+		const db = await createKyselyAdapter(config, true).catch((e) => {
+			logger.error(e.message);
+			process.exit(1);
+		});
 		if (!db) {
 			logger.error("Invalid database configuration.");
 			process.exit(1);
