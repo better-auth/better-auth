@@ -7,7 +7,10 @@ import type { FieldAttribute, FieldType } from "../../db";
 import { logger } from "../../utils/logger";
 import type { BetterAuthOptions } from "../../types";
 import { getSchema } from "./get-schema";
-import { createKyselyAdapter, getDatabaseType } from "../../db/kysely";
+import {
+	createKyselyAdapter,
+	getDatabaseType,
+} from "../../adapters/kysely-adapter/dialect";
 
 const postgresMap = {
 	string: ["character varying", "text"],

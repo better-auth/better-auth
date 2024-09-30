@@ -3,7 +3,11 @@ import { BetterAuthError } from "../error/better-auth-error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getAuthTables } from "./get-tables";
-import { createKyselyAdapter, getDatabaseType, kyselyAdapter } from "./kysely";
+import {
+	createKyselyAdapter,
+	getDatabaseType,
+} from "../adapters/kysely-adapter/dialect";
+import { kyselyAdapter } from "../adapters/kysely-adapter";
 
 export function getAdapter(options: BetterAuthOptions): Adapter {
 	if (!options.database) {

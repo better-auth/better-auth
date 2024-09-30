@@ -1,0 +1,32 @@
+---
+title: CLI
+description: built in CLI for managing your project
+---
+
+Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
+
+## Generate
+
+The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+
+```bash title="Terminal"
+pnpm better-auth generate
+```
+
+### Options
+
+- `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+
+
+## Migrate
+
+The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter.
+
+```bash title="Terminal"
+pnpm better-auth migrate
+```
+
+### Options
+
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.

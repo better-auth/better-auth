@@ -1,6 +1,6 @@
 import type { Kysely } from "kysely";
 import { getAuthTables } from "./db/get-tables";
-import { createKyselyAdapter } from "./db/kysely";
+import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";

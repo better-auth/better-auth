@@ -4,7 +4,7 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "../../utils/logger";
-import { createKyselyAdapter } from "../../db/kysely";
+import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
 import ora from "ora";
 import chalk from "chalk";
 import prompts from "prompts";

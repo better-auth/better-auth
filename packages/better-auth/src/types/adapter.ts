@@ -16,6 +16,7 @@ export type Where = {
  * Adapter Interface
  */
 export interface Adapter {
+	id: string;
 	create: <T, R = T>(data: {
 		model: string;
 		data: T;

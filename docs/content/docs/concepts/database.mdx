@@ -60,9 +60,42 @@ See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialec
 </Callout>
 
 
+## Using Adapters
+
+If your database is managed by an ORM like Prisma or Drizzle, you can use the corresponding adapter to connect to the database. Better auth comes with built-in adapters for Prisma and Drizzle. You can pass the adapter to the `database` object in the auth options.
+
+**Example: Prisma**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { PrismaAdapter } from "better-auth/adapters/prisma"
+
+const prisma = new PrismaAdapter({
+        prisma: prismaClient
+})
+
+export const auth = await betterAuth({
+    database: prismaAdapter(prisma, {
+      provider: "sqlite" // or "postgres" or "mysql" or any other supported by prisma
+    })
+})
+```
+
+**Example: Drizzle**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { db } from "./drizzle"
+import { drizzleAdapter } from "better-auth/adapters"
+
+export const auth = await betterAuth({
+    database: drizzleAdapter(db, {
+      provider: "sqlite" // or "pg" or "mysql" 
+    })
+})
+```
+
 ## Running Migrations
 
-Better auth comes with a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed.
+Better auth comes with a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed. 
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns.
 
@@ -70,7 +103,19 @@ The cli checks your database and prompts you to add missing tables or update exi
 npx better-auth migrate
 ```
 
+## Running Migrations Manually and Generting Schema
+
+Better auth also provides a `generate` command to generate the schema required by better auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+
+```bash
+npx better-auth generate
+```
+
+See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
+
+<Callout>
 If you prefer adding tables manually, you can do that as well. The core schema required by better auth is described below and you can find additional schema required by plugins in the plugin documentation.
+</Callout>
 
 ## Core Schema
 

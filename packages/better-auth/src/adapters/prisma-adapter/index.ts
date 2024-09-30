@@ -64,6 +64,7 @@ export const prismaAdapter = ({
 }): Adapter => {
 	const db: PrismaClient = prisma;
 	return {
+		id: "prisma",
 		async create(data) {
 			const { model, data: val, select } = data;
 

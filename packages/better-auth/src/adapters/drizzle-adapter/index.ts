@@ -68,6 +68,7 @@ export const drizzleAdapter = (
 	}
 	const databaseType = options?.provider;
 	return {
+		id: "drizzle",
 		async create(data) {
 			const { model, data: val } = data;
 			const schemaModel = getSchema(model, schema);
