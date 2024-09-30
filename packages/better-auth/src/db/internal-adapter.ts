@@ -28,7 +28,7 @@ export const createInternalAdapter = (
 		}
 
 		const created = await adapter.create<T>({
-			model,
+			model: tables[model].tableName,
 			data,
 		});
 
