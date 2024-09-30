@@ -1,4 +1,8 @@
+import path from "path";
+import type { FieldType } from "../../db";
+import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, Where } from "../../types";
+import fs from "fs/promises";
 
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
@@ -48,7 +52,13 @@ interface PrismaClient {
 	};
 }
 
-export const prismaAdapter = (prisma: any): Adapter => {
+export const prismaAdapter = ({
+	db: prisma,
+	provider,
+}: {
+	db: any;
+	provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
+}): Adapter => {
 	const db: PrismaClient = prisma;
 	return {
 		async create(data) {
@@ -106,6 +116,53 @@ export const prismaAdapter = (prisma: any): Adapter => {
 			const whereClause = whereConvertor(where);
 
 			return await db[model].delete({ where: whereClause });
+		},
+		async createSchema(options) {
+			const tables = getAuthTables(options);
+			let code = "";
+			for (const table in tables) {
+				const fields = tables[table].fields;
+				const tableName = tables[table].tableName;
+				function getType(type: FieldType) {
+					if (type === "string") {
+						return "String";
+					}
+					if (type === "number") {
+						return "Int";
+					}
+					if (type === "boolean") {
+						return "Boolean";
+					}
+					if (type === "date") {
+						return "DateTime";
+					}
+				}
+				function getForeginKey(
+					field: string,
+					reference: { model: string; field: string },
+				) {
+					return `${reference.model} ${reference.model} @relation(fields: [${field}], references: [${reference.field}])`;
+				}
+				const schema = `model ${tableName} {
+					id String @id 
+					${Object.entries(fields)
+						.map(([key, value]) => {
+							return `${key} ${getType(value.type)}${
+								value.required === false ? "?" : ""
+							}${value.unique ? " @unique" : ""}${
+								value.references
+									? `\n${getForeginKey(key, value.references!)}`
+									: ""
+							}`;
+						})
+						.join("\n")}
+				}`;
+				code += `${schema}\n`;
+			}
+			return {
+				code,
+				fileName: "./prisma/schema/auth.prisma",
+			};
 		},
 	};
 };

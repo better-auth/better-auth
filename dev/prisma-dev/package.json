@@ -1,0 +1,7 @@
+{
+    "name": "prisma-dev",
+    "dependencies": {
+        "better-auth": "workspace:*",
+        "prisma": "^5.19.1"
+    }
+}

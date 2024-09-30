@@ -12,6 +12,7 @@ import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import pg from "pg";
 import { BetterAuthError } from "../error/better-auth-error";
+import { getMigrations } from "../cli/utils/get-migration";
 
 const { Pool } = pg;
 
@@ -228,6 +229,14 @@ export const kyselyAdapter = (
 			}
 
 			await query.execute();
+		},
+		async createSchema(options) {
+			const { compileMigrations } = await getMigrations(options);
+			console.log(compileMigrations);
+			return {
+				code: await compileMigrations(),
+				fileName: `./better-auth_migrations/${new Date().toISOString()}.sql`,
+			};
 		},
 	};
 };

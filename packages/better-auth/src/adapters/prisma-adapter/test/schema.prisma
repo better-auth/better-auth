@@ -15,3 +15,8 @@ model User {
     createdAt     DateTime @default(now())
     updatedAt     DateTime @default(now()) @updatedAt
 }
+
+model session {
+    id     String @id @default(cuid())
+    userId String
+}

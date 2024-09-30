@@ -11,7 +11,9 @@ export type BetterAuthDbSchema = Record<
 	}
 >;
 
-export const getAuthTables = (options: BetterAuthOptions) => {
+export const getAuthTables = (
+	options: BetterAuthOptions,
+): BetterAuthDbSchema => {
 	const pluginSchema = options.plugins?.reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;

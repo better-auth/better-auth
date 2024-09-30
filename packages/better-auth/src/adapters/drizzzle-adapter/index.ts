@@ -1,11 +1,15 @@
 import { and, eq, or, SQL } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
+import type { FieldType } from "../../db";
+import * as prettier from "prettier";
+import { getAuthTables } from "../../db/get-tables";
 
 export interface DrizzleAdapterOptions<
 	T extends Record<string, any> = Record<string, any>,
 > {
 	db: T;
 	schema: Record<string, any>;
+	databaseType?: "pg" | "mysql" | "sqlite";
 }
 
 function getSchema(modelName: string, schema: Record<string, any>) {
@@ -51,6 +55,7 @@ function whereConvertor(where: Where[], schemaModel: any) {
 export const drizzleAdapter = ({
 	db,
 	schema,
+	databaseType,
 }: DrizzleAdapterOptions): Adapter => {
 	return {
 		async create(data) {
@@ -114,6 +119,67 @@ export const drizzleAdapter = ({
 			const res = await db.delete(schemaModel).where(...wheres);
 
 			return res[0];
+		},
+		async createSchema(options) {
+			const tables = getAuthTables(options);
+			const timestampAndBoolean =
+				databaseType !== "sqlite" ? "timestamp, boolean" : "";
+			const int = databaseType === "mysql" ? "int" : "integer";
+			let code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+			`;
+			for (const table in tables) {
+				const tableName = tables[table].tableName;
+				const fields = tables[table].fields;
+				function getType(name: string, type: FieldType) {
+					if (type === "string") {
+						return `text('${name}')`;
+					}
+					if (type === "number") {
+						return `${int}('${name}')`;
+					}
+					if (type === "boolean") {
+						if (databaseType === "sqlite") {
+							return `integer('${name}', {
+								mode: "boolean"
+							})`;
+						}
+						return `boolean('${name}')`;
+					}
+					if (type === "date") {
+						if (databaseType === "sqlite") {
+							return `integer('${name}', {
+								mode: "timestamp"
+							})`;
+						}
+						return `timestamp('${name}')`;
+					}
+				}
+				const schema = `export const ${table} = ${databaseType}Table("${tableName}", {
+					id: text("id").primaryKey(),
+					${Object.keys(fields)
+						.map((field) => {
+							const attr = fields[field];
+							return `${field}: ${getType(field, attr.type)}${
+								attr.required !== false ? ".notNull()" : ""
+							}${attr.unique ? ".unique()" : ""}${
+								attr.references
+									? `.references(()=> ${attr.references.model}.${attr.references.field})`
+									: ""
+							}`;
+						})
+						.join()}
+				});`;
+				code += `\n${schema}\n`;
+			}
+			const formattedCode = await prettier.format(code, {
+				semi: true,
+				parser: "typescript",
+				tabWidth: 4,
+			});
+			return {
+				code: formattedCode,
+				fileName: "schema.ts",
+			};
 		},
 	};
 };

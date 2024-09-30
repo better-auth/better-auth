@@ -200,5 +200,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 			await migration.execute();
 		}
 	}
-	return { toBeCreated, toBeAdded, runMigrations };
+	async function compileMigrations() {
+		const compiled = migrations.map((m) => m.compile().sql);
+		return compiled.join(";\n\n");
+	}
+	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }

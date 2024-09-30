@@ -1,5 +1,6 @@
 import type { Session } from "../db/schema";
 import type { FieldAttribute } from "../db";
+import type { BetterAuthOptions } from "./options";
 
 /**
  * Adapter where clause
@@ -35,6 +36,10 @@ export interface Adapter {
 		update: Record<string, any>;
 	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	createSchema?: (options: BetterAuthOptions) => Promise<{
+		code: string;
+		fileName: string;
+	}>;
 }
 
 export interface SessionAdapter {
