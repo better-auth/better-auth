@@ -12,8 +12,8 @@ describe("init", async () => {
 		expect(res).toMatchSnapshot();
 	});
 
-	it("should mount internal plugins", () => {
-		const res = init({
+	it("should mount internal plugins", async () => {
+		const res = await init({
 			database: {
 				provider: "sqlite",
 				url: ":memory:",
@@ -24,15 +24,16 @@ describe("init", async () => {
 				},
 			},
 		});
+
 		expect(res.options.plugins).toHaveLength(1);
 		expect(res.options.plugins[0]["id"]).toBe("cross-subdomain-cookies");
 	});
 
-	it("should execute plugins init", () => {
+	it("should execute plugins init", async () => {
 		let changedCtx = {
 			baseURL: "http://test.test",
 		};
-		const res = init({
+		const res = await init({
 			database: {
 				provider: "sqlite",
 				url: ":memory:",

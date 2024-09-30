@@ -36,8 +36,8 @@ import { onRequestRateLimit } from "./rate-limiter";
 export function getEndpoints<
 	C extends AuthContext,
 	Option extends BetterAuthOptions,
->(ctx: C, options: Option) {
-	const pluginEndpoints = ctx.options.plugins?.reduce(
+>(ctx: Promise<C> | C, options: Option) {
+	const pluginEndpoints = options.plugins?.reduce(
 		(acc, plugin) => {
 			return {
 				...acc,
@@ -56,7 +56,7 @@ export function getEndpoints<
 	>;
 
 	const middlewares =
-		ctx.options.plugins
+		options.plugins
 			?.map((plugin) =>
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
@@ -113,16 +113,17 @@ export function getEndpoints<
 			 * TODO: move this to respond a json response
 			 * instead of response object.
 			 */
+			const c = await ctx;
 			//@ts-ignore
 			const endpointRes = await value({
 				...context,
 				context: {
-					...ctx,
+					...c,
 					...context.context,
 				},
 			});
 			let response = endpointRes;
-			for (const plugin of ctx.options.plugins || []) {
+			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
 						const match = hook.matcher(context);

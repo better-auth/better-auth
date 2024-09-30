@@ -7,7 +7,10 @@ import type { FieldAttribute, FieldType } from "../../db";
 import { logger } from "../../utils/logger";
 import type { BetterAuthOptions } from "../../types";
 import { getSchema } from "./get-schema";
-import { createKyselyAdapter, getDatabaseType } from "../../db/kysely";
+import {
+	createKyselyAdapter,
+	getDatabaseType,
+} from "../../adapters/kysely-adapter/dialect";
 
 const postgresMap = {
 	string: ["character varying", "text"],
@@ -65,7 +68,7 @@ export function matchType(
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const dbType = getDatabaseType(config);
-	const db = createKyselyAdapter(config);
+	const db = await createKyselyAdapter(config);
 	if (!db) {
 		logger.error("Invalid database configuration.");
 		process.exit(1);
@@ -200,5 +203,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 			await migration.execute();
 		}
 	}
-	return { toBeCreated, toBeAdded, runMigrations };
+	async function compileMigrations() {
+		const compiled = migrations.map((m) => m.compile().sql);
+		return compiled.join(";\n\n");
+	}
+	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }

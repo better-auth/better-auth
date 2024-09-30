@@ -11,7 +11,9 @@ export type BetterAuthDbSchema = Record<
 	}
 >;
 
-export const getAuthTables = (options: BetterAuthOptions) => {
+export const getAuthTables = (
+	options: BetterAuthOptions,
+): BetterAuthDbSchema => {
 	const pluginSchema = options.plugins?.reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -59,13 +61,17 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			fields: {
 				name: {
 					type: "string",
+					required: true,
 				},
 				email: {
 					type: "string",
+					unique: true,
+					required: true,
 				},
 				emailVerified: {
 					type: "boolean",
 					defaultValue: () => false,
+					required: true,
 				},
 				image: {
 					type: "string",
@@ -74,10 +80,12 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 				createdAt: {
 					type: "date",
 					defaultValue: () => new Date(),
+					required: true,
 				},
 				updatedAt: {
 					type: "date",
 					defaultValue: () => new Date(),
+					required: true,
 				},
 				...user?.fields,
 			},
@@ -88,6 +96,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			fields: {
 				expiresAt: {
 					type: "date",
+					required: true,
 				},
 				ipAddress: {
 					type: "string",
@@ -104,6 +113,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						field: "id",
 						onDelete: "cascade",
 					},
+					required: true,
 				},
 				...session?.fields,
 			},
@@ -114,9 +124,11 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 			fields: {
 				accountId: {
 					type: "string",
+					required: true,
 				},
 				providerId: {
 					type: "string",
+					required: true,
 				},
 				userId: {
 					type: "string",
@@ -125,6 +137,7 @@ export const getAuthTables = (options: BetterAuthOptions) => {
 						field: "id",
 						onDelete: "cascade",
 					},
+					required: true,
 				},
 				accessToken: {
 					type: "string",

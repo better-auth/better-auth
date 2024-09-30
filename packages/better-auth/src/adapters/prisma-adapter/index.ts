@@ -1,4 +1,11 @@
+import { existsSync } from "fs";
+import path from "path";
+import type { FieldType } from "../../db";
+import { getAuthTables } from "../../db/get-tables";
 import type { Adapter, Where } from "../../types";
+import fs from "fs/promises";
+import { produceSchema } from "@mrleebo/prisma-ast";
+import { capitalizeFirstLetter } from "../../utils";
 
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
@@ -48,9 +55,16 @@ interface PrismaClient {
 	};
 }
 
-export const prismaAdapter = (prisma: any): Adapter => {
+export const prismaAdapter = ({
+	db: prisma,
+	provider,
+}: {
+	db: any;
+	provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
+}): Adapter => {
 	const db: PrismaClient = prisma;
 	return {
+		id: "prisma",
 		async create(data) {
 			const { model, data: val, select } = data;
 
@@ -107,5 +121,93 @@ export const prismaAdapter = (prisma: any): Adapter => {
 
 			return await db[model].delete({ where: whereClause });
 		},
+		async createSchema(options, file) {
+			const tables = getAuthTables(options);
+			const filePath = file || "./prisma/schema.prisma";
+			const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+			let schemaPrisma = "";
+			if (schemaPrismaExist) {
+				schemaPrisma = await fs.readFile(
+					path.join(process.cwd(), filePath),
+					"utf-8",
+				);
+			} else {
+				schemaPrisma = getNewPrisma(provider);
+			}
+
+			const schema = produceSchema(schemaPrisma, (builder) => {
+				for (const table in tables) {
+					const fields = tables[table].fields;
+					const tableName = tables[table].tableName;
+					function getType(type: FieldType, isOptional: boolean) {
+						if (type === "string") {
+							return isOptional ? "String?" : "String";
+						}
+						if (type === "number") {
+							return isOptional ? "Int?" : "Int";
+						}
+						if (type === "boolean") {
+							return isOptional ? "Boolean?" : "Boolean";
+						}
+						if (type === "date") {
+							return isOptional ? "DateTime?" : "DateTime";
+						}
+					}
+					const prismaModel = builder.findByType("model", {
+						name: tableName,
+					});
+					!prismaModel &&
+						builder.model(tableName).field("id", "String").attribute("id");
+
+					for (const field in fields) {
+						const attr = fields[field];
+
+						if (prismaModel) {
+							const isAlreadyExist = builder.findByType("field", {
+								name: field,
+								within: prismaModel.properties,
+							});
+							console.log(field, "exists");
+							if (isAlreadyExist) {
+								continue;
+							}
+						}
+
+						builder
+							.model(tableName)
+							.field(field, getType(attr.type, !attr.required));
+						if (attr.unique) {
+							builder.model(tableName).blockAttribute(`unique([${field}])`);
+						}
+						if (attr.references) {
+							builder
+								.model(tableName)
+								.field(
+									capitalizeFirstLetter(attr.references.model),
+									attr.references.model,
+								)
+								.attribute(
+									`relation(fields: [${field}], references: [${attr.references.field}], onDelete: Cascade)`,
+								);
+						}
+					}
+				}
+			});
+			return {
+				code: schema,
+				fileName: filePath,
+			};
+		},
 	};
 };
+
+const getNewPrisma = (provider: string) => `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "${provider}"
+  url      = ${
+		provider === "sqlite" ? `"file:./dev.db"` : `env("DATABASE_URL")`
+	}
+}`;

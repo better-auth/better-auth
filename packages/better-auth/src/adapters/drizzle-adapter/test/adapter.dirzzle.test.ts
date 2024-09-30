@@ -8,6 +8,7 @@ import { getMigrations } from "../../../cli/utils/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
+import { getAuthTables } from "../../../db/get-tables";
 
 describe("adapter test", async () => {
 	beforeEach(async () => {
@@ -34,7 +35,9 @@ describe("adapter test", async () => {
 		schema: {
 			user,
 		},
+		provider: "pg",
 	});
+
 	await runAdapterTest({
 		adapter,
 	});

@@ -73,6 +73,7 @@ interface MongoClient {
 export const mongodbAdapter = (mongo: any) => {
 	const db: MongoClient = mongo;
 	return {
+		id: "mongodb",
 		async create(data) {
 			const { model, data: val } = data;
 			const res = await db.collection(model).insertOne({

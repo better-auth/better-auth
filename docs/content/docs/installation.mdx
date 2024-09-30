@@ -66,40 +66,39 @@ export const auth = betterAuth({
 
 <Step>
 ### Configure Database
-        
-Better Auth requires a database to store user data. By default, it uses <Link href="https://kysely.dev/">Kysely </Link> under the hood to connect and query your database. `postgresql`, `mysql`, and `sqlite` are supported out of the box. 
-        
-```ts  title="auth.ts"
+
+ Better Auth requires a database to store user data. By default, it uses [Kysely](https://kysely.dev/) for database connections and queries, with support for `postgresql`, `mysql`, and `sqlite` out of the box.
+
+```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    database: { // [!code highlight]
-        provider: "sqlite", // or "mysql", "postgresql" // [!code highlight]
-        url: "./db.sqlite", // path to your database or connection string // [!code highlight]
-    } // [!code highlight]
+  database: {
+    provider: "sqlite", // or "mysql", "postgresql"
+    url: "./db.sqlite", // path to your database or connection string
+  }
 })
 ```
-You can also pass any dialect that is supported by Kysely to the database configration.
+
+You can also use any dialect supported by Kysely in the database configuration.
 
 **Example with LibsqlDialect:**
 
-```ts  title="auth.ts" 
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 
 export const auth = betterAuth({
-	database: new LibsqlDialect({
-		url: process.env.TURSO_DATABASE_URL || "",
-		authToken: process.env.TURSO_AUTH_TOKEN || "",
-	}),
+  database: new LibsqlDialect({
+    url: process.env.TURSO_DATABASE_URL || "",
+    authToken: process.env.TURSO_AUTH_TOKEN || "",
+  }),
 });
 ```
 
 **Adapters**
 
-If your database is not supported by Kysely, you can use an adapter to connect to your database.
-
-To use an adapter, import the adapter and pass it to the database option.
+If your database isn’t supported by Kysely, you can use an adapter to connect. Simply import the adapter and pass it into the `database` option.
 
 <Tabs items={["prisma", "drizzle", "mongodb"]}>
     <Tab value="prisma">
@@ -110,9 +109,9 @@ To use an adapter, import the adapter and pass it to the database option.
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
-            database: {
-                provider: prismaAdapter(prisma),
-            },
+            database: prismaAdapter(prisma, {
+                    provider: "sqlite", // or "mysql", "postgresql", ...etc
+            }),
         });
     ```
     </Tab>
@@ -121,11 +120,12 @@ To use an adapter, import the adapter and pass it to the database option.
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { drizzleAdapter } from "better-auth/adapters";
+    import { db } from "@/db"; // your drizzle instance
 
     export const auth = betterAuth({
-        database: {
-            provider: drizzleAdapter(db),
-        },
+        database: drizzleAdapter(db, {
+                provider: "pg", // or "mysql", "sqlite"
+        })
     });
     ```
     </Tab>
@@ -137,9 +137,7 @@ To use an adapter, import the adapter and pass it to the database option.
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: {
-            provider: monogdbAdapter(client),
-        },
+        database: monogdbAdapter(client)
     });
     ```
     </Tab>
@@ -148,17 +146,27 @@ To use an adapter, import the adapter and pass it to the database option.
 </Step>
 
 <Step>
-    ### Migrate Schema
+    ### Create Database Tables
+    
+    Better Auth includes a CLI tool to help manage your database tables. You can either migrate tables directly or generate an ORM schema or SQL migration file.
 
-    Better Auth includes a CLI tool to migrate the required schema to your database. It introspects the database and creates the required tables. Run the following command to perform the migration:
+    **Migrate**: Creates the necessary tables in your database.
 
     ```bash title="Terminal"
     npx better-auth migrate
     ```
 
-   <Callout type="warn">
-    If you're using an adapter and your database is not supported by Kysely, you need to create required tables manually. You can find the core schema required in the [database section](/docs/concepts/database#core-schema).
-   </Callout>
+    **Generate**: Generates the required ORM schema (e.g., Prisma, Drizzle) or an SQL migration file.
+
+    ```bash title="Terminal"
+    npx better-auth generate    
+    ```
+
+    see the [CLI documentation](/docs/concepts/cli) for more information.
+
+    <Callout>
+     If you instead want to create the schema manually, you can find the core schema required in the [database section](/docs/concepts/database#core-schema).
+    </Callout>
 </Step>
 
 <Step>

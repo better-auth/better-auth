@@ -4,7 +4,7 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "../../utils/logger";
-import { createKyselyAdapter } from "../../db/kysely";
+import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
 import ora from "ora";
 import chalk from "chalk";
 import prompts from "prompts";
@@ -43,7 +43,7 @@ export const migrate = new Command("migrate")
 			);
 			return;
 		}
-		const db = createKyselyAdapter(config);
+		const db = await createKyselyAdapter(config);
 		if (!db) {
 			logger.error("Invalid database configuration.");
 			process.exit(1);

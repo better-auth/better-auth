@@ -1,8 +1,15 @@
 import { and, eq, or, SQL } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
+import type { FieldType } from "../../db";
+import * as prettier from "prettier";
+import { getAuthTables } from "../../db/get-tables";
+import { existsSync } from "fs";
+import fs from "fs/promises";
+import { BetterAuthError } from "../../error/better-auth-error";
 
 export interface DrizzleAdapterOptions {
-	schema: Record<string, any>;
+	schema?: Record<string, any>;
+	provider: "pg" | "mysql" | "sqlite";
 }
 
 function getSchema(modelName: string, schema: Record<string, any>) {
@@ -45,11 +52,23 @@ function whereConvertor(where: Where[], schemaModel: any) {
 	return clause;
 }
 
+interface DB {
+	[key: string]: any;
+}
+
 export const drizzleAdapter = (
-	db: Record<string, any>,
-	{ schema }: DrizzleAdapterOptions,
+	db: DB,
+	options: DrizzleAdapterOptions,
 ): Adapter => {
+	const schema = options?.schema || db._.schema;
+	if (!schema) {
+		throw new BetterAuthError(
+			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+		);
+	}
+	const databaseType = options?.provider;
 	return {
+		id: "drizzle",
 		async create(data) {
 			const { model, data: val } = data;
 			const schemaModel = getSchema(model, schema);
@@ -111,6 +130,83 @@ export const drizzleAdapter = (
 			const res = await db.delete(schemaModel).where(...wheres);
 
 			return res[0];
+		},
+		async createSchema(options, file) {
+			const tables = getAuthTables(options);
+			const filePath = file || "./schema.ts";
+			const timestampAndBoolean =
+				databaseType !== "sqlite" ? "timestamp, boolean" : "";
+			const int = databaseType === "mysql" ? "int" : "integer";
+			let code = "";
+
+			const fileExist = existsSync(filePath);
+			if (fileExist) {
+				const file = await fs.readFile(filePath, "utf-8");
+				if (file.includes("import")) {
+					code = file;
+				} else {
+					code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+				`;
+				}
+			} else {
+				code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+			`;
+			}
+
+			for (const table in tables) {
+				const tableName = tables[table].tableName;
+				const fields = tables[table].fields;
+				function getType(name: string, type: FieldType) {
+					if (type === "string") {
+						return `text('${name}')`;
+					}
+					if (type === "number") {
+						return `${int}('${name}')`;
+					}
+					if (type === "boolean") {
+						if (databaseType === "sqlite") {
+							return `integer('${name}', {
+								mode: "boolean"
+							})`;
+						}
+						return `boolean('${name}')`;
+					}
+					if (type === "date") {
+						if (databaseType === "sqlite") {
+							return `integer('${name}', {
+								mode: "timestamp"
+							})`;
+						}
+						return `timestamp('${name}')`;
+					}
+				}
+				const schema = `export const ${table} = ${databaseType}Table("${tableName}", {
+					id: text("id").primaryKey(),
+					${Object.keys(fields)
+						.map((field) => {
+							const attr = fields[field];
+							return `${field}: ${getType(field, attr.type)}${
+								attr.required ? ".notNull()" : ""
+							}${attr.unique ? ".unique()" : ""}${
+								attr.references
+									? `.references(()=> ${attr.references.model}.${attr.references.field})`
+									: ""
+							}`;
+						})
+						.join()}
+				});`;
+				code += `\n${schema}\n`;
+			}
+			const formattedCode = await prettier.format(code, {
+				semi: true,
+				parser: "typescript",
+				tabWidth: 4,
+			});
+			return {
+				code: formattedCode,
+				fileName: filePath,
+				append: fileExist,
+			};
 		},
 	};
 };

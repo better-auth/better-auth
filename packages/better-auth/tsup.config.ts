@@ -6,8 +6,8 @@ export default defineConfig((env) => {
 			social: "./src/social-providers/index.ts",
 			types: "./src/types/index.ts",
 			client: "./src/client/index.ts",
-			cli: "./src/cli/index.ts",
 			adapters: "./src/adapters/index.ts",
+			cli: "./src/cli/index.ts",
 			react: "./src/client/react.ts",
 			vue: "./src/client/vue.ts",
 			svelte: "./src/client/svelte.ts",
@@ -26,6 +26,6 @@ export default defineConfig((env) => {
 		dts: true,
 		splitting: false,
 		skipNodeModulesBundle: true,
-		target: "es6",
+		target: "es2022",
 	};
 });
