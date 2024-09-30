@@ -1,0 +1,57 @@
+---
+title: Cookies
+description: Learn how cookies are used in BetterAuth
+---
+
+Cookies are used to store data such as session tokens, CSRF tokens, and more. All cookies are signed using the `secret` key provided in the auth options.
+
+Core better auth cookies like `session` and `csrf` will follow `betterauth.${cookie_name}` format. 
+
+All cookies are `httpOnly` and `secure` if the server is running in production mode. 
+
+### Cross Subdomain Cookies (🧪 Expiremental)
+
+By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To do this, set `crossSubDomainCookies` to `true` in the `advanced` object of the auth options.
+
+Keep in mind that this does not imply that all cookies will be shared across subdomains; only a specific subset of cookies necessary for session sharing will be set.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = await betterAuth({
+    adavaned: {
+        crossSubDomainCookies: {
+            enabled: true,
+            domain: "example.com" // Optional. Defaults to the base url domain
+        }
+    }
+})
+```
+
+### Disable CSRF Cookie (⚠︎ Not Recommended)
+
+If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true` in the `advanced` object in the auth options.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = await betterAuth({
+    adavaned: {
+        disableCsrfCheck: true
+    }
+})
+```
+
+### Secure Cookies
+
+By default, cookies are secure if the server is running in production mode. You can force cookies to be secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = await betterAuth({
+    adavaned: {
+        useSecureCookies: true
+    }
+})
+```

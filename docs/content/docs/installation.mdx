@@ -101,27 +101,50 @@ If your database is not supported by Kysely, you can use an adapter to connect t
 
 To use an adapter, import the adapter and pass it to the database option.
 
-Currently, 3 adapters are supported:
-- **Prisma**
-- **Drizzle**
-- **MongoDB**
+<Tabs items={["prisma", "drizzle", "mongodb"]}>
+    <Tab value="prisma">
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { prismaAdapter } from "better-auth/adapters";
+        import { PrismaClient } from "@prisma/client";
 
-```ts  title="auth.ts"
-import { prismaAdapter } from "better-auth/adapters"; // [!code highlight]
-import { PrismaClient } from "@prisma/client";
+        const prisma = new PrismaClient();
+        export const auth = betterAuth({
+            database: {
+                provider: prismaAdapter(prisma),
+            },
+        });
+    ```
+    </Tab>
 
-const prisma = new PrismaClient();
+    <Tab value="drizzle">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { drizzleAdapter } from "better-auth/adapters";
 
-export const auth = betterAuth({
-    database: {
-        provider: prismaAdapter(prisma), // [!code highlight]
-    }
-})
-```
+    export const auth = betterAuth({
+        database: {
+            provider: drizzleAdapter(db),
+        },
+    });
+    ```
+    </Tab>
+    
+    <Tab value="mongodb">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { monogdbAdapter } from "better-auth/adapters";
+    import { client } from "@/db"; // your mongodb client
 
-<Callout>
-We highly recommend using the built-in option if your database is supported by Kysely, as we use optimized queries for Kysely.
-</Callout>
+    export const auth = betterAuth({
+        database: {
+            provider: monogdbAdapter(client),
+        },
+    });
+    ```
+    </Tab>
+</Tabs>
+
 </Step>
 
 <Step>
@@ -249,7 +272,7 @@ Better auth supports any backend framework with standard Request and Response ob
     const app = express();
     const port = 8000;
 
-    app.get("/api/auth/*", toNodeHandler(auth));
+    app.all("/api/auth/*", toNodeHandler(auth));
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });

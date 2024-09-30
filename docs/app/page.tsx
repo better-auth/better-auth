@@ -1,7 +1,28 @@
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
-export default function HomePage() {
+async function getGitHubStars() {
+	try {
+		const response = await fetch(
+			"https://api.github.com/repos/better-auth/better-auth",
+			{
+				next: {
+					revalidate: 60,
+				},
+			},
+		);
+		if (!response?.ok) {
+			return null;
+		}
+		const json = await response.json();
+		const stars = parseInt(json.stargazers_count).toLocaleString();
+		return stars;
+	} catch {
+		return null;
+	}
+}
+export default async function HomePage() {
+	const stars = await getGitHubStars();
 	return (
 		<main className="h-min mx-auto ">
 			<Section
@@ -12,7 +33,7 @@ export default function HomePage() {
 				id="hero"
 			>
 				<Hero />
-				<Features />
+				<Features stars={stars} />
 				<hr className="h-px bg-gray-200" />
 			</Section>
 		</main>
