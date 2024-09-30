@@ -53,21 +53,17 @@ export const getDialect = async (config: BetterAuthOptions) => {
 				if (e instanceof TypeError) {
 					throw new BetterAuthError("Invalid database URL");
 				}
+				throw e;
 			}
 		}
 
 		if (provider === "sqlite") {
 			try {
-				const database = await import("better-sqlite3").catch((e) => {
-					throw new BetterAuthError(
-						"Please install `better-sqlite3` to use sqlite database",
-					);
-				});
+				const database = await import("better-sqlite3");
 				const Database = database.default || database;
-
 				if (!Database) {
 					throw new BetterAuthError(
-						"Failed to import better-sqlite3. Please ensure `better-sqlite3` is properly installed.",
+						"Failed to import better-sqlite3. Make sure `better-sqlite3` is properly installed.",
 					);
 				}
 
@@ -78,7 +74,7 @@ export const getDialect = async (config: BetterAuthOptions) => {
 			} catch (e) {
 				console.error(e);
 				throw new BetterAuthError(
-					"Failed to initialize SQLite. Please ensure `better-sqlite3` is properly installed.",
+					"Failed to initialize SQLite. Make sure `better-sqlite3` is properly installed.",
 				);
 			}
 		}
