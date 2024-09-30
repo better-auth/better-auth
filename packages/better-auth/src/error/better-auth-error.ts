@@ -4,6 +4,7 @@ export class BetterAuthError extends Error {
 		this.name = "BetterAuthError";
 		this.message = message;
 		this.cause = cause;
+		this.stack = "";
 	}
 }
 export class MissingDependencyError extends BetterAuthError {
