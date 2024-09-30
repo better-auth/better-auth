@@ -7,6 +7,8 @@ description: Twitter Provider
     <Step> 
         ### Get your X(Twitter) Credentials
         Get your Twitter credentials from the [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard).
+
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/twitter` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
     </Step>
 
   <Step>

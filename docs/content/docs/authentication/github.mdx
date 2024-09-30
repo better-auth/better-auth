@@ -7,6 +7,8 @@ description: Github Provider
     <Step> 
         ### Get your Github credentials
         To use Github sign in, you need a client ID and client secret. You can get them from the [Github Developer Portal](https://github.com/settings/developers).
+
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/github` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
     </Step>
 
   <Step>
