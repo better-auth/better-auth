@@ -35,7 +35,9 @@ Before a user can sign in, they need to sign up. To sign up a user using email a
 **Example: Using React**
 
 ```tsx title="SignUp.tsx"
-import { authClient } from '@/auth'; //import the auth client
+"use client"
+import { authClient } from "@/lib/auth-client"; //import the auth client
+import { useState } from 'react';
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
