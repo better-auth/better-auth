@@ -55,13 +55,14 @@ interface PrismaClient {
 	};
 }
 
-export const prismaAdapter = ({
-	db: prisma,
-	provider,
-}: {
-	db: any;
-	provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
-}): Adapter => {
+export const prismaAdapter = (
+	prisma: any,
+	{
+		provider,
+	}: {
+		provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
+	},
+): Adapter => {
 	const db: PrismaClient = prisma;
 	return {
 		id: "prisma",
