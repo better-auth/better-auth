@@ -116,7 +116,7 @@ export const callbackOAuth = createAuthEndpoint(
 				try {
 					await c.context.internalAdapter.linkAccount({
 						providerId: provider.id,
-						accountId: user.id,
+						accountId: user.id.toString(),
 						id: `${provider.id}:${user.id}`,
 						userId: dbUser.user.id,
 						...getAccountTokens(tokens),
@@ -134,7 +134,7 @@ export const callbackOAuth = createAuthEndpoint(
 					...getAccountTokens(tokens),
 					id: `${provider.id}:${user.id}`,
 					providerId: provider.id,
-					accountId: user.id,
+					accountId: user.id.toString(),
 					userId: id,
 				});
 			} catch (e) {
