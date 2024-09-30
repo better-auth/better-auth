@@ -173,7 +173,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 ### Authentication Methods
 Configure the authentication methods you want to use. Better auth comes with built-in support for email/password, and social sign-on providers.
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { github } from "better-auth/social-providers"
 
