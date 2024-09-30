@@ -1,10 +1,10 @@
 {
     "name": "better-auth",
-    "version": "0.2.3-beta.10",
+    "version": "0.2.3-beta.11",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean --minify",
+        "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
         "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch --sourcemap",
         "test": "pnpm prisma:push && pnpm typecheck && vitest",
         "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
