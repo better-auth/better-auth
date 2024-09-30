@@ -18,7 +18,7 @@ export function toNextJsHandler(auth: Auth | Auth["handler"]) {
  * If not, it redirects to the redirectTo URL.
  */
 export function authMiddleware(options: {
-	baePath?: string;
+	basePath?: string;
 	redirectTo?: string;
 	customRedirect?: (
 		session: {
@@ -30,7 +30,7 @@ export function authMiddleware(options: {
 }) {
 	return async (request: NextRequest) => {
 		const url = new URL(request.url).origin;
-		const basePath = options?.baePath || "/api/auth";
+		const basePath = options?.basePath || "/api/auth";
 		const fullURL = `${url}${basePath}/session`;
 
 		const res = await betterFetch<{
