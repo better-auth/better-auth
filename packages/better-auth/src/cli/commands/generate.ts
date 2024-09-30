@@ -20,14 +20,14 @@ export const generate = new Command("generate")
 		"--config <config>",
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
-	.option("--out <output>", "the file to output to the generated schema")
+	.option("--output <output>", "the file to output to the generated schema")
 	.option("--y", "")
 	.action(async (opts) => {
 		const options = z
 			.object({
 				cwd: z.string(),
 				config: z.string().optional(),
-				out: z.string().optional(),
+				output: z.string().optional(),
 			})
 			.parse(opts);
 		const cwd = path.resolve(options.cwd);
@@ -57,7 +57,7 @@ export const generate = new Command("generate")
 		const spinner = ora("preparing schema...").start();
 		const { code, fileName, append } = await adapter.createSchema(
 			config,
-			options.out,
+			options.output,
 		);
 		spinner.stop();
 		if (!code) {
@@ -100,7 +100,7 @@ export const generate = new Command("generate")
 				recursive: true,
 			});
 		}
-		await fs.writeFile(options.out || path.join(cwd, fileName), code);
+		await fs.writeFile(options.output || path.join(cwd, fileName), code);
 		logger.success(`🚀 schema was generated successfully!`);
 		process.exit(0);
 	});

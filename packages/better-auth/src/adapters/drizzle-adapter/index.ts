@@ -141,7 +141,7 @@ export const drizzleAdapter = (
 			`;
 
 			const fileExist = existsSync(filePath);
-			let fileContent = await fs.readFile(filePath, "utf-8");
+			let fileContent = fileExist ? await fs.readFile(filePath, "utf-8") : "";
 
 			for (const table in tables) {
 				const tableName = tables[table].tableName;
