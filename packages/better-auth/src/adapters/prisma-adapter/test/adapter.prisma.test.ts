@@ -13,7 +13,7 @@ describe("adapter test", async () => {
 		provider: "sqlite",
 	});
 
-	it("should match", async () => {
+	it("should create schema", async () => {
 		const res = await adapter.createSchema!({
 			database: {
 				provider: "sqlite",

@@ -1,14 +1,12 @@
 import fs from "fs/promises";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-
-import { user } from "./schema";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runAdapterTest } from "../../test";
-import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../cli/utils/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { getAuthTables } from "../../../db/get-tables";
+import { kyselyAdapter } from "..";
+import { Kysely, SqliteDialect } from "kysely";
 
 describe("adapter test", async () => {
 	beforeEach(async () => {
@@ -25,17 +23,18 @@ describe("adapter test", async () => {
 		await fs.unlink(path.join(__dirname, "test.db"));
 	});
 	const sqlite = new Database(path.join(__dirname, "test.db"));
-	const db = drizzle(sqlite, {
-		schema: {
-			user,
-		},
+	const db = new Kysely({
+		dialect: new SqliteDialect({
+			database: sqlite,
+		}),
 	});
 
-	const adapter = drizzleAdapter(db, {
-		schema: {
-			user,
+	const adapter = kyselyAdapter(db, {
+		transform: {
+			schema: {},
+			boolean: true,
+			date: true,
 		},
-		provider: "pg",
 	});
 
 	it("should create schema", async () => {

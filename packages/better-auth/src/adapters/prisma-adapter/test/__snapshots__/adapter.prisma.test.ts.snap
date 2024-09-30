@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`adapter test > should match > __snapshots__/adapter.prisma 1`] = `
+exports[`adapter test > should create schema > __snapshots__/adapter.prisma 1`] = `
 "
 generator client {
   provider = "prisma-client-js"
