@@ -1,10 +1,7 @@
 import { and, eq, or, SQL } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
 
-export interface DrizzleAdapterOptions<
-	T extends Record<string, any> = Record<string, any>,
-> {
-	db: T;
+export interface DrizzleAdapterOptions {
 	schema: Record<string, any>;
 }
 
@@ -48,10 +45,10 @@ function whereConvertor(where: Where[], schemaModel: any) {
 	return clause;
 }
 
-export const drizzleAdapter = ({
-	db,
-	schema,
-}: DrizzleAdapterOptions): Adapter => {
+export const drizzleAdapter = (
+	db: Record<string, any>,
+	{ schema }: DrizzleAdapterOptions,
+): Adapter => {
 	return {
 		async create(data) {
 			const { model, data: val } = data;
