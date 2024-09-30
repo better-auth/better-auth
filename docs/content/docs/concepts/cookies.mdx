@@ -19,7 +19,7 @@ Keep in mind that this does not imply that all cookies will be shared across sub
 import { betterAuth } from "better-auth"
 
 export const auth = await betterAuth({
-    adavaned: {
+    advanced: {
         crossSubDomainCookies: {
             enabled: true,
             domain: "example.com" // Optional. Defaults to the base url domain
@@ -36,7 +36,7 @@ If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true`
 import { betterAuth } from "better-auth"
 
 export const auth = await betterAuth({
-    adavaned: {
+    advanced: {
         disableCsrfCheck: true
     }
 })
@@ -50,7 +50,7 @@ By default, cookies are secure if the server is running in production mode. You 
 import { betterAuth } from "better-auth"
 
 export const auth = await betterAuth({
-    adavaned: {
+    advanced: {
         useSecureCookies: true
     }
 })
