@@ -8,6 +8,7 @@ import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../utils/cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
+import Database from "better-sqlite3";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
@@ -31,10 +32,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 			},
 		},
 		secret: "better-auth.secret",
-		database: {
-			provider: "sqlite",
-			url: dbName,
-		},
+		database: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
 		},

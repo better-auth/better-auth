@@ -29,7 +29,7 @@ export const init = async (opts: BetterAuthOptions) => {
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const adapter = await getAdapter(options);
-	const db = (await createKyselyAdapter(options)) || null;
+	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
 	const secret =
