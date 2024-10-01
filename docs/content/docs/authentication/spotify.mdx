@@ -20,10 +20,7 @@ description: Spotify Provider
         import { spotify } from "better-auth/social-providers"
         
         export const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
+           
             socialProviders: { // [!code highlight]
                 spotify: { // [!code highlight]
                     clientId: process.env.SPOTIFY_CLIENT_ID as string, // [!code highlight]

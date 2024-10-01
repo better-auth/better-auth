@@ -285,9 +285,15 @@ importers:
       '@hono/node-server':
         specifier: ^1.12.2
         version: 1.13.1(hono@4.6.3)
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: ^0.0.4
         version: 0.0.4(react@18.3.1)(solid-js@1.9.1)(typescript@5.6.2)(vue@3.5.10)
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       dotenv:
         specifier: ^16.4.5
         version: 16.4.5
@@ -353,6 +359,9 @@ importers:
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
@@ -375,9 +384,15 @@ importers:
 
   dev/express:
     dependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       express:
         specifier: ^4.21.0
         version: 4.21.0
@@ -695,12 +710,18 @@ importers:
       '@oslojs/encoding':
         specifier: ^1.0.0
         version: 1.1.0
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       astro:
         specifier: ^4.15.9
         version: 4.15.9(@types/node@20.16.9)(typescript@5.6.2)
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
@@ -855,12 +876,18 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.56.2
         version: 5.56.2(react@19.0.0-rc-7771d3a7-20240827)
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
       better-call:
         specifier: 0.2.3-beta.2
         version: 0.2.3-beta.2
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
@@ -991,6 +1018,9 @@ importers:
       '@radix-icons/vue':
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.9)
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       '@unovis/ts':
         specifier: 1.4.3-beta.0
         version: 1.4.3-beta.0
@@ -1006,6 +1036,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
@@ -1017,7 +1050,7 @@ importers:
         version: 8.3.0(vue@3.5.9)
       nuxt:
         specifier: ^3.13.0
-        version: 3.13.2(@biomejs/biome@1.7.3)(@types/node@20.16.9)(typescript@5.6.1-rc)(vite@5.4.8)
+        version: 3.13.2(@biomejs/biome@1.7.3)(@types/node@20.16.9)(better-sqlite3@11.3.0)(typescript@5.6.1-rc)(vite@5.4.8)
       radix-vue:
         specifier: ^1.9.6
         version: 1.9.6(vue@3.5.9)
@@ -1061,9 +1094,15 @@ importers:
       '@internationalized/date':
         specifier: ^3.5.5
         version: 3.5.5
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       bits-ui:
         specifier: ^0.21.15
         version: 0.21.15(svelte@4.2.19)
@@ -9594,7 +9633,6 @@ packages:
     resolution: {integrity: sha512-i8KcD3PgGtGBLl3+mMYA8PdKkButvPyARxA7IQAd6qeslht13qxb1zzO8dRCtE7U3IoJS782zDBAeoKiM695kg==}
     dependencies:
       '@types/node': 20.16.9
-    dev: true
 
   /@types/body-parser@1.19.5:
     resolution: {integrity: sha512-fB3Zu92ucau0iQ0JMCFQE7b/dv8Ot07NI3KaZIkIUNXq82k4eBAqUaneXfleGY9JWskeS9y+u0nXMyspcuQrCg==}
@@ -13965,7 +14003,7 @@ packages:
     resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
     dev: false
 
-  /db0@0.1.4:
+  /db0@0.1.4(better-sqlite3@11.3.0):
     resolution: {integrity: sha512-Ft6eCwONYxlwLjBXSJxw0t0RYtA5gW9mq8JfBXn9TtC0nDPlqePAhpv9v4g9aONBi6JI1OXHTKKkUYGd+BOrCA==}
     peerDependencies:
       '@libsql/client': ^0.5.2
@@ -13978,6 +14016,8 @@ packages:
         optional: true
       drizzle-orm:
         optional: true
+    dependencies:
+      better-sqlite3: 11.3.0
     dev: false
 
   /debounce@1.2.1:
@@ -19792,7 +19832,7 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nitropack@2.9.7:
+  /nitropack@2.9.7(better-sqlite3@11.3.0):
     resolution: {integrity: sha512-aKXvtNrWkOCMsQbsk4A0qQdBjrJ1ZcvwlTQevI/LAgLWLYc5L7Q/YiYxGLal4ITyNSlzir1Cm1D2ZxnYhmpMEw==}
     engines: {node: ^16.11.0 || >=17.0.0}
     hasBin: true
@@ -19823,7 +19863,7 @@ packages:
       cookie-es: 1.2.2
       croner: 8.1.1
       crossws: 0.2.4
-      db0: 0.1.4
+      db0: 0.1.4(better-sqlite3@11.3.0)
       defu: 6.1.4
       destr: 2.0.3
       dot-prop: 8.0.2
@@ -20078,7 +20118,7 @@ packages:
     hasBin: true
     dev: false
 
-  /nuxt@3.13.2(@biomejs/biome@1.7.3)(@types/node@20.16.9)(typescript@5.6.1-rc)(vite@5.4.8):
+  /nuxt@3.13.2(@biomejs/biome@1.7.3)(@types/node@20.16.9)(better-sqlite3@11.3.0)(typescript@5.6.1-rc)(vite@5.4.8):
     resolution: {integrity: sha512-Bjc2qRsipfBhjXsBEJCN+EUAukhdgFv/KoIR5HFB2hZOYRSqXBod3oWQs78k3ja1nlIhAEdBG533898KJxUtJw==}
     engines: {node: ^14.18.0 || >=16.10.0}
     hasBin: true
@@ -20127,7 +20167,7 @@ packages:
       magic-string: 0.30.11
       mlly: 1.7.1
       nanotar: 0.1.1
-      nitropack: 2.9.7
+      nitropack: 2.9.7(better-sqlite3@11.3.0)
       nuxi: 3.14.0
       nypm: 0.3.12
       ofetch: 1.4.0

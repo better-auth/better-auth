@@ -47,6 +47,8 @@
     "@react-three/fiber": "^8.17.7",
     "@tanstack/react-query": "^5.56.2",
     "better-auth": "workspace:*",
+    "@types/better-sqlite3": "^7.6.11",
+    "better-sqlite3": "^11.3.0",
     "better-call": "0.2.3-beta.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

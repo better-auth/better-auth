@@ -67,18 +67,44 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
 
- Better Auth requires a database to store user data. By default, it uses [Kysely](https://kysely.dev/) for database connections and queries, with support for `postgresql`, `mysql`, and `sqlite` out of the box.
+Better Auth requires a database to store user data. By default, it uses [Kysely](https://kysely.dev/) for database connections and queries, with support for `postgresql`, `mysql`, and `sqlite` out of the box.
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+<Tabs items={["sqlite", "postgres", "mysql"]}>
+    <Tab value="sqlite">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import Database from "better-sqlite3";
 
-export const auth = betterAuth({
-  database: {
-    provider: "sqlite", // or "mysql", "postgresql"
-    url: "./db.sqlite", // path to your database or connection string
-  }
-})
-```
+    export const auth = betterAuth({
+        database: new Database("./sqlite.db"),
+    })
+    ```
+    </Tab>
+    <Tab value="postgres">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { Pool } from "pg";
+
+    export const auth = betterAuth({
+        database: new Pool({
+            // connection options
+        })
+    })
+    ```
+    </Tab>
+    <Tab value="mysql">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { createPool } from "mysql2/promise";
+
+    export const auth = betterAuth({
+        database: createPool({
+            // connection options
+        })
+    })
+    ```
+    </Tab>
+</Tabs>
 
 You can also use any dialect supported by Kysely in the database configuration.
 
@@ -178,10 +204,7 @@ import { betterAuth } from "better-auth"
 import { github } from "better-auth/social-providers"
 
 export const auth = betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
+    //...other options
     emailAndPassword: {  // [!code highlight]
         enabled: true // [!code highlight]
     },// [!code highlight]

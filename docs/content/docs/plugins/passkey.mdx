@@ -27,10 +27,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
         import { passkey } from "better-auth/plugins"
         
         export const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
+           
             plugins: [ // [!code highlight]
                 passkey(), // [!code highlight]
             ], // [!code highlight]

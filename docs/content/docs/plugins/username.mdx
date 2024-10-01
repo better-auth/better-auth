@@ -16,10 +16,7 @@ The username plugin wraps the email and password authenticator and adds username
         import { username } from "better-auth/plugins"
 
         const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
+           
             plugins: [ // [!code highlight]
                 username() // [!code highlight]
             ] // [!code highlight]

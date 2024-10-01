@@ -12,33 +12,37 @@ You can also pass a kysley dialect directly to use other databases supported by 
 **Example: Sqlite**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import Database from "better-sqlite3"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "path/to/database.sqlite"
-    }
+    database: new Database("database.sqlite")
 })
 ```
 
 **Example: Postgres**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { Pool } from "pg"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "postgres",
-        url: "postgres://user:password@localhost:5432/database"
-    }
+    database: new Pool({
+        connectionString: "postgres://user:password@localhost:5432/database"
+    })
 })
 ```
 
 **Exmaple: Mysql**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { createPool } from "mysql2/promise"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "mysql",
-        url: "mysql://user:password@localhost:3306/database"
-    }
+    database: createPool({
+        host: "localhost",
+        user: "root",
+        password: "password",
+        database: "database"
+    })
 })
 ```
 

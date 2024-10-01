@@ -17,10 +17,6 @@ To add a plugin on the server, include it in the `plugins` array in your auth co
 import { betterAuth } from "better-auth";
 
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
     plugins: [
         // Add your plugins here
     ]

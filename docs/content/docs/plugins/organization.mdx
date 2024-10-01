@@ -16,10 +16,6 @@ import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
     plugins: [ // [!code highlight]
         organization() // [!code highlight]
     ] // [!code highlight]

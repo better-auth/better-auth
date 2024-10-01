@@ -187,10 +187,6 @@ import { betterAuth } from "better-auth"
 import { twoFactor } from "better-auth/plugins"
 
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
     plugins: [
         twoFactor({
           	otpOptions: {
