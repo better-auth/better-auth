@@ -14,6 +14,13 @@ export const phoneNumber = (options?: {
 		 */
 		phoneNumber: string;
 	};
+	/**
+	 * Length of the OTP code
+	 * @default 6
+	 */
+	otpLength?: number;
+	sendOTP?: (phoneNumber: string) => Promise<string>;
+	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean>;
 }) => {
 	const opts = {
 		phoneNumber: options?.schema?.phoneNumber || "phoneNumber",
@@ -173,6 +180,27 @@ export const phoneNumber = (options?: {
 					});
 				},
 			),
+			sendVerificationCode: createAuthEndpoint(
+				"/phone-number/send-verification",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+				},
+				async () => {},
+			),
+			verifyPhoneNumber: createAuthEndpoint(
+				"/phone-number/verify",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+						code: z.string(),
+					}),
+				},
+				async () => {},
+			),
 		},
 		schema: {
 			user: {
@@ -181,6 +209,11 @@ export const phoneNumber = (options?: {
 						type: "string",
 						required: false,
 						unique: true,
+						returned: true,
+					},
+					phoneNumberVerified: {
+						type: "boolean",
+						required: false,
 						returned: true,
 					},
 				},
