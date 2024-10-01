@@ -39,7 +39,7 @@ describe("general types", async (it) => {
 			},
 			plugins: [twoFactor(), organization()],
 		});
-		expectTypeOf(auth.$Infer.Session.user).toEqualTypeOf<{
+		expectTypeOf<typeof auth.$Infer.Session.user>().toEqualTypeOf<{
 			id: string;
 			email: string;
 			emailVerified: boolean;
@@ -50,7 +50,7 @@ describe("general types", async (it) => {
 			twoFactorEnabled?: boolean | undefined;
 		}>();
 
-		expectTypeOf(auth.$Infer.Session.session).toEqualTypeOf<{
+		expectTypeOf<typeof auth.$Infer.Session.session>().toEqualTypeOf<{
 			id: string;
 			userId: string;
 			expiresAt: Date;
