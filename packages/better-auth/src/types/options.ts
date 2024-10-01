@@ -5,8 +5,6 @@ import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
-import type Database from "better-sqlite3";
-import type { Pool } from "mysql2";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 
 export interface BetterAuthOptions {

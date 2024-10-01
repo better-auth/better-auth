@@ -6,8 +6,6 @@ import {
 	SqliteDialect,
 } from "kysely";
 import type { BetterAuthOptions } from "../../types";
-import Database from "better-sqlite3";
-import { Pool as PostgresPool } from "pg";
 
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
@@ -26,7 +24,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		}
 	}
 
-	if (db instanceof Database) {
+	if ("aggregate" in db) {
 		dialect = new SqliteDialect({
 			database: db,
 		});
@@ -40,7 +38,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		databaseType = "mysql";
 	}
 
-	if (db instanceof PostgresPool) {
+	if ("connect" in db) {
 		dialect = new PostgresDialect({
 			pool: db,
 		});
