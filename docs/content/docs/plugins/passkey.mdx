@@ -22,15 +22,12 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid.Do NOT include any trailing /
 
-        ```ts title="auth.ts" twoslash
+        ```ts title="auth.ts" 
         import { betterAuth } from "better-auth"
         import { passkey } from "better-auth/plugins"
         
         export const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
+           
             plugins: [ // [!code highlight]
                 passkey(), // [!code highlight]
             ], // [!code highlight]
@@ -53,7 +50,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
     <Step>  
         ### Add the client plugin
         
-         ```ts title="client.ts" twoslash
+         ```ts title="client.ts" 
             import { createAuthClient } from "better-auth/client"
             import { passkeyClient } from "better-auth/client/plugins"
             
@@ -73,7 +70,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { passkeyClient } from "better-auth/client/plugins"
     
@@ -97,7 +94,7 @@ Signin method accepts:
 
 `callbackURL`: The URL to redirect to after the user has signed in. (optional)
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { passkeyClient } from "better-auth/client/plugins"
     

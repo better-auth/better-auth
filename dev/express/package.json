@@ -8,7 +8,9 @@
     "@types/express": "^4.17.21"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "better-sqlite3": "^11.3.0"
   },
   "dependencies": {
     "better-auth": "workspace:*",

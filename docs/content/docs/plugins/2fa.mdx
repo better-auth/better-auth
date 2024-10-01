@@ -182,15 +182,11 @@ OTP (One-Time Password) is similar to TOTP but the code is sent directly to the 
 
 Before using OTP to verify the second factor, you need to configure `sendOTP` in your better auth instance. This function is responsible for sending the OTP to the user's email, phone, or any other method supported by your application.
 
-```ts title="auth.ts" twoslash
+```ts title="auth.ts" 
 import { betterAuth } from "better-auth"
 import { twoFactor } from "better-auth/plugins"
 
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "./db.sqlite",
-    },
     plugins: [
         twoFactor({
           	otpOptions: {
@@ -362,7 +358,7 @@ backup codes are generated and stored in the database when the user enabled two 
 
 To use the two factor plugin in the client, you need to add it on your plugins list.
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
 import { createAuthClient } from "better-auth/client"
 import { twoFactorClient } from "better-auth/client/plugins"
 

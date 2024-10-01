@@ -9,12 +9,10 @@ import { kyselyAdapter } from "..";
 import { Kysely, SqliteDialect } from "kysely";
 
 describe("adapter test", async () => {
+	const database = new Database(path.join(__dirname, "test.db"));
 	beforeEach(async () => {
 		const { runMigrations } = await getMigrations({
-			database: {
-				provider: "sqlite",
-				url: path.join(__dirname, "test.db"),
-			},
+			database,
 		});
 		await runMigrations();
 	});
@@ -39,10 +37,7 @@ describe("adapter test", async () => {
 
 	it("should create schema", async () => {
 		const res = await adapter.createSchema!({
-			database: {
-				provider: "sqlite",
-				url: ":memory:",
-			},
+			database: new Database(path.join(__dirname, "test-2.db")),
 		});
 		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
 	});

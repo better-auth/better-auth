@@ -17,10 +17,6 @@ Magic link or email link is a way to authenticate users without a password. When
     import { magicLink } from "better-auth/plugins";
 
     export const auth = await betterAuth({
-        database: {
-            provider: "sqlite",
-            url: "./db.sqlite",
-        },
         plugins: [
             magicLink({
                 sendMagicLink: async (data: {

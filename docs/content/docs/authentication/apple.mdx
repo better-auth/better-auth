@@ -29,10 +29,6 @@ description: Apple
         import { apple } from "better-auth/social-providers"
 
         export const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
             socialProviders: { // [!code highlight]
                 apple({ // [!code highlight]
                     clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]

@@ -1,10 +1,13 @@
-import type { Dialect } from "kysely";
+import type { Dialect, PostgresPool } from "kysely";
 import type { Account, Session, User } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
+import type Database from "better-sqlite3";
+import type { Pool } from "mysql2";
+import type { BetterSqlite3Database, MysqlPool } from "./database";
 
 export interface BetterAuthOptions {
 	/**
@@ -60,10 +63,9 @@ export interface BetterAuthOptions {
 	 * Database configuration
 	 */
 	database:
-		| {
-				provider: "postgres" | "sqlite" | "mysql";
-				url: string;
-		  }
+		| PostgresPool
+		| MysqlPool
+		| BetterSqlite3Database
 		| Dialect
 		| Adapter;
 	/**

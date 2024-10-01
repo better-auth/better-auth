@@ -3,10 +3,7 @@ import { BetterAuthError } from "../error/better-auth-error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getAuthTables } from "./get-tables";
-import {
-	createKyselyAdapter,
-	getDatabaseType,
-} from "../adapters/kysely-adapter/dialect";
+import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 
 export async function getAdapter(
@@ -21,8 +18,8 @@ export async function getAdapter(
 		return options.database;
 	}
 
-	const db = await createKyselyAdapter(options);
-	if (!db) {
+	const { kysely, databaseType } = await createKyselyAdapter(options);
+	if (!kysely) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
 	const tables = getAuthTables(options);
@@ -30,11 +27,11 @@ export async function getAdapter(
 	for (const table of Object.values(tables)) {
 		schema[table.tableName] = table.fields;
 	}
-	return kyselyAdapter(db, {
+	return kyselyAdapter(kysely, {
 		transform: {
 			schema,
 			date: true,
-			boolean: getDatabaseType(options) === "sqlite",
+			boolean: databaseType === "sqlite",
 		},
 	});
 }

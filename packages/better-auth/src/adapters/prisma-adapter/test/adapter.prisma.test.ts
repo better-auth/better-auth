@@ -4,6 +4,7 @@ import { prismaAdapter } from "..";
 import { runAdapterTest } from "../../test";
 import { twoFactor } from "../../../plugins";
 import path from "path";
+import Database from "better-sqlite3";
 
 const db = new PrismaClient();
 describe("adapter test", async () => {
@@ -13,23 +14,17 @@ describe("adapter test", async () => {
 	const adapter = prismaAdapter(db, {
 		provider: "sqlite",
 	});
-
+	const database = new Database(path.join(__dirname, "test.db"));
 	it("should create schema", async () => {
 		const res = await adapter.createSchema!({
-			database: {
-				provider: "sqlite",
-				url: ":memory:",
-			},
+			database,
 		});
 		expect(res.code).toMatchSnapshot("__snapshots__/adapter.prisma");
 	});
 
 	it("should work with plugins", async () => {
 		const res = await adapter.createSchema!({
-			database: {
-				provider: "sqlite",
-				url: ":memory:",
-			},
+			database,
 			plugins: [twoFactor()],
 		});
 		expect(res.code).toMatchSnapshot(
