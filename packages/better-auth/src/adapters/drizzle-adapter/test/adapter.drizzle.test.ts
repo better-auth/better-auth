@@ -1,6 +1,5 @@
 import fs from "fs/promises";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { user } from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
@@ -8,7 +7,6 @@ import { getMigrations } from "../../../cli/utils/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { getAuthTables } from "../../../db/get-tables";
 
 describe("adapter test", async () => {
 	beforeEach(async () => {

@@ -154,7 +154,7 @@ export default function Features({ stars }: { stars: string | null }) {
 					<div className="max-w-full">
 						<div className="flex gap-3 ">
 							<p className="text-2xl tracking-tighter font-normal max-w-lg">
-								Pluggable with <strong>custom.</strong>
+								Extend your application with plugins
 							</p>
 						</div>
 					</div>
