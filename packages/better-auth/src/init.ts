@@ -29,7 +29,7 @@ export const init = async (opts: BetterAuthOptions) => {
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const adapter = await getAdapter(options);
-	const db = await createKyselyAdapter(options);
+	const db = (await createKyselyAdapter(options)) || null;
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
 	const secret =
@@ -107,7 +107,7 @@ export type AuthContext = {
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db?: Kysely<any>;
+	db: Kysely<any> | null;
 	rateLimit: {
 		enabled: boolean;
 		window: number;

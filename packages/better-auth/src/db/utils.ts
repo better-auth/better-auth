@@ -21,7 +21,7 @@ export async function getAdapter(
 		return options.database;
 	}
 
-	const db = await createKyselyAdapter(options, isCli);
+	const db = await createKyselyAdapter(options);
 	if (!db) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}

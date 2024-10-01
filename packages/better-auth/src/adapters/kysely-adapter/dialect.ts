@@ -10,15 +10,8 @@ import {
 	BetterAuthError,
 	MissingDependencyError,
 } from "../../error/better-auth-error";
-import { execa } from "execa";
-import prompts from "prompts";
-import { getPackageManager } from "../../cli/utils/get-package-manager";
-import ora from "ora";
 
-export const getDialect = async (
-	config: BetterAuthOptions,
-	isCli?: boolean,
-) => {
+export const getDialect = async (config: BetterAuthOptions) => {
 	if (!config.database) {
 		return undefined;
 	}
@@ -30,16 +23,23 @@ export const getDialect = async (
 		const provider = config.database.provider;
 		const connectionString = config.database?.url?.trim();
 		if (provider === "postgres") {
-			const pg = await import("pg").catch(async (e) => {
-				throw new MissingDependencyError("pg");
-			});
-			const Pool = pg.default?.Pool || pg.Pool;
-			const pool = new Pool({
-				connectionString,
-			});
-			dialect = new PostgresDialect({
-				pool,
-			});
+			try {
+				const pg = await import("pg").catch(async (e) => {
+					throw new MissingDependencyError("pg");
+				});
+				const Pool = pg.default?.Pool || pg.Pool;
+				const pool = new Pool({
+					connectionString,
+				});
+				dialect = new PostgresDialect({
+					pool,
+				});
+			} catch (e) {
+				if (e instanceof TypeError) {
+					throw new BetterAuthError("Invalid database URL");
+				}
+				throw e;
+			}
 		}
 		if (provider === "mysql") {
 			try {
@@ -88,18 +88,18 @@ export const getDialect = async (
 	return dialect;
 };
 
-export const createKyselyAdapter = async (
-	config: BetterAuthOptions,
-	isCli?: boolean,
-) => {
-	const dialect = await getDialect(config, isCli);
-	if (!dialect) {
-		return dialect;
+export const createKyselyAdapter = async (config: BetterAuthOptions) => {
+	if ("provider" in config.database) {
+		const dialect = await getDialect(config);
+		if (!dialect) {
+			return dialect;
+		}
+		const db = new Kysely<any>({
+			dialect,
+		});
+		return db;
 	}
-	const db = new Kysely<any>({
-		dialect,
-	});
-	return db;
+	return null;
 };
 
 export const getDatabaseType = (config: BetterAuthOptions) => {

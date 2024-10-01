@@ -120,4 +120,17 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		expect(findRes).toBeNull();
 	});
+
+	test("shouldn't throw on record not found", async () => {
+		const res = await adapter.findOne({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: "2",
+				},
+			],
+		});
+		expect(res).toBeNull();
+	});
 }

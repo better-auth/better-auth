@@ -45,7 +45,7 @@ export const migrate = new Command("migrate")
 			);
 			return;
 		}
-		const db = await createKyselyAdapter(config, true).catch((e) => {
+		const db = await createKyselyAdapter(config).catch((e) => {
 			logger.error(e.message);
 			process.exit(1);
 		});

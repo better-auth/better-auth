@@ -7,7 +7,7 @@ import fs from "fs/promises";
 import { BetterAuthError } from "../../error/better-auth-error";
 
 export interface DrizzleAdapterOptions {
-	schema?: Record<string, any>;
+	schema: Record<string, any>;
 	provider: "pg" | "mysql" | "sqlite";
 }
 
@@ -17,14 +17,7 @@ function getSchema(modelName: string, schema: Record<string, any>) {
 			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 		);
 	}
-	const key = Object.keys(schema).find((key) => {
-		const modelName = schema[key].name;
-		return modelName === modelName;
-	});
-	if (!key) {
-		throw new Error("Model not found");
-	}
-	return schema[key];
+	return schema[modelName];
 }
 
 function whereConvertor(where: Where[], schemaModel: any) {
@@ -49,6 +42,7 @@ function whereConvertor(where: Where[], schemaModel: any) {
 			return eq(schemaModel[w.field], w.value);
 		}),
 	);
+
 	const clause: SQL<unknown>[] = [];
 
 	if (andGroup.length) clause.push(andClause!);
@@ -64,7 +58,7 @@ export const drizzleAdapter = (
 	db: DB,
 	options: DrizzleAdapterOptions,
 ): Adapter => {
-	const schema = options?.schema || db._.schema;
+	const schema = options.schema;
 
 	const databaseType = options?.provider;
 	return {

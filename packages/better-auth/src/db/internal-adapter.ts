@@ -4,6 +4,7 @@ import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User } from "./schema";
+import { generateId } from "../utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -29,7 +30,10 @@ export const createInternalAdapter = (
 
 		const created = await adapter.create<T>({
 			model: tables[model].tableName,
-			data,
+			data: {
+				id: generateId(),
+				...data,
+			},
 		});
 
 		if (hooks?.[model]?.create?.after && created) {
@@ -63,7 +67,7 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
+				id: generateId(),
 				userId,
 				/**
 				 * If the user doesn't want to be remembered

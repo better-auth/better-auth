@@ -198,7 +198,10 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			const log = options.logger?.verboseLogging ? logger : undefined;
 			if (options.logger?.disabled !== true) {
 				if (e instanceof APIError) {
-					log?.warn(e);
+					if (e.status === "INTERNAL_SERVER_ERROR") {
+						logger.error(e);
+					}
+					log?.error(e.message);
 				} else {
 					if (typeof e === "object" && e !== null && "message" in e) {
 						const errorMessage = e.message as string;
