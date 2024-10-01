@@ -30,6 +30,7 @@ export const generate = new Command("generate")
 				output: z.string().optional(),
 			})
 			.parse(opts);
+		const spinner = ora("preparing schema...").start();
 		const cwd = path.resolve(options.cwd);
 		if (!existsSync(cwd)) {
 			logger.error(`The directory "${cwd}" does not exist.`);
@@ -54,7 +55,7 @@ export const generate = new Command("generate")
 			logger.error("The adapter does not support schema generation.");
 			process.exit(1);
 		}
-		const spinner = ora("preparing schema...").start();
+		spinner.text = "generating schema...";
 		const { code, fileName, append } = await adapter.createSchema(
 			config,
 			options.output,

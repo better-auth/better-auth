@@ -13,6 +13,11 @@ export interface DrizzleAdapterOptions {
 }
 
 function getSchema(modelName: string, schema: Record<string, any>) {
+	if (!schema) {
+		throw new BetterAuthError(
+			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+		);
+	}
 	const key = Object.keys(schema).find((key) => {
 		const modelName = schema[key].name;
 		return modelName === modelName;
@@ -61,11 +66,7 @@ export const drizzleAdapter = (
 	options: DrizzleAdapterOptions,
 ): Adapter => {
 	const schema = options?.schema || db._.schema;
-	if (!schema) {
-		throw new BetterAuthError(
-			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
-		);
-	}
+
 	const databaseType = options?.provider;
 	return {
 		id: "drizzle",

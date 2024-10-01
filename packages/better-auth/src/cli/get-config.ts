@@ -90,12 +90,14 @@ export async function getConfig({
 						break;
 					}
 				} catch (e) {
+					logger.error("[#better-auth]: Couldn't read your auth config.", e);
 					process.exit(1);
 				}
 			}
 		}
 		return configFile;
 	} catch (e) {
+		logger.error("Couldn't read your auth config.");
 		process.exit(1);
 	}
 }
