@@ -28,8 +28,8 @@ export const createInternalAdapter = (
 		}
 
 		const created = await adapter.create<T>({
-			model: tables[model].tableName,
-			data,
+			model,
+			data: actualData,
 		});
 
 		if (hooks?.[model]?.create?.after && created) {

@@ -5,16 +5,28 @@ import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
 
-export const username = () => {
+export const phoneNumber = (options?: {
+	schema?: {
+		/**
+		 * Phone number field on your db
+		 *
+		 * @default "phoneNumber"
+		 */
+		phoneNumber: string;
+	};
+}) => {
+	const opts = {
+		phoneNumber: options?.schema?.phoneNumber || "phoneNumber",
+	};
 	return {
-		id: "username",
+		id: "phone-number",
 		endpoints: {
-			signInUsername: createAuthEndpoint(
-				"/sign-in/username",
+			signInPhoneNumber: createAuthEndpoint(
+				"/sign-in/phone-number",
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string(),
+						phoneNumber: z.string(),
 						password: z.string(),
 						dontRememberMe: z.boolean().optional(),
 						callbackURL: z.string().optional(),
@@ -25,20 +37,19 @@ export const username = () => {
 						model: "user",
 						where: [
 							{
-								field: "username",
-								value: ctx.body.username,
+								field: opts.phoneNumber,
+								value: ctx.body.phoneNumber,
 							},
 						],
 					});
 					if (!user) {
 						await ctx.context.password.hash(ctx.body.password);
-						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
 							message: "Invalid email or password",
 						});
 					}
 					const account = await ctx.context.adapter.findOne<Account>({
-						model: "account",
+						model: ctx.context.tables.account.tableName,
 						where: [
 							{
 								field: "userId",
@@ -57,7 +68,10 @@ export const username = () => {
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
-						ctx.context.logger.error("Password not found", { username });
+						ctx.context.logger.warn(
+							"Unexpectedly password is missing for the user",
+							user,
+						);
 						throw new APIError("UNAUTHORIZED", {
 							message: "Unexpected error",
 						});
@@ -104,12 +118,12 @@ export const username = () => {
 					});
 				},
 			),
-			signUpUsername: createAuthEndpoint(
-				"/sign-up/username",
+			signUpPhoneNumber: createAuthEndpoint(
+				"/sign-up/phone-number",
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().min(3).max(20),
+						phoneNumber: z.string().min(3).max(20),
 						name: z.string(),
 						email: z.string().email(),
 						password: z.string(),
@@ -135,7 +149,7 @@ export const username = () => {
 					const updated = await ctx.context.internalAdapter.updateUserByEmail(
 						res.user.email,
 						{
-							username: ctx.body.username,
+							[opts.phoneNumber]: ctx.body.phoneNumber,
 						},
 					);
 					if (ctx.body.callbackURL) {
@@ -160,11 +174,10 @@ export const username = () => {
 				},
 			),
 		},
-
 		schema: {
 			user: {
 				fields: {
-					username: {
+					phoneNumber: {
 						type: "string",
 						required: false,
 						unique: true,
