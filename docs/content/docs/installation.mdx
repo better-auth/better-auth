@@ -122,6 +122,8 @@ export const auth = betterAuth({
 });
 ```
 
+We recommend using the built-in Kysely adapter for better performance if your database is supported.
+
 **Adapters**
 
 If your database isn’t supported by Kysely, you can use an adapter to connect. Simply import the adapter and pass it into the `database` option.
