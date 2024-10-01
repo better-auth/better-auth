@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.12.2",
-    "better-auth": "^0.0.4",
+    "better-auth": "workspace:*",
     "@types/better-sqlite3": "^7.6.11",
     "better-sqlite3": "^11.3.0",
     "dotenv": "^16.4.5",

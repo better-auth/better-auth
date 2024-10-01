@@ -11,7 +11,7 @@ Organizations simplifies user access and permissions management. Assign roles an
 <Steps>
 <Step>
 ### Add the plugin to your **auth** config
-```ts title="auth.ts" twoslash
+```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
@@ -40,7 +40,7 @@ export const auth = await betterAuth({
 <Step>
     ### Add the client plugin
     
-    ```ts title="client.ts" twoslash
+    ```ts title="client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { organizationClient } from "better-auth/client/plugins"
 
@@ -68,7 +68,7 @@ To create an organization, you need to provide:
 - `slug`: The slug of the organization.
 - `logo`: The logo of the organization. (Optional)
 
-```ts title="client.ts" twoslash
+```ts title="client.ts"
 import { createAuthClient } from "better-auth/client"
 import { organizationClient } from "better-auth/client/plugins"
 

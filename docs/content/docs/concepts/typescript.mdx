@@ -23,9 +23,10 @@ You can also infer types on the server side.
 
 ```ts title="auth.ts" twoslash
 import { betterAuth } from "better-auth"
+import Database from "better-sqlite3"
 
 export const auth = await betterAuth({
-    // your configuration
+    database: new Database("database.db")
 })
 
 type Session = typeof auth.$Infer.Session

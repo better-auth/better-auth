@@ -11,12 +11,11 @@ The username plugin wraps the email and password authenticator and adds username
     <Step>
         ### Add Plugin to the server
 
-        ```ts title="auth.ts" twoslash
+        ```ts title="auth.ts" 
         import { betterAuth } from "better-auth"
         import { username } from "better-auth/plugins"
 
         const auth = await betterAuth({
-           
             plugins: [ // [!code highlight]
                 username() // [!code highlight]
             ] // [!code highlight]
@@ -39,7 +38,7 @@ The username plugin wraps the email and password authenticator and adds username
     <Step>
         ### Add the client plugin
         
-        ```ts title="client.ts" twoslash
+        ```ts title="client.ts"
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
         
@@ -65,7 +64,7 @@ To signup a user with username, you can use the `signUp.username` function provi
 - `image`: The image of the user. (optional)
 - `callbackURL`: The url to redirect to after the user has signed up. (optional)
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
 import { createAuthClient } from "better-auth/client"
 import { usernameClient } from "better-auth/client/plugins"
 const client = createAuthClient({
@@ -92,7 +91,7 @@ To signin a user with username, you can use the `signIn.username` function provi
 - `password`: The password of the user.
 - `callbackURL`: The url to redirect to after the user has signed in. (optional)
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
 import { createAuthClient } from "better-auth/client"
 import { usernameClient } from "better-auth/client/plugins"
 const client = createAuthClient({
