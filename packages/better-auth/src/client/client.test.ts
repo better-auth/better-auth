@@ -9,7 +9,9 @@ import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../db/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
-import { twoFactorClient } from "../plugins";
+import { passkeyClient, twoFactorClient } from "../plugins";
+import { createAuthClient } from "./vanilla";
+import { organizationClient } from "./plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -245,6 +247,29 @@ describe("type", () => {
 				testField4: string;
 				twoFactorEnabled?: boolean | undefined;
 			};
+		}>();
+	});
+
+	it("should infer session react", () => {
+		const client = createReactClient({
+			plugins: [
+				organizationClient(),
+				twoFactorClient({
+					twoFactorPage: "/two-factor",
+				}),
+				passkeyClient(),
+			],
+		});
+		const $infer = client.$Infer.Session;
+		expectTypeOf($infer.user).toEqualTypeOf<{
+			name: string;
+			id: string;
+			email: string;
+			emailVerified: boolean;
+			createdAt: Date;
+			updatedAt: Date;
+			image?: string | undefined;
+			twoFactorEnabled?: boolean | undefined;
 		}>();
 	});
 });

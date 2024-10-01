@@ -57,14 +57,12 @@ type AdditionalUserFields<Options extends BetterAuthOptions> =
 
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<
-		Prettify<
-			User &
-				(O extends BetterAuthOptions
-					? AdditionalUserFields<O>
-					: O extends Auth
-						? AdditionalUserFields<O["options"]>
-						: {})
-		>
+		User &
+			(O extends BetterAuthOptions
+				? AdditionalUserFields<O>
+				: O extends Auth
+					? AdditionalUserFields<O["options"]>
+					: {})
 	>
 >;
 
