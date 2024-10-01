@@ -134,7 +134,7 @@ export const drizzleAdapter = (
 		},
 		async createSchema(options, file) {
 			const tables = getAuthTables(options);
-			const filePath = file || "./schema.ts";
+			const filePath = file || "./auth-schema.ts";
 			const timestampAndBoolean =
 				databaseType !== "sqlite" ? "timestamp, boolean" : "";
 			const int = databaseType === "mysql" ? "int" : "integer";
