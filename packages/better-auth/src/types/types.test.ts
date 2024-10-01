@@ -1,16 +1,10 @@
 import { describe, expectTypeOf } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { betterAuth } from "../auth";
 import { organization, twoFactor } from "../plugins";
 
 describe("general types", async (it) => {
-	it("should infer base session", () => {
-		const auth = betterAuth({
-			database: {
-				provider: "sqlite",
-				url: "file:./test.db",
-			},
-		});
+	it("should infer base session", async () => {
+		const { auth } = await getTestInstance();
 		expectTypeOf(auth.$Infer.Session).toEqualTypeOf<{
 			session: {
 				id: string;
@@ -32,11 +26,7 @@ describe("general types", async (it) => {
 	});
 
 	it("should infer additional fields from plugins", async () => {
-		const auth = betterAuth({
-			database: {
-				provider: "sqlite",
-				url: "file:./test.db",
-			},
+		const { auth } = await getTestInstance({
 			plugins: [twoFactor(), organization()],
 		});
 		expectTypeOf<typeof auth.$Infer.Session.user>().toEqualTypeOf<{
