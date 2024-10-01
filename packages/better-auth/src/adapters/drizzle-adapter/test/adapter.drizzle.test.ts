@@ -32,9 +32,6 @@ describe("adapter test", async () => {
 	});
 
 	const adapter = drizzleAdapter(db, {
-		schema: {
-			user,
-		},
 		provider: "pg",
 	});
 

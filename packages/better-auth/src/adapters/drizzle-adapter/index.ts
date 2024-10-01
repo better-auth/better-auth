@@ -7,7 +7,7 @@ import fs from "fs/promises";
 import { BetterAuthError } from "../../error/better-auth-error";
 
 export interface DrizzleAdapterOptions {
-	schema: Record<string, any>;
+	schema?: Record<string, any>;
 	provider: "pg" | "mysql" | "sqlite";
 }
 
@@ -58,8 +58,7 @@ export const drizzleAdapter = (
 	db: DB,
 	options: DrizzleAdapterOptions,
 ): Adapter => {
-	const schema = options.schema;
-
+	const schema = options.schema || db._.fullSchema;
 	const databaseType = options?.provider;
 	return {
 		id: "drizzle",
