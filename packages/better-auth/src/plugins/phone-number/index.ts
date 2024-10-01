@@ -4,6 +4,14 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
+import { logger } from "../../utils";
+import { nanoid } from "nanoid";
+
+interface OTP {
+	code: string;
+	phoneNumber: string;
+	createdAt: Date;
+}
 
 export const phoneNumber = (options?: {
 	schema?: {
@@ -19,7 +27,7 @@ export const phoneNumber = (options?: {
 	 * @default 6
 	 */
 	otpLength?: number;
-	sendOTP?: (phoneNumber: string) => Promise<string>;
+	sendOTP?: (phoneNumber: string, code: string) => Promise<string>;
 	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean>;
 }) => {
 	const opts = {
@@ -188,7 +196,32 @@ export const phoneNumber = (options?: {
 						phoneNumber: z.string(),
 					}),
 				},
-				async () => {},
+				async (ctx) => {
+					if (!options?.sendOTP) {
+						logger.warn("sendOTP not implemented");
+						throw new APIError("NOT_IMPLEMENTED", {
+							message: "sendOTP not implemented",
+						});
+					}
+					const code = nanoid(options?.otpLength || 6);
+					await ctx.context.adapter.create({
+						model: "otp",
+						data: {
+							code,
+							phoneNumber: ctx.body.phoneNumber,
+							createdAt: new Date(),
+						},
+					});
+					await options.sendOTP(ctx.body.phoneNumber, code);
+					return ctx.json(
+						{ code },
+						{
+							body: {
+								message: "Code sent",
+							},
+						},
+					);
+				},
 			),
 			verifyPhoneNumber: createAuthEndpoint(
 				"/phone-number/verify",
@@ -199,7 +232,46 @@ export const phoneNumber = (options?: {
 						code: z.string(),
 					}),
 				},
-				async () => {},
+				async (ctx) => {
+					const otp = await ctx.context.adapter.findOne<OTP>({
+						model: "otp",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: "phoneNumber",
+							},
+						],
+					});
+					if (!otp) {
+						return ctx.json(
+							{
+								status: false,
+							},
+							{
+								body: {
+									message: "Invalid code",
+								},
+								status: 400,
+							},
+						);
+					}
+					if (otp.code !== ctx.body.code) {
+						return ctx.json(
+							{
+								status: false,
+							},
+							{
+								body: {
+									message: "Invalid code",
+								},
+								status: 400,
+							},
+						);
+					}
+					return ctx.json({
+						status: true,
+					});
+				},
 			),
 		},
 		schema: {
