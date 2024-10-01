@@ -56,7 +56,7 @@ export const generate = new Command("generate")
 			process.exit(1);
 		}
 		spinner.text = "generating schema...";
-		const { code, fileName, append } = await adapter.createSchema(
+		const { code, fileName, append, overwrite } = await adapter.createSchema(
 			config,
 			options.output,
 		);
@@ -65,16 +65,20 @@ export const generate = new Command("generate")
 			logger.success("Your schema is already up to date.");
 			process.exit(0);
 		}
-		if (append) {
-			const { append } = await prompts({
+		if (append || overwrite) {
+			const { confirm } = await prompts({
 				type: "confirm",
-				name: "append",
+				name: "confirm",
 				message: `The file ${fileName} already exists. Do you want to ${chalk.yellow(
-					"append",
+					`${overwrite ? "overwrite" : "append"}`,
 				)} the schema to the file?`,
 			});
-			if (append) {
-				await fs.appendFile(path.join(cwd, fileName), code);
+			if (confirm) {
+				if (overwrite) {
+					await fs.writeFile(path.join(cwd, fileName), code);
+				} else {
+					await fs.appendFile(path.join(cwd, fileName), code);
+				}
 				logger.success(`🚀 schema was appended successfully!`);
 				process.exit(0);
 			} else {

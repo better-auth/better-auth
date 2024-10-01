@@ -1,7 +1,6 @@
 import { and, eq, or, SQL } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
 import type { FieldType } from "../../db";
-import * as prettier from "prettier";
 import { getAuthTables } from "../../db/get-tables";
 import { existsSync } from "fs";
 import fs from "fs/promises";
@@ -184,31 +183,15 @@ export const drizzleAdapter = (
 									: ""
 							}`;
 						})
-						.join()}
+						.join(",\n ")}
 				});`;
 				code += `\n${schema}\n`;
 			}
-			if (fileExist) {
-				if (fileContent.includes(code)) {
-					return {
-						code: "",
-						fileName: filePath,
-						append: false,
-					};
-				}
-				if (fileContent.includes("import")) {
-					code = code.replace(/import {.*?} from "drizzle-orm\/.*?";/, "");
-				}
-			}
-			const formattedCode = await prettier.format(code, {
-				semi: true,
-				parser: "typescript",
-				tabWidth: 4,
-			});
+
 			return {
-				code: formattedCode,
+				code: code,
 				fileName: filePath,
-				append: fileExist,
+				overwrite: fileExist,
 			};
 		},
 	};

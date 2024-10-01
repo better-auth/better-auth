@@ -4,8 +4,8 @@
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=16384' tsup --clean",
-        "dev": "NODE_OPTIONS='--max-old-space-size=16384' tsup --watch --sourcemap",
+        "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean",
+        "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
         "test": "pnpm prisma:push && pnpm typecheck && vitest",
         "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
         "test:adapters": "pnpm prisma:push && vitest adapters",
@@ -108,7 +108,6 @@
         "oauth4webapi": "^2.12.0",
         "ora": "^8.0.1",
         "oslo": "^1.2.1",
-        "prettier": "^3.3.3",
         "prompts": "^2.4.2",
         "zod": "^3.22.5"
     },

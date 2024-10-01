@@ -50,6 +50,7 @@ export interface Adapter {
 		code: string;
 		fileName: string;
 		append?: boolean;
+		overwrite?: boolean;
 	}>;
 }
 
