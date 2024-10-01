@@ -3,12 +3,14 @@ import { organization, passkey, twoFactor } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 export const auth = betterAuth({
-	database: new Database("./db.sqlite"),
+	database: {
+		provider: "sqlite",
+		url: "./db.sqlite",
+	},
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword(token, user) {
