@@ -9,51 +9,44 @@ import type {
 } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
 
+type InferAdditional<
+	Options extends BetterAuthOptions,
+	Key extends string,
+> = Options["plugins"] extends Array<infer T>
+	? T extends {
+			schema: {
+				[key in Key]: {
+					fields: infer Field;
+				};
+			};
+		}
+		? Field extends Record<infer Key, FieldAttribute>
+			? {
+					[key in Key as Field[key]["required"] extends false
+						? never
+						: Field[key]["defaultValue"] extends
+									| boolean
+									| string
+									| number
+									| Date
+									| Function
+							? key
+							: never]: InferFieldOutput<Field[key]>;
+				} & {
+					[key in Key as Field[key]["returned"] extends false
+						? never
+						: key]?: InferFieldOutput<Field[key]>;
+				}
+			: {}
+		: {}
+	: {};
 type AdditionalSessionFields<Options extends BetterAuthOptions> =
-	Options["plugins"] extends Array<infer T>
-		? T extends {
-				schema: {
-					session: {
-						fields: infer Field;
-					};
-				};
-			}
-			? Field extends Record<string, FieldAttribute>
-				? {
-						[key in keyof Field]: InferFieldOutput<Field[key]>;
-					}
-				: {}
-			: {}
-		: {};
-type AdditionalUserFields<Options extends BetterAuthOptions> =
-	Options["plugins"] extends Array<infer T>
-		? T extends {
-				schema: {
-					user: {
-						fields: infer Field;
-					};
-				};
-			}
-			? Field extends Record<infer Key, FieldAttribute>
-				? {
-						[key in Key as Field[key]["required"] extends false
-							? never
-							: Field[key]["defaultValue"] extends
-										| boolean
-										| string
-										| number
-										| Date
-										| Function
-								? key
-								: never]: InferFieldOutput<Field[key]>;
-					} & {
-						[key in Key as Field[key]["returned"] extends false
-							? never
-							: key]?: InferFieldOutput<Field[key]>;
-					}
-				: {}
-			: {}
-		: {};
+	InferAdditional<Options, "session">;
+
+type AdditionalUserFields<Options extends BetterAuthOptions> = InferAdditional<
+	Options,
+	"user"
+>;
 
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<
