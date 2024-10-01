@@ -1,40 +1,18 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
-import type { Auth as BetterAuth } from "../auth";
-import type { Prettify, UnionToIntersection } from "../types/helper";
-import type { InferSession, InferUser } from "../types/models";
-import type { BetterAuthClientPlugin, ClientOptions } from "./types";
+import type { Prettify } from "../types/helper";
+import type {
+	ClientOptions,
+	InferSessionFromClient,
+	InferUserFromClient,
+} from "./types";
 import { useAuthQuery } from "./query";
-import type { BetterAuthPlugin } from "../plugins";
 
 export function getSessionAtom<Option extends ClientOptions>(
 	$fetch: BetterFetch,
 ) {
-	type Plugins = Option["plugins"] extends Array<BetterAuthClientPlugin>
-		? Array<
-				Option["plugins"][number] extends infer T
-					? T extends BetterAuthClientPlugin
-						? T["$InferServerPlugin"] extends infer U
-							? U extends BetterAuthPlugin
-								? U
-								: never
-							: never
-						: never
-					: never
-			>
-		: never;
-
-	type Auth = {
-		handler: any;
-		api: any;
-		options: {
-			database: any;
-			plugins: Plugins;
-		};
-	};
-
-	type UserWithAdditionalFields = InferUser<Auth["options"]>;
-	type SessionWithAdditionalFields = InferSession<Auth["options"]>;
+	type UserWithAdditionalFields = InferUserFromClient<Option>;
+	type SessionWithAdditionalFields = InferSessionFromClient<Option>;
 	const $signal = atom<boolean>(false);
 	const session = useAuthQuery<{
 		user: Prettify<UserWithAdditionalFields>;
@@ -47,8 +25,8 @@ export function getSessionAtom<Option extends ClientOptions>(
 		_sessionSignal: $signal,
 		$Infer: {} as {
 			Session: {
-				session: Prettify<SessionWithAdditionalFields>;
-				user: Prettify<UserWithAdditionalFields>;
+				session: SessionWithAdditionalFields;
+				user: UserWithAdditionalFields;
 			};
 		},
 	};

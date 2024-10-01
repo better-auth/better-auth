@@ -5,10 +5,15 @@ import type {
 } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../types/plugins";
 import type { Atom } from "nanostores";
-import type { LiteralString, UnionToIntersection } from "../types/helper";
+import type {
+	LiteralString,
+	StripEmptyObjects,
+	UnionToIntersection,
+} from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { InferSession, InferUser } from "../types";
+import type { InferSession, InferUser, Session, User } from "../types";
+import type { FieldAttribute, InferFieldOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
@@ -93,19 +98,43 @@ export type InferPluginsFromClient<O extends ClientOptions> =
 		? Array<O["plugins"][number]["$InferServerPlugin"]>
 		: undefined;
 
-type InferAuthFromClient<O extends ClientOptions> = {
-	handler: any;
-	api: any;
-	options: {
-		database: any;
-		plugins: InferPluginsFromClient<O>;
-	};
-};
-
-export type InferSessionFromClient<O extends ClientOptions> = InferSession<
-	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
+export type InferSessionFromClient<O extends ClientOptions> = StripEmptyObjects<
+	Session & UnionToIntersection<InferAdditionalFromClient<O, "session">>
+>;
+export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
+	User & UnionToIntersection<InferAdditionalFromClient<O, "user">>
 >;
 
-export type InferUserFromClient<O extends ClientOptions> = InferUser<
-	InferAuthFromClient<O> extends Auth ? InferAuthFromClient<O> : never
->;
+export type InferAdditionalFromClient<
+	Options extends ClientOptions,
+	Key extends string,
+> = Options["plugins"] extends Array<infer T>
+	? T extends BetterAuthClientPlugin
+		? T["$InferServerPlugin"] extends {
+				schema: {
+					[key in Key]: {
+						fields: infer Field;
+					};
+				};
+			}
+			? Field extends Record<infer Key, FieldAttribute>
+				? {
+						[key in Key as Field[key]["required"] extends false
+							? never
+							: Field[key]["defaultValue"] extends
+										| boolean
+										| string
+										| number
+										| Date
+										| Function
+								? key
+								: never]: InferFieldOutput<Field[key]>;
+					} & {
+						[key in Key as Field[key]["returned"] extends false
+							? never
+							: key]?: InferFieldOutput<Field[key]>;
+					}
+				: {}
+			: {}
+		: {}
+	: {};

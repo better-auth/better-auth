@@ -27,3 +27,9 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 export type HasRequiredKeys<BaseType extends object> =
 	RequiredKeysOf<BaseType> extends never ? false : true;
 export type WithoutEmpty<T> = T extends T ? ({} extends T ? never : T) : never;
+
+export type StripEmptyObjects<T> = T extends { [K in keyof T]: never }
+	? never
+	: T extends object
+		? { [K in keyof T as T[K] extends never ? never : K]: T[K] }
+		: T;

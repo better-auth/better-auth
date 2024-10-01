@@ -1,4 +1,4 @@
-import { auth } from "./auth";
+import { auth } from "./_auth";
 
 Bun.serve({
 	fetch(request, server) {

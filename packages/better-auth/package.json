@@ -60,7 +60,7 @@
         "@types/react": "^18.3.3",
         "better-sqlite3": "^11.3.0",
         "drizzle-orm": "^0.33.0",
-        "happy-dom": "^15.7.3",
+        "happy-dom": "^15.7.4",
         "hono": "^4.5.4",
         "listhen": "^1.7.2",
         "mongodb": "^6.9.0",
