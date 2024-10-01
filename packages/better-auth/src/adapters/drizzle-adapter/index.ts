@@ -100,11 +100,13 @@ export const drizzleAdapter = (
 			const { model, where } = data;
 			const schemaModel = getSchema(model, schema);
 			const wheres = where ? whereConvertor(where, schemaModel) : [];
-
+			if (!wheres.length) {
+				return await db.select().from(schemaModel);
+			}
 			return await db
 				.select()
 				.from(schemaModel)
-				.findMany(...wheres);
+				.where(...wheres);
 		},
 		async update(data) {
 			const { model, where, update } = data;

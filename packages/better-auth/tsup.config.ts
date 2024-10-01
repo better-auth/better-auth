@@ -27,7 +27,9 @@ export default defineConfig((env) => {
 		format: ["esm"],
 		dts: true,
 		splitting: false,
+		treeshake: true,
 		skipNodeModulesBundle: true,
 		target: "es2022",
+		noExternal: ["pg", "better-sqlite3", "mysql2"],
 	};
 });
