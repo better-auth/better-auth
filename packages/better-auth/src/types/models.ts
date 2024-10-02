@@ -2,11 +2,7 @@ import type { BetterAuthOptions } from ".";
 import type { Session, User } from "../db/schema";
 import type { Auth } from "../auth";
 import type { FieldAttribute, InferFieldOutput } from "../db";
-import type {
-	Prettify,
-	StripEmptyObjects,
-	UnionToIntersection,
-} from "./helper";
+import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
 
 type InferAdditional<
@@ -40,6 +36,7 @@ type InferAdditional<
 			: {}
 		: {}
 	: {};
+
 type AdditionalSessionFields<Options extends BetterAuthOptions> =
 	InferAdditional<Options, "session">;
 
@@ -60,7 +57,7 @@ export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 >;
 
 export type InferSession<O extends BetterAuthOptions | Auth> =
-	UnionToIntersection<
+	StripEmptyObjects<
 		Session &
 			(O extends BetterAuthOptions
 				? AdditionalSessionFields<O>
