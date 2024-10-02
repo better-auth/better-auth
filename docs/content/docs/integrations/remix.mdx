@@ -64,7 +64,7 @@ Create a client instance. Here we are creating `auth.client.ts` file inside the 
 ```ts title="app/lib/auth.client.ts"
 import { createAuthClient } from "better-auth/react" // make sure to import from better-auth/react
 
-export const client = createAuthClient({
+export const authClient = createAuthClient({
     //you can pass client configuration here
 })
 ```
@@ -78,7 +78,7 @@ Once you have created the client, you can use it to sign up, sign in, and perfor
 ```ts title="app/routes/signup.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
-import { client } from "~/lib/auth.client"
+import { authClient } from "~/lib/auth.client"
 
 export default function Signup() {
   const [email, setEmail] = useState("")
