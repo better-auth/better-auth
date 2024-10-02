@@ -132,19 +132,31 @@ export const username = () => {
 							},
 						});
 					}
-					await ctx.context.internalAdapter.updateUserByEmail(res.user.email, {
-						username: ctx.body.username,
-					});
+					const updated = await ctx.context.internalAdapter.updateUserByEmail(
+						res.user.email,
+						{
+							username: ctx.body.username,
+						},
+					);
 					if (ctx.body.callbackURL) {
-						return ctx.json(res, {
-							body: {
-								url: ctx.body.callbackURL,
-								redirect: true,
-								...res,
+						return ctx.json(
+							{
+								user: updated,
+								session: res.session,
 							},
-						});
+							{
+								body: {
+									url: ctx.body.callbackURL,
+									redirect: true,
+									...res,
+								},
+							},
+						);
 					}
-					return ctx.json(res);
+					return ctx.json({
+						user: updated,
+						session: res.session,
+					});
 				},
 			),
 		},

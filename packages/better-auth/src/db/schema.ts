@@ -38,13 +38,17 @@ export const sessionSchema = z.object({
 	userAgent: z.string().optional(),
 });
 
+export const verificationSchema = z.object({
+	id: z.string(),
+	value: z.string(),
+	expiresAt: z.date(),
+	identifier: z.string(),
+});
+
 export type User = z.infer<typeof userSchema>;
 export type Account = z.infer<typeof accountSchema>;
 export type Session = z.infer<typeof sessionSchema>;
-export interface MigrationTable {
-	name: string;
-	timestamp: string;
-}
+export type Verification = z.infer<typeof verificationSchema>;
 
 export function parseData<T extends Record<string, any>>(
 	data: T,

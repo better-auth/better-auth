@@ -89,7 +89,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						 */
 						const matches = atomListeners?.find((s) => s.matcher(routePath));
 						if (!matches) return;
-						const signal = atoms[matches.signal];
+						const signal = atoms[matches.signal as any];
 						if (!signal) return;
 						/**
 						 * To avoid race conditions we set the signal in a setTimeout

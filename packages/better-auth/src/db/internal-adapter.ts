@@ -1,10 +1,10 @@
-import { alphabet, generateRandomString } from "oslo/crypto";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
-import type { Account, Session, User } from "./schema";
+import type { Account, Session, User, Verification } from "./schema";
 import { generateId } from "../utils";
+import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -12,35 +12,8 @@ export const createInternalAdapter = (
 ) => {
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
+	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, options);
 	const hooks = options.databaseHooks;
-
-	async function createWithHooks<T extends Record<string, any>>(
-		data: T,
-		model: "user" | "account" | "session",
-	) {
-		let actualData = data;
-		if (hooks?.[model]?.create?.before) {
-			const result = await hooks[model].create.before(data as any);
-			if (result === false) {
-				return null;
-			}
-			const isObject = typeof result === "object";
-			actualData = isObject ? (result as any).data : result;
-		}
-
-		const created = await adapter.create<T>({
-			model: tables[model].tableName,
-			data: {
-				id: generateId(),
-				...data,
-			},
-		});
-
-		if (hooks?.[model]?.create?.after && created) {
-			await hooks[model].create.after(created as any);
-		}
-		return created;
-	}
 
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
@@ -76,7 +49,7 @@ export const createInternalAdapter = (
 				 */
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
-					: getDate(sessionExpiration, true),
+					: getDate(sessionExpiration, "sec"),
 				ipAddress: headers?.get("x-forwarded-for") || "",
 				userAgent: headers?.get("user-agent") || "",
 			};
@@ -114,26 +87,11 @@ export const createInternalAdapter = (
 			};
 		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
-			if (hooks?.session?.update?.before) {
-				const result = await hooks.session.update.before(session as any);
-				if (result === false) {
-					return null;
-				}
-				session = typeof result === "object" ? (result as any).data : result;
-			}
-			const updatedSession = await adapter.update<Session>({
-				model: tables.session.tableName,
-				where: [
-					{
-						field: "id",
-						value: sessionId,
-					},
-				],
-				update: session,
-			});
-			if (hooks?.session?.update?.after && updatedSession) {
-				await hooks.session.update.after(updatedSession);
-			}
+			const updatedSession = await updateWithHooks<Session>(
+				session,
+				[{ field: "id", value: sessionId }],
+				"session",
+			);
 			return updatedSession;
 		},
 		deleteSession: async (id: string) => {
@@ -146,7 +104,6 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return session;
 		},
 		deleteSessions: async (userId: string) => {
 			return await adapter.delete({
@@ -200,6 +157,19 @@ export const createInternalAdapter = (
 			const _account = await createWithHooks(account, "account");
 			return _account;
 		},
+		updateUser: async (userId: string, data: Partial<User>) => {
+			const user = await updateWithHooks<User>(
+				data,
+				[
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+				"user",
+			);
+			return user;
+		},
 		updateUserByEmail: async (
 			email: string,
 			data: Partial<User & Record<string, any>>,
@@ -228,22 +198,22 @@ export const createInternalAdapter = (
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
-			const account = await adapter.update<Account>({
-				model: tables.account.tableName,
-				where: [
+			const account = await updateWithHooks<Account>(
+				{
+					password,
+				},
+				[
 					{
-						value: userId,
 						field: "userId",
+						value: userId,
 					},
 					{
 						field: "providerId",
 						value: "credential",
 					},
 				],
-				update: {
-					password,
-				},
-			});
+				"account",
+			);
 			return account;
 		},
 		findAccounts: async (userId: string) => {
@@ -259,27 +229,56 @@ export const createInternalAdapter = (
 			return accounts;
 		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
-			if (hooks?.account?.update?.before) {
-				const result = await hooks.account.update.before(data as any);
-				if (result === false) {
-					return null;
-				}
-				data = typeof result === "object" ? (result as any).data : result;
-			}
-			const account = await adapter.update<Account>({
-				model: tables.account.tableName,
+			const account = await updateWithHooks<Account>(
+				data,
+				[{ field: "id", value: accountId }],
+				"account",
+			);
+			return account;
+		},
+		createVerificationValue: async (data: Omit<Verification, "id">) => {
+			const verification = await createWithHooks(
+				{
+					id: generateId(),
+					...data,
+				},
+				"verification",
+			);
+			return verification;
+		},
+		findVerificationValue: async (identifier: string) => {
+			const verification = await adapter.findOne<Verification>({
+				model: tables.verification.tableName,
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
+					},
+				],
+			});
+			return verification;
+		},
+		deleteVerificationValue: async (id: string) => {
+			await adapter.delete<Verification>({
+				model: tables.verification.tableName,
 				where: [
 					{
 						field: "id",
-						value: accountId,
+						value: id,
 					},
 				],
-				update: data,
 			});
-			if (hooks?.account?.update?.after && account) {
-				await hooks.account.update.after(account);
-			}
-			return account;
+		},
+		updateVerificationValue: async (
+			id: string,
+			data: Partial<Verification>,
+		) => {
+			const verification = await updateWithHooks<Verification>(
+				data,
+				[{ field: "id", value: id }],
+				"verification",
+			);
+			return verification;
 		},
 	};
 };

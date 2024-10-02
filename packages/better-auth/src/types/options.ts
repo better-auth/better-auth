@@ -1,5 +1,5 @@
 import type { Dialect, PostgresPool } from "kysely";
-import type { Account, Session, User } from "../db/schema";
+import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "./provider";
 import type { SocialProviders } from "../social-providers";
@@ -141,9 +141,11 @@ export interface BetterAuthOptions {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
+		fields?: Partial<Record<keyof User, string>>;
 	};
 	session?: {
 		modelName?: string;
+		fields?: Partial<Record<keyof Session, string>>;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -160,6 +162,7 @@ export interface BetterAuthOptions {
 	};
 	account?: {
 		modelName?: string;
+		fields?: Partial<Record<keyof Account, string>>;
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -172,6 +175,13 @@ export interface BetterAuthOptions {
 			 */
 			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
 		};
+	};
+	/**
+	 * Verification configuration
+	 */
+	verification?: {
+		modelName?: string;
+		fields?: Partial<Record<keyof Verification, string>>;
 	};
 	/**
 	 * List of trusted origins.
@@ -353,6 +363,26 @@ export interface BetterAuthOptions {
 				 * Hook that is called after a user is created.
 				 */
 				after?: (account: Account) => Promise<void>;
+			};
+		};
+		verification?: {
+			[key in "create" | "update"]: {
+				/**
+				 * Hook that is called before a user is created.
+				 * if the hook returns false, the user will not be created.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (verification: Verification) => Promise<
+					| boolean
+					| void
+					| {
+							data: Verification & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is created.
+				 */
+				after?: (verification: Verification) => Promise<void>;
 			};
 		};
 	};

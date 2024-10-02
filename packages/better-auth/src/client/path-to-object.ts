@@ -6,8 +6,14 @@ import type { Context, Endpoint } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
+	StripEmptyObjects,
 	UnionToIntersection,
 } from "../types/helper";
+import type {
+	ClientOptions,
+	InferSessionFromClient,
+	InferUserFromClient,
+} from "./types";
 
 type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
@@ -43,7 +49,29 @@ type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 			};
 
 type MergeRoutes<T> = UnionToIntersection<T>;
-export type InferRoute<API> = API extends {
+
+type InferReturn<R, O extends ClientOptions> = R extends
+	| {
+			user: any;
+	  }
+	| {
+			session: any;
+	  }
+	| {
+			user: any;
+			session: any;
+	  }
+	? StripEmptyObjects<
+			{
+				user: InferUserFromClient<O>;
+				session: InferSessionFromClient<O>;
+			} & {
+				[key in Exclude<keyof R, "user" | "session">]: R[key];
+			}
+		>
+	: R;
+
+export type InferRoute<API, COpts extends ClientOptions> = API extends {
 	[key: string]: infer T;
 }
 	? T extends Endpoint
@@ -65,15 +93,18 @@ export type InferRoute<API> = API extends {
 												Prettify<InferCtx<C>>?,
 												BetterFetchOption<C["body"], C["query"], C["params"]>?,
 											]
-								) => Promise<BetterFetchResponse<Awaited<R>>>
+								) => Promise<
+									BetterFetchResponse<InferReturn<Awaited<R>, COpts>>
+								>
 							: never
 						: never
 				>
 		: never
 	: never;
-export type InferRoutes<API extends Record<string, Endpoint>> = MergeRoutes<
-	InferRoute<API>
->;
+export type InferRoutes<
+	API extends Record<string, Endpoint>,
+	ClientOpts extends ClientOptions,
+> = MergeRoutes<InferRoute<API, ClientOpts>>;
 
 export interface ProxyRequest {
 	options?: BetterFetchOption<any, any>;

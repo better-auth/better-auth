@@ -49,6 +49,15 @@ model Account {
 
   @@map("account")
 }
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  @@map("verification")
+}
 "
 `;
 
@@ -103,6 +112,15 @@ model Account {
   password     String?
 
   @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  @@map("verification")
 }
 "
 `;

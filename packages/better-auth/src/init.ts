@@ -10,6 +10,7 @@ import type {
 	BetterAuthPlugin,
 	OAuthProvider,
 } from "./types";
+
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
