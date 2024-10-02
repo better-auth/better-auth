@@ -164,6 +164,23 @@ export const getAuthTables = (
 			},
 			order: 2,
 		},
+		verification: {
+			tableName: options.verification?.modelName || "verification",
+			fields: {
+				identifier: {
+					type: "string",
+					required: true,
+				},
+				value: {
+					type: "string",
+					required: true,
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+				},
+			},
+		},
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDbSchema;
