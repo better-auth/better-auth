@@ -196,6 +196,29 @@ export const createInternalAdapter = (
 			const _account = await createWithHooks(account, "account");
 			return _account;
 		},
+		updateUser: async (userId: string, data: Partial<User>) => {
+			if (hooks?.user?.update?.before) {
+				const result = await hooks.user.update.before(data as any);
+				if (result === false) {
+					return null;
+				}
+				data = typeof result === "object" ? (result as any).data : result;
+			}
+			const user = await adapter.update<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						value: userId,
+						field: "id",
+					},
+				],
+				update: data,
+			});
+			if (hooks?.user?.update?.after && user) {
+				await hooks.user.update.after(user);
+			}
+			return user;
+		},
 		updateUserByEmail: async (
 			email: string,
 			data: Partial<User & Record<string, any>>,

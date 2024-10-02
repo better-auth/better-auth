@@ -1,4 +1,4 @@
-import { APIError, type Context, type InferUse } from "better-call";
+import { APIError, type Context } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
@@ -68,8 +68,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (cachedSession.expiresAt > Date.now()) {
 						return ctx.json(
 							cachedSession.data as unknown as {
-								session: Prettify<InferSession<Option>>;
-								user: Prettify<InferUser<Option>>;
+								session: InferSession<Option>;
+								user: InferUser<Option>;
 							},
 						);
 					}
@@ -100,8 +100,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (dontRememberMe) {
 					return ctx.json(
 						session as unknown as {
-							session: Prettify<InferSession<Option>>;
-							user: Prettify<InferUser<Option>>;
+							session: InferSession<Option>;
+							user: InferUser<Option>;
 						},
 					);
 				}
@@ -143,10 +143,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						maxAge,
 					});
 					return ctx.json({
-						session: updatedSession as unknown as Prettify<
-							InferSession<Option>
-						>,
-						user: session.user as unknown as Prettify<InferUser<Option>>,
+						session: updatedSession,
+						user: session.user,
+					} as unknown as {
+						session: InferSession<Option>;
+						user: InferUser<Option>;
 					});
 				}
 				sessionCache.set(key, {
@@ -155,8 +156,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				});
 				return ctx.json(
 					session as unknown as {
-						session: Prettify<InferSession<Option>>;
-						user: Prettify<InferUser<Option>>;
+						session: InferSession<Option>;
+						user: InferUser<Option>;
 					},
 				);
 			} catch (error) {

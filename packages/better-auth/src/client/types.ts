@@ -73,7 +73,8 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 					>
 				: {}) &
 				Auth["api"]
-		: Auth["api"]
+		: Auth["api"],
+	O
 >;
 
 export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<

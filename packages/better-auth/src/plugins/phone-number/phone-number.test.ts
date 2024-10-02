@@ -5,19 +5,30 @@ import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
 
 describe("phone-number", async (it) => {
-	const { customFetchImpl } = await getTestInstance({
-		plugins: [phoneNumber()],
+	let otp = "";
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				otp: {
+					async sendOTP(_, code) {
+						otp = code;
+					},
+				},
+			}),
+		],
 	});
 
-	it("should sign-up with phone number", async () => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [phoneNumberClient()],
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
 
+	const headers = new Headers();
+
+	it("should sign-up with phone number", async () => {
 		const res = await client.signUp.phoneNumber({
 			email: "valid-email@email.com",
 			name: "Test User",
@@ -47,18 +58,15 @@ describe("phone-number", async (it) => {
 	});
 
 	it("should sing-in with phone-number", async () => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [phoneNumberClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const res = await client.signIn.phoneNumber(
+			{
+				phoneNumber: "+251911121314",
+				password: "valid-password",
 			},
-		});
-
-		const res = await client.signIn.phoneNumber({
-			phoneNumber: "+251911121314",
-			password: "valid-password",
-		});
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
 
 		expect(res.data).toMatchObject({
 			user: {
@@ -79,5 +87,25 @@ describe("phone-number", async (it) => {
 				userAgent: "",
 			},
 		});
+	});
+
+	it("should send verification code", async () => {
+		await client.phoneNumber.sendVerificationCode({
+			phoneNumber: "+251911121314",
+		});
+		expect(otp).toHaveLength(6);
+	});
+
+	it("should verify phone number", async () => {
+		await client.phoneNumber.verify({
+			phoneNumber: "+251911121314",
+			code: otp,
+		});
+		const user = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 });

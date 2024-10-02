@@ -5,7 +5,7 @@ import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
 import { logger } from "../../utils";
-import { nanoid } from "nanoid";
+import { alphabet, generateRandomString } from "oslo/crypto";
 
 interface OTP {
 	code: string;
@@ -13,25 +13,34 @@ interface OTP {
 	createdAt: Date;
 }
 
+function generateOTP(size: number) {
+	return generateRandomString(size, alphabet("0-9"));
+}
+
 export const phoneNumber = (options?: {
-	schema?: {
+	otp?: {
+		modelName?: string;
 		/**
-		 * Phone number field on your db
-		 *
-		 * @default "phoneNumber"
+		 * Length of the OTP code
+		 * @default 6
 		 */
-		phoneNumber: string;
+		otpLength?: number;
+		sendOTP?: (phoneNumber: string, code: string) => Promise<void> | void;
+		verifyOTP?: (
+			phoneNumber: string,
+			code: string,
+		) => Promise<boolean> | boolean;
 	};
-	/**
-	 * Length of the OTP code
-	 * @default 6
-	 */
-	otpLength?: number;
-	sendOTP?: (phoneNumber: string, code: string) => Promise<string>;
-	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean>;
 }) => {
 	const opts = {
-		phoneNumber: options?.schema?.phoneNumber || "phoneNumber",
+		phoneNumber: "phoneNumber",
+		phoneNumberVerified: "phoneNumberVerified",
+		otp: {
+			modelName: options?.otp?.modelName || "otp",
+			code: "code",
+			phoneNumber: "phoneNumber",
+			createdAt: "createdAt",
+		},
 	};
 	return {
 		id: "phone-number",
@@ -189,7 +198,7 @@ export const phoneNumber = (options?: {
 				},
 			),
 			sendVerificationCode: createAuthEndpoint(
-				"/phone-number/send-verification",
+				"/phone-number/send-verification-code",
 				{
 					method: "POST",
 					body: z.object({
@@ -197,22 +206,22 @@ export const phoneNumber = (options?: {
 					}),
 				},
 				async (ctx) => {
-					if (!options?.sendOTP) {
+					if (!options?.otp?.sendOTP) {
 						logger.warn("sendOTP not implemented");
 						throw new APIError("NOT_IMPLEMENTED", {
 							message: "sendOTP not implemented",
 						});
 					}
-					const code = nanoid(options?.otpLength || 6);
+					const code = generateOTP(options?.otp?.otpLength || 6);
 					await ctx.context.adapter.create({
-						model: "otp",
+						model: opts.otp.modelName,
 						data: {
 							code,
 							phoneNumber: ctx.body.phoneNumber,
 							createdAt: new Date(),
 						},
 					});
-					await options.sendOTP(ctx.body.phoneNumber, code);
+					await options.otp.sendOTP(ctx.body.phoneNumber, code);
 					return ctx.json(
 						{ code },
 						{
@@ -268,6 +277,23 @@ export const phoneNumber = (options?: {
 							},
 						);
 					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: ctx.context.tables.user.tableName,
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("NOT_FOUND", {
+							message: "User with phone number not found",
+						});
+					}
+					await ctx.context.internalAdapter.updateUser(user.id, {
+						[opts.phoneNumberVerified]: true,
+					});
 					return ctx.json({
 						status: true,
 					});
@@ -286,6 +312,25 @@ export const phoneNumber = (options?: {
 					phoneNumberVerified: {
 						type: "boolean",
 						required: false,
+						returned: true,
+					},
+				},
+			},
+			otp: {
+				fields: {
+					code: {
+						type: "string",
+						required: true,
+						returned: true,
+					},
+					phoneNumber: {
+						type: "string",
+						required: true,
+						returned: true,
+					},
+					createdAt: {
+						type: "string",
+						required: true,
 						returned: true,
 					},
 				},
