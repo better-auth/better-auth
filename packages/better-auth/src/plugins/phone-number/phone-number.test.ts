@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
@@ -107,5 +107,22 @@ describe("phone-number", async (it) => {
 			},
 		});
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+
+	it("should update phone number", async () => {
+		const newPhoneNumber = "+25120201212";
+		await client.phoneNumber.update({
+			phoneNumber: newPhoneNumber,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const user = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
+		expect(user.data?.user.phoneNumberVerified).toBe(false);
 	});
 });

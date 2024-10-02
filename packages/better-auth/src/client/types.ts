@@ -17,7 +17,7 @@ import type { FieldAttribute, InferFieldOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
-	signal: string;
+	signal: "_sessionSignal" | Omit<string, "_sessionSignal">;
 };
 
 export interface BetterAuthClientPlugin {

@@ -12,17 +12,6 @@ import type {
 	Prettify,
 } from "../../types";
 
-const sessionCache = new Map<
-	string,
-	{
-		data: {
-			session: Session;
-			user: User;
-		};
-		expiresAt: number;
-	}
->();
-
 /**
  * Generate a unique key for the request to cache the
  * request for 5 seconds for this specific request.
@@ -63,18 +52,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 
 				const key = getRequestUniqueKey(ctx, sessionCookieToken);
-				const cachedSession = sessionCache.get(key);
-				if (cachedSession) {
-					if (cachedSession.expiresAt > Date.now()) {
-						return ctx.json(
-							cachedSession.data as unknown as {
-								session: InferSession<Option>;
-								user: InferUser<Option>;
-							},
-						);
-					}
-					sessionCache.delete(key);
-				}
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
@@ -127,7 +104,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						await ctx.context.internalAdapter.updateSession(
 							session.session.id,
 							{
-								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, true),
+								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
 							},
 						);
 					if (!updatedSession) {
@@ -150,10 +127,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-				sessionCache.set(key, {
-					data: session,
-					expiresAt: Date.now() + 5000,
-				});
+
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;

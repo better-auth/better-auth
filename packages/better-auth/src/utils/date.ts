@@ -1,4 +1,4 @@
-export const getDate = (span: number, isSeconds = false) => {
+export const getDate = (span: number, unit: "sec" | "ms" = "ms") => {
 	const date = new Date();
-	return new Date(date.getTime() + (isSeconds ? span * 1000 : span));
+	return new Date(date.getTime() + (unit === "sec" ? span * 1000 : span));
 };

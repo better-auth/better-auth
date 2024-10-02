@@ -4,13 +4,19 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
-import { logger } from "../../utils";
+import { getDate, logger } from "../../utils";
 import { alphabet, generateRandomString } from "oslo/crypto";
+import { sessionMiddleware } from "../../api";
 
 interface OTP {
 	code: string;
 	phoneNumber: string;
 	createdAt: Date;
+}
+
+interface UserWithPhoneNumber extends User {
+	phoneNumber: string;
+	phoneNumberVerified: boolean;
 }
 
 function generateOTP(size: number) {
@@ -30,6 +36,13 @@ export const phoneNumber = (options?: {
 			phoneNumber: string,
 			code: string,
 		) => Promise<boolean> | boolean;
+		sendOTPonSignUp?: boolean;
+		sendOTPonUpdate?: boolean;
+		/**
+		 * Expiry time of the OTP code in seconds
+		 * @default 300
+		 */
+		expiresIn?: number;
 	};
 }) => {
 	const opts = {
@@ -40,6 +53,7 @@ export const phoneNumber = (options?: {
 			code: "code",
 			phoneNumber: "phoneNumber",
 			createdAt: "createdAt",
+			expiresIn: options?.otp?.expiresIn || 300,
 		},
 	};
 	return {
@@ -170,12 +184,31 @@ export const phoneNumber = (options?: {
 							},
 						});
 					}
+					if (options?.otp?.sendOTPonSignUp) {
+						if (!options.otp.sendOTP) {
+							logger.warn("sendOTP not implemented");
+							throw new APIError("NOT_IMPLEMENTED", {
+								message: "sendOTP not implemented",
+							});
+						}
+						const code = generateOTP(options?.otp?.otpLength || 6);
+						await ctx.context.adapter.create({
+							model: opts.otp.modelName,
+							data: {
+								code,
+								phoneNumber: ctx.body.phoneNumber,
+								createdAt: getDate(opts.otp.expiresIn, "sec"),
+							},
+						});
+						await options.otp.sendOTP(ctx.body.phoneNumber, code);
+					}
 					const updated = await ctx.context.internalAdapter.updateUserByEmail(
 						res.user.email,
 						{
 							[opts.phoneNumber]: ctx.body.phoneNumber,
 						},
 					);
+
 					if (ctx.body.callbackURL) {
 						return ctx.json(
 							{
@@ -218,7 +251,7 @@ export const phoneNumber = (options?: {
 						data: {
 							code,
 							phoneNumber: ctx.body.phoneNumber,
-							createdAt: new Date(),
+							createdAt: getDate(opts.otp.expiresIn, "sec"),
 						},
 					});
 					await options.otp.sendOTP(ctx.body.phoneNumber, code);
@@ -251,7 +284,8 @@ export const phoneNumber = (options?: {
 							},
 						],
 					});
-					if (!otp) {
+
+					if (!otp || otp.createdAt < new Date()) {
 						return ctx.json(
 							{
 								status: false,
@@ -296,6 +330,46 @@ export const phoneNumber = (options?: {
 					});
 					return ctx.json({
 						status: true,
+					});
+				},
+			),
+			updatePhoneNumber: createAuthEndpoint(
+				"/phone-number/update",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					if (options?.otp?.sendOTPonUpdate) {
+						if (!options.otp.sendOTP) {
+							logger.warn("sendOTP not implemented");
+							throw new APIError("NOT_IMPLEMENTED", {
+								message: "sendOTP not implemented",
+							});
+						}
+						const code = generateOTP(options?.otp?.otpLength || 6);
+						await ctx.context.adapter.create({
+							model: opts.otp.modelName,
+							data: {
+								code,
+								phoneNumber: ctx.body.phoneNumber,
+								createdAt: getDate(opts.otp.expiresIn, "sec"),
+							},
+						});
+						await options.otp.sendOTP(ctx.body.phoneNumber, code);
+					}
+					const user = await ctx.context.internalAdapter.updateUser(
+						ctx.context.session.user.id,
+						{
+							[opts.phoneNumber]: ctx.body.phoneNumber,
+							[opts.phoneNumberVerified]: false,
+						},
+					);
+					return ctx.json({
+						user,
 					});
 				},
 			),

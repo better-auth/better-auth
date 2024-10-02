@@ -72,7 +72,7 @@ export const createInternalAdapter = (
 				 */
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
-					: getDate(sessionExpiration, true),
+					: getDate(sessionExpiration, "sec"),
 				ipAddress: headers?.get("x-forwarded-for") || "",
 				userAgent: headers?.get("user-agent") || "",
 			};
