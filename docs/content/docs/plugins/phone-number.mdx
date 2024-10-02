@@ -110,35 +110,6 @@ const isVerified = await client.phoneNumber.verify({
 })
 ```
 
-### Auto Sign-In
-
-You can enable auto sign-in on verify success by default. 
-
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-    plugins: [
-        phoneNumber({
-            otp: {
-                sendOTP: (phoneNumber, code) => {
-                    // Implement sending OTP code via SMS
-                }
-            },
-            enableAutoSignIn: true
-        })
-    ]
-})
-```
-
-```ts title="client.ts"
-await client.phoneNumber.verify({
-    phoneNumber: "+1234567890",
-    code: "123456",
-})
-```
-
-Now the user will be signed in automatically after the phone number is verified.
-
 
 ### Update Phone Number
 
@@ -174,13 +145,83 @@ This will update the phone number and send an OTP to the new number for verifica
 ### OTP Options 
 
 - **modelName**: The name of the model to store OTPs. Default: `otp`
-
 - **otpLength**: The length of the OTP code. Default: `6`
-
 - **sendOTP**: A function to send the OTP code to the user's phone number. The function should accept two arguments: `phoneNumber` and `code`.
-
 - **sendOTPonUpdate**: A boolean to send OTP for verification when updating the phone number. Default: `false`
-
 - **sendOTPonSignUp**: A boolean to send OTP for verification when signing up. Default: `false`.
-
 - **expiresIn**: The time in seconds after which the OTP code expires. Default: `300` (5 minutes)
+
+
+### Auto Sign-In
+
+You can enable auto sign-in on verify success by default. 
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            otp: {
+                sendOTP: (phoneNumber, code) => {
+                    // Implement sending OTP code via SMS
+                }
+            },
+            enableAutoSignIn: true
+        })
+    ]
+})
+```
+
+```ts title="client.ts"
+await client.phoneNumber.verify({
+    phoneNumber: "+1234567890",
+    code: "123456",
+})
+```
+
+Now the user will be signed in automatically after the phone number is verified.
+
+## Schema
+
+The plugin requires 2 fields to be added to the user table and a new table to store OTPs:
+
+### User Table (Add the following fields)
+
+<DatabaseTable
+    fields={[
+        { 
+            name: "phoneNumber", 
+            type: "string", 
+            description: "The phone number of the user",
+            isUnique: true
+        },
+        { 
+            name: "phoneNumberVerified", 
+            type: "boolean", 
+            description: "Whether the phone number is verified or not",
+            defaultValue: false
+        },
+    ]}
+    />
+
+### OTP Table
+
+<DatabaseTable
+    name="otp"
+    fields={[
+        { 
+            name: "phoneNumber", 
+            type: "string", 
+            description: "The phone number of the user"
+        },
+        { 
+            name: "code", 
+            type: "string", 
+            description: "The OTP code"
+        },
+        { 
+            name: "expiresAt", 
+            type: "timestamp", 
+            description: "The time when the OTP code expires"
+        },
+    ]}
+    />
