@@ -351,20 +351,22 @@ There are two types of hooks you can define:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-   user: {
-    create: {
-      before: async (user) => {
-          // Modify the user object before it is created
-          return {
-              ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1]
-          }
+   databaseHooks: [{
+        user: {
+          create: {
+              before: async (user) => {
+                  // Modify the user object before it is created
+                  return {
+                      ...user,
+                      firstName: user.name.split(" ")[0],
+                      lastName: user.name.split(" ")[1]
+                  }
+              },
+              after: async (user) => {
+                  //perform additional actions, like creating a stripe customer
+              },
+          },
       },
-      after: async (user) => {
-          //perform additional actions, like creating a stripe customer
-      },
-    },
-  },
+   }]
 })
 ```
