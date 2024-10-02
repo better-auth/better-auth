@@ -16,15 +16,15 @@ The phone number plugin extends the authentication system by allowing users to s
         import { phoneNumber } from "better-auth/plugins"
 
         const auth = await betterAuth({
-            plugins: [ // [!code highlight]
-                phoneNumber({ 
-                    otp: {
-                        sendOTP: (phoneNumber, code) => {
-                            // Implement sending OTP code via SMS
-                        },
-                    }
+            plugins: [ 
+                phoneNumber({  // [!code highlight]
+                    otp: { // [!code highlight]
+                        sendOTP: (phoneNumber, code) => { // [!code highlight]
+                            // Implement sending OTP code via SMS // [!code highlight]
+                        } // [!code highlight]
+                    } // [!code highlight]
                 }) // [!code highlight]
-            ] // [!code highlight]
+            ] 
         })
         ```
     </Step>
@@ -33,16 +33,18 @@ The phone number plugin extends the authentication system by allowing users to s
 
         Run the migration or generate the schema to add the necessary fields to your **user** and **otp** tables.
 
-        ```bash
-        npx better-auth migrate
-        ```
-
-        or
-
-        ```bash
-        npx better-auth generate
-        ```
-
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx better-auth migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx better-auth generate
+            ```
+            </Tab>
+        </Tabs>
         See the [Schema](#schema) section to add the fields manually.
     </Step>
     <Step>
@@ -72,6 +74,17 @@ const data = await client.signUp.phoneNumber({
     phoneNumber: "+1234567890",
     name: "John Doe",
     email: "john@example.com",
+    password: "securePassword123"
+})
+```
+
+### Sign In with Phone Number
+
+To sign in a user with their phone number, use the `signIn.phoneNumber` function provided by the client.
+
+```ts title="client.ts"
+const data = await client.signIn.phoneNumber({
+    phoneNumber: "+1234567890",
     password: "securePassword123"
 })
 ```

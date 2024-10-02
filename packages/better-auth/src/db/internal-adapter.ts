@@ -32,7 +32,7 @@ export const createInternalAdapter = (
 			model: tables[model].tableName,
 			data: {
 				id: generateId(),
-				...data,
+				...actualData,
 			},
 		});
 
