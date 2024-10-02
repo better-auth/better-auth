@@ -3,6 +3,7 @@ import {
 	LucideAArrowDown,
 	LucideIcon,
 	Mailbox,
+	Phone,
 	ScanFace,
 	Users2,
 	UserSquare2,
@@ -580,6 +581,11 @@ export const contents: Content[] = [
 				title: "Username",
 				icon: UserSquare2,
 				href: "/docs/plugins/username",
+			},
+			{
+				title: "Phone Number",
+				icon: Phone,
+				href: "/docs/plugins/phone-number",
 			},
 			{
 				title: "Magic Link",
