@@ -52,6 +52,7 @@ export interface Adapter {
 		append?: boolean;
 		overwrite?: boolean;
 	}>;
+	options?: Record<string, any>;
 }
 
 export interface SessionAdapter {

@@ -9,6 +9,7 @@ import prompts from "prompts";
 import { getAdapter } from "../../db/utils";
 import fs from "fs/promises";
 import chalk from "chalk";
+import { generatePrismaSchema } from "../../adapters/prisma-adapter/generate-cli";
 
 export const generate = new Command("generate")
 	.option(
@@ -51,15 +52,30 @@ export const generate = new Command("generate")
 			process.exit(1);
 		});
 
-		if (!adapter.createSchema) {
-			logger.error("The adapter does not support schema generation.");
-			process.exit(1);
+		let code = "";
+		let fileName = "";
+		let append = false;
+		let overwrite = false;
+		if (adapter.id === "prisma") {
+			spinner.text = "generating schema...";
+			const result = await generatePrismaSchema({
+				options: config,
+				file: options.output,
+				provider: adapter.options?.provider || "pg",
+			});
+			code = result.code;
+			fileName = result.fileName;
+		} else {
+			if (!adapter.createSchema) {
+				logger.error("The adapter does not support schema generation.");
+				process.exit(1);
+			}
+			const result = await adapter.createSchema(config, options.output);
+			code = result.code;
+			fileName = result.fileName;
+			append = result.append || false;
+			overwrite = result.overwrite || false;
 		}
-		spinner.text = "generating schema...";
-		const { code, fileName, append, overwrite } = await adapter.createSchema(
-			config,
-			options.output,
-		);
 		spinner.stop();
 		if (!code) {
 			logger.success("Your schema is already up to date.");
