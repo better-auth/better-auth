@@ -6,7 +6,11 @@ import { organizationClient } from "./client";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
-		plugins: [organization()],
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
 		logger: {
 			verboseLogging: true,
 		},
