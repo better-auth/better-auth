@@ -125,4 +125,17 @@ describe("phone-number", async (it) => {
 		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(false);
 	});
+
+	it("should not verify if code expired", async () => {
+		vi.useFakeTimers();
+		await client.phoneNumber.sendVerificationCode({
+			phoneNumber: "+25120201212",
+		});
+		vi.advanceTimersByTime(1000 * 60 * 5 + 1); // 5 minutes + 1ms
+		const res = await client.phoneNumber.verify({
+			phoneNumber: "+25120201212",
+			code: otp,
+		});
+		expect(res.error?.status).toBe(400);
+	});
 });

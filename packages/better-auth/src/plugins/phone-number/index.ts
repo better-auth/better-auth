@@ -25,7 +25,6 @@ function generateOTP(size: number) {
 
 export const phoneNumber = (options?: {
 	otp?: {
-		modelName?: string;
 		/**
 		 * Length of the OTP code
 		 * @default 6
@@ -50,7 +49,6 @@ export const phoneNumber = (options?: {
 		phoneNumber: "phoneNumber",
 		phoneNumberVerified: "phoneNumberVerified",
 		otp: {
-			modelName: options?.otp?.modelName || "otp",
 			code: "code",
 			phoneNumber: "phoneNumber",
 			createdAt: "createdAt",
@@ -193,13 +191,10 @@ export const phoneNumber = (options?: {
 							});
 						}
 						const code = generateOTP(options?.otp?.otpLength || 6);
-						await ctx.context.adapter.create({
-							model: opts.otp.modelName,
-							data: {
-								code,
-								phoneNumber: ctx.body.phoneNumber,
-								createdAt: getDate(opts.otp.expiresIn, "sec"),
-							},
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: code,
+							identifier: ctx.body.phoneNumber,
+							expiresAt: getDate(opts.otp.expiresIn, "sec"),
 						});
 						await options.otp.sendOTP(ctx.body.phoneNumber, code);
 					}
@@ -247,14 +242,13 @@ export const phoneNumber = (options?: {
 						});
 					}
 					const code = generateOTP(options?.otp?.otpLength || 6);
-					await ctx.context.adapter.create({
-						model: opts.otp.modelName,
-						data: {
-							code,
-							phoneNumber: ctx.body.phoneNumber,
-							createdAt: getDate(opts.otp.expiresIn, "sec"),
-						},
+
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: code,
+						identifier: ctx.body.phoneNumber,
+						expiresAt: getDate(opts.otp.expiresIn, "sec"),
 					});
+
 					await options.otp.sendOTP(ctx.body.phoneNumber, code);
 					return ctx.json(
 						{ code },
@@ -276,17 +270,11 @@ export const phoneNumber = (options?: {
 					}),
 				},
 				async (ctx) => {
-					const otp = await ctx.context.adapter.findOne<OTP>({
-						model: "otp",
-						where: [
-							{
-								value: ctx.body.phoneNumber,
-								field: "phoneNumber",
-							},
-						],
-					});
+					const otp = await ctx.context.internalAdapter.findVerificationValue(
+						ctx.body.phoneNumber,
+					);
 
-					if (!otp || otp.createdAt < new Date()) {
+					if (!otp || otp.expiresAt < new Date()) {
 						return ctx.json(
 							{
 								status: false,
@@ -299,7 +287,7 @@ export const phoneNumber = (options?: {
 							},
 						);
 					}
-					if (otp.code !== ctx.body.code) {
+					if (otp.value !== ctx.body.code) {
 						return ctx.json(
 							{
 								status: false,
@@ -377,7 +365,7 @@ export const phoneNumber = (options?: {
 						}
 						const code = generateOTP(options?.otp?.otpLength || 6);
 						await ctx.context.adapter.create({
-							model: opts.otp.modelName,
+							model: ctx.context.tables.verification.tableName,
 							data: {
 								code,
 								phoneNumber: ctx.body.phoneNumber,
@@ -411,25 +399,6 @@ export const phoneNumber = (options?: {
 					phoneNumberVerified: {
 						type: "boolean",
 						required: false,
-						returned: true,
-					},
-				},
-			},
-			otp: {
-				fields: {
-					code: {
-						type: "string",
-						required: true,
-						returned: true,
-					},
-					phoneNumber: {
-						type: "string",
-						required: true,
-						returned: true,
-					},
-					createdAt: {
-						type: "string",
-						required: true,
 						returned: true,
 					},
 				},

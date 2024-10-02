@@ -1,4 +1,3 @@
-import { alphabet, generateRandomString } from "oslo/crypto";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
@@ -237,13 +236,11 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (identifier: string, value: string) => {
+		createVerificationValue: async (data: Omit<Verification, "id">) => {
 			const verification = await createWithHooks(
 				{
 					id: generateId(),
-					identifier,
-					value,
-					expiresAt: getDate(1000 * 60 * 60 * 24), // 1 day
+					...data,
 				},
 				"verification",
 			);

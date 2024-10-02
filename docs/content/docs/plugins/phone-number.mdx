@@ -31,7 +31,7 @@ The phone number plugin extends the authentication system by allowing users to s
     <Step>
         ### Migrate the database
 
-        Run the migration or generate the schema to add the necessary fields to your **user** and **otp** tables.
+        Run the migration or generate the schema to add the necessary fields to your **user** table.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
@@ -182,10 +182,9 @@ Now the user will be signed in automatically after the phone number is verified.
 
 ## Schema
 
-The plugin requires 2 fields to be added to the user table and a new table to store OTPs:
+The plugin requires 2 fields to be added to the user table 
 
-### User Table (Add the following fields)
-
+### User Table
 <DatabaseTable
     fields={[
         { 
@@ -199,29 +198,6 @@ The plugin requires 2 fields to be added to the user table and a new table to st
             type: "boolean", 
             description: "Whether the phone number is verified or not",
             defaultValue: false
-        },
-    ]}
-    />
-
-### OTP Table
-
-<DatabaseTable
-    name="otp"
-    fields={[
-        { 
-            name: "phoneNumber", 
-            type: "string", 
-            description: "The phone number of the user"
-        },
-        { 
-            name: "code", 
-            type: "string", 
-            description: "The OTP code"
-        },
-        { 
-            name: "expiresAt", 
-            type: "timestamp", 
-            description: "The time when the OTP code expires"
         },
     ]}
     />
