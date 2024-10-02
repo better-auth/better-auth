@@ -5,19 +5,41 @@ import { getAuthTables } from "../../db/get-tables";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import { BetterAuthError } from "../../error/better-auth-error";
+import chalk from "chalk";
 
 export interface DrizzleAdapterOptions {
 	schema?: Record<string, any>;
 	provider: "pg" | "mysql" | "sqlite";
+	/**
+	 * If the table names in the schema are plural
+	 * set this to true. For example, if the schema
+	 * has an object with a key "users" instead of "user"
+	 */
+	usePlural?: boolean;
 }
 
-function getSchema(modelName: string, schema: Record<string, any>) {
+function getSchema(
+	modelName: string,
+	options: {
+		schema: Record<string, any>;
+		usePlural?: boolean;
+	},
+) {
+	const schema = options.schema;
 	if (!schema) {
 		throw new BetterAuthError(
 			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 		);
 	}
-	return schema[modelName];
+	const model = options.usePlural ? `${modelName}s` : modelName;
+
+	const schemaModel = schema[model];
+	if (!schemaModel) {
+		throw new BetterAuthError(
+			`[# Drizzle Adapter]: The model "${modelName}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
+		);
+	}
+	return schemaModel;
 }
 
 function whereConvertor(where: Where[], schemaModel: any) {
@@ -64,13 +86,22 @@ export const drizzleAdapter = (
 		id: "drizzle",
 		async create(data) {
 			const { model, data: val } = data;
-			const schemaModel = getSchema(model, schema);
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
 			const res = await db.insert(schemaModel).values(val).returning();
+
 			return res[0];
 		},
 		async findOne(data) {
 			const { model, where, select: included } = data;
-			const schemaModel = getSchema(model, schema);
+
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
+
 			const wheres = whereConvertor(where, schemaModel);
 
 			let res = null;
@@ -97,19 +128,27 @@ export const drizzleAdapter = (
 		},
 		async findMany(data) {
 			const { model, where } = data;
-			const schemaModel = getSchema(model, schema);
+
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
 			const wheres = where ? whereConvertor(where, schemaModel) : [];
 			if (!wheres.length) {
 				return await db.select().from(schemaModel);
 			}
-			return await db
+			const res = await db
 				.select()
 				.from(schemaModel)
 				.where(...wheres);
+			return res;
 		},
 		async update(data) {
 			const { model, where, update } = data;
-			const schemaModel = getSchema(model, schema);
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
 			const wheres = whereConvertor(where, schemaModel);
 			const res = await db
 				.update(schemaModel)
@@ -120,7 +159,10 @@ export const drizzleAdapter = (
 		},
 		async delete(data) {
 			const { model, where } = data;
-			const schemaModel = getSchema(model, schema);
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
 			const wheres = whereConvertor(where, schemaModel);
 			const res = await db.delete(schemaModel).where(...wheres);
 

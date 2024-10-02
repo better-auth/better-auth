@@ -28,7 +28,12 @@ import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
-import { changePassword, setPassword, updateUser } from "./routes/update-user";
+import {
+	changePassword,
+	deleteUser,
+	setPassword,
+	updateUser,
+} from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
 import chalk from "chalk";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -95,6 +100,7 @@ export function getEndpoints<
 		changePassword,
 		setPassword,
 		updateUser,
+		deleteUser,
 		forgetPasswordCallback,
 		listSessions: listSessions<Option>(),
 		revokeSession,

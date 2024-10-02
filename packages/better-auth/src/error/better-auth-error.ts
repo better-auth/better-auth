@@ -1,5 +1,7 @@
+import { logger } from "../utils";
+
 export class BetterAuthError extends Error {
-	constructor(message: string, cause?: string, docsLink?: string) {
+	constructor(message: string, cause?: string) {
 		super(message);
 		this.name = "BetterAuthError";
 		this.message = message;

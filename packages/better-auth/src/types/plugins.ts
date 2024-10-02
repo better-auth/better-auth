@@ -3,7 +3,7 @@ import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
-import type { LiteralString } from "./helper";
+import type { DeepPartial, LiteralString } from "./helper";
 import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
@@ -21,7 +21,10 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (options: BetterAuthOptions) => Partial<AuthContext> | void;
+	init?: (options: BetterAuthOptions) => DeepPartial<{
+		context: Omit<AuthContext, "options">;
+		options: BetterAuthOptions;
+	}> | void;
 	endpoints?: {
 		[key: string]: AuthEndpoint;
 	};

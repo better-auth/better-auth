@@ -13,8 +13,6 @@ export const createInternalAdapter = (
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, options);
-	const hooks = options.databaseHooks;
-
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
@@ -32,6 +30,17 @@ export const createInternalAdapter = (
 		createUser: async (user: User) => {
 			const createdUser = await createWithHooks(user, "user");
 			return createdUser;
+		},
+		deleteUser: async (userId: string) => {
+			await adapter.delete<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			});
 		},
 		createSession: async (
 			userId: string,
@@ -174,27 +183,11 @@ export const createInternalAdapter = (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 		) => {
-			if (hooks?.user?.update?.before) {
-				const result = await hooks.user.update.before(data as any);
-				if (result === false) {
-					return null;
-				}
-				data = typeof result === "object" ? (result as any).data : result;
-			}
-			const user = await adapter.update<User>({
-				model: tables.user.tableName,
-				where: [
-					{
-						value: email,
-						field: "email",
-					},
-				],
-				update: data,
-			});
-
-			if (hooks?.user?.update?.after && user) {
-				await hooks.user.update.after(user);
-			}
+			const user = await updateWithHooks<User>(
+				data,
+				[{ field: "email", value: email }],
+				"user",
+			);
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {

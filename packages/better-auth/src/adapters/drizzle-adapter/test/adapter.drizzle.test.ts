@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { user } from "./schema";
+import * as schema from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../cli/utils/get-migration";
@@ -21,14 +21,11 @@ describe("adapter test", async () => {
 		await fs.unlink(path.join(__dirname, "test.db"));
 	});
 
-	const db = drizzle(database, {
-		schema: {
-			user,
-		},
-	});
+	const db = drizzle(database);
 
 	const adapter = drizzleAdapter(db, {
 		provider: "pg",
+		schema,
 	});
 
 	it("should create schema", async () => {

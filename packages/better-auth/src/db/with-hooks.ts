@@ -12,13 +12,17 @@ export function getWithHooks(adapter: Adapter, options: BetterAuthOptions) {
 		model: Models,
 	) {
 		let actualData = data;
-		if (hooks?.[model]?.create?.before) {
-			const result = await hooks[model].create.before(data as any);
-			if (result === false) {
-				return null;
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.create?.before;
+			if (toRun) {
+				const result = await toRun(data as any);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object";
+				actualData = isObject ? (result as any).data : result;
 			}
-			const isObject = typeof result === "object";
-			actualData = isObject ? (result as any).data : result;
 		}
 
 		const created = await adapter.create<T>({
@@ -28,9 +32,14 @@ export function getWithHooks(adapter: Adapter, options: BetterAuthOptions) {
 				...actualData,
 			},
 		});
-		if (hooks?.[model]?.create?.after && created) {
-			await hooks[model].create.after(created as any);
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.create?.after;
+			if (toRun) {
+				await toRun(created as any);
+			}
 		}
+
 		return created;
 	}
 
@@ -40,13 +49,17 @@ export function getWithHooks(adapter: Adapter, options: BetterAuthOptions) {
 		model: Models,
 	) {
 		let actualData = data;
-		if (hooks?.[model]?.update?.before) {
-			const result = await hooks[model].update.before(data as any);
-			if (result === false) {
-				return null;
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.before;
+			if (toRun) {
+				const result = await toRun(data as any);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object";
+				actualData = isObject ? (result as any).data : result;
 			}
-			const isObject = typeof result === "object";
-			actualData = isObject ? (result as any).data : result;
 		}
 
 		const updated = await adapter.update<T>({
@@ -54,12 +67,16 @@ export function getWithHooks(adapter: Adapter, options: BetterAuthOptions) {
 			update: actualData,
 			where,
 		});
-		if (hooks?.[model]?.update?.after && updated) {
-			await hooks[model].update.after(updated as any);
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.after;
+			if (toRun) {
+				await toRun(updated as any);
+			}
 		}
+
 		return updated;
 	}
-
 	return {
 		createWithHooks,
 		updateWithHooks,

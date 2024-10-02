@@ -1,4 +1,4 @@
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { alphabet, generateRandomString } from "../../crypto/random";
 import { hs256 } from "../../crypto";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";

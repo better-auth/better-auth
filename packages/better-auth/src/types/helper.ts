@@ -33,3 +33,8 @@ export type StripEmptyObjects<T> = T extends { [K in keyof T]: never }
 	: T extends object
 		? { [K in keyof T as T[K] extends never ? never : K]: T[K] }
 		: T;
+export type DeepPartial<T> = T extends Function
+	? T
+	: T extends object
+		? { [K in keyof T]?: DeepPartial<T[K]> }
+		: T;
