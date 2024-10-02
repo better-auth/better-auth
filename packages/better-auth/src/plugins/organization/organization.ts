@@ -294,6 +294,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					organizationId: {
 						type: "string",
 						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
 					},
 					userId: {
 						type: "string",
@@ -319,6 +323,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					organizationId: {
 						type: "string",
 						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
 					},
 					email: {
 						type: "string",

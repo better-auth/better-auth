@@ -323,7 +323,25 @@ export const getOrgAdapter = (
 			return organization;
 		},
 		deleteOrganization: async (orgId: string) => {
-			const organization = await adapter.delete<Organization>({
+			await adapter.delete({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
+			await adapter.delete({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
+			await adapter.delete<Organization>({
 				model: "organization",
 				where: [
 					{

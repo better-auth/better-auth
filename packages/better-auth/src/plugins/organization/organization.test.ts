@@ -7,6 +7,9 @@ import { organizationClient } from "./client";
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
 		plugins: [organization()],
+		logger: {
+			verboseLogging: true,
+		},
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -236,13 +239,14 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow deleting organization", async () => {
-		const organization = await client.organization.delete({
+		const res = await client.organization.delete({
 			orgId,
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(organization.data).toBe(orgId);
+
+		expect(res.data).toBe(orgId);
 	});
 
 	it("should have server side methods", async () => {
