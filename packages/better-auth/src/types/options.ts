@@ -365,5 +365,25 @@ export interface BetterAuthOptions {
 				after?: (account: Account) => Promise<void>;
 			};
 		};
+		verification?: {
+			[key in "create" | "update"]: {
+				/**
+				 * Hook that is called before a user is created.
+				 * if the hook returns false, the user will not be created.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (verification: Verification) => Promise<
+					| boolean
+					| void
+					| {
+							data: Verification & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is created.
+				 */
+				after?: (verification: Verification) => Promise<void>;
+			};
+		};
 	};
 }
