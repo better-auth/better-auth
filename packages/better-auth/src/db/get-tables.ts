@@ -54,12 +54,13 @@ export const getAuthTables = (
 	} satisfies BetterAuthDbSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
-
+	const accountFields = options.account?.fields;
+	const userFields = options.user?.fields;
 	return {
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
-				name: {
+				[userFields?.name || "name"]: {
 					type: "string",
 					required: true,
 				},
@@ -122,7 +123,7 @@ export const getAuthTables = (
 		account: {
 			tableName: options.account?.modelName || "account",
 			fields: {
-				accountId: {
+				[accountFields?.accountId || "accountId"]: {
 					type: "string",
 					required: true,
 				},
@@ -162,6 +163,23 @@ export const getAuthTables = (
 				...account?.fields,
 			},
 			order: 2,
+		},
+		verification: {
+			tableName: options.verification?.modelName || "verification",
+			fields: {
+				identifier: {
+					type: "string",
+					required: true,
+				},
+				value: {
+					type: "string",
+					required: true,
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+				},
+			},
 		},
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),

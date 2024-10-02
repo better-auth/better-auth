@@ -67,7 +67,7 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
 
-Better Auth requires a database to store user data. By default, it uses [Kysely](https://kysely.dev/) for database connections and queries, with support for `postgresql`, `mysql`, and `sqlite` out of the box.
+Better Auth requires a database to store user data. By default, it uses Kysely for database queries, supporting `postgresql`, `mysql`, and `sqlite` out of the box.
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -106,7 +106,7 @@ Better Auth requires a database to store user data. By default, it uses [Kysely]
     </Tab>
 </Tabs>
 
-You can also use any dialect supported by Kysely in the database configuration.
+You can also use any Kysely dialect in the database configuration.
 
 **Example with LibsqlDialect:**
 
@@ -121,8 +121,6 @@ export const auth = betterAuth({
   }),
 });
 ```
-
-We recommend using the built-in Kysely adapter for better performance if your database is supported.
 
 **Adapters**
 
@@ -142,7 +140,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
             }),
         });
     ```
-    </Tab>
+    </Tab>  
 
     <Tab value="drizzle">
     ```ts title="auth.ts"
@@ -170,21 +168,23 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     ```
     </Tab>
 </Tabs>
-
+   <Callout>
+     For optimal performance, use the built-in Kysely adapter if possible.
+    </Callout>
 </Step>
 
 <Step>
     ### Create Database Tables
     
-    Better Auth includes a CLI tool to help manage your database tables. You can either migrate tables directly or generate an ORM schema or SQL migration file.
+    Better Auth’s CLI helps manage your tables. You can either migrate tables directly or generate ORM schema/SQL migration files.
 
-    **Migrate**: Creates the necessary tables in your database.
+    **Migrate**: Creates the required tables in the database.
 
     ```bash title="Terminal"
     npx better-auth migrate
     ```
 
-    **Generate**: Generates the required ORM schema (e.g., Prisma, Drizzle) or an SQL migration file.
+    **Generate**: Creates an ORM schema or SQL migration file.
 
     ```bash title="Terminal"
     npx better-auth generate    
