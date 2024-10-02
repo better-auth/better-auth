@@ -13,8 +13,6 @@ export const createInternalAdapter = (
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, options);
-	const hooks = options.databaseHooks;
-
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
@@ -174,27 +172,11 @@ export const createInternalAdapter = (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 		) => {
-			if (hooks?.user?.update?.before) {
-				const result = await hooks.user.update.before(data as any);
-				if (result === false) {
-					return null;
-				}
-				data = typeof result === "object" ? (result as any).data : result;
-			}
-			const user = await adapter.update<User>({
-				model: tables.user.tableName,
-				where: [
-					{
-						value: email,
-						field: "email",
-					},
-				],
-				update: data,
-			});
-
-			if (hooks?.user?.update?.after && user) {
-				await hooks.user.update.after(user);
-			}
+			const user = await updateWithHooks<User>(
+				data,
+				[{ field: "email", value: email }],
+				"user",
+			);
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
@@ -236,11 +218,13 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (data: Omit<Verification, "id">) => {
+		createVerificationValue: async (identifier: string, value: string) => {
 			const verification = await createWithHooks(
 				{
 					id: generateId(),
-					...data,
+					identifier,
+					value,
+					expiresAt: getDate(1000 * 60 * 60 * 24), // 1 day
 				},
 				"verification",
 			);
