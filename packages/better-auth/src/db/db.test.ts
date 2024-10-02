@@ -34,4 +34,24 @@ describe("db", async () => {
 		expect(session).toHaveLength(2);
 		expect(accounts).toHaveLength(2);
 	});
+
+	it("should work with custom model names and custom fields", async () => {
+		const { client, db } = await getTestInstance({
+			user: {
+				modelName: "users",
+				fields: {
+					name: "full_name",
+				},
+			},
+		});
+		await client.signUp.email({
+			email: "test@mail.com",
+			password: "password",
+			name: "Test User",
+		});
+		const result = await db.findMany({
+			model: "users",
+		});
+		console.log({ result });
+	});
 });

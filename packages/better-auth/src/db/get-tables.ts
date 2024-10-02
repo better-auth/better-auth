@@ -54,12 +54,13 @@ export const getAuthTables = (
 	} satisfies BetterAuthDbSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
-
+	const accountFields = options.account?.fields;
+	const userFields = options.user?.fields;
 	return {
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
-				name: {
+				[userFields?.name || "name"]: {
 					type: "string",
 					required: true,
 				},
@@ -122,7 +123,7 @@ export const getAuthTables = (
 		account: {
 			tableName: options.account?.modelName || "account",
 			fields: {
-				accountId: {
+				[accountFields?.accountId || "accountId"]: {
 					type: "string",
 					required: true,
 				},
