@@ -338,7 +338,7 @@ There are two types of hooks you can define:
 ### 1. Before Hook
 
 - **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
-- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns an object, that object will replace the original data.
+- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the orginal payload.
 
 ### 2. After Hook
 
@@ -357,9 +357,11 @@ export const auth = betterAuth({
               before: async (user) => {
                   // Modify the user object before it is created
                   return {
-                      ...user,
-                      firstName: user.name.split(" ")[0],
-                      lastName: user.name.split(" ")[1]
+                     data: {
+                        ...user,
+                        firstName: user.name.split(" ")[0],
+                        lastName: user.name.split(" ")[1]
+                     }
                   }
               },
               after: async (user) => {

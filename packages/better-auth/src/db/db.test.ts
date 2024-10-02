@@ -34,4 +34,34 @@ describe("db", async () => {
 		expect(session).toHaveLength(2);
 		expect(accounts).toHaveLength(2);
 	});
+
+	it("db hooks", async () => {
+		let callback = false;
+		const { client, db } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						async before(user) {
+							return {
+								data: {
+									...user,
+									image: "test-image",
+								},
+							};
+						},
+						async after(user) {
+							callback = true;
+						},
+					},
+				},
+			},
+		});
+		const res = await client.signUp.email({
+			email: "test@email.com",
+			name: "test",
+			password: "password",
+		});
+		expect(res.data?.user.image).toBe("test-image");
+		expect(callback).toBe(true);
+	});
 });
