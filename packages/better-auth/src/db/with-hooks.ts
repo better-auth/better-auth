@@ -1,7 +1,7 @@
 import type { Adapter, Where } from "./../types/adapter";
 import type { BetterAuthOptions } from "../types";
 import { getAuthTables } from "./get-tables";
-import { generateId } from "../utils";
+import { generateId } from "../utils/id";
 
 export function getWithHooks(
 	adapter: Adapter,

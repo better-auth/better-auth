@@ -12,7 +12,7 @@ import type {
 } from "../types/helper";
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
-import type { InferSession, InferUser, Session, User } from "../types";
+import type { Session, User } from "../types";
 import type { FieldAttribute, InferFieldOutput } from "../db";
 
 export type AtomListener = {

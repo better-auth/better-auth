@@ -1,4 +1,4 @@
-import type { Context, CookieOptions } from "better-call";
+import type { CookieOptions } from "better-call";
 import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";

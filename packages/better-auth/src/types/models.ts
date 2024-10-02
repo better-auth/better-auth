@@ -57,13 +57,15 @@ export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 >;
 
 export type InferSession<O extends BetterAuthOptions | Auth> =
-	StripEmptyObjects<
-		Session &
-			(O extends BetterAuthOptions
-				? AdditionalSessionFields<O>
-				: O extends Auth
-					? AdditionalSessionFields<O["options"]>
-					: {})
+	UnionToIntersection<
+		StripEmptyObjects<
+			Session &
+				(O extends BetterAuthOptions
+					? AdditionalSessionFields<O>
+					: O extends Auth
+						? AdditionalSessionFields<O["options"]>
+						: {})
+		>
 	>;
 
 export type InferPluginTypes<O extends BetterAuthOptions> =

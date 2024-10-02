@@ -1,4 +1,3 @@
-import { createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
 
 interface Options {

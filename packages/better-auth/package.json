@@ -48,8 +48,7 @@
         "./node": "./dist/node.js",
         "./adapters/prisma": "./dist/adapters/prisma.js",
         "./adapters/drizzle": "./dist/adapters/drizzle.js",
-        "./adapters/mongodb": "./dist/adapters/mongodb.js",
-        "./utils": "./dist/utils.js"
+        "./adapters/mongodb": "./dist/adapters/mongodb.js"
     },
     "devDependencies": {
         "@prisma/client": "^5.19.1",

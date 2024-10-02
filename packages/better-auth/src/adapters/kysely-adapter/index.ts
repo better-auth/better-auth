@@ -2,7 +2,6 @@ import type { Kysely } from "kysely";
 import type { FieldAttribute } from "../../db";
 import type { Adapter, Where } from "../../types";
 import { getMigrations } from "../../cli/utils/get-migration";
-import { logger } from "../../utils";
 
 function convertWhere(w?: Where[]) {
 	if (!w)

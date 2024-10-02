@@ -1,6 +1,6 @@
 import { useStore } from "@nanostores/react";
 import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
+
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -11,10 +11,13 @@ import type {
 import { createDynamicPathProxy } from "./proxy";
 import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
-import { useEffect, useState } from "react";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
+}
+
+export function capitalizeFirstLetter(str: string) {
+	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<

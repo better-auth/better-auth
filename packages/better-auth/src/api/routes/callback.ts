@@ -8,7 +8,7 @@ import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { getAccountTokens } from "../../utils/getAccount";
 import { setSessionCookie } from "../../utils/cookies";
 import type { OAuth2Tokens } from "arctic";
-import { logger } from "../../utils";
+import { logger } from "../../utils/logger";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",

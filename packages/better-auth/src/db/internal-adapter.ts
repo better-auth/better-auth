@@ -3,7 +3,7 @@ import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User, Verification } from "./schema";
-import { generateId } from "../utils";
+import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (

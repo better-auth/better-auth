@@ -7,7 +7,6 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
-
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import type { Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";

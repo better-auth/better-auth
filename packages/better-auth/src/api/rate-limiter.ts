@@ -1,5 +1,6 @@
 import type { AuthContext, RateLimit } from "../types";
-import { getIp, logger } from "../utils";
+import { getIp } from "../utils/get-request-ip";
+import { logger } from "../utils/logger";
 
 function shouldRateLimit(
 	max: number,

@@ -2,7 +2,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
-import { setSessionCookie } from "../../utils";
+import { setSessionCookie } from "../../utils/cookies";
 
 export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",

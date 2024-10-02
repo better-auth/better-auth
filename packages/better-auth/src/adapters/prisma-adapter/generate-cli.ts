@@ -4,7 +4,7 @@ import { getAuthTables } from "../../db/get-tables";
 import type { BetterAuthOptions } from "../../types";
 import path from "path";
 import fs from "fs/promises";
-import { capitalizeFirstLetter } from "../../utils";
+import { capitalizeFirstLetter } from "../../utils/misc";
 import type { FieldType } from "../../db";
 
 export async function generatePrismaSchema({

@@ -16,7 +16,6 @@ export default defineConfig((env) => {
 			solid: "./src/client/solid.ts",
 			plugins: "./src/plugins/index.ts",
 			api: "./src/api/index.ts",
-			utils: "./src/utils/index.ts",
 			"client/plugins": "./src/client/plugins/index.ts",
 			"svelte-kit": "./src/integrations/svelte-kit.ts",
 			access: "./src/plugins/organization/access/index.ts",
@@ -27,7 +26,7 @@ export default defineConfig((env) => {
 		format: ["esm"],
 		dts: true,
 		splitting: false,
-		treeshake: true,
+		bundle: true,
 		skipNodeModulesBundle: true,
 		target: "es2022",
 	};

@@ -5,7 +5,7 @@ import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { role } from "../schema";
-import { logger } from "../../../utils";
+import { logger } from "../../../utils/logger";
 
 export const createInvitation = createAuthEndpoint(
 	"/organization/invite-member",

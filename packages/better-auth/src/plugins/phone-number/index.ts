@@ -4,9 +4,11 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
-import { getDate, logger, setSessionCookie } from "../../utils";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx, sessionMiddleware } from "../../api";
+import { getDate } from "../../utils/date";
+import { logger } from "../../utils/logger";
+import { setSessionCookie } from "../../utils/cookies";
 
 interface OTP {
 	code: string;
