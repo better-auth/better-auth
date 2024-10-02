@@ -22,7 +22,7 @@ describe("init", async () => {
 		});
 
 		expect(res.options.plugins).toHaveLength(1);
-		expect(res.options.plugins[0]["id"]).toBe("cross-subdomain-cookies");
+		expect(res.options.plugins?.[0]["id"]).toBe("cross-subdomain-cookies");
 	});
 
 	it("should execute plugins init", async () => {
@@ -34,8 +34,10 @@ describe("init", async () => {
 			plugins: [
 				{
 					id: "test",
-					init: (options) => {
-						return changedCtx;
+					init: () => {
+						return {
+							context: changedCtx,
+						};
 					},
 				},
 			],

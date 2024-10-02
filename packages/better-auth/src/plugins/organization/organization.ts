@@ -38,6 +38,8 @@ import {
 } from "./routes/crud-org";
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
+import { getAdapter } from "../../db/utils";
+import { generateId } from "../../utils";
 
 export interface OrganizationOptions {
 	/**
@@ -294,6 +296,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					organizationId: {
 						type: "string",
 						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
 					},
 					userId: {
 						type: "string",
@@ -319,6 +325,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					organizationId: {
 						type: "string",
 						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
 					},
 					email: {
 						type: "string",

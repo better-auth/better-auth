@@ -305,8 +305,8 @@ export interface BetterAuthOptions {
 	 * operations.
 	 */
 	databaseHooks?: {
-		user: {
-			[key in "create" | "update"]: {
+		user?: {
+			[key in "create" | "update"]?: {
 				/**
 				 * Hook that is called before a user is created.
 				 * if the hook returns false, the user will not be created.
@@ -325,8 +325,8 @@ export interface BetterAuthOptions {
 				after?: (user: User) => Promise<void>;
 			};
 		};
-		session: {
-			[key in "create" | "update"]: {
+		session?: {
+			[key in "create" | "update"]?: {
 				/**
 				 * Hook that is called before a user is created.
 				 * if the hook returns false, the user will not be created.
@@ -345,8 +345,8 @@ export interface BetterAuthOptions {
 				after?: (session: Session) => Promise<void>;
 			};
 		};
-		account: {
-			[key in "create" | "update"]: {
+		account?: {
+			[key in "create" | "update"]?: {
 				/**
 				 * Hook that is called before a user is created.
 				 * If the hook returns false, the user will not be created.
@@ -385,5 +385,5 @@ export interface BetterAuthOptions {
 				after?: (verification: Verification) => Promise<void>;
 			};
 		};
-	};
+	}[];
 }

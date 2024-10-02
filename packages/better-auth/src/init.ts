@@ -11,6 +11,7 @@ import type {
 	OAuthProvider,
 } from "./types";
 
+import { defu } from "defu";
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
@@ -142,21 +143,17 @@ function runPluginInit(options: BetterAuthOptions) {
 			const result = plugin.init(options);
 			if (typeof result === "object") {
 				if (result.options) {
-					options = {
-						...options,
-						...result.options,
-					};
+					options = defu(options, result.options);
 				}
-				context = {
-					...result,
-				};
+				if (result.context) {
+					context = defu(context, result.context);
+				}
 			}
 		}
 	}
-	const { options: _, ...rest } = context;
 	return {
 		options,
-		context: rest,
+		context,
 	};
 }
 

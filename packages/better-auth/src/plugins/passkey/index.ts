@@ -11,7 +11,7 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/types";
 import { APIError } from "better-call";
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";

@@ -1,4 +1,4 @@
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";

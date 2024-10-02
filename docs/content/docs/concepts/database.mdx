@@ -68,7 +68,10 @@ See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialec
 
 If your database is managed by an ORM like Prisma or Drizzle, you can use the corresponding adapter to connect to the database. Better auth comes with built-in adapters for Prisma and Drizzle. You can pass the adapter to the `database` object in the auth options.
 
-**Example: Prisma**
+### Prisma Adapter
+
+The Prisma adapter expects a prisma client instance and a provider key that specifies the database provider to use. The provider key can be `sqlite`, `postgres`, `mysql`, or any other supported by prisma.
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { PrismaAdapter } from "better-auth/adapters/prisma";
@@ -79,12 +82,16 @@ const prisma = new PrismaAdapter({
 
 export const auth = await betterAuth({
     database: prismaAdapter(prisma, {
-      provider: "sqlite" // or "postgres" or "mysql" or any other supported by prisma
+      provider: "sqlite"
     })
 })
 ```
 
-**Example: Drizzle**
+
+### Drizzle adapter
+
+The Drizzle adapter expects a drizzle client instance and a provider key that specifies the database provider to use. The provider key can be `sqlite`, `pg` or `mysql`.
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./drizzle";
@@ -92,10 +99,35 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 export const auth = await betterAuth({
     database: drizzleAdapter(db, {
-      provider: "sqlite" // or "pg" or "mysql" 
+      provider: "sqlite", // or "pg" or "mysql" 
     })
 })
 ```
+
+#### Mapping Schema
+
+The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
+
+```ts
+import { betterAuth } from "better-auth";
+import { db } from "./drizzle";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { schema } from "./schema";
+
+export const auth = await betterAuth({
+    database: drizzleAdapter(db, {
+      provider: "sqlite", // or "pg" or "mysql" 
+      schema: {
+         ...schema,
+        user: schema.users,
+      },
+      //if all of them are just using plural form, you can just pass the option below
+      usePlural: true
+    })
+})
+```
+
+
 
 ## Running Migrations
 
@@ -319,20 +351,22 @@ There are two types of hooks you can define:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-   user: {
-    create: {
-      before: async (user) => {
-          // Modify the user object before it is created
-          return {
-              ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1]
-          }
+   databaseHooks: [{
+        user: {
+          create: {
+              before: async (user) => {
+                  // Modify the user object before it is created
+                  return {
+                      ...user,
+                      firstName: user.name.split(" ")[0],
+                      lastName: user.name.split(" ")[1]
+                  }
+              },
+              after: async (user) => {
+                  //perform additional actions, like creating a stripe customer
+              },
+          },
       },
-      after: async (user) => {
-          //perform additional actions, like creating a stripe customer
-      },
-    },
-  },
+   }]
 })
 ```

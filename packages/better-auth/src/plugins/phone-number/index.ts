@@ -5,7 +5,7 @@ import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
 import { getDate, logger, setSessionCookie } from "../../utils";
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx, sessionMiddleware } from "../../api";
 
 interface OTP {

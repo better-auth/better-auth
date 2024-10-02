@@ -31,6 +31,17 @@ export const createInternalAdapter = (
 			const createdUser = await createWithHooks(user, "user");
 			return createdUser;
 		},
+		deleteUser: async (userId: string) => {
+			await adapter.delete<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			});
+		},
 		createSession: async (
 			userId: string,
 			request?: Request | Headers,
@@ -218,13 +229,11 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (identifier: string, value: string) => {
+		createVerificationValue: async (data: Omit<Verification, "id">) => {
 			const verification = await createWithHooks(
 				{
 					id: generateId(),
-					identifier,
-					value,
-					expiresAt: getDate(1000 * 60 * 60 * 24), // 1 day
+					...data,
 				},
 				"verification",
 			);

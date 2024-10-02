@@ -1,6 +1,6 @@
 import { scrypt } from "node:crypto";
 import { decodeHex, encodeHex } from "oslo/encoding";
-import { constantTimeEqual } from "oslo/crypto";
+import { constantTimeEqual } from "./buffer";
 
 const config = {
 	N: 16384,
@@ -39,6 +39,7 @@ export const hashPassword = async (password: string) => {
 	const key = await generateKey(password, salt);
 	return `${salt}:${encodeHex(key)}`;
 };
+
 export const verifyPassword = async (hash: string, password: string) => {
 	const [salt, key] = hash.split(":");
 	const targetKey = await generateKey(password, salt!);

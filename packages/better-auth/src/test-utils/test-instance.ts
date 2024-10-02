@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { alphabet, generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
@@ -55,7 +55,10 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		});
 	}
 
-	const { runMigrations } = await getMigrations(auth.options);
+	const { runMigrations } = await getMigrations({
+		...auth.options,
+		database: opts.database,
+	});
 	await runMigrations();
 	await createTestUser();
 

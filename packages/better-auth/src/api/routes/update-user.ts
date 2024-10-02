@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../call";
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { createAuthEndpoint } from "../call";
+import { alphabet, generateRandomString } from "../../crypto/random";
 import { setSessionCookie } from "../../utils/cookies";
-import { getSessionFromCtx, sessionMiddleware } from "./session";
-import { APIError } from "better-call";
+import { sessionMiddleware } from "./session";
 
 export const updateUser = createAuthEndpoint(
 	"/user/update",
@@ -176,5 +175,45 @@ export const setPassword = createAuthEndpoint(
 			status: 400,
 			body: { message: "User already has a password" },
 		});
+	},
+);
+
+export const deleteUser = createAuthEndpoint(
+	"/user/delete",
+	{
+		method: "POST",
+		body: z.object({
+			password: z.string(),
+		}),
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const { password } = ctx.body;
+		const session = ctx.context.session;
+		const accounts = await ctx.context.internalAdapter.findAccounts(
+			session.user.id,
+		);
+		const account = accounts.find(
+			(account) => account.providerId === "credential" && account.password,
+		);
+		if (!account || !account.password) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User does not have a password" },
+			});
+		}
+		const verify = await ctx.context.password.verify(
+			account.password,
+			password,
+		);
+		if (!verify) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "Invalid password" },
+			});
+		}
+		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		return ctx.json(null);
 	},
 );

@@ -5,6 +5,7 @@ import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { role } from "../schema";
+import { logger } from "../../../utils";
 
 export const createInvitation = createAuthEndpoint(
 	"/organization/invite-member",
@@ -19,6 +20,18 @@ export const createInvitation = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
+		if (!ctx.context.orgOptions.sendInvitationEmail) {
+			logger.warn(
+				"Invitation email is not enabled. Pass `sendInvitationEmail` to the plugin options to enable it.",
+			);
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "invitation is not enabled",
+				},
+			});
+		}
+
 		const session = ctx.context.session;
 		const orgId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
