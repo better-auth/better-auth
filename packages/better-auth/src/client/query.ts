@@ -23,10 +23,12 @@ export const useAuthQuery = <T>(
 		data: null | T;
 		error: null | BetterFetchError;
 		isPending: boolean;
+		isRefetching: boolean;
 	}>({
 		data: null,
 		error: null,
 		isPending: false,
+		isRefetching: false,
 	});
 
 	const fn = () => {
@@ -45,28 +47,32 @@ export const useAuthQuery = <T>(
 					data: context.data,
 					error: null,
 					isPending: false,
+					isRefetching: false,
 				});
 				await opts?.onSuccess?.(context);
 			},
 			async onError(context) {
 				value.set({
 					error: context.error,
-					data: null,
+					data: value.get().data,
 					isPending: false,
+					isRefetching: false,
 				});
 				await opts?.onError?.(context);
 			},
 			async onRequest(context) {
 				const currentValue = value.get();
 				value.set({
-					isPending: true,
+					isPending: currentValue.data === null,
 					data: currentValue.data,
-					error: currentValue.error,
+					error: null,
+					isRefetching: true,
 				});
 				await opts?.onRequest?.(context);
 			},
 		});
 	};
+
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
