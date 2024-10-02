@@ -127,7 +127,7 @@ Better auth requires the following tables to be present in the database. The typ
 
 ### User
 
-  Table Name: `user`
+Table Name: `user`
 
 <DatabaseTable
   fields={[
@@ -248,6 +248,36 @@ Table Name: `account`
 />
 
 
+### Verification 
+
+Table Name: `verification`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each verification",
+      isPrimaryKey: true
+    },
+    {
+      name: "identifier",
+      type: "string",
+      description: "The identifier for the verification request"
+    },
+    {
+      name: "value",
+      type: "string",
+      description: "The value to be verified"
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The time when the verification request expires"
+    }
+  ]}
+/>
+
 ## Plugins Schema
 
 Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
@@ -256,22 +286,16 @@ Plugins can define their own tables in the database to store additional data. Th
 - `twoFactorSecret`: The secret key used to generate TOTP codes.
 - `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
 
-To add additional tables and columns to the database, you can run the `migrate` command provided by better auth. The `migrate` command will run the migrations defined by the plugins to add the required tables and columns to the database.
+To add new tables and columns to your database, you have two options:
 
-```bash
-npx better-auth migrate
-```
+`CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
+`Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
-<Callout>
-The `migrate` command should be run whenever you add plugins that require additional tables or columns in the database.
-</Callout>
+Both methods ensure your database schema stays up-to-date with your plugins' requirements.
 
 ## Extending the Schema
 
-Better auth currently does not provide a direct method to extend the core schema. However, you can add extra columns to the database and manage them independently. For instance, to store additional user data, you can either create a new table or add columns to the `user` table.
-
-We suggest creating a new table for additional data to keep the core tables clean and maintainable. You can link this new table to the `user` table using a foreign key.
-
+Better auth doesn't allow you to directly extend any of the core schema. But you can always add new columns in your table and use database hooks to add or modify data during the lifecycle of core database operations.
 
 ## Database Hooks
 
@@ -293,7 +317,7 @@ There are two types of hooks you can define:
 
 **Example Usage: add a `before` hook to the `user` model to split the `name` field into `firstName` and `lastName` fields.**
 
-```typescript
+```typescript title="auth.ts"
 const hooks: BetterAuthOptions['databaseHooks'] = {
   user: {
     create: {
