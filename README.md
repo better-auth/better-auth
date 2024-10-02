@@ -27,7 +27,7 @@
 </p>
 
 
-> [!IMPORTANT]
+> [!WARNING]
 > **Note:** 🚧 This project is currently in beta. Features and APIs may change.
 
 ## About the Project

@@ -1,10 +1,8 @@
+import Database from "better-sqlite3";
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-	database: {
-		provider: "sqlite",
-		url: "./sqlite.db",
-	},
+	database: new Database("./db.sqlite"),
 	socialProviders: {
 		google: {
 			clientId: process.env.GOOGLE_CLIENT_ID || "",

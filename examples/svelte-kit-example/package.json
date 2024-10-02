@@ -25,6 +25,8 @@
 	"dependencies": {
 		"@internationalized/date": "^3.5.5",
 		"better-auth": "workspace:*",
+		"@types/better-sqlite3": "^7.6.11",
+        "better-sqlite3": "^11.3.0",
 		"bits-ui": "^0.21.15",
 		"clsx": "^2.1.1",
 		"cmdk-sv": "^0.0.18",

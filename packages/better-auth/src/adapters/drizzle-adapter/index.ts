@@ -17,14 +17,7 @@ function getSchema(modelName: string, schema: Record<string, any>) {
 			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 		);
 	}
-	const key = Object.keys(schema).find((key) => {
-		const modelName = schema[key].name;
-		return modelName === modelName;
-	});
-	if (!key) {
-		throw new Error("Model not found");
-	}
-	return schema[key];
+	return schema[modelName];
 }
 
 function whereConvertor(where: Where[], schemaModel: any) {
@@ -49,6 +42,7 @@ function whereConvertor(where: Where[], schemaModel: any) {
 			return eq(schemaModel[w.field], w.value);
 		}),
 	);
+
 	const clause: SQL<unknown>[] = [];
 
 	if (andGroup.length) clause.push(andClause!);
@@ -64,8 +58,7 @@ export const drizzleAdapter = (
 	db: DB,
 	options: DrizzleAdapterOptions,
 ): Adapter => {
-	const schema = options?.schema || db._.schema;
-
+	const schema = options.schema || db._.fullSchema;
 	const databaseType = options?.provider;
 	return {
 		id: "drizzle",
@@ -106,11 +99,13 @@ export const drizzleAdapter = (
 			const { model, where } = data;
 			const schemaModel = getSchema(model, schema);
 			const wheres = where ? whereConvertor(where, schemaModel) : [];
-
+			if (!wheres.length) {
+				return await db.select().from(schemaModel);
+			}
 			return await db
 				.select()
 				.from(schemaModel)
-				.findMany(...wheres);
+				.where(...wheres);
 		},
 		async update(data) {
 			const { model, where, update } = data;

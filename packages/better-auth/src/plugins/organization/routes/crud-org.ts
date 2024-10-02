@@ -249,7 +249,7 @@ export const getFullOrganization = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
 		const organization = await adapter.findFullOrganization(
 			orgId,
-			ctx.context.db,
+			ctx.context.db || undefined,
 		);
 		if (!organization) {
 			return ctx.json(null, {
@@ -307,7 +307,7 @@ export const setActiveOrganization = createAuthEndpoint(
 		await adapter.setActiveOrganization(session.session.id, orgId);
 		const organization = await adapter.findFullOrganization(
 			orgId,
-			ctx.context.db,
+			ctx.context.db || undefined,
 		);
 		return ctx.json(organization);
 	},

@@ -1,6 +1,5 @@
 import fs from "fs/promises";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { user } from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
@@ -8,15 +7,12 @@ import { getMigrations } from "../../../cli/utils/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { getAuthTables } from "../../../db/get-tables";
 
 describe("adapter test", async () => {
+	const database = new Database(path.join(__dirname, "test.db"));
 	beforeEach(async () => {
 		const { runMigrations } = await getMigrations({
-			database: {
-				provider: "sqlite",
-				url: path.join(__dirname, "test.db"),
-			},
+			database,
 		});
 		await runMigrations();
 	});
@@ -24,26 +20,20 @@ describe("adapter test", async () => {
 	afterAll(async () => {
 		await fs.unlink(path.join(__dirname, "test.db"));
 	});
-	const sqlite = new Database(path.join(__dirname, "test.db"));
-	const db = drizzle(sqlite, {
+
+	const db = drizzle(database, {
 		schema: {
 			user,
 		},
 	});
 
 	const adapter = drizzleAdapter(db, {
-		schema: {
-			user,
-		},
 		provider: "pg",
 	});
 
 	it("should create schema", async () => {
 		const res = await adapter.createSchema!({
-			database: {
-				provider: "sqlite",
-				url: ":memory:",
-			},
+			database: new Database(path.join(__dirname, "test.db")),
 		});
 		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
 	});

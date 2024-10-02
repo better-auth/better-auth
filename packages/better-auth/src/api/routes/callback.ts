@@ -8,6 +8,7 @@ import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { getAccountTokens } from "../../utils/getAccount";
 import { setSessionCookie } from "../../utils/cookies";
 import type { OAuth2Tokens } from "arctic";
+import { logger } from "../../utils";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -86,7 +87,18 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		//find user in db
-		const dbUser = await c.context.internalAdapter.findUserByEmail(user.email);
+		const dbUser = await c.context.internalAdapter
+			.findUserByEmail(user.email)
+			.catch((e) => {
+				logger.error(
+					"Better auth was unable to query your database.\nError: ",
+					e,
+				);
+				throw c.redirect(
+					`${c.context.baseURL}/error?error=internal_server_error`,
+				);
+			});
+
 		const userId = dbUser?.user.id;
 		if (dbUser) {
 			//check if user has already linked this provider
@@ -150,20 +162,26 @@ export const callbackOAuth = createAuthEndpoint(
 				message: "Unable to create user",
 			});
 		//create session
-		const session = await c.context.internalAdapter.createSession(
-			userId || id,
-			c.request,
-			dontRememberMe,
-		);
-		if (!session) {
-			const url = new URL(currentURL || callbackURL);
-			url.searchParams.set("error", "unable_to_create_session");
-			throw c.redirect(url.toString());
-		}
 		try {
-			await setSessionCookie(c, session.id, dontRememberMe);
-		} catch (e) {
-			c.context.logger.error("Unable to set session cookie", e);
+			const session = await c.context.internalAdapter.createSession(
+				userId || id,
+				c.request,
+				dontRememberMe,
+			);
+			if (!session) {
+				const url = new URL(currentURL || callbackURL);
+				url.searchParams.set("error", "unable_to_create_session");
+				throw c.redirect(url.toString());
+			}
+			try {
+				await setSessionCookie(c, session.id, dontRememberMe);
+			} catch (e) {
+				c.context.logger.error("Unable to set session cookie", e);
+				const url = new URL(currentURL || callbackURL);
+				url.searchParams.set("error", "unable_to_create_session");
+				throw c.redirect(url.toString());
+			}
+		} catch {
 			const url = new URL(currentURL || callbackURL);
 			url.searchParams.set("error", "unable_to_create_session");
 			throw c.redirect(url.toString());

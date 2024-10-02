@@ -20,10 +20,6 @@ description: Facebook Provider
         import { facebook } from "better-auth/social-providers"
         
         export const auth = await betterAuth({
-            database: {
-                provider: "sqlite",
-                url: "./db.sqlite",
-            },
             socialProviders: { // [!code highlight]
                 facebook: { // [!code highlight]
                     clientId: process.env.FACEBOOK_CLIENT_ID as string, // [!code highlight]
@@ -41,7 +37,7 @@ description: Facebook Provider
         ```ts title="client.ts"  /
         import { createAuthClient } from "better-auth/client"
         const client = createAuthClient()
-        
+
         const signin = async () => {
             const data = await client.signIn.social({
                 provider: "facebook"

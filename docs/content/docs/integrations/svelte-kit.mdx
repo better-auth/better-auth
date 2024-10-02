@@ -8,7 +8,7 @@ Before you start, make sure you have a better auth instance configured. If you h
 
 We need to mount the handler to svelte kit server hook.
 
-```ts
+```ts title="hooks.server.ts"
 import { auth } from "$lib/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 
@@ -29,8 +29,8 @@ npx better-auth migrate
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
-```ts twoslash title="client.ts"
-import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svlete
+```ts title="client.ts"
+import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svelte
 
 export const client = createAuthClient({
     //you can pass client configuration here

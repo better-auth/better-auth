@@ -1,14 +1,12 @@
 import { betterAuth } from "better-auth";
 import { passkey, twoFactor } from "better-auth/plugins";
+import Database from "better-sqlite3";
 import { Resend } from "resend";
 
 const resend = new Resend(import.meta.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
-	database: {
-		provider: "sqlite",
-		url: "./db.sqlite",
-	},
+	database: new Database("./db.sqlite"),
 	account: {
 		accountLinking: {
 			enabled: true,

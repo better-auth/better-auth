@@ -12,33 +12,37 @@ You can also pass a kysley dialect directly to use other databases supported by 
 **Example: Sqlite**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import Database from "better-sqlite3"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "sqlite",
-        url: "path/to/database.sqlite"
-    }
+    database: new Database("database.sqlite")
 })
 ```
 
 **Example: Postgres**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { Pool } from "pg"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "postgres",
-        url: "postgres://user:password@localhost:5432/database"
-    }
+    database: new Pool({
+        connectionString: "postgres://user:password@localhost:5432/database"
+    })
 })
 ```
 
 **Exmaple: Mysql**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { createPool } from "mysql2/promise"
+
 export const auth = await betterAuth({
-    database: {
-        provider: "mysql",
-        url: "mysql://user:password@localhost:3306/database"
-    }
+    database: createPool({
+        host: "localhost",
+        user: "root",
+        password: "password",
+        database: "database"
+    })
 })
 ```
 
@@ -278,38 +282,33 @@ There are two types of hooks you can define:
 ### 1. Before Hook
 
 - **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
-- **Behavior**: 
-  - If the hook returns `false`, the operation will be aborted.
-  - If it returns an object, that object will replace the original data.
+- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns an object, that object will replace the original data.
 
 ### 2. After Hook
 
 - **Purpose**: This hook is called after the respective entity is created or updated.
 - **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
 
-**Example Usage: add a `before` hook to the `user` model to split the `name` field into `firstName` and `lastName` fields.**
+**Example Usage**
 
-```typescript
-const hooks: BetterAuthOptions['databaseHooks'] = {
-  user: {
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   user: {
     create: {
       before: async (user) => {
+          // Modify the user object before it is created
           return {
               ...user,
               firstName: user.name.split(" ")[0],
               lastName: user.name.split(" ")[1]
           }
       },
-    },
-    update: {
       after: async (user) => {
-          return {
-              ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1]
-          }
+          //perform additional actions, like creating a stripe customer
       },
     },
   },
-};
+})
 ```
