@@ -38,7 +38,7 @@ export type InferFieldOutput<T extends FieldAttribute> =
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
-	 * if the field should be required on a new record.
+	 * If the field should be required on a new record.
 	 * @default false
 	 */
 	required?: boolean;

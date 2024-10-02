@@ -1,4 +1,4 @@
-import { APIError, type Context, type InferUse } from "better-call";
+import { APIError, type Context } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
@@ -11,17 +11,6 @@ import type {
 	InferUser,
 	Prettify,
 } from "../../types";
-
-const sessionCache = new Map<
-	string,
-	{
-		data: {
-			session: Session;
-			user: User;
-		};
-		expiresAt: number;
-	}
->();
 
 /**
  * Generate a unique key for the request to cache the
@@ -63,18 +52,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 
 				const key = getRequestUniqueKey(ctx, sessionCookieToken);
-				const cachedSession = sessionCache.get(key);
-				if (cachedSession) {
-					if (cachedSession.expiresAt > Date.now()) {
-						return ctx.json(
-							cachedSession.data as unknown as {
-								session: Prettify<InferSession<Option>>;
-								user: Prettify<InferUser<Option>>;
-							},
-						);
-					}
-					sessionCache.delete(key);
-				}
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
@@ -100,8 +77,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (dontRememberMe) {
 					return ctx.json(
 						session as unknown as {
-							session: Prettify<InferSession<Option>>;
-							user: Prettify<InferUser<Option>>;
+							session: InferSession<Option>;
+							user: InferUser<Option>;
 						},
 					);
 				}
@@ -127,7 +104,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						await ctx.context.internalAdapter.updateSession(
 							session.session.id,
 							{
-								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, true),
+								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
 							},
 						);
 					if (!updatedSession) {
@@ -143,20 +120,18 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						maxAge,
 					});
 					return ctx.json({
-						session: updatedSession as unknown as Prettify<
-							InferSession<Option>
-						>,
-						user: session.user as unknown as Prettify<InferUser<Option>>,
+						session: updatedSession,
+						user: session.user,
+					} as unknown as {
+						session: InferSession<Option>;
+						user: InferUser<Option>;
 					});
 				}
-				sessionCache.set(key, {
-					data: session,
-					expiresAt: Date.now() + 5000,
-				});
+
 				return ctx.json(
 					session as unknown as {
-						session: Prettify<InferSession<Option>>;
-						user: Prettify<InferUser<Option>>;
+						session: InferSession<Option>;
+						user: InferUser<Option>;
 					},
 				);
 			} catch (error) {

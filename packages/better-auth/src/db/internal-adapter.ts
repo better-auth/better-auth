@@ -1,4 +1,3 @@
-import { alphabet, generateRandomString } from "oslo/crypto";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getDate } from "../utils/date";
@@ -48,7 +47,7 @@ export const createInternalAdapter = (
 				 */
 				expiresAt: dontRememberMe
 					? getDate(1000 * 60 * 60 * 24) // 1 day
-					: getDate(sessionExpiration, true),
+					: getDate(sessionExpiration, "sec"),
 				ipAddress: headers?.get("x-forwarded-for") || "",
 				userAgent: headers?.get("user-agent") || "",
 			};
@@ -155,6 +154,19 @@ export const createInternalAdapter = (
 		linkAccount: async (account: Account) => {
 			const _account = await createWithHooks(account, "account");
 			return _account;
+		},
+		updateUser: async (userId: string, data: Partial<User>) => {
+			const user = await updateWithHooks<User>(
+				data,
+				[
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+				"user",
+			);
+			return user;
 		},
 		updateUserByEmail: async (
 			email: string,
