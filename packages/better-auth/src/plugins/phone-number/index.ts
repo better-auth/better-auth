@@ -4,9 +4,9 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { signUpEmail } from "../../api/routes/sign-up";
-import { getDate, logger } from "../../utils";
+import { getDate, logger, setSessionCookie } from "../../utils";
 import { alphabet, generateRandomString } from "oslo/crypto";
-import { sessionMiddleware } from "../../api";
+import { getSessionFromCtx, sessionMiddleware } from "../../api";
 
 interface OTP {
 	code: string;
@@ -44,6 +44,7 @@ export const phoneNumber = (options?: {
 		 */
 		expiresIn?: number;
 	};
+	enableAutoSignIn?: boolean;
 }) => {
 	const opts = {
 		phoneNumber: "phoneNumber",
@@ -328,6 +329,30 @@ export const phoneNumber = (options?: {
 					await ctx.context.internalAdapter.updateUser(user.id, {
 						[opts.phoneNumberVerified]: true,
 					});
+					if (options?.enableAutoSignIn) {
+						const session = await getSessionFromCtx(ctx);
+						if (!session) {
+							const session = await ctx.context.internalAdapter.createSession(
+								user.id,
+								ctx.request,
+							);
+							if (!session) {
+								return ctx.json(null, {
+									status: 500,
+									body: {
+										message: "Failed to create session",
+										status: 500,
+									},
+								});
+							}
+							await setSessionCookie(ctx, session.id);
+							return ctx.json({
+								user,
+								session,
+							});
+						}
+					}
+
 					return ctx.json({
 						status: true,
 					});

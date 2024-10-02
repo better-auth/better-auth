@@ -110,6 +110,36 @@ const isVerified = await client.phoneNumber.verify({
 })
 ```
 
+### Auto Sign-In
+
+You can enable auto sign-in on verify success by default. 
+
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            otp: {
+                sendOTP: (phoneNumber, code) => {
+                    // Implement sending OTP code via SMS
+                }
+            },
+            enableAutoSignIn: true
+        })
+    ]
+})
+```
+
+```ts title="client.ts"
+await client.phoneNumber.verify({
+    phoneNumber: "+1234567890",
+    code: "123456",
+})
+```
+
+Now the user will be signed in automatically after the phone number is verified.
+
+
 ### Update Phone Number
 
 Users can update their phone number and optionally verify the new one via OTP. You can enable to send OTP for verification when updating the phone number.
