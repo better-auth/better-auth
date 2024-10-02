@@ -385,5 +385,5 @@ export interface BetterAuthOptions {
 				after?: (verification: Verification) => Promise<void>;
 			};
 		};
-	}[];
+	};
 }

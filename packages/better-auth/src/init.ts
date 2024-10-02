@@ -27,7 +27,7 @@ export const init = async (opts: BetterAuthOptions) => {
 	/**
 	 * Run plugins init to get the actual options
 	 */
-	const { options, context } = runPluginInit(opts);
+	const { options, context, dbHooks } = runPluginInit(opts);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const adapter = await getAdapter(options);
@@ -96,7 +96,10 @@ export const init = async (opts: BetterAuthOptions) => {
 			},
 		},
 		adapter: adapter,
-		internalAdapter: createInternalAdapter(adapter, options),
+		internalAdapter: createInternalAdapter(adapter, {
+			options,
+			hooks: dbHooks.filter((u) => u !== undefined),
+		}),
 		createAuthCookie: createCookieGetter(options),
 		...context,
 	};
@@ -138,11 +141,15 @@ export type AuthContext = {
 function runPluginInit(options: BetterAuthOptions) {
 	const plugins = options.plugins || [];
 	let context: Partial<AuthContext> = {};
+	const dbHooks: BetterAuthOptions["databaseHooks"][] = [options.databaseHooks];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			const result = plugin.init(options);
 			if (typeof result === "object") {
 				if (result.options) {
+					if (result.options.databaseHooks) {
+						dbHooks.push(result.options.databaseHooks);
+					}
 					options = defu(options, result.options);
 				}
 				if (result.context) {
@@ -154,6 +161,7 @@ function runPluginInit(options: BetterAuthOptions) {
 	return {
 		options,
 		context,
+		dbHooks,
 	};
 }
 

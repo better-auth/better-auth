@@ -8,11 +8,15 @@ import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
-	options: BetterAuthOptions,
+	ctx: {
+		options: BetterAuthOptions;
+		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+	},
 ) => {
+	const options = ctx.options;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
-	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, options);
+	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {

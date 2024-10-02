@@ -351,7 +351,7 @@ There are two types of hooks you can define:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-   databaseHooks: [{
+   databaseHooks: {
         user: {
           create: {
               before: async (user) => {
@@ -367,6 +367,6 @@ export const auth = betterAuth({
               },
           },
       },
-   }]
+   }
 })
 ```

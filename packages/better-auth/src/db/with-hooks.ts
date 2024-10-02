@@ -3,9 +3,15 @@ import type { BetterAuthOptions } from "../types";
 import { getAuthTables } from "./get-tables";
 import { generateId } from "../utils";
 
-export function getWithHooks(adapter: Adapter, options: BetterAuthOptions) {
-	const hooks = options.databaseHooks;
-	const tables = getAuthTables(options);
+export function getWithHooks(
+	adapter: Adapter,
+	ctx: {
+		options: BetterAuthOptions;
+		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+	},
+) {
+	const hooks = ctx.hooks;
+	const tables = getAuthTables(ctx.options);
 	type Models = "user" | "account" | "session" | "verification";
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
