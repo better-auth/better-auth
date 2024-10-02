@@ -306,38 +306,33 @@ There are two types of hooks you can define:
 ### 1. Before Hook
 
 - **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
-- **Behavior**: 
-  - If the hook returns `false`, the operation will be aborted.
-  - If it returns an object, that object will replace the original data.
+- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns an object, that object will replace the original data.
 
 ### 2. After Hook
 
 - **Purpose**: This hook is called after the respective entity is created or updated.
 - **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
 
-**Example Usage: add a `before` hook to the `user` model to split the `name` field into `firstName` and `lastName` fields.**
+**Example Usage**
 
 ```typescript title="auth.ts"
-const hooks: BetterAuthOptions['databaseHooks'] = {
-  user: {
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   user: {
     create: {
       before: async (user) => {
+          // Modify the user object before it is created
           return {
               ...user,
               firstName: user.name.split(" ")[0],
               lastName: user.name.split(" ")[1]
           }
       },
-    },
-    update: {
       after: async (user) => {
-          return {
-              ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1]
-          }
+          //perform additional actions, like creating a stripe customer
       },
     },
   },
-};
+})
 ```
