@@ -27,7 +27,7 @@ export const init = async (opts: BetterAuthOptions) => {
 	/**
 	 * Run plugins init to get the actual options
 	 */
-	const { options, context, dbHooks } = runPluginInit(opts);
+	let { options, context, dbHooks } = runPluginInit(opts);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const adapter = await getAdapter(options);
@@ -40,9 +40,15 @@ export const init = async (opts: BetterAuthOptions) => {
 		process.env.AUTH_SECRET ||
 		DEFAULT_SECRET;
 
+	options = {
+		...options,
+		secret,
+		baseURL: baseURL ? new URL(baseURL).origin : "",
+		basePath: options.basePath || "/api/auth",
+		plugins: plugins.concat(internalPlugins),
+	};
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-
 	const socialProviders = Object.keys(options.socialProviders || {})
 		.map((key) => {
 			const value = options.socialProviders?.[key as "github"]!;
@@ -61,12 +67,7 @@ export const init = async (opts: BetterAuthOptions) => {
 	return {
 		appName: options.appName || "Better Auth",
 		socialProviders,
-		options: {
-			...options,
-			baseURL: baseURL ? new URL(baseURL).origin : "",
-			basePath: options.basePath || "/api/auth",
-			plugins: plugins.concat(internalPlugins),
-		},
+		options,
 		tables,
 		baseURL: baseURL,
 		sessionConfig: {

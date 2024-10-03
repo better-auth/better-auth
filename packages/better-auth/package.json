@@ -4,8 +4,9 @@
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean",
+        "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean --dts",
         "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
+        "dev:dts": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --dts",
         "test": "pnpm prisma:push && pnpm typecheck && vitest",
         "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
         "test:adapters": "pnpm prisma:push && vitest adapters",
