@@ -68,7 +68,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 	const { kysely: db, databaseType: dbType } =
 		await createKyselyAdapter(config);
 	if (!db || !dbType) {
-		logger.error("Invalid database configuration.");
+		logger.error(
+			"Only kysely adapter is supported for migrations. You can use `generate` command to generate the schema, if you're using a different adapter.",
+		);
 		process.exit(1);
 	}
 	const tableMetadata = await db.introspection.getTables();
