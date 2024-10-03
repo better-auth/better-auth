@@ -31,7 +31,7 @@ export const generate = new Command("generate")
 				output: z.string().optional(),
 			})
 			.parse(opts);
-		const spinner = ora("preparing schema...").start();
+
 		const cwd = path.resolve(options.cwd);
 		if (!existsSync(cwd)) {
 			logger.error(`The directory "${cwd}" does not exist.`);
@@ -47,6 +47,7 @@ export const generate = new Command("generate")
 			);
 			return;
 		}
+		const spinner = ora("preparing schema...").start();
 		const adapter = await getAdapter(config, true).catch((e) => {
 			logger.error(e.message);
 			process.exit(1);
@@ -90,6 +91,12 @@ export const generate = new Command("generate")
 				)} the schema to the file?`,
 			});
 			if (confirm) {
+				const exist = existsSync(path.join(cwd, fileName));
+				if (!exist) {
+					await fs.mkdir(path.dirname(path.join(cwd, fileName)), {
+						recursive: true,
+					});
+				}
 				if (overwrite) {
 					await fs.writeFile(path.join(cwd, fileName), code);
 				} else {
@@ -115,11 +122,13 @@ export const generate = new Command("generate")
 			process.exit(1);
 		}
 
-		const dirExist = existsSync(path.dirname(path.join(cwd, fileName)));
-		if (!dirExist) {
-			await fs.mkdir(path.dirname(path.join(cwd, fileName)), {
-				recursive: true,
-			});
+		if (!options.output) {
+			const dirExist = existsSync(path.dirname(path.join(cwd, fileName)));
+			if (!dirExist) {
+				await fs.mkdir(path.dirname(path.join(cwd, fileName)), {
+					recursive: true,
+				});
+			}
 		}
 		await fs.writeFile(options.output || path.join(cwd, fileName), code);
 		logger.success(`🚀 schema was generated successfully!`);

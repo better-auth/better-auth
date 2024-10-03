@@ -6,7 +6,8 @@ import path from "path";
 import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
-
+import fs from "fs";
+import { BetterAuthError } from "../error/better-auth-error";
 let possiblePaths = ["auth.ts", "auth.tsx"];
 
 possiblePaths = [
@@ -16,19 +17,60 @@ possiblePaths = [
 ];
 possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`)];
 
+function stripJsonComments(jsonString: string): string {
+	return jsonString.replace(
+		/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
+		(m, g) => (g ? "" : m),
+	);
+}
+
+function getPathAliases(cwd: string): Record<string, string> | null {
+	const tsConfigPath = path.join(cwd, "tsconfig.json");
+	if (!fs.existsSync(tsConfigPath)) {
+		logger.warn("[#better-auth]: tsconfig.json not found.");
+		return null;
+	}
+	try {
+		const tsConfigContent = fs.readFileSync(tsConfigPath, "utf8");
+		const strippedTsConfigContent = stripJsonComments(tsConfigContent);
+		const tsConfig = JSON.parse(strippedTsConfigContent);
+		const { paths = {} } = tsConfig.compilerOptions || {};
+
+		const result: Record<string, string> = {};
+		const obj = Object.entries(paths) as [string, string[]][];
+		for (const [alias, aliasPaths] of obj) {
+			for (const _ of aliasPaths) {
+				result[alias[0]] = "../";
+			}
+		}
+		return result;
+	} catch (error) {
+		throw new BetterAuthError("Error parsing tsconfig.json");
+	}
+}
 /**
  * .tsx files are not supported by Jiti.
  */
-const jitiOptions = {
-	transformOptions: {
-		babel: {
-			presets: [
-				[babelPresetTypescript, { isTSX: true, allExtensions: true }],
-				[babelPresetReact, { runtime: "automatic" }],
-			],
+const jitiOptions = (cwd: string) => {
+	const alias = getPathAliases(cwd) || {};
+	return {
+		transformOptions: {
+			babel: {
+				presets: [
+					[
+						babelPresetTypescript,
+						{
+							isTSX: true,
+							allExtensions: true,
+						},
+					],
+					[babelPresetReact, { runtime: "automatic" }],
+				],
+			},
 		},
-	},
-	extensions: [".ts", ".tsx", ".js", ".jsx"],
+		extensions: [".ts", ".tsx", ".js", ".jsx"],
+		alias,
+	};
 };
 export async function getConfig({
 	cwd,
@@ -40,6 +82,7 @@ export async function getConfig({
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
+			const alias = getPathAliases(cwd);
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;
@@ -50,7 +93,7 @@ export async function getConfig({
 			}>({
 				configFile: path.join(cwd, configPath),
 				dotenv: true,
-				jitiOptions,
+				jitiOptions: jitiOptions(cwd),
 			});
 			if (!config.auth && !config.default) {
 				logger.error(
@@ -73,7 +116,7 @@ export async function getConfig({
 						};
 					}>({
 						configFile: possiblePath,
-						jitiOptions,
+						jitiOptions: jitiOptions(cwd),
 					});
 					const hasConfig = Object.keys(config).length > 0;
 					if (hasConfig) {
