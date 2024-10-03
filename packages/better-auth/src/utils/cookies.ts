@@ -5,8 +5,9 @@ import type { GenericEndpointContext } from "../types/context";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
-		!!options.advanced?.useSecureCookies ||
-		(process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test");
+		options.advanced?.useSecureCookies !== undefined
+			? options.advanced?.useSecureCookies
+			: process.env.NODE_ENV !== "development";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge = new TimeSpan(7, "d").seconds();

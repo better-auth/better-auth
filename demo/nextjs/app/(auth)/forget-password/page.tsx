@@ -28,13 +28,11 @@ export default function Component() {
 		setIsSubmitting(true);
 		setError("");
 
-		// Simulate API call
 		try {
 			const res = await client.forgetPassword({
 				email,
 				redirectTo: "/reset-password",
 			});
-			// If the API call is successful, set isSubmitted to true
 			setIsSubmitted(true);
 		} catch (err) {
 			setError("An error occurred. Please try again.");

@@ -54,7 +54,7 @@ export const useAuthQuery = <T>(
 			async onError(context) {
 				value.set({
 					error: context.error,
-					data: value.get().data,
+					data: null,
 					isPending: false,
 					isRefetching: false,
 				});
