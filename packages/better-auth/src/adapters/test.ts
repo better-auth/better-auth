@@ -114,6 +114,9 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				id: "2",
 				name: "user2",
 				email: "test@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			},
 		});
 
