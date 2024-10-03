@@ -79,6 +79,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			],
 			select: ["email"],
 		});
+
 		expect(res).toEqual({ email: user.email });
 	});
 
@@ -97,6 +98,35 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			},
 		});
 		expect(res?.email).toEqual(newEmail);
+	});
+
+	test("should find many", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find many with where", async () => {
+		await adapter.create({
+			model: "user",
+			data: {
+				id: "2",
+				name: "user2",
+				email: "test@email.com",
+			},
+		});
+
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: "2",
+				},
+			],
+		});
+		expect(res.length).toBe(1);
 	});
 
 	test("delete model", async () => {
@@ -127,7 +157,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			where: [
 				{
 					field: "id",
-					value: "2",
+					value: "3",
 				},
 			],
 		});
