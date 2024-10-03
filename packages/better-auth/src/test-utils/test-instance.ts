@@ -31,6 +31,9 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 				clientSecret: "test",
 			},
 		},
+		advanced: {
+			useSecureCookies: false,
+		},
 		secret: "better-auth.secret",
 		database: new Database(dbName),
 		emailAndPassword: {
