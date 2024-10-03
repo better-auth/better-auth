@@ -1,5 +1,3 @@
-//@ts-expect-error
-import { building } from "$app/environment";
 import type { Auth } from "../auth";
 import type { BetterAuthOptions } from "../types";
 
@@ -7,7 +5,7 @@ export const toSvelteKitHandler = (auth: Auth) => {
 	return (event: { request: Request }) => auth.handler(event.request);
 };
 
-export const svelteKitHandler = ({
+export const svelteKitHandler = async ({
 	auth,
 	event,
 	resolve,
@@ -16,6 +14,8 @@ export const svelteKitHandler = ({
 	event: { request: Request; url: URL };
 	resolve: (event: any) => any;
 }) => {
+	//@ts-expect-error
+	const { building } = await import("$app/environment").catch((e) => {});
 	if (building) {
 		return resolve(event);
 	}
