@@ -706,6 +706,11 @@ export const examples: Content[] = [
 				icon: Icons.astro,
 			},
 			{
+				title: "Remix",
+				href: "/docs/examples/remix",
+				icon: Icons.remix,
+			},
+			{
 				title: "Next JS",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
