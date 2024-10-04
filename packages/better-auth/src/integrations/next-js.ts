@@ -29,6 +29,9 @@ export function authMiddleware(options: {
 	) => Promise<any>;
 }) {
 	return async (request: NextRequest) => {
+		if (request.method !== "GET") {
+			return NextResponse.next();
+		}
 		const url = new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
 		const fullURL = `${url}${basePath}/session`;
