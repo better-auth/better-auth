@@ -134,7 +134,7 @@ on top of normal methods, the client provides hooks to easily access differnt re
             ```svelte title="user.svelte"
             <script lang="ts">
             import { client } from "$lib/client";
-            const session = client.useSsession;
+            const session = client.useSession();
             </script>
 
             <div
@@ -144,10 +144,10 @@ on top of normal methods, the client provides hooks to easily access differnt re
                 {#if $session}
                     <div>
                     <p>
-                        {$session?.user.name}
+                        {$session?.data?.user.name}
                     </p>
                     <p>
-                        {$session?.user.email}
+                        {$session?.data?.user.email}
                     </p>
                     <button
                         on:click={async () => {
