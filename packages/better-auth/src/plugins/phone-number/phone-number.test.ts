@@ -97,7 +97,7 @@ describe("phone-number", async (it) => {
 	});
 
 	it("should verify phone number", async () => {
-		await client.phoneNumber.verify({
+		const res = await client.phoneNumber.verify({
 			phoneNumber: "+251911121314",
 			code: otp,
 		});
@@ -106,7 +106,16 @@ describe("phone-number", async (it) => {
 				headers,
 			},
 		});
+		expect(res.error).toBe(null);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+
+	it("shouldn't verify again with the same code", async () => {
+		const res = await client.phoneNumber.verify({
+			phoneNumber: "+251911121314",
+			code: otp,
+		});
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should update phone number", async () => {

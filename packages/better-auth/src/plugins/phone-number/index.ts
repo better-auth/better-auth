@@ -277,6 +277,9 @@ export const phoneNumber = (options?: {
 					);
 
 					if (!otp || otp.expiresAt < new Date()) {
+						if (otp && otp.expiresAt < new Date()) {
+							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						}
 						return ctx.json(
 							{
 								status: false,
@@ -302,6 +305,7 @@ export const phoneNumber = (options?: {
 							},
 						);
 					}
+					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 					const user = await ctx.context.adapter.findOne<User>({
 						model: ctx.context.tables.user.tableName,
 						where: [
