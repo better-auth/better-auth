@@ -34,8 +34,9 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 			matcher(path) {
 				return (
 					path === "/sign-out" ||
-					path === "sign-up/email" ||
-					path === "/user/update"
+					path === "/user/update" ||
+					path.startsWith("/sign-in") ||
+					path.startsWith("/sign-up")
 				);
 			},
 		},
