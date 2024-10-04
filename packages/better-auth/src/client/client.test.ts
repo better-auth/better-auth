@@ -10,7 +10,6 @@ import type { ReadableAtom } from "nanostores";
 import type { Session } from "../db/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { passkeyClient, twoFactorClient } from "../plugins";
-import { createAuthClient } from "./vanilla";
 import { organizationClient } from "./plugins";
 
 describe("run time proxy", async () => {
@@ -245,6 +244,7 @@ describe("type", () => {
 				testField?: string | undefined;
 				testField2?: number | undefined;
 				testField4: string;
+				deletedAt?: Date | undefined;
 				twoFactorEnabled?: boolean | undefined;
 			};
 		}>();
@@ -268,6 +268,7 @@ describe("type", () => {
 			emailVerified: boolean;
 			createdAt: Date;
 			updatedAt: Date;
+			deletedAt?: Date | undefined;
 			image?: string | undefined;
 			twoFactorEnabled?: boolean | undefined;
 		}>();

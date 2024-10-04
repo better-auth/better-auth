@@ -28,6 +28,7 @@ export const userSchema = z.object({
 	image: z.string().optional(),
 	createdAt: z.date().default(new Date()),
 	updatedAt: z.date().default(new Date()),
+	deletedAt: z.date().optional(),
 });
 
 export const sessionSchema = z.object({

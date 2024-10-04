@@ -21,6 +21,7 @@ describe("general types", async (it) => {
 				image?: string | undefined;
 				createdAt: Date;
 				updatedAt: Date;
+				deletedAt?: Date | undefined;
 			};
 		}>();
 	});
@@ -38,6 +39,7 @@ describe("general types", async (it) => {
 			createdAt: Date;
 			updatedAt: Date;
 			twoFactorEnabled?: boolean | undefined;
+			deletedAt?: Date | undefined;
 		}>();
 
 		expectTypeOf<typeof auth.$Infer.Session.session>().toEqualTypeOf<{

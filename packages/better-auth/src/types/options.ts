@@ -142,6 +142,12 @@ export interface BetterAuthOptions {
 		 */
 		modelName?: string;
 		fields?: Partial<Record<keyof User, string>>;
+		/**
+		 * Enable soft delete for the user instead of hard delete.
+		 *
+		 * @default false
+		 */
+		softDelete?: boolean;
 	};
 	session?: {
 		modelName?: string;

@@ -88,6 +88,11 @@ export const getAuthTables = (
 					defaultValue: () => new Date(),
 					required: true,
 				},
+				deletedAt: {
+					type: "date",
+					defaultValue: undefined,
+					required: false,
+				},
 				...user?.fields,
 			},
 			order: 0,
