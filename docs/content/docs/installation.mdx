@@ -47,7 +47,7 @@ Create a file named `auth.ts` in one of these locations:
    - `lib/` folder
    - `utils/` folder
 
-You can also nest any of these folders under `src/` folder. (e.g. `src/lib/auth.ts`)
+You can also nest any of these folders under `src/` or `app/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`)
 
 And in this file, import Better Auth and create your instance.
 
@@ -243,15 +243,6 @@ Better auth supports any backend framework with standard Request and Response ob
         export const { POST, GET } = toNextJsHandler(auth);
         ```
     </Tab>
-    <Tab value="remix">
-    ```ts title="/app/routes/api.auth.$.ts"
-    import { auth } from "@/lib/auth"; // path to your auth file
-
-    export async function loader({ request }) {
-        return auth.handler(request);
-    }
-    ```
-    </Tab>
     <Tab value="nuxt">
     ```ts title="/server/api/auth/[...all].ts"
     import { auth } from "~/utils/auth"; // path to your auth file
@@ -268,6 +259,20 @@ Better auth supports any backend framework with standard Request and Response ob
 
     export async function handle({ event, resolve }) {
         return svelteKitHandler({ event, resolve, auth });
+    }
+    ```
+    </Tab>
+    <Tab value="remix">
+    ```ts title="/app/routes/api.auth.$.ts"
+    import { auth } from '~/lib/auth.server' // Adjust the path as necessary
+    import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
+
+    export async function loader({ request }: LoaderFunctionArgs) {
+        return auth.handler(request)
+    }
+
+    export async function action({ request }: ActionFunctionArgs) {
+        return auth.handler(request)
     }
     ```
     </Tab>

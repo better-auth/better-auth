@@ -15,7 +15,11 @@ possiblePaths = [
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
-possiblePaths = [...possiblePaths, ...possiblePaths.map((it) => `src/${it}`)];
+possiblePaths = [
+	...possiblePaths,
+	...possiblePaths.map((it) => `src/${it}`),
+	...possiblePaths.map((it) => `app/${it}`),
+];
 
 function stripJsonComments(jsonString: string): string {
 	return jsonString.replace(
