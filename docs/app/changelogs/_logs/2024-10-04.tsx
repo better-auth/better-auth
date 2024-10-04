@@ -4,9 +4,11 @@ import Link from "next/link";
 
 const listOfFeatures = [
 	"Database Schema Generation",
-	"Better type Inference",
-	"Custom table/model names",
 	"Phone Number Plugin",
+	"Anonymous Plugin",
+	"Better type Inference",
+	"User Delete API",
+	"Custom table/model names",
 	"Removed flat db config",
 	"new core table for verification use cases",
 	"moved passkey challenge keys to be stored on db ",
@@ -20,8 +22,8 @@ const ChangelogThree = () => {
 				<div className="flex flex-col gap-2">
 					<h2 className="text-2xl font-bold tracking-tighter">v0.3.0</h2>
 					<p>
-						Database Schema Generation, Better type Inference, Custom table
-						names, Phone Number Plugin and many more.
+						Database Schema Generation, Phone Number Plugin, Anonymous Plugin,
+						Better type Inference, Custom table names, and many more.
 					</p>
 				</div>
 				<p className="text-gray-600 dark:text-gray-300 text-[0.855rem]"></p>
