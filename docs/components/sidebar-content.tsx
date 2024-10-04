@@ -5,6 +5,7 @@ import {
 	Mailbox,
 	Phone,
 	ScanFace,
+	UserCircle,
 	Users2,
 	UserSquare2,
 } from "lucide-react";
@@ -583,6 +584,11 @@ export const contents: Content[] = [
 				href: "/docs/plugins/username",
 			},
 			{
+				title: "Anonymous",
+				icon: UserCircle,
+				href: "/docs/plugins/anonymous",
+			},
+			{
 				title: "Phone Number",
 				icon: Phone,
 				href: "/docs/plugins/phone-number",
@@ -609,6 +615,7 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+
 			{
 				title: "Authorization",
 				group: true,
