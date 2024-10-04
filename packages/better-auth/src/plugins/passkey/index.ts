@@ -20,6 +20,14 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../utils/cookies";
 import { BetterAuthError } from "../../error/better-auth-error";
 
+interface WebAuthnChallengeValue {
+	expectedChallenge: string;
+	userData: {
+		id: string;
+	};
+	callbackURL?: string;
+}
+
 export interface PasskeyOptions {
 	/**
 	 * A unique identifier for your website. 'localhost' is okay for
@@ -50,12 +58,6 @@ export interface PasskeyOptions {
 		webAuthnChallengeCookie?: string;
 	};
 }
-
-export type WebAuthnCookieType = {
-	expectedChallenge: string;
-	userData: { id: string };
-	callbackURL?: string;
-};
 
 export type Passkey = {
 	id: string;
@@ -93,7 +95,11 @@ export const passkey = (options?: PasskeyOptions) => {
 			...options?.advanced,
 		},
 	};
-	const webAuthnChallengeCookieExpiration = 60 * 60 * 24; // 24 hours
+	const expirationTime = new Date(Date.now() + 1000 * 60 * 5);
+	const currentTime = new Date();
+	const maxAgeInSeconds = Math.floor(
+		(expirationTime.getTime() - currentTime.getTime()) / 1000,
+	);
 	return {
 		id: "passkey",
 		endpoints: {
@@ -139,27 +145,29 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: "platform",
 						},
 					});
-					/**
-					 * set challenge on cookies
-					 */
-					const data: WebAuthnCookieType = {
-						expectedChallenge: options.challenge,
-						userData: {
-							id: session.user.id,
-						},
-					};
 
+					const id = generateRandomString(32, alphabet("a-z", "0-9"));
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
-						JSON.stringify(data),
+						id,
 						ctx.context.secret,
 						{
 							secure: true,
 							httpOnly: true,
 							sameSite: "lax",
-							maxAge: webAuthnChallengeCookieExpiration,
+							maxAge: maxAgeInSeconds,
 						},
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify({
+							expectedChallenge: options.challenge,
+							userData: {
+								id: session.user.id,
+							},
+						}),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -204,28 +212,30 @@ export const passkey = (options?: PasskeyOptions) => {
 								}
 							: {}),
 					});
-					/**
-					 * set challenge on cookies
-					 */
-					const data: WebAuthnCookieType = {
+					const data = {
 						expectedChallenge: options.challenge,
 						callbackURL: ctx.body?.callbackURL,
 						userData: {
 							id: session?.user.id || "",
 						},
 					};
-
+					const id = generateRandomString(32, alphabet("a-z", "0-9"));
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
-						JSON.stringify(data),
+						id,
 						ctx.context.secret,
 						{
 							secure: true,
 							httpOnly: true,
 							sameSite: "lax",
-							maxAge: webAuthnChallengeCookieExpiration,
+							maxAge: maxAgeInSeconds,
 						},
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: id,
+						value: JSON.stringify(data),
+						expiresAt: expirationTime,
+					});
 					return ctx.json(options, {
 						status: 200,
 					});
@@ -249,18 +259,32 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeString = await ctx.getSignedCookie(
+					const challengeId = await ctx.getSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						ctx.context.secret,
 					);
-					if (!challengeString) {
+					if (!challengeId) {
+						return ctx.json(null, {
+							status: 400,
+							statusText: "No challenge found",
+							body: {
+								message: "No challenge found",
+							},
+						});
+					}
+
+					const data =
+						await ctx.context.internalAdapter.findVerificationValue(
+							challengeId,
+						);
+					if (!data) {
 						return ctx.json(null, {
 							status: 400,
 						});
 					}
-					const { userData, expectedChallenge } = JSON.parse(
-						challengeString,
-					) as WebAuthnCookieType;
+					const { expectedChallenge, userData } = JSON.parse(
+						data.value,
+					) as WebAuthnChallengeValue;
 
 					if (userData.id !== ctx.context.session.user.id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -336,18 +360,28 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeString = await ctx.getSignedCookie(
+					const challengeId = await ctx.getSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						ctx.context.secret,
 					);
-					if (!challengeString) {
+					if (!challengeId) {
+						return ctx.json(null, {
+							status: 400,
+						});
+					}
+
+					const data =
+						await ctx.context.internalAdapter.findVerificationValue(
+							challengeId,
+						);
+					if (!data) {
 						return ctx.json(null, {
 							status: 400,
 						});
 					}
 					const { expectedChallenge, callbackURL } = JSON.parse(
-						challengeString,
-					) as WebAuthnCookieType;
+						data.value,
+					) as WebAuthnChallengeValue;
 					const passkey = await ctx.context.adapter.findOne<Passkey>({
 						model: "passkey",
 						where: [

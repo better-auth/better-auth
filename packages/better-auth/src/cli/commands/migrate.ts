@@ -9,9 +9,6 @@ import ora from "ora";
 import chalk from "chalk";
 import prompts from "prompts";
 import { getMigrations } from "../utils/get-migration";
-import { MissingDependencyError } from "../../error/better-auth-error";
-import { installDependency } from "../utils/install-dep";
-
 export const migrate = new Command("migrate")
 	.option(
 		"-c, --cwd <cwd>",

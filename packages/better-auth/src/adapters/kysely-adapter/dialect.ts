@@ -1,4 +1,4 @@
-import { Kysely } from "kysely";
+import { DialectAdapterBase, Kysely } from "kysely";
 import {
 	type Dialect,
 	MysqlDialect,
@@ -10,7 +10,9 @@ import type { BetterAuthOptions } from "../../types";
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
 	let dialect: Dialect | undefined = undefined;
-	let databaseType: "sqlite" | "mysql" | "postgres" | undefined = undefined;
+	//TODO: on custom dialect require the user to pass the database type
+	let databaseType: "sqlite" | "mysql" | "postgres" = "sqlite";
+
 	if ("createDriver" in db) {
 		dialect = db;
 		if (dialect instanceof SqliteDialect) {

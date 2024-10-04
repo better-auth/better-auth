@@ -15,7 +15,9 @@ export const svelteKitHandler = async ({
 	resolve: (event: any) => any;
 }) => {
 	//@ts-expect-error
-	const { building } = await import("$app/environment").catch((e) => {});
+	const { building } = await import("$app/environment")
+		.catch((e) => {})
+		.then((m) => m || {});
 	if (building) {
 		return resolve(event);
 	}

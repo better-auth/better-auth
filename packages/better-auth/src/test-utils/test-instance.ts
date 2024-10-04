@@ -71,6 +71,10 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 
 	async function signInWithTestUser() {
 		let headers = new Headers();
+		const setCookie = (name: string, value: string) => {
+			const current = headers.get("cookie");
+			headers.set("cookie", `${current || ""}; ${name}=${value}`);
+		};
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -86,6 +90,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		return {
 			res,
 			headers,
+			setCookie,
 		};
 	}
 	async function signInWithUser(email: string, password: string) {
