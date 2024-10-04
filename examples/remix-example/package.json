@@ -45,7 +45,7 @@
     "@remix-run/react": "^2.12.1",
     "@remix-run/serve": "^2.12.1",
     "@types/better-sqlite3": "^7.6.11",
-    "better-auth": "workspace:0.2.9-beta.7",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^11.3.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

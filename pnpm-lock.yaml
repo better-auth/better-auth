@@ -1197,7 +1197,7 @@ importers:
         specifier: ^7.6.11
         version: 7.6.11
       better-auth:
-        specifier: workspace:0.2.9-beta.7
+        specifier: workspace:*
         version: link:../../packages/better-auth
       better-sqlite3:
         specifier: ^11.3.0
@@ -4154,7 +4154,7 @@ packages:
     peerDependencies:
       react-hook-form: ^7.0.0
     dependencies:
-      react-hook-form: 7.53.0(react@18.3.1)
+      react-hook-form: 7.53.0(react@19.0.0-rc-7771d3a7-20240827)
     dev: false
 
   /@humanwhocodes/config-array@0.13.0:
