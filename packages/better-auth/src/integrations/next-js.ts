@@ -29,19 +29,24 @@ export function authMiddleware(options: {
 	) => Promise<any>;
 }) {
 	return async (request: NextRequest) => {
-		if (request.method !== "GET") {
-			return NextResponse.next();
-		}
+		// if (request.method !== "GET") {
+		// 	return NextResponse.next();
+		// }
 		const url = new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
-		const fullURL = `${url}${basePath}/session`;
+		const fullURL = `${url}${basePath}/user/list-sessions`;
 
 		const res = await betterFetch<{
 			session: Session;
 			user: User;
 		}>(fullURL, {
-			headers: request.headers,
+			headers: {
+				cookie: request.headers.get("cookie") || "",
+			},
+		}).catch((e) => {
+			return { data: null };
 		});
+
 		const session = res.data || null;
 		if (options.customRedirect) {
 			return options.customRedirect(session, request);
