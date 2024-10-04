@@ -1,4 +1,4 @@
-import  Database  from 'better-sqlite3';
+import Database from "better-sqlite3";
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
