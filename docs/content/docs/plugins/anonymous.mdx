@@ -1,0 +1,94 @@
+---
+title: Aanonymous
+description: Anonymous plugin for Better Auth.
+---
+
+Anonymous plugin allows you to provide users an authenticated experience without requiring users to enter an email address, password, use an OAuth provider or provide any other PII (Personally Identifiable Information). Later, when ready, the user can link an authentication method to their account.
+
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        Add the anonymous plugin to your auth config.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { anonymous } from "better-auth/plugins" // [!code highlight]
+        
+        export const auth = await betterAuth({
+            // ... other config options
+            plugins: [
+                anonymous() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+        <Step>
+            ### Migrate your database:
+            Run migrate or generate to create the required tables in your database.
+
+            ```bash title="terminal"
+            npx better-auth migrate # [!code highlight]
+            ```
+
+            or
+
+            ```bash title="terminal"
+            npx better-auth generate 
+            ```
+
+            See the [schema-section](#schema) to see what fields this plugin requires. You can also add these fields manually to your database.
+        </Step>
+
+        <Step>
+        ### Add the client Plugin
+        
+        Add the client plugin in your auth client instance.
+
+        ```ts title="client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { anonymousClient } from "better-auth/client/plugins"
+        
+        const client = createAuthClient({
+            plugins: [
+               anonymousClient()
+            ]
+        })
+        ```
+        </Step>
+</Steps>
+
+
+## Usage
+
+### Sign In 
+
+To sign in a user anonymously, call the `signIn.anonymously` method.
+
+```ts title="example.ts"
+const user = await client.signIn.anonymous()
+```
+
+### Link Account
+
+once the user is signed in, you can link an account to the user. Currenyly, only email/password is supported.
+
+```ts title="example.ts"
+const user = await client.anonymous.linkAccount({
+    email: "user@email.com",    
+    password: "secure-password"
+})
+```
+
+## Schema
+
+The anonymous plugin requires one additinal field in the user table.
+
+<DatabaseTable
+    fields={[
+        { name: "isAnonymous", type: "boolean", description: "Whether the user is anonymous or not." },
+    ]}
+/>
