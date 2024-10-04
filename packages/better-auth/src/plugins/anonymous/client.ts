@@ -1,0 +1,9 @@
+import type { anonymous } from ".";
+import type { BetterAuthClientPlugin } from "../../client/types";
+
+export const anonymousClient = () => {
+  return {
+    id: "anonymous",
+    $InferServerPlugin: {} as ReturnType<typeof anonymous>,
+  } satisfies BetterAuthClientPlugin;
+};

@@ -8,3 +8,4 @@ export * from "../api/call";
 export * from "../utils/hide-metadata";
 export * from "./magic-link";
 export * from "./phone-number";
+export * from "./anonymous";
