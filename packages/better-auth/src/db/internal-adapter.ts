@@ -31,7 +31,7 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
-		createUser: async (user: User) => {
+		createUser: async (user: User & Record<string, any>) => {
 			const createdUser = await createWithHooks(user, "user");
 			return createdUser;
 		},
