@@ -21,7 +21,6 @@ describe("anonymous", async () => {
     const userId = anonUser.data?.user.id;
     const isAnonymous = anonUser.data?.user.isAnonymous;
     const sessionId = anonUser.data?.session.id;
-    console.log({ userId, sessionId });
     expect(userId).toBeDefined();
     expect(isAnonymous).toBeTruthy();
     expect(sessionId).toBeDefined();
