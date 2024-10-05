@@ -52,6 +52,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
+    "consola": "^3.2.3",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.2.1",
     "framer-motion": "^11.5.4",

@@ -1,5 +1,10 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	phoneNumber,
+	twoFactor,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
@@ -24,6 +29,7 @@ export const auth = betterAuth({
 		},
 		sendEmailVerificationOnSignUp: true,
 		async sendVerificationEmail(email, url) {
+			console.log("Sending verification email to", email);
 			const res = await resend.emails.send({
 				from,
 				to: to || email,
@@ -34,6 +40,14 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
+		phoneNumber({
+			otp: {
+				sendOTP(phoneNumber, code) {
+					console.log(`Sending OTP to ${phoneNumber}: ${code}`);
+				},
+				sendOTPonSignUp: true,
+			},
+		}),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({
