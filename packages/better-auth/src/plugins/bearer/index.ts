@@ -9,38 +9,25 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 export const bearer = () => {
 	return {
 		id: "bearer",
-		hooks: {
-			before: [
-				{
-					matcher(context) {
-						return (
-							context.request?.headers
-								.get("authorization")
-								?.startsWith("Bearer ") || false
-						);
-					},
-					handler: async (ctx) => {
-						const token = ctx.request?.headers
-							.get("authorization")
-							?.replace("Bearer ", "");
-						if (!token) {
-							throw new BetterAuthError("No token found");
-						}
-						const headers = ctx.headers || new Headers();
-						const signedToken = await serializeSigned(
-							"",
-							token,
-							ctx.context.secret,
-						);
-						headers.set(
-							"cookie",
-							`${
-								ctx.context.authCookies.sessionToken.name
-							}=${signedToken.replace("=", "")}`,
-						);
-					},
-				},
-			],
+		async onRequest(request, ctx) {
+			const token = request.headers
+				.get("authorization")
+				?.replace("Bearer ", "");
+			if (!token) {
+				return;
+			}
+			const headers = request.headers || new Headers();
+			const signedToken = await serializeSigned("", token, ctx.secret);
+			headers.set(
+				"cookie",
+				`${ctx.authCookies.sessionToken.name}=${signedToken.replace("=", "")}`,
+			);
+			return {
+				request: new Request(request.url, {
+					method: request.method,
+					headers,
+				}),
+			};
 		},
 	} satisfies BetterAuthPlugin;
 };

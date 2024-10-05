@@ -44,14 +44,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
-
 				if (!sessionCookieToken) {
 					return ctx.json(null, {
 						status: 401,
 					});
 				}
-
-				const key = getRequestUniqueKey(ctx, sessionCookieToken);
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
@@ -147,6 +144,7 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 		//@ts-expect-error: By default since this request context comes from a router it'll have a `router` flag which force it to be a request object
 		_flag: undefined,
 	});
+
 	return session;
 };
 
