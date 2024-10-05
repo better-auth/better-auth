@@ -111,15 +111,9 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						return ctx.json({ status: true });
 					},
 					invalid: async () => {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 401,
-								body: {
-									message: "Invalid code",
-								},
-							},
-						);
+						throw new APIError("UNAUTHORIZED", {
+							message: "invalid two factor authentication",
+						});
 					},
 					session: {
 						id: session.id,

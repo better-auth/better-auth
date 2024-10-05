@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { Member } from "../schema";
+import { APIError } from "better-call";
 
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",
@@ -35,20 +36,14 @@ export const removeMember = createAuthEndpoint(
 			organizationId: orgId,
 		});
 		if (!member) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Member not found!",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Member not found!",
 			});
 		}
 		const role = ctx.context.roles[member.role];
 		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Role not found!",
 			});
 		}
 		const isLeaving =
@@ -58,11 +53,8 @@ export const removeMember = createAuthEndpoint(
 			isLeaving &&
 			member.role === (ctx.context.orgOptions?.creatorRole || "owner");
 		if (isOwnerLeaving) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "You cannot leave the organization as the owner",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "You cannot leave the organization as the owner",
 			});
 		}
 
@@ -72,11 +64,8 @@ export const removeMember = createAuthEndpoint(
 				member: ["delete"],
 			}).success;
 		if (!canDeleteMember) {
-			return ctx.json(null, {
-				body: {
-					message: "You are not allowed to delete this member",
-				},
-				status: 403,
+			throw new APIError("UNAUTHORIZED", {
+				message: "You are not allowed to delete this member",
 			});
 		}
 		let existing: Member | null = null;
@@ -89,11 +78,8 @@ export const removeMember = createAuthEndpoint(
 			existing = await adapter.findMemberById(ctx.body.memberIdOrEmail);
 		}
 		if (existing?.organizationId !== orgId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Member not found!",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Member not found!",
 			});
 		}
 		await adapter.deleteMember(existing.id);

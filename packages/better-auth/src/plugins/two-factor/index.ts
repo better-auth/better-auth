@@ -11,6 +11,7 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 import type { Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
+import { APIError } from "better-call";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const totp = totp2fa({
@@ -42,15 +43,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 400,
-								body: {
-									message: "Invalid password",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid password",
+						});
 					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
 					const encryptedSecret = symmetricEncrypt({
@@ -95,15 +90,9 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 400,
-								body: {
-									message: "Invalid password",
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid password",
+						});
 					}
 					await ctx.context.adapter.update({
 						model: "user",

@@ -5,6 +5,7 @@ import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import { APIError } from "better-call";
 
 export interface BackupCodeOptions {
 	/**
@@ -98,12 +99,9 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						ctx.context.secret,
 					);
 					if (!validate) {
-						return ctx.json(
-							{ status: false },
-							{
-								status: 401,
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid backup code",
+						});
 					}
 					return ctx.json({ status: true });
 				},

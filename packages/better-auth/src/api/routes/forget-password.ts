@@ -3,6 +3,7 @@ import { createJWT, parseJWT, type JWT } from "oslo/jwt";
 import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
+import { APIError } from "better-call";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -27,17 +28,14 @@ export const forgetPassword = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPasswordToken function to your auth config!",
 			);
-			return ctx.json(null, {
-				status: 400,
-				statusText: "RESET_PASSWORD_EMAIL_NOT_SENT",
-				body: {
-					message: "Reset password isn't enabled",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Reset password isn't enabled",
 			});
 		}
 		const { email } = ctx.body;
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
+			ctx.context.logger.error("Reset Password: User not found", { email });
 			//only on the server status is false for the client it's always true
 			//to avoid leaking information
 			return ctx.json(
@@ -129,19 +127,9 @@ export const resetPassword = createAuthEndpoint(
 	async (ctx) => {
 		const token = ctx.query?.currentURL.split("?token=")[1];
 		if (!token) {
-			return ctx.json(
-				{
-					error: "Invalid token",
-					data: null,
-				},
-				{
-					status: 400,
-					statusText: "INVALID_TOKEN",
-					body: {
-						message: "Invalid token",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Token not found",
+			});
 		}
 		const { newPassword } = ctx.body;
 		try {
@@ -175,19 +163,9 @@ export const resetPassword = createAuthEndpoint(
 				newPassword.length >
 					(ctx.context.options.emailAndPassword?.maxPasswordLength || 32)
 			) {
-				return ctx.json(
-					{
-						data: null,
-						error: "password is too short or too long",
-					},
-					{
-						status: 400,
-						statusText: "INVALID_PASSWORD_LENGTH",
-						body: {
-							message: "password is too short or too long",
-						},
-					},
-				);
+				throw new APIError("BAD_REQUEST", {
+					message: "Password is too short or too long",
+				});
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
 			const updatedUser = await ctx.context.internalAdapter.updatePassword(
@@ -195,12 +173,8 @@ export const resetPassword = createAuthEndpoint(
 				hashedPassword,
 			);
 			if (!updatedUser) {
-				return ctx.json(null, {
-					status: 400,
-					statusText: "USER_NOT_FOUND",
-					body: {
-						message: "User doesn't have a credential account",
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: "Failed to update password",
 				});
 			}
 			return ctx.json(
@@ -221,20 +195,10 @@ export const resetPassword = createAuthEndpoint(
 				},
 			);
 		} catch (e) {
-			console.log(e);
-			return ctx.json(
-				{
-					error: "Invalid token",
-					data: null,
-				},
-				{
-					status: 400,
-					statusText: "INVALID_TOKEN",
-					body: {
-						message: "Invalid token",
-					},
-				},
-			);
+			ctx.context.logger.error("Failed to reset password", e);
+			throw new APIError("BAD_REQUEST", {
+				message: "Failed to reset password",
+			});
 		}
 	},
 );

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
 import { setSessionCookie } from "../../utils/cookies";
+import { APIError } from "better-call";
 
 export const signUpEmail = createAuthEndpoint(
 	"/sign-up/email",
@@ -23,93 +24,37 @@ export const signUpEmail = createAuthEndpoint(
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.enabled) {
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Email and password is not enabled",
-					},
-				},
-				{
-					status: 400,
-					body: {
-						message: "Email and password is not enabled",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Email and password sign up is not enabled",
+			});
 		}
 		const { name, email, password, image } = ctx.body;
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Invalid email address",
-					},
-				},
-				{
-					status: 400,
-					body: {
-						message: "Invalid email address",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid email",
+			});
 		}
 
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (password.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Password is too short",
-					},
-				},
-				{
-					status: 400,
-					body: { message: "Password is too short" },
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Password is too short",
+			});
 		}
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 		if (password.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Password is too long",
-					},
-				},
-				{
-					status: 400,
-					body: { message: "Password is too long" },
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Password is too long",
+			});
 		}
 		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (dbUser?.user) {
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "User already exists",
-					},
-				},
-				{
-					status: 400,
-					body: {
-						message: "User already exists",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "User already exists",
+			});
 		}
 		const createdUser = await ctx.context.internalAdapter.createUser({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
@@ -121,21 +66,9 @@ export const signUpEmail = createAuthEndpoint(
 			updatedAt: new Date(),
 		});
 		if (!createdUser) {
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Could not create user",
-					},
-				},
-				{
-					status: 400,
-					body: {
-						message: "Could not create user",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Couldn't create user",
+			});
 		}
 		/**
 		 * Link the account to the user
@@ -153,21 +86,9 @@ export const signUpEmail = createAuthEndpoint(
 			ctx.request,
 		);
 		if (!session) {
-			return ctx.json(
-				{
-					user: null,
-					session: null,
-					error: {
-						message: "Could not create session",
-					},
-				},
-				{
-					status: 400,
-					body: {
-						message: "Could not create session",
-					},
-				},
-			);
+			throw new APIError("BAD_REQUEST", {
+				message: "Couldn't create session",
+			});
 		}
 		await setSessionCookie(ctx, session.id);
 		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {

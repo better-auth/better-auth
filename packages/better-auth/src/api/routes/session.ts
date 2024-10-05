@@ -2,7 +2,7 @@ import { APIError, type Context } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
-import type { Session, User } from "../../db/schema";
+import type { Session } from "../../db/schema";
 import { z } from "zod";
 import { getIp } from "../../utils/get-request-ip";
 import type {
@@ -205,16 +205,18 @@ export const revokeSession = createAuthEndpoint(
 		const id = ctx.body.id;
 		const findSession = await ctx.context.internalAdapter.findSession(id);
 		if (!findSession) {
-			return ctx.json(null, { status: 400 });
+			throw new APIError("BAD_REQUEST", {
+				message: "Session not found",
+			});
 		}
 		if (findSession.session.userId !== ctx.context.session.user.id) {
-			return ctx.json(null, { status: 403 });
+			throw new APIError("UNAUTHORIZED");
 		}
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {
 			ctx.context.logger.error(error);
-			return ctx.json(null, { status: 500 });
+			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
 			status: true,
@@ -238,7 +240,7 @@ export const revokeSessions = createAuthEndpoint(
 			);
 		} catch (error) {
 			ctx.context.logger.error(error);
-			return ctx.json(null, { status: 500 });
+			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
 			status: true,
