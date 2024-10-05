@@ -337,7 +337,7 @@ export const phoneNumber = (options?: {
 								message: "OTP expired",
 							});
 						}
-						throw new APIError("NOT_FOUND", {
+						throw new APIError("BAD_REQUEST", {
 							message: "OTP not found",
 						});
 					}
