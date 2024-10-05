@@ -3,7 +3,7 @@ export type * from "./models";
 export type * from "../init";
 export type * from "./plugins";
 export type * from "./helper";
-export type * from "./provider";
+export type * from "../social-providers/types";
 export type * from "./context";
 export type * from "./adapter";
 export * from "../client/types";

@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Facebook } from "arctic";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface FacebookProfile {
@@ -17,11 +17,7 @@ export interface FacebookProfile {
 		};
 	};
 }
-export interface FacebookOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
+export interface FacebookOptions extends ProviderOptions {}
 export const facebook = (options: FacebookOptions) => {
 	const facebookArctic = new Facebook(
 		options.clientId,
@@ -32,7 +28,7 @@ export const facebook = (options: FacebookOptions) => {
 		id: "facebook",
 		name: "Facebook",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scopes || ["email", "public_profile"];
+			const _scopes = options.scope || scopes || ["email", "public_profile"];
 			return facebookArctic.createAuthorizationURL(state, _scopes);
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {

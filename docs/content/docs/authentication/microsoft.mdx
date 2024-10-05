@@ -1,0 +1,55 @@
+---
+title: Microsoft
+description: Microsoft SSO
+---
+
+Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows your users to sign in and sign up to your application with their Microsoft account.
+
+
+<Steps>
+    <Step> 
+        ### Get your Microsoft credentials
+        To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and Client Secret using your Microsoft Entra ID dashboard account.
+
+        see the [Microsoft Entra ID documentation](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) for more information.
+    </Step>
+
+    <Step>
+    ### Configure the provider
+    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
+
+    ```ts title="auth.ts"   
+    import { betterAuth } from "better-auth"
+    import { google } from "better-auth/social-providers"
+
+    export const auth = await betterAuth({
+        socialProviders: { // [!code highlight]
+            google: { // [!code highlight]
+                clientId: process.env.MICROSOFT_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        }, // [!code highlight]
+    })
+    ```
+    </Step>
+</Steps>
+
+
+## Signin with Microsoft
+
+To signin with Microsoft, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `provider`: The provider to use. It should be set to `microsoft`.
+
+```ts title="client.ts"  /
+import { createAuthClient } from "better-auth/client"
+
+const client = createAuthClient()
+
+const signin = async () => {
+    const data = await client.signIn.social({
+        provider: "microsoft",
+        callbackURL: "/dashboard" //the url to redirect to after the signin
+    })
+}
+```

@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { GitHub } from "arctic";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { getRedirectURI } from "./utils";
 
 export interface GithubProfile {
@@ -52,14 +52,11 @@ export interface GithubProfile {
 	last_name: string;
 }
 
-export interface GithubOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
+export interface GithubOptions extends ProviderOptions {}
 export const github = ({
 	clientId,
 	clientSecret,
+	scope,
 	redirectURI,
 }: GithubOptions) => {
 	const githubArctic = new GitHub(
@@ -71,7 +68,7 @@ export const github = ({
 		id: "github",
 		name: "Github",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scopes || ["user:email"];
+			const _scopes = scope || scopes || ["user:email"];
 			return githubArctic.createAuthorizationURL(state, _scopes);
 		},
 		validateAuthorizationCode: async (state) => {

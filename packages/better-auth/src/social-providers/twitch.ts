@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Twitch } from "arctic";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface TwitchProfile {
@@ -22,12 +22,7 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export interface TwitchOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
-
+export interface TwitchOptions extends ProviderOptions {}
 export const twitch = (options: TwitchOptions) => {
 	const twitchArctic = new Twitch(
 		options.clientId,
@@ -38,7 +33,7 @@ export const twitch = (options: TwitchOptions) => {
 		id: "twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scopes || ["activity:write", "read"];
+			const _scopes = options.scope || scopes || ["activity:write", "read"];
 			return twitchArctic.createAuthorizationURL(state, _scopes);
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
