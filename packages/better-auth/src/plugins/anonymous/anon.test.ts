@@ -29,7 +29,7 @@ describe("anonymous", async () => {
 		const isAnonymous = anonUser.data?.user.isAnonymous;
 		const sessionId = anonUser.data?.session.id;
 		expect(userId).toBeDefined();
-		expect(email?.endsWith('@localhost')).toBeTruthy();
+		expect(email?.endsWith("@localhost")).toBeTruthy();
 		expect(isAnonymous).toBeTruthy();
 		expect(sessionId).toBeDefined();
 	});

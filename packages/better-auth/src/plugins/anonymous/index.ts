@@ -11,13 +11,11 @@ export interface AnonymousOptions {
 	 * for anonymous users in the database.
 	 * @default "localhost"
 	 */
-	emailDomainName?: string
+	emailDomainName?: string;
 }
 
 export const anonymous = (options?: AnonymousOptions) => {
-	const {
-		emailDomainName = "localhost",
-	} = options || {}
+	const { emailDomainName = "localhost" } = options || {};
 
 	return {
 		id: "anonymous",
