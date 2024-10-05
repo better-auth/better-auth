@@ -29,7 +29,6 @@ export default function Layout({ children }: { children: ReactNode }) {
 			>
 				<RootProvider>
 					<NavbarProvider>
-						<BetaNotice />
 						<Navbar />
 						{children}
 					</NavbarProvider>

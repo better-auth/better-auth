@@ -57,10 +57,10 @@ export const NavbarMobileBtn: React.FC = () => {
 	const { toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="flex pt-2 items-center">
+		<div className="flex pt-2 items-center ">
 			<MobileThemeToggle />
 			<button
-				className="text-muted-foreground overflow-hidden  px-2.5 block md:hidden"
+				className="text-muted-foreground overflow-hidden px-2.5 block md:hidden"
 				onClick={() => {
 					toggleNavbar();
 				}}
