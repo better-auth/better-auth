@@ -223,7 +223,9 @@ export const kyselyAdapter = (
 			const migrations = await compileMigrations();
 			return {
 				code: migrations,
-				fileName: `./better-auth_migrations/${new Date().toISOString()}.sql`,
+				fileName: `./better-auth_migrations/${new Date()
+					.toISOString()
+					.replace(/:/g, "-")}.sql`,
 			};
 		},
 	};
