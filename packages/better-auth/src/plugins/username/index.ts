@@ -123,17 +123,17 @@ export const username = () => {
 						//@ts-expect-error
 						_flag: undefined,
 					});
-					if (!res) {
+					if (res.error) {
 						return ctx.json(null, {
 							status: 400,
 							body: {
-								message: "Sign up failed",
+								message: res.error,
 								status: 400,
 							},
 						});
 					}
 					const updated = await ctx.context.internalAdapter.updateUserByEmail(
-						res.user.email,
+						res.user?.email,
 						{
 							username: ctx.body.username,
 						},
