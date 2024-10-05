@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/accordion";
 import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
 import { contents } from "./sidebar-content";
-import { ThemeToggle } from "./theme-toggler";
+import { MobileThemeToggle, ThemeToggle } from "./theme-toggler";
 
 interface NavbarMobileContextProps {
   isOpen: boolean;
@@ -57,14 +57,17 @@ export const NavbarMobileBtn: React.FC = () => {
   const { toggleNavbar } = useNavbarMobile();
 
   return (
-    <button
-      className="text-muted-foreground overflow-hidden  px-2.5 block md:hidden"
-      onClick={() => {
-        toggleNavbar();
-      }}
-    >
-      <Menu />
-    </button>
+    <div className="flex pt-2 items-center">
+      <MobileThemeToggle />
+      <button
+        className="text-muted-foreground overflow-hidden  px-2.5 block md:hidden"
+        onClick={() => {
+          toggleNavbar();
+        }}
+      >
+        <Menu />
+      </button>
+    </div>
   );
 };
 
@@ -72,7 +75,7 @@ export const NavbarMobile = () => {
   const { isOpen, toggleNavbar } = useNavbarMobile();
 
   return (
-    <div className="fixed top-[50px] pb-10 left-0 z-30 px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-black md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]">
+    <div className="fixed top-[50px]  left-0 z-30 px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-black md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]">
       <AnimatePresence>
         {isOpen && (
           <FadeIn
@@ -112,8 +115,6 @@ export const NavbarMobile = () => {
                 )}
               </Fragment>
             ))}
-            <Sun className="bg-white w-10 h-10" />
-            <ThemeToggle />
           </FadeIn>
         )}
       </AnimatePresence>
