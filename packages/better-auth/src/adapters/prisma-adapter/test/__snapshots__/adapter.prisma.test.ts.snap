@@ -19,6 +19,7 @@ model User {
   image         String?
   createdAt     DateTime
   updatedAt     DateTime
+  deletedAt     DateTime?
 
   @@unique([email])
   @@map("user")

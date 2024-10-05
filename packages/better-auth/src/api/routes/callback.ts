@@ -102,6 +102,10 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const userId = dbUser?.user.id;
 		if (dbUser) {
+			// check if user is deleted
+			if (dbUser.user.deletedAt) {
+				throw c.redirect(`${c.context.baseURL}/error?error=account_deleted`);
+			}
 			//check if user has already linked this provider
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,

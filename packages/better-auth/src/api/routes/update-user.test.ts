@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../utils/cookies";
+import type { User } from "../../types";
 
 describe("updateUser", async () => {
-	const { auth, client, testUser, sessionSetter, customFetchImpl } =
+	const { auth, client, testUser, sessionSetter, customFetchImpl, db } =
 		await getTestInstance();
 	const headers = new Headers();
 	const session = await client.signIn.email({
@@ -73,5 +72,26 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(sessionAttempt.data).toBeNull();
+	});
+
+	it("should delete the user", async () => {
+		const headers = new Headers();
+		const deleted = await client.user.delete({
+			password: testUser.password,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const deletedUser = await db.findOne<User>({
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+			model: "user",
+		});
+		expect(deletedUser?.deletedAt).not.toBeNull();
+		expect(deleted.data).toBe(null);
 	});
 });
