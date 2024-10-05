@@ -1,7 +1,13 @@
 "use client";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
-import { Fragment, createContext, useContext, useState } from "react";
+import {
+	Fragment,
+	createContext,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 import {
 	Accordion,
 	AccordionContent,
@@ -70,12 +76,24 @@ export const NavbarMobileBtn: React.FC = () => {
 export const NavbarMobile = () => {
 	const { isOpen, toggleNavbar } = useNavbarMobile();
 
+	useEffect(() => {
+		if (isOpen) {
+			document.body.classList.add("overflow-hidden");
+		} else {
+			document.body.classList.remove("overflow-hidden");
+		}
+
+		return () => {
+			document.body.classList.remove("overflow-hidden");
+		};
+	}, [isOpen]);
+
 	return (
 		<AnimatePresence>
 			{isOpen && (
 				<FadeIn
 					fromTopToBottom
-					className="absolute top-[57px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-[1000] p-5 divide-y overflow-y-auto"
+					className="bg-background h-[calc(100vh)] w-full z-[1000] p-5 divide-y overflow-y-auto "
 				>
 					{navMenu.map((menu, i) => (
 						<Fragment key={menu.name}>
