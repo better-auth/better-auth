@@ -112,8 +112,8 @@ export const github = (options: GithubOptions) => {
 			}
 			return {
 				user: {
-					id: profile.id,
-					name: profile.name,
+					id: profile.id.toString(),
+					name: profile.name || profile.login,
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified,
