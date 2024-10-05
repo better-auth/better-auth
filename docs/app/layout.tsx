@@ -2,12 +2,10 @@ import { Navbar } from "@/components/nav-bar";
 import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
 import type { ReactNode } from "react";
-import { NavbarMobile, NavbarProvider } from "@/components/nav-mobile";
+import { NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
-import { Banner } from "fumadocs-ui/components/banner";
-import Link from "next/link";
 import Loglib from "@loglib/tracker/react";
 import { BetaNotice } from "@/components/banner";
 
@@ -34,7 +32,6 @@ export default function Layout({ children }: { children: ReactNode }) {
 						<BetaNotice />
 						<Navbar />
 						{children}
-						<NavbarMobile />
 					</NavbarProvider>
 				</RootProvider>
 				<Loglib
