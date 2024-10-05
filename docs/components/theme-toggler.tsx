@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Moon, MoonIcon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -48,5 +48,31 @@ export function ThemeToggle() {
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
+	);
+}
+export function MobileThemeToggle() {
+	const { theme, setTheme } = useTheme();
+	return (
+		<div className="">
+			{theme === "dark" ? (
+				<Button
+					onClick={() => {
+						setTheme("light");
+					}}
+					variant={"ghost"}
+				>
+					<Sun className="w-4 h-4" />
+				</Button>
+			) : (
+				<Button
+					onClick={() => {
+						setTheme("dark");
+					}}
+					variant={"ghost"}
+				>
+					<MoonIcon className="w-4 h-4" />
+				</Button>
+			)}
+		</div>
 	);
 }
