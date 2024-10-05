@@ -117,8 +117,6 @@ export const github = (options: GithubOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified,
-					createdAt: new Date(),
-					updatedAt: new Date(),
 				},
 				data: profile,
 			};

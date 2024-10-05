@@ -23,53 +23,93 @@ export const signUpEmail = createAuthEndpoint(
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.enabled) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Email and password is not enabled",
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Email and password is not enabled",
+					},
 				},
-			});
+				{
+					status: 400,
+					body: {
+						message: "Email and password is not enabled",
+					},
+				},
+			);
 		}
 		const { name, email, password, image } = ctx.body;
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Invalid email address",
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Invalid email address",
+					},
 				},
-			});
+				{
+					status: 400,
+					body: {
+						message: "Invalid email address",
+					},
+				},
+			);
 		}
 
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (password.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too short" },
-			});
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Password is too short",
+					},
+				},
+				{
+					status: 400,
+					body: { message: "Password is too short" },
+				},
+			);
 		}
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 		if (password.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too long" },
-			});
-		}
-
-		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
-		/**
-		 * hash first to avoid timing attacks
-		 */
-		const hash = await ctx.context.password.hash(password);
-		if (dbUser?.user) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "User already exists",
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Password is too long",
+					},
 				},
-			});
+				{
+					status: 400,
+					body: { message: "Password is too long" },
+				},
+			);
+		}
+		const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+		if (dbUser?.user) {
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "User already exists",
+					},
+				},
+				{
+					status: 400,
+					body: {
+						message: "User already exists",
+					},
+				},
+			);
 		}
 		const createdUser = await ctx.context.internalAdapter.createUser({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
@@ -81,16 +121,26 @@ export const signUpEmail = createAuthEndpoint(
 			updatedAt: new Date(),
 		});
 		if (!createdUser) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Could not create user",
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Could not create user",
+					},
 				},
-			});
+				{
+					status: 400,
+					body: {
+						message: "Could not create user",
+					},
+				},
+			);
 		}
 		/**
 		 * Link the account to the user
 		 */
+		const hash = await ctx.context.password.hash(password);
 		await ctx.context.internalAdapter.linkAccount({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 			userId: createdUser.id,
@@ -103,12 +153,21 @@ export const signUpEmail = createAuthEndpoint(
 			ctx.request,
 		);
 		if (!session) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Could not create session",
+			return ctx.json(
+				{
+					user: null,
+					session: null,
+					error: {
+						message: "Could not create session",
+					},
 				},
-			});
+				{
+					status: 400,
+					body: {
+						message: "Could not create session",
+					},
+				},
+			);
 		}
 		await setSessionCookie(ctx, session.id);
 		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
@@ -131,6 +190,7 @@ export const signUpEmail = createAuthEndpoint(
 			{
 				user: createdUser,
 				session,
+				error: null,
 			},
 			{
 				body: ctx.body.callbackURL

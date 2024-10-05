@@ -170,6 +170,9 @@ importers:
       cmdk:
         specifier: 1.0.0
         version: 1.0.0(@types/react-dom@18.3.0)(@types/react@18.3.9)(react-dom@19.0.0-rc-7771d3a7-20240827)(react@19.0.0-rc-7771d3a7-20240827)
+      consola:
+        specifier: ^3.2.3
+        version: 3.2.3
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
