@@ -95,12 +95,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						if (callbackURL) {
 							throw ctx.redirect(`${callbackURL}?error=INVALID_TOKEN`);
 						}
-						return ctx.json(null, {
-							status: 400,
-							statusText: "INVALID_TOKEN",
-							body: {
-								message: "Invalid token",
-							},
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid token",
 						});
 					}
 					const schema = z.object({
@@ -114,12 +110,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						if (callbackURL) {
 							throw ctx.redirect(`${callbackURL}?error=USER_NOT_FOUND`);
 						}
-						return ctx.json(null, {
-							status: 400,
-							statusText: "USER_NOT_FOUND",
-							body: {
-								message: "User not found",
-							},
+						throw new APIError("BAD_REQUEST", {
+							message: "User not found",
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -130,12 +122,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						if (callbackURL) {
 							throw ctx.redirect(`${callbackURL}?error=SESSION_NOT_CREATED`);
 						}
-						return ctx.json(null, {
-							status: 400,
-							statusText: "SESSION NOT CREATED",
-							body: {
-								message: "Failed to create session",
-							},
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Unable to create session",
 						});
 					}
 					await setSessionCookie(ctx, session.id);

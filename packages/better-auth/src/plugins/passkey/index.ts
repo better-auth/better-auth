@@ -264,12 +264,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						ctx.context.secret,
 					);
 					if (!challengeId) {
-						return ctx.json(null, {
-							status: 400,
-							statusText: "No challenge found",
-							body: {
-								message: "No challenge found",
-							},
+						throw new APIError("BAD_REQUEST", {
+							message: "Challenge not found",
 						});
 					}
 
@@ -335,11 +331,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					} catch (e) {
 						console.log(e);
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: "Registration failed",
-							},
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to verify registration",
 						});
 					}
 				},
@@ -355,8 +348,8 @@ export const passkey = (options?: PasskeyOptions) => {
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
 					if (!origin) {
-						return ctx.json(null, {
-							status: 400,
+						throw new APIError("BAD_REQUEST", {
+							message: "origin missing",
 						});
 					}
 					const resp = ctx.body.response;
@@ -365,8 +358,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						ctx.context.secret,
 					);
 					if (!challengeId) {
-						return ctx.json(null, {
-							status: 400,
+						throw new APIError("BAD_REQUEST", {
+							message: "Challenge not found",
 						});
 					}
 
@@ -375,8 +368,8 @@ export const passkey = (options?: PasskeyOptions) => {
 							challengeId,
 						);
 					if (!data) {
-						return ctx.json(null, {
-							status: 400,
+						throw new APIError("BAD_REQUEST", {
+							message: "Challenge not found",
 						});
 					}
 					const { expectedChallenge, callbackURL } = JSON.parse(
@@ -392,11 +385,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						],
 					});
 					if (!passkey) {
-						return ctx.json(null, {
-							status: 401,
-							body: {
-								message: "Passkey not found",
-							},
+						throw new APIError("UNAUTHORIZED", {
+							message: "Passkey not found",
 						});
 					}
 					try {
@@ -418,11 +408,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 						const { verified } = verification;
 						if (!verified)
-							return ctx.json(null, {
-								status: 401,
-								body: {
-									message: "verification failed",
-								},
+							throw new APIError("UNAUTHORIZED", {
+								message: "Authentication failed",
 							});
 
 						await ctx.context.adapter.update<Passkey>({
@@ -442,11 +429,8 @@ export const passkey = (options?: PasskeyOptions) => {
 							ctx.request,
 						);
 						if (!s) {
-							return ctx.json(null, {
-								status: 500,
-								body: {
-									message: "Failed to create session",
-								},
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: "Unable to create session",
 							});
 						}
 						await setSessionCookie(ctx, s.id);
@@ -467,11 +451,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						);
 					} catch (e) {
 						ctx.context.logger.error(e);
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: "Authentication failed",
-							},
+						throw new APIError("BAD_REQUEST", {
+							message: "Failed to verify authentication",
 						});
 					}
 				},
