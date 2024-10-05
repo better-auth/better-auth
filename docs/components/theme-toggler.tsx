@@ -42,26 +42,17 @@ export function ThemeToggle() {
   );
 }
 export function MobileThemeToggle() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   return (
-    <div className="md:hidden">
+    <div className="block md:hidden">
       <Button
-        className="dark:hidden"
-        onClick={() => {
-          setTheme("light");
-        }}
-        variant={"ghost"}
+        variant="ghost"
+        size="icon"
+        onClick={() => setTheme(theme === "light" ? "dark" : "light")}
       >
-        <Sun className="w-4 h-4" />
-      </Button>
-      <Button
-        className="hidden dark:visible"
-        onClick={() => {
-          setTheme("dark");
-        }}
-        variant={"ghost"}
-      >
-        <MoonIcon className="w-4 h-4" />
+        <Sun className="h-4 w-4 dark:hidden" color="#000" />
+        <Moon className="hidden h-4 w-4 dark:block" />
+        <span className="sr-only">Toggle theme</span>
       </Button>
     </div>
   );
