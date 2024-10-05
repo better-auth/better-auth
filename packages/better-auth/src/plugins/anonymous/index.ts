@@ -15,7 +15,7 @@ export const anonymous = () => {
 				},
 				async (ctx) => {
 					const tempEmail =
-						"temporary-" + Date.now().toString() + "-better-auth@email.com";
+						"temporary-" + Date.now().toString() + "-better-auth@localhost";
 					const newUser = await ctx.context.internalAdapter.createUser({
 						id: generateId(),
 						email: tempEmail,
