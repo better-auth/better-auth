@@ -94,7 +94,7 @@ export default function Hero() {
 	return (
 		<section className="w-full mx-auto px-10 flex min-h-[85vh] py-16 items-center justify-center gap-20">
 			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
-				<div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
+				<div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12 py-2 lg:py-4">
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
