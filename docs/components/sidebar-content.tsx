@@ -435,6 +435,23 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Microsoft",
+				href: "/docs/authentication/microsoft",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M2 3h9v9H2zm9 19H2v-9h9zM21 3v9h-9V3zm0 19h-9v-9h9z"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Twitch",
 				href: "/docs/authentication/twitch",
 				icon: () => (

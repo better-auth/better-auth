@@ -1,7 +1,7 @@
 import type { Dialect, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProviderList } from "./provider";
+import type { OAuthProviderList } from "../social-providers/types";
 import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";

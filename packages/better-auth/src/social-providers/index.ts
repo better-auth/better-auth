@@ -4,6 +4,7 @@ import { discord } from "./discord";
 import { facebook } from "./facebook";
 import { github } from "./github";
 import { google } from "./google";
+import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
@@ -13,6 +14,7 @@ export const oAuthProviders = {
 	discord,
 	facebook,
 	github,
+	microsoft,
 	google,
 	spotify,
 	twitch,
@@ -35,9 +37,10 @@ export type SocialProviders = typeof oAuthProviders extends {
 export * from "./github";
 export * from "./google";
 export * from "./apple";
+export * from "./microsoft-entra-id";
 export * from "./discord";
 export * from "./spotify";
 export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
-export * from "../types/provider";
+export * from "./types";

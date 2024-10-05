@@ -1,6 +1,6 @@
 import type { User } from "../db/schema";
-import type { oAuthProviderList } from "../social-providers";
-import type { LiteralString } from "./helper";
+import type { oAuthProviderList } from ".";
+import type { LiteralString } from "../types/helper";
 import { OAuth2Tokens } from "arctic";
 
 export interface OAuthProvider<

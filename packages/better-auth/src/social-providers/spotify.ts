@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { Spotify } from "arctic";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface SpotifyProfile {
@@ -12,11 +12,7 @@ export interface SpotifyProfile {
 	}[];
 }
 
-export interface SpotifyOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
+export interface SpotifyOptions extends ProviderOptions {}
 
 export const spotify = (options: SpotifyOptions) => {
 	const spotifyArctic = new Spotify(
@@ -28,7 +24,7 @@ export const spotify = (options: SpotifyOptions) => {
 		id: "spotify",
 		name: "Spotify",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scopes || ["user-read-email"];
+			const _scopes = options.scope || scopes || ["user-read-email"];
 			return spotifyArctic.createAuthorizationURL(state, _scopes);
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {

@@ -88,5 +88,9 @@ export const auth = betterAuth({
 			clientId: process.env.DISCORD_CLIENT_ID || "",
 			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
 		},
+		microsoft: {
+			clientId: process.env.MICROSOFT_CLIENT_ID || "",
+			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
 	},
 });

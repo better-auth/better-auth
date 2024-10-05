@@ -1,5 +1,5 @@
 import { OAuth2Tokens } from "arctic";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { parseJWT } from "oslo/jwt";
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error/better-auth-error";
@@ -47,11 +47,7 @@ export interface AppleProfile {
 	name: string;
 }
 
-export interface AppleOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
+export interface AppleOptions extends ProviderOptions {}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -59,7 +55,7 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scope = scopes || ["email", "name", "openid"];
+			const _scope = options.scope || scopes || ["email", "name", "openid"];
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId

@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider } from ".";
+import type { OAuthProvider, ProviderOptions } from ".";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface DiscordProfile extends Record<string, any> {
@@ -74,18 +74,14 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export interface DiscordOptions {
-	clientId: string;
-	clientSecret: string;
-	redirectURI?: string;
-}
+export interface DiscordOptions extends ProviderOptions {}
 
 export const discord = (options: DiscordOptions) => {
 	return {
 		id: "discord",
 		name: "Discord",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scopes || ["identify", "email"];
+			const _scopes = options.scope || scopes || ["identify", "email"];
 			return new URL(
 				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
 					"+",
