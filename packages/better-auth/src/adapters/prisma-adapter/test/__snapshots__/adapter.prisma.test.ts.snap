@@ -81,6 +81,7 @@ model User {
   image                String?
   createdAt            DateTime
   updatedAt            DateTime
+  deletedAt            DateTime?
   twoFactorEnabled     Boolean?
   twoFactorSecret      String?
   twoFactorBackupCodes String?
