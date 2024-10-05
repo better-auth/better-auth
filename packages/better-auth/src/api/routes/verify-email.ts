@@ -2,6 +2,7 @@ import { TimeSpan } from "oslo";
 import { createJWT, validateJWT, type JWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
+import { APIError } from "better-call";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -43,12 +44,8 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Verification email isn't enabled. Pass `sendVerificationEmail` in `emailAndPassword` options to enable it.",
 			);
-			return ctx.json(null, {
-				status: 400,
-				statusText: "VERIFICATION_EMAIL_NOT_SENT",
-				body: {
-					message: "Verification email isn't enabled",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
 			});
 		}
 		const { email } = ctx.body;
