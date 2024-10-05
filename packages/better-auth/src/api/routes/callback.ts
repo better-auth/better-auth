@@ -69,7 +69,6 @@ export const callbackOAuth = createAuthEndpoint(
 			...user,
 			id,
 		});
-		console.log({ user, data });
 		const parsedState = parseState(c.query.state);
 		if (!parsedState.success) {
 			c.context.logger.error("Unable to parse state");

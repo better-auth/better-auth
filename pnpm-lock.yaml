@@ -149,12 +149,18 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.56.2
         version: 5.56.2(react@19.0.0-rc-7771d3a7-20240827)
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
       better-call:
         specifier: 0.2.3-beta.2
         version: 0.2.3-beta.2
+      better-sqlite3:
+        specifier: ^11.3.0
+        version: 11.3.0
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0

@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { GitHub } from "arctic";
 import type { OAuthProvider, ProviderOptions } from ".";
-import { getRedirectURI } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "./utils";
 
 export interface GithubProfile {
 	login: string;
@@ -53,26 +53,27 @@ export interface GithubProfile {
 }
 
 export interface GithubOptions extends ProviderOptions {}
-export const github = ({
-	clientId,
-	clientSecret,
-	scope,
-	redirectURI,
-}: GithubOptions) => {
+export const github = (options: GithubOptions) => {
 	const githubArctic = new GitHub(
-		clientId,
-		clientSecret,
-		getRedirectURI("github", redirectURI),
+		options.clientId,
+		options.clientSecret,
+		getRedirectURI("github", options.redirectURI),
 	);
+	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
 		name: "Github",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = scope || scopes || ["user:email"];
+			const _scopes = options.scope || scopes || ["user:email"];
 			return githubArctic.createAuthorizationURL(state, _scopes);
 		},
-		validateAuthorizationCode: async (state) => {
-			return await githubArctic.validateAuthorizationCode(state);
+		validateAuthorizationCode: async (code, _, redirect) => {
+			return validateAuthorizationCode({
+				code,
+				redirectURI: options.redirectURI || getRedirectURI("google", redirect),
+				options,
+				tokenEndpoint,
+			});
 		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<GithubProfile>(
