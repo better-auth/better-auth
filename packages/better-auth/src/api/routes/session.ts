@@ -139,7 +139,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	);
 
 export const getSessionFromCtx = async (ctx: Context<any, any>) => {
-	//@ts-expect-error
+	//@ts-ignore
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",
