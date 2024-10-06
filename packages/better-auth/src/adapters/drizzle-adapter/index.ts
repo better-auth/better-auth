@@ -90,16 +90,14 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
-			const query = db.insert(schemaModel).values(val);
-			if (databaseType !== "mysql") return (await query.returning())[0];
+			const mutation = db.insert(schemaModel).values(val);
+			if (databaseType !== "mysql") return (await mutation.returning())[0];
 
-			//  `$returningId` is returning an empty array. This could be due to the additional `image` and `emailVerified` fields being inserted as values - the schema I am testing with does not include these fields. The 'core' schema docs may need to be updated to reflect this.
-
-			const { id } = (await query.$returningId())[0];
+			await mutation;
 			const res = await db
 				.select()
 				.from(schemaModel)
-				.where(eq(schemaModel.id, id));
+				.where(eq(schemaModel.id, (data.data as { id: string }).id));
 			return res[0];
 		},
 		async findOne(data) {
@@ -158,17 +156,17 @@ export const drizzleAdapter = (
 				usePlural: options.usePlural,
 			});
 			const wheres = whereConvertor(where, schemaModel);
-            const query = db
-            .update(schemaModel)
-            .set(update)
-            .where(...wheres);
-            if (databaseType !== "mysql") return (await query.returning())[0];
-            
-			const { id } = (await query.$returningId())[0];
+			const mutation = db
+				.update(schemaModel)
+				.set(update)
+				.where(...wheres);
+			if (databaseType !== "mysql") return (await mutation.returning())[0];
+
+			await mutation;
 			const res = await db
 				.select()
 				.from(schemaModel)
-				.where(eq(schemaModel.id, id));
+				.where(eq(schemaModel.id, (data.update as { id: string }).id));
 			return res[0];
 		},
 		async delete(data) {
