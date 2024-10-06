@@ -13,15 +13,20 @@ export function getSchema(config: BetterAuthOptions) {
 	> = {};
 	for (const key in tables) {
 		const table = tables[key];
+		const fields = table.fields;
+		let actualFields: Record<string, FieldAttribute> = {};
+		Object.entries(fields).forEach(([key, field]) => {
+			actualFields[field.fieldName || key] = field;
+		});
 		if (schema[table.tableName]) {
 			schema[table.tableName].fields = {
 				...schema[table.tableName].fields,
-				...table.fields,
+				...actualFields,
 			};
 			continue;
 		}
 		schema[table.tableName] = {
-			fields: table.fields,
+			fields: actualFields,
 			order: table.order || Infinity,
 		};
 	}

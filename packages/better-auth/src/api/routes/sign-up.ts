@@ -65,6 +65,7 @@ export const signUpEmail = createAuthEndpoint(
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		});
+
 		if (!createdUser) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Couldn't create user",
@@ -73,6 +74,7 @@ export const signUpEmail = createAuthEndpoint(
 		/**
 		 * Link the account to the user
 		 */
+
 		const hash = await ctx.context.password.hash(password);
 		await ctx.context.internalAdapter.linkAccount({
 			id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),

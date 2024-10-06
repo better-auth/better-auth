@@ -123,7 +123,7 @@ export const createInternalAdapter = (
 				model: tables.session.tableName,
 				where: [
 					{
-						field: "userId",
+						field: tables.session.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 				],
@@ -135,7 +135,7 @@ export const createInternalAdapter = (
 				where: [
 					{
 						value: email.toLowerCase(),
-						field: "email",
+						field: tables.user.fields.email.fieldName || "email",
 					},
 				],
 			});
@@ -145,7 +145,7 @@ export const createInternalAdapter = (
 				where: [
 					{
 						value: user.id,
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 					},
 				],
 			});
@@ -218,7 +218,7 @@ export const createInternalAdapter = (
 				model: tables.account.tableName,
 				where: [
 					{
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 				],
@@ -248,7 +248,8 @@ export const createInternalAdapter = (
 				model: tables.verification.tableName,
 				where: [
 					{
-						field: "identifier",
+						field:
+							tables.verification.fields.identifier.fieldName || "identifier",
 						value: identifier,
 					},
 				],
