@@ -6,6 +6,7 @@ import { phoneNumberClient } from "./client";
 
 describe("phone-number", async (it) => {
 	let otp = "";
+
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
@@ -146,5 +147,42 @@ describe("phone-number", async (it) => {
 			code: otp,
 		});
 		expect(res.error?.status).toBe(400);
+	});
+
+	it("should work with custom config", async () => {
+		let otpCode = "";
+		const { auth } = await getTestInstance({
+			plugins: [
+				phoneNumber({
+					otp: {
+						sendOTPonSignUp: true,
+						otpLength: 4,
+						async sendOTP(_, code) {
+							otpCode = code;
+						},
+						expiresIn: 120,
+					},
+				}),
+			],
+		});
+		await auth.api.signUpPhoneNumber({
+			body: {
+				email: "test@email.com",
+				phoneNumber: "+25120201212",
+				password: "password",
+				name: "test",
+			},
+		});
+
+		expect(otpCode).toHaveLength(4);
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(1000 * 60 * 2);
+		const res = await auth.api.verifyPhoneNumber({
+			body: {
+				phoneNumber: "+25120201212",
+				code: otpCode,
+			},
+		});
+		expect(res.user);
 	});
 });

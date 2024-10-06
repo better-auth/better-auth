@@ -175,22 +175,9 @@ export const phoneNumber = (options?: {
 						options?.phoneNumberValidator &&
 						!options.phoneNumberValidator(ctx.body.phoneNumber)
 					) {
-						return ctx.json(
-							{
-								user: null,
-								session: null,
-								error: {
-									message: "Invalid phone number",
-								},
-							},
-							{
-								status: 400,
-								body: {
-									message: "Invalid phone number",
-									status: 400,
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid phone number",
+						});
 					}
 
 					const existing = await ctx.context.adapter.findOne<User>({
@@ -203,22 +190,9 @@ export const phoneNumber = (options?: {
 						],
 					});
 					if (existing) {
-						return ctx.json(
-							{
-								user: null,
-								session: null,
-								error: {
-									message: "Phone number already exists",
-								},
-							},
-							{
-								status: 400,
-								body: {
-									message: "Phone number already exists",
-									status: 400,
-								},
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Phone number already exists",
+						});
 					}
 					try {
 						const res = await signUpEmail({
@@ -361,9 +335,12 @@ export const phoneNumber = (options?: {
 							message: "User with phone number not found",
 						});
 					}
-					await ctx.context.internalAdapter.updateUser(user.id, {
-						[opts.phoneNumberVerified]: true,
-					});
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							[opts.phoneNumberVerified]: true,
+						},
+					);
 					if (options?.enableAutoSignIn) {
 						const session = await getSessionFromCtx(ctx);
 						if (!session) {
@@ -372,24 +349,21 @@ export const phoneNumber = (options?: {
 								ctx.request,
 							);
 							if (!session) {
-								return ctx.json(null, {
-									status: 500,
-									body: {
-										message: "Failed to create session",
-										status: 500,
-									},
+								throw new APIError("INTERNAL_SERVER_ERROR", {
+									message: "Failed to create session",
 								});
 							}
 							await setSessionCookie(ctx, session.id);
 							return ctx.json({
-								user,
+								user: updatedUser,
 								session,
 							});
 						}
 					}
 
 					return ctx.json({
-						status: true,
+						user: updatedUser,
+						session: null,
 					});
 				},
 			),
