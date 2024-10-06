@@ -64,4 +64,6 @@ describe("db", async () => {
 		expect(res.data?.user.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
+
+	it("should work with custom field names", async () => {});
 });

@@ -239,6 +239,10 @@ export interface BetterAuthOptions {
 		 */
 		tableName?: string;
 		/**
+		 * Custom field names for the rate limit table
+		 */
+		fields?: Record<keyof RateLimit, string>;
+		/**
 		 * custom storage configuration.
 		 *
 		 * NOTE: If custom storage is used storage
