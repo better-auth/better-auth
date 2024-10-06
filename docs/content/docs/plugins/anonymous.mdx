@@ -83,6 +83,23 @@ const user = await client.anonymous.linkAccount({
 })
 ```
 
+## Options
+
+- `emailDomainName`: The domain name to use when generating an email address for anonymous users. Defaults to the domain name of the current site.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = await betterAuth({
+    plugins: [
+        anonymous({
+            emailDomainName: "example.com"
+        })
+    ]
+})
+```
+
+
 ## Schema
 
 The anonymous plugin requires an additional field in the user table:

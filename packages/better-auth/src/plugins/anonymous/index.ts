@@ -8,9 +8,9 @@ import { getOrigin } from "../../utils/base-url";
 
 export interface AnonymousOptions {
 	/**
-	 * Configure the domain name of the temporary email address
-	 * for anonymous users in the database.
-	 * @default "localhost"
+	 * Configure the domain name of the temporary email
+	 * address for anonymous users in the database.
+	 * @default "baseURL"
 	 */
 	emailDomainName?: string;
 }
