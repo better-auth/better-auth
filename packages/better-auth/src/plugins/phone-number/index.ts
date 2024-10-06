@@ -355,14 +355,14 @@ export const phoneNumber = (options?: {
 							}
 							await setSessionCookie(ctx, session.id);
 							return ctx.json({
-								user: updatedUser,
+								user: updatedUser as UserWithPhoneNumber,
 								session,
 							});
 						}
 					}
 
 					return ctx.json({
-						user: updatedUser,
+						user: updatedUser as UserWithPhoneNumber,
 						session: null,
 					});
 				},
@@ -403,7 +403,7 @@ export const phoneNumber = (options?: {
 						},
 					);
 					return ctx.json({
-						user,
+						user: user as UserWithPhoneNumber,
 					});
 				},
 			),

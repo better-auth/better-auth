@@ -1,9 +1,4 @@
-import {
-	APIError,
-	type Context,
-	type Endpoint,
-	createRouter,
-} from "better-call";
+import { APIError, type Endpoint, createRouter } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";

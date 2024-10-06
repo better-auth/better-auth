@@ -183,6 +183,6 @@ describe("phone-number", async (it) => {
 				code: otpCode,
 			},
 		});
-		expect(res.user);
+		expect(res.user.phoneNumberVerified).toBe(true);
 	});
 });
