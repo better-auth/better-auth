@@ -9,11 +9,14 @@ import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import Database from "better-sqlite3";
+
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 export const auth = betterAuth({
-	database: new Database("better-auth.db"),
+	database: new LibsqlDialect({
+		url: process.env.TURSO_DATABASE_URL || "",
+		authToken: process.env.TURSO_AUTH_TOKEN || "",
+	}),
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword(url, user) {
