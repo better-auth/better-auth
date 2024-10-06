@@ -197,11 +197,10 @@ export const phoneNumber = (options?: {
 					try {
 						const res = await signUpEmail({
 							...ctx,
-							//@ts-expect-error
 							options: {
 								...ctx.context.options,
 							},
-							_flag: undefined,
+							_flag: "json",
 						});
 
 						if (options?.otp?.sendOTPonSignUp) {

@@ -1512,8 +1512,8 @@ importers:
         specifier: 2.0.0-next.9
         version: 2.0.0-next.9
       better-call:
-        specifier: 0.2.3-beta.10
-        version: 0.2.3-beta.10
+        specifier: 0.2.5-beta.3
+        version: 0.2.5-beta.3
       c12:
         specifier: ^1.11.2
         version: 1.11.2(magicast@0.3.5)
@@ -13533,8 +13533,8 @@ packages:
     dependencies:
       safe-buffer: 5.1.2
 
-  /better-call@0.2.3-beta.10:
-    resolution: {integrity: sha512-yIb0lL6/XNOFEEon28wLdjDy/4oMKThFFt/5Tzz7xcwqqh++FwiLFIDwgVFP9pZYT4ytn6GdqQGQlFMe6ugaVg==}
+  /better-call@0.2.3-beta.2:
+    resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
     dependencies:
       '@better-fetch/fetch': 1.1.9
       '@types/set-cookie-parser': 2.4.10
@@ -13543,8 +13543,8 @@ packages:
       typescript: 5.6.2
     dev: false
 
-  /better-call@0.2.3-beta.2:
-    resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
+  /better-call@0.2.5-beta.3:
+    resolution: {integrity: sha512-UqOOQ8pQItZsznvS78Hiu5gqkz7e+T/UaXwveVAuiJz/MOevzMp/lcuo19J7ltN1IiZg7aoqNbuWad+CD/uE2A==}
     dependencies:
       '@better-fetch/fetch': 1.1.9
       '@types/set-cookie-parser': 2.4.10
