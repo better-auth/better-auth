@@ -31,9 +31,29 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
-		createUser: async (user: User & Record<string, any>) => {
-			const createdUser = await createWithHooks(user, "user");
-			return createdUser;
+		createUser: async <T>(
+			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
+				Partial<User> &
+				Record<string, any>,
+		) => {
+			const createdUser = await createWithHooks(
+				{
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					emailVerified: false,
+					...user,
+				},
+				"user",
+			);
+			return createdUser as T & User;
+		},
+		listUsers: async (limit?: number, offset?: number) => {
+			const users = await adapter.findMany<User>({
+				model: tables.user.tableName,
+				limit,
+				offset,
+			});
+			return users;
 		},
 		deleteUser: async (userId: string) => {
 			await adapter.delete<User>({
@@ -166,11 +186,19 @@ export const createInternalAdapter = (
 			});
 			return user;
 		},
-		linkAccount: async (account: Account) => {
-			const _account = await createWithHooks(account, "account");
+		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
+			const _account = await createWithHooks(
+				{
+					...account,
+				},
+				"account",
+			);
 			return _account;
 		},
-		updateUser: async (userId: string, data: Partial<User>) => {
+		updateUser: async (
+			userId: string,
+			data: Partial<User> & Record<string, any>,
+		) => {
 			const user = await updateWithHooks<User>(
 				data,
 				[

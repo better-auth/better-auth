@@ -127,7 +127,7 @@ export const drizzleAdapter = (
 			else return null;
 		},
 		async findMany(data) {
-			const { model, where } = data;
+			const { model, where, limit, offset } = data;
 
 			const schemaModel = getSchema(model, {
 				schema,
@@ -140,6 +140,8 @@ export const drizzleAdapter = (
 			const res = await db
 				.select()
 				.from(schemaModel)
+				.limit(limit || 100)
+				.offset(offset || 0)
 				.where(...wheres);
 			return res;
 		},

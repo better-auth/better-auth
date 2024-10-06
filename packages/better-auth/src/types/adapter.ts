@@ -30,6 +30,8 @@ export interface Adapter {
 	findMany: <T>(data: {
 		model: string;
 		where?: Where[];
+		limit?: number;
+		offset?: number;
 	}) => Promise<T[]>;
 	update: <T>(data: {
 		model: string;
