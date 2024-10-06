@@ -42,3 +42,8 @@ export function getBaseURL(url?: string, path?: string) {
 	}
 	return undefined;
 }
+
+export function getOrigin(url: string) {
+	const parsedUrl = new URL(url);
+	return parsedUrl.origin.replace("http://", "").replace("https://", "");
+}
