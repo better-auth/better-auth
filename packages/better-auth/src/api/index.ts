@@ -254,3 +254,4 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 export * from "./routes";
 export * from "./middlewares";
 export * from "./call";
+export { APIError } from "better-call";

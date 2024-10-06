@@ -1,17 +1,19 @@
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	organization,
+	passkey,
+	phoneNumber,
+	twoFactor,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-
+import Database from "better-sqlite3";
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 export const auth = betterAuth({
-	database: new LibsqlDialect({
-		url: process.env.TURSO_DATABASE_URL || "",
-		authToken: process.env.TURSO_AUTH_TOKEN || "",
-	}),
+	database: new Database("better-auth.db"),
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword(url, user) {
@@ -27,6 +29,7 @@ export const auth = betterAuth({
 		},
 		sendEmailVerificationOnSignUp: true,
 		async sendVerificationEmail(email, url) {
+			console.log("Sending verification email to", email);
 			const res = await resend.emails.send({
 				from,
 				to: to || email,
@@ -37,6 +40,14 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
+		phoneNumber({
+			otp: {
+				sendOTP(phoneNumber, code) {
+					console.log(`Sending OTP to ${phoneNumber}: ${code}`);
+				},
+				sendOTPonSignUp: true,
+			},
+		}),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({

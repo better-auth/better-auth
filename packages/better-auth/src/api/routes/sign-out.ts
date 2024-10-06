@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../utils/cookies";
+import { APIError } from "better-call";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
@@ -18,7 +19,9 @@ export const signOut = createAuthEndpoint(
 			ctx.context.secret,
 		);
 		if (!sessionCookieToken) {
-			return ctx.json(null);
+			throw new APIError("BAD_REQUEST", {
+				message: "Session not found",
+			});
 		}
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);

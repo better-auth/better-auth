@@ -128,7 +128,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(wrongPerson.error?.status).toBe(400);
+		expect(wrongPerson.error?.status).toBe(403);
 
 		const invitation = await client.organization.acceptInvitation({
 			invitationId: invite.data.id,

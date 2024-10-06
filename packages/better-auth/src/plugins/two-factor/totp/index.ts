@@ -112,7 +112,7 @@ export const totp2fa = (options: TOTPOptions) => {
 			}
 			const totp = new TOTPController(opts);
 			const secret = Buffer.from(
-				await symmetricDecrypt({
+				symmetricDecrypt({
 					key: ctx.context.secret,
 					data: ctx.context.session.user.twoFactorSecret,
 				}),

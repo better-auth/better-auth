@@ -57,10 +57,10 @@ export const NavbarMobileBtn: React.FC = () => {
 	const { toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="flex pt-2 items-center">
+		<div className="flex items-center ">
 			<MobileThemeToggle />
 			<button
-				className="text-muted-foreground overflow-hidden  px-2.5 block md:hidden"
+				className="text-muted-foreground overflow-hidden px-2.5 block md:hidden"
 				onClick={() => {
 					toggleNavbar();
 				}}
@@ -75,7 +75,7 @@ export const NavbarMobile = () => {
 	const { isOpen, toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="fixed top-[50px]  left-0 z-30 px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-black md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]">
+		<div className="fixed top-[50px] z-40 left-0  px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-transparent md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]">
 			<AnimatePresence>
 				{isOpen && (
 					<FadeIn

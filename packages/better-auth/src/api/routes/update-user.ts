@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { setSessionCookie } from "../../utils/cookies";
 import { sessionMiddleware } from "./session";
+import { APIError } from "better-call";
 
 export const updateUser = createAuthEndpoint(
 	"/user/update",
@@ -58,9 +59,8 @@ export const changePassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too short" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Password is too short",
 			});
 		}
 
@@ -68,9 +68,8 @@ export const changePassword = createAuthEndpoint(
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too long" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Password too long",
 			});
 		}
 
@@ -81,9 +80,8 @@ export const changePassword = createAuthEndpoint(
 			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "User does not have a password" },
+			throw new APIError("BAD_REQUEST", {
+				message: "User does not have a password",
 			});
 		}
 		const passwordHash = await ctx.context.password.hash(newPassword);
@@ -92,9 +90,8 @@ export const changePassword = createAuthEndpoint(
 			currentPassword,
 		);
 		if (!verify) {
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Invalid password" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Incorrect password",
 			});
 		}
 		await ctx.context.internalAdapter.updateAccount(account.id, {
@@ -107,9 +104,8 @@ export const changePassword = createAuthEndpoint(
 				ctx.headers,
 			);
 			if (!newSession) {
-				return ctx.json(null, {
-					status: 500,
-					body: { message: "Failed to create session" },
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Unable to create session",
 				});
 			}
 			// set the new session cookie
@@ -138,9 +134,8 @@ export const setPassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too short" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Password is too short",
 			});
 		}
 
@@ -148,9 +143,8 @@ export const setPassword = createAuthEndpoint(
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Password is too long" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Password too long",
 			});
 		}
 
@@ -171,9 +165,8 @@ export const setPassword = createAuthEndpoint(
 			});
 			return ctx.json(session.user);
 		}
-		return ctx.json(null, {
-			status: 400,
-			body: { message: "User already has a password" },
+		throw new APIError("BAD_REQUEST", {
+			message: "user already has a password",
 		});
 	},
 );
@@ -197,9 +190,8 @@ export const deleteUser = createAuthEndpoint(
 			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "User does not have a password" },
+			throw new APIError("BAD_REQUEST", {
+				message: "User does not have a password",
 			});
 		}
 		const verify = await ctx.context.password.verify(
@@ -207,9 +199,8 @@ export const deleteUser = createAuthEndpoint(
 			password,
 		);
 		if (!verify) {
-			return ctx.json(null, {
-				status: 400,
-				body: { message: "Invalid password" },
+			throw new APIError("BAD_REQUEST", {
+				message: "Incorrect password",
 			});
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);

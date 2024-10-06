@@ -10,13 +10,7 @@ import { getDate } from "../../utils/date";
 import { logger } from "../../utils/logger";
 import { setSessionCookie } from "../../utils/cookies";
 
-interface OTP {
-	code: string;
-	phoneNumber: string;
-	createdAt: Date;
-}
-
-interface UserWithPhoneNumber extends User {
+export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
 	phoneNumberVerified: boolean;
 }
@@ -46,6 +40,12 @@ export const phoneNumber = (options?: {
 		expiresIn?: number;
 	};
 	enableAutoSignIn?: boolean;
+	/**
+	 * Function to validate phone number
+	 *
+	 * by default any string is accepted
+	 */
+	phoneNumberValidator?: (phoneNumber: string) => boolean;
 }) => {
 	const opts = {
 		phoneNumber: "phoneNumber",
@@ -171,61 +171,115 @@ export const phoneNumber = (options?: {
 					}),
 				},
 				async (ctx) => {
-					const res = await signUpEmail({
-						...ctx,
-						//@ts-expect-error
-						_flag: undefined,
-					});
-					if (!res) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: "Sign up failed",
-								status: 400,
-							},
-						});
-					}
-					if (options?.otp?.sendOTPonSignUp) {
-						if (!options.otp.sendOTP) {
-							logger.warn("sendOTP not implemented");
-							throw new APIError("NOT_IMPLEMENTED", {
-								message: "sendOTP not implemented",
-							});
-						}
-						const code = generateOTP(options?.otp?.otpLength || 6);
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: code,
-							identifier: ctx.body.phoneNumber,
-							expiresAt: getDate(opts.otp.expiresIn, "sec"),
-						});
-						await options.otp.sendOTP(ctx.body.phoneNumber, code);
-					}
-					const updated = await ctx.context.internalAdapter.updateUserByEmail(
-						res.user.email,
-						{
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-						},
-					);
-
-					if (ctx.body.callbackURL) {
+					if (
+						options?.phoneNumberValidator &&
+						!options.phoneNumberValidator(ctx.body.phoneNumber)
+					) {
 						return ctx.json(
 							{
-								user: updated,
-								session: res.session,
+								user: null,
+								session: null,
+								error: {
+									message: "Invalid phone number",
+								},
 							},
 							{
+								status: 400,
 								body: {
-									url: ctx.body.callbackURL,
-									redirect: true,
-									...res,
+									message: "Invalid phone number",
+									status: 400,
 								},
 							},
 						);
 					}
-					return ctx.json({
-						user: updated,
-						session: res.session,
+
+					const existing = await ctx.context.adapter.findOne<User>({
+						model: ctx.context.tables.user.tableName,
+						where: [
+							{
+								field: opts.phoneNumber,
+								value: ctx.body.phoneNumber,
+							},
+						],
 					});
+					if (existing) {
+						return ctx.json(
+							{
+								user: null,
+								session: null,
+								error: {
+									message: "Phone number already exists",
+								},
+							},
+							{
+								status: 400,
+								body: {
+									message: "Phone number already exists",
+									status: 400,
+								},
+							},
+						);
+					}
+					try {
+						const res = await signUpEmail({
+							...ctx,
+							//@ts-expect-error
+							options: {
+								...ctx.context.options,
+							},
+							_flag: undefined,
+						});
+
+						if (options?.otp?.sendOTPonSignUp) {
+							if (!options.otp.sendOTP) {
+								logger.warn("sendOTP not implemented");
+								throw new APIError("NOT_IMPLEMENTED", {
+									message: "sendOTP not implemented",
+								});
+							}
+							const code = generateOTP(options?.otp?.otpLength || 6);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: code,
+								identifier: ctx.body.phoneNumber,
+								expiresAt: getDate(opts.otp.expiresIn, "sec"),
+							});
+							await options.otp.sendOTP(ctx.body.phoneNumber, code);
+						}
+
+						const updated = await ctx.context.internalAdapter.updateUserByEmail(
+							res.user.email,
+							{
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+							},
+						);
+
+						if (ctx.body.callbackURL) {
+							return ctx.json(
+								{
+									user: updated,
+									session: res.session,
+								},
+								{
+									body: {
+										url: ctx.body.callbackURL,
+										redirect: true,
+										...res,
+									},
+								},
+							);
+						}
+						return ctx.json({
+							user: updated,
+							session: res.session,
+						});
+					} catch (e) {
+						if (e instanceof APIError) {
+							throw e;
+						}
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to create user",
+						});
+					}
 				},
 			),
 			sendVerificationCode: createAuthEndpoint(
@@ -279,31 +333,18 @@ export const phoneNumber = (options?: {
 					if (!otp || otp.expiresAt < new Date()) {
 						if (otp && otp.expiresAt < new Date()) {
 							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+							throw new APIError("BAD_REQUEST", {
+								message: "OTP expired",
+							});
 						}
-						return ctx.json(
-							{
-								status: false,
-							},
-							{
-								body: {
-									message: "Invalid code",
-								},
-								status: 400,
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "OTP not found",
+						});
 					}
 					if (otp.value !== ctx.body.code) {
-						return ctx.json(
-							{
-								status: false,
-							},
-							{
-								body: {
-									message: "Invalid code",
-								},
-								status: 400,
-							},
-						);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid OTP",
+						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 					const user = await ctx.context.adapter.findOne<User>({

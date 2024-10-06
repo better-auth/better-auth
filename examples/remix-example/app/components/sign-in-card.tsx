@@ -18,6 +18,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { signIn } from "~/lib/auth-client";
+import { PasswordInput } from "./ui/password-input";
 
 export default function SignInCard() {
 	const [email, setEmail] = useState("");
@@ -58,13 +59,13 @@ export default function SignInCard() {
 								Forgot your password?
 							</Link>
 						</div>
-						{/* <PasswordInput
+						<PasswordInput
 							id="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
 							autoComplete="password"
 							placeholder="Password"
-						/> */}
+						/>
 					</div>
 					<div className="flex items-center gap-2">
 						<Checkbox
