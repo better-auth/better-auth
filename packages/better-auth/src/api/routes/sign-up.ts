@@ -90,7 +90,7 @@ export const signUpEmail = createAuthEndpoint(
 				message: "Couldn't create session",
 			});
 		}
-		await setSessionCookie(ctx, session.id);
+		
 		if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
@@ -101,12 +101,18 @@ export const signUpEmail = createAuthEndpoint(
 			}/verify-email?token=${token}&callbackURL=${
 				ctx.body.callbackURL || ctx.query?.currentURL || "/"
 			}`;
+			
 			await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
 				createdUser.email,
 				url,
 				token,
 			);
+
+			session = null;
+		} else {
+			await setSessionCookie(ctx, session.id);
 		}
+		
 		return ctx.json(
 			{
 				user: createdUser,
