@@ -1,4 +1,4 @@
-import type { Dialect, PostgresPool } from "kysely";
+import type { Dialect, Kysely, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "../social-providers/types";
@@ -6,6 +6,7 @@ import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
+import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 
 export interface BetterAuthOptions {
 	/**
@@ -65,7 +66,21 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| BetterSqlite3Database
 		| Dialect
-		| Adapter;
+		| {
+				dialect: Dialect;
+				type: KyselyDatabaseType;
+		  }
+		| Adapter
+		| {
+				/**
+				 * Kysely instance
+				 */
+				db: Kysely<any>;
+				/**
+				 * Database type between postgres, mysql and sqlite
+				 */
+				type: KyselyDatabaseType;
+		  };
 	/**
 	 * Email and password authentication
 	 */
