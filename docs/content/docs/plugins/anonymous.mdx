@@ -106,6 +106,6 @@ The anonymous plugin requires an additional field in the user table:
 
 <DatabaseTable
     fields={[
-        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous." },
+        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous.", isOptional: true },
     ]}
 />
