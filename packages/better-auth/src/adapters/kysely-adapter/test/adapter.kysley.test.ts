@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { kyselyAdapter } from "..";
 import { Kysely, SqliteDialect } from "kysely";
+import { getTestInstance } from "../../../test-utils/test-instance";
 
 describe("adapter test", async () => {
 	const database = new Database(path.join(__dirname, "test.db"));
@@ -44,5 +45,14 @@ describe("adapter test", async () => {
 
 	await runAdapterTest({
 		adapter,
+	});
+
+	it("should support kysely instance", async () => {
+		const { auth } = await getTestInstance({
+			database: {
+				db,
+				type: "sqlite",
+			},
+		});
 	});
 });
