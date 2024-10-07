@@ -76,9 +76,7 @@ The Prisma adapter expects a prisma client instance and a provider key that spec
 import { betterAuth } from "better-auth";
 import { PrismaAdapter } from "better-auth/adapters/prisma";
 
-const prisma = new PrismaAdapter({
-        prisma: prismaClient
-})
+const prisma = new PrismaClient();
 
 export const auth = await betterAuth({
     database: prismaAdapter(prisma, {
