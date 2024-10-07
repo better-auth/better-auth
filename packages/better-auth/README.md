@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source srcset="./banner-dark.png" media="(prefers-color-scheme: dark)">
-    <source srcset="./banner.png" media="(prefers-color-scheme: light)">
-    <img src="./banner.png" alt="Better Auth Logo">
+    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" media="(prefers-color-scheme: dark)">
+    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" media="(prefers-color-scheme: light)">
+    <img src="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" alt="Better Auth Logo">
   </picture>
   <h2 align="center">
     Better Auth
@@ -25,8 +25,6 @@
 
 > [!WARNING]
 > **Note:** 🚧 This project is currently in beta. Features and APIs may change.
-
-## About the Project
 
 Better Auth is framework-agnostic authentication (and authorization) library for TypeScript. It provides a comprehensive set of features out of the box and includes a plugin ecosystem that simplifies adding advanced functionalities with minimal code in short amount of time. Whether you need 2FA, multi-tenant support, or other complex features. It lets you focus on building your actual application instead of reinventing the wheel. 
 
