@@ -61,6 +61,10 @@ export const auth = await betterAuth({
 })
 ```
 
+<Callout>
+See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialects </Link> for more dialects supported by kysley.
+</Callout>
+
 **Example: Custom Kysely Instance**
 
 ```ts title="auth.ts"
@@ -69,15 +73,11 @@ import { db } from "./db"
 
 export const auth = await betterAuth({
     database: {
-      kysely: db,
+      db: db,
       type: "sqlite" // or "mysql", "postgres" or "mssql"
     }
 })
 ```
-
-<Callout>
-See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialects </Link> for more dialects supported by kysley.
-</Callout>
 
 
 ## Using Adapters
