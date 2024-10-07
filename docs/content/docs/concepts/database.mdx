@@ -179,6 +179,12 @@ Table Name: `user`
       description: "User's email address for communication and login"
     },
     {
+      name: "image",
+      type: "string",
+      description: "User's image url",
+      isOptional: true
+    },
+    {
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the user account was created"
@@ -217,12 +223,14 @@ Table Name: `session`
     {
       name: "ipAddress",
       type: "string",
-      description: "The IP address of the device"
+      description: "The IP address of the device",
+      isOptional: true
     },
     {
       name: "userAgent",
       type: "string",
-      description: "The user agent information of the device"
+      description: "The user agent information of the device",
+      isOptional: true
     },
   ]}
   />
@@ -259,21 +267,25 @@ Table Name: `account`
       name: "accessToken",
       type: "string",
       description: "The access token of the account. Returned by the provider",
+      isOptional: true,
     },
     {
       name: "refreshToken",
       type: "string",
       description: "The refresh token of the account. Returned by the provider",
+      isOptional: true,
     },
     {
       name: "expiresAt",
       type: "Date",
       description: "The time when the access token expires",
+      isOptional: true,
     },
     {
       name: "password",
       type: "string",
       description: "The password of the account. Mainly used for email and password authentication",
+      isOptional: true,
     },
   ]}
 />

@@ -282,9 +282,9 @@ The plugin requires 3 additional fields in the `user` table.
 
 <DatabaseTable
     fields={[
-        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user." },
-        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes." },
-        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery." },
+        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
+        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes.", isOptional: true },
+        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery.", isOptional: true },
     ]}
 />
 

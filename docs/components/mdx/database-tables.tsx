@@ -8,8 +8,14 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Key, Link } from "lucide-react";
+import { CircleDot, Key, Link } from "lucide-react";
 import { Label } from "../ui/label";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "../ui/tooltip";
 
 interface Field {
 	name: string;
@@ -17,6 +23,7 @@ interface Field {
 	description: string;
 	isPrimaryKey?: boolean;
 	isForeignKey?: boolean;
+	isOptional?: boolean;
 }
 
 interface DatabaseTableProps {
@@ -47,22 +54,51 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 							</TableCell>
 							<TableCell>
 								{field.isPrimaryKey && (
-									<Badge
-										variant="secondary"
-										className="mr-1 rounded-sm bg-amber-500"
-									>
-										<Key className="w-3 h-3 mr-1" size={14} />
-										PK
-									</Badge>
+									<TooltipProvider delayDuration={0}>
+										<Tooltip>
+											<TooltipTrigger>
+												<Badge
+													variant="secondary"
+													className="mr-1 rounded-sm bg-amber-500"
+												>
+													<Key className="w-3 h-3 mr-1" size={14} />
+													PK
+												</Badge>
+											</TooltipTrigger>
+											<TooltipContent>Primary Key</TooltipContent>
+										</Tooltip>
+									</TooltipProvider>
 								)}
 								{field.isForeignKey && (
-									<Badge className="rounded-sm" variant="secondary">
-										<Link className="w-3 h-3 mr-1" size={14} />
-										FK
-									</Badge>
+									<TooltipProvider delayDuration={0}>
+										<Tooltip>
+											<TooltipTrigger>
+												<Badge
+													variant="secondary"
+													className="mr-1 rounded-sm bg-blue-500"
+												>
+													<Link className="w-3 h-3 mr-1" size={14} />
+													FK
+												</Badge>
+											</TooltipTrigger>
+											<TooltipContent>Foreign Key</TooltipContent>
+										</Tooltip>
+									</TooltipProvider>
 								)}
-								{!field.isPrimaryKey && !field.isForeignKey && (
-									<span className="text-muted text-center">-</span>
+								{!field.isPrimaryKey &&
+									!field.isForeignKey &&
+									!field.isOptional && (
+										<span className="text-muted text-center">-</span>
+									)}
+								{field.isOptional && (
+									<TooltipProvider delayDuration={0}>
+										<Tooltip>
+											<TooltipTrigger>
+												<Badge variant="outline">?</Badge>
+											</TooltipTrigger>
+											<TooltipContent>Optional</TooltipContent>
+										</Tooltip>
+									</TooltipProvider>
 								)}
 							</TableCell>
 							<TableCell>{field.description}</TableCell>
