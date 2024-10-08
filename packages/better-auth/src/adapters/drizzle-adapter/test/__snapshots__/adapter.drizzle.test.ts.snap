@@ -2,7 +2,7 @@
 
 exports[`adapter test > should create schema > __snapshots__/adapter.drizzle 1`] = `
 "import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-			
+
 export const user = pgTable("user", {
 					id: text("id").primaryKey(),
 					name: text('name').notNull(),
@@ -10,7 +10,8 @@ export const user = pgTable("user", {
  emailVerified: boolean('emailVerified').notNull(),
  image: text('image'),
  createdAt: timestamp('createdAt').notNull(),
- updatedAt: timestamp('updatedAt').notNull()
+ updatedAt: timestamp('updatedAt').notNull(),
+ deletedAt: timestamp('deletedAt')
 				});
 
 export const session = pgTable("session", {

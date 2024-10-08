@@ -137,7 +137,7 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
-		if (!user) {
+		if (!user || user.user.deletedAt) {
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {

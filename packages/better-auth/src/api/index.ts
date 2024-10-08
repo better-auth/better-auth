@@ -17,18 +17,16 @@ import {
 	signInOAuth,
 	signOut,
 	verifyEmail,
-} from "./routes";
-import { getCSRFToken } from "./routes/csrf";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
-import { logger } from "../utils/logger";
-import {
 	changePassword,
 	deleteUser,
 	setPassword,
 	updateUser,
-} from "./routes/update-user";
+	getCSRFToken,
+	signUpEmail,
+	error,
+	ok,
+} from "./routes";
+import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import chalk from "chalk";
 import { onRequestRateLimit } from "./rate-limiter";

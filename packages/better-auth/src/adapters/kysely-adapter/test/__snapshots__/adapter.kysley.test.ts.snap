@@ -5,7 +5,7 @@ exports[`adapter test > should create schema > __snapshots__/adapter.drizzle 1`]
 
 create table "account" ("id" text primary key, "accountId" text not null, "providerId" text not null, "userId" text not null references "user" ("id"), "accessToken" text, "refreshToken" text, "idToken" text, "expiresAt" date, "password" text);
 
-create table "user" ("id" text primary key, "name" text not null, "email" text not null unique, "emailVerified" boolean not null, "image" text, "createdAt" date not null, "updatedAt" date not null);
+create table "user" ("id" text primary key, "name" text not null, "email" text not null unique, "emailVerified" boolean not null, "image" text, "createdAt" date not null, "updatedAt" date not null, "deletedAt" date);
 
 create table "verification" ("id" text primary key, "identifier" text not null, "value" text not null, "expiresAt" date not null)"
 `;

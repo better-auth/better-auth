@@ -17,6 +17,7 @@ export const createInternalAdapter = (
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
+	const softDelete = options.user?.softDelete || false;
 	return {
 		createOAuthUser: async (user: User, account: Account) => {
 			try {
@@ -36,15 +37,30 @@ export const createInternalAdapter = (
 			return createdUser;
 		},
 		deleteUser: async (userId: string) => {
-			await adapter.delete<User>({
-				model: tables.user.tableName,
-				where: [
-					{
-						field: "id",
-						value: userId,
+			if (softDelete) {
+				await adapter.update<User>({
+					model: tables.user.tableName,
+					where: [
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+					update: {
+						deletedAt: new Date(),
 					},
-				],
-			});
+				});
+			} else {
+				await adapter.delete<User>({
+					model: tables.user.tableName,
+					where: [
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+				});
+			}
 		},
 		createSession: async (
 			userId: string,
@@ -91,7 +107,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			if (!user) {
+			if (!user || user.deletedAt) {
 				return null;
 			}
 			return {
@@ -139,7 +155,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			if (!user) return null;
+			if (!user || user.deletedAt) return null;
 			const accounts = await adapter.findMany<Account>({
 				model: tables.account.tableName,
 				where: [
@@ -164,6 +180,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+			if (!user || user.deletedAt) return null;
 			return user;
 		},
 		linkAccount: async (account: Account) => {

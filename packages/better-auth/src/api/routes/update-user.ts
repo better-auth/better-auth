@@ -21,6 +21,12 @@ export const updateUser = createAuthEndpoint(
 		if (!image && !name) {
 			return ctx.json(session.user);
 		}
+		if (session.user.deletedAt) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User not found" },
+			});
+		}
 		const user = await ctx.context.internalAdapter.updateUserByEmail(
 			session.user.email,
 			{
@@ -56,6 +62,12 @@ export const changePassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
+		if (session.user.deletedAt) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User not found" },
+			});
+		}
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
@@ -131,6 +143,12 @@ export const setPassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword } = ctx.body;
 		const session = ctx.context.session;
+		if (session.user.deletedAt) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User not found" },
+			});
+		}
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
@@ -186,6 +204,12 @@ export const deleteUser = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			session.user.id,
 		);
+		if (session.user.deletedAt) {
+			return ctx.json(null, {
+				status: 400,
+				body: { message: "User not found" },
+			});
+		}
 		const account = accounts.find(
 			(account) => account.providerId === "credential" && account.password,
 		);
