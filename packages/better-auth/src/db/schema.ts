@@ -50,7 +50,7 @@ export type Account = z.infer<typeof accountSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type Verification = z.infer<typeof verificationSchema>;
 
-export function parseData<T extends Record<string, any>>(
+export function parseOutputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
 		fields: Record<string, FieldAttribute>;
@@ -85,17 +85,63 @@ export function getAllFields(options: BetterAuthOptions, table: string) {
 	return schema;
 }
 
-export function parseUser(options: BetterAuthOptions, user: User) {
+export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseData(user, { fields: schema });
+	return parseOutputData(user, { fields: schema });
 }
 
-export function parseAccount(options: BetterAuthOptions, account: Account) {
+export function parseAccountOutput(
+	options: BetterAuthOptions,
+	account: Account,
+) {
 	const schema = getAllFields(options, "account");
-	return parseData(account, { fields: schema });
+	return parseOutputData(account, { fields: schema });
 }
 
-export function parseSession(options: BetterAuthOptions, session: Session) {
+export function parseSessionOutput(
+	options: BetterAuthOptions,
+	session: Session,
+) {
 	const schema = getAllFields(options, "session");
-	return parseData(session, { fields: schema });
+	return parseOutputData(session, { fields: schema });
+}
+
+export function parseInputData<T extends Record<string, any>>(
+	data: T,
+	schema: {
+		fields: Record<string, FieldAttribute>;
+	},
+) {
+	const fields = schema.fields;
+	const parsedData: Record<string, any> = {};
+	for (const key in fields) {
+		if (key in data) {
+			parsedData[key] = data[key];
+		}
+	}
+	return parsedData as Partial<T>;
+}
+
+export function parseUserInput(
+	options: BetterAuthOptions,
+	user: Record<string, any>,
+) {
+	const schema = getAllFields(options, "user");
+	return parseInputData(user, { fields: schema });
+}
+
+export function parseAccountInput(
+	options: BetterAuthOptions,
+	account: Partial<Account>,
+) {
+	const schema = getAllFields(options, "account");
+	return parseInputData(account, { fields: schema });
+}
+
+export function parseSessionInput(
+	options: BetterAuthOptions,
+	session: Partial<Session>,
+) {
+	const schema = getAllFields(options, "session");
+	return parseInputData(session, { fields: schema });
 }

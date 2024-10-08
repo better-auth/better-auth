@@ -5,7 +5,26 @@ import type { FieldAttribute, InferFieldOutput } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
 
-type InferAdditional<
+type InferFields<Field> = Field extends Record<infer Key, FieldAttribute>
+	? {
+			[key in Key as Field[key]["required"] extends false
+				? never
+				: Field[key]["defaultValue"] extends
+							| boolean
+							| string
+							| number
+							| Date
+							| Function
+					? key
+					: never]: InferFieldOutput<Field[key]>;
+		} & {
+			[key in Key as Field[key]["returned"] extends false
+				? never
+				: key]?: InferFieldOutput<Field[key]>;
+		}
+	: {};
+
+type InferFieldsFromPlugins<
 	Options extends BetterAuthOptions,
 	Key extends string,
 > = Options["plugins"] extends Array<infer T>
@@ -16,34 +35,26 @@ type InferAdditional<
 				};
 			};
 		}
-		? Field extends Record<infer Key, FieldAttribute>
-			? {
-					[key in Key as Field[key]["required"] extends false
-						? never
-						: Field[key]["defaultValue"] extends
-									| boolean
-									| string
-									| number
-									| Date
-									| Function
-							? key
-							: never]: InferFieldOutput<Field[key]>;
-				} & {
-					[key in Key as Field[key]["returned"] extends false
-						? never
-						: key]?: InferFieldOutput<Field[key]>;
-				}
-			: {}
+		? InferFields<Field>
 		: {}
 	: {};
 
-type AdditionalSessionFields<Options extends BetterAuthOptions> =
-	InferAdditional<Options, "session">;
+type InferFieldsFromOptions<
+	Options extends BetterAuthOptions,
+	Key extends "session" | "user",
+> = Options[Key] extends {
+	additionalFields: infer Field;
+}
+	? InferFields<Field>
+	: {};
 
-type AdditionalUserFields<Options extends BetterAuthOptions> = InferAdditional<
-	Options,
-	"user"
->;
+export type AdditionalSessionFields<Options extends BetterAuthOptions> =
+	InferFieldsFromPlugins<Options, "session"> &
+		InferFieldsFromOptions<Options, "session">;
+
+export type AdditionalUserFields<Options extends BetterAuthOptions> =
+	InferFieldsFromPlugins<Options, "user"> &
+		InferFieldsFromOptions<Options, "user">;
 
 export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
 	StripEmptyObjects<

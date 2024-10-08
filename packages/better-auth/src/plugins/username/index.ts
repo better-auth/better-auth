@@ -118,7 +118,7 @@ export const username = () => {
 					}),
 				},
 				async (ctx) => {
-					const res = await signUpEmail({
+					const res = await signUpEmail()({
 						...ctx,
 						_flag: "json",
 					});

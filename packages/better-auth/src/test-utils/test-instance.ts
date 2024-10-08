@@ -53,7 +53,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	};
 	async function createTestUser() {
 		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		const res = await auth.api.signUpEmail()({
 			body: testUser,
 		});
 	}
