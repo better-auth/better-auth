@@ -12,25 +12,6 @@ import type {
 	Prettify,
 } from "../../types";
 
-/**
- * Generate a unique key for the request to cache the
- * request for 5 seconds for this specific request.
- *
- * This is to prevent reaching to database if getSession is
- * called multiple times for the same request
- */
-function getRequestUniqueKey(ctx: Context<any, any>, token: string): string {
-	if (!ctx.request) {
-		return "";
-	}
-	const { method, url, headers } = ctx.request;
-	const userAgent = ctx.request.headers.get("User-Agent") || "";
-	const ip = getIp(ctx.request) || "";
-	const headerString = JSON.stringify(headers);
-	const uniqueString = `${method}:${url}:${headerString}:${userAgent}:${ip}:${token}`;
-	return uniqueString;
-}
-
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/session",
@@ -87,8 +68,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 *
 				 * e.g. ({expiry date} - 30 days) + 1 hour
 				 *
-				 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/
-				 * actions/session.ts
+				 * inspired by: https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/actions/session.ts
 				 */
 				const sessionIsDueToBeUpdatedDate =
 					session.session.expiresAt.valueOf() -
