@@ -17,7 +17,12 @@ export type FieldAttribute<T extends FieldType = FieldType> = {
 	type: T;
 } & FieldAttributeConfig<T>;
 
-export type FieldType = "string" | "number" | "boolean" | "date";
+export type FieldType =
+	| "string"
+	| "number"
+	| "boolean"
+	| "date"
+	| `${"string" | "number"}[]`;
 
 export type InferValueType<T extends FieldType> = T extends "string"
 	? string
@@ -25,8 +30,10 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends "date"
-				? Date
+			: T extends `${infer T}[]`
+				? T extends "string"
+					? string[]
+					: number[]
 				: never;
 
 export type InferFieldOutput<T extends FieldAttribute> =
@@ -58,7 +65,7 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: InferValueType<T> | (() => InferValueType<T>);
+	defaultValue?: any;
 	/**
 	 * transform the value before storing it.
 	 */
