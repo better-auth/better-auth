@@ -242,10 +242,10 @@ describe("type", () => {
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined;
-				testField?: string | undefined;
-				testField2?: number | undefined;
+				testField: string | undefined;
+				testField2: number | undefined;
 				testField4: string;
-				twoFactorEnabled?: boolean | undefined;
+				twoFactorEnabled: boolean | undefined;
 			};
 		}>();
 	});
@@ -269,7 +269,7 @@ describe("type", () => {
 			createdAt: Date;
 			updatedAt: Date;
 			image?: string | undefined;
-			twoFactorEnabled?: boolean | undefined;
+			twoFactorEnabled: boolean | undefined;
 		}>();
 	});
 });

@@ -19,6 +19,7 @@ describe("additionalFields", async () => {
 			},
 		},
 	});
+
 	it("should extends fields", async () => {
 		const { headers } = await signInWithTestUser();
 		const res = await auth.api.getSession({
@@ -31,9 +32,9 @@ describe("additionalFields", async () => {
 	it("should require additional fields on signUp", async () => {
 		await auth.api.signUpEmail({
 			body: {
-				email: "test@test.com",
-				password: "test",
-				name: "test",
+				email: "test2@test.com",
+				password: "test-password",
+				name: "test2",
 				additionalFields: {
 					nonRequiredFiled: "test",
 					newField: "test",
@@ -58,6 +59,34 @@ describe("additionalFields", async () => {
 				image?: string | undefined;
 				newField: string;
 				nonRequiredFiled?: string | undefined;
+			};
+			session: Session;
+		} | null>;
+	});
+
+	it("should infer it on the client without direct import", async () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						newField: {
+							type: "string",
+						},
+					},
+				}),
+			],
+		});
+		type t = Awaited<ReturnType<typeof client.session>>["data"];
+		expectTypeOf<t>().toMatchTypeOf<{
+			user: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+				name: string;
+				createdAt: Date;
+				updatedAt: Date;
+				image?: string | undefined;
+				newField: string;
 			};
 			session: Session;
 		} | null>;

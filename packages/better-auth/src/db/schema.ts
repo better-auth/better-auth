@@ -73,7 +73,10 @@ export function parseOutputData<T extends Record<string, any>>(
 }
 
 export function getAllFields(options: BetterAuthOptions, table: string) {
-	let schema: Record<string, FieldAttribute> = {};
+	let schema: Record<string, FieldAttribute> = {
+		...(table === "user" ? options.user?.additionalFields : {}),
+		...(table === "session" ? options.session?.additionalFields : {}),
+	};
 	for (const plugin of options.plugins || []) {
 		if (plugin.schema && plugin.schema[table]) {
 			schema = {
@@ -117,6 +120,11 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			parsedData[key] = data[key];
+			continue;
+		}
+		if (fields[key].defaultValue) {
+			parsedData[key] = fields[key].defaultValue;
+			continue;
 		}
 	}
 	return parsedData as Partial<T>;
@@ -124,10 +132,10 @@ export function parseInputData<T extends Record<string, any>>(
 
 export function parseUserInput(
 	options: BetterAuthOptions,
-	user: Record<string, any>,
+	user?: Record<string, any>,
 ) {
 	const schema = getAllFields(options, "user");
-	return parseInputData(user, { fields: schema });
+	return parseInputData(user || {}, { fields: schema });
 }
 
 export function parseAccountInput(

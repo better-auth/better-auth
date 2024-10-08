@@ -5,7 +5,7 @@ import { createEmailVerificationToken } from "./verify-email";
 import { setSessionCookie } from "../../utils/cookies";
 import { APIError } from "better-call";
 import type {
-	AdditionalUserFields,
+	AdditionalUserFieldsInput,
 	BetterAuthOptions,
 	HasRequiredKeys,
 	InferUser,
@@ -30,12 +30,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				image: z.string().optional(),
 				callbackURL: z.string().optional(),
 				additionalFields: z
-					.record(z.any())
+					.record(z.string(), z.any())
 					.optional() as unknown as HasRequiredKeys<
-					AdditionalUserFields<O>
+					AdditionalUserFieldsInput<O>
 				> extends true
-					? toZod<AdditionalUserFields<O>>
-					: ZodOptional<toZod<AdditionalUserFields<O>>>,
+					? toZod<AdditionalUserFieldsInput<O>>
+					: ZodOptional<toZod<AdditionalUserFieldsInput<O>>>,
 			}),
 		},
 		async (ctx) => {
@@ -47,6 +47,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			const { name, email, password, image } = ctx.body;
 			const additionalFields = ctx.body.additionalFields;
 			const isValidEmail = z.string().email().safeParse(email);
+
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid email",
@@ -74,9 +75,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const additionalData = additionalFields
-				? parseUserInput(ctx.context.options, additionalFields)
-				: {};
+			const additionalData = parseUserInput(
+				ctx.context.options,
+				additionalFields as any,
+			);
 			const createdUser = await ctx.context.internalAdapter.createUser({
 				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				email: email.toLowerCase(),

@@ -13,7 +13,7 @@ import type {
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
 import type { Session, User } from "../types";
-import type { FieldAttribute, InferFieldOutput } from "../db";
+import type { InferFieldsOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
@@ -118,24 +118,7 @@ export type InferAdditionalFromClient<
 					};
 				};
 			}
-			? Field extends Record<infer Key, FieldAttribute>
-				? {
-						[key in Key as Field[key]["required"] extends false
-							? never
-							: Field[key]["defaultValue"] extends
-										| boolean
-										| string
-										| number
-										| Date
-										| Function
-								? key
-								: never]: InferFieldOutput<Field[key]>;
-					} & {
-						[key in Key as Field[key]["returned"] extends false
-							? never
-							: key]?: InferFieldOutput<Field[key]>;
-					}
-				: {}
+			? InferFieldsOutput<Field>
 			: {}
 		: {}
 	: {};
