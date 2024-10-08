@@ -79,10 +79,7 @@ const jitiOptions = (cwd: string) => {
 export async function getConfig({
 	cwd,
 	configPath,
-}: {
-	cwd: string;
-	configPath?: string;
-}) {
+}: { cwd: string; configPath?: string }) {
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
@@ -127,8 +124,7 @@ export async function getConfig({
 						configFile =
 							config.auth?.options || config.default?.options || null;
 						if (!configFile) {
-							logger.error("[#better-auth]: Couldn't read your auth config.");
-							logger.break();
+							logger.error("[#better-auth]: Couldn't read your auth config.\n");
 							logger.info(
 								"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
 							);
