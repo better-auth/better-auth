@@ -9,8 +9,8 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	OAuthProvider,
+	SecondaryStorage,
 } from "./types";
-
 import { defu } from "defu";
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
@@ -81,13 +81,17 @@ export const init = async (opts: BetterAuthOptions) => {
 				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
 			window: options.rateLimit?.window || 60,
 			max: options.rateLimit?.max || 100,
-			storage: options.rateLimit?.storage || "memory",
+			storage:
+				options.rateLimit?.storage || options.secondaryStorage
+					? ("secondary-storage" as const)
+					: ("memory" as const),
 		},
 		authCookies: cookies,
 		logger: createLogger({
 			disabled: options.logger?.disabled || false,
 		}),
 		db,
+		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
@@ -118,7 +122,7 @@ export type AuthContext = {
 		enabled: boolean;
 		window: number;
 		max: number;
-		storage: "memory" | "database";
+		storage: "memory" | "database" | "secondary-storage";
 	} & BetterAuthOptions["rateLimit"];
 	adapter: Adapter;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
@@ -128,6 +132,7 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
+	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
 		verify: (hash: string, password: string) => Promise<boolean>;

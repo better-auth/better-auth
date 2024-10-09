@@ -3,12 +3,12 @@ import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "../social-providers/types";
 import type { SocialProviders } from "../social-providers";
-import type { RateLimit } from "./models";
-import type { Adapter } from "./adapter";
+import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { EligibleCookies } from "../internal-plugins";
+import type { RateLimit } from "./models";
 
 export interface BetterAuthOptions {
 	/**
@@ -83,6 +83,12 @@ export interface BetterAuthOptions {
 				 */
 				type: KyselyDatabaseType;
 		  };
+	/**
+	 * Secondary storage configuration
+	 *
+	 * This is used to store session and rate limit data.
+	 */
+	secondaryStorage?: SecondaryStorage;
 	/**
 	 * Email and password authentication
 	 */
@@ -257,9 +263,13 @@ export interface BetterAuthOptions {
 		/**
 		 * Storage configuration
 		 *
+		 * By default, rate limiting is stored in memory. If you passed a
+		 * secondary storage, rate limiting will be stored in the secondary
+		 * storage.
+		 *
 		 * @default "memory"
 		 */
-		storage?: "memory" | "database";
+		storage?: "memory" | "database" | "secondary-storage";
 		/**
 		 * If database is used as storage, the name of the table to
 		 * use for rate limiting.

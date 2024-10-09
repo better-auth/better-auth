@@ -75,8 +75,16 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 
 const memory = new Map<string, RateLimit>();
 export function getRateLimitStorage(ctx: AuthContext) {
-	if (ctx.rateLimit.customStorage) {
-		return ctx.rateLimit.customStorage;
+	if (ctx.rateLimit.storage === "secondary-storage") {
+		return {
+			get: async (key: string) => {
+				const stringified = await ctx.options.secondaryStorage?.get(key);
+				return stringified ? (JSON.parse(stringified) as RateLimit) : undefined;
+			},
+			set: async (key: string, value: RateLimit) => {
+				await ctx.options.secondaryStorage?.set?.(key, JSON.stringify(value));
+			},
+		};
 	}
 	const storage = ctx.rateLimit.storage;
 	if (storage === "memory") {
