@@ -90,8 +90,14 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
-			const res = await db.insert(schemaModel).values(val).returning();
+			const mutation = db.insert(schemaModel).values(val);
+			if (databaseType !== "mysql") return (await mutation.returning())[0];
 
+			await mutation;
+			const res = await db
+				.select()
+				.from(schemaModel)
+				.where(eq(schemaModel.id, (data.data as { id: string }).id));
 			return res[0];
 		},
 		async findOne(data) {
@@ -150,11 +156,17 @@ export const drizzleAdapter = (
 				usePlural: options.usePlural,
 			});
 			const wheres = whereConvertor(where, schemaModel);
-			const res = await db
+			const mutation = db
 				.update(schemaModel)
 				.set(update)
-				.where(...wheres)
-				.returning();
+				.where(...wheres);
+			if (databaseType !== "mysql") return (await mutation.returning())[0];
+
+			await mutation;
+			const res = await db
+				.select()
+				.from(schemaModel)
+				.where(eq(schemaModel.id, (data.update as { id: string }).id));
 			return res[0];
 		},
 		async delete(data) {

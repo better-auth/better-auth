@@ -64,4 +64,30 @@ describe("db", async () => {
 		expect(res.data?.user.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
+
+	it("should work with custom field names", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+		});
+		const res = await client.signUp.email({
+			email: "test@email.com",
+			password: "password",
+			name: "Test User",
+		});
+		expect(res.data?.user.email).toBe("test@email.com");
+		const { headers } = await signInWithTestUser();
+		const res2 = await client.user.update(
+			{
+				name: "New Name",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res2.data?.name).toBe("New Name");
+	});
 });

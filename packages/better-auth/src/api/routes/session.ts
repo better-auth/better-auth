@@ -4,7 +4,6 @@ import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
 import type { Session } from "../../db/schema";
 import { z } from "zod";
-import { getIp } from "../../utils/get-request-ip";
 import type {
 	BetterAuthOptions,
 	InferSession,

@@ -12,7 +12,10 @@ import Database from "better-sqlite3";
 
 export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	options?: O,
-	port?: number,
+	config?: {
+		port?: number;
+		disableTestUser?: boolean;
+	},
 ) {
 	/**
 	 * create db folder if not exists
@@ -52,6 +55,9 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		name: "test",
 	};
 	async function createTestUser() {
+		if (config?.disableTestUser) {
+			return;
+		}
 		//@ts-expect-error
 		const res = await auth.api.signUpEmail({
 			body: testUser,
@@ -70,6 +76,9 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	});
 
 	async function signInWithTestUser() {
+		if (config?.disableTestUser) {
+			throw new Error("Test user is disabled");
+		}
 		let headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
@@ -133,10 +142,11 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	}
 
 	const client = createAuthClient({
+		baseURL:
+			options?.baseURL ||
+			"http://localhost:" + (config?.port || 3000) + "/api/auth",
 		fetchOptions: {
 			customFetchImpl,
-			baseURL:
-				options?.baseURL || "http://localhost:" + (port || 3000) + "/api/auth",
 		},
 	});
 	return {

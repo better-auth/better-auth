@@ -17,9 +17,8 @@ description: Spotify Provider
 
         ```ts title="auth.ts"  
         import { betterAuth } from "better-auth"
-        import { spotify } from "better-auth/social-providers"
         
-        export const auth = await betterAuth({
+        export const auth = betterAuth({
            
             socialProviders: { // [!code highlight]
                 spotify: { // [!code highlight]

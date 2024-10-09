@@ -17,9 +17,8 @@ description: Facebook Provider
 
         ```ts title="auth.ts"  
         import { betterAuth } from "better-auth"
-        import { facebook } from "better-auth/social-providers"
         
-        export const auth = await betterAuth({
+        export const auth = betterAuth({
             socialProviders: { // [!code highlight]
                 facebook: { // [!code highlight]
                     clientId: process.env.FACEBOOK_CLIENT_ID as string, // [!code highlight]

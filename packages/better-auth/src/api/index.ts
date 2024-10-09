@@ -86,7 +86,7 @@ export function getEndpoints<
 		getCSRFToken,
 		getSession: getSession<Option>(),
 		signOut,
-		signUpEmail,
+		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
 		forgetPassword,
 		resetPassword,

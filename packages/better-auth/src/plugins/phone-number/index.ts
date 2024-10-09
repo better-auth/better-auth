@@ -195,7 +195,7 @@ export const phoneNumber = (options?: {
 						});
 					}
 					try {
-						const res = await signUpEmail({
+						const res = await signUpEmail()({
 							...ctx,
 							options: {
 								...ctx.context.options,

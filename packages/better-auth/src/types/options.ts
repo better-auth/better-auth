@@ -6,6 +6,8 @@ import type { SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { FieldAttribute } from "../db";
+import type { EligibleCookies } from "../internal-plugins";
 
 export interface BetterAuthOptions {
 	/**
@@ -162,6 +164,12 @@ export interface BetterAuthOptions {
 		 */
 		modelName?: string;
 		fields?: Partial<Record<keyof User, string>>;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	session?: {
 		modelName?: string;
@@ -179,6 +187,12 @@ export interface BetterAuthOptions {
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		updateAge?: number;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	account?: {
 		modelName?: string;
@@ -262,6 +276,20 @@ export interface BetterAuthOptions {
 		 * @default "rateLimit"
 		 */
 		tableName?: string;
+		/**
+		 * Custom field names for the rate limit table
+		 */
+		fields?: Record<keyof RateLimit, string>;
+		/**
+		 * custom storage configuration.
+		 *
+		 * NOTE: If custom storage is used storage
+		 * is ignored
+		 */
+		customStorage?: {
+			get: (key: string) => Promise<RateLimit | undefined>;
+			set: (key: string, value: RateLimit) => Promise<void>;
+		};
 	};
 	/**
 	 * Advanced options
@@ -291,7 +319,7 @@ export interface BetterAuthOptions {
 			 * by default, only sessionToken, csrfToken and dontRememberToken
 			 * cookies will be shared across subdomains
 			 */
-			eligibleCookies?: string[];
+			eligibleCookies?: EligibleCookies[];
 			/**
 			 * The domain to use for the cookies
 			 *

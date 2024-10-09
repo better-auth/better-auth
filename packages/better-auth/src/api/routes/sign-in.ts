@@ -6,6 +6,7 @@ import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../utils/cookies";
+import type { toZod } from "../../types/to-zod";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",

@@ -90,7 +90,7 @@ List of all the available options for configuring Better Auth.
 a configuration object that contains the configuration for social providers.
 
 ```ts title="auth.ts"
-const auth = await betterAuth({
+const auth = betterAuth({
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID as string,

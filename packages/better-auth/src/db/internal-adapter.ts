@@ -32,8 +32,21 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
-		createUser: async (user: User & Record<string, any>) => {
-			const createdUser = await createWithHooks(user, "user");
+		createUser: async (
+			user: Omit<User, "id" | "emailVerified" | "createdAt" | "updatedAt"> &
+				Record<string, any> &
+				Partial<User>,
+		) => {
+			const createdUser = await createWithHooks(
+				{
+					id: generateId(),
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...user,
+				},
+				"user",
+			);
 			return createdUser;
 		},
 		deleteUser: async (userId: string) => {
@@ -162,7 +175,7 @@ export const createInternalAdapter = (
 				model: tables.session.tableName,
 				where: [
 					{
-						field: "userId",
+						field: tables.session.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 				],
@@ -174,7 +187,7 @@ export const createInternalAdapter = (
 				where: [
 					{
 						value: email.toLowerCase(),
-						field: "email",
+						field: tables.user.fields.email.fieldName || "email",
 					},
 				],
 			});
@@ -184,7 +197,7 @@ export const createInternalAdapter = (
 				where: [
 					{
 						value: user.id,
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 					},
 				],
 			});
@@ -257,7 +270,7 @@ export const createInternalAdapter = (
 				model: tables.account.tableName,
 				where: [
 					{
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 				],
@@ -287,7 +300,8 @@ export const createInternalAdapter = (
 				model: tables.verification.tableName,
 				where: [
 					{
-						field: "identifier",
+						field:
+							tables.verification.fields.identifier.fieldName || "identifier",
 						value: identifier,
 					},
 				],

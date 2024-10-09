@@ -16,7 +16,7 @@ To add a plugin on the server, include it in the `plugins` array in your auth co
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         // Add your plugins here
     ]
