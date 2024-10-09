@@ -79,7 +79,7 @@ export const generate = new Command("generate")
 		}
 		spinner.stop();
 		if (!code) {
-			logger.success("Your schema is already up to date.");
+			logger.info("Your schema is already up to date.");
 			process.exit(0);
 		}
 		if (append || overwrite) {
@@ -102,7 +102,7 @@ export const generate = new Command("generate")
 				} else {
 					await fs.appendFile(path.join(cwd, fileName), code);
 				}
-				logger.success(`🚀 schema was appended successfully!`);
+				logger.info(`🚀 schema was appended successfully!`);
 				process.exit(0);
 			} else {
 				logger.error("Schema generation aborted.");
@@ -131,6 +131,6 @@ export const generate = new Command("generate")
 			}
 		}
 		await fs.writeFile(options.output || path.join(cwd, fileName), code);
-		logger.success(`🚀 schema was generated successfully!`);
+		logger.info(`🚀 schema was generated successfully!`);
 		process.exit(0);
 	});

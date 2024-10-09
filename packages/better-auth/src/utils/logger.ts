@@ -1,45 +1,35 @@
-import { createConsola } from "consola";
+import winston from "winston";
 
-const consola = createConsola({
-	formatOptions: {
-		date: false,
-		colors: true,
-		compact: true,
-	},
-	defaults: {
-		tag: "Better Auth",
-	},
-});
-
-export const createLogger = (options?: {
+export interface BetterAuthLoggerOptions
+	extends Pick<winston.LoggerOptions, "level" | "transports"> {
+	/**
+	 * Disable logging
+	 *
+	 * @default false
+	 */
 	disabled?: boolean;
-}) => {
-	return {
-		log: (...args: any[]) => {
-			!options?.disabled && consola.log("", ...args);
+}
+
+export const createLogger = (options?: BetterAuthLoggerOptions) => {
+	return winston.createLogger({
+		defaultMeta: {
+			tag: "Better Auth",
 		},
-		error: (...args: any[]) => {
-			!options?.disabled && consola.error("", ...args);
-		},
-		warn: (...args: any[]) => {
-			!options?.disabled && consola.warn("", ...args);
-		},
-		info: (...args: any[]) => {
-			!options?.disabled && consola.info("", ...args);
-		},
-		debug: (...args: any[]) => {
-			!options?.disabled && consola.debug("", ...args);
-		},
-		box: (...args: any[]) => {
-			!options?.disabled && consola.box("", ...args);
-		},
-		success: (...args: any[]) => {
-			!options?.disabled && consola.success("", ...args);
-		},
-		break: (...args: any[]) => {
-			!options?.disabled && console.log("\n");
-		},
-	};
+		silent: options?.disabled || false,
+		transports: [
+			new winston.transports.Console({
+				format: winston.format.combine(
+					winston.format.colorize(),
+					winston.format.simple(),
+				),
+			}),
+			...(options?.transports !== undefined
+				? Array.isArray(options.transports)
+					? options.transports
+					: [options.transports]
+				: []),
+		],
+	});
 };
 
 export const logger = createLogger();

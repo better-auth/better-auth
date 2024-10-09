@@ -7,6 +7,7 @@ import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { BetterAuthLoggerOptions } from "../utils/logger";
 
 export interface BetterAuthOptions {
 	/**
@@ -302,18 +303,7 @@ export interface BetterAuthOptions {
 			domain?: string;
 		};
 	};
-	logger?: {
-		/**
-		 * Disable logging
-		 *
-		 * @default false
-		 */
-		disabled?: boolean;
-		/**
-		 * log verbose information
-		 */
-		verboseLogging?: boolean;
-	};
+	logger?: BetterAuthLoggerOptions;
 	/**
 	 * allows you to define custom hooks that can be
 	 * executed during lifecycle of core database
