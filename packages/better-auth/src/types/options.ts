@@ -8,6 +8,7 @@ import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { EligibleCookies } from "../internal-plugins";
+import type { RateLimit } from "./models";
 
 export interface BetterAuthOptions {
 	/**
