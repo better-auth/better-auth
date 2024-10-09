@@ -46,7 +46,7 @@ describe("general types", async (it) => {
 			expiresAt: Date;
 			ipAddress?: string | undefined;
 			userAgent?: string | undefined;
-			activeOrganizationId: string | undefined;
+			activeOrganizationId?: string | undefined;
 		}>();
 	});
 });

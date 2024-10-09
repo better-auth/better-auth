@@ -231,8 +231,8 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
-				ipAddress?: string;
-				userAgent?: string;
+				ipAddress?: string | undefined;
+				userAgent?: string | undefined;
 			};
 			user: {
 				id: string;
@@ -242,9 +242,9 @@ describe("type", () => {
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined;
-				testField: string | undefined;
-				testField2: number | undefined;
 				testField4: string;
+				testField?: string | undefined;
+				testField2?: number | undefined;
 				twoFactorEnabled: boolean | undefined;
 			};
 		}>();
