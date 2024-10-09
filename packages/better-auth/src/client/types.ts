@@ -100,10 +100,11 @@ export type InferPluginsFromClient<O extends ClientOptions> =
 		: undefined;
 
 export type InferSessionFromClient<O extends ClientOptions> = StripEmptyObjects<
-	Session & UnionToIntersection<InferAdditionalFromClient<O, "session">>
+	Session &
+		UnionToIntersection<InferAdditionalFromClient<O, "session", "output">>
 >;
 export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
-	User & UnionToIntersection<InferAdditionalFromClient<O, "user">>
+	User & UnionToIntersection<InferAdditionalFromClient<O, "user", "output">>
 >;
 
 export type InferAdditionalFromClient<

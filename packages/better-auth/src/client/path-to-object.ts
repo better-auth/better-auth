@@ -114,6 +114,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 				>
 		: never
 	: never;
+
 export type InferRoutes<
 	API extends Record<string, Endpoint>,
 	ClientOpts extends ClientOptions,

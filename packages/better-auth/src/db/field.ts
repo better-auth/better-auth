@@ -99,15 +99,13 @@ export type InferFieldsOutput<Field> = Field extends Record<
 	FieldAttribute
 >
 	? {
-			[key in Key as Field[key]["required"] extends true
-				? key
-				: Field[key]["defaultValue"] extends any
+			[key in Key as Field[key]["required"] extends false
+				? never
+				: Field[key]["defaultValue"] extends boolean | string | number | Date
 					? key
 					: never]: InferFieldOutput<Field[key]>;
 		} & {
-			[key in Key as Field[key]["returned"] extends false
-				? never
-				: key]?: InferFieldOutput<Field[key]>;
+			[key in Key]?: InferFieldOutput<Field[key]>;
 		}
 	: {};
 
