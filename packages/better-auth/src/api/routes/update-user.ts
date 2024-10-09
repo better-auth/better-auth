@@ -157,7 +157,6 @@ export const setPassword = createAuthEndpoint(
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
 			await ctx.context.internalAdapter.linkAccount({
-				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				userId: session.user.id,
 				providerId: "credential",
 				accountId: session.user.id,
