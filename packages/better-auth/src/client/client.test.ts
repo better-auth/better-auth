@@ -10,7 +10,6 @@ import type { ReadableAtom } from "nanostores";
 import type { Session } from "../db/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { passkeyClient, twoFactorClient } from "../plugins";
-import { createAuthClient } from "./vanilla";
 import { organizationClient } from "./plugins";
 
 describe("run time proxy", async () => {
