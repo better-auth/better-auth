@@ -154,7 +154,7 @@ The cli checks your database and prompts you to add missing tables or update exi
 npx better-auth migrate
 ```
 
-## Running Migrations Manually and Generting Schema
+## Generting Schema
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
@@ -337,22 +337,39 @@ Table Name: `verification`
   ]}
 />
 
-## Plugins Schema
 
-Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
+## Custom Tables
 
-- `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
-- `twoFactorSecret`: The secret key used to generate TOTP codes.
-- `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+Better Auth allows you to customize the table names and column names for the core schema. You can also extend the core schema by adding additional fields to the user and session tables.
 
-To add new tables and columns to your database, you have two options:
+### Custom Table Names
 
-`CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
-`Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
+You can customize the table names and column names for the core schema by using the `modelName` and `fields` properties in your auth config:
 
-Both methods ensure your database schema stays up-to-date with your plugins' requirements.
+```ts title="auth.ts"
+export const auth = betterAuth({
+   user: {
+      modelName: "users",
+      fields: {
+        name: "full_name",
+        email: "email_address"
+      }
+   },
+   session: {
+      modelName: "user_sessions",
+      fields: {
+        userId: "user_id"
+      }
+   }
+})
+```
 
-## Extending Core Schema
+<Callout>
+  Type inference in your code will still use the original field names (e.g., `user.name`, not `user.full_name`).
+</Callout>
+
+
+### Extending Core Schema
 
 Better Auth provides a type-safe way to extend the `user` and `session` schemas. You can add custom fields to your auth config, and the CLI will automatically update the database schema. These additional fields will be properly inferred in functions like `useSession`, `signUp.email`, and other endpoints that work with user or session objects.
 
@@ -399,18 +416,20 @@ This configuration will:
 2. Ensure that the "role" field is available in user objects returned by Better Auth functions.
 3. Set a default value of "user" for the "role" field in your application logic.
 
-## Database Hooks
+
+
+### Database Hooks
 
 Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in BetterAuth. You can create hooks for the following models: **user**, **session**, and **account**.
 
 There are two types of hooks you can define:
 
-### 1. Before Hook
+#### 1. Before Hook
 
 - **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
 - **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the orginal payload.
 
-### 2. After Hook
+#### 2. After Hook
 
 - **Purpose**: This hook is called after the respective entity is created or updated.
 - **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
@@ -442,3 +461,19 @@ export const auth = betterAuth({
    }
 })
 ```
+
+## Plugins Schema
+
+Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
+
+- `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
+- `twoFactorSecret`: The secret key used to generate TOTP codes.
+- `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+
+To add new tables and columns to your database, you have two options:
+
+`CLI`: Use the migrate or generate command. These commands will scan your database and guide you through adding any missing tables or columns.
+`Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
+
+Both methods ensure your database schema stays up-to-date with your plugins' requirements.
+

@@ -63,6 +63,15 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * A zod schema to validate the value.
 	 */
 	validator?: ZodSchema;
+	/**
+	 * The name of the field on the database.
+	 *
+	 * @default
+	 * ```txt
+	 * the key in the fields object.
+	 * ```
+	 */
+	fieldName?: string;
 };
 
 export type FieldAttribute<T extends FieldType = FieldType> = {

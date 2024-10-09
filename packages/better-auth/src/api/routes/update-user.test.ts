@@ -4,7 +4,7 @@ import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../utils/cookies";
 
 describe("updateUser", async () => {
-	const { auth, client, testUser, sessionSetter, customFetchImpl } =
+	const { client, testUser, sessionSetter, customFetchImpl } =
 		await getTestInstance();
 	const headers = new Headers();
 	const session = await client.signIn.email({
