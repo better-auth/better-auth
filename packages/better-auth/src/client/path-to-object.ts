@@ -34,6 +34,8 @@ type InferSignUpEmailCtx<ClientOpts extends ClientOptions> = {
 	email: string;
 	name: string;
 	password: string;
+	callbackURL?: string;
+	fetchOptions?: BetterFetchOption<any, any, any>;
 } & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
 type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
