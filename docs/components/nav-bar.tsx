@@ -7,57 +7,57 @@ import { Logo } from "./logo";
 import { VersionProgress } from "./version-progress";
 
 export const Navbar = () => {
-  return (
-    <div className="flex flex-col sticky top-0 bg-background backdrop-blur-md z-40">
-      <nav className="md:grid grid-cols-11 border-b-input/50 border-b-[1.2px] md:border-b top-0 flex items-center justify-between ">
-        <div className="flex gap-2 w-[30rem] items-center">
-          <Link
-            href="/"
-            className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[--fd-sidebar-width]"
-          >
-            <div className="flex flex-col gap-2 w-full">
-              <div className="flex items-center gap-2">
-                <Logo />
-                <p>BETTER-AUTH.</p>
-              </div>
-            </div>
-          </Link>
-          <VersionProgress />
-        </div>
-        <div className="md:col-span-10 flex items-center justify-end relative">
-          <ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
-            {navMenu.map((menu, i) => (
-              <NavLink key={menu.name} href={menu.path}>
-                {menu.name}
-              </NavLink>
-            ))}
-          </ul>
+	return (
+		<div className="flex flex-col sticky top-0 bg-background backdrop-blur-md z-40">
+			<nav className="md:grid grid-cols-11 border-b-input/50 border-b-[1.2px] md:border-b top-0 flex items-center justify-between ">
+				<div className="flex gap-2 w-[30rem] items-center">
+					<Link
+						href="/"
+						className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[--fd-sidebar-width]"
+					>
+						<div className="flex flex-col gap-2 w-full">
+							<div className="flex items-center gap-2">
+								<Logo />
+								<p>BETTER-AUTH.</p>
+							</div>
+						</div>
+					</Link>
+					<VersionProgress />
+				</div>
+				<div className="md:col-span-10 flex items-center justify-end relative">
+					<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
+						{navMenu.map((menu, i) => (
+							<NavLink key={menu.name} href={menu.path}>
+								{menu.name}
+							</NavLink>
+						))}
+					</ul>
 
-          <ThemeToggle />
-          <NavbarMobileBtn />
-        </div>
-      </nav>
-      <NavbarMobile />
-    </div>
-  );
+					<ThemeToggle />
+					<NavbarMobileBtn />
+				</div>
+			</nav>
+			<NavbarMobile />
+		</div>
+	);
 };
 
 export const navMenu = [
-  {
-    name: "helo_",
-    path: "/",
-  },
-  {
-    name: "docs",
-    path: "/docs",
-  },
+	{
+		name: "helo_",
+		path: "/",
+	},
+	{
+		name: "docs",
+		path: "/docs",
+	},
 
-  {
-    name: "changelogs",
-    path: "/changelogs",
-  },
-  {
-    name: "community",
-    path: "https://discord.gg/GYC3W7tZzb",
-  },
+	{
+		name: "changelogs",
+		path: "/changelogs",
+	},
+	{
+		name: "community",
+		path: "https://discord.gg/GYC3W7tZzb",
+	},
 ];
