@@ -8,6 +8,7 @@ import type { Adapter } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
+import type { EligibleCookies } from "../internal-plugins";
 
 export interface BetterAuthOptions {
 	/**
@@ -305,7 +306,7 @@ export interface BetterAuthOptions {
 			 * by default, only sessionToken, csrfToken and dontRememberToken
 			 * cookies will be shared across subdomains
 			 */
-			eligibleCookies?: string[];
+			eligibleCookies?: EligibleCookies[];
 			/**
 			 * The domain to use for the cookies
 			 *

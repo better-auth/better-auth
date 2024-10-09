@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "../../types";
 import type { BetterAuthCookies } from "../../utils/cookies";
 
-type EligibleCookies = keyof BetterAuthCookies;
+export type EligibleCookies = keyof BetterAuthCookies;
 
 interface Options {
 	/**
@@ -42,7 +42,7 @@ export const crossSubdomainCookies = (options?: Options): BetterAuthPlugin => {
 			if (!setCookie) return { response };
 
 			const baseURL = ctx.baseURL;
-			const domain = options?.domain || `.${new URL(baseURL).hostname}`;
+			const domain = options?.domain || new URL(baseURL).hostname;
 			const authCookies = ctx.authCookies;
 			const eligibleCookies = options?.eligibleCookies
 				? getEligibleCookies(

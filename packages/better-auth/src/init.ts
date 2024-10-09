@@ -172,6 +172,7 @@ function getInternalPlugins(options: BetterAuthOptions) {
 		plugins.push(
 			crossSubdomainCookies({
 				eligibleCookies: options.advanced.crossSubDomainCookies.eligibleCookies,
+				domain: options.advanced.crossSubDomainCookies.domain,
 			}),
 		);
 	}

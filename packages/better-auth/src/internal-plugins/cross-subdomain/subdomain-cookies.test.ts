@@ -7,15 +7,10 @@ import { parseSetCookieHeader } from "../../utils/cookies";
 describe("crossSubdomainCookies", () => {
 	it("should update cookies with custom domain", async () => {
 		const { client, testUser } = await getTestInstance({
-			plugins: [
-				crossSubdomainCookies({
-					domain: ".example.com",
-				}),
-			],
-			socialProviders: {
-				google: {
-					clientId: "google",
-					clientSecret: "google",
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+					domain: "example.com",
 				},
 			},
 		});
@@ -28,7 +23,7 @@ describe("crossSubdomainCookies", () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("Domain=.example.com");
+					expect(setCookie).toContain("Domain=example.com");
 					expect(setCookie).toContain("SameSite=None");
 					expect(setCookie).toContain("Secure");
 				},
@@ -38,8 +33,12 @@ describe("crossSubdomainCookies", () => {
 
 	it("should use default domain from baseURL if not provided", async () => {
 		const { testUser, client } = await getTestInstance({
-			plugins: [crossSubdomainCookies()],
 			baseURL: "https://app.example.com",
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+				},
+			},
 		});
 
 		await client.signIn.email(
@@ -51,7 +50,7 @@ describe("crossSubdomainCookies", () => {
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
 
-					expect(setCookie).toContain("Domain=.app.example.com");
+					expect(setCookie).toContain("Domain=app.example.com");
 				},
 			},
 		);
@@ -59,12 +58,13 @@ describe("crossSubdomainCookies", () => {
 
 	it("should only modify eligible cookies", async () => {
 		const { client, testUser } = await getTestInstance({
-			plugins: [
-				crossSubdomainCookies({
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
 					domain: ".example.com",
 					eligibleCookies: [],
-				}),
-			],
+				},
+			},
 		});
 
 		await client.signIn.email(
@@ -91,15 +91,17 @@ describe("crossSubdomainCookies", () => {
 
 	it("should not modify cookies if none are eligible", async () => {
 		const { client } = await getTestInstance({
-			plugins: [
-				crossSubdomainCookies({
-					domain: ".example.com",
-				}),
-			],
 			socialProviders: {
 				google: {
 					clientId: "google",
 					clientSecret: "google",
+				},
+			},
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+					domain: ".example.com",
+					eligibleCookies: [],
 				},
 			},
 		});
@@ -120,11 +122,12 @@ describe("crossSubdomainCookies", () => {
 
 	it("should handle multiple cookies correctly", async () => {
 		const { client, testUser } = await getTestInstance({
-			plugins: [
-				crossSubdomainCookies({
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
 					domain: ".example.com",
-				}),
-			],
+				},
+			},
 		});
 
 		await client.signIn.email(
