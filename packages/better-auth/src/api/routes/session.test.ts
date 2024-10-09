@@ -227,6 +227,9 @@ describe("session storage", async () => {
 				store.delete(key);
 			},
 		},
+		rateLimit: {
+			enabled: false,
+		},
 	});
 
 	it("should store session in secondary storage", async () => {
