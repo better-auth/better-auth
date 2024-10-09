@@ -31,8 +31,21 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
-		createUser: async (user: User & Record<string, any>) => {
-			const createdUser = await createWithHooks(user, "user");
+		createUser: async (
+			user: Omit<User, "id" | "emailVerified" | "createdAt" | "updatedAt"> &
+				Record<string, any> &
+				Partial<User>,
+		) => {
+			const createdUser = await createWithHooks(
+				{
+					id: generateId(),
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...user,
+				},
+				"user",
+			);
 			return createdUser;
 		},
 		deleteUser: async (userId: string) => {
