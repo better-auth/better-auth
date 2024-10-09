@@ -7,6 +7,7 @@ import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { FieldAttribute } from "../db";
 
 export interface BetterAuthOptions {
 	/**
@@ -157,6 +158,12 @@ export interface BetterAuthOptions {
 		 */
 		modelName?: string;
 		fields?: Partial<Record<keyof User, string>>;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	session?: {
 		modelName?: string;
@@ -174,6 +181,12 @@ export interface BetterAuthOptions {
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		updateAge?: number;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	account?: {
 		modelName?: string;

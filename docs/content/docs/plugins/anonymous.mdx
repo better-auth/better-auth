@@ -17,7 +17,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     import { betterAuth } from "better-auth"
     import { anonymous } from "better-auth/plugins" // [!code highlight]
     
-    export const auth = await betterAuth({
+    export const auth = betterAuth({
         // ... other config options
         plugins: [
             anonymous() // [!code highlight]
@@ -90,7 +90,7 @@ const user = await client.anonymous.linkAccount({
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         anonymous({
             emailDomainName: "example.com"

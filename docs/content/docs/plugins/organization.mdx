@@ -14,7 +14,7 @@ Organizations simplifies user access and permissions management. Assign roles an
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [ // [!code highlight]
         organization() // [!code highlight]
     ] // [!code highlight]
@@ -93,7 +93,7 @@ By default, any user can create an organization. To restrict this, set the `allo
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-const auth = await betterAuth({
+const auth = betterAuth({
     //...
     plugins: [
         organization({

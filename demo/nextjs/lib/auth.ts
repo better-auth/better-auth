@@ -43,14 +43,6 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
-		phoneNumber({
-			otp: {
-				sendOTP(phoneNumber, code) {
-					console.log(`Sending OTP to ${phoneNumber}: ${code}`);
-				},
-				sendOTPonSignUp: true,
-			},
-		}),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({

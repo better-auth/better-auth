@@ -62,7 +62,7 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data, isPending, error } = useSession(props.session);
+	const { data, isPending, error } = useSession();
 	const [ua, setUa] = useState<UAParser.UAParserInstance>();
 
 	const session = data || props.session;

@@ -22,7 +22,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
     import { betterAuth } from "better-auth"
     import { google } from "better-auth/social-providers"
 
-    export const auth = await betterAuth({
+    export const auth = betterAuth({
         socialProviders: { // [!code highlight]
             google: { // [!code highlight]
                 clientId: process.env.MICROSOFT_CLIENT_ID as string, // [!code highlight]

@@ -12,7 +12,7 @@ You can pass a database connection to Better Auth by passing a supported databas
 import { betterAuth } from "better-auth"
 import Database from "better-sqlite3"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: new Database("database.sqlite")
 })
 ```
@@ -22,7 +22,7 @@ export const auth = await betterAuth({
 import { betterAuth } from "better-auth"
 import { Pool } from "pg"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: new Pool({
         connectionString: "postgres://user:password@localhost:5432/database"
     })
@@ -34,7 +34,7 @@ export const auth = await betterAuth({
 import { betterAuth } from "better-auth"
 import { createPool } from "mysql2/promise"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: createPool({
         host: "localhost",
         user: "root",
@@ -50,7 +50,7 @@ export const auth = await betterAuth({
 import { betterAuth } from "better-auth"
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
    	database: {
       dialect: new LibsqlDialect({
         url: process.env.TURSO_DATABASE_URL || "",
@@ -71,7 +71,7 @@ See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialec
 import { betterAuth } from "better-auth"
 import { db } from "./db"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: {
       db: db,
       type: "sqlite" // or "mysql", "postgres" or "mssql"
@@ -95,7 +95,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: prismaAdapter(prisma, {
       provider: "sqlite"
     })
@@ -112,7 +112,7 @@ import { betterAuth } from "better-auth";
 import { db } from "./drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: drizzleAdapter(db, {
       provider: "sqlite", // or "pg" or "mysql"
     })
@@ -129,7 +129,7 @@ import { db } from "./drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { schema } from "./schema";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: drizzleAdapter(db, {
       provider: "sqlite", // or "pg" or "mysql"
       schema: {
@@ -352,9 +352,52 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up-to-date with your plugins' requirements.
 
-## Extending the Schema
+## Extending Core Schema
 
-Better Auth doesn't allow you to directly extend any of the core schema. But you can always add new columns in your table and use database hooks to add or modify data during the lifecycle of core database operations.
+Better Auth provides a type-safe way to extend the `user` and `session` schemas. You can add custom fields to your auth config, and the CLI will automatically update the database schema. These additional fields will be properly inferred in functions like `useSession`, `signUp.email`, and other endpoints that work with user or session objects.
+
+To add custom fields, use the `additionalFields` property in the `user` or `session` object of your auth config. The `additionalFields` object uses field names as keys, with each value being a `FieldAttributes` object containing:
+
+- `type`: The data type of the field (e.g., "string", "number", "boolean").
+- `required`: A boolean indicating if the field is mandatory.
+- `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
+
+Here's an example of how to extend the user schema with a custom "role" field:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   user: {
+      additionalFields: { 
+          role: {
+             type: "string",
+             required: false,
+             defaultValue: "user"
+          }
+      }
+   }
+})
+```
+
+Now you can access the `role` field in your application logic.
+
+```ts
+//on signup
+const res = await auth.api.signUpEmail({
+    email: "test@example.com",
+    password: "password",
+    name: "John Doe",
+    role: "admin"
+})
+
+//user object
+res.user.role // > "admin"
+```
+This configuration will:
+1. Add a "role" column to the user table in your database (if not already present).
+2. Ensure that the "role" field is available in user objects returned by Better Auth functions.
+3. Set a default value of "user" for the "role" field in your application logic.
 
 ## Database Hooks
 
