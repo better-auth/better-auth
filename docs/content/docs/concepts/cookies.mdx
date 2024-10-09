@@ -18,7 +18,7 @@ Keep in mind that this does not imply that all cookies will be shared across sub
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     advanced: {
         crossSubDomainCookies: {
             enabled: true,
@@ -35,7 +35,7 @@ If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true`
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     advanced: {
         disableCsrfCheck: true
     }
@@ -49,7 +49,7 @@ By default, cookies are secure if the server is running in production mode. You 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     advanced: {
         useSecureCookies: true
     }
