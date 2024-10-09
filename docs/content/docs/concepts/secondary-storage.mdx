@@ -1,0 +1,59 @@
+---
+title: Secondary Storage
+description: Learn how to use secondary storage with BetterAuth
+---
+
+Secondary storage in BetterAuth refers to key-value stores used for efficiently managing data such as session information and rate limiting counters.
+
+## Why Use Secondary Storage?
+
+BetterAuth allows you to offload certain data from your primary database to a secondary storage system. This approach offers several benefits:
+
+1. **Performance**: Key-value operations are typically faster than traditional database queries.
+2. **Scalability**: Secondary storage solutions are often designed to handle high-volume, low-complexity data.
+3. **Separation of Concerns**: Keeps your main database focused on core application data.
+
+You can use a secondary storage by setting the `secondaryStorage` option in the `betterAuth` function.
+
+Better auth doesn't come with an adapter for secondary storage, so you need to implement the `SecondaryStorage` interface yourself.
+
+## Implementing a Secondary Storage
+
+You need to implement the `SecondaryStorage` interface to create a secondary storage.
+
+```ts
+interface SecondaryStorage {
+	get: (key: string) => Promise<string | null>
+	set: (
+		key: string,
+		value: string,
+		ttl?: number,
+	) => Promise<void>;
+	delete: (key: string) => Promise<void>;
+}
+```
+
+**Example: Using Redis as a Secondary Storage**
+
+```ts title="auth.ts"
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+const redis = createClient();
+
+export const auth = betterAuth({
+    // ...your config
+    secondaryStorage: {
+        get: async (key: string) => {
+            const value = await redis.get(key);
+            return value;
+        },
+        set: async (key: string, value: string, ttl?: number) => {
+            await redis.set(key, value, { EX: ttl });
+        },
+        delete: async (key: string) => {
+            await redis.del(key);
+        },
+    }
+})
+```
+
