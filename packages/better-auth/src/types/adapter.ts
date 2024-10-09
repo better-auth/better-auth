@@ -58,7 +58,7 @@ export interface SecondaryStorage {
 	set: (
 		key: string,
 		value: string,
-		ttl: number,
+		ttl?: number,
 	) => Promise<void | null | string> | void;
 	delete: (key: string) => Promise<void | null | string> | void;
 }

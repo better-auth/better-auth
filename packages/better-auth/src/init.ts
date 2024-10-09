@@ -81,7 +81,10 @@ export const init = async (opts: BetterAuthOptions) => {
 				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
 			window: options.rateLimit?.window || 60,
 			max: options.rateLimit?.max || 100,
-			storage: options.rateLimit?.storage || "memory",
+			storage:
+				options.rateLimit?.storage || options.secondaryStorage
+					? ("secondary-storage" as const)
+					: ("memory" as const),
 		},
 		authCookies: cookies,
 		logger: createLogger({
@@ -119,7 +122,7 @@ export type AuthContext = {
 		enabled: boolean;
 		window: number;
 		max: number;
-		storage: "memory" | "database";
+		storage: "memory" | "database" | "secondary-storage";
 	} & BetterAuthOptions["rateLimit"];
 	adapter: Adapter;
 	internalAdapter: ReturnType<typeof createInternalAdapter>;
