@@ -9,8 +9,8 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	OAuthProvider,
+	SecondaryStorage,
 } from "./types";
-
 import { defu } from "defu";
 import { getBaseURL } from "./utils/base-url";
 import { DEFAULT_SECRET } from "./utils/constants";
@@ -88,6 +88,7 @@ export const init = async (opts: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		db,
+		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
@@ -128,6 +129,7 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
+	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
 		verify: (hash: string, password: string) => Promise<boolean>;

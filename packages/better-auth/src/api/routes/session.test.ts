@@ -212,3 +212,50 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 });
+
+describe("session storage", async () => {
+	let store = new Map<string, string>();
+	const { client, signInWithTestUser } = await getTestInstance({
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+	});
+
+	it("should store session in secondary storage", async () => {
+		//since the instance creates a session on init, we expect the store to have 1 item
+		expect(store.size).toBe(1);
+		const { headers } = await signInWithTestUser();
+		expect(store.size).toBe(2);
+		const session = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toMatchObject({
+			session: {
+				id: expect.any(String),
+				userId: expect.any(String),
+				expiresAt: expect.any(String),
+				ipAddress: expect.any(String),
+				userAgent: expect.any(String),
+			},
+			user: {
+				id: expect.any(String),
+				name: "test",
+				email: "test@test.com",
+				emailVerified: false,
+				image: null,
+				createdAt: expect.any(String),
+				updatedAt: expect.any(String),
+			},
+		});
+	});
+});

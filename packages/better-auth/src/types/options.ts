@@ -4,7 +4,7 @@ import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "../social-providers/types";
 import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
-import type { Adapter } from "./adapter";
+import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 
@@ -81,6 +81,12 @@ export interface BetterAuthOptions {
 				 */
 				type: KyselyDatabaseType;
 		  };
+	/**
+	 * Secondary storage configuration
+	 *
+	 * This is used to store session and rate limit data.
+	 */
+	secondaryStorage?: SecondaryStorage;
 	/**
 	 * Email and password authentication
 	 */

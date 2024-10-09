@@ -14,6 +14,7 @@ export const createInternalAdapter = (
 	},
 ) => {
 	const options = ctx.options;
+	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
@@ -67,21 +68,42 @@ export const createInternalAdapter = (
 				userAgent: headers?.get("user-agent") || "",
 			};
 			const session = await createWithHooks(data, "session");
+			if (secondaryStorage && session) {
+				secondaryStorage.set(
+					session.id,
+					JSON.stringify(session),
+					sessionExpiration,
+				);
+			}
 			return session;
 		},
 		findSession: async (sessionId: string) => {
-			const session = await adapter.findOne<Session>({
-				model: tables.session.tableName,
-				where: [
-					{
-						value: sessionId,
-						field: "id",
-					},
-				],
-			});
+			let session: Session | null = null;
+			if (secondaryStorage) {
+				const sessionStringified = await secondaryStorage.get(sessionId);
+				if (sessionStringified) {
+					const s = JSON.parse(sessionStringified);
+					session = {
+						...s,
+						expiresAt: new Date(s.expiresAt),
+					};
+				}
+			} else {
+				session = await adapter.findOne<Session>({
+					model: tables.session.tableName,
+					where: [
+						{
+							value: sessionId,
+							field: "id",
+						},
+					],
+				});
+			}
+
 			if (!session) {
 				return null;
 			}
+
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
 				where: [
@@ -108,7 +130,10 @@ export const createInternalAdapter = (
 			return updatedSession;
 		},
 		deleteSession: async (id: string) => {
-			const session = await adapter.delete<Session>({
+			if (secondaryStorage) {
+				await secondaryStorage.delete(id);
+			}
+			await adapter.delete<Session>({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -119,7 +144,21 @@ export const createInternalAdapter = (
 			});
 		},
 		deleteSessions: async (userId: string) => {
-			return await adapter.delete({
+			if (secondaryStorage) {
+				const sessions = await adapter.findMany<Session>({
+					model: tables.session.tableName,
+					where: [
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+				});
+				for (const session of sessions) {
+					await secondaryStorage.delete(session.id);
+				}
+			}
+			await adapter.delete({
 				model: tables.session.tableName,
 				where: [
 					{

@@ -33,6 +33,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
+
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
 					if (session) {
