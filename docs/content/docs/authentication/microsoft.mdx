@@ -20,8 +20,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
 
     ```ts title="auth.ts"   
     import { betterAuth } from "better-auth"
-    import { google } from "better-auth/social-providers"
-
+    
     export const auth = betterAuth({
         socialProviders: { // [!code highlight]
             google: { // [!code highlight]
