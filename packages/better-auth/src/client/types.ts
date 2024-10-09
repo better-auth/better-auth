@@ -13,7 +13,7 @@ import type {
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
 import type { Session, User } from "../types";
-import type { InferFieldsOutput } from "../db";
+import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
@@ -89,8 +89,8 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 		>
 	: {};
 /**
- * signals are just used to recall a computed value. as a
- * convention they start with "_"
+ * signals are just used to recall a computed value.
+ * as a convention they start with "_"
  */
 export type IsSignal<T> = T extends `_${infer _}` ? true : false;
 
@@ -109,6 +109,7 @@ export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
 export type InferAdditionalFromClient<
 	Options extends ClientOptions,
 	Key extends string,
+	Format extends "input" | "output" = "output",
 > = Options["plugins"] extends Array<infer T>
 	? T extends BetterAuthClientPlugin
 		? T["$InferServerPlugin"] extends {
@@ -118,7 +119,9 @@ export type InferAdditionalFromClient<
 					};
 				};
 			}
-			? InferFieldsOutput<Field>
+			? Format extends "input"
+				? InferFieldsInputClient<Field>
+				: InferFieldsOutput<Field>
 			: {}
 		: {}
 	: {};

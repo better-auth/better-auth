@@ -3,14 +3,16 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "./client";
+import { twoFactor } from "../two-factor";
 
 describe("additionalFields", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [twoFactor()],
 		user: {
 			additionalFields: {
 				newField: {
 					type: "string",
-					defaultValue: "test",
+					defaultValue: "default-value",
 				},
 				nonRequiredFiled: {
 					type: "string",
@@ -30,17 +32,74 @@ describe("additionalFields", async () => {
 	});
 
 	it("should require additional fields on signUp", async () => {
-		await auth.api.signUpEmail({
-			body: {
-				email: "test2@test.com",
-				password: "test-password",
-				name: "test2",
-				additionalFields: {
-					nonRequiredFiled: "test",
-					newField: "test",
+		await auth.api
+			.signUpEmail({
+				body: {
+					email: "test@test.com",
+					name: "test",
+					password: "test-password",
+					newField: "new-field",
+					nonRequiredFiled: "non-required-field",
 				},
+			})
+			.catch((e) => {});
+
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						newField: {
+							type: "string",
+						},
+						nonRequiredFiled: {
+							type: "string",
+							defaultValue: "test",
+						},
+					},
+				}),
+			],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
 			},
 		});
+
+		const res = await client.signUp.email({
+			email: "test3@test.com",
+			name: "test3",
+			password: "test-password",
+			newField: "new-field",
+		});
+		expect(res.data?.user.newField).toBe("new-field");
+	});
+
+	it("should work with other plugins", async () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						newField: {
+							type: "string",
+							required: true,
+						},
+					},
+				}),
+				twoFactor(),
+			],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await client.signUp.email({
+			email: "test4@test.com",
+			name: "test4",
+			password: "test-password",
+			newField: "new-field",
+		});
+
+		expect(res.data?.user.newField).toBe("new-field");
 	});
 
 	it("should infer it on the client", async () => {

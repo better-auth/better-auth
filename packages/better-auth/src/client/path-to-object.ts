@@ -11,6 +11,7 @@ import type {
 } from "../types/helper";
 import type {
 	ClientOptions,
+	InferAdditionalFromClient,
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
@@ -28,6 +29,12 @@ export type PathToObject<
 	: T extends `/${infer Segment}`
 		? { [K in CamelCase<Segment>]: Fn }
 		: never;
+
+type InferSignUpEmailCtx<ClientOpts extends ClientOptions> = {
+	email: string;
+	name: string;
+	password: string;
+} & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
 type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 	string,
@@ -86,7 +93,11 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 							? (
 									...data: HasRequiredKeys<InferCtx<C>> extends true
 										? [
-												Prettify<InferCtx<C>>,
+												Prettify<
+													T["path"] extends `/sign-up/email`
+														? InferSignUpEmailCtx<COpts>
+														: InferCtx<C>
+												>,
 												BetterFetchOption<C["body"], C["query"], C["params"]>?,
 											]
 										: [

@@ -116,13 +116,31 @@ export type InferFieldsInput<Field> = Field extends Record<
 	FieldAttribute
 >
 	? {
-			[key in Key as Field[key]["required"] extends true
-				? key
-				: Field[key]["defaultValue"] extends any
-					? key
-					: never]: InferFieldOutput<Field[key]>;
+			[key in Key as Field[key]["required"] extends false
+				? never
+				: Field[key]["defaultValue"] extends string | number | boolean | Date
+					? never
+					: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]?: InferFieldOutput<Field[key]>;
+			[key in Key]: InferFieldInput<Field[key]> | undefined;
+		}
+	: {};
+
+/**
+ * For client will add "?" on optional fields
+ */
+export type InferFieldsInputClient<Field> = Field extends Record<
+	infer Key,
+	FieldAttribute
+>
+	? {
+			[key in Key as Field[key]["required"] extends false
+				? never
+				: Field[key]["defaultValue"] extends string | number | boolean | Date
+					? never
+					: key]: InferFieldInput<Field[key]>;
+		} & {
+			[key in Key]?: InferFieldInput<Field[key]> | undefined;
 		}
 	: {};
 
@@ -131,6 +149,8 @@ type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
 	: T["required"] extends false
 		? InferValueType<T["type"]> | undefined
 		: InferValueType<T["type"]>;
+
+type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;
 
 export type PluginFieldAttribute = Omit<
 	FieldAttribute,

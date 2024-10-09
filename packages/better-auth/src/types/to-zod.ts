@@ -19,8 +19,7 @@ export type toZod<T> = {
 	number: z.ZodNumber;
 	boolean: z.ZodBoolean;
 	date: z.ZodDate;
-	// @ts-expect-error
-	object: z.ZodObject<{ [k in keyof T]: toZod<T[k]> }, { strict: true }, T>;
+	object: z.ZodObject<{ [k in keyof T]: toZod<T[k]> }>;
 	rest: never;
 }[zodKey<T>];
 

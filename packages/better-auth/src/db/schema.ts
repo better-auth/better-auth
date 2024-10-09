@@ -138,6 +138,16 @@ export function parseUserInput(
 	return parseInputData(user || {}, { fields: schema });
 }
 
+export function parseAdditionalUserInput(
+	options: BetterAuthOptions,
+	user?: Record<string, any>,
+) {
+	const schema = {
+		...options.user?.additionalFields,
+	};
+	return parseInputData(user || {}, { fields: schema });
+}
+
 export function parseAccountInput(
 	options: BetterAuthOptions,
 	account: Partial<Account>,

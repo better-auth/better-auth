@@ -1,5 +1,5 @@
 import { alphabet, generateRandomString } from "../../crypto/random";
-import { z, ZodOptional } from "zod";
+import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";
 import { setSessionCookie } from "../../utils/cookies";
@@ -7,11 +7,10 @@ import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
-	HasRequiredKeys,
-	InferUser,
+	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
-import { parseUserInput } from "../../db/schema";
+import { parseAdditionalUserInput } from "../../db/schema";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -23,20 +22,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					currentURL: z.string().optional(),
 				})
 				.optional(),
-			body: z.object({
-				name: z.string(),
-				email: z.string(),
-				password: z.string(),
-				image: z.string().optional(),
-				callbackURL: z.string().optional(),
-				additionalFields: z
-					.record(z.string(), z.any())
-					.optional() as unknown as HasRequiredKeys<
-					AdditionalUserFieldsInput<O>
-				> extends true
-					? toZod<AdditionalUserFieldsInput<O>>
-					: ZodOptional<toZod<AdditionalUserFieldsInput<O>>>,
-			}),
+			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
+				name: ZodString;
+				email: ZodString;
+				password: ZodString;
+				callbackURL: ZodOptional<ZodString>;
+			}> &
+				toZod<AdditionalUserFieldsInput<O>>,
 		},
 		async (ctx) => {
 			if (!ctx.context.options.emailAndPassword?.enabled) {
@@ -44,8 +36,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: "Email and password sign up is not enabled",
 				});
 			}
-			const { name, email, password, image } = ctx.body;
-			const additionalFields = ctx.body.additionalFields;
+			const body = ctx.body as any as User & {
+				password: string;
+				callbackURL?: string;
+			} & {
+				[key: string]: any;
+			};
+			const { name, email, password, image, ...additionalFields } = body;
 			const isValidEmail = z.string().email().safeParse(email);
 
 			if (!isValidEmail.success) {
@@ -75,7 +72,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const additionalData = parseUserInput(
+			const additionalData = parseAdditionalUserInput(
 				ctx.context.options,
 				additionalFields as any,
 			);
@@ -123,7 +120,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const url = `${
 					ctx.context.baseURL
 				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || ctx.query?.currentURL || "/"
+					body.callbackURL || ctx.query?.currentURL || "/"
 				}`;
 				await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
 					createdUser.email,
@@ -138,9 +135,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					error: null,
 				},
 				{
-					body: ctx.body.callbackURL
+					body: body.callbackURL
 						? {
-								url: ctx.body.callbackURL,
+								url: body.callbackURL,
 								redirect: true,
 							}
 						: {
