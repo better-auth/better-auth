@@ -19,7 +19,6 @@ type InferAPI<API> = Omit<
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
-	type API = typeof api;
 
 	return {
 		handler: async (request: Request) => {

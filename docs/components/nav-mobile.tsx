@@ -149,7 +149,7 @@ export const DocsNavbarMobileBtn: React.FC = () => {
 				viewBox="0 0 24 24"
 			>
 				<path
-					fill="currentColor"
+					className="fill-foreground"
 					fillRule="evenodd"
 					d="M2.25 6A.75.75 0 0 1 3 5.25h18a.75.75 0 0 1 0 1.5H3A.75.75 0 0 1 2.25 6m0 4A.75.75 0 0 1 3 9.25h18a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75m0 4a.75.75 0 0 1 .75-.75h7a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75m0 4a.75.75 0 0 1 .75-.75h7a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75"
 					clipRule="evenodd"

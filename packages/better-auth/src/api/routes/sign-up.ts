@@ -77,14 +77,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				additionalFields as any,
 			);
 			const createdUser = await ctx.context.internalAdapter.createUser({
-				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
 				email: email.toLowerCase(),
 				name,
 				image,
-				emailVerified: false,
-				createdAt: new Date(),
-				updatedAt: new Date(),
 				...additionalData,
+				emailVerified: false,
 			});
 			if (!createdUser) {
 				throw new APIError("BAD_REQUEST", {

@@ -40,7 +40,6 @@ export const createInternalAdapter = (
 			const createdUser = await createWithHooks(
 				{
 					id: generateId(),
-					emailVerified: false,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...user,
@@ -218,8 +217,14 @@ export const createInternalAdapter = (
 			});
 			return user;
 		},
-		linkAccount: async (account: Account) => {
-			const _account = await createWithHooks(account, "account");
+		linkAccount: async (account: Omit<Account, "id"> & Record<string, any>) => {
+			const _account = await createWithHooks(
+				{
+					...account,
+					id: generateId(),
+				},
+				"account",
+			);
 			return _account;
 		},
 		updateUser: async (userId: string, data: Partial<User>) => {

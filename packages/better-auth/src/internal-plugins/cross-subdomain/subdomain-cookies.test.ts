@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { crossSubdomainCookies } from "./index";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../utils/cookies";
 
 describe("crossSubdomainCookies", () => {
