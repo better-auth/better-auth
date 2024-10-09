@@ -8,6 +8,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const $fetch = createFetch({
 		baseURL: getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL),
 		credentials: "include",
+		method: "GET",
 		...options?.fetchOptions,
 		plugins: [
 			csrfPlugin,
