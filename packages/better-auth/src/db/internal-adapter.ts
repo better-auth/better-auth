@@ -39,11 +39,10 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
-					...user,
 					id: generateId(),
-					emailVerified: false,
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					...user,
 				},
 				"user",
 			);
