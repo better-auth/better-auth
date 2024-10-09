@@ -139,10 +139,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	);
 
 export const getSessionFromCtx = async (ctx: Context<any, any>) => {
+	//@ts-expect-error
 	const session = await getSession()({
 		...ctx,
-		//@ts-expect-error: By default since this request context comes from a router it'll have a `router` flag which force it to be a request object
-		_flag: undefined,
+		_flag: "json",
+		headers: ctx.headers!,
 	});
 
 	return session;

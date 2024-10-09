@@ -43,6 +43,20 @@ await auth.api.getSession({
 Unlike the client, the server needs the values to be passed as an object with the key `body` for the body, `headers` for the headers, and `query` for the query.
 
 
+### Getting the `Response` Object
+
+When you invoke an API endpoint on the server, it will return a standard JavaScript object or array directly. To get the `Response` object instead, you can use the `asResponse` option.
+
+```ts title="server.ts"
+const response = await auth.api.signInEmail({
+    body: {
+        email: "",
+        password: ""
+    },
+    asResponse: true
+})
+```
+
 ## Error Handling
 
 When you call an API endpoint in the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
