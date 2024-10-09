@@ -9,7 +9,7 @@ import { VersionProgress } from "./version-progress";
 export const Navbar = () => {
   return (
     <div className="flex flex-col sticky top-0 bg-background backdrop-blur-md z-40">
-      <nav className="md:grid grid-cols-11 md:border-b top-0 flex items-center justify-between ">
+      <nav className="md:grid grid-cols-11 border-b-input/50 border-b-[1.2px] md:border-b top-0 flex items-center justify-between ">
         <div className="flex gap-2 w-[30rem] items-center">
           <Link
             href="/"

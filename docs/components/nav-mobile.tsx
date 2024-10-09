@@ -83,7 +83,7 @@ export const NavbarMobile = () => {
       }}
       className={cn(
         "blurredNav",
-        "fixed top-[50px] z-50 left-0  px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-transparent md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]"
+        "fixed top-[50px] z-50 left-0  px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-stone-900/90 md:hidden transform-gpu [] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]"
       )}
     >
       <AnimatePresence>
