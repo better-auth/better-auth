@@ -46,3 +46,4 @@ jobs:
 
             - name: Stop Docker Containers
               run: docker compose down
+            
