@@ -65,6 +65,9 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
+	if (fieldType === "string[]" || fieldType === "number[]") {
+		return columnDataType.toLowerCase().includes("json");
+	}
 	const types = map[dbType];
 	const type = types[fieldType].map((t) => t.toLowerCase());
 	const matches = type.includes(columnDataType.toLowerCase());
@@ -168,6 +171,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 		} as const;
 		if (dbType === "mysql" && type === "string") {
 			return "varchar(255)";
+		}
+		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
+			return "text";
+		}
+		if (type === "string[]" || type === "number[]") {
+			return "jsonb";
 		}
 		return typeMap[type];
 	}
