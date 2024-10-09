@@ -228,8 +228,8 @@ export const getFullOrganization = createAuthEndpoint(
 		const session = ctx.context.session;
 		const orgId = ctx.query.orgId || session.session.activeOrganizationId;
 		if (!orgId) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Organization not found",
+			return ctx.json(null, {
+				status: 400,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
