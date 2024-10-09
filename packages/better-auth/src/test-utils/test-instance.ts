@@ -142,11 +142,11 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 	}
 
 	const client = createAuthClient({
+		baseURL:
+			options?.baseURL ||
+			"http://localhost:" + (config?.port || 3000) + "/api/auth",
 		fetchOptions: {
 			customFetchImpl,
-			baseURL:
-				options?.baseURL ||
-				"http://localhost:" + (config?.port || 3000) + "/api/auth",
 		},
 	});
 	return {
