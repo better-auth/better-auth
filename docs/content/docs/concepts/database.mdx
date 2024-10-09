@@ -142,9 +142,12 @@ export const auth = betterAuth({
 })
 ```
 
-## Running Migrations
+## CLI 
 
-Better Auth comes with a CLI tool to manage database migrations. Use the `migrate` command to create or update tables as needed.
+
+Better Auth comes with a CLI tool to manage database migrations and generate schema.
+
+### Running Migrations
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns.
 
@@ -152,7 +155,7 @@ The cli checks your database and prompts you to add missing tables or update exi
 npx better-auth migrate
 ```
 
-## Generting Schema
+### Generting Schema
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
@@ -165,6 +168,63 @@ See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
 <Callout>
 If you prefer adding tables manually, you can do that as well. The core schema required by Better Auth is described below and you can find additional schema required by plugins in the plugin documentation.
 </Callout>
+
+
+## Secondary Storage
+
+Secondary storage in BetterAuth allows you to use key-value stores for managing session data, rate limiting counters, etc.
+
+### Implementation
+
+To use secondary storage, implement the `SecondaryStorage` interface:
+
+```typescript
+interface SecondaryStorage {
+	get: (key: string) => Promise<string | null>
+	set: (
+		key: string,
+		value: string,
+		ttl?: number,
+	) => Promise<void>;
+	delete: (key: string) => Promise<void>;
+}
+```
+
+Then, provide your implementation to the `betterAuth` function:
+
+```typescript
+betterAuth({
+	// ... other options
+	secondaryStorage: {
+		// Your implementation here
+	}
+})
+```
+
+**Example: Redis Implementation**
+
+Here's a basic example using Redis:
+
+```typescript
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+
+const redis = createClient();
+
+export const auth = betterAuth({
+	// ... other options
+	secondaryStorage: {
+		get: async (key) => await redis.get(key),
+		set: async (key, value, ttl) => {
+			if (ttl) await redis.set(key, value, { EX: ttl });
+			else await redis.set(key, value);
+		},
+		delete: async (key) => await redis.del(key),
+	}
+});
+```
+
+This implementation allows BetterAuth to use Redis for storing session data and rate limiting counters.
 
 ## Core Schema
 
