@@ -1,12 +1,12 @@
 {
     "name": "better-auth",
-    "version": "0.3.3-beta.8",
+    "version": "0.3.4-beta.4",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean --dts",
         "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
-        "dev:dts": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --dts",
+        "dev:dts": "NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
         "test": "pnpm prisma:push && pnpm typecheck && vitest",
         "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
         "test:adapters": "pnpm prisma:push && vitest adapters",
@@ -93,7 +93,7 @@
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "arctic": "2.0.0-next.9",
-        "better-call": "0.2.3-beta.10",
+        "better-call": "0.2.5-beta.4",
         "c12": "^1.11.2",
         "chalk": "^5.3.0",
         "commander": "^12.1.0",

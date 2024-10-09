@@ -8,6 +8,7 @@ import { logger } from "../../utils/logger";
 import type { BetterAuthOptions } from "../../types";
 import { getSchema } from "./get-schema";
 import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
+import type { KyselyDatabaseType } from "../../adapters/kysely-adapter/types";
 
 const postgresMap = {
 	string: ["character varying", "text"],
@@ -45,17 +46,28 @@ const sqliteMap = {
 	date: ["DATE", "INTEGER"],
 };
 
+const mssqlMap = {
+	string: ["nvarchar", "varchar"],
+	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
+	boolean: ["bit", "boolean"],
+	date: ["datetime", "date"],
+};
+
 const map = {
 	postgres: postgresMap,
 	mysql: mysqlMap,
 	sqlite: sqliteMap,
+	mssql: mssqlMap,
 };
 
 export function matchType(
 	columnDataType: string,
 	fieldType: FieldType,
-	dbType: "postgres" | "sqlite" | "mysql",
+	dbType: KyselyDatabaseType,
 ) {
+	if (fieldType === "string[]" || fieldType === "number[]") {
+		return columnDataType.toLowerCase().includes("json");
+	}
 	const types = map[dbType];
 	const type = types[fieldType].map((t) => t.toLowerCase());
 	const matches = type.includes(columnDataType.toLowerCase());
@@ -65,9 +77,16 @@ export function matchType(
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 
-	const { kysely: db, databaseType: dbType } =
-		await createKyselyAdapter(config);
-	if (!db || !dbType) {
+	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
+
+	if (!dbType) {
+		logger.warn(
+			"Could not determine database type, defaulting to sqlite. Please provide a type in the database options to avoid this.",
+		);
+		dbType = "sqlite";
+	}
+
+	if (!db) {
 		logger.error(
 			"Only kysely adapter is supported for migrations. You can use `generate` command to generate the schema, if you're using a different adapter.",
 		);
@@ -152,6 +171,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 		} as const;
 		if (dbType === "mysql" && type === "string") {
 			return "varchar(255)";
+		}
+		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
+			return "text";
+		}
+		if (type === "string[]" || type === "number[]") {
+			return "jsonb";
 		}
 		return typeMap[type];
 	}

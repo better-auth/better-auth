@@ -16,7 +16,7 @@ To add a plugin on the server, include it in the `plugins` array in your auth co
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         // Add your plugins here
     ]
@@ -49,11 +49,11 @@ const myPlugin = {
 
 ### Endpoints
 
-To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and teh value being `AuthEndpoint`. 
+To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and teh value being `AuthEndpoint`.
 
 To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
 
-Better auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple web framework made by the same author of Better Auth.
+Better Auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple web framework made by the same author of Better Auth.
 
 ```ts title="plugin.ts"
 import { createAuthEndpoint } from "better-auth";
@@ -84,12 +84,12 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `logger`: The logger instance used by Better Auth.
 - `db`: The kysely instance used by Better Auth to interact with the database.
 - `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for peroframnce reasons)
-- `intenralAdapter`: this are intenral db calls that are used by better auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
-- `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on 
+- `intenralAdapter`: this are intenral db calls that are used by Better Auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
+- `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on
 
 For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/init.ts">source code </Link>.
 
-    
+
 **Rules for Endpoints**
 
 - Makes sure you use kebab-case for the endpoint path.
@@ -124,7 +124,7 @@ By default better-auth will create an `id` field for each table. You can add add
 
 The key is the column name and the value is the column definition. The column definition can have the following properties:
 
-`type`: The type of the filed. It can be `string`, `number`, `boolean`, `date`. 
+`type`: The type of the filed. It can be `string`, `number`, `boolean`, `date`.
 
 `required`:  if the field should be required on a new record. (default: `false`)
 
@@ -164,7 +164,7 @@ const myPlugin = (opts: PluginOptions)=>{
 
 ### Middleware
 
-You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware functions created by `createAuthMiddelware`. 
+You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware functions created by `createAuthMiddelware`.
 
 `createAuthMiddelware` wraps around `createMiddleware` from Better Call. It takes a function that returns a middleware function. The function will be called with the context object.
 
@@ -188,7 +188,7 @@ Additional to middlewares you can also hook into right before a request is made 
 
 #### On Request
 
-The `onRequest` function is called right before the request is made. It takes two parameters: the `request` and the `context` object. 
+The `onRequest` function is called right before the request is made. It takes two parameters: the `request` and the `context` object.
 
 Here’s how it works:
 
@@ -200,7 +200,7 @@ Here’s how it works:
 const myPlugin = {
     id: "my-plugin",
     onRequest: async (requset, context) => {
-        //do something  
+        //do something
     },
 }
 ```
@@ -260,7 +260,7 @@ const myPlugin = {
 
 #### When to use Middelware, Hooks, On Request, On Response
 
-- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes. 
+- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes.
 - **Hooks**: You should use hooks when you want to target a specific route or request.
 - **On Request & On Response**: You should use on request and on response when you want to do something that affects all requests or responses.
 
@@ -286,11 +286,11 @@ const myPlugin = {
 
 ### Client
 
-If your endpoints needs to be called from the client, you'll need to also create a client plugin. Better auth clients can infer the endpoints from the server plugins. You can also add additional client side logic.
+If your endpoints needs to be called from the client, you'll need to also create a client plugin. Better Auth clients can infer the endpoints from the server plugins. You can also add additional client side logic.
 
 **Endpoint Inference**
 
-Endpoints are inferred from the server plugin by adding a `$InferServerPlugin` key to the client plugin. 
+Endpoints are inferred from the server plugin by adding a `$InferServerPlugin` key to the client plugin.
 
 The client infers the `path` as an object and converts kebab-case to camelCase. For example, `/my-plugin/hello-world` becomes `myPlugin.helloWorld`.
 
@@ -308,7 +308,7 @@ const myPluginClient = {
 
 If you need to add additional methods or what not to the client you can use the `getActions` function. This function is called with the `fetch` function from the client.
 
-Better auth uses <Link href="https://bette-fetch.vercel.app"> Better fetch </Link> to make requests. Better fetch is a simple fetch wrapper made by the same author of Better Auth.
+Better Auth uses <Link href="https://bette-fetch.vercel.app"> Better fetch </Link> to make requests. Better fetch is a simple fetch wrapper made by the same author of Better Auth.
 
 ```ts title="client-plugin.ts"
 import type { BetterAuthClientPlugin } from "better-auth/client";
@@ -344,7 +344,7 @@ const myPluginClient = {
 
 **getAtoms**
 
-This is only useful if you want to provide `hooks` like `useSession`. 
+This is only useful if you want to provide `hooks` like `useSession`.
 
 Get atoms is called with the `fetch` function from better fetch and it should return an object with the atoms. This atoms should be created using <Link href="https://github.com/nanostores/nanostores">nanostore</Link>. The atoms will be resolved by each framework `useStore` hook provided by nanostore.
 

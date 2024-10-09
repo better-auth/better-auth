@@ -118,10 +118,9 @@ export const username = () => {
 					}),
 				},
 				async (ctx) => {
-					const res = await signUpEmail({
+					const res = await signUpEmail()({
 						...ctx,
-						//@ts-expect-error
-						_flag: undefined,
+						_flag: "json",
 					});
 					if (res.error) {
 						return ctx.json(null, {

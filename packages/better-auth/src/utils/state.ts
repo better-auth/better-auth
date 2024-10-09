@@ -5,6 +5,7 @@ export function generateState(
 	callbackURL?: string,
 	currentURL?: string,
 	dontRememberMe?: boolean,
+	additionalFields?: Record<string, any>,
 ) {
 	const code = generateStateOAuth();
 	const state = JSON.stringify({
@@ -12,6 +13,7 @@ export function generateState(
 		callbackURL,
 		currentURL,
 		dontRememberMe,
+		additionalFields,
 	});
 	return { state, code };
 }
@@ -23,6 +25,7 @@ export function parseState(state: string) {
 			callbackURL: z.string().optional(),
 			currentURL: z.string().optional(),
 			dontRememberMe: z.boolean().optional(),
+			additionalFields: z.record(z.string()).optional(),
 		})
 		.safeParse(JSON.parse(state));
 	return data;

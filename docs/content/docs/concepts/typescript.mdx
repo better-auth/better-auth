@@ -1,6 +1,6 @@
 ---
 title: Typescript
-description: Better auth typescript integration
+description: Better Auth typescript integration
 ---
 
 Better Auth is designed to be type-safe. Both the client and server are built with TypeScript, allowing you to easily infer types.
@@ -25,7 +25,7 @@ You can also infer types on the server side.
 import { betterAuth } from "better-auth"
 import Database from "better-sqlite3"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     database: new Database("database.db")
 })
 

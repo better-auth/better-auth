@@ -9,12 +9,12 @@ Any endpoint added on the server will be available on the `api` object.
 
 ## Calling API on the Server
 
-Better auth uses a library called [better-call](https://github.com/bekacru/better-call) to make API endpoints. It's a library made by the same team behind Better Auth and is designed to work seamlessly with it.Better call endpoints allow you to call `rest` api handlers as if they were normal functions.
+Better Auth uses a library called [better-call](https://github.com/bekacru/better-call) to make API endpoints. It's a library made by the same team behind Better Auth and is designed to work seamlessly with it.Better call endpoints allow you to call `rest` api handlers as if they were normal functions.
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         // add your plugins here
     ]
@@ -43,10 +43,24 @@ await auth.api.getSession({
 Unlike the client, the server needs the values to be passed as an object with the key `body` for the body, `headers` for the headers, and `query` for the query.
 
 
+### Getting the `Response` Object
+
+When you invoke an API endpoint on the server, it will return a standard JavaScript object or array directly. To get the `Response` object instead, you can use the `asResponse` option.
+
+```ts title="server.ts"
+const response = await auth.api.signInEmail({
+    body: {
+        email: "",
+        password: ""
+    },
+    asResponse: true
+})
+```
+
 ## Error Handling
 
 When you call an API endpoint in the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
- 
+
 ```ts title="server.ts"
 import { APIError } from "better-auth/api";
 

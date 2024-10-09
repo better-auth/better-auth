@@ -86,7 +86,7 @@ export function getEndpoints<
 		getCSRFToken,
 		getSession: getSession<Option>(),
 		signOut,
-		signUpEmail,
+		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
 		forgetPassword,
 		resetPassword,
@@ -162,6 +162,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
+	console.log({ basePath });
 
 	return createRouter(api, {
 		extraContext: ctx,

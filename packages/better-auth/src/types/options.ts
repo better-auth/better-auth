@@ -1,4 +1,4 @@
-import type { Dialect, PostgresPool } from "kysely";
+import type { Dialect, Kysely, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { OAuthProviderList } from "../social-providers/types";
@@ -6,6 +6,8 @@ import type { SocialProviders } from "../social-providers";
 import type { RateLimit } from "./models";
 import type { Adapter } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
+import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { FieldAttribute } from "../db";
 
 export interface BetterAuthOptions {
 	/**
@@ -65,7 +67,21 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| BetterSqlite3Database
 		| Dialect
-		| Adapter;
+		| {
+				dialect: Dialect;
+				type: KyselyDatabaseType;
+		  }
+		| Adapter
+		| {
+				/**
+				 * Kysely instance
+				 */
+				db: Kysely<any>;
+				/**
+				 * Database type between postgres, mysql and sqlite
+				 */
+				type: KyselyDatabaseType;
+		  };
 	/**
 	 * Email and password authentication
 	 */
@@ -142,6 +158,12 @@ export interface BetterAuthOptions {
 		 */
 		modelName?: string;
 		fields?: Partial<Record<keyof User, string>>;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	session?: {
 		modelName?: string;
@@ -159,6 +181,12 @@ export interface BetterAuthOptions {
 		 * @default 1 day (60 * 60 * 24)
 		 */
 		updateAge?: number;
+		/**
+		 * Additional fields for the session
+		 */
+		additionalFields?: {
+			[key: string]: FieldAttribute;
+		};
 	};
 	account?: {
 		modelName?: string;
