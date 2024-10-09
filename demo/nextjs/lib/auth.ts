@@ -82,7 +82,7 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey(),
-		bearer()
+		bearer(),
 	],
 	socialProviders: {
 		github: {
