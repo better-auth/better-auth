@@ -20,6 +20,11 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 */
 	returned?: boolean;
 	/**
+	 * If a value should be provided when creating a new record.
+	 * @default true
+	 */
+	input?: boolean;
+	/**
 	 * If the value should be hashed when it's stored.
 	 * @default false
 	 */
@@ -131,7 +136,9 @@ export type InferFieldsInput<Field> = Field extends Record<
 					? never
 					: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]: InferFieldInput<Field[key]> | undefined;
+			[key in Key as Field[key]["input"] extends false ? never : key]:
+				| InferFieldInput<Field[key]>
+				| undefined;
 		}
 	: {};
 
