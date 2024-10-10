@@ -164,17 +164,20 @@ const myPlugin = (opts: PluginOptions)=>{
 
 ### Middleware
 
-You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware functions created by `createAuthMiddelware`.
+You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware objects with a `path` and `middleware` property.
 
-`createAuthMiddelware` wraps around `createMiddleware` from Better Call. It takes a function that returns a middleware function. The function will be called with the context object.
+The path can be a string or a path matcher. It uses the same path matcher as `better-call`.
 
 ```ts title="plugin.ts"
 const myPlugin = {
     id: "my-plugin",
     middleware: [
-        createAuthMiddelware(async(ctx)=>{
-            //do something
-        })
+        {
+            path: "/my-plugin/hello-world",
+            middleware: createAuthMiddelware(async(ctx)=>{
+                //do something
+            })
+        }
     ]
 }
 ```
@@ -225,9 +228,7 @@ const myPlugin = {
 
 ### Hooks
 
-Hooks are similar to middlewares, as well as the `onRequest` and `onResponse` functions. However, unlike `onResponse` and `onRequest`, hooks provide the ability to use a `better-call` handler and include a `matcher` function that lets you target specific requests.
-
-YOu should use hooks when you need to hook into to a specific endpoint or request for more precise control.
+Hooks are similar to middlewares. But they run even when the endpoint is called directly on the server.
 
 ```ts title="plugin.ts"
 import {  createAuthMiddleware } from "better-auth/plugins";
@@ -238,7 +239,7 @@ const myPlugin = {
         before: {
             [{
                 matcher: (context)=>{
-                    return context.req.method === "POST"
+                    return context.headers.get("x-my-header") === "my-value"
                 },
                 handler: createAuthMiddleware(async(ctx)=>{
                     //do something before the request
@@ -249,11 +250,11 @@ const myPlugin = {
             matcher: (context)=>{
                 return context.req.method === "POST
             },
-            handler: createAuthMiddleware(async(ctx)=>{
-                //this is the returned response object from the actual endpoint
-                const returned = ctx.context.returned
-                //do something after the request
-            })
+            handler: async(ctx)=>{
+                return {
+                    context: ctx // if you want to modify the context
+                }
+            }
         }]
     }
 } satisfies BetterAuthPlugin
@@ -262,8 +263,8 @@ const myPlugin = {
 
 #### When to use Middelware, Hooks, On Request, On Response
 
-- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes.
-- **Hooks**: You should use hooks when you want to target a specific route or request.
+- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes. And you want to run the middleware only when the routes are called through a request.
+- **Hooks**: You should use hooks when you want to target a specific route or request. And you want to run the hook even if the endpoint is called directly.
 - **On Request & On Response**: You should use on request and on response when you want to do something that affects all requests or responses.
 
 ### Rate Limit
