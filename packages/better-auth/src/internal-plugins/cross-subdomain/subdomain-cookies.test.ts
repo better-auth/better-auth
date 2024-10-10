@@ -47,7 +47,6 @@ describe("crossSubdomainCookies", () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-
 					expect(setCookie).toContain("Domain=app.example.com");
 				},
 			},
