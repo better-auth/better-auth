@@ -17,7 +17,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     import { betterAuth } from "better-auth"
     import { anonymous } from "better-auth/plugins" // [!code highlight]
     
-    export const auth = await betterAuth({
+    export const auth = betterAuth({
         // ... other config options
         plugins: [
             anonymous() // [!code highlight]
@@ -90,7 +90,7 @@ const user = await client.anonymous.linkAccount({
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         anonymous({
             emailDomainName: "example.com"
@@ -106,6 +106,6 @@ The anonymous plugin requires an additional field in the user table:
 
 <DatabaseTable
     fields={[
-        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous." },
+        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous.", isOptional: true },
     ]}
 />

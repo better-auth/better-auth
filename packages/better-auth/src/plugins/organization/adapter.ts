@@ -7,96 +7,6 @@ import type { OrganizationOptions } from "./organization";
 import type { Invitation, Member, Organization } from "./schema";
 import { BetterAuthError } from "../../error/better-auth-error";
 
-const directDBCalls = {
-	findFullOrganization: async (orgId: string, db: Kysely<any>) => {
-		const rows = await db
-			?.selectFrom("organization")
-			.leftJoin("member", "organization.id", "member.organizationId")
-			.leftJoin("invitation", "organization.id", "invitation.organizationId")
-			.leftJoin("user", "member.userId", "user.id")
-			.where("organization.id", "=", orgId)
-			.select([
-				"organization.id as org_id",
-				"organization.name as org_name",
-				"organization.slug as org_slug",
-				"organization.logo as org_logo",
-				"organization.metadata as org_metadata",
-				"organization.createdAt as org_createdAt",
-				"member.id as member_id",
-				"member.userId as member_user_id",
-				"member.role as member_role",
-				"member.createdAt as member_createdAt",
-				"invitation.id as invitation_id",
-				"invitation.email as invitation_email",
-				"invitation.status as invitation_status",
-				"invitation.expiresAt as invitation_expiresAt",
-				"invitation.role as invitation_role",
-				"invitation.inviterId as invitation_inviterId",
-				"user.id as user_id",
-				"user.name as user_name",
-				"user.email as user_email",
-				"user.image as user_image",
-			])
-			.execute();
-		if (!rows || rows.length === 0) {
-			return null;
-		}
-		const organization: Organization & {
-			members: (Member & {
-				user: { id: string; name: string; email: string; image: string };
-			})[];
-			invitations: Invitation[];
-		} = {
-			id: rows[0].org_id,
-			name: rows[0].org_name,
-			slug: rows[0].org_slug,
-			logo: rows[0].org_logo,
-			metadata: rows[0].org_metadata
-				? JSON.parse(rows[0].org_metadata)
-				: undefined,
-			createdAt: rows[0].org_createdAt,
-			members: [],
-			invitations: [],
-		};
-		rows.forEach((row) => {
-			if (row.member_id) {
-				const existingMember = organization.members.find(
-					(m) => m.id === row.member_id,
-				);
-				if (!existingMember) {
-					organization.members.push({
-						id: row.member_id,
-						userId: row.member_user_id,
-						role: row.member_role,
-						createdAt: row.member_createdAt,
-						// Add other member fields
-						user: {
-							id: row.user_id,
-							name: row.user_name,
-							email: row.user_email,
-							image: row.user_image,
-						},
-						email: row.user_email,
-						organizationId: row.org_id,
-					});
-				}
-			}
-			if (row.invitation_id) {
-				organization.invitations.push({
-					id: row.invitation_id,
-					email: row.invitation_email,
-					status: row.invitation_status,
-					expiresAt: row.invitation_expiresAt,
-					organizationId: row.org_id,
-					role: row.invitation_role,
-					inviterId: row.invitation_inviterId,
-				});
-			}
-		});
-		return organization;
-	},
-};
-
 export const getOrgAdapter = (
 	adapter: Adapter,
 	options?: OrganizationOptions,
@@ -383,75 +293,72 @@ export const getOrgAdapter = (
 		 * @requires db
 		 */
 		findFullOrganization: async (orgId: string, db?: Kysely<any>) => {
-			async function base() {
-				const org = await adapter.findOne<Organization>({
-					model: "organization",
-					where: [
-						{
-							field: "id",
-							value: orgId,
-						},
-					],
-				});
+			const org = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: orgId,
+					},
+				],
+			});
+			if (!org) {
+				return null;
+			}
 
-				const invitations = await adapter.findMany<Invitation>({
-					model: "invitation",
-					where: [
-						{
-							field: "organizationId",
-							value: orgId,
-						},
-					],
-				});
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
 
-				const members = await adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: orgId,
-						},
-					],
-				});
+			const members = await adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
 
-				const membersWithUsers = await Promise.all(
-					members.map(async (member) => {
-						const user = await adapter.findOne<User>({
-							model: "user",
-							where: [
-								{
-									field: "id",
-									value: member.userId,
-								},
-							],
-						});
-						if (!user) {
-							throw new BetterAuthError(
-								"Unexpected error: User not found for member",
-							);
-						}
-						return {
-							...member,
-							user: {
-								id: user.id,
-								name: user.name,
-								email: user.email,
-								image: user.image,
+			const membersWithUsers = await Promise.all(
+				members.map(async (member) => {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "id",
+								value: member.userId,
 							},
-						};
-					}),
-				);
-				const fullOrg = {
-					...org,
-					invitations,
-					members: membersWithUsers,
-				};
-				return fullOrg;
-			}
-			if (db) {
-				return directDBCalls.findFullOrganization(orgId, db);
-			}
-			return base();
+						],
+					});
+					if (!user) {
+						throw new BetterAuthError(
+							"Unexpected error: User not found for member",
+						);
+					}
+					return {
+						...member,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+					};
+				}),
+			);
+			const fullOrg = {
+				...org,
+				invitations,
+				members: membersWithUsers,
+			};
+			return fullOrg;
 		},
 		listOrganizations: async (userId: string) => {
 			const members = await adapter.findMany<Member>({

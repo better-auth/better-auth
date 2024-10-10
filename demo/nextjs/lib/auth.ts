@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import {
+	bearer,
 	organization,
 	passkey,
 	phoneNumber,
@@ -12,6 +13,7 @@ import { resend } from "./email/resend";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
+
 export const auth = betterAuth({
 	database: new LibsqlDialect({
 		url: process.env.TURSO_DATABASE_URL || "",
@@ -43,14 +45,6 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
-		phoneNumber({
-			otp: {
-				sendOTP(phoneNumber, code) {
-					console.log(`Sending OTP to ${phoneNumber}: ${code}`);
-				},
-				sendOTPonSignUp: true,
-			},
-		}),
 		organization({
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({
@@ -88,6 +82,7 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey(),
+		bearer(),
 	],
 	socialProviders: {
 		github: {

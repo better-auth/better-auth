@@ -1,6 +1,4 @@
 import { serializeSigned } from "better-call";
-import { createAuthMiddleware } from "../../api/call";
-import { BetterAuthError } from "../../error/better-auth-error";
 import type { BetterAuthPlugin } from "../../types/plugins";
 
 /**
@@ -9,25 +7,49 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 export const bearer = () => {
 	return {
 		id: "bearer",
-		async onRequest(request, ctx) {
-			const token = request.headers
-				.get("authorization")
-				?.replace("Bearer ", "");
-			if (!token) {
-				return;
-			}
-			const headers = request.headers || new Headers();
-			const signedToken = await serializeSigned("", token, ctx.secret);
-			headers.set(
-				"cookie",
-				`${ctx.authCookies.sessionToken.name}=${signedToken.replace("=", "")}`,
-			);
-			return {
-				request: new Request(request.url, {
-					method: request.method,
-					headers,
-				}),
-			};
+		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return Boolean(
+							context.request?.headers.get("authorization") ||
+								context.headers?.get("authorization"),
+						);
+					},
+					handler: async (c) => {
+						const token =
+							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
+							c.headers?.get("authorization")?.replace("Bearer ", "");
+						if (!token) {
+							return;
+						}
+						const signedToken = await serializeSigned(
+							"",
+							token,
+							c.context.secret,
+						);
+						if (c.request) {
+							c.request.headers.set(
+								"cookie",
+								`${
+									c.context.authCookies.sessionToken.name
+								}=${signedToken.replace("=", "")}`,
+							);
+						}
+						if (c.headers) {
+							c.headers.set(
+								"cookie",
+								`${
+									c.context.authCookies.sessionToken.name
+								}=${signedToken.replace("=", "")}`,
+							);
+						}
+						return {
+							context: c,
+						};
+					},
+				},
+			],
 		},
 	} satisfies BetterAuthPlugin;
 };

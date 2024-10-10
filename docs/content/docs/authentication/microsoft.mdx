@@ -16,15 +16,14 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
 
     <Step>
     ### Configure the provider
-    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
+    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.microsoft` in your auth configuration.
 
     ```ts title="auth.ts"   
     import { betterAuth } from "better-auth"
-    import { google } from "better-auth/social-providers"
-
-    export const auth = await betterAuth({
+    
+    export const auth = betterAuth({
         socialProviders: { // [!code highlight]
-            google: { // [!code highlight]
+            microsoft: { // [!code highlight]
                 clientId: process.env.MICROSOFT_CLIENT_ID as string, // [!code highlight]
                 clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string, // [!code highlight]
             }, // [!code highlight]

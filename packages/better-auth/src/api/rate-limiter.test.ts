@@ -79,3 +79,36 @@ describe("rate-limiter", async () => {
 		}
 	});
 });
+
+describe("custom rate limiting storage", async () => {
+	let store = new Map<string, string>();
+	const { client, testUser } = await getTestInstance({
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+	});
+
+	it("should use custom storage", async () => {
+		await client.session();
+		expect(store.size).toBe(2);
+		for (let i = 0; i < 10; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+			if (i >= 7) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
+});

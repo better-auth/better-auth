@@ -16,10 +16,9 @@ description: Twitter Provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts"  
-        import { betterAuth } from "better-auth"
-        import { twitter } from "better-auth/social-providers"
+        import { betterAuth } from "better-auth" 
         
-        export const auth = await betterAuth({
+        export const auth = betterAuth({
             socialProviders: {// [!code highlight]
                 twitter: { // [!code highlight]
                     clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]

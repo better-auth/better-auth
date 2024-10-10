@@ -86,7 +86,7 @@ export function getEndpoints<
 		getCSRFToken,
 		getSession: getSession<Option>(),
 		signOut,
-		signUpEmail,
+		signUpEmail: signUpEmail<Option>(),
 		signInEmail,
 		forgetPassword,
 		resetPassword,
@@ -110,11 +110,33 @@ export function getEndpoints<
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {
 		api[key] = async (context: any) => {
-			/**
-			 * TODO: move this to respond a json response
-			 * instead of response object.
-			 */
-			const c = await ctx;
+			let c = await ctx;
+			for (const plugin of options.plugins || []) {
+				if (plugin.hooks?.before) {
+					for (const hook of plugin.hooks.before) {
+						const match = hook.matcher({
+							...value,
+							...context,
+							context: c,
+						});
+						if (match) {
+							const hookRes = await hook.handler({
+								...context,
+								context: {
+									...c,
+									...context.context,
+								},
+							});
+							if (hookRes && "context" in hookRes) {
+								c = {
+									...c,
+									...hookRes.context,
+								};
+							}
+						}
+					}
+				}
+			}
 			//@ts-ignore
 			const endpointRes = await value({
 				...context,

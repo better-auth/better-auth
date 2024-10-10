@@ -15,25 +15,17 @@ description: Apple
     </Step>
     <Step>
         ### Configure the provider
-        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+        To configure the provider, you need to add it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts" 
-        const process = {
-            env: {
-                APPLE_CLIENT_ID: "" as string,
-                APPLE_CLIENT_SECRET: "" as string,
-            }
-        }
-        // ---cut---
         import { betterAuth } from "better-auth"
-        import { apple } from "better-auth/social-providers"
 
-        export const auth = await betterAuth({
+        export const auth = betterAuth({
             socialProviders: { // [!code highlight]
-                apple({ // [!code highlight]
+                apple: { // [!code highlight]
                     clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.APPLE_CLIENT_SECRET as string, // [!code highlight]
-                }), // [!code highlight]
+                }, // [!code highlight]
             }, // [!code highlight]
         })
         ```

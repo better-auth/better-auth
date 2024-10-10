@@ -3,6 +3,7 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type { InferPluginTypes, InferSession, InferUser } from "./types";
+import { getBaseURL } from "./utils/base-url";
 
 type InferAPI<API> = Omit<
 	API,
@@ -18,22 +19,15 @@ type InferAPI<API> = Omit<
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
-	type API = typeof api;
-	type X = API extends { [key in infer K]: Endpoint }
-		? K extends string
-			? API[K]["options"]["metadata"] extends { isAction: false }
-				? K
-				: never
-			: never
-		: never;
 
 	return {
 		handler: async (request: Request) => {
 			const ctx = await authContext;
-			const basePath = ctx.options.basePath;
+			const basePath = ctx.options.basePath || "/api/auth";
 			const url = new URL(request.url);
 			if (!ctx.options.baseURL) {
-				const baseURL = `${url.origin}/api/auth`;
+				const baseURL =
+					getBaseURL(undefined, basePath) || `${url.origin}${basePath}`;
 				ctx.options.baseURL = baseURL;
 				ctx.baseURL = baseURL;
 			}

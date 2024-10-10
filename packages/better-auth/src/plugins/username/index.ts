@@ -34,7 +34,7 @@ export const username = () => {
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: "Invalid username or password",
 						});
 					}
 					const account = await ctx.context.adapter.findOne<Account>({
@@ -52,7 +52,7 @@ export const username = () => {
 					});
 					if (!account) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: "Invalid username or password",
 						});
 					}
 					const currentPassword = account?.password;
@@ -69,7 +69,7 @@ export const username = () => {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: "Invalid username or password",
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -118,7 +118,7 @@ export const username = () => {
 					}),
 				},
 				async (ctx) => {
-					const res = await signUpEmail({
+					const res = await signUpEmail()({
 						...ctx,
 						_flag: "json",
 					});

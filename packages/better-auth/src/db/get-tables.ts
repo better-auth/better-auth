@@ -42,12 +42,15 @@ export const getAuthTables = (
 			fields: {
 				key: {
 					type: "string",
+					fieldName: options.rateLimit?.fields?.key || "key",
 				},
 				count: {
 					type: "number",
+					fieldName: options.rateLimit?.fields?.count || "count",
 				},
 				lastRequest: {
 					type: "number",
+					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 				},
 			},
 		},
@@ -60,35 +63,42 @@ export const getAuthTables = (
 		user: {
 			tableName: options.user?.modelName || "user",
 			fields: {
-				[userFields?.name || "name"]: {
+				name: {
 					type: "string",
 					required: true,
+					fieldName: options.user?.fields?.name || "name",
 				},
 				email: {
 					type: "string",
 					unique: true,
 					required: true,
+					fieldName: options.user?.fields?.email || "email",
 				},
 				emailVerified: {
 					type: "boolean",
 					defaultValue: () => false,
 					required: true,
+					fieldName: options.user?.fields?.emailVerified || "emailVerified",
 				},
 				image: {
 					type: "string",
 					required: false,
+					fieldName: options.user?.fields?.image || "image",
 				},
 				createdAt: {
 					type: "date",
 					defaultValue: () => new Date(),
 					required: true,
+					fieldName: options.user?.fields?.createdAt || "createdAt",
 				},
 				updatedAt: {
 					type: "date",
 					defaultValue: () => new Date(),
 					required: true,
+					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
 				...user?.fields,
+				...options.user?.additionalFields,
 			},
 			order: 0,
 		},
@@ -98,17 +108,21 @@ export const getAuthTables = (
 				expiresAt: {
 					type: "date",
 					required: true,
+					fieldName: options.session?.fields?.expiresAt || "expiresAt",
 				},
 				ipAddress: {
 					type: "string",
 					required: false,
+					fieldName: options.session?.fields?.ipAddress || "ipAddress",
 				},
 				userAgent: {
 					type: "string",
 					required: false,
+					fieldName: options.session?.fields?.userAgent || "userAgent",
 				},
 				userId: {
 					type: "string",
+					fieldName: options.session?.fields?.userId || "userId",
 					references: {
 						model: options.user?.modelName || "user",
 						field: "id",
@@ -117,19 +131,22 @@ export const getAuthTables = (
 					required: true,
 				},
 				...session?.fields,
+				...options.session?.additionalFields,
 			},
 			order: 1,
 		},
 		account: {
 			tableName: options.account?.modelName || "account",
 			fields: {
-				[accountFields?.accountId || "accountId"]: {
+				accountId: {
 					type: "string",
 					required: true,
+					fieldName: options.account?.fields?.accountId || "accountId",
 				},
 				providerId: {
 					type: "string",
 					required: true,
+					fieldName: options.account?.fields?.providerId || "providerId",
 				},
 				userId: {
 					type: "string",
@@ -139,26 +156,32 @@ export const getAuthTables = (
 						onDelete: "cascade",
 					},
 					required: true,
+					fieldName: options.account?.fields?.userId || "userId",
 				},
 				accessToken: {
 					type: "string",
 					required: false,
+					fieldName: options.account?.fields?.accessToken || "accessToken",
 				},
 				refreshToken: {
 					type: "string",
 					required: false,
+					fieldName: options.account?.fields?.refreshToken || "refreshToken",
 				},
 				idToken: {
 					type: "string",
 					required: false,
+					fieldName: options.account?.fields?.idToken || "idToken",
 				},
 				expiresAt: {
 					type: "date",
 					required: false,
+					fieldName: options.account?.fields?.expiresAt || "expiresAt",
 				},
 				password: {
 					type: "string",
 					required: false,
+					fieldName: options.account?.fields?.password || "password",
 				},
 				...account?.fields,
 			},
@@ -170,14 +193,17 @@ export const getAuthTables = (
 				identifier: {
 					type: "string",
 					required: true,
+					fieldName: options.verification?.fields?.identifier || "identifier",
 				},
 				value: {
 					type: "string",
 					required: true,
+					fieldName: options.verification?.fields?.value || "value",
 				},
 				expiresAt: {
 					type: "date",
 					required: true,
+					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
 				},
 			},
 		},

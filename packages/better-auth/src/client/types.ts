@@ -13,7 +13,7 @@ import type {
 import type { Auth } from "../auth";
 import type { InferRoutes } from "./path-to-object";
 import type { Session, User } from "../types";
-import type { FieldAttribute, InferFieldOutput } from "../db";
+import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
@@ -89,8 +89,8 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 		>
 	: {};
 /**
- * signals are just used to recall a computed value. as a
- * convention they start with "_"
+ * signals are just used to recall a computed value.
+ * as a convention they start with "_"
  */
 export type IsSignal<T> = T extends `_${infer _}` ? true : false;
 
@@ -100,15 +100,17 @@ export type InferPluginsFromClient<O extends ClientOptions> =
 		: undefined;
 
 export type InferSessionFromClient<O extends ClientOptions> = StripEmptyObjects<
-	Session & UnionToIntersection<InferAdditionalFromClient<O, "session">>
+	Session &
+		UnionToIntersection<InferAdditionalFromClient<O, "session", "output">>
 >;
 export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
-	User & UnionToIntersection<InferAdditionalFromClient<O, "user">>
+	User & UnionToIntersection<InferAdditionalFromClient<O, "user", "output">>
 >;
 
 export type InferAdditionalFromClient<
 	Options extends ClientOptions,
 	Key extends string,
+	Format extends "input" | "output" = "output",
 > = Options["plugins"] extends Array<infer T>
 	? T extends BetterAuthClientPlugin
 		? T["$InferServerPlugin"] extends {
@@ -118,24 +120,9 @@ export type InferAdditionalFromClient<
 					};
 				};
 			}
-			? Field extends Record<infer Key, FieldAttribute>
-				? {
-						[key in Key as Field[key]["required"] extends false
-							? never
-							: Field[key]["defaultValue"] extends
-										| boolean
-										| string
-										| number
-										| Date
-										| Function
-								? key
-								: never]: InferFieldOutput<Field[key]>;
-					} & {
-						[key in Key as Field[key]["returned"] extends false
-							? never
-							: key]?: InferFieldOutput<Field[key]>;
-					}
-				: {}
+			? Format extends "input"
+				? InferFieldsInputClient<Field>
+				: InferFieldsOutput<Field>
 			: {}
 		: {}
 	: {};

@@ -3,7 +3,7 @@ title: User & Accounts
 description: user and account management
 ---
 
-Beyond authenticating users, better auth also provides a set of methods to manage users. This includes, updating user information, changing passwords, and more.
+Beyond authenticating users, Better Auth also provides a set of methods to manage users. This includes, updating user information, changing passwords, and more.
 
 ## User table
 
@@ -77,7 +77,7 @@ The account table stores the authentication data of the user. The account table 
 
 Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
 
-By default better auth allows account linking for all providers. You can disable account linking by setting `accountLinking.enabled` to `false`.
+By default Better Auth allows account linking for all providers. You can disable account linking by setting `accountLinking.enabled` to `false`.
 ```ts
 const auth = new BetterAuth({
     account: {
@@ -88,7 +88,7 @@ const auth = new BetterAuth({
 });
 ```
 
-You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns a verfied email, the user is automatically signed in. 
+You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns a verfied email, the user is automatically signed in.
 
 ```ts
 const auth = new BetterAuth({

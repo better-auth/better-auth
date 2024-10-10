@@ -29,8 +29,8 @@ This plugin offers two main methods to do a second factor verification:
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { twoFactor } from "better-auth/plugins" // [!code highlight]
-        
-        export const auth = await betterAuth({
+
+        export const auth = betterAuth({
             // ... other config options
             plugins: [
                 twoFactor({  // [!code highlight]
@@ -53,17 +53,17 @@ This plugin offers two main methods to do a second factor verification:
 
         <Step>
         ### Add the client Plugin
-        
+
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
         ```ts title="client.ts"
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
-        
+
         const client = createAuthClient({
             plugins: [
-                twoFactorClient({ 
-                    twoFactorPage: "/two-factor" //redirect for two factor verification if enabled // [!code highlight] 
+                twoFactorClient({
+                    twoFactorPage: "/two-factor" //redirect for two factor verification if enabled // [!code highlight]
                 })
             ]
         })
@@ -180,13 +180,13 @@ const verifyTotp = async (code: string) => {
 
 OTP (One-Time Password) is similar to TOTP but the code is sent directly to the user, and the code is valid for 3 mins by default.
 
-Before using OTP to verify the second factor, you need to configure `sendOTP` in your better auth instance. This function is responsible for sending the OTP to the user's email, phone, or any other method supported by your application.
+Before using OTP to verify the second factor, you need to configure `sendOTP` in your Better Auth instance. This function is responsible for sending the OTP to the user's email, phone, or any other method supported by your application.
 
-```ts title="auth.ts" 
+```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { twoFactor } from "better-auth/plugins"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
@@ -278,13 +278,13 @@ When `trustDevice` is set to `true`, the current device will be remembered for 6
 
 ## Schema
 
-The plugin requires 3 additional fields in the `user` table. 
+The plugin requires 3 additional fields in the `user` table.
 
 <DatabaseTable
     fields={[
-        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user." },
-        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes." },
-        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery." },
+        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
+        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes.", isOptional: true },
+        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery.", isOptional: true },
     ]}
 />
 
@@ -296,7 +296,7 @@ The plugin requires 3 additional fields in the `user` table.
 
 **TOTP options**
 
-these are options for TOTP. 
+these are options for TOTP.
 
 <TypeTable
   type={{
@@ -354,18 +354,18 @@ backup codes are generated and stored in the database when the user enabled two 
     }}
 />
 
-### Client 
+### Client
 
 To use the two factor plugin in the client, you need to add it on your plugins list.
 
-```ts title="client.ts" 
+```ts title="client.ts"
 import { createAuthClient } from "better-auth/client"
 import { twoFactorClient } from "better-auth/client/plugins"
 
 const client = createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // [!code highlight] 
+            twoFactorPage: "/two-factor" // [!code highlight]
         }) // [!code highlight]
     ] // [!code highlight]
 })

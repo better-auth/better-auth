@@ -75,7 +75,7 @@ export const NavbarMobile = () => {
 	const { isOpen, toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="fixed top-[50px] z-40 left-0  px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-transparent md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]">
+		<div className="fixed top-[50px] left-0  px-4 mx-auto w-full h-auto md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] z-[100] bg-background">
 			<AnimatePresence>
 				{isOpen && (
 					<FadeIn
@@ -139,7 +139,7 @@ export const DocsNavbarMobileBtn: React.FC = () => {
 				viewBox="0 0 24 24"
 			>
 				<path
-					fill="currentColor"
+					className="fill-foreground"
 					fillRule="evenodd"
 					d="M2.25 6A.75.75 0 0 1 3 5.25h18a.75.75 0 0 1 0 1.5H3A.75.75 0 0 1 2.25 6m0 4A.75.75 0 0 1 3 9.25h18a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75m0 4a.75.75 0 0 1 .75-.75h7a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75m0 4a.75.75 0 0 1 .75-.75h7a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75"
 					clipRule="evenodd"

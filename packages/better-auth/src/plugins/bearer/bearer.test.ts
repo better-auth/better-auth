@@ -3,7 +3,7 @@ import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
-	const { client, signInWithTestUser } = await getTestInstance({
+	const { client, signInWithTestUser, auth } = await getTestInstance({
 		plugins: [bearer()],
 	});
 
@@ -31,5 +31,16 @@ describe("bearer", async () => {
 			},
 		});
 		expect(sessions.data).toHaveLength(2);
+	});
+
+	it("should work on server actions", async () => {
+		const { res } = await signInWithTestUser();
+		token = res.data?.session.id || "";
+		const headers = new Headers();
+		headers.set("authorization", `Bearer ${token}`);
+		const session = await auth.api.getSession({
+			headers,
+		});
+		expect(session?.session.id).toBe(token);
 	});
 });

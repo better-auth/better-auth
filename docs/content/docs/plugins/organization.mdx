@@ -5,7 +5,6 @@ descirption: The organization plugin allows you to manage your organization's me
 
 Organizations simplifies user access and permissions management. Assign roles and permissions to streamline project management, team coordination, and partnerships.
 
-
 ## Installation
 
 <Steps>
@@ -15,7 +14,7 @@ Organizations simplifies user access and permissions management. Assign roles an
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     plugins: [ // [!code highlight]
         organization() // [!code highlight]
     ] // [!code highlight]
@@ -94,7 +93,7 @@ By default, any user can create an organization. To restrict this, set the `allo
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
 
-const auth = await betterAuth({
+const auth = betterAuth({
     //...
     plugins: [
         organization({
@@ -525,12 +524,14 @@ Table Name: `organization`
     { 
       name: "logo", 
       type: "string", 
-      description: "The logo of the organization" 
+      description: "The logo of the organization",
+      isOptional: true
     },   
     { 
       name: "metadata", 
       type: "string",
-      description: "Additional metadata for the organization"
+      description: "Additional metadata for the organization",
+      isOptional: true
     },
     { 
       name: "createdAt", 

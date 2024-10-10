@@ -3,7 +3,7 @@ title: Session Management
 description: Better Auth Session Management
 ---
 
-Better auth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid. 
+Better Auth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid.
 
 ## Session table
 
@@ -17,14 +17,14 @@ The session table stores the session data. The session table has the following f
 
 ## Session Expiration
 
-The session expires after 7 days by default. But whenever the session is used, and the `updateAge` is reached the session expiration is updated to the current time plus the `expiresIn` value. 
+The session expires after 7 days by default. But whenever the session is used, and the `updateAge` is reached the session expiration is updated to the current time plus the `expiresIn` value.
 
 You can change both the `expiresIn` and `updateAge` values by passing the `session` object to the `auth` configuration.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
-export const auth = await betterAuth({
+export const auth = betterAuth({
     //... other config options
     session: {
         expiresIn: 1000 * 60 * 60 * 24 * 7 // 7 days,
@@ -35,7 +35,7 @@ export const auth = await betterAuth({
 
 ## Session Management
 
-Better Auth provides a set of functions to manage sessions. 
+Better Auth provides a set of functions to manage sessions.
 
 ### List Sessions
 

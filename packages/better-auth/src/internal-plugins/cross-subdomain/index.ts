@@ -1,79 +1,96 @@
 import type { BetterAuthPlugin } from "../../types";
+import type { BetterAuthCookies } from "../../utils/cookies";
+
+export type EligibleCookies = keyof BetterAuthCookies;
 
 interface Options {
 	/**
-	 * By default, domain name will be extracted from base URL
-	 * you can provide a custom domain name here
+	 * Domain name for the cookies. If not provided, it will be extracted from the base URL.
+	 * Should start with a dot for cross-subdomain compatibility (e.g., '.example.com')
 	 */
-	domainName?: string;
+	domain?: string;
 	/**
-	 * List of cookies that should be shared across subdomains
-	 *
-	 * by default, only sessionToken, csrfToken and dontRememberToken
-	 * cookies will be shared across subdomains
+	 * List of cookies that should be shared across subdomains.
+	 * By default, only sessionToken, csrfToken, and dontRememberToken cookies will be shared.
 	 */
-	eligibleCookies?: string[];
+	eligibleCookies?: EligibleCookies[];
+}
+
+function getEligibleCookies(
+	authCookies: BetterAuthCookies,
+	eligibleCookies?: EligibleCookies[],
+) {
+	const cookies: string[] = [];
+	for (const cookie of eligibleCookies || []) {
+		cookies.push(authCookies[cookie].name);
+	}
+	return cookies;
 }
 
 /**
- * This plugin will update the domain of the cookies
- * that are eligible to be shared across subdomains
+ * This plugin updates the domain of eligible cookies to be shared across subdomains
  * @param options
  * @category Plugins
  *
  * @internal plugin
  */
-export const crossSubdomainCookies = (options?: Options) => {
+export const crossSubdomainCookies = (options?: Options): BetterAuthPlugin => {
 	return {
 		id: "cross-subdomain-cookies",
 		async onResponse(response, ctx) {
 			const setCookie = response.headers.get("set-cookie");
-			if (!setCookie) return;
+			if (!setCookie) return { response };
+
 			const baseURL = ctx.baseURL;
-			const cookieParts = setCookie.split(";");
-			const domain = options?.domainName || new URL(baseURL).hostname;
+			const domain = options?.domain || new URL(baseURL).hostname;
 			const authCookies = ctx.authCookies;
-			const cookieNamesEligibleForDomain = [
-				authCookies.sessionToken.name,
-				authCookies.csrfToken.name,
-				authCookies.dontRememberToken.name,
-			];
+			const eligibleCookies = options?.eligibleCookies
+				? getEligibleCookies(
+						authCookies,
+						options.eligibleCookies as EligibleCookies[],
+					)
+				: [
+						authCookies.sessionToken.name,
+						authCookies.csrfToken.name,
+						authCookies.dontRememberToken.name,
+					];
 
-			if (
-				!cookieNamesEligibleForDomain.some((name) => setCookie.includes(name))
-			) {
-				return;
-			}
+			const updatedCookies = setCookie
+				.split(",")
+				.map((cookie) => {
+					let [name] = cookie.trim().split("=");
+					if (!eligibleCookies.includes(name)) return cookie;
+					name = name.replace("__Host-", "");
+					const parts = cookie.split(";").map((part) => part.trim());
+					const domainIndex = parts.findIndex((part) =>
+						part.toLowerCase().startsWith("domain="),
+					);
 
-			const updatedCookies = cookieParts
-				.map((part) => {
-					if (
-						!cookieNamesEligibleForDomain.some((name) =>
-							part.toLowerCase().includes(name.toLowerCase()),
-						)
-					) {
-						return part;
+					if (domainIndex !== -1) {
+						parts[domainIndex] = `Domain=${domain}`;
+					} else {
+						parts.push(`Domain=${domain}`);
 					}
 
-					const trimmedPart = part.trim();
-					if (trimmedPart.toLowerCase().startsWith("domain=")) {
-						return `Domain=${domain}`;
+					const sameSiteIndex = parts.findIndex((part) =>
+						part.toLowerCase().startsWith("samesite="),
+					);
+					if (sameSiteIndex !== -1) {
+						parts[sameSiteIndex] = "SameSite=None";
+					} else {
+						parts.push("SameSite=None");
 					}
-					if (!trimmedPart.toLowerCase().includes("domain=")) {
-						return `${trimmedPart}; Domain=${domain}`;
+
+					if (!parts.includes("Secure")) {
+						parts.push("Secure");
 					}
-					return trimmedPart;
+
+					return parts.join("; ");
 				})
-				.filter(
-					(part, index, self) =>
-						index ===
-						self.findIndex((p) => p.split(";")[0] === part.split(";")[0]),
-				)
-				.join("; ");
+				.join(", ");
+
 			response.headers.set("set-cookie", updatedCookies);
-			return {
-				response,
-			};
+			return { response };
 		},
-	} satisfies BetterAuthPlugin;
+	};
 };
