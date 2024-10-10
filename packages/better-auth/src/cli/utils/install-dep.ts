@@ -1,7 +1,7 @@
-import ora from "ora";
+import yoctoSpinner from "yocto-spinner";
 import prompts from "prompts";
 import { getPackageManager } from "./get-package-manager";
-import { execa } from "execa";
+import { x } from "tinyexec";
 
 export async function installDependency(pkgName: string) {
 	const { install } = await prompts({
@@ -10,12 +10,12 @@ export async function installDependency(pkgName: string) {
 		message: `The package "${pkgName}" is required. Do you want to install it?`,
 	});
 	if (install) {
-		const spinner = ora(`Installing ${pkgName}...`).start();
+		const spinner = yoctoSpinner({ text: `Installing ${pkgName}...` }).start();
 		const packageManager = await getPackageManager(process.cwd());
-		await execa(packageManager, [
+		await x(packageManager, [
 			packageManager === "npm" ? "install" : "add",
 			"pg",
 		]);
-		spinner.succeed("pg installed successfully");
+		spinner.success("pg installed successfully");
 	}
 }

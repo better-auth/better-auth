@@ -1,6 +1,6 @@
 import { defineConfig } from "bumpp";
-import fg from "fast-glob";
+import { globSync } from "tinyglobby";
 
 export default defineConfig({
-	files: fg.sync(["./packages/*/package.json"]),
+	files: globSync(["./packages/*/package.json"], { expandDirectories: false }),
 });
