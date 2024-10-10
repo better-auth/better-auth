@@ -4,7 +4,7 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "../../utils/logger";
-import ora from "ora";
+import yoctoSpinner from "yocto-spinner";
 import prompts from "prompts";
 import { getAdapter } from "../../db/utils";
 import fs from "fs/promises";
@@ -47,7 +47,7 @@ export const generate = new Command("generate")
 			);
 			return;
 		}
-		const spinner = ora("preparing schema...").start();
+		const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 		const adapter = await getAdapter(config, true).catch((e) => {
 			logger.error(e.message);
 			process.exit(1);
