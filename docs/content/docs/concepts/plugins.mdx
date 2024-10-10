@@ -230,6 +230,8 @@ Hooks are similar to middlewares, as well as the `onRequest` and `onResponse` fu
 YOu should use hooks when you need to hook into to a specific endpoint or request for more precise control.
 
 ```ts title="plugin.ts"
+import {  createAuthMiddleware } from "better-auth/plugins";
+
 const myPlugin = {
     id: "my-plugin",
     hooks: {
@@ -238,16 +240,16 @@ const myPlugin = {
                 matcher: (context)=>{
                     return context.req.method === "POST"
                 },
-                handler: createAuthMiddelware(async(ctx)=>{
+                handler: createAuthMiddleware(async(ctx)=>{
                     //do something before the request
                 })
             }]
         },
         after: [{
             matcher: (context)=>{
-                return context.req.method === "POST"
+                return context.req.method === "POST
             },
-            handler: createAuthMiddelware(async(ctx)=>{
+            handler: createAuthMiddleware(async(ctx)=>{
                 //this is the returned response object from the actual endpoint
                 const returned = ctx.context.returned
                 //do something after the request
