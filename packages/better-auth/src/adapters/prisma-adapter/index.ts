@@ -95,10 +95,14 @@ export const prismaAdapter = (
 			});
 		},
 		async findMany(data) {
-			const { model, where } = data;
+			const { model, where, limit, offset } = data;
 			const whereClause = whereConvertor(where);
 
-			return await db[model].findMany({ where: whereClause });
+			return await db[model].findMany({
+				where: whereClause,
+				take: limit || 100,
+				skip: offset || 0,
+			});
 		},
 		async update(data) {
 			const { model, where, update } = data;
