@@ -58,9 +58,9 @@ export const crossSubdomainCookies = (options?: Options): BetterAuthPlugin => {
 			const updatedCookies = setCookie
 				.split(",")
 				.map((cookie) => {
-					const [name] = cookie.trim().split("=");
+					let [name] = cookie.trim().split("=");
 					if (!eligibleCookies.includes(name)) return cookie;
-
+					name = name.replace("__Host-", "");
 					const parts = cookie.split(";").map((part) => part.trim());
 					const domainIndex = parts.findIndex((part) =>
 						part.toLowerCase().startsWith("domain="),
