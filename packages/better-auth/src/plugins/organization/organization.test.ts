@@ -86,6 +86,8 @@ describe("organization", async (it) => {
 		expect((session.data?.session as any).activeOrganizationId).toBe(orgId);
 	});
 
+	
+
 	it("invites user to organization", async () => {
 		const newUser = {
 			email: "test2@test.com",

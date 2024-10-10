@@ -293,72 +293,72 @@ export const getOrgAdapter = (
 		 * @requires db
 		 */
 		findFullOrganization: async (orgId: string, db?: Kysely<any>) => {
-			async function base() {
-				const org = await adapter.findOne<Organization>({
-					model: "organization",
-					where: [
-						{
-							field: "id",
-							value: orgId,
-						},
-					],
-				});
-
-				const invitations = await adapter.findMany<Invitation>({
-					model: "invitation",
-					where: [
-						{
-							field: "organizationId",
-							value: orgId,
-						},
-					],
-				});
-
-				const members = await adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: orgId,
-						},
-					],
-				});
-
-				const membersWithUsers = await Promise.all(
-					members.map(async (member) => {
-						const user = await adapter.findOne<User>({
-							model: "user",
-							where: [
-								{
-									field: "id",
-									value: member.userId,
-								},
-							],
-						});
-						if (!user) {
-							throw new BetterAuthError(
-								"Unexpected error: User not found for member",
-							);
-						}
-						return {
-							...member,
-							user: {
-								id: user.id,
-								name: user.name,
-								email: user.email,
-								image: user.image,
-							},
-						};
-					}),
-				);
-				const fullOrg = {
-					...org,
-					invitations,
-					members: membersWithUsers,
-				};
-				return fullOrg;
+			const org = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: orgId,
+					},
+				],
+			});
+			if (!org) {
+				return null;
 			}
-			return base();
+
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
+
+			const members = await adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: orgId,
+					},
+				],
+			});
+
+			const membersWithUsers = await Promise.all(
+				members.map(async (member) => {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "id",
+								value: member.userId,
+							},
+						],
+					});
+					if (!user) {
+						throw new BetterAuthError(
+							"Unexpected error: User not found for member",
+						);
+					}
+					return {
+						...member,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+					};
+				}),
+			);
+			const fullOrg = {
+				...org,
+				invitations,
+				members: membersWithUsers,
+			};
+			return fullOrg;
 		},
 		listOrganizations: async (userId: string) => {
 			const members = await adapter.findMany<Member>({
