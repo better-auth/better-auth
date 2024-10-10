@@ -442,8 +442,9 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 - `type`: The data type of the field (e.g., "string", "number", "boolean").
 - `required`: A boolean indicating if the field is mandatory.
 - `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
+- `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
 
-Here's an example of how to extend the user schema with a custom "role" field:
+Here's an example of how to extend the user schema with additional fields:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -454,31 +455,34 @@ export const auth = betterAuth({
           role: {
              type: "string",
              required: false,
-             defaultValue: "user"
+             defaultValue: "user",
+             input: false // don't allow user to set role
+          },
+          lang: {
+            type: "string",
+            required: false,
+            defaultValue: "en",
           }
       }
    }
 })
 ```
 
-Now you can access the `role` field in your application logic.
-
+Now you can access the additional fields in your application logic.
+  
 ```ts
 //on signup
 const res = await auth.api.signUpEmail({
     email: "test@example.com",
     password: "password",
     name: "John Doe",
-    role: "admin"
+    lang: "fr"
 })
 
 //user object
 res.user.role // > "admin"
+res.user.lang // > "fr"
 ```
-This configuration will:
-1. Add a "role" column to the user table in your database (if not already present).
-2. Ensure that the "role" field is available in user objects returned by Better Auth functions.
-3. Set a default value of "user" for the "role" field in your application logic.
 
 <Callout>
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.

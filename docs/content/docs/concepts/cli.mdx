@@ -30,3 +30,10 @@ pnpm better-auth migrate
 ### Options
 
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+
+
+## Common Issues
+
+**Error: Cannot find module "$env/static/.."**
+
+In sveltekit, if you're facing this error, import the env variable from `import.meta.env` instead.

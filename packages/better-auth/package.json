@@ -33,7 +33,6 @@
             "types": "./dist/client/plugins.d.ts"
         },
         "./types": "./dist/types.js",
-        "./cli": "./dist/cli.js",
         "./react": "./dist/react.js",
         "./preact": "./dist/preact.js",
         "./solid": "./dist/solid.js",

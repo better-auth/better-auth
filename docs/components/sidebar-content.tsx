@@ -119,23 +119,6 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Client",
-				href: "/docs/concepts/client",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-					>
-						<path
-							fill="currentColor"
-							d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6-10v4h4V4zm-6 4h4V4h-4zm6 6h4v-4h-4zm0 6h4v-4h-4z"
-						></path>
-					</svg>
-				),
-			},
-			{
 				title: "CLI",
 				icon: () => (
 					<svg
@@ -151,6 +134,23 @@ export const contents: Content[] = [
 					</svg>
 				),
 				href: "/docs/concepts/cli",
+			},
+			{
+				title: "Client",
+				href: "/docs/concepts/client",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6-10v4h4V4zm-6 4h4V4h-4zm6 6h4v-4h-4zm0 6h4v-4h-4z"
+						></path>
+					</svg>
+				),
 			},
 			{
 				title: "Cookies",

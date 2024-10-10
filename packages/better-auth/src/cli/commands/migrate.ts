@@ -47,7 +47,9 @@ export const migrate = new Command("migrate")
 			process.exit(1);
 		});
 		if (!db) {
-			logger.error("Invalid database configuration.");
+			logger.error(
+				"Invalid database configuration. Make sure you're not using adapters. Migrate command only works with built-in Kysely adapter.",
+			);
 			process.exit(1);
 		}
 		const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
