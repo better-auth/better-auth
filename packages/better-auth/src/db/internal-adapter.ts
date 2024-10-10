@@ -71,11 +71,13 @@ export const createInternalAdapter = (
 			userId: string,
 			request?: Request | Headers,
 			dontRememberMe?: boolean,
+			inputData?: Partial<Session> & Record<string, any>,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
 				id: generateId(),
 				userId,
+				...inputData,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.

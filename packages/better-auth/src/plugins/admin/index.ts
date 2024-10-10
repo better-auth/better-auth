@@ -6,10 +6,14 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, Session, User } from "../../types";
 
 interface UserWithRole extends User {
 	role?: string;
+}
+
+interface SessionWithImpersonatedBy extends Session {
+	impersonatedBy?: string;
 }
 
 export const adminMiddleware = createAuthMiddleware(async (ctx) => {
@@ -34,6 +38,33 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 export const admin = () => {
 	return {
 		id: "admin",
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path === "/user/list-sessions";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const returned = ctx.context.returned;
+						if (returned) {
+							const json =
+								(await returned.json()) as SessionWithImpersonatedBy[];
+							const newJson = json.filter((session) => {
+								return !session.impersonatedBy;
+							});
+							const response = new Response(JSON.stringify(newJson), {
+								status: 200,
+								statusText: "OK",
+								headers: returned.headers,
+							});
+							return {
+								response: response,
+							};
+						}
+					}),
+				},
+			],
+		},
 		endpoints: {
 			setAdmin: createAuthEndpoint(
 				"/admin/set-admin",
@@ -159,6 +190,40 @@ export const admin = () => {
 					});
 				},
 			),
+			impersonateUser: createAuthEndpoint(
+				"/admin/impersonate-user",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					const targetUser = await ctx.context.internalAdapter.findUserById(
+						ctx.body.userId,
+					);
+
+					if (!targetUser) {
+						throw new APIError("NOT_FOUND", {
+							message: "User not found",
+						});
+					}
+
+					const session = await ctx.context.internalAdapter.createSession(
+						targetUser.id,
+						undefined,
+						true,
+						{
+							impersonatedBy: ctx.context.session.user.id,
+						},
+					);
+					return {
+						session: session,
+						user: targetUser,
+					};
+				},
+			),
 		},
 		schema: {
 			user: {
@@ -169,6 +234,18 @@ export const admin = () => {
 					banned: {
 						type: "boolean",
 						defaultValue: false,
+					},
+				},
+			},
+			session: {
+				fields: {
+					impersonatedBy: {
+						type: "string",
+						required: false,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 				},
 			},

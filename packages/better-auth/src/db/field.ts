@@ -20,6 +20,11 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 */
 	returned?: boolean;
 	/**
+	 * If the value can be set by the user.
+	 * @default true
+	 */
+	input?: boolean;
+	/**
 	 * If the value should be hashed when it's stored.
 	 * @default false
 	 */

@@ -119,6 +119,9 @@ export function parseInputData<T extends Record<string, any>>(
 	const parsedData: Record<string, any> = {};
 	for (const key in fields) {
 		if (key in data) {
+			if (fields[key].input === false) {
+				continue;
+			}
 			parsedData[key] = data[key];
 			continue;
 		}
