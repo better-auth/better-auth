@@ -176,15 +176,15 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 <Step>
     ### Create Database Tables
 
-    Better Auth’s CLI helps manage your tables. You can either migrate tables directly or generate ORM schema/SQL migration files.
+    Better Auth’s comes with a CLI tool to help manage schema required by the library.
 
-    **Migrate**: Creates the required tables in the database.
+    **Migrate**: Directly creates the required tables in the database.
 
     ```bash title="Terminal"
     npx better-auth migrate
     ```
 
-    **Generate**: Creates an ORM schema or SQL migration file.
+    **Generate**: Generates an ORM schema or SQL migration file.
 
     ```bash title="Terminal"
     npx better-auth generate
@@ -198,6 +198,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 </Step>
 
 <Step>
+
 ### Authentication Methods
 Configure the authentication methods you want to use. Better Auth comes with built-in support for email/password, and social sign-on providers.
 
@@ -220,7 +221,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-You can use even more authentication methods like passkey, username, magic link and more through plugins.
+You can use even more authentication methods like [passkey](/docs/plugins/passkey), [username](/docs/plugins/username), [magic link](/docs/plugins/magic-link) and more through plugins.
 </Callout>
 </Step>
 
@@ -234,7 +235,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "remix", "nuxt", "svelte-kit",  "solid-start", "hono", "express"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file

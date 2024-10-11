@@ -120,6 +120,10 @@ export function parseInputData<T extends Record<string, any>>(
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key].input === false) {
+				if (fields[key].defaultValue) {
+					parsedData[key] = fields[key].defaultValue;
+					continue;
+				}
 				continue;
 			}
 			parsedData[key] = data[key];
