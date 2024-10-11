@@ -88,6 +88,6 @@ describe("db", async () => {
 				headers,
 			},
 		);
-		expect(res2.data?.name).toBe("New Name");
+		expect(res2.data?.user.name).toBe("New Name");
 	});
 });

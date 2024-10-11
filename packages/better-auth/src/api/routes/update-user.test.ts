@@ -28,7 +28,7 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		expect(updated.data?.name).toBe("newName");
+		expect(updated.data?.user.name).toBe("newName");
 	});
 
 	it("should update the user's password", async () => {

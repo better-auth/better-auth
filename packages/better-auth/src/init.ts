@@ -165,7 +165,10 @@ function runPluginInit(ctx: AuthContext) {
 					options = defu(options, result.options);
 				}
 				if (result.context) {
-					context = defu(context, result.context);
+					context = {
+						...context,
+						...(result.context as Partial<AuthContext>),
+					};
 				}
 			}
 		}

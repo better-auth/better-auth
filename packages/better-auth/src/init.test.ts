@@ -14,9 +14,7 @@ describe("init", async () => {
 	});
 
 	it("should execute plugins init", async () => {
-		let changedCtx = {
-			baseURL: "http://test.test",
-		};
+		const newBaseURL = "http://test.test";
 		const res = await init({
 			database,
 			plugins: [
@@ -24,13 +22,15 @@ describe("init", async () => {
 					id: "test",
 					init: () => {
 						return {
-							context: changedCtx,
+							context: {
+								baseURL: newBaseURL,
+							},
 						};
 					},
 				},
 			],
 		});
-		expect(res).toMatchObject(changedCtx);
+		expect(res.baseURL).toBe(newBaseURL);
 	});
 
 	it("should work with custom path", async () => {
