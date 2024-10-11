@@ -59,6 +59,7 @@ export const getPasskeyActions = (
 				},
 				...opts?.fetchOptions,
 				...options,
+				method: "POST",
 			});
 			if (!verified.data) {
 				return verified;
@@ -99,6 +100,7 @@ export const getPasskeyActions = (
 					response: res,
 					name: opts?.name,
 				},
+				method: "POST",
 			});
 			if (!verified.data) {
 				return verified;
