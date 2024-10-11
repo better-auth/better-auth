@@ -47,16 +47,12 @@ Create a file named `auth.ts` in one of these locations:
    - `lib/` folder
    - `utils/` folder
 
-You can also nest any of these folders under `src/` or `app/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`)
+You can also nest any of these folders under `src/` or `app/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`).
 
-And in this file, import Better Auth and create your instance.
-
-<Callout type="warn">
-Make sure to export the auth instance with the variable name `auth` or as a `default` export.
-</Callout>
+And in this file, import Better Auth and create your instance. Make sure to export the auth instance with the variable name `auth` or as a `default` export.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     //...
