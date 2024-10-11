@@ -119,7 +119,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				updatedAt: new Date(),
 			},
 		});
-
 		const res = await adapter.findMany({
 			model: "user",
 			where: [
@@ -128,6 +127,53 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 					value: "2",
 				},
 			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find many with sortBy", async () => {
+		await adapter.create({
+			model: "user",
+			data: {
+				name: "a",
+				email: "a@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const res = await adapter.findMany<User>({
+			model: "user",
+			sortBy: {
+				field: "name",
+				direction: "asc",
+			},
+		});
+		expect(res[0].name).toBe("a");
+
+		const res2 = await adapter.findMany<User>({
+			model: "user",
+			sortBy: {
+				field: "name",
+				direction: "desc",
+			},
+		});
+
+		expect(res2[res2.length - 1].name).toBe("a");
+	});
+
+	test("should find many with limit", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			limit: 1,
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should find many with offset", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			offset: 2,
 		});
 		expect(res.length).toBe(1);
 	});

@@ -22,14 +22,11 @@ import {
 import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
 
-export const init = async (opts: BetterAuthOptions) => {
-	/**
-	 * Run plugins init to get the actual options
-	 */
-	let { options, context, dbHooks } = runPluginInit(opts);
+export const init = async (options: BetterAuthOptions) => {
+	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
-	const adapter = await getAdapter(options);
+
 	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
 
@@ -71,7 +68,7 @@ export const init = async (opts: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
-	return {
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders,
 		options,
@@ -110,11 +107,12 @@ export const init = async (opts: BetterAuthOptions) => {
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
-			hooks: dbHooks.filter((u) => u !== undefined),
+			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 		}),
 		createAuthCookie: createCookieGetter(options),
-		...context,
 	};
+	let { context } = runPluginInit(ctx);
+	return context;
 };
 
 export type AuthContext = {
@@ -151,13 +149,14 @@ export type AuthContext = {
 	tables: ReturnType<typeof getAuthTables>;
 };
 
-function runPluginInit(options: BetterAuthOptions) {
+function runPluginInit(ctx: AuthContext) {
+	let options = ctx.options;
 	const plugins = options.plugins || [];
-	let context: Partial<AuthContext> = {};
+	let context: AuthContext = ctx;
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [options.databaseHooks];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			const result = plugin.init(options);
+			const result = plugin.init(ctx);
 			if (typeof result === "object") {
 				if (result.options) {
 					if (result.options.databaseHooks) {
@@ -166,16 +165,20 @@ function runPluginInit(options: BetterAuthOptions) {
 					options = defu(options, result.options);
 				}
 				if (result.context) {
-					context = defu(context, result.context);
+					context = {
+						...context,
+						...(result.context as Partial<AuthContext>),
+					};
 				}
 			}
 		}
 	}
-	return {
+	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
-		context,
-		dbHooks,
-	};
+		hooks: dbHooks.filter((u) => u !== undefined),
+	});
+	context.options = options;
+	return { context };
 }
 
 function getInternalPlugins(options: BetterAuthOptions) {

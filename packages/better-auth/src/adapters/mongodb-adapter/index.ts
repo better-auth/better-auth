@@ -56,21 +56,6 @@ function selectConvertor(selects: string[]) {
 	return selectConstruct;
 }
 
-// interface MongoClient {
-// 	collection: (model: string) => {
-// 		insertOne: (data: any) => Promise<any>;
-// 		find: (
-// 			where: any,
-// 			select: any,
-// 		) => {
-// 			toArray: () => any;
-// 		};
-// 		findMany: (where: any) => Promise<any>;
-// 		findOneAndUpdate: (where: any, update: any, config: any) => Promise<any>;
-// 		findOneAndDelete: (where: any) => Promise<any>;
-// 	};
-// }
-
 export const mongodbAdapter = (mongo: Db) => {
 	const db = mongo;
 	return {
@@ -106,13 +91,16 @@ export const mongodbAdapter = (mongo: Db) => {
 			return removeMongoId(result);
 		},
 		async findMany(data) {
-			const { model, where } = data;
+			const { model, where, limit, offset, sortBy } = data;
 			const wheres = whereConvertor(where);
 			const toReturn = await db
 				.collection(model)
 				.find()
 				// @ts-expect-error
 				.filter(wheres)
+				.skip(offset || 0)
+				.limit(limit || 100)
+				.sort(sortBy?.field || "id", sortBy?.direction === "desc" ? -1 : 1)
 				.toArray();
 			return toReturn.map(removeMongoId);
 		},

@@ -4,7 +4,7 @@ import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
 import type { DeepPartial, LiteralString } from "./helper";
-import type { AuthContext, BetterAuthOptions } from ".";
+import type { Adapter, AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
 	[table: string]: {
@@ -21,9 +21,9 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (options: BetterAuthOptions) => {
+	init?: (ctx: AuthContext) => {
 		context?: DeepPartial<Omit<AuthContext, "options">>;
-		options?: BetterAuthOptions;
+		options?: Partial<BetterAuthOptions>;
 	} | void;
 	endpoints?: {
 		[key: string]: AuthEndpoint;

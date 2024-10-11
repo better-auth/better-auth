@@ -3,6 +3,7 @@ import {
 	organizationClient,
 	passkeyClient,
 	twoFactorClient,
+	adminClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 
@@ -13,6 +14,7 @@ export const client = createAuthClient({
 			twoFactorPage: "/two-factor",
 		}),
 		passkeyClient(),
+		adminClient(),
 	],
 	fetchOptions: {
 		onError(e) {

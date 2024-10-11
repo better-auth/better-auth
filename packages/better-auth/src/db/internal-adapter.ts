@@ -32,23 +32,70 @@ export const createInternalAdapter = (
 				return null;
 			}
 		},
-		createUser: async (
-			user: Omit<User, "id" | "emailVerified" | "createdAt" | "updatedAt"> &
-				Record<string, any> &
-				Partial<User>,
+		createUser: async <T>(
+			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
+				Partial<User> &
+				Record<string, any>,
 		) => {
 			const createdUser = await createWithHooks(
 				{
 					id: generateId(),
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					emailVerified: false,
 					...user,
 				},
 				"user",
 			);
-			return createdUser;
+			return createdUser as T & User;
+		},
+		listSessions: async (userId: string) => {
+			const sessions = await adapter.findMany<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: tables.session.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
+			return sessions;
+		},
+		listUsers: async (
+			limit?: number,
+			offset?: number,
+			sortBy?: {
+				field: string;
+				direction: "asc" | "desc";
+			},
+		) => {
+			const users = await adapter.findMany<User>({
+				model: tables.user.tableName,
+				limit,
+				offset,
+				sortBy,
+			});
+			return users;
 		},
 		deleteUser: async (userId: string) => {
+			await adapter.delete({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: tables.account.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
+			await adapter.delete({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: tables.session.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
 			await adapter.delete<User>({
 				model: tables.user.tableName,
 				where: [
@@ -63,11 +110,13 @@ export const createInternalAdapter = (
 			userId: string,
 			request?: Request | Headers,
 			dontRememberMe?: boolean,
+			inputData?: Partial<Session> & Record<string, any>,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
 				id: generateId(),
 				userId,
+				...inputData,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
@@ -217,17 +266,19 @@ export const createInternalAdapter = (
 			});
 			return user;
 		},
-		linkAccount: async (account: Omit<Account, "id"> & Record<string, any>) => {
+		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
 			const _account = await createWithHooks(
 				{
 					...account,
-					id: generateId(),
 				},
 				"account",
 			);
 			return _account;
 		},
-		updateUser: async (userId: string, data: Partial<User>) => {
+		updateUser: async (
+			userId: string,
+			data: Partial<User> & Record<string, any>,
+		) => {
 			const user = await updateWithHooks<User>(
 				data,
 				[

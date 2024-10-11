@@ -1,0 +1,237 @@
+---
+title: Admin
+description: Admin plugin for Better Auth
+---
+
+The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, managing user roles, banning/unbanning users, impersonating users, and more.
+
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To use the Admin plugin, add it to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { admin } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            admin() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate your database
+
+    Run the migration command to create the necessary tables in your database.
+
+    ```bash title="terminal"
+    npx better-auth migrate
+    ```
+
+    Or, you can generate the required tables with:
+
+    ```bash title="terminal"
+    npx better-auth generate
+    ```
+
+    Refer to the [Schema section](#schema) to see which fields this plugin requires. You can also manually add these fields to your database.
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    Next, include the anonymous client plugin in your authentication client instance.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { adminClient } from "better-auth/client/plugins"
+    
+    const authClient = createAuthClient({
+        plugins: [
+            adminClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role. For the first admin user, you'll need to manually assign the `admin` role to their account in your database.
+
+### Create User
+
+Allows an admin to create a new user.
+
+```ts title="admin.ts"
+const newUser = await authClient.admin.createUser({
+  name: "Test User",
+  email: "test@example.com",
+  password: "password123",
+  role: "user"
+});
+```
+
+### List Users
+
+Allows an admin to list all users in the database.
+
+```ts title="admin.ts"
+const users = await authClient.admin.listUsers({
+    query: {
+        limit: 10,
+    }
+});
+```
+By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
+
+- `limit`: The number of users to return.
+- `offset`: The number of users to skip.
+- `sortBy`: The field to sort the users by.
+- `sortDirection`: The direction to sort the users by. Defaults to `asc`.
+
+```ts title="admin.ts"
+const users = await authClient.admin.listUsers({
+    query: {
+        limit: 10,
+        offset: 0,
+        sortBy: "createdAt",
+        sortDirection: "desc"
+    }
+});
+```
+
+### Set User Role
+
+Changes the role of a user.
+
+```ts title="admin.ts"
+const updatedUser = await authClient.admin.setRole({
+  userId: "user_id_here",
+  role: "admin"
+});
+```
+
+### Ban User
+
+Bans a user, preventing them from signing in and revokes all of their existing sessions.
+
+```ts title="admin.ts"
+const bannedUser = await authClient.admin.banUser({
+  userId: "user_id_here"
+});
+```
+
+### Unban User
+
+Removes the ban from a user, allowing them to sign in again.
+
+```ts title="admin.ts"
+const unbannedUser = await authClient.admin.unbanUser({
+  userId: "user_id_here"
+});
+```
+
+### List User Sessions
+
+Lists all sessions for a user.
+
+```ts title="admin.ts"
+const sessions = await authClient.admin.listSessions({
+  userId: "user_id_here"
+});
+```
+
+### Revoke User Session
+
+Revokes a specific session for a user.
+
+```ts title="admin.ts"
+const revokedSessions = await authClient.admin.revokeSession({
+ sessionId: "session_id_here"
+});
+```
+
+### Revoke All Sessions for a User
+
+Revokes all sessions for a user.
+
+```ts title="admin.ts"
+const revokedSessions = await authClient.admin.revokeUserSessions({
+  userId: "user_id_here"
+});
+```
+
+### Impersonate User
+
+Allows an admin to create a session as if they were the specified user.
+
+```ts title="admin.ts"
+const impersonatedSession = await authClient.admin.impersonateUser({
+  userId: "user_id_here"
+});
+```
+
+### Remove User
+
+Hard deletes a user from the database.
+
+```ts title="admin.ts"
+const deletedUser = await authClient.admin.removeUser({
+  userId: "user_id_here"
+});
+```
+
+## Schema
+
+This plugin adds the following fields to the `user` table:
+
+<DatabaseTable
+    fields={[
+        {
+            name: "role",
+            type: "string",
+            description: "The user's role. Defaults to `user`. Admins will have the `admin` role.",
+            isOptional: true,
+        },
+        {
+            name: "banned",
+            type: "boolean",
+            description: "Indicates whether the user is banned.",
+            isOptional: true,
+        },
+        {
+            name: "banReason",
+            type: "string",
+            description: "The reason for the user's ban.",
+            isOptional: true,
+        },
+        {
+            name: "banExpires",
+            type: "number",
+            description: "The Unix timestamp when the user's ban will expire.",
+            isOptional: true,
+        },
+    ]}
+/>
+
+And adds one field in the `session` table:
+
+<DatabaseTable
+    fields={[
+        {
+            name: "impersonatedBy",
+            type: "string",
+            description: "The ID of the admin that is impersonating this session.",
+            isOptional: true,
+        },
+    ]}
+/>

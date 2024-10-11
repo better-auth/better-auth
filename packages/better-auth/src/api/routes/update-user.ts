@@ -19,7 +19,9 @@ export const updateUser = createAuthEndpoint(
 		const { name, image } = ctx.body;
 		const session = ctx.context.session;
 		if (!image && !name) {
-			return ctx.json(session.user);
+			return ctx.json({
+				user: session.user,
+			});
 		}
 		const user = await ctx.context.internalAdapter.updateUserByEmail(
 			session.user.email,
@@ -28,7 +30,9 @@ export const updateUser = createAuthEndpoint(
 				image,
 			},
 		);
-		return ctx.json(user);
+		return ctx.json({
+			user,
+		});
 	},
 );
 
