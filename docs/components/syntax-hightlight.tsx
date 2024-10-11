@@ -19,7 +19,7 @@ export default ({
 
   return (
     <pre>
-      <code className={cn(`language-xml text-sm w-full ${className}`)}>
+      <code className={cn(`language-${fm} text-sm w-full ${className}`)}>
         {code}
       </code>
     </pre>

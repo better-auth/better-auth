@@ -85,7 +85,7 @@ export function ComponentShowcase({
             <TabsTrigger
               className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="react"
-              onClick={() => setFm("react")}
+              onClick={() => setFm("jsx")}
             >
               <Icons.nextJS className="w-4 h-4" />
               React
@@ -93,7 +93,7 @@ export function ComponentShowcase({
             <TabsTrigger
               className="flex data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
               value="svelte"
-              onClick={() => setFm("svelte")}
+              onClick={() => setFm("js")}
             >
               <Icons.svelteKit />
               Svelte
@@ -101,7 +101,7 @@ export function ComponentShowcase({
             <TabsTrigger
               className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
               value="astro"
-              onClick={() => setFm("astro")}
+              onClick={() => setFm("js")}
             >
               <Icons.astro />
               Astro
@@ -109,7 +109,7 @@ export function ComponentShowcase({
             <TabsTrigger
               className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="solid"
-              onClick={() => setFm("solid")}
+              onClick={() => setFm("jsx")}
             >
               <Icons.solidStart />
               Solid{" "}
@@ -117,7 +117,7 @@ export function ComponentShowcase({
             <TabsTrigger
               className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="nuxt"
-              onClick={() => setFm("nuxt")}
+              onClick={() => setFm("html")}
             >
               <Icons.nuxt />
               Nuxt
