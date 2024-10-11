@@ -67,8 +67,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			}
 			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (dbUser?.user) {
-				throw new APIError("BAD_REQUEST", {
-					message: "User already exists",
+				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message: "The email has already been taken",
 				});
 			}
 
@@ -85,7 +86,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			});
 			if (!createdUser) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Couldn't create user",
+					message: "Failed to create user",
 				});
 			}
 			/**
@@ -105,7 +106,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Couldn't create session",
+					message: "Failed to create session",
 				});
 			}
 			await setSessionCookie(ctx, session.id);
