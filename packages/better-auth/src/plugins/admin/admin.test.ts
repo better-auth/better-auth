@@ -201,6 +201,41 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.id).toBe(newUser?.id);
 	});
 
+	it("should allow admin to revoke user session", async () => {
+		const sessions = await client.admin.listUserSessions(
+			{
+				userId: newUser?.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessions.data?.sessions.length).toBe(2);
+		const res = await client.admin.revokeUserSession(
+			{ sessionId: sessions.data?.sessions[0].id || "" },
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.success).toBe(true);
+		const sessions2 = await client.admin.listUserSessions(
+			{ userId: newUser?.id || "" },
+			{ headers: adminHeaders },
+		);
+		expect(sessions2.data?.sessions.length).toBe(1);
+	});
+
+	it("should allow admin to revoke user sessions", async () => {
+		const res = await client.admin.revokeUserSessions(
+			{ userId: newUser?.id || "" },
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.success).toBe(true);
+		const sessions2 = await client.admin.listUserSessions(
+			{ userId: newUser?.id || "" },
+			{ headers: adminHeaders },
+		);
+		expect(sessions2.data?.sessions.length).toBe(0);
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{

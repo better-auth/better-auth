@@ -6,6 +6,7 @@ import {
 	getSessionFromCtx,
 } from "../../api";
 import type { BetterAuthPlugin, Session, User } from "../../types";
+import { setSessionCookie } from "../../cookies";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -135,6 +136,14 @@ export const admin = () => {
 					use: [adminMiddleware],
 				},
 				async (ctx) => {
+					const existUser = await ctx.context.internalAdapter.findUserByEmail(
+						ctx.body.email,
+					);
+					if (existUser) {
+						throw new APIError("BAD_REQUEST", {
+							message: "User already exists",
+						});
+					}
 					const user =
 						await ctx.context.internalAdapter.createUser<UserWithRole>({
 							email: ctx.body.email,
@@ -144,8 +153,8 @@ export const admin = () => {
 						});
 
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: "User already exists",
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to create user",
 						});
 					}
 					const hashedPassword = await ctx.context.password.hash(
@@ -297,9 +306,47 @@ export const admin = () => {
 							impersonatedBy: ctx.context.session.user.id,
 						},
 					);
+					if (!session) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to create session",
+						});
+					}
+					await setSessionCookie(ctx, session.id, true);
 					return {
 						session: session,
 						user: targetUser,
+					};
+				},
+			),
+			revokeUserSession: createAuthEndpoint(
+				"/admin/revoke-user-session",
+				{
+					method: "POST",
+					body: z.object({
+						sessionId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					await ctx.context.internalAdapter.deleteSession(ctx.body.sessionId);
+					return {
+						success: true,
+					};
+				},
+			),
+			revokeUserSessions: createAuthEndpoint(
+				"/admin/revoke-user-sessions",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+					return {
+						success: true,
 					};
 				},
 			),

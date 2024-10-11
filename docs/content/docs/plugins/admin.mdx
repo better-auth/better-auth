@@ -150,6 +150,26 @@ const sessions = await authClient.admin.listSessions({
 });
 ```
 
+### Revoke User Session
+
+Revokes a specific session for a user.
+
+```ts title="admin.ts"
+const revokedSessions = await authClient.admin.revokeSession({
+ sessionId: "session_id_here"
+});
+```
+
+### Revoke All Sessions for a User
+
+Revokes all sessions for a user.
+
+```ts title="admin.ts"
+const revokedSessions = await authClient.admin.revokeUserSessions({
+  userId: "user_id_here"
+});
+```
+
 ### Impersonate User
 
 Allows an admin to create a session as if they were the specified user.
