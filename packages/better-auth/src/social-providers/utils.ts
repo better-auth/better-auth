@@ -59,6 +59,7 @@ export function createAuthorizationURL(
 	state: string,
 	codeVerifier: string,
 	scopes: string[],
+	disablePkce?: boolean,
 ): URL {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
@@ -69,8 +70,10 @@ export function createAuthorizationURL(
 		"redirect_uri",
 		options.redirectURI || getRedirectURI(id),
 	);
-	const codeChallenge = generateCodeChallenge(codeVerifier);
-	url.searchParams.set("code_challenge_method", "S256");
-	url.searchParams.set("code_challenge", codeChallenge);
+	if (!disablePkce) {
+		const codeChallenge = generateCodeChallenge(codeVerifier);
+		url.searchParams.set("code_challenge_method", "S256");
+		url.searchParams.set("code_challenge", codeChallenge);
+	}
 	return url;
 }
