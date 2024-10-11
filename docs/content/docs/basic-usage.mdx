@@ -31,12 +31,18 @@ export const auth = betterAuth({
 
 Before a user can sign in, they need to sign up. To sign up a user using email and password, you need to call the client method `signUp.email` with the user's information.
 
+You can pass the following properties to the `signUp.email` method:
+
+- **email**: the user's email address
+- **password**: the user's password
+- **name**: the user's display name
+- **image**: the user's image url (optional)
 
 **Example: Using React**
 
 ```tsx title="SignUp.tsx"
 "use client"
-import { authClient } from "@/lib/auth-client"; //import the auth client
+import { authClient } from "@/lib/auth-client"; //import the auth client // [!code highlight]
 import { useState } from 'react';
 
 export default function SignUp() {
@@ -46,22 +52,22 @@ export default function SignUp() {
   const [image, setImage] = useState<File | null>(null);
 
   const signUp = async () => {
-    const res = await authClient.signUp.email({
-        email,
-        password,
-        name,
-        image: image ? convertImageToBase64(image) : undefined,
-     }, {
-        onRequest: (ctx) => {
-         //show loading
-        },
-        onSuccess: (ctx) => {
-          //redirect to the dashboard
-        },
-        onError: (ctx) => {
-          alert(ctx.error.message);
-        },
-      });
+    const { data, error } = await authClient.signUp.email({ // [!code highlight]
+        email, // [!code highlight]
+        password, // [!code highlight]
+        name, // [!code highlight]
+        image: image ? convertImageToBase64(image) : undefined, // [!code highlight]
+     }, { // [!code highlight]
+        onRequest: (ctx) => { // [!code highlight]
+         //show loading // [!code highlight]
+        }, // [!code highlight]
+        onSuccess: (ctx) => { // [!code highlight]
+          //redirect to the dashboard // [!code highlight]
+        }, // [!code highlight]
+        onError: (ctx) => { // [!code highlight]
+          alert(ctx.error.message); // [!code highlight]
+        }, // [!code highlight]
+      }); // [!code highlight]
   };
 
   return (
@@ -80,31 +86,34 @@ export default function SignUp() {
 
 To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
 
+- **email**: the user's email address
+- **password**: the user's password
+
 **Example: Using Svlete**
 
 ```svelte title="signin.svelte"
 <script lang="ts">
-import { client } from "$lib/auth-client"; //import the auth client
+import { authClient } from "$lib/auth-client"; //import the auth client // [!code highlight]
 import { writable } from "svelte/store";
 
 const email = writable("");
 const password = writable("");
 
 const handleSignIn = async () => {
-    await client.signIn.email({
-        email: $email,
-        password: $password
-    }, {
-        onRequest: () => {
-            //show loading
-        },
-        onSuccess: () => {
-            //redirect to dashboard
-        },
-        onError: (ctx) => {
-            alert(ctx.error.message)
-        }
-    })
+    await authClient.signIn.email({ // [!code highlight]
+        email: $email, // [!code highlight]
+        password: $password, // [!code highlight]
+    }, { // [!code highlight]
+        onRequest: () => { // [!code highlight]
+            //show loading // [!code highlight]
+        }, // [!code highlight]
+        onSuccess: () => { // [!code highlight]
+            //redirect to dashboard // [!code highlight]
+        }, // [!code highlight]
+        onError: (ctx) => { // [!code highlight]
+            alert(ctx.error.message) // [!code highlight]
+        } // [!code highlight]
+    }) // [!code highlight]
 }
 </script>
 
@@ -129,8 +138,8 @@ export const auth = betterAuth({
     //...rest of the options
     socialProviders: { // [!code highlight]
        github: { // [!code highlight]
-        clientId: GITHUB_CLIENT_ID, // [!code highlight]
-        clientSecret: GITHUB_CLIENT_SECRET, // [!code highlight]
+        clientId: process.env.GITHUB_CLIENT_ID!, // [!code highlight]
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!, // [!code highlight]
        } // [!code highlight]
     }, // [!code highlight]
 })
@@ -145,28 +154,28 @@ It also takes `callbackURL` property which is the url the user will be redirecte
 **Example: Using Vue**
 
 ```vue title="signin.vue"
+<script>
+import { authClient } from "@/auth-client"; //import the auth client // [!code highlight]
+
+export default {
+  name: "SignIn",
+  methods: {
+    async handleSignIn() {
+        await authClient.signIn.social({ // [!code highlight]
+            provider: "github", // [!code highlight]
+            callbackURL: "/dashboard", //redirect to dashboard after sign in // [!code highlight]
+        }); // [!code highlight]
+    }
+  }
+};
+</script>
+
 <template>
   <div>
     <h2>Sign In</h2>
     <button @click="handleSignIn">Sign In with GitHub</button>
   </div>
 </template>
-
-<script>
-import { client } from "@/auth-client"; //import the auth client
-
-export default {
-  name: "SignIn",
-  methods: {
-    async handleSignIn() {
-    await client.signIn.social({
-          provider: "github",
-          callbackURL: "/dashboard", //redirect to dashboard after sign in
-    });
-    }
-  }
-};
-</script>
 ```
 
 ## Session Management
@@ -185,17 +194,17 @@ It has the following properties:
 <Tabs items={["Vanilla","React", "Vue","Svelte", "Solid"]} defaultValue="React">
     <Tab value="React">
         ```tsx title="user.tsx"
-        //make sure you're using the react client
-        import { createAuthClient } from "better-auth/react"
-        const { useSession } = createAuthClient() // [!code highlight]
+        import { authClient } from "@/lib/auth-client" // [!code highlight]
 
         export function User(){
-            const {
-                data: session,
-                isPending, //loading state
-                error //error object
-            } = useSession()
-            returns (
+
+            const { // [!code highlight]
+                data: session, // [!code highlight]
+                isPending, //loading state // [!code highlight]
+                error //error object // [!code highlight]
+            } = authClient.useSession() // [!code highlight]
+
+            return (
                 //...
             )
         }
@@ -205,20 +214,16 @@ It has the following properties:
      <Tab value="Vue">
         ```vue title="index.vue"
         <script setup lang="ts">
-        import { client } from "~/lib/client"
-        const session = client.useSession()
+        import { authClient } from "~/lib/auth-client" // [!code highlight]
+
+        const session = authClient.useSession() // [!code highlight]
         </script>
 
         <template>
             <div>
-                <button v-if="!session?.data" @click="() => client.signIn.social({
-                    provider: 'github'
-                })">
-                    Continue with github
-                </button>
                 <div>
                     <pre>{{ session.data }}</pre>
-                    <button v-if="session.data" @click="client.signOut()">
+                    <button v-if="session.data" @click="authClient.signOut()">
                         Sign out
                     </button>
                 </div>
@@ -230,72 +235,37 @@ It has the following properties:
         <Tab value="Svelte">
             ```svelte title="user.svelte"
             <script lang="ts">
-            import { client } from "$lib/client";
-            const session = client.useSession();
-            </script>
+            import { authClient } from "$lib/auth-client"; // [!code highlight]
 
-            <div
-                style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
-            >
-                <div>
-                {#if $session}
-                    <div>
-                    <p>
-                        {$session?.user.name}
-                    </p>
-                    <p>
-                        {$session?.user.email}
-                    </p>
-                    <button
-                        on:click={async () => {
-                        await client.signOut();
-                        }}
-                    >
-                        Signout
-                    </button>
-                    </div>
-                {:else}
-                    <button
-                    on:click={async () => {
-                        await client.signIn.social({
-                        provider: "github",
-                        });
-                    }}
-                    >
-                    Continue with github
-                    </button>
-                {/if}
-                </div>
-            </div>
+            const session = authClient.useSession(); // [!code highlight]
+            </script>
+            <p>
+                {$session.data?.user.email}
+            </p>
             ```
         </Tab>
          <Tab value="Vanilla">
             ```ts title="user.svelte"
-            import { client } from "~/lib/client";
-            client.useSession.subscribe((value)=>{
-                //do something with the session
-            })
+            import { authClient } from "~/lib/auth-client"; //import the auth client
+
+            authClient.useSession.subscribe((value)=>{
+                //do something with the session //
+            }) 
             ```
         </Tab>
 
         <Tab value="Solid">
             ```tsx title="user.tsx"
-            import { client } from "~/lib/client";
-            import { Show } from 'solid-js';
+            import { authClient } from "~/lib/auth-client"; // [!code highlight]
 
             export default function Home() {
-                const session = client.useSession()
+                const session = authClient.useSession() // [!code highlight]
                 return (
-                    <Show
-                        when={session()}
-                        fallback={<button onClick={toggle}>Log in</button>}
-                    >
-                        <button onClick={toggle}>Log out</button>
-                    </Show>
+                    <pre>{JSON.stringify(session(), null, 2)}</pre>
                 );
             }
             ```
-            </Tab>
+        </Tab>
 </Tabs>
 
 <Callout>
@@ -308,7 +278,7 @@ The server provides a `session` object that you can use to access the session da
 
 **Example: Using some popular frameworks**
 
-<Tabs items={["NextJs", "NuxtJs", "Svelte", "Astro", "Hono"]}>
+<Tabs items={["NextJs", "Nuxt", "Svelte", "Astro", "Hono"]}>
     <Tab value="NextJs">
     ```ts title="server.ts"
     import { auth } from "./auth";
@@ -337,8 +307,8 @@ The server provides a `session` object that you can use to access the session da
     ---
     import { auth } from "./auth";
 
-   const session = await auth.api.getSession({
-	headers: Astro.request.headers,
+    const session = await auth.api.getSession({
+	    headers: Astro.request.headers,
     });
     ---
     <!-- Your Astro Template -->
@@ -402,14 +372,12 @@ To add a plugin, you need to import the plugin and pass it to the `plugins` opti
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { twoFactor } from "better-auth/plugins"
+import { twoFactor } from "better-auth/plugins" // [!code highlight]
 
 export const auth = betterAuth({
     //...rest of the options
     plugins: [ // [!code highlight]
-        twoFactor({
-            issuer: "my app" //your application name
-       }) // [!code highlight]
+        twoFactor() // [!code highlight]
     ] // [!code highlight]
 })
 ```
@@ -419,11 +387,23 @@ now two factor related routes and method will be available on the server.
 <Step>
 ### Migrate Database
 
-once you have added the plugin, you need to migrate your database to add the necessary tables and fields. You can do this by running the following command:
+After adding the plugin, you'll need to add the required tables to your database. You can do this by running the `migrate` command, or by using the `generate` command to create the schema and handle the migration manually.
 
-```bash
+using the `migrate` command:
+
+```bash title="terminal"
 npx better-auth migrate
 ```
+
+generating the schema:
+
+```bash title="terminal"
+npx better-auth generate
+```
+
+<Callout>
+If you prefer adding the schema manually, you can check the schema required on the [two factor plugin](/docs/plugins/2fa#schema) documentation.
+</Callout>
 
 </Step>
 <Step>
@@ -433,9 +413,9 @@ Once we're done with the server, we need to add the plugin to the client. To do 
 
 ```ts title="client.ts"  /
 import { createAuthClient } from "better-auth/client";
-import { twoFactorClient } from "better-auth/client/plugins";
+import { twoFactorClient } from "better-auth/client/plugins"; // [!code highlight]
 
-const client = createAuthClient({
+const authClient = createAuthClient({
     plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight]
@@ -447,30 +427,30 @@ const client = createAuthClient({
 now two factor related methods will be available on the client.
 
 ```ts title="profile.ts"
-import { client } from "./client"
+import { authClient } from "./auth-client"
 
 const enableTwoFactor = async() => {
-    const data = await client.twoFactor.enable({
+    const data = await authClient.twoFactor.enable({
         password // the user password is required
     }) // this will enable two factor
 }
 
 const disableTwoFactor = async() => {
-    const data = await client.twoFactor.disable({
+    const data = await authClient.twoFactor.disable({
         password // the user password is required
     }) // this will disable two factor
 }
 
 const signInWith2Factor = async() => {
-    const data = await client.signIn.email({
+    const data = await authClient.signIn.email({
         //...
     })
     //if the user has two factor enabled, it will redirect to the two factor page
 }
 
 const verifyTOTP = async() => {
-    const data = await client.twoFactor.verifyTOTP({
-        code: "123456", // the code entered by the user
+    const data = await authClient.twoFactor.verifyTOTP({
+        code: "123456", // the code entered by the user 
         /**
          * If the device is trusted, the user won't
          * need to pass 2FA again on the same device
