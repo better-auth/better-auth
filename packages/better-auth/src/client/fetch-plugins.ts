@@ -34,11 +34,6 @@ export const csrfPlugin = {
 	id: "csrf",
 	name: "CSRF Check",
 	async init(url, options) {
-		if (!options?.baseURL) {
-			throw new BetterAuthError(
-				"API Base URL on the auth client isn't configured. Please pass it directly to the client `baseURL`",
-			);
-		}
 		if (options?.method !== "GET") {
 			options = options || {};
 			const { data, error } = await betterFetch<{

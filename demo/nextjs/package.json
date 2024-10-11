@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:secure": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
