@@ -5,6 +5,7 @@ import {
 	Mailbox,
 	Phone,
 	ScanFace,
+	ShieldCheck,
 	UserCircle,
 	Users2,
 	UserSquare2,
@@ -690,6 +691,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Security",
+				href: "/docs/reference/security",
+				icon: () => <ShieldCheck className="text-current w-4 h-4" />,
 			},
 		],
 	},

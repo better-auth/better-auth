@@ -227,7 +227,7 @@ const auth = betterAuth({
 
 ### `trustedOrignins`
 
-list of trusted origins. This will disable CSRF protection for the provided origins.
+list of trusted origins. This will disable CSRF token check for the provided origins. By default, CSRF token check is disabled for origins that are same as `baseURL`.
 
 ### `advanced`
 
