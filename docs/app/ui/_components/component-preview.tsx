@@ -11,6 +11,7 @@ import typescript from "highlight.js/lib/languages/typescript";
 import javascript from "highlight.js/lib/languages/javascript";
 import xml from "highlight.js/lib/languages/xml";
 import { marked } from "marked";
+import SyntaxHightlight from "@/components/syntax-hightlight";
 hljs.registerLanguage("typescript", typescript);
 hljs.registerLanguage("javascript", javascript);
 hljs.registerLanguage("xml", xml);
@@ -46,12 +47,12 @@ export function ComponentShowcase({
   });
   const [fm, setFm] = useState("react");
   const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    hljs.highlightAll();
-  }, [fm, codeExamples]);
-  useEffect(() => {
-    hljs.highlightAll();
-  });
+  // useEffect(() => {
+  //   hljs.highlightAll();
+  // }, [fm, codeExamples]);
+  // useEffect(() => {
+  //   hljs.highlightAll();
+  // });
   const copyToClipboard = (
     text: string,
     framework: keyof typeof copiedStates
@@ -141,19 +142,17 @@ export function ComponentShowcase({
                     <Loader2 className="animate-spin w-5 h-5" />
                   </div>
                 ) : (
-                  <div
-                    className="text-sm"
-                    dangerouslySetInnerHTML={{ __html: marked(example.code) }}
-                  ></div>
+                  <></>
+                  // <div
+                  //   className="text-sm"
+                  //   dangerouslySetInnerHTML={{ __html: marked(example.code) }}
+                  // ></div>
                   // <pre className="rounded-none overflow-auto">
-                  //   <code className={`language-${example.language}`}>
-                  //     {/* {example.code} */}
-                  //     {markdown}
-                  //   </code>
+                  //   <code className={`language-js`}>{example.code}</code>
                   // </pre>
                 )}
 
-                {/* <SyntaxHightlight fm={fm} code={example.code} key={framework} /> */}
+                <SyntaxHightlight fm={fm} code={example.code} key={framework} />
                 <Button
                   variant="outline"
                   size="icon"

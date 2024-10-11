@@ -1,10 +1,3 @@
-/**
- * Shades of Purple Theme for Prism.js
- *
- * @author Ahmad Awais <https://twitter.com/MrAhmadAwais/>
- * @support Follow/tweet at https://twitter.com/MrAhmadAwais/
- */
-
 code[class*="language-"],
 pre[class*="language-"] {
   color: #9efeff;
@@ -22,11 +15,12 @@ pre[class*="language-"] {
   -moz-hyphens: none;
   -ms-hyphens: none;
   hyphens: none;
+  background-color: transparent;
 
   font-family: "Operator Mono", "Fira Code", Consolas, Monaco, "Andale Mono",
     "Ubuntu Mono", monospace;
   font-weight: 400;
-  font-size: 17px;
+  font-size: 13px;
   line-height: 25px;
   letter-spacing: 0.5px;
   text-shadow: 0 1px #222245;
@@ -53,7 +47,7 @@ pre[class*="language-"] {
 
 :not(pre) > code[class*="language-"],
 pre[class*="language-"] {
-  background: #1e1e3f;
+  /* background: #1e1e3f; */
 }
 
 /* Inline code */

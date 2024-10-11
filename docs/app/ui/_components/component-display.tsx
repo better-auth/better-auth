@@ -1,12 +1,13 @@
 "use client";
+import { useState, useEffect } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import TabsTrigger from "@/components/tabs";
 import lazyWrapper from "@/components/lazy-wrapper";
-import { useState } from "react";
 import { motion } from "framer-motion";
-import { DocsPage, DocsBody } from "fumadocs-ui/page";
+import hljs from "highlight.js/lib/core";
 import { Separator } from "@/components/ui/separator";
 import ComponentShowcaseSection from "./component-render";
+
 const tabs = [
   {
     name: "All",
@@ -28,9 +29,17 @@ const tabs = [
     name: "Plugins",
     value: "plugin",
   },
+  {
+    name: "Others",
+    value: "others",
+  },
 ];
 export const ComponentDisplay = () => {
   const [selectedTab, setSelectedTab] = useState("all");
+
+  useEffect(() => {
+    hljs.highlightAll();
+  }, [selectedTab]);
   return (
     <div>
       <Tabs.Root

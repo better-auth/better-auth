@@ -1,18 +1,22 @@
+"use client";
+import { useState, useEffect } from "react";
 import { ComponentShowcase } from "./component-preview";
 import { Button } from "@/components/ui/button";
 import { previewComponent } from "./preview-component";
 import { Icons } from "@/components/icons";
 import { Github } from "lucide-react";
-
+import hljs from "highlight.js/lib/core";
 export default function ComponentShowcaseSection({
   category,
 }: {
   category: string;
 }) {
+  useEffect(() => {
+    hljs.highlightAll();
+  }, []);
   const filteredBasedOnCategory = previewComponent.filter((comp) =>
     comp.category.includes(category)
   );
-  console.log(filteredBasedOnCategory);
   return (
     <div className="p-8 flex flex-col gap-10">
       {category === "all" ? (
