@@ -86,7 +86,7 @@ export function ComponentShowcase({
               value="react"
               onClick={() => setFm("react")}
             >
-              <Icons.react className="w-4 h-4" />
+              <Icons.nextJS className="w-4 h-4" />
               React
             </TabsTrigger>
             <TabsTrigger
