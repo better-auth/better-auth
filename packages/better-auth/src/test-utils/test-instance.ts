@@ -5,7 +5,7 @@ import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
-import { parseSetCookieHeader } from "../utils/cookies";
+import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
@@ -38,9 +38,6 @@ export async function getTestInstance<
 				clientId: "test",
 				clientSecret: "test",
 			},
-		},
-		advanced: {
-			useSecureCookies: false,
 		},
 		secret: "better-auth.secret",
 		database: new Database(dbName),

@@ -4,7 +4,7 @@ import { createAuthMiddleware } from "../../api/call";
 import { hs256 } from "../../crypto";
 import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
 import type { UserWithTwoFactor } from "./types";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../utils/cookies";
+import { parseSetCookieHeader } from "../../cookies";
 import type { UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {

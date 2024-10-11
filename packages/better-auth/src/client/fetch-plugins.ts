@@ -30,7 +30,6 @@ export const addCurrentURL = {
 	},
 } satisfies BetterFetchPlugin;
 
-const cache = new Map<string, string>();
 export const csrfPlugin = {
 	id: "csrf",
 	name: "CSRF Check",
@@ -40,45 +39,41 @@ export const csrfPlugin = {
 				"API Base URL on the auth client isn't configured. Please pass it directly to the client `baseURL`",
 			);
 		}
-
 		if (options?.method !== "GET") {
 			options = options || {};
-			const csrfToken = cache.get("CSRF_TOKEN");
-			if (!csrfToken) {
-				const { data, error } = await betterFetch<{
-					csrfToken: string;
-				}>("/csrf", {
-					body: undefined,
-					baseURL: options.baseURL,
-					plugins: [],
-					method: "GET",
-					credentials: "include",
-					customFetchImpl: options.customFetchImpl,
-				});
-				if (error) {
-					if (error.status === 404) {
-						throw new BetterAuthError(
-							"CSRF route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
-						);
-					}
-
-					if (error.status === 429) {
-						return new Response(
-							JSON.stringify({
-								message: "Too many requests. Please try again later.",
-							}),
-							{
-								status: 429,
-								statusText: "Too Many Requests",
-							},
-						);
-					}
+			const { data, error } = await betterFetch<{
+				csrfToken: string;
+			}>("/csrf", {
+				body: undefined,
+				baseURL: options.baseURL,
+				plugins: [],
+				method: "GET",
+				credentials: "include",
+				customFetchImpl: options.customFetchImpl,
+			});
+			if (error) {
+				if (error.status === 404) {
 					throw new BetterAuthError(
-						"Failed to fetch CSRF token: " + error.message,
+						"CSRF route not found. Make sure the server is running and the base URL is correct and includes the path (e.g. http://localhost:3000/api/auth).",
 					);
 				}
-				cache.set("CSRF_TOKEN", data.csrfToken);
+
+				if (error.status === 429) {
+					return new Response(
+						JSON.stringify({
+							message: "Too many requests. Please try again later.",
+						}),
+						{
+							status: 429,
+							statusText: "Too Many Requests",
+						},
+					);
+				}
+				throw new BetterAuthError(
+					"Failed to fetch CSRF token: " + error.message,
+				);
 			}
+			const csrfToken = data?.csrfToken;
 			options.body = {
 				...options?.body,
 				csrfToken: csrfToken,

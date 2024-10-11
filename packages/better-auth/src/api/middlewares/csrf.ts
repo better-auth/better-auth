@@ -32,6 +32,11 @@ export const csrfMiddleware = createAuthMiddleware(
 		}
 
 		const csrfToken = ctx.body?.csrfToken;
+		if (!csrfToken) {
+			throw new APIError("UNAUTHORIZED", {
+				message: "CSRF Token is required",
+			});
+		}
 		const csrfCookie = await ctx.getSignedCookie(
 			ctx.context.authCookies.csrfToken.name,
 			ctx.context.secret,

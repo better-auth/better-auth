@@ -4,7 +4,7 @@ import { OAuth2Tokens } from "arctic";
 import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
-import { parseSetCookieHeader } from "../utils/cookies";
+import { parseSetCookieHeader } from "../cookies";
 
 vi.mock("./utils", async (importOriginal) => {
 	const original = (await importOriginal()) as any;

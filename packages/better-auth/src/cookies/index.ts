@@ -2,6 +2,7 @@ import type { CookieOptions } from "better-call";
 import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
+import { BetterAuthError } from "../error/better-auth-error";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
@@ -12,65 +13,86 @@ export function getCookies(options: BetterAuthOptions) {
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge = new TimeSpan(7, "d").seconds();
+	const crossSubdomainEnabled =
+		options.advanced?.crossSubDomainCookies?.enabled;
+
+	const domain = crossSubdomainEnabled
+		? options.advanced?.crossSubDomainCookies?.domain ||
+			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+		: undefined;
+
+	if (crossSubdomainEnabled && !domain) {
+		throw new BetterAuthError(
+			"baseURL is required when crossSubdomainCookies are enabled",
+		);
+	}
+
+	const sameSite = crossSubdomainEnabled ? "none" : "lax";
 	return {
 		sessionToken: {
 			name: `${secureCookiePrefix}${cookiePrefix}.session_token`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: sessionMaxAge,
+				...(crossSubdomainEnabled && { domain }),
 			} satisfies CookieOptions,
 		},
 		csrfToken: {
-			name: `${secureCookiePrefix ? "__Host-" : ""}${cookiePrefix}.csrf_token`,
+			name: `${secureCookiePrefix}${cookiePrefix}.csrf_token`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: 60 * 60 * 24 * 7,
+				...(crossSubdomainEnabled && { domain }),
 			} satisfies CookieOptions,
 		},
 		state: {
 			name: `${secureCookiePrefix}${cookiePrefix}.state`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
+				...(crossSubdomainEnabled && { domain }),
 			} satisfies CookieOptions,
 		},
 		pkCodeVerifier: {
 			name: `${secureCookiePrefix}${cookiePrefix}.pk_code_verifier`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
+				...(crossSubdomainEnabled && { domain }),
 			} as CookieOptions,
 		},
 		dontRememberToken: {
 			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				//no max age so it expires when the browser closes
+				...(crossSubdomainEnabled && { domain }),
 			} as CookieOptions,
 		},
 		nonce: {
 			name: `${secureCookiePrefix}${cookiePrefix}.nonce`,
 			options: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: 60 * 15, // 15 minutes in seconds
+				...(crossSubdomainEnabled && { domain }),
 			} as CookieOptions,
 		},
 	};
@@ -82,7 +104,18 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
-	function getCookie(cookieName: string, options?: CookieOptions) {
+
+	const domain =
+		options.advanced?.crossSubDomainCookies?.domain ||
+		(options.baseURL ? new URL(options.baseURL).hostname : undefined);
+
+	function getCookie(cookieName: string, opts?: CookieOptions) {
+		const crossSubdomainEnabled = options.advanced?.crossSubDomainCookies
+			?.enabled
+			? options.advanced.crossSubDomainCookies.additionalCookies?.includes(
+					cookieName,
+				)
+			: undefined;
 		return {
 			name:
 				process.env.NODE_ENV === "production"
@@ -93,7 +126,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				sameSite: "lax",
 				path: "/",
 				maxAge: 60 * 15, // 15 minutes in seconds
-				...options,
+				...opts,
+				...(crossSubdomainEnabled && { domain }),
 			} as CookieOptions,
 		};
 	}
@@ -164,3 +198,5 @@ export function parseSetCookieHeader(
 
 	return cookieMap;
 }
+
+export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});

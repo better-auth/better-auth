@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { alphabet, generateRandomString } from "../../crypto/random";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 

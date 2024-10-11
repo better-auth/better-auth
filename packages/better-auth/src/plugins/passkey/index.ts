@@ -17,7 +17,7 @@ import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error/better-auth-error";
 import { generateId } from "../../utils/id";
 
