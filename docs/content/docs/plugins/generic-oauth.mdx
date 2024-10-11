@@ -1,0 +1,146 @@
+---
+title: Generic OAuth
+description: Authenticate users with any OAuth provider
+---
+
+The Generic OAuth plugin provides a flexible way to integrate authentication with any OAuth provider. It supports both OAuth 2.0 and OpenID Connect (OIDC) flows, allowing you to easily add social login or custom OAuth authentication to your application.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To use the Generic OAuth plugin, add it to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { genericOAuth } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [ 
+            genericOAuth({ // [!code highlight]
+                config: [ // [!code highlight]
+                    { // [!code highlight] 
+                        providerId: "provider-id", // [!code highlight]
+                        clientId: "test-client-id", // [!code highlight]
+                        clientSecret: "test-client-secret", // [!code highlight]
+                        discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
+                        // ... other config options // [!code highlight]
+                    }, // [!code highlight]
+                    // Add more providers as needed // [!code highlight]
+                ] // [!code highlight]
+            }) // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    Include the Generic OAuth client plugin in your authentication client instance.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { genericOAuthClient } from "better-auth/client/plugins"
+    
+    const authClient = createAuthClient({
+        plugins: [
+            genericOAuthClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+The Generic OAuth plugin provides endpoints for initiating the OAuth flow and handling the callback. Here's how to use them:
+
+### Initiate OAuth Sign-In
+
+To start the OAuth sign-in process:
+
+```ts title="sign-in.ts"
+const response = await authClient.signIn.oauth2({
+  providerId: "provider-id",
+  callbackURL: "/dashboard" // the path to redirect to after the user is authenticated
+});
+```
+
+### Handle OAuth Callback
+
+The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
+
+## Configuration
+
+When adding the plugin to your auth config, you can configure multiple OAuth providers. Each provider configuration object supports the following options:
+
+```ts
+interface GenericOAuthConfig {
+  providerId: string;
+  discoveryUrl?: string;
+  type?: "oauth2" | "oidc";
+  authorizationUrl?: string;
+  tokenUrl?: string;
+  userInfoUrl?: string;
+  clientId: string;
+  clientSecret: string;
+  scopes?: string[];
+  redirectURI?: string;
+  responseType?: string;
+  prompt?: string;
+  pkce?: boolean;
+  accessType?: string;
+  getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+}
+```
+
+- `providerId`: A unique identifier for the OAuth provider.
+- `discoveryUrl`: URL to fetch OAuth 2.0 configuration (optional, but recommended for OIDC providers).
+- `type`: Type of OAuth flow ("oauth2" or "oidc", defaults to "oauth2").
+- `authorizationUrl`: URL for the authorization endpoint (optional if using discoveryUrl).
+- `tokenUrl`: URL for the token endpoint (optional if using discoveryUrl).
+- `userInfoUrl`: URL for the user info endpoint (optional if using discoveryUrl).
+- `clientId`: OAuth client ID.
+- `clientSecret`: OAuth client secret.
+- `scopes`: Array of OAuth scopes to request.
+- `redirectURI`: Custom redirect URI (optional).
+- `responseType`: OAuth response type (defaults to "code").
+- `prompt`: Controls the authentication experience for the user.
+- `pkce`: Whether to use PKCE (Proof Key for Code Exchange, defaults to false).
+- `accessType`: Access type for the authorization request.
+- `getUserInfo`: Custom function to fetch user info (optional).
+
+## Advanced Usage
+
+### Custom User Info Fetching
+
+You can provide a custom `getUserInfo` function to handle specific provider requirements:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      getUserInfo: async (tokens) => {
+        // Custom logic to fetch and return user info
+        const userInfo = await fetchUserInfoFromCustomProvider(tokens);
+        return {
+          id: userInfo.sub,
+          email: userInfo.email,
+          name: userInfo.name,
+          // ... map other fields as needed
+        };
+      }
+    }
+  ]
+})
+```
+
+### Error Handling
+
+The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.
