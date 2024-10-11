@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import clsx from "clsx";
 import { CheckIcon } from "lucide-react";
 import Link from "next/link";
+
 export const SimpleUsernameAndPass = () => {
   return (
     <div className="w-full max-w-md rounded-xl dark:bg-background shadow-md ring-1 ring-black/5 dark:transform-gpu  dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset]">

@@ -9,8 +9,8 @@ export default function ComponentShowcaseSection({
 }: {
   category: string;
 }) {
-  const filteredBasedOnCategory = previewComponent.filter(
-    (comp) => comp.category === category
+  const filteredBasedOnCategory = previewComponent.filter((comp) =>
+    comp.category.includes(category)
   );
   console.log(filteredBasedOnCategory);
   return (

@@ -65,7 +65,7 @@ export function ComponentShowcase({
   };
 
   return (
-    <Card className="w-full bg-transparent max-w-5xl mx-auto rounded-none">
+    <Card className="w-full bg-transparent max-w-7xl mx-auto rounded-none">
       <CardContent className="p-6">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <Tabs defaultValue="preview" className="w-full ">
