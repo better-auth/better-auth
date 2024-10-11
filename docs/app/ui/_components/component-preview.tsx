@@ -6,16 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Layout, Loader2 } from "lucide-react";
 import { Icons } from "@/components/icons";
-import hljs from "highlight.js/lib/core";
-import typescript from "highlight.js/lib/languages/typescript";
-import javascript from "highlight.js/lib/languages/javascript";
-import xml from "highlight.js/lib/languages/xml";
-import { marked } from "marked";
 import SyntaxHightlight from "@/components/syntax-hightlight";
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("xml", xml);
-
 interface CodeExample {
   language: string;
   code: string;
@@ -47,12 +38,7 @@ export function ComponentShowcase({
   });
   const [fm, setFm] = useState("react");
   const [loading, setLoading] = useState(false);
-  // useEffect(() => {
-  //   hljs.highlightAll();
-  // }, [fm, codeExamples]);
-  // useEffect(() => {
-  //   hljs.highlightAll();
-  // });
+
   const copyToClipboard = (
     text: string,
     framework: keyof typeof copiedStates
@@ -132,31 +118,16 @@ export function ComponentShowcase({
           </TabsContent>
           {Object.entries(codeExamples).map(([framework, example]) => (
             <TabsContent
-              className="border data-[state=active]:bg-transparent bg-transparent rounded-none"
+              className="border h-[600px] overflow-auto data-[state=active]:bg-transparent bg-transparent rounded-none"
               key={framework}
               value={framework}
             >
               <div className="relative">
-                {loading ? (
-                  <div className="flex justify-center items-center">
-                    <Loader2 className="animate-spin w-5 h-5" />
-                  </div>
-                ) : (
-                  <></>
-                  // <div
-                  //   className="text-sm"
-                  //   dangerouslySetInnerHTML={{ __html: marked(example.code) }}
-                  // ></div>
-                  // <pre className="rounded-none overflow-auto">
-                  //   <code className={`language-js`}>{example.code}</code>
-                  // </pre>
-                )}
-
                 <SyntaxHightlight fm={fm} code={example.code} key={framework} />
                 <Button
                   variant="outline"
                   size="icon"
-                  className="absolute top-2 right-2"
+                  className="absolute top-2 right-4"
                   onClick={() =>
                     copyToClipboard(
                       example.code,

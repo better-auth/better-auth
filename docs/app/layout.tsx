@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { NavbarProvider } from "@/components/nav-mobile";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import "highlight.js/styles/github-dark.css";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import Loglib from "@loglib/tracker/react";
 import { BetaNotice } from "@/components/banner";
