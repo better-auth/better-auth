@@ -55,3 +55,17 @@ export const auth = betterAuth({
     }
 })
 ```
+
+## CSRF Protection
+
+Better Auth uses multiple ways to protect your app from cross-site request forgery attacks. First better auth cookies are marked as `HttpOnly` and `Secure` by default. This makes them inaccessible to client-side scripts and ensures that they can only be sent over HTTPS. And all cookies use the `SameSite=Lax` attribute by default. Which prevents them from being sent on a cross-site request. 
+
+Second, Better Auth uses CSRF tokens. By default, CSRF token check is disabled for the same origin as `baseURL`. For other origins, whenever a `POST` request is made, the CSRF token check is enforced.
+
+You can change this behavior using the `disableCSRFTokenCheck` option on the client. 
+
+Once you set `disableCSRFTokenCheck` to `true`, CSRF token check is completely disabled for the client making the request. Now if a request comes from an untrusted origin, it will fail with a `403` error. To allow requests from untrusted origins, you can specify the list of origins in `trustedOrigins` option on the server. All origins specified in `trustedOrigins` are excluded from CSRF token check.
+
+<Callout type="warn">
+You can also disable CSRF token check for all clients by setting `advanced.disableCSRFCheck` option on the server. You should only do this if your framework handles CSRF protection itself.
+</Callout>
