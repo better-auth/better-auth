@@ -16,7 +16,7 @@ export default ({
 }) => (
   <Tabs.Trigger
     className={cn(
-      "relative py-2 px-3 rounded-none text-sm text-zinc-400 hover:text-zinc-100 data-[state=active]:text-zinc-100",
+      "relative py-2 px-3 rounded-none text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-100 data-[state=active]:text-zinc-100",
       className
     )}
     value={value}

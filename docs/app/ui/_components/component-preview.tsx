@@ -71,18 +71,18 @@ export function ComponentShowcase({
         <Tabs defaultValue="preview" className="w-full ">
           <TabsList className="flex data-[state=active]:bg-background items-center bg-tranparent gap-3 w-fit grid-cols-7 rounded-none">
             <TabsTrigger
-              className="rounded-none flex items-center gap-2 data-[state=active]:bg-stone-900 "
+              className="rounded-none data-[state=active]:text-white flex items-center gap-2 data-[state=active]:bg-stone-900 "
               value="preview"
-              onClick={() => setFm("")}
+              onClick={() => setFm("preview")}
             >
               <Layout className="w-4 h-4" />
               Preview
             </TabsTrigger>
             <div className="mx-5">
-              <div className="w-[1px] h-[28px] z-20 bg-white/50"></div>
+              <div className="w-[1px] h-[28px] z-20 bg-black/50 dark:bg-white/50"></div>
             </div>
             <TabsTrigger
-              className="flex  rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="react"
               onClick={() => setFm("react")}
             >
@@ -90,7 +90,7 @@ export function ComponentShowcase({
               React
             </TabsTrigger>
             <TabsTrigger
-              className="flex rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
+              className="flex data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
               value="svelte"
               onClick={() => setFm("svelte")}
             >
@@ -98,7 +98,7 @@ export function ComponentShowcase({
               Svelte
             </TabsTrigger>
             <TabsTrigger
-              className="flex rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
+              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
               value="astro"
               onClick={() => setFm("astro")}
             >
@@ -106,7 +106,7 @@ export function ComponentShowcase({
               Astro
             </TabsTrigger>
             <TabsTrigger
-              className="flex rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="solid"
               onClick={() => setFm("solid")}
             >
@@ -114,7 +114,7 @@ export function ComponentShowcase({
               Solid{" "}
             </TabsTrigger>
             <TabsTrigger
-              className="flex rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="nuxt"
               onClick={() => setFm("nuxt")}
             >
