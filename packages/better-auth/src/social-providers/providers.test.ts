@@ -60,10 +60,24 @@ describe("Social Providers", async () => {
 		},
 	});
 	let state = "";
+	const headers = new Headers();
 	it("should be able to add social providers", async () => {
-		const signInRes = await client.signIn.social({
-			provider: "google",
-		});
+		const signInRes = await client.signIn.social(
+			{
+				provider: "google",
+			},
+			{
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+					);
+				},
+			},
+		);
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			state: expect.any(String),
@@ -80,6 +94,7 @@ describe("Social Providers", async () => {
 				code: "test",
 			},
 			method: "GET",
+			headers,
 			onError(context) {
 				expect(context.response.status).toBe(302);
 				const cookies = parseSetCookieHeader(
