@@ -7,3 +7,4 @@ export * from "../../plugins/magic-link/client";
 export * from "../../plugins/phone-number/client";
 export * from "../../plugins/anonymous/client";
 export * from "../../plugins/additional-fields/client";
+export * from "../../plugins/admin/client";

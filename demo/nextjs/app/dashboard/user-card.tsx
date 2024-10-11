@@ -216,7 +216,7 @@ export default function UserCard(props: {
 					<div className="flex flex-col gap-2">
 						<p className="text-sm">Two Factor</p>
 						<div className="flex gap-2">
-							{session?.user.twoFactorEnabled && (
+							{!!session?.user.twoFactorEnabled && (
 								<Dialog>
 									<DialogTrigger asChild>
 										<Button variant="outline" className="gap-2">

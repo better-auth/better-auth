@@ -151,15 +151,9 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			requireHeaders: true,
 		},
 		async (ctx) => {
-			const sessions = await ctx.context.adapter.findMany<Session>({
-				model: ctx.context.tables.session.tableName,
-				where: [
-					{
-						field: "userId",
-						value: ctx.context.session.user.id,
-					},
-				],
-			});
+			const sessions = await ctx.context.internalAdapter.listSessions(
+				ctx.context.session.user.id,
+			);
 			const activeSessions = sessions.filter((session) => {
 				return session.expiresAt > new Date();
 			});
