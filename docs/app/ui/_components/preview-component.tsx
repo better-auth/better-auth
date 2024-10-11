@@ -5,7 +5,7 @@ export const previewComponent = [
   {
     title: "Simple Credential Login",
     slug: "username-and-password",
-    docsLink: "/docs/docs/plugins/username",
+    docsLink: "/docs/plugins/username",
     component: <SimpleUsernameAndPass />,
     category: ["credential"],
 
@@ -323,7 +323,7 @@ export const previewComponent = [
   {
     title: "Credential with Social",
     slug: "hybrid-username-and-social",
-    docsLink: "/docs/docs/plugins/username",
+    docsLink: "/docs/plugins/username",
     component: <FUISignUpWithLeftBackground />,
     category: ["credential", "social"],
     code: {

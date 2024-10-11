@@ -4,7 +4,14 @@ import React, { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Layout, Loader2, Link2 } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Layout,
+  Loader2,
+  Link2,
+  ChevronsDownUpIcon,
+} from "lucide-react";
 import { Icons } from "@/components/icons";
 import Link from "next/link";
 import SyntaxHightlight from "@/components/syntax-hightlight";
@@ -14,6 +21,15 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 interface CodeExample {
   language: string;
   code: string;
@@ -47,7 +63,8 @@ export function ComponentShowcase({
   });
   const [fm, setFm] = useState("react");
   const [loading, setLoading] = useState(false);
-
+  const [defaultFm, setDefaultFm] = useState("react");
+  const [isPrev, setIsPrev] = useState(true);
   const copyToClipboard = (
     text: string,
     framework: keyof typeof copiedStates
@@ -78,73 +95,112 @@ export function ComponentShowcase({
             </Tooltip>
           </TooltipProvider>
         </div>
+
         <Tabs defaultValue="preview" className="w-full ">
-          <TabsList className="md:ml-[-5px] flex data-[state=active]:bg-background items-center bg-tranparent gap-3 w-fit  rounded-none">
+          <TabsList className=" md:ml-[-5px] data-[state=active]:bg-background items-center justify-between md:justify-normal bg-tranparent gap-3 w-full md:w-fit  rounded-none">
             <TabsTrigger
-              className="rounded-none data-[state=active]:text-white flex items-center gap-2 data-[state=active]:bg-stone-900 "
+              className="rounded-none data-[state=active]:text-white flex  items-center gap-2 data-[state=active]:bg-stone-900 "
               value="preview"
-              onClick={() => setFm("preview")}
+              onClick={() => setIsPrev((prv) => !prv)}
             >
               <Layout className="w-4 h-4" />
               Preview
             </TabsTrigger>
             <div className="mx-5">
-              <div className="w-[1px] h-[30px] z-20 bg-black/50 dark:bg-white/20"></div>
+              <div className="hidden md:block w-[1px] h-[30px] z-20 bg-black/50 dark:bg-white/20"></div>
             </div>
-            <TabsTrigger
-              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
-              value="react"
-              onClick={() => setFm("jsx")}
-            >
-              <Icons.nextJS className="w-4 h-4" />
-              React
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
-              value="svelte"
-              onClick={() => setFm("js")}
-            >
-              <Icons.svelteKit />
-              Svelte
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
-              value="astro"
-              onClick={() => setFm("js")}
-            >
-              <Icons.astro />
-              Astro
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
-              value="solid"
-              onClick={() => setFm("jsx")}
-            >
-              <Icons.solidStart />
-              Solid{" "}
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex  py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
-              value="nuxt"
-              onClick={() => setFm("html")}
-            >
-              <Icons.nuxt />
-              Nuxt
-            </TabsTrigger>
+            <div className="hidden md:flex">
+              <TabsTrigger
+                className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+                value="react"
+                onClick={() => setFm("jsx")}
+              >
+                <Icons.nextJS className="w-4 h-4" />
+                React
+              </TabsTrigger>
+              <TabsTrigger
+                className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
+                value="svelte"
+                onClick={() => setFm("html")}
+              >
+                <Icons.svelteKit />
+                Svelte
+              </TabsTrigger>
+              <TabsTrigger
+                className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
+                value="astro"
+                onClick={() => setFm("js")}
+              >
+                <Icons.astro />
+                Astro
+              </TabsTrigger>
+              <TabsTrigger
+                className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+                value="solid"
+                onClick={() => setFm("jsx")}
+              >
+                <Icons.solidStart />
+                Solid{" "}
+              </TabsTrigger>
+              <TabsTrigger
+                className="flex  py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+                value="nuxt"
+                onClick={() => setFm("html")}
+              >
+                <Icons.nuxt />
+                Nuxt
+              </TabsTrigger>
+            </div>
+
+            <div className="block md:hidden">
+              <Select
+                defaultValue="react"
+                onValueChange={(value) => {
+                  setDefaultFm(value);
+                  setIsPrev(false);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a framework" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="react">React</SelectItem>
+                  <SelectItem value="svelte">Svelte</SelectItem>
+                  <SelectItem value="astro">Astro</SelectItem>
+                  <SelectItem value="solid">Solid</SelectItem>
+                  <SelectItem value="nuxt">Nuxt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </TabsList>
-          <TabsContent
-            value="preview"
-            className=" md:mt-[-2px] p-4 border rounded-none"
-          >
-            <main className="overflow-hidden bg-gray-50 dark:bg-gradient-to-tr dark:from-stone-950 dark:via-stone-900 dark:to-stone-950">
-              <div className="isolate flex min-h-dvh items-center justify-center p-6 lg:p-8">
-                {component}
-              </div>
-            </main>
-          </TabsContent>
+
+          {isPrev && (
+            <TabsContent
+              value="preview"
+              className=" md:mt-[-2px] p-4 border rounded-none"
+            >
+              <main className="overflow-hidden bg-gray-50 dark:bg-gradient-to-tr dark:from-stone-950 dark:via-stone-900 dark:to-stone-950">
+                <div className="isolate flex min-h-dvh items-center justify-center p-6 lg:p-8">
+                  {component}
+                </div>
+              </main>
+            </TabsContent>
+          )}
+          <div className="block md:hidden">
+            {Object.entries(codeExamples).map(
+              ([framework, example]) =>
+                defaultFm === framework && (
+                  <SyntaxHightlight
+                    fm={fm}
+                    code={example.code}
+                    key={framework}
+                  />
+                )
+            )}
+          </div>
           {Object.entries(codeExamples).map(([framework, example]) => (
             <TabsContent
-              className="border h-[600px] md:mt-[-2px] overflow-auto data-[state=active]:bg-transparent bg-transparent rounded-none"
+              className="border hidden md:block  h-[600px] md:mt-[-2px] overflow-auto data-[state=active]:bg-transparent bg-transparent rounded-none"
               key={framework}
               value={framework}
             >
