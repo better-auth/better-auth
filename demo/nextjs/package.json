@@ -62,7 +62,7 @@
     "kysely": "^0.27.4",
     "lucide-react": "^0.439.0",
     "mini-svg-data-uri": "^1.4.4",
-    "next": "15.0.0-canary.157",
+    "next": "15.0.0-canary.185",
     "next-themes": "^0.3.0",
     "prisma": "^5.19.1",
     "react": "19.0.0-rc-7771d3a7-20240827",
