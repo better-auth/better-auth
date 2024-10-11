@@ -60,26 +60,21 @@ type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
 
 type MergeRoutes<T> = UnionToIntersection<T>;
 
-type InferReturn<R, O extends ClientOptions> = R extends
-	| {
-			user: any;
-	  }
-	| {
-			session: any;
-	  }
-	| {
-			user: any;
-			session: any;
-	  }
-	? StripEmptyObjects<
-			{
-				user: InferUserFromClient<O>;
-				session: InferSessionFromClient<O>;
-			} & {
-				[key in Exclude<keyof R, "user" | "session">]: R[key];
-			}
-		>
-	: R;
+type InferReturn<R, O extends ClientOptions> = StripEmptyObjects<
+	{
+		user: R extends { user: any } ? InferUserFromClient<O> : never;
+		users: R extends { users: any[] } ? InferUserFromClient<O>[] : never;
+		session: R extends { session: any } ? InferSessionFromClient<O> : never;
+		sessions: R extends { sessions: any[] }
+			? InferSessionFromClient<O>[]
+			: never;
+	} & {
+		[key in Exclude<
+			keyof R,
+			"user" | "users" | "session" | "sessions"
+		>]: R[key];
+	}
+>;
 
 export type InferRoute<API, COpts extends ClientOptions> = API extends {
 	[key: string]: infer T;

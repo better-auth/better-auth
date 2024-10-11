@@ -6,7 +6,6 @@ import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
-import type { toZod } from "../../types/to-zod";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -178,7 +177,9 @@ export const signInEmail = createAuthEndpoint(
 		);
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
-			throw new APIError("INTERNAL_SERVER_ERROR");
+			throw new APIError("UNAUTHORIZED", {
+				message: "Failed to create session",
+			});
 		}
 		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
 		return ctx.json({

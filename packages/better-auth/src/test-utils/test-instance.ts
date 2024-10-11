@@ -3,7 +3,7 @@ import { alphabet, generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions } from "../types";
+import type { BetterAuthOptions, ClientOptions, User } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -19,7 +19,7 @@ export async function getTestInstance<
 		clientOptions?: C;
 		port?: number;
 		disableTestUser?: boolean;
-		testUser?: Record<string, any>;
+		testUser?: Partial<User>;
 	},
 ) {
 	/**
@@ -62,7 +62,7 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		const res = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -87,10 +87,13 @@ export async function getTestInstance<
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
+		//@ts-expect-error
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
+
 			fetchOptions: {
+				//@ts-expect-error
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -107,10 +110,12 @@ export async function getTestInstance<
 	}
 	async function signInWithUser(email: string, password: string) {
 		let headers = new Headers();
+		//@ts-expect-error
 		const res = await client.signIn.email({
 			email,
 			password,
 			fetchOptions: {
+				//@ts-expect-error
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
@@ -145,13 +150,13 @@ export async function getTestInstance<
 	}
 
 	const client = createAuthClient({
+		...(config?.clientOptions as C extends undefined ? {} : C),
 		baseURL:
 			options?.baseURL ||
 			"http://localhost:" + (config?.port || 3000) + "/api/auth",
 		fetchOptions: {
 			customFetchImpl,
 		},
-		...(config?.clientOptions as C extends undefined ? {} : C),
 	});
 	return {
 		auth,

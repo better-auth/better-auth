@@ -39,6 +39,7 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
+					id: generateId(),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					emailVerified: false,
@@ -47,6 +48,18 @@ export const createInternalAdapter = (
 				"user",
 			);
 			return createdUser as T & User;
+		},
+		listSessions: async (userId: string) => {
+			const sessions = await adapter.findMany<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: tables.session.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
+			return sessions;
 		},
 		listUsers: async (limit?: number, offset?: number) => {
 			const users = await adapter.findMany<User>({
@@ -57,6 +70,24 @@ export const createInternalAdapter = (
 			return users;
 		},
 		deleteUser: async (userId: string) => {
+			await adapter.delete({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: tables.account.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
+			await adapter.delete({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: tables.session.fields.userId.fieldName || "userId",
+						value: userId,
+					},
+				],
+			});
 			await adapter.delete<User>({
 				model: tables.user.tableName,
 				where: [

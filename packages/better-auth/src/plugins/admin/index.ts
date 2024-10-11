@@ -4,12 +4,12 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
-	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, Session, User } from "../../types";
 
-interface UserWithRole extends User {
+export interface UserWithRole extends User {
 	role?: string;
+	banned?: boolean;
 }
 
 interface SessionWithImpersonatedBy extends Session {
@@ -38,6 +38,26 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 export const admin = () => {
 	return {
 		id: "admin",
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						session: {
+							create: {
+								async before(session) {
+									const user = (await ctx.internalAdapter.findUserById(
+										session.userId,
+									)) as UserWithRole;
+									if (user.banned) {
+										return false;
+									}
+								},
+							},
+						},
+					},
+				},
+			};
+		},
 		hooks: {
 			after: [
 				{
@@ -66,12 +86,13 @@ export const admin = () => {
 			],
 		},
 		endpoints: {
-			setAdmin: createAuthEndpoint(
-				"/admin/set-admin",
+			setRole: createAuthEndpoint(
+				"/admin/set-role",
 				{
 					method: "POST",
 					body: z.object({
 						userId: z.string(),
+						role: z.string(),
 					}),
 					use: [adminMiddleware],
 				},
@@ -79,7 +100,7 @@ export const admin = () => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						ctx.body.userId,
 						{
-							role: "admin",
+							role: ctx.body.role,
 						},
 					);
 					return {
@@ -154,8 +175,26 @@ export const admin = () => {
 					};
 				},
 			),
-			deleteUser: createAuthEndpoint(
-				"/admin/delete-user",
+			listUserSessions: createAuthEndpoint(
+				"/admin/list-user-sessions",
+				{
+					method: "POST",
+					use: [adminMiddleware],
+					body: z.object({
+						userId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const sessions = await ctx.context.internalAdapter.listSessions(
+						ctx.body.userId,
+					);
+					return {
+						sessions: sessions,
+					};
+				},
+			),
+			unbanUser: createAuthEndpoint(
+				"/admin/unban-user",
 				{
 					method: "POST",
 					body: z.object({
@@ -164,12 +203,15 @@ export const admin = () => {
 					use: [adminMiddleware],
 				},
 				async (ctx) => {
-					if (ctx.body.userId === ctx.context.session.user.id) {
-						throw new APIError("BAD_REQUEST", {
-							message: "You cannot delete yourself",
-						});
-					}
-					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+					const user = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						{
+							banned: false,
+						},
+					);
+					return {
+						user: user,
+					};
 				},
 			),
 			banUser: createAuthEndpoint(
@@ -187,9 +229,17 @@ export const admin = () => {
 							message: "You cannot ban yourself",
 						});
 					}
-					await ctx.context.internalAdapter.updateUser(ctx.body.userId, {
-						banned: true,
-					});
+					const user = await ctx.context.internalAdapter.updateUser(
+						ctx.body.userId,
+						{
+							banned: true,
+						},
+					);
+					//revoke all sessions
+					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+					return {
+						user: user,
+					};
 				},
 			),
 			impersonateUser: createAuthEndpoint(
@@ -226,16 +276,34 @@ export const admin = () => {
 					};
 				},
 			),
+			removeUser: createAuthEndpoint(
+				"/admin/remove-user",
+				{
+					method: "POST",
+					body: z.object({
+						userId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+					return {
+						success: true,
+					};
+				},
+			),
 		},
 		schema: {
 			user: {
 				fields: {
 					role: {
 						type: "string",
+						required: false,
 					},
 					banned: {
 						type: "boolean",
 						defaultValue: false,
+						required: false,
 					},
 				},
 			},
