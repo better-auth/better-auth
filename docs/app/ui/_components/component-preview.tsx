@@ -68,7 +68,7 @@ export function ComponentShowcase({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/${docLink}`}>
+                <Link href={`${docLink}`}>
                   <Link2 className="w-4 h-4" />
                 </Link>
               </TooltipTrigger>
