@@ -2,15 +2,15 @@ import { SimpleUsernameAndPass } from "./credential/username-and-password";
 import FUISignUpWithLeftBackground from "./hybrids/username-social";
 
 export const previewComponent = [
-  {
-    title: "Simple Credential Login",
-    slug: "username-and-password",
-    docsLink: "/docs/plugins/username",
-    component: <SimpleUsernameAndPass />,
-    category: ["credential"],
+	{
+		title: "Simple Credential Login",
+		slug: "username-and-password",
+		docsLink: "/docs/plugins/username",
+		component: <SimpleUsernameAndPass />,
+		category: ["credential"],
 
-    code: {
-      react: `
+		code: {
+			react: `
 
       import { useState } from "react";
       import { Button } from "@/components/ui/button";
@@ -86,7 +86,7 @@ export const previewComponent = [
 
       export default SimpleUsernameAndPass;
             `,
-      svelte: `
+			svelte: `
 
       <script>
         let email = '';
@@ -142,7 +142,7 @@ export const previewComponent = [
         </div>
       </div>
      `,
-      astro: `
+			astro: `
 
       ---
       import { Button } from "@/components/ui/button";
@@ -198,7 +198,7 @@ export const previewComponent = [
         </form>
       </div>
             `,
-      solid: `
+			solid: `
 
       import { createSignal } from "solid-js";
       import { Button } from "@/components/ui/button";
@@ -271,7 +271,7 @@ export const previewComponent = [
       };
                `,
 
-      nuxt: `
+			nuxt: `
 
       <template>
         <div class="w-full max-w-md rounded-xl dark:bg-background shadow-md ring-1 ring-black/5 dark:transform-gpu dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset]">
@@ -317,17 +317,17 @@ export const previewComponent = [
             </div>
           </
                     `,
-    },
-  },
+		},
+	},
 
-  {
-    title: "Credential with Social",
-    slug: "hybrid-username-and-social",
-    docsLink: "/docs/plugins/username",
-    component: <FUISignUpWithLeftBackground />,
-    category: ["credential", "social"],
-    code: {
-      react: `
+	{
+		title: "Credential with Social",
+		slug: "hybrid-username-and-social",
+		docsLink: "/docs/plugins/username",
+		component: <FUISignUpWithLeftBackground />,
+		category: ["credential", "social"],
+		code: {
+			react: `
 
       "use client";
       import React from "react";
@@ -597,7 +597,7 @@ export const previewComponent = [
       }
 
       `,
-      svelte: `
+			svelte: `
 
       <script>
         let reset = false;
@@ -657,7 +657,7 @@ export const previewComponent = [
       </main>
 
       `,
-      astro: `
+			astro: `
 
       ---
       // Import necessary components
@@ -724,7 +724,7 @@ export const previewComponent = [
         </div>
       </main>
       `,
-      solid: `
+			solid: `
 
       import { createSignal } from "solid-js";
 
@@ -796,7 +796,7 @@ export const previewComponent = [
 
       export default FUISignUpWithLeftBackground;
       `,
-      nuxt: `
+			nuxt: `
 
       <template>
         <main class="w-full min-h-screen flex overflow-y-hidden">
@@ -868,6 +868,6 @@ export const previewComponent = [
       </script>
 
       `,
-    },
-  },
+		},
+	},
 ];

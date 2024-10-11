@@ -14,7 +14,7 @@ import { PulicBetaBadge } from "../beta/badge";
 
 function Glow() {
 	const id = useId();
-``
+	``;
 	return (
 		<div className="absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent via-stone-800/5 to-transparent/1  lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[1rem]">
 			<svg

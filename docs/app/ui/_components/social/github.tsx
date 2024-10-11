@@ -1,3 +1,3 @@
 export const GithubSocialLogin = () => {
-  return <div></div>;
+	return <div></div>;
 };
