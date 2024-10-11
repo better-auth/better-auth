@@ -163,7 +163,7 @@ export const kyselyAdapter = (
 			return (res || null) as any;
 		},
 		async findMany(data) {
-			const { model, where, limit, offset } = data;
+			const { model, where, limit, offset, sortBy } = data;
 			let query = db.selectFrom(model);
 			const { and, or } = convertWhere(where);
 			if (and) {
@@ -175,6 +175,9 @@ export const kyselyAdapter = (
 			query = query.limit(limit || 100);
 			if (offset) {
 				query = query.offset(offset);
+			}
+			if (sortBy) {
+				query = query.orderBy(sortBy.field, sortBy.direction);
 			}
 			const res = await query.selectAll().execute();
 			if (config?.transform) {

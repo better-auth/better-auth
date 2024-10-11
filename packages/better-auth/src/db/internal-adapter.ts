@@ -61,11 +61,19 @@ export const createInternalAdapter = (
 			});
 			return sessions;
 		},
-		listUsers: async (limit?: number, offset?: number) => {
+		listUsers: async (
+			limit?: number,
+			offset?: number,
+			sortBy?: {
+				field: string;
+				direction: "asc" | "desc";
+			},
+		) => {
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				limit,
 				offset,
+				sortBy,
 			});
 			return users;
 		},

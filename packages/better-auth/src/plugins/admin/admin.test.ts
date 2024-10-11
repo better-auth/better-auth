@@ -57,11 +57,52 @@ describe("Admin plugin", async () => {
 
 	it("should allow admin to list users", async () => {
 		const res = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
 			fetchOptions: {
 				headers: adminHeaders,
 			},
 		});
 		expect(res.data?.users.length).toBe(2);
+	});
+
+	it("should allow to sort users by name", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				sortBy: "name",
+				sortDirection: "desc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.users[0].name).toBe("Test User");
+
+		const res2 = await client.admin.listUsers({
+			query: {
+				sortBy: "name",
+				sortDirection: "asc",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res2.data?.users[0].name).toBe("Admin");
+	});
+
+	it("should allow offset and limit", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				limit: 1,
+				offset: 1,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0].name).toBe("Test User");
 	});
 
 	it("should allow to set user role", async () => {

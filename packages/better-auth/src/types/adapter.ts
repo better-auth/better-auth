@@ -29,6 +29,10 @@ export interface Adapter {
 		model: string;
 		where?: Where[];
 		limit?: number;
+		sortBy?: {
+			field: string;
+			direction: "asc" | "desc";
+		};
 		offset?: number;
 	}) => Promise<T[]>;
 	update: <T>(data: {

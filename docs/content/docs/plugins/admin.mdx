@@ -1,0 +1,104 @@
+---
+title: Admin
+description: Admin plugin for Better Auth
+---
+
+The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, listing users, managing user roles, banning/unbanning users, and more.
+
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To use the Admin plugin, add it to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { admin } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            admin() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate your database
+
+    Run the migration command to create the necessary tables in your database.
+
+    ```bash title="terminal"
+    npx better-auth migrate # [!code highlight]
+    ```
+
+    Alternatively, you can generate the required tables with:
+
+    ```bash title="terminal"
+    npx better-auth generate
+    ```
+
+    Refer to the [Schema section](#schema) to see which fields this plugin requires. You can also manually add these fields to your database if necessary.
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    Next, include the anonymous client plugin in your authentication client instance.
+
+    ```ts title="client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { adminClient } from "better-auth/client/plugins"
+    
+    const client = createAuthClient({
+        plugins: [
+            adminClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role. For the first admin user, you'll need to manually assign the `admin` role to their account in your database.
+
+### Create User
+
+Allows an admin to create a new user.
+
+```ts
+const newUser = await client.admin.createUser({
+  name: "Test User",
+  email: "test@example.com",
+  password: "password123",
+  role: "user"
+});
+```
+
+### List Users
+
+Allows an admin to list all users in the database.
+
+```ts
+const users = await client.admin.listUsers();
+```
+By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
+
+- `limit`: The number of users to return.
+- `offset`: The number of users to skip.
+- `sortBy`: The field to sort the users by.
+
+```ts
+const users = await client.admin.listUsers({
+    query: {
+        limit: 10,
+        offset: 0,
+        sortBy: "createdAt"
+    }
+});
+```

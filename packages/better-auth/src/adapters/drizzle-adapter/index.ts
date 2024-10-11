@@ -1,4 +1,4 @@
-import { and, eq, or, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, or, SQL } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
 import type { FieldType } from "../../db";
 import { getAuthTables } from "../../db/get-tables";
@@ -133,22 +133,22 @@ export const drizzleAdapter = (
 			else return null;
 		},
 		async findMany(data) {
-			const { model, where, limit, offset } = data;
+			const { model, where, limit, offset, sortBy } = data;
 
 			const schemaModel = getSchema(model, {
 				schema,
 				usePlural: options.usePlural,
 			});
 			const wheres = where ? whereConvertor(where, schemaModel) : [];
-			if (!wheres.length) {
-				return await db.select().from(schemaModel);
-			}
+			const fn = sortBy?.direction === "desc" ? desc : asc;
 			const res = await db
 				.select()
 				.from(schemaModel)
 				.limit(limit || 100)
 				.offset(offset || 0)
-				.where(...wheres);
+				.orderBy(fn(schemaModel[sortBy?.field || "id"]))
+				.where(...(wheres.length ? wheres : []));
+
 			return res;
 		},
 		async update(data) {

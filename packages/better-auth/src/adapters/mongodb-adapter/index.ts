@@ -91,7 +91,7 @@ export const mongodbAdapter = (mongo: Db) => {
 			return removeMongoId(result);
 		},
 		async findMany(data) {
-			const { model, where, limit, offset } = data;
+			const { model, where, limit, offset, sortBy } = data;
 			const wheres = whereConvertor(where);
 			const toReturn = await db
 				.collection(model)
@@ -100,6 +100,7 @@ export const mongodbAdapter = (mongo: Db) => {
 				.filter(wheres)
 				.skip(offset || 0)
 				.limit(limit || 100)
+				.sort(sortBy?.field || "id", sortBy?.direction === "desc" ? -1 : 1)
 				.toArray();
 			return toReturn.map(removeMongoId);
 		},

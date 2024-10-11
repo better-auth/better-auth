@@ -95,13 +95,18 @@ export const prismaAdapter = (
 			});
 		},
 		async findMany(data) {
-			const { model, where, limit, offset } = data;
+			const { model, where, limit, offset, sortBy } = data;
 			const whereClause = whereConvertor(where);
 
 			return await db[model].findMany({
 				where: whereClause,
 				take: limit || 100,
 				skip: offset || 0,
+				orderBy: sortBy?.field
+					? {
+							[sortBy.field]: sortBy.direction === "desc" ? "desc" : "asc",
+						}
+					: undefined,
 			});
 		},
 		async update(data) {
