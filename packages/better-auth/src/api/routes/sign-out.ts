@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
-import { deleteSessionCookie } from "../../utils/cookies";
+import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 
 export const signOut = createAuthEndpoint(

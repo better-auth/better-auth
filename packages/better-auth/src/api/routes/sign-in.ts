@@ -5,7 +5,7 @@ import { oAuthProviderList } from "../../social-providers";
 import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import type { toZod } from "../../types/to-zod";
 
 export const signInOAuth = createAuthEndpoint(

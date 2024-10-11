@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { parseSetCookieHeader } from "../../utils/cookies";
+import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 
 describe("session", async () => {

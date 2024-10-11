@@ -11,7 +11,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		method: "GET",
 		...options?.fetchOptions,
 		plugins: [
-			csrfPlugin,
+			...(!options?.disableCSRFTokenCheck ? [csrfPlugin] : []),
 			redirectPlugin,
 			addCurrentURL,
 			...(options?.fetchOptions?.plugins?.filter((pl) => pl !== undefined) ||

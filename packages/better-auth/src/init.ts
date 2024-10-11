@@ -18,10 +18,9 @@ import {
 	type BetterAuthCookies,
 	createCookieGetter,
 	getCookies,
-} from "./utils/cookies";
+} from "./cookies";
 import { createLogger, logger } from "./utils/logger";
 import { oAuthProviderList, oAuthProviders } from "./social-providers";
-import { crossSubdomainCookies } from "./internal-plugins";
 
 export const init = async (opts: BetterAuthOptions) => {
 	/**
@@ -33,6 +32,13 @@ export const init = async (opts: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
+
+	/**
+	 * Add baseURL to trusted origins if it exists
+	 */
+	if (baseURL) {
+		options.trustedOrigins = [...(options.trustedOrigins || []), baseURL];
+	}
 
 	const secret =
 		options.secret ||
@@ -48,6 +54,7 @@ export const init = async (opts: BetterAuthOptions) => {
 		plugins: plugins.concat(internalPlugins),
 	};
 	const cookies = getCookies(options);
+
 	const tables = getAuthTables(options);
 	const socialProviders = Object.keys(options.socialProviders || {})
 		.map((key) => {
@@ -174,12 +181,7 @@ function runPluginInit(options: BetterAuthOptions) {
 function getInternalPlugins(options: BetterAuthOptions) {
 	const plugins: BetterAuthPlugin[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
-		plugins.push(
-			crossSubdomainCookies({
-				eligibleCookies: options.advanced.crossSubDomainCookies.eligibleCookies,
-				domain: options.advanced.crossSubDomainCookies.domain,
-			}),
-		);
+		//TODO: add internal plugin
 	}
 	return plugins;
 }
