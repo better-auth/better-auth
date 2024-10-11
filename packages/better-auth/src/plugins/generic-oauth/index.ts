@@ -17,51 +17,111 @@ import { generateId } from "../../utils/id";
 import { getAccountTokens } from "../../utils/getAccount";
 import { setSessionCookie } from "../../cookies";
 
+/**
+ * Configuration interface for generic OAuth providers.
+ */
 interface GenericOAuthConfig {
+	/** Unique identifier for the OAuth provider */
 	providerId: string;
+	/**
+	 * URL to fetch OAuth 2.0 configuration.
+	 * If provided, the authorization and token endpoints will be fetched from this URL.
+	 */
 	discoveryUrl?: string;
+	/**
+	 * Type of OAuth flow.
+	 * @default "oauth2"
+	 */
+	type?: "oauth2" | "oidc";
+	/**
+	 * URL for the authorization endpoint.
+	 * Optional if using discoveryUrl.
+	 */
 	authorizationUrl?: string;
+	/**
+	 * URL for the token endpoint.
+	 * Optional if using discoveryUrl.
+	 */
 	tokenUrl?: string;
+	/**
+	 * URL for the user info endpoint.
+	 * Optional if using discoveryUrl.
+	 */
 	userInfoUrl?: string;
+	/** OAuth client ID */
 	clientId: string;
+	/** OAuth client secret */
 	clientSecret: string;
+	/**
+	 * Array of OAuth scopes to request.
+	 * @default []
+	 */
 	scopes?: string[];
+	/**
+	 * Custom redirect URI.
+	 * If not provided, a default URI will be constructed.
+	 */
 	redirectURI?: string;
+	/**
+	 * OAuth response type.
+	 * @default "code"
+	 */
 	responseType?: string;
+	/**
+	 * Prompt parameter for the authorization request.
+	 * Controls the authentication experience for the user.
+	 */
 	prompt?: string;
+	/**
+	 * Whether to use PKCE (Proof Key for Code Exchange)
+	 * @default false
+	 */
 	pkce?: boolean;
+	/**
+	 * Access type for the authorization request.
+	 * Use "offline" to request a refresh token.
+	 */
 	accessType?: string;
+	/**
+	 * Custom function to fetch user info.
+	 * If provided, this function will be used instead of the default user info fetching logic.
+	 * @param tokens - The OAuth tokens received after successful authentication
+	 * @returns A promise that resolves to a User object or null
+	 */
 	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
 }
 
 interface GenericOAuthOptions {
+	/**
+	 * Array of OAuth provider configurations.
+	 */
 	config: GenericOAuthConfig[];
 }
 
 async function getUserInfo(
 	tokens: OAuth2Tokens,
+	type: "oauth2" | "oidc",
 	finalUserInfoUrl: string | undefined,
 ) {
-	const idToken = tokens.idToken();
-	if (idToken) {
+	if (type === "oidc") {
+		const idToken = tokens.idToken();
 		const decoded = parseJWT(idToken);
-		console.log({ payload: decoded });
 		if (decoded?.payload) {
 			return decoded.payload;
 		}
-	} else {
-		if (!finalUserInfoUrl) {
-			return null;
-		}
-
-		const userInfo = await betterFetch<User>(finalUserInfoUrl, {
-			method: "GET",
-			headers: {
-				Authorization: `Bearer ${tokens.accessToken()}`,
-			},
-		});
-		return userInfo.data;
 	}
+
+	if (!finalUserInfoUrl) {
+		return null;
+	}
+
+	const userInfo = await betterFetch<User>(finalUserInfoUrl, {
+		method: "GET",
+		headers: {
+			Authorization: `Bearer ${tokens.accessToken()}`,
+		},
+	});
+	return userInfo.data;
 }
 
 /**
@@ -210,7 +270,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					if (ctx.query.error || !ctx.query.code) {
 						const parsedState = parseState(ctx.query.state);
 						const callbackURL =
-							parsedState.data?.callbackURL || `${ctx.context.baseURL}/error`;
+							parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
 						ctx.context.logger.error(ctx.query.error, ctx.params.providerId);
 						throw ctx.redirect(
 							`${callbackURL}?error=${ctx.query.error || "oAuth_code_missing"}`,
@@ -241,22 +301,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const {
 						data: { callbackURL, currentURL, dontRememberMe, code },
 					} = parsedState;
+					const errorURL =
+						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
 					const storedCode = await ctx.getSignedCookie(
 						ctx.context.authCookies.state.name,
 						ctx.context.secret,
 					);
 
 					if (storedCode !== code) {
-						console.log("OAuth code mismatch", storedCode, code);
 						logger.error("OAuth code mismatch", storedCode, code);
-						if (callbackURL || currentURL) {
-							throw ctx.redirect(
-								`${callbackURL || currentURL}?error=please_restart_the_process`,
-							);
-						}
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=please_restart_the_process`,
-						);
+						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
 					}
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
@@ -291,9 +345,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					} catch (e) {
 						ctx.context.logger.error(e);
 						throw ctx.redirect(
-							`${
-								parsedState.data?.callbackURL || `${ctx.context.baseURL}/error`
-							}?error=oauth_code_verification_failed`,
+							`${errorURL}?error=oauth_code_verification_failed`,
 						);
 					}
 
@@ -304,7 +356,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					const userInfo = provider.getUserInfo
 						? await provider.getUserInfo(tokens)
-						: await getUserInfo(tokens, finalUserInfoUrl);
+						: await getUserInfo(
+								tokens,
+								provider.type || "oauth2",
+								finalUserInfoUrl,
+							);
 					const id = generateId();
 					const user = userInfo
 						? userSchema.safeParse({
@@ -313,11 +369,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							})
 						: null;
 					if (!user?.success) {
-						throw ctx.redirect(
-							`${
-								parsedState.data?.callbackURL || `${ctx.context.baseURL}/error`
-							}?error=oauth_user_info_invalid`,
-						);
+						throw ctx.redirect(`${errorURL}?error=oauth_user_info_invalid`);
 					}
 					const dbUser = await ctx.context.internalAdapter
 						.findUserByEmail(user.data.email)
@@ -326,12 +378,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								"Better auth was unable to query your database.\nError: ",
 								e,
 							);
-							throw ctx.redirect(
-								`${ctx.context.baseURL}/error?error=internal_server_error`,
-							);
+							throw ctx.redirect(`${errorURL}?error=internal_server_error`);
 						});
 
-					const userId = dbUser?.user.id;
+					const userId = dbUser?.user.id || id;
 
 					if (dbUser) {
 						//check if user has already linked this provider
@@ -350,15 +400,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						) {
 							let url: URL;
 							try {
-								url = new URL(
-									parsedState.data?.callbackURL ||
-										`${ctx.context.baseURL}/error`,
-								);
+								url = new URL(errorURL);
 								url.searchParams.set("error", "account_not_linked");
 							} catch (e) {
-								throw ctx.redirect(
-									`${ctx.context.baseURL}/error?error=account_not_linked`,
-								);
+								throw ctx.redirect(`${errorURL}?error=account_not_linked`);
 							}
 							throw ctx.redirect(url.toString());
 						}
@@ -373,9 +418,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								});
 							} catch (e) {
 								console.log(e);
-								throw ctx.redirect(
-									`${ctx.context.baseURL}/error?error=failed_linking_account`,
-								);
+								throw ctx.redirect(`${errorURL}?error=failed_linking_account`);
 							}
 						}
 					} else {
@@ -388,9 +431,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								userId: userId!,
 							});
 						} catch (e) {
-							const url = new URL(
-								parsedState.data?.callbackURL || `${ctx.context.baseURL}/error`,
-							);
+							const url = new URL(errorURL);
 							url.searchParams.set("error", "unable_to_create_user");
 							ctx.setHeader("Location", url.toString());
 							throw ctx.redirect(url.toString());
@@ -404,37 +445,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							parsedState.data?.dontRememberMe,
 						);
 						if (!session) {
-							if (callbackURL || currentURL) {
-								throw ctx.redirect(
-									`${callbackURL || currentURL}?error=unable_to_create_session`,
-								);
-							}
-							throw ctx.redirect(
-								`${ctx.context.baseURL}/error?error=unable_to_create_session`,
-							);
+							throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 						}
-						try {
-							await setSessionCookie(ctx, session.id, dontRememberMe);
-						} catch (e) {
-							ctx.context.logger.error("Unable to set session cookie", e);
-							if (currentURL || callbackURL) {
-								const url = new URL(currentURL || callbackURL || "");
-								url.searchParams.set("error", "unable_to_create_session");
-								throw ctx.redirect(url.toString());
-							}
-							throw ctx.redirect(
-								`${ctx.context.baseURL}/error?error=unable_to_create_session`,
-							);
-						}
+						await setSessionCookie(ctx, session.id, dontRememberMe);
 					} catch {
-						if (currentURL || callbackURL) {
-							const url = new URL(currentURL || callbackURL || "");
-							url.searchParams.set("error", "unable_to_create_session");
-							throw ctx.redirect(url.toString());
-						}
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=unable_to_create_session`,
-						);
+						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 					}
 					throw ctx.redirect(callbackURL || currentURL || "");
 				},

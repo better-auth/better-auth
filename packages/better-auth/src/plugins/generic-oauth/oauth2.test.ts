@@ -25,10 +25,10 @@ describe("oauth2", async () => {
 	});
 
 	afterAll(async () => {
-		// await server.stop();
+		await server.stop();
 	});
 
-	const { auth, customFetchImpl } = await getTestInstance({
+	const { customFetchImpl } = await getTestInstance({
 		plugins: [
 			genericOAuth({
 				config: [
@@ -64,10 +64,6 @@ describe("oauth2", async () => {
 		userInfoResponse.statusCode = 200;
 	});
 
-	server.service.once("beforeTokenSigning", (token, req) => {
-		token.payload.client_id = "woo";
-	});
-
 	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
@@ -80,16 +76,17 @@ describe("oauth2", async () => {
 
 		if (!location) throw new Error("No redirect location found");
 
+		let callbackURL = "";
 		const callbackResponse = await betterFetch(location, {
 			method: "GET",
 			customFetchImpl,
 			headers,
 			onError(context) {
-				console.log(context.response.headers.get("Location"));
+				callbackURL = context.response.headers.get("location") || "";
 			},
 		});
 
-		return callbackResponse;
+		return callbackURL;
 	}
 
 	it("should redirect to the provider and handle the response", async () => {
@@ -115,17 +112,48 @@ describe("oauth2", async () => {
 				},
 			},
 		);
-		const callbackResponse = await simulateOAuthFlow(
-			res.data?.url || "",
-			headers,
-		);
-		console.log(callbackResponse);
+		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
-	it("should redirect to the provider", async () => {
+	it("should handle invalid provider ID", async () => {
 		const res = await authClient.signIn.oauth2({
-			providerId: "test",
+			providerId: "invalid-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should handle server error during OAuth flow", async () => {
+		server.service.once("beforeTokenResponse", (tokenResponse) => {
+			tokenResponse.statusCode = 500;
+			tokenResponse.body = { error: "internal_server_error" };
+		});
+
+		let headers = new Headers();
+		const res = await authClient.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			{
+				onSuccess(context) {
+					const parsedSetCookie = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${
+							parsedSetCookie.get("better-auth.state")?.value
+						}; better-auth.pk_code_verifier=${
+							parsedSetCookie.get("better-auth.pk_code_verifier")?.value
+						}`,
+					);
+				},
+			},
+		);
+
+		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
+		expect(callbackURL).toContain("?error=");
 	});
 });
