@@ -23,7 +23,6 @@ export const SimpleUsernameAndPass = () => {
           <Label className="text-sm/5 font-medium">Email</Label>
           <Input
             required
-            autoFocus
             type="email"
             name="email"
             className={clsx(

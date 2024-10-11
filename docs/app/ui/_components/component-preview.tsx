@@ -56,7 +56,7 @@ export function ComponentShowcase({
       <CardContent className="p-6">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <Tabs defaultValue="preview" className="w-full ">
-          <TabsList className="flex data-[state=active]:bg-background items-center bg-tranparent gap-3 w-fit grid-cols-7 rounded-none">
+          <TabsList className="md:ml-[-5px] flex data-[state=active]:bg-background items-center bg-tranparent gap-3 w-fit  rounded-none">
             <TabsTrigger
               className="rounded-none data-[state=active]:text-white flex items-center gap-2 data-[state=active]:bg-stone-900 "
               value="preview"
@@ -66,10 +66,10 @@ export function ComponentShowcase({
               Preview
             </TabsTrigger>
             <div className="mx-5">
-              <div className="w-[1px] h-[28px] z-20 bg-black/50 dark:bg-white/50"></div>
+              <div className="w-[1px] h-[30px] z-20 bg-black/50 dark:bg-white/20"></div>
             </div>
             <TabsTrigger
-              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="react"
               onClick={() => setFm("jsx")}
             >
@@ -77,7 +77,7 @@ export function ComponentShowcase({
               React
             </TabsTrigger>
             <TabsTrigger
-              className="flex data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
+              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center  data-[state=active]:bg-stone-900"
               value="svelte"
               onClick={() => setFm("js")}
             >
@@ -85,7 +85,7 @@ export function ComponentShowcase({
               Svelte
             </TabsTrigger>
             <TabsTrigger
-              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
+              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900 "
               value="astro"
               onClick={() => setFm("js")}
             >
@@ -93,7 +93,7 @@ export function ComponentShowcase({
               Astro
             </TabsTrigger>
             <TabsTrigger
-              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="solid"
               onClick={() => setFm("jsx")}
             >
@@ -101,7 +101,7 @@ export function ComponentShowcase({
               Solid{" "}
             </TabsTrigger>
             <TabsTrigger
-              className="flex data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
+              className="flex  py-2 data-[state=active]:text-white rounded-none gap-2 items-center data-[state=active]:bg-stone-900"
               value="nuxt"
               onClick={() => setFm("html")}
             >
@@ -109,7 +109,10 @@ export function ComponentShowcase({
               Nuxt
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="preview" className="p-4 border rounded-none mt-2">
+          <TabsContent
+            value="preview"
+            className=" md:mt-[-2px] p-4 border rounded-none"
+          >
             <main className="overflow-hidden bg-gray-50 dark:bg-gradient-to-tr dark:from-stone-950 dark:via-stone-900 dark:to-stone-950">
               <div className="isolate flex min-h-dvh items-center justify-center p-6 lg:p-8">
                 {component}
@@ -118,7 +121,7 @@ export function ComponentShowcase({
           </TabsContent>
           {Object.entries(codeExamples).map(([framework, example]) => (
             <TabsContent
-              className="border h-[600px] overflow-auto data-[state=active]:bg-transparent bg-transparent rounded-none"
+              className="border h-[600px] md:mt-[-2px] overflow-auto data-[state=active]:bg-transparent bg-transparent rounded-none"
               key={framework}
               value={framework}
             >
