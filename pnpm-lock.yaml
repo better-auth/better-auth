@@ -1571,6 +1571,9 @@ importers:
       next:
         specifier: ^14.2.8
         version: 14.2.13(@babel/core@7.25.2)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)
+      oauth2-mock-server:
+        specifier: ^7.1.2
+        version: 7.1.2
       pg:
         specifier: ^8.12.0
         version: 8.13.0
@@ -7403,6 +7406,10 @@ packages:
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
 
+  cors@2.8.5:
+    resolution: {integrity: sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g==}
+    engines: {node: '>= 0.10'}
+
   cose-base@1.0.3:
     resolution: {integrity: sha512-s9whTXInMSgAp/NVXVNuVxVKzGH2qck3aQlVHxDCdAEPgtMKwc4Wq6/QKhgdEdgbLSi9rBTAcPoRa6JpiG4ksg==}
 
@@ -9650,6 +9657,10 @@ packages:
     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
     engines: {node: '>=12'}
 
+  is-plain-object@5.0.0:
+    resolution: {integrity: sha512-VRSzKkbMm5jMDoKLbltAkFQ5Qr7VDiTFGXxYFXXowVj387GeGNOCsOH6Msy00SGZ3Fp84b1Naa1psqgcCIEP5Q==}
+    engines: {node: '>=0.10.0'}
+
   is-potential-custom-element-name@1.0.1:
     resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
 
@@ -11046,6 +11057,11 @@ packages:
   nypm@0.3.12:
     resolution: {integrity: sha512-D3pzNDWIvgA+7IORhD/IuWzEk4uXv6GsgOxiid4UU3h9oq5IqV1KtPDi63n4sZJ/xcWlr88c0QM2RgN5VbOhFA==}
     engines: {node: ^14.16.0 || >=16.10.0}
+    hasBin: true
+
+  oauth2-mock-server@7.1.2:
+    resolution: {integrity: sha512-xUg/YOTcMRe8W+q2jphecq1fB1BAjlAPbeeA9lvqwGaQSPJKxI2e8JUnDXHrrKGNJAVXQdHgE/9h4RpCtOfYOA==}
+    engines: {node: ^18.12 || ^20 || ^22, yarn: ^1.15.2}
     hasBin: true
 
   object-assign@4.1.1:
@@ -22177,6 +22193,11 @@ snapshots:
 
   core-util-is@1.0.3: {}
 
+  cors@2.8.5:
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
+
   cose-base@1.0.3:
     dependencies:
       layout-base: 1.0.2
@@ -25075,6 +25096,8 @@ snapshots:
 
   is-plain-obj@4.1.0: {}
 
+  is-plain-object@5.0.0: {}
+
   is-potential-custom-element-name@1.0.1: {}
 
   is-property@1.0.2: {}
@@ -27146,6 +27169,16 @@ snapshots:
       pathe: 1.1.2
       pkg-types: 1.2.0
       ufo: 1.5.4
+
+  oauth2-mock-server@7.1.2:
+    dependencies:
+      basic-auth: 2.0.1
+      cors: 2.8.5
+      express: 4.21.0
+      is-plain-object: 5.0.0
+      jose: 5.9.3
+    transitivePeerDependencies:
+      - supports-color
 
   object-assign@4.1.1: {}
 
