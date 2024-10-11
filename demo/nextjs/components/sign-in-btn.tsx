@@ -49,9 +49,9 @@ function checkOptimisticSession(headers: Headers) {
 	return !!guessIsSignIn;
 }
 
-export function SignInFallback() {
+export async function SignInFallback() {
 	//to avoid flash of unauthenticated state
-	const guessIsSignIn = checkOptimisticSession(headers());
+	const guessIsSignIn = checkOptimisticSession(await headers());
 	return (
 		<Link
 			href={guessIsSignIn ? "/dashboard" : "/sign-in"}
