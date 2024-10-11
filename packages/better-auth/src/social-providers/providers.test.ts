@@ -65,6 +65,7 @@ describe("Social Providers", async () => {
 		const signInRes = await client.signIn.social(
 			{
 				provider: "google",
+				callbackURL: "/callback",
 			},
 			{
 				onSuccess(context) {
@@ -97,6 +98,9 @@ describe("Social Providers", async () => {
 			headers,
 			onError(context) {
 				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);

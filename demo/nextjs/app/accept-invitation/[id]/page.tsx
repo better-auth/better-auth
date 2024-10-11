@@ -15,7 +15,6 @@ import { useParams, useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { client, organization } from "@/lib/auth-client";
 import { InvitationError } from "./invitation-error";
-import { Invitation } from "@/lib/auth-types";
 
 export default function InvitationPage() {
 	const params = useParams<{
