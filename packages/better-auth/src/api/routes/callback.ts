@@ -56,16 +56,16 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		const {
-			data: { callbackURL, currentURL, dontRememberMe, code },
+			data: { callbackURL, currentURL, code: stateCode },
 		} = parsedState;
 
-		const storedCode = await c.getSignedCookie(
+		const storedState = await c.getSignedCookie(
 			c.context.authCookies.state.name,
 			c.context.secret,
 		);
 
-		if (storedCode !== code) {
-			logger.error("Oauth code mismatch", storedCode, code);
+		if (storedState !== stateCode) {
+			logger.error("OAuth state mismatch", storedState, stateCode);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -186,7 +186,6 @@ export const callbackOAuth = createAuthEndpoint(
 			const session = await c.context.internalAdapter.createSession(
 				userId || id,
 				c.request,
-				dontRememberMe,
 			);
 			if (!session) {
 				const url = new URL(currentURL || callbackURL);
@@ -194,7 +193,7 @@ export const callbackOAuth = createAuthEndpoint(
 				throw c.redirect(url.toString());
 			}
 			try {
-				await setSessionCookie(c, session.id, dontRememberMe);
+				await setSessionCookie(c, session.id);
 			} catch (e) {
 				c.context.logger.error("Unable to set session cookie", e);
 				const url = new URL(currentURL || callbackURL);

@@ -30,10 +30,6 @@ export const signInOAuth = createAuthEndpoint(
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(oAuthProviderList),
-			/**
-			 * If this is true the session will only be valid for the current browser session
-			 */
-			dontRememberMe: z.boolean().default(false).optional(),
 		}),
 	},
 	async (c) => {
@@ -62,37 +58,33 @@ export const signInOAuth = createAuthEndpoint(
 			callbackURL || currentURL?.origin || c.context.baseURL,
 			c.query?.currentURL,
 		);
-		try {
-			await c.setSignedCookie(
-				cookie.state.name,
-				state.code,
-				c.context.secret,
-				cookie.state.options,
-			);
-			const codeVerifier = generateCodeVerifier();
-			await c.setSignedCookie(
-				cookie.pkCodeVerifier.name,
-				codeVerifier,
-				c.context.secret,
-				cookie.pkCodeVerifier.options,
-			);
-			const url = provider.createAuthorizationURL({
-				state: state.state,
-				codeVerifier,
-			});
-			url.searchParams.set(
-				"redirect_uri",
-				`${c.context.baseURL}/callback/${c.body.provider}`,
-			);
-			return {
-				url: url.toString(),
-				state: state.state,
-				codeVerifier,
-				redirect: true,
-			};
-		} catch (e) {
-			throw new APIError("INTERNAL_SERVER_ERROR");
-		}
+		await c.setSignedCookie(
+			cookie.state.name,
+			state.code,
+			c.context.secret,
+			cookie.state.options,
+		);
+		const codeVerifier = generateCodeVerifier();
+		await c.setSignedCookie(
+			cookie.pkCodeVerifier.name,
+			codeVerifier,
+			c.context.secret,
+			cookie.pkCodeVerifier.options,
+		);
+		const url = provider.createAuthorizationURL({
+			state: state.state,
+			codeVerifier,
+		});
+		url.searchParams.set(
+			"redirect_uri",
+			`${c.context.baseURL}/callback/${c.body.provider}`,
+		);
+		return {
+			url: url.toString(),
+			state: state.state,
+			codeVerifier,
+			redirect: true,
+		};
 	},
 );
 
