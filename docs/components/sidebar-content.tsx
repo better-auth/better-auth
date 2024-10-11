@@ -225,7 +225,7 @@ export const contents: Content[] = [
 				href: "/docs/concepts/rate-limit",
 			},
 			{
-				title: "Session Management",
+				title: "Sessions",
 				href: "/docs/concepts/session-management",
 				icon: () => (
 					<svg
