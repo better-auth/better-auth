@@ -672,7 +672,6 @@ export const contents: Content[] = [
 				icon: Users2,
 				href: "/docs/plugins/organization",
 			},
-
 			{
 				title: "Utility",
 				group: true,

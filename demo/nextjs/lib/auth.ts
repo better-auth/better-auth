@@ -5,6 +5,7 @@ import {
 	passkey,
 	phoneNumber,
 	twoFactor,
+	admin,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -83,6 +84,7 @@ export const auth = betterAuth({
 		}),
 		passkey(),
 		bearer(),
+		admin(),
 	],
 	socialProviders: {
 		github: {

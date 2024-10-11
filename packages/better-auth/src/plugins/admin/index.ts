@@ -54,8 +54,8 @@ export const admin = () => {
 										if (user.banExpires && user.banExpires < Date.now()) {
 											await ctx.internalAdapter.updateUser(session.userId, {
 												banned: false,
-												banReason: undefined,
-												banExpires: undefined,
+												banReason: null,
+												banExpires: null,
 											});
 											return;
 										}

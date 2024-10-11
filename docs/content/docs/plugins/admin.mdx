@@ -50,11 +50,11 @@ The Admin plugin provides a set of administrative functions for user management 
 
     Next, include the anonymous client plugin in your authentication client instance.
 
-    ```ts title="client.ts"
+    ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { adminClient } from "better-auth/client/plugins"
     
-    const client = createAuthClient({
+    const authClient = createAuthClient({
         plugins: [
             adminClient()
         ]
@@ -71,8 +71,8 @@ Before performing any admin operations, the user must be authenticated with an a
 
 Allows an admin to create a new user.
 
-```ts
-const newUser = await client.admin.createUser({
+```ts title="admin.ts"
+const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
@@ -84,8 +84,8 @@ const newUser = await client.admin.createUser({
 
 Allows an admin to list all users in the database.
 
-```ts
-const users = await client.admin.listUsers({
+```ts title="admin.ts"
+const users = await authClient.admin.listUsers({
     query: {
         limit: 10,
     }
@@ -98,8 +98,8 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 - `sortBy`: The field to sort the users by.
 - `sortDirection`: The direction to sort the users by. Defaults to `asc`.
 
-```ts
-const users = await client.admin.listUsers({
+```ts title="admin.ts"
+const users = await authClient.admin.listUsers({
     query: {
         limit: 10,
         offset: 0,
@@ -113,8 +113,8 @@ const users = await client.admin.listUsers({
 
 Changes the role of a user.
 
-```ts
-const updatedUser = await client.admin.setRole({
+```ts title="admin.ts"
+const updatedUser = await authClient.admin.setRole({
   userId: "user_id_here",
   role: "admin"
 });
@@ -124,8 +124,8 @@ const updatedUser = await client.admin.setRole({
 
 Bans a user, preventing them from signing in and revokes all of their existing sessions.
 
-```ts
-const bannedUser = await client.admin.banUser({
+```ts title="admin.ts"
+const bannedUser = await authClient.admin.banUser({
   userId: "user_id_here"
 });
 ```
@@ -134,8 +134,8 @@ const bannedUser = await client.admin.banUser({
 
 Removes the ban from a user, allowing them to sign in again.
 
-```ts
-const unbannedUser = await client.admin.unbanUser({
+```ts title="admin.ts"
+const unbannedUser = await authClient.admin.unbanUser({
   userId: "user_id_here"
 });
 ```
@@ -144,8 +144,8 @@ const unbannedUser = await client.admin.unbanUser({
 
 Lists all sessions for a user.
 
-```ts
-const sessions = await client.admin.listSessions({
+```ts title="admin.ts"
+const sessions = await authClient.admin.listSessions({
   userId: "user_id_here"
 });
 ```
@@ -154,8 +154,8 @@ const sessions = await client.admin.listSessions({
 
 Allows an admin to create a session as if they were the specified user.
 
-```ts
-const impersonatedSession = await client.admin.impersonateUser({
+```ts title="admin.ts"
+const impersonatedSession = await authClient.admin.impersonateUser({
   userId: "user_id_here"
 });
 ```
@@ -164,8 +164,8 @@ const impersonatedSession = await client.admin.impersonateUser({
 
 Hard deletes a user from the database.
 
-```ts
-const deletedUser = await client.admin.removeUser({
+```ts title="admin.ts"
+const deletedUser = await authClient.admin.removeUser({
   userId: "user_id_here"
 });
 ```
