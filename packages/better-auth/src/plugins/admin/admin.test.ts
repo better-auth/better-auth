@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
@@ -130,12 +130,38 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banned).toBe(true);
 	});
 
+	it("should allow to ban user with reason and expiration", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: newUser?.id || "",
+				banReason: "Test reason",
+				banExpiresIn: 60 * 60 * 24,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.banned).toBe(true);
+		expect(res.data?.user?.banReason).toBe("Test reason");
+		expect(res.data?.user?.banExpires).toBeDefined();
+	});
+
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
 			password: "test",
 		});
 		expect(res.error?.status).toBe(401);
+	});
+
+	it("should allow banned user to sign in if ban expired", async () => {
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 60 * 24 * 1000);
+		const res = await client.signIn.email({
+			email: newUser?.email || "",
+			password: "test",
+		});
+		expect(res.data?.session).toBeDefined();
 	});
 
 	it("should allow to unban user", async () => {
@@ -148,14 +174,6 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.user?.banned).toBe(false);
-	});
-
-	it("should allow user to sign in", async () => {
-		const res = await client.signIn.email({
-			email: "test2@test.com",
-			password: "test",
-		});
-		expect(res.data?.session).toBeDefined();
 	});
 
 	it("should allow admin to list user sessions", async () => {

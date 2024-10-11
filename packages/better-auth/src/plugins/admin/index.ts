@@ -10,6 +10,8 @@ import type { BetterAuthPlugin, Session, User } from "../../types";
 export interface UserWithRole extends User {
 	role?: string;
 	banned?: boolean;
+	banReason?: string;
+	banExpires?: number;
 }
 
 interface SessionWithImpersonatedBy extends Session {
@@ -49,6 +51,14 @@ export const admin = () => {
 										session.userId,
 									)) as UserWithRole;
 									if (user.banned) {
+										if (user.banExpires && user.banExpires < Date.now()) {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												banned: false,
+												banReason: undefined,
+												banExpires: undefined,
+											});
+											return;
+										}
 										return false;
 									}
 								},
@@ -225,6 +235,14 @@ export const admin = () => {
 					method: "POST",
 					body: z.object({
 						userId: z.string(),
+						/**
+						 * Reason for the ban
+						 */
+						banReason: z.string().optional(),
+						/**
+						 * Number of seconds until the ban expires
+						 */
+						banExpiresIn: z.number().optional(),
 					}),
 					use: [adminMiddleware],
 				},
@@ -238,6 +256,10 @@ export const admin = () => {
 						ctx.body.userId,
 						{
 							banned: true,
+							banReason: ctx.body.banReason,
+							banExpires: ctx.body.banExpiresIn
+								? Date.now() + ctx.body.banExpiresIn * 1000
+								: undefined,
 						},
 					);
 					//revoke all sessions
@@ -308,6 +330,14 @@ export const admin = () => {
 					banned: {
 						type: "boolean",
 						defaultValue: false,
+						required: false,
+					},
+					banReason: {
+						type: "string",
+						required: false,
+					},
+					banExpires: {
+						type: "number",
 						required: false,
 					},
 				},

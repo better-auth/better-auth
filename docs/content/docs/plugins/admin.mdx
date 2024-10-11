@@ -3,7 +3,7 @@ title: Admin
 description: Admin plugin for Better Auth
 ---
 
-The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, listing users, managing user roles, banning/unbanning users, and more.
+The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, managing user roles, banning/unbanning users, impersonating users, and more.
 
 
 ## Installation
@@ -85,20 +85,133 @@ const newUser = await client.admin.createUser({
 Allows an admin to list all users in the database.
 
 ```ts
-const users = await client.admin.listUsers();
+const users = await client.admin.listUsers({
+    query: {
+        limit: 10,
+    }
+});
 ```
 By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
 
 - `limit`: The number of users to return.
 - `offset`: The number of users to skip.
 - `sortBy`: The field to sort the users by.
+- `sortDirection`: The direction to sort the users by. Defaults to `asc`.
 
 ```ts
 const users = await client.admin.listUsers({
     query: {
         limit: 10,
         offset: 0,
-        sortBy: "createdAt"
+        sortBy: "createdAt",
+        sortDirection: "desc"
     }
 });
 ```
+
+### Set User Role
+
+Changes the role of a user.
+
+```ts
+const updatedUser = await client.admin.setRole({
+  userId: "user_id_here",
+  role: "admin"
+});
+```
+
+### Ban User
+
+Bans a user, preventing them from signing in and revokes all of their existing sessions.
+
+```ts
+const bannedUser = await client.admin.banUser({
+  userId: "user_id_here"
+});
+```
+
+### Unban User
+
+Removes the ban from a user, allowing them to sign in again.
+
+```ts
+const unbannedUser = await client.admin.unbanUser({
+  userId: "user_id_here"
+});
+```
+
+### List User Sessions
+
+Lists all sessions for a user.
+
+```ts
+const sessions = await client.admin.listSessions({
+  userId: "user_id_here"
+});
+```
+
+### Impersonate User
+
+Allows an admin to create a session as if they were the specified user.
+
+```ts
+const impersonatedSession = await client.admin.impersonateUser({
+  userId: "user_id_here"
+});
+```
+
+### Remove User
+
+Hard deletes a user from the database.
+
+```ts
+const deletedUser = await client.admin.removeUser({
+  userId: "user_id_here"
+});
+```
+
+## Schema
+
+This plugin adds the following fields to the `user` table:
+
+<DatabaseTable
+    fields={[
+        {
+            name: "role",
+            type: "string",
+            description: "The user's role. Defaults to `user`. Admins will have the `admin` role.",
+            isOptional: true,
+        },
+        {
+            name: "banned",
+            type: "boolean",
+            description: "Indicates whether the user is banned.",
+            isOptional: true,
+        },
+        {
+            name: "banReason",
+            type: "string",
+            description: "The reason for the user's ban.",
+            isOptional: true,
+        },
+        {
+            name: "banExpires",
+            type: "number",
+            description: "The Unix timestamp when the user's ban will expire.",
+            isOptional: true,
+        },
+    ]}
+/>
+
+And adds one field in the `session` table:
+
+<DatabaseTable
+    fields={[
+        {
+            name: "impersonatedBy",
+            type: "string",
+            description: "The ID of the admin that is impersonating this session.",
+            isOptional: true,
+        },
+    ]}
+/>
