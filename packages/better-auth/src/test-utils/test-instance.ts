@@ -3,18 +3,23 @@ import { alphabet, generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, ClientOptions } from "../types";
 import { getMigrations } from "../cli/utils/get-migration";
 import { parseSetCookieHeader } from "../utils/cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
 
-export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
+export async function getTestInstance<
+	O extends Partial<BetterAuthOptions>,
+	C extends ClientOptions,
+>(
 	options?: O,
 	config?: {
+		clientOptions?: C;
 		port?: number;
 		disableTestUser?: boolean;
+		testUser?: Record<string, any>;
 	},
 ) {
 	/**
@@ -53,6 +58,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		email: "test@test.com",
 		password: "test123456",
 		name: "test",
+		...config?.testUser,
 	};
 	async function createTestUser() {
 		if (config?.disableTestUser) {
@@ -148,6 +154,7 @@ export async function getTestInstance<O extends Partial<BetterAuthOptions>>(
 		fetchOptions: {
 			customFetchImpl,
 		},
+		...(config?.clientOptions as C extends undefined ? {} : C),
 	});
 	return {
 		auth,

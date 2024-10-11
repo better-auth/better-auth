@@ -136,16 +136,18 @@ export const admin = () => {
 				{
 					method: "GET",
 					use: [adminMiddleware],
-					query: z.object({
-						limit: z.number().optional(),
-						offset: z.number().optional(),
-						sortBy: z.string().optional(),
-					}),
+					query: z
+						.object({
+							limit: z.number().optional(),
+							offset: z.number().optional(),
+							sortBy: z.string().optional(),
+						})
+						.optional(),
 				},
 				async (ctx) => {
 					const users = await ctx.context.internalAdapter.listUsers(
-						ctx.query.limit,
-						ctx.query.offset,
+						ctx.query?.limit,
+						ctx.query?.offset,
 					);
 					return {
 						users: users as UserWithRole[],
