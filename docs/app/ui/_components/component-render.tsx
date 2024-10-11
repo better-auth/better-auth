@@ -5,15 +5,11 @@ import { Button } from "@/components/ui/button";
 import { previewComponent } from "./preview-component";
 import { Icons } from "@/components/icons";
 import { Github } from "lucide-react";
-import hljs from "highlight.js/lib/core";
 export default function ComponentShowcaseSection({
   category,
 }: {
   category: string;
 }) {
-  useEffect(() => {
-    hljs.highlightAll();
-  }, []);
   const filteredBasedOnCategory = previewComponent.filter((comp) =>
     comp.category.includes(category)
   );
@@ -30,6 +26,7 @@ export default function ComponentShowcaseSection({
                 nuxt: { language: "html", code: comp.code.nuxt },
                 solid: { language: "html", code: comp.code.solid },
               }}
+              docLink={comp.docsLink}
               component={comp.component}
               title={comp.title}
             />
@@ -56,6 +53,7 @@ export default function ComponentShowcaseSection({
                 nuxt: { language: "html", code: comp.code.nuxt },
                 solid: { language: "html", code: comp.code.solid },
               }}
+              docLink={comp.docsLink}
               component={comp.component}
               title={comp.title}
             />

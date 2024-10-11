@@ -4,9 +4,16 @@ import React, { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Layout, Loader2 } from "lucide-react";
+import { Copy, Check, Layout, Loader2, Link2 } from "lucide-react";
 import { Icons } from "@/components/icons";
+import Link from "next/link";
 import SyntaxHightlight from "@/components/syntax-hightlight";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 interface CodeExample {
   language: string;
   code: string;
@@ -14,6 +21,7 @@ interface CodeExample {
 
 interface ComponentShowcaseProps {
   component: React.ReactNode;
+  docLink?: string;
   codeExamples: {
     react: CodeExample;
     svelte: CodeExample;
@@ -28,6 +36,7 @@ export function ComponentShowcase({
   component,
   codeExamples,
   title,
+  docLink,
 }: ComponentShowcaseProps) {
   const [copiedStates, setCopiedStates] = useState({
     react: false,
@@ -54,7 +63,21 @@ export function ComponentShowcase({
   return (
     <Card className="w-full bg-transparent max-w-7xl mx-auto rounded-none">
       <CardContent className="p-6">
-        <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold mb-4">{title}</h2>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/${docLink}`}>
+                  <Link2 className="w-4 h-4" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Reference Docs</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <Tabs defaultValue="preview" className="w-full ">
           <TabsList className="md:ml-[-5px] flex data-[state=active]:bg-background items-center bg-tranparent gap-3 w-fit  rounded-none">
             <TabsTrigger
