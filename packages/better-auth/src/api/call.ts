@@ -40,6 +40,7 @@ export type AuthEndpoint = Endpoint<
 		options: BetterAuthOptions;
 		body: any;
 		query: any;
+		params: any;
 		headers: Headers;
 	}) => Promise<EndpointResponse>
 >;
