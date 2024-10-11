@@ -63,7 +63,7 @@ export function ComponentShowcase({
   });
   const [fm, setFm] = useState("react");
   const [loading, setLoading] = useState(false);
-  const [defaultFm, setDefaultFm] = useState("react");
+  const [defaultFm, setDefaultFm] = useState("");
   const [isPrev, setIsPrev] = useState(true);
   const copyToClipboard = (
     text: string,
@@ -154,16 +154,15 @@ export function ComponentShowcase({
 
             <div className="block md:hidden">
               <Select
-                defaultValue="react"
                 onValueChange={(value) => {
                   setDefaultFm(value);
                   setIsPrev(false);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="rounded-none">
                   <SelectValue placeholder="Select a framework" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-none">
                   <SelectItem value="react">React</SelectItem>
                   <SelectItem value="svelte">Svelte</SelectItem>
                   <SelectItem value="astro">Astro</SelectItem>
