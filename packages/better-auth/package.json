@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.4.1",
+    "version": "0.4.2-beta.1",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "scripts": {
@@ -100,7 +100,6 @@
         "consola": "^3.2.3",
         "defu": "^6.1.4",
         "dotenv": "^16.4.5",
-        "tinyexec": "^0.3.0",
         "jose": "^5.7.0",
         "kysely": "^0.27.4",
         "nanoid": "^5.0.7",
@@ -109,6 +108,8 @@
         "ora": "^8.0.1",
         "oslo": "^1.2.1",
         "prompts": "^2.4.2",
+        "tinyexec": "^0.3.0",
+        "yocto-spinner": "^0.1.1",
         "zod": "^3.22.5"
     },
     "files": [
