@@ -183,3 +183,28 @@ export const signInEmail = createAuthEndpoint(
 		});
 	},
 );
+
+const c = <
+	A extends {
+		additional: {
+			[key: string]: any;
+		};
+	},
+	T extends {
+		additional: A["additional"];
+		hooks: {
+			create: (user: A["additional"]) => any;
+		};
+	},
+>(
+	o: T,
+) => {};
+
+c({
+	additional: {
+		name: "string",
+	},
+	hooks: {
+		create(user) {},
+	},
+});
