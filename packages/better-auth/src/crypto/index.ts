@@ -1,7 +1,7 @@
 import { xchacha20poly1305 } from "@noble/ciphers/chacha";
 import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/ciphers/utils";
 import { managedNonce } from "@noble/ciphers/webcrypto";
-import { sha256 } from "@noble/hashes/sha256";
+import { sha256 } from "oslo/crypto";
 
 export async function hs256(secretKey: string, message: string) {
 	const enc = new TextEncoder();
@@ -26,10 +26,13 @@ export type SymmetricEncryptOptions = {
 	data: string;
 };
 
-export const symmetricEncrypt = ({ key, data }: SymmetricEncryptOptions) => {
-	const keyAsBytes = sha256(key);
+export const symmetricEncrypt = async ({
+	key,
+	data,
+}: SymmetricEncryptOptions) => {
+	const keyAsBytes = await sha256(new TextEncoder().encode(key));
 	const dataAsBytes = utf8ToBytes(data);
-	const chacha = managedNonce(xchacha20poly1305)(keyAsBytes);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
 	return bytesToHex(chacha.encrypt(dataAsBytes));
 };
 
@@ -38,9 +41,12 @@ export type SymmetricDecryptOptions = {
 	data: string;
 };
 
-export const symmetricDecrypt = ({ key, data }: SymmetricDecryptOptions) => {
-	const keyAsBytes = sha256(key);
+export const symmetricDecrypt = async ({
+	key,
+	data,
+}: SymmetricDecryptOptions) => {
+	const keyAsBytes = await sha256(new TextEncoder().encode(key));
 	const dataAsBytes = hexToBytes(data);
-	const chacha = managedNonce(xchacha20poly1305)(keyAsBytes);
-	return chacha.decrypt(dataAsBytes);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
 };

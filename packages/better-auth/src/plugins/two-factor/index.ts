@@ -48,7 +48,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						});
 					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
-					const encryptedSecret = symmetricEncrypt({
+					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secret,
 						data: secret,
 					});

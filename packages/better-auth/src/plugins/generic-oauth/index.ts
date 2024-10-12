@@ -219,7 +219,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						ctx.context.secret,
 						cookie.pkCodeVerifier.options,
 					);
-					const authUrl = createAuthorizationURL({
+					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
 							clientId,

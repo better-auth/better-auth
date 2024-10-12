@@ -21,7 +21,7 @@ export interface OAuthProvider<
 		codeVerifier: string;
 		scopes?: string[];
 		redirectURI?: string;
-	}) => URL;
+	}) => Promise<URL> | URL;
 	name: string;
 	validateAuthorizationCode: (
 		code: string,

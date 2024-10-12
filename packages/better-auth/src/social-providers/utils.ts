@@ -1,7 +1,7 @@
+import { sha256 } from "oslo/crypto";
 import type { OAuth2Tokens, ProviderOptions } from ".";
 import { getBaseURL } from "../utils/base-url";
 import { betterFetch } from "@better-fetch/fetch";
-import { sha256 } from "@noble/hashes/sha256";
 import { base64url } from "oslo/encoding";
 
 export function getRedirectURI(providerId: string, redirectURI?: string) {
@@ -44,14 +44,16 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
-export function generateCodeChallenge(codeVerifier: string): string {
-	const codeChallengeBytes = sha256(new TextEncoder().encode(codeVerifier));
-	return base64url.encode(codeChallengeBytes, {
+export async function generateCodeChallenge(codeVerifier: string) {
+	const codeChallengeBytes = await sha256(
+		new TextEncoder().encode(codeVerifier),
+	);
+	return base64url.encode(new Uint8Array(codeChallengeBytes), {
 		includePadding: false,
 	});
 }
 
-export function createAuthorizationURL({
+export async function createAuthorizationURL({
 	id,
 	options,
 	authorizationEndpoint,
@@ -67,7 +69,7 @@ export function createAuthorizationURL({
 	codeVerifier?: string;
 	scopes: string[];
 	disablePkce?: boolean;
-}): URL {
+}) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
 	url.searchParams.set("client_id", options.clientId);
@@ -78,7 +80,7 @@ export function createAuthorizationURL({
 		options.redirectURI || getRedirectURI(id),
 	);
 	if (!disablePkce && codeVerifier) {
-		const codeChallenge = generateCodeChallenge(codeVerifier);
+		const codeChallenge = await generateCodeChallenge(codeVerifier);
 		url.searchParams.set("code_challenge_method", "S256");
 		url.searchParams.set("code_challenge", codeChallenge);
 	}

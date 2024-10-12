@@ -40,7 +40,7 @@ export async function generateBackupCodes(
 	const backupCodes = options?.customBackupCodesGenerate
 		? options.customBackupCodesGenerate()
 		: generateBackupCodesFn();
-	const encCodes = symmetricEncrypt({
+	const encCodes = await symmetricEncrypt({
 		data: JSON.stringify(backupCodes),
 		key: key,
 	});

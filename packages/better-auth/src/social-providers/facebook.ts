@@ -25,9 +25,9 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		createAuthorizationURL({ state, scopes, codeVerifier }) {
+		async createAuthorizationURL({ state, scopes, codeVerifier }) {
 			const _scopes = options.scope || scopes || ["email", "public_profile"];
-			return createAuthorizationURL({
+			return await createAuthorizationURL({
 				id: "facebook",
 				options,
 				authorizationEndpoint: "https://www.facebook.com/v16.0/dialog/oauth",

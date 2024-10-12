@@ -71,7 +71,7 @@ export const signInOAuth = createAuthEndpoint(
 			c.context.secret,
 			cookie.pkCodeVerifier.options,
 		);
-		const url = provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			state: state.state,
 			codeVerifier,
 		});
