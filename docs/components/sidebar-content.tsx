@@ -563,6 +563,11 @@ export const contents: Content[] = [
 				icon: Icons.node,
 				href: "/docs/integrations/node",
 			},
+			{
+				title: "Elysia",
+				icon: Icons.elysia,
+				href: "/docs/integrations/elysia",
+			},
 		],
 	},
 	{
@@ -588,33 +593,33 @@ export const contents: Content[] = [
 				title: "Authentication",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
-				icon: LucideAArrowDown,
+				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 
 			{
 				title: "Two Factor",
-				icon: ScanFace,
+				icon: () => <ScanFace className="w-4 h-4" />,
 				href: "/docs/plugins/2fa",
 			},
 			{
 				title: "Username",
-				icon: UserSquare2,
+				icon: () => <UserSquare2 className="w-4 h-4" />,
 				href: "/docs/plugins/username",
 			},
 			{
 				title: "Anonymous",
-				icon: UserCircle,
+				icon: () => <UserCircle className="w-4 h-4" />,
 				href: "/docs/plugins/anonymous",
 			},
 			{
 				title: "Phone Number",
-				icon: Phone,
+				icon: () => <Phone className="w-4 h-4" />,
 				href: "/docs/plugins/phone-number",
 			},
 			{
 				title: "Magic Link",
 				href: "/docs/plugins/magic-link",
-				icon: Mailbox,
+				icon: () => <Mailbox className="w-4 h-4" />,
 			},
 			{
 				title: "Passkey",
@@ -660,7 +665,7 @@ export const contents: Content[] = [
 				title: "Authorization",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
-				icon: LucideAArrowDown,
+				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
 				title: "Admin",
@@ -673,17 +678,12 @@ export const contents: Content[] = [
 						viewBox="0 0 24 24"
 					>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="M12 23C6.443 21.765 2 16.522 2 11V5l10-4l10 4v6c0 5.524-4.443 10.765-10 12M4 6v5a10.58 10.58 0 0 0 8 10a10.58 10.58 0 0 0 8-10V6l-8-3Z"
 						></path>
-						<circle
-							cx="12"
-							cy="8.5"
-							r="2.5"
-							className="fill-foreground"
-						></circle>
+						<circle cx="12" cy="8.5" r="2.5" className="fill-current"></circle>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="M7 15a5.78 5.78 0 0 0 5 3a5.78 5.78 0 0 0 5-3c-.025-1.896-3.342-3-5-3c-1.667 0-4.975 1.104-5 3"
 						></path>
 					</svg>
@@ -691,19 +691,19 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Organization",
-				icon: Users2,
+				icon: () => <Users2 className="w-4 h-4" />,
 				href: "/docs/plugins/organization",
 			},
 			{
 				title: "Utility",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
-				icon: LucideAArrowDown,
+				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 
 			{
 				title: "Bearer",
-				icon: Key,
+				icon: () => <Key className="w-4 h-4" />,
 				href: "/docs/plugins/bearer",
 			},
 		],
