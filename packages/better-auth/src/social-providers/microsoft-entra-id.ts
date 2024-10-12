@@ -8,6 +8,7 @@ import type { OAuthProvider } from "./types";
 import { betterFetch } from "@better-fetch/fetch";
 import { parseJWT } from "oslo/jwt";
 import { logger } from "../utils/logger";
+import { BetterAuthError } from "../error/better-auth-error";
 
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	sub: string;
@@ -63,14 +64,16 @@ export const microsoft = (options: MicrosoftOptions) => {
 			});
 		},
 		async getUserInfo(token) {
-			const user = parseJWT(token.idToken())
-				?.payload as MicrosoftEntraIDProfile;
+			if (!token.idToken) {
+				return null;
+			}
+			const user = parseJWT(token.idToken)?.payload as MicrosoftEntraIDProfile;
 			const profilePhotoSize = options.profilePhotoSize || 48;
 			await betterFetch<ArrayBuffer>(
 				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
 				{
 					headers: {
-						Authorization: `Bearer ${token.accessToken()}`,
+						Authorization: `Bearer ${token.accessToken}`,
 					},
 					async onResponse(context) {
 						if (options.disableProfilePhoto || !context.response.ok) {

@@ -7,8 +7,8 @@ import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { getAccountTokens } from "../../utils/getAccount";
 import { setSessionCookie } from "../../cookies";
-import type { OAuth2Tokens } from "arctic";
 import { logger } from "../../utils/logger";
+import type { OAuth2Tokens } from "../../social-providers";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",

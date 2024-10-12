@@ -72,7 +72,10 @@ export const apple = (options: AppleOptions) => {
 			});
 		},
 		async getUserInfo(token) {
-			const data = parseJWT(token.idToken())?.payload as AppleProfile | null;
+			if (!token.idToken) {
+				return null;
+			}
+			const data = parseJWT(token.idToken)?.payload as AppleProfile | null;
 			if (!data) {
 				return null;
 			}

@@ -76,7 +76,7 @@ export const google = (options: GoogleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = parseJWT(token.idToken())?.payload as GoogleProfile;
+			const user = parseJWT(token.idToken)?.payload as GoogleProfile;
 			return {
 				user: {
 					id: user.sub,

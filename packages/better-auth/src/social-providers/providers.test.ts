@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { OAuth2Tokens } from "arctic";
 import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
+import { getOAuth2Tokens } from "./utils";
 
 vi.mock("./utils", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -35,7 +35,7 @@ vi.mock("./utils", async (importOriginal) => {
 					Buffer.from(DEFAULT_SECRET),
 					data,
 				);
-				const tokens = new OAuth2Tokens({
+				const tokens = getOAuth2Tokens({
 					access_token: "test",
 					refresh_token: "test",
 					id_token: testIdToken,

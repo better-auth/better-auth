@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { APIError } from "better-call";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, OAuth2Tokens, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../utils/state";
@@ -10,7 +10,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 } from "../../social-providers/utils";
-import type { OAuth2Tokens } from "arctic";
+
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
@@ -103,9 +103,8 @@ async function getUserInfo(
 	type: "oauth2" | "oidc",
 	finalUserInfoUrl: string | undefined,
 ) {
-	if (type === "oidc") {
-		const idToken = tokens.idToken();
-		const decoded = parseJWT(idToken);
+	if (type === "oidc" && tokens.idToken) {
+		const decoded = parseJWT(tokens.idToken);
 		if (decoded?.payload) {
 			return decoded.payload;
 		}
@@ -118,7 +117,7 @@ async function getUserInfo(
 	const userInfo = await betterFetch<User>(finalUserInfoUrl, {
 		method: "GET",
 		headers: {
-			Authorization: `Bearer ${tokens.accessToken()}`,
+			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
 	return userInfo.data;

@@ -86,7 +86,7 @@ export const github = (options: GithubOptions) => {
 				{
 					auth: {
 						type: "Bearer",
-						token: token.accessToken(),
+						token: token.accessToken,
 					},
 				},
 			);
@@ -105,7 +105,7 @@ export const github = (options: GithubOptions) => {
 				>("https://api.github.com/user/emails", {
 					auth: {
 						type: "Bearer",
-						token: token.accessToken(),
+						token: token.accessToken,
 					},
 				});
 				if (!error) {

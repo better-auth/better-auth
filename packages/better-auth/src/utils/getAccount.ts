@@ -1,13 +1,11 @@
-import type { OAuth2Tokens } from "arctic";
+import type { OAuth2Tokens } from "../social-providers";
 
 export function getAccountTokens(tokens: OAuth2Tokens) {
-	const accessToken = tokens.accessToken();
-	let refreshToken = tokens.hasRefreshToken()
-		? tokens.refreshToken()
-		: undefined;
+	const accessToken = tokens.accessToken;
+	let refreshToken = tokens.refreshToken;
 	let accessTokenExpiresAt = undefined;
 	try {
-		accessTokenExpiresAt = tokens.accessTokenExpiresAt();
+		accessTokenExpiresAt = tokens.accessTokenExpiresAt;
 	} catch {}
 	return {
 		accessToken,

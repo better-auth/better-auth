@@ -128,7 +128,7 @@ export const twitter = (options: TwitterOption) => {
 				{
 					method: "GET",
 					headers: {
-						Authorization: `Bearer ${token.accessToken()}`,
+						Authorization: `Bearer ${token.accessToken}`,
 					},
 				},
 			);

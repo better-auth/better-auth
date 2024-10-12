@@ -52,7 +52,7 @@ export const facebook = (options: FacebookOptions) => {
 				{
 					auth: {
 						type: "Bearer",
-						token: token.accessToken(),
+						token: token.accessToken,
 					},
 				},
 			);

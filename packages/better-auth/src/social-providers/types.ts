@@ -1,7 +1,16 @@
 import type { User } from "../db/schema";
 import type { oAuthProviderList } from ".";
 import type { LiteralString } from "../types/helper";
-import { OAuth2Tokens } from "arctic";
+
+export interface OAuth2Tokens {
+	tokenType?: string;
+	accessToken?: string;
+	refreshToken?: string;
+	accessTokenExpiresAt?: Date;
+	refreshTokenExpiresAt?: Date;
+	scopes?: string[];
+	idToken?: string;
+}
 
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,

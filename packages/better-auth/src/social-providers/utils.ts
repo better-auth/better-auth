@@ -1,5 +1,4 @@
-import { OAuth2Tokens } from "arctic";
-import type { ProviderOptions } from ".";
+import type { OAuth2Tokens, ProviderOptions } from ".";
 import { getBaseURL } from "../utils/base-url";
 import { betterFetch } from "@better-fetch/fetch";
 import { sha256 } from "@noble/hashes/sha256";
@@ -41,7 +40,7 @@ export async function validateAuthorizationCode({
 	if (error) {
 		throw error;
 	}
-	const tokens = new OAuth2Tokens(data);
+	const tokens = getOAuth2Tokens(data);
 	return tokens;
 }
 
@@ -84,4 +83,17 @@ export function createAuthorizationURL({
 		url.searchParams.set("code_challenge", codeChallenge);
 	}
 	return url;
+}
+
+export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
+	return {
+		tokenType: data.token_type,
+		accessToken: data.access_token,
+		refreshToken: data.refresh_token,
+		accessTokenExpiresAt: data.expires_at
+			? new Date((Date.now() + data.expires_in) * 1000)
+			: undefined,
+		scopes: data.scope?.split(" ") || [],
+		idToken: data.id_token,
+	};
 }

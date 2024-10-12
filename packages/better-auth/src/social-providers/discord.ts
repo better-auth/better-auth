@@ -106,7 +106,7 @@ export const discord = (options: DiscordOptions) => {
 				"https://discord.com/api/users/@me",
 				{
 					headers: {
-						authorization: `Bearer ${token.accessToken()}`,
+						authorization: `Bearer ${token.accessToken}`,
 					},
 				},
 			);
