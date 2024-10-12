@@ -86,6 +86,82 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 	],
+	session: {
+		additionalFields: {
+			latitude: {
+				type: "string",
+				required: false,
+			},
+			longitude: {
+				type: "string",
+				required: false,
+			},
+			continent: {
+				type: "string",
+				required: false,
+			},
+			country: {
+				type: "string",
+				required: false,
+			},
+			region: {
+				type: "string",
+				required: false,
+			},
+			city: {
+				type: "string",
+				required: false,
+			},
+			timezone: {
+				type: "string",
+				required: false,
+			},
+			browserName: {
+				type: "string",
+				required: false,
+			},
+			browserVersion: {
+				type: "string",
+				required: false,
+			},
+			browserMajor: {
+				type: "string",
+				required: false,
+			},
+			engineName: {
+				type: "string",
+				required: false,
+			},
+			engineVersion: {
+				type: "string",
+				required: false,
+			},
+			osName: {
+				type: "string",
+				required: false,
+			},
+			osVersion: {
+				type: "string",
+				required: false,
+			},
+			deviceVendor: {
+				type: "string",
+				required: false,
+			},
+			deviceModel: {
+				type: "string",
+				required: false,
+			},
+			deviceType: {
+				type: "string",
+				required: false,
+			},
+			cpuArchitecture: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
 	socialProviders: {
 		github: {
 			clientId: process.env.GITHUB_CLIENT_ID || "",
@@ -105,3 +181,5 @@ export const auth = betterAuth({
 		},
 	},
 });
+
+type A = typeof auth.$Infer.Session;

@@ -84,7 +84,9 @@ import { inferAdditionalFields } from "better-auth/client/plugins";
 export const authClient = createAuthClient({
   plugins: [inferAdditionalFields({
       user: {
-        role: "string"
+        role: {
+          type: "string"
+        }
       }
   })],
 });

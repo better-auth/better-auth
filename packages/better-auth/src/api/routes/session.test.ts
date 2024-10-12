@@ -7,7 +7,7 @@ describe("session", async () => {
 	const { client, testUser, sessionSetter } = await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
-		await client.signIn.email(
+		const res = await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -26,6 +26,9 @@ describe("session", async () => {
 				},
 			},
 		);
+		const expiresAt = new Date(res.data?.session?.expiresAt || "");
+		const now = new Date();
+		expect(expiresAt.getDate()).toBeGreaterThan(now.getDate() + 6);
 	});
 
 	it("should return null when not authenticated", async () => {

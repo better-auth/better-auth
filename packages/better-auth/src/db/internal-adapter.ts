@@ -123,43 +123,59 @@ export const createInternalAdapter = (
 				 * The cookie will be set to expire at the end of the session
 				 */
 				expiresAt: dontRememberMe
-					? getDate(1000 * 60 * 60 * 24) // 1 day
+					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
 				ipAddress: headers?.get("x-forwarded-for") || "",
 				userAgent: headers?.get("user-agent") || "",
 			};
 			const session = await createWithHooks(data, "session");
 			if (secondaryStorage && session) {
+				const user = await adapter.findOne<User>({
+					model: tables.user.tableName,
+					where: [{ field: "id", value: userId }],
+				});
 				secondaryStorage.set(
 					session.id,
-					JSON.stringify(session),
+					JSON.stringify({
+						session,
+						user,
+					}),
 					sessionExpiration,
 				);
 			}
 			return session;
 		},
 		findSession: async (sessionId: string) => {
-			let session: Session | null = null;
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(sessionId);
 				if (sessionStringified) {
 					const s = JSON.parse(sessionStringified);
-					session = {
-						...s,
-						expiresAt: new Date(s.expiresAt),
+					return {
+						session: {
+							...s.session,
+							expiresAt: new Date(s.session.expiresAt),
+						},
+						user: {
+							...s.user,
+							createdAt: new Date(s.user.createdAt),
+							updatedAt: new Date(s.user.updatedAt),
+						},
+					} as {
+						session: Session;
+						user: User;
 					};
 				}
-			} else {
-				session = await adapter.findOne<Session>({
-					model: tables.session.tableName,
-					where: [
-						{
-							value: sessionId,
-							field: "id",
-						},
-					],
-				});
 			}
+
+			const session = await adapter.findOne<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						value: sessionId,
+						field: "id",
+					},
+				],
+			});
 
 			if (!session) {
 				return null;

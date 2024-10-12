@@ -49,6 +49,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 		}
 		return result;
 	} catch (error) {
+		console.error(error);
 		throw new BetterAuthError("Error parsing tsconfig.json");
 	}
 }
