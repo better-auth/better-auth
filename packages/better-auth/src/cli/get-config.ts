@@ -86,7 +86,6 @@ export async function getConfig({
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
-			const alias = getPathAliases(cwd);
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;

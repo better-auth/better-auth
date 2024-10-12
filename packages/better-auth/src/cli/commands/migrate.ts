@@ -67,7 +67,7 @@ export const migrate = new Command("migrate")
 		logger.info(`🔑 The migration will affect the following:`);
 
 		for (const table of [...toBeCreated, ...toBeAdded]) {
-			logger.info(
+			console.log(
 				"->",
 				chalk.magenta(Object.keys(table.fields).join(", ")),
 				chalk.white("fields on"),
