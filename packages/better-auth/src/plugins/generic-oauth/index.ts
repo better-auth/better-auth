@@ -299,7 +299,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						);
 					}
 					const {
-						data: { callbackURL, currentURL, dontRememberMe, code },
+						data: { callbackURL, currentURL, code },
 					} = parsedState;
 					const errorURL =
 						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
@@ -442,12 +442,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						const session = await ctx.context.internalAdapter.createSession(
 							userId || id,
 							ctx.request,
-							parsedState.data?.dontRememberMe,
 						);
 						if (!session) {
 							throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 						}
-						await setSessionCookie(ctx, session.id, dontRememberMe);
+						await setSessionCookie(ctx, session.id);
 					} catch {
 						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 					}
