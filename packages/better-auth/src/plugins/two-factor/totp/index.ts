@@ -111,12 +111,11 @@ export const totp2fa = (options: TOTPOptions) => {
 				});
 			}
 			const totp = new TOTPController(opts);
-			const secret = Buffer.from(
-				symmetricDecrypt({
-					key: ctx.context.secret,
-					data: ctx.context.session.user.twoFactorSecret,
-				}),
-			);
+			const decrypted = await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: ctx.context.session.user.twoFactorSecret,
+			});
+			const secret = Buffer.from(decrypted);
 			const status = await totp.verify(ctx.body.code, secret);
 			if (!status) {
 				return ctx.context.invalid();

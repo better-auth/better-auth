@@ -8,7 +8,6 @@ import type { OAuthProvider } from "./types";
 import { betterFetch } from "@better-fetch/fetch";
 import { parseJWT } from "oslo/jwt";
 import { logger } from "../utils/logger";
-import { BetterAuthError } from "../error/better-auth-error";
 
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	sub: string;
