@@ -1486,9 +1486,6 @@ importers:
       nanoid:
         specifier: ^5.0.7
         version: 5.0.7
-      nanoquery:
-        specifier: ^1.3.0
-        version: 1.3.0
       nanostores:
         specifier: ^0.11.2
         version: 0.11.3
@@ -10710,9 +10707,6 @@ packages:
     resolution: {integrity: sha512-eLoBxg6wE/rZkJPhU/xRX1WTpkFEwDJEN96oxFrTsqBdbT5ec295Q+CoHrL9IT0DipqKhmGcaZmwOt8OON5x1w==}
     engines: {node: '>=12.0.0'}
 
-  nanoassert@1.1.0:
-    resolution: {integrity: sha512-C40jQ3NzfkP53NsO8kEOFd79p4b9kDXQMwgiY1z8ZwrDZgUyom0AHwGegF4Dm99L+YoYhuaB0ceerUcXmqr1rQ==}
-
   nanoevents@9.0.0:
     resolution: {integrity: sha512-X8pU7IOpgKXVLPxYUI55ymXc8XuBE+uypfEyEFBtHkD1EX9KavYTVc+vXZHFyHKzA1TaZoVDqklLdQBBrxIuAw==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -10729,9 +10723,6 @@ packages:
     resolution: {integrity: sha512-oLxFY2gd2IqnjcYyOXD8XGCftpGtZP2AbHbOkthDkvRywH5ayNtPVy9YlOPcHckXzbLTCHpkb7FB+yuxKV13pQ==}
     engines: {node: ^18 || >=20}
     hasBin: true
-
-  nanoquery@1.3.0:
-    resolution: {integrity: sha512-eZv8Ct2PZn/CdOmD2BgLNwjhhPmxg4tXhygp0roaRer5RqBFB0gm0wHIb5VZcL0CS0r+yWQ1kBVYG7S1jUyG0A==}
 
   nanostores@0.11.3:
     resolution: {integrity: sha512-TUes3xKIX33re4QzdxwZ6tdbodjmn3tWXCEc1uokiEmo14sI1EaGYNs2k3bU2pyyGNmBqFGAVl6jAGWd06AVIg==}
@@ -26535,8 +26526,6 @@ snapshots:
     dependencies:
       lru-cache: 7.18.3
 
-  nanoassert@1.1.0: {}
-
   nanoevents@9.0.0: {}
 
   nanoid@2.1.11: {}
@@ -26544,10 +26533,6 @@ snapshots:
   nanoid@3.3.7: {}
 
   nanoid@5.0.7: {}
-
-  nanoquery@1.3.0:
-    dependencies:
-      nanoassert: 1.1.0
 
   nanostores@0.11.3: {}
 
