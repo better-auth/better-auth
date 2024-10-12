@@ -290,9 +290,8 @@ Better Auth supports any backend framework with standard Request and Response ob
 
     const app = new Hono();
 
-    app.on(["POST", "GET"], "/api/auth/**", (c) => {
-        return auth.handler(c.req.raw);
-    });
+    app.get('/api/auth/*', (c) => auth.handler(c.req.raw));
+    app.post('/api/auth/*', (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```
