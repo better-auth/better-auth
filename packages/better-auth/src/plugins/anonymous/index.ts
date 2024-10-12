@@ -1,6 +1,6 @@
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
 import { getOrigin } from "../../utils/base-url";

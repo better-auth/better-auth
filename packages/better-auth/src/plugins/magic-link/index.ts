@@ -4,7 +4,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "../../api/routes";
 import { validateJWT, type JWT } from "oslo/jwt";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 
 interface MagicLinkOptions {
 	/**

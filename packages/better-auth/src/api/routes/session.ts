@@ -1,7 +1,7 @@
 import { APIError, type Context } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
-import { deleteSessionCookie, setSessionCookie } from "../../utils/cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import type { Session } from "../../db/schema";
 import { z } from "zod";
 import type {

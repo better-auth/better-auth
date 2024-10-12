@@ -8,7 +8,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx, sessionMiddleware } from "../../api";
 import { getDate } from "../../utils/date";
 import { logger } from "../../utils/logger";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;

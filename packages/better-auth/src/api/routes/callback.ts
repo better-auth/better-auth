@@ -6,7 +6,7 @@ import { parseState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { getAccountTokens } from "../../utils/getAccount";
-import { setSessionCookie } from "../../utils/cookies";
+import { setSessionCookie } from "../../cookies";
 import type { OAuth2Tokens } from "arctic";
 import { logger } from "../../utils/logger";
 
