@@ -124,6 +124,32 @@ describe("session", async () => {
 		).toBeLessThanOrEqual(getDate(1000 * 60 * 60 * 24).valueOf());
 	});
 
+	it("should set cookies correctly on sign in after changing config", async () => {
+		const res = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+
+					expect(cookies.get("better-auth.session_token")).toMatchObject({
+						value: expect.any(String),
+						"max-age": (60 * 60 * 24 * 7).toString(),
+						path: "/",
+						httponly: true,
+						samesite: "Lax",
+					});
+				},
+			},
+		);
+		const expiresAt = new Date(res.data?.session?.expiresAt || "");
+		const now = new Date();
+		expect(expiresAt.getDate()).toBeGreaterThan(now.getDate() + 6);
+	});
+
 	it("should clear session on sign out", async () => {
 		let headers = new Headers();
 		const res = await client.signIn.email(

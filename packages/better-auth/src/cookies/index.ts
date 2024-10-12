@@ -12,7 +12,8 @@ export function getCookies(options: BetterAuthOptions) {
 				process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
-	const sessionMaxAge = new TimeSpan(7, "d").seconds();
+	const sessionMaxAge =
+		options.session?.expiresIn || new TimeSpan(7, "d").seconds();
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 
@@ -145,12 +146,18 @@ export async function setSessionCookie(
 ) {
 	const options = ctx.context.authCookies.sessionToken.options;
 	//@ts-expect-error
-	options.maxAge = dontRememberMe ? undefined : options.maxAge;
+	options.maxAge = dontRememberMe
+		? undefined
+		: ctx.context.sessionConfig.expiresIn;
+
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		sessionToken,
 		ctx.context.secret,
-		options,
+		{
+			...options,
+			...overrides,
+		},
 	);
 	if (dontRememberMe) {
 		await ctx.setSignedCookie(

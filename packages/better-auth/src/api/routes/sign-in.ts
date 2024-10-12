@@ -173,6 +173,7 @@ export const signInEmail = createAuthEndpoint(
 				message: "Failed to create session",
 			});
 		}
+
 		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
 		return ctx.json({
 			user: user.user,

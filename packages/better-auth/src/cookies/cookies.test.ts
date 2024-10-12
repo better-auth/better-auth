@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { createAuthClient } from "../client";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
