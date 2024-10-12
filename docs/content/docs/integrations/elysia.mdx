@@ -1,0 +1,35 @@
+---
+title: Elysia Integration
+description: Elysia Integration Guide
+---
+
+This integration guide is assuming you are using Elysia with bun server.
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+### Mount the handler
+
+We need to mount the handler to elysia endpoint.
+
+```ts
+import { Elysia } from "elysia";
+import { auth } from "./auth";
+
+const betterAuthView = (context: Context) => {
+  const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
+  // validate request method
+  if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
+    return auth.handler(context.request);
+  }
+  else {
+    context.error(405)
+  }
+}
+
+const app = new Elysia().all("/*", betterAuthView).listen(3000);
+
+console.log(
+  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+);
+
+```
