@@ -126,7 +126,9 @@ Bans a user, preventing them from signing in and revokes all of their existing s
 
 ```ts title="admin.ts"
 const bannedUser = await authClient.admin.banUser({
-  userId: "user_id_here"
+  userId: "user_id_here",
+  banReason: "Spamming", // Optional
+  banExpiresIn: 60 * 60 * 24 * 7 // Optional
 });
 ```
 
