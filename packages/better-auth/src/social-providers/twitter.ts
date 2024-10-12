@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { Twitter } from "arctic";
 import type { OAuthProvider, ProviderOptions } from ".";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
-import { BetterAuthError } from "../error/better-auth-error";
+import {
+	createAuthorizationURL,
+	getRedirectURI,
+	validateAuthorizationCode,
+} from "./utils";
 
 export interface TwitterProfile {
 	data: {
@@ -96,21 +98,19 @@ export interface TwitterProfile {
 export interface TwitterOption extends ProviderOptions {}
 
 export const twitter = (options: TwitterOption) => {
-	const twitterArctic = new Twitter(
-		options.clientId,
-		options.clientSecret,
-		getRedirectURI("twitter", options.redirectURI),
-	);
 	return {
 		id: "twitter",
 		name: "Twitter",
 		createAuthorizationURL(data) {
 			const _scopes = options.scope || data.scopes || ["account_info.read"];
-			return twitterArctic.createAuthorizationURL(
-				data.state,
-				data.codeVerifier,
-				_scopes,
-			);
+			return createAuthorizationURL({
+				id: "twitter",
+				options,
+				authorizationEndpoint: "https://twitter.com/i/oauth2/authorize",
+				scopes: _scopes,
+				state: data.state,
+				codeVerifier: data.codeVerifier,
+			});
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
 			return validateAuthorizationCode({

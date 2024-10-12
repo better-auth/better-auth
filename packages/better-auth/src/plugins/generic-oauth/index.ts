@@ -220,21 +220,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						ctx.context.secret,
 						cookie.pkCodeVerifier.options,
 					);
-					const authUrl = createAuthorizationURL(
-						providerId,
-						{
+					const authUrl = createAuthorizationURL({
+						id: providerId,
+						options: {
 							clientId,
 							clientSecret,
 							redirectURI:
 								redirectURI ||
 								`${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 						},
-						finalAuthUrl,
-						state.state,
-						codeVerifier,
-						scopes || [],
-						!pkce,
-					);
+						authorizationEndpoint: finalAuthUrl,
+						state: state.state,
+						codeVerifier: codeVerifier,
+						scopes: scopes || [],
+						disablePkce: !pkce,
+					});
 
 					if (responseType && responseType !== "code") {
 						authUrl.searchParams.set("response_type", responseType);

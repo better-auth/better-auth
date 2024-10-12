@@ -1,9 +1,12 @@
-import { Google } from "arctic";
 import { parseJWT } from "oslo/jwt";
 import type { OAuthProvider, ProviderOptions } from ".";
 import { BetterAuthError } from "../error/better-auth-error";
 import { logger } from "../utils/logger";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import {
+	createAuthorizationURL,
+	getRedirectURI,
+	validateAuthorizationCode,
+} from "./utils";
 
 export interface GoogleProfile {
 	aud: string;
@@ -35,11 +38,6 @@ export interface GoogleProfile {
 export interface GoogleOptions extends ProviderOptions {}
 
 export const google = (options: GoogleOptions) => {
-	const googleArctic = new Google(
-		options.clientId,
-		options.clientSecret,
-		getRedirectURI("google", options.redirectURI),
-	);
 	return {
 		id: "google",
 		name: "Google",
@@ -54,11 +52,14 @@ export const google = (options: GoogleOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
 			const _scopes = options.scope || scopes || ["email", "profile"];
-			const url = googleArctic.createAuthorizationURL(
+			const url = createAuthorizationURL({
+				id: "google",
+				options,
+				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
+				scopes: _scopes,
 				state,
 				codeVerifier,
-				_scopes,
-			);
+			});
 			return url;
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {

@@ -1,7 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { Twitch } from "arctic";
 import type { OAuthProvider, ProviderOptions } from ".";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import {
+	createAuthorizationURL,
+	getRedirectURI,
+	validateAuthorizationCode,
+} from "./utils";
 
 export interface TwitchProfile {
 	/**
@@ -24,17 +27,18 @@ export interface TwitchProfile {
 
 export interface TwitchOptions extends ProviderOptions {}
 export const twitch = (options: TwitchOptions) => {
-	const twitchArctic = new Twitch(
-		options.clientId,
-		options.clientSecret,
-		getRedirectURI("twitch", options.redirectURI),
-	);
 	return {
 		id: "twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes }) {
 			const _scopes = options.scope || scopes || ["activity:write", "read"];
-			return twitchArctic.createAuthorizationURL(state, _scopes);
+			return createAuthorizationURL({
+				id: "twitch",
+				options,
+				authorizationEndpoint: "https://id.twitch.tv/oauth2/authorize",
+				scopes: _scopes,
+				state,
+			});
 		},
 		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
 			return validateAuthorizationCode({

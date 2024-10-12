@@ -43,14 +43,14 @@ export const microsoft = (options: MicrosoftOptions) => {
 		createAuthorizationURL(data) {
 			const scopes = options.scope ||
 				data.scopes || ["openid", "profile", "email", "User.Read"];
-			return createAuthorizationURL(
-				"microsoft",
+			return createAuthorizationURL({
+				id: "microsoft",
 				options,
 				authorizationEndpoint,
-				data.state,
-				data.codeVerifier,
+				state: data.state,
+				codeVerifier: data.codeVerifier,
 				scopes,
-			);
+			});
 		},
 		validateAuthorizationCode(code, codeVerifier, redirectURI) {
 			return validateAuthorizationCode({

@@ -52,15 +52,23 @@ export function generateCodeChallenge(codeVerifier: string): string {
 	});
 }
 
-export function createAuthorizationURL(
-	id: string,
-	options: ProviderOptions,
-	authorizationEndpoint: string,
-	state: string,
-	codeVerifier: string,
-	scopes: string[],
-	disablePkce?: boolean,
-): URL {
+export function createAuthorizationURL({
+	id,
+	options,
+	authorizationEndpoint,
+	state,
+	codeVerifier,
+	scopes,
+	disablePkce,
+}: {
+	id: string;
+	options: ProviderOptions;
+	authorizationEndpoint: string;
+	state: string;
+	codeVerifier?: string;
+	scopes: string[];
+	disablePkce?: boolean;
+}): URL {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
 	url.searchParams.set("client_id", options.clientId);
@@ -70,7 +78,7 @@ export function createAuthorizationURL(
 		"redirect_uri",
 		options.redirectURI || getRedirectURI(id),
 	);
-	if (!disablePkce) {
+	if (!disablePkce && codeVerifier) {
 		const codeChallenge = generateCodeChallenge(codeVerifier);
 		url.searchParams.set("code_challenge_method", "S256");
 		url.searchParams.set("code_challenge", codeChallenge);

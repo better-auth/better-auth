@@ -1,8 +1,5 @@
-import { OAuth2Tokens } from "arctic";
 import type { OAuthProvider, ProviderOptions } from ".";
 import { parseJWT } from "oslo/jwt";
-import { betterFetch } from "@better-fetch/fetch";
-import { BetterAuthError } from "../error/better-auth-error";
 import { getRedirectURI, validateAuthorizationCode } from "./utils";
 export interface AppleProfile {
 	/**
