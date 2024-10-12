@@ -100,8 +100,10 @@ export function getCookies(options: BetterAuthOptions) {
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
-		!!options.advanced?.useSecureCookies ||
-		process.env.NODE_ENV === "production";
+		options.advanced?.useSecureCookies !== undefined
+			? options.advanced?.useSecureCookies
+			: options.baseURL?.startsWith("https://") ||
+				process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 
@@ -162,12 +164,6 @@ export async function setSessionCookie(
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-		maxAge: 0,
-	});
-	ctx.setCookie(ctx.context.authCookies.pkCodeVerifier.name, "", {
-		maxAge: 0,
-	});
-	ctx.setCookie(ctx.context.authCookies.state.name, "", {
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {

@@ -79,12 +79,12 @@ export const signInOAuth = createAuthEndpoint(
 			"redirect_uri",
 			`${c.context.baseURL}/callback/${c.body.provider}`,
 		);
-		return {
+		return c.json({
 			url: url.toString(),
 			state: state.state,
 			codeVerifier,
 			redirect: true,
-		};
+		});
 	},
 );
 
