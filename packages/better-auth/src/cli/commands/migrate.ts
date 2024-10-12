@@ -5,7 +5,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { logger } from "../../utils/logger";
 import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
-import ora from "ora";
+import yoctoSpinner from "yocto-spinner";
 import chalk from "chalk";
 import prompts from "prompts";
 import { getMigrations } from "../utils/get-migration";
@@ -52,7 +52,7 @@ export const migrate = new Command("migrate")
 			);
 			process.exit(1);
 		}
-		const spinner = ora("preparing migration...").start();
+		const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
 		const { toBeAdded, toBeCreated, runMigrations } =
 			await getMigrations(config);
