@@ -174,7 +174,7 @@ const revokedSessions = await authClient.admin.revokeUserSessions({
 
 ### Impersonate User
 
-Allows an admin to create a session as if they were the specified user.
+This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 day in age.
 
 ```ts title="admin.ts"
 const impersonatedSession = await authClient.admin.impersonateUser({
