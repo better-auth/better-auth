@@ -13,7 +13,7 @@ let possiblePaths = ["auth.ts", "auth.tsx"];
 
 possiblePaths = [
 	...possiblePaths,
-...possiblePaths.map((it) => `lib/server${it}`),
+	...possiblePaths.map((it) => `lib/server${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
@@ -49,7 +49,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 				result[alias[0]] = "../";
 			}
 		}
-addSvelteKitEnvModules(result);
+		addSvelteKitEnvModules(result);
 		return result;
 	} catch (error) {
 		console.error(error);
