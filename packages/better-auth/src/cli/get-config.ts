@@ -8,10 +8,12 @@ import babelPresetTypescript from "@babel/preset-typescript";
 import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
 import { BetterAuthError } from "../error/better-auth-error";
+import { addSvelteKitEnvModules } from "./utils/add-svelte-kit-env-modules";
 let possiblePaths = ["auth.ts", "auth.tsx"];
 
 possiblePaths = [
 	...possiblePaths,
+	...possiblePaths.map((it) => `lib/server${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
@@ -47,6 +49,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 				result[alias[0]] = "../";
 			}
 		}
+		addSvelteKitEnvModules(result);
 		return result;
 	} catch (error) {
 		console.error(error);
