@@ -452,6 +452,6 @@ export interface BetterAuthOptions {
 		 * @param error
 		 * @param ctx - Auth context
 		 */
-		onError?: (error: unknown, ctx: AuthContext) => void;
+		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 	};
 }

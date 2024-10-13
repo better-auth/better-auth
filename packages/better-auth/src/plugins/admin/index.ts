@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-	AuthAPIError,
+	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
@@ -23,11 +23,11 @@ interface SessionWithImpersonatedBy extends Session {
 export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw new AuthAPIError("UNAUTHORIZED");
+		throw new APIError("UNAUTHORIZED");
 	}
 	const user = session.user as UserWithRole;
 	if (user.role !== "admin") {
-		throw new AuthAPIError("FORBIDDEN", {
+		throw new APIError("FORBIDDEN", {
 			message: "Only admins can access this endpoint",
 		});
 	}
@@ -184,7 +184,7 @@ export const admin = (options?: AdminOptions) => {
 						ctx.body.email,
 					);
 					if (existUser) {
-						throw new AuthAPIError("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							message: "User already exists",
 						});
 					}
@@ -197,7 +197,7 @@ export const admin = (options?: AdminOptions) => {
 						});
 
 					if (!user) {
-						throw new AuthAPIError("INTERNAL_SERVER_ERROR", {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to create user",
 						});
 					}
@@ -301,7 +301,7 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					if (ctx.body.userId === ctx.context.session.user.id) {
-						throw new AuthAPIError("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							message: "You cannot ban yourself",
 						});
 					}
@@ -340,7 +340,7 @@ export const admin = (options?: AdminOptions) => {
 					);
 
 					if (!targetUser) {
-						throw new AuthAPIError("NOT_FOUND", {
+						throw new APIError("NOT_FOUND", {
 							message: "User not found",
 						});
 					}
@@ -357,7 +357,7 @@ export const admin = (options?: AdminOptions) => {
 						},
 					);
 					if (!session) {
-						throw new AuthAPIError("INTERNAL_SERVER_ERROR", {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "Failed to create session",
 						});
 					}

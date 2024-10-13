@@ -3,11 +3,11 @@ title: API
 description: Better Auth API
 ---
 
-When you create a new Better Auth instance, it gives you an `api` object. This object provides functions to interact with the server while your code is running server-side.
+When you create a new Better Auth instance, it gives you an `api` object. This object provides functions to interact with the server while your code is running server-side. You can use these functions to call any API endpoint on the server.
 
-Any endpoint added to Better Auth, whether from plugins or the core, will be accessible through the `api` object.
+Any endpoint added to Better Auth, whether from plugins or the core, will be accessible through the `api` object. 
 
-## Calling API on the Server
+## Calling API Endpoints on the Server
 
 To call an API endpoint on the server, import your `auth` instance and call the endpoint using the `api` object.
 
@@ -16,9 +16,7 @@ import { betterAuth } from "better-auth";
 import { headers } from "next/server";
 
 export const auth = betterAuth({
-    plugins: [
-        // add your plugins here
-    ]
+    //...
 })
 
 // calling get session on the server
@@ -29,8 +27,18 @@ await auth.api.getSession({
 
 Unlike the client, the server needs the values to be passed as an object with the key `body` for the body, `headers` for the headers, and `query` for the query.
 
+
+```ts title="server.ts"
+await auth.api.signInEmail({
+    body: {
+        email: "",
+        password: ""
+    }
+})
+```
+
 <Callout>
-Better Auth uses a library called [better-call](https://github.com/bekacru/better-call) to create API endpoints. Developed by the same team, it's built to integrate seamlessly with Better Auth. With Better Call, you can invoke `rest` API handlers as if they were regular functions.
+Better auth API endpoints are built on top of [better-call](https://github.com/bekacru/better-call), a tiny web framework that lets you call REST API endpoints as if they were regular functions and allows us to easily infer client types from the server.
 </Callout>
 
 ### Getting the `Response` Object
@@ -47,7 +55,7 @@ const response = await auth.api.signInEmail({
 })
 ```
 
-## Error Handling
+### Error Handling
 
 When you call an API endpoint in the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
 
