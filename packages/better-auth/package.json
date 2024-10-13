@@ -88,7 +88,7 @@
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "better-call": "0.2.6",
-        "c12": "^1.11.2",
+        "c12": "^2.0.1",
         "chalk": "^5.3.0",
         "commander": "^12.1.0",
         "consola": "^3.2.3",
