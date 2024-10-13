@@ -278,19 +278,28 @@ When `trustDevice` is set to `true`, the current device will be remembered for 6
 
 ## Schema
 
-The plugin requires 3 additional fields in the `user` table.
+The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
 
 <DatabaseTable
     fields={[
         { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
-        { name: "twoFactorSecret", type: "string", description: "The secret key used to generate TOTP codes.", isOptional: true },
-        { name: "twoFactorBackupCodes", type: "string", description: "Encrypted backup codes for account recovery.", isOptional: true },
+    ]}
+/>
+
+Table: `twoFactor`
+
+<DatabaseTable
+    fields={[
+        { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
+        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
     ]}
 />
 
 ## Options
 
 ### Server
+
+**twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **Issuer**: The issuer is the name of your application. It's used to generate totp codes. It'll be displayed in the authenticator apps.
 

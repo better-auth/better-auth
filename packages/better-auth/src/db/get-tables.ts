@@ -37,7 +37,7 @@ export const getAuthTables = (
 						...acc[key]?.fields,
 						...value.fields,
 					},
-					tableName: key,
+					tableName: value.tableName || key,
 				};
 			}
 			return acc;

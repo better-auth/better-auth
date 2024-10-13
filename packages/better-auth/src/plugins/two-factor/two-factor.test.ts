@@ -172,6 +172,41 @@ describe("two factor", async () => {
 		});
 	});
 
+	it("should work with different two factor table", async () => {
+		const { client: client2, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						twoFactorTable: "two_factor",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [twoFactorClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const res = await client2.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.status).toBe(true);
+		const dbUser = await db.findOne<UserWithTwoFactor>({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: session.data?.user.id as string,
+				},
+			],
+		});
+		expect(dbUser?.twoFactorEnabled).toBe(true);
+	});
+
 	it("should trust device", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,

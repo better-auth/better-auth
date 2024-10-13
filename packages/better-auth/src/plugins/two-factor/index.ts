@@ -15,7 +15,7 @@ import { APIError } from "better-call";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
-		twoFactorTable: options?.twoFactorTable || "twoFactor",
+		twoFactorTable: options?.twoFactorTable || ("twoFactor" as const),
 	};
 	const totp = totp2fa(
 		{
@@ -237,6 +237,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			},
 			twoFactor: {
+				tableName: opts.twoFactorTable,
 				fields: {
 					secret: {
 						type: "string",
