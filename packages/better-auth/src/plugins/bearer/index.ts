@@ -27,7 +27,7 @@ export const bearer = () => {
 						let signedToken = "";
 
 						if (token.includes(".")) {
-							signedToken = token.split(".")[1];
+							signedToken = token;
 						} else {
 							signedToken = await serializeSigned("", token, c.context.secret);
 						}
