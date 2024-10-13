@@ -153,7 +153,7 @@ function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
 	const plugins = options.plugins || [];
 	let context: AuthContext = ctx;
-	const dbHooks: BetterAuthOptions["databaseHooks"][] = [options.databaseHooks];
+	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			const result = plugin.init(ctx);
@@ -173,6 +173,8 @@ function runPluginInit(ctx: AuthContext) {
 			}
 		}
 	}
+	// Add the global database hooks last
+	dbHooks.push(options.databaseHooks);
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),

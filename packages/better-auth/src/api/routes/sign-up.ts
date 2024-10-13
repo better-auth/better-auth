@@ -94,14 +94,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			 * Link the account to the user
 			 */
 			const hash = await ctx.context.password.hash(password);
-			const account = await ctx.context.internalAdapter.linkAccount({
+			await ctx.context.internalAdapter.linkAccount({
 				userId: createdUser.id,
 				providerId: "credential",
 				accountId: createdUser.id,
 				password: hash,
 				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
-
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
 				ctx.request,
@@ -125,6 +124,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
 					url,
 					createdUser,
+					token,
 				);
 			}
 			return ctx.json(

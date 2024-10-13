@@ -7,9 +7,9 @@ describe("Email Verification", async () => {
 	const { auth, testUser, client } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
-			async sendVerificationEmail(email, url, _token) {
+			async sendVerificationEmail(url, user, _token) {
 				token = _token;
-				mockSendEmail(email, url);
+				mockSendEmail(user.email, url);
 			},
 		},
 	});

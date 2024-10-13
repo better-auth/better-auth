@@ -81,8 +81,8 @@ export const admin = (options?: AdminOptions) => {
 									}
 									return {
 										data: {
+											role: options?.defaultRole ?? "user",
 											...user,
-											role: options?.defaultRole || "user",
 										},
 									};
 								},

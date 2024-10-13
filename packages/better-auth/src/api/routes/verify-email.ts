@@ -64,6 +64,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		await ctx.context.options.emailAndPassword.sendVerificationEmail(
 			url,
 			user.user,
+			token,
 		);
 		return ctx.json({
 			status: true,
@@ -87,12 +88,8 @@ export const verifyEmail = createAuthEndpoint(
 			jwt = await validateJWT("HS256", Buffer.from(ctx.context.secret), token);
 		} catch (e) {
 			ctx.context.logger.error("Failed to verify email", e);
-			return ctx.json(null, {
-				status: 400,
-				statusText: "INVALID_TOKEN",
-				body: {
-					message: "Invalid token",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid token",
 			});
 		}
 
@@ -102,19 +99,18 @@ export const verifyEmail = createAuthEndpoint(
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
+			{ includeAccounts: true },
 		);
 		if (!user) {
-			return ctx.json(null, {
-				status: 400,
-				statusText: "USER_NOT_FOUND",
-				body: {
-					message: "User not found",
-				},
+			throw new APIError("BAD_REQUEST", {
+				message: "User not found",
 			});
 		}
 		const account = user.accounts.find((a) => a.providerId === "credential");
 		if (!account) {
-			throw ctx.redirect;
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,

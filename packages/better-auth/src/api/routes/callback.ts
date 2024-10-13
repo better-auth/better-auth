@@ -108,7 +108,9 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		//find user in db
 		const dbUser = await c.context.internalAdapter
-			.findUserByEmail(user.email)
+			.findUserByEmail(user.email, {
+				includeAccounts: true,
+			})
 			.catch((e) => {
 				logger.error(
 					"Better auth was unable to query your database.\nError: ",

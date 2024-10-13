@@ -119,8 +119,13 @@ export interface BetterAuthOptions {
 		 * @param user the user to send the verification email to
 		 * @param url the url to send the verification email to
 		 * it contains the token as well
+		 * @param token the token to send the verification email to
 		 */
-		sendVerificationEmail?: (url: string, user: User) => Promise<void>;
+		sendVerificationEmail?: (
+			url: string,
+			user: User,
+			token: string,
+		) => Promise<void>;
 		/**
 		 * Send a verification email automatically
 		 * after sign up
