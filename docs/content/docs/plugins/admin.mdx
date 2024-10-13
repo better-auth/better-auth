@@ -127,8 +127,8 @@ Bans a user, preventing them from signing in and revokes all of their existing s
 ```ts title="admin.ts"
 const bannedUser = await authClient.admin.banUser({
   userId: "user_id_here",
-  banReason: "Spamming", // Optional
-  banExpiresIn: 60 * 60 * 24 * 7 // Optional
+  banReason: "Spamming", // Optional (if not provided, the default ban reason will be used - No reason)
+  banExpiresIn: 60 * 60 * 24 * 7 // Optional (if not provided, the ban will never expire)
 });
 ```
 
@@ -174,7 +174,7 @@ const revokedSessions = await authClient.admin.revokeUserSessions({
 
 ### Impersonate User
 
-This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 day in age.
+This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 hour. You can change this duration by setting the `impersonationSessionDuration` option.
 
 ```ts title="admin.ts"
 const impersonatedSession = await authClient.admin.impersonateUser({
@@ -237,3 +237,48 @@ And adds one field in the `session` table:
         },
     ]}
 />
+
+
+## Options
+
+### Default Role
+
+The default role for a user created by the admin. Defaults to `user`.
+
+```ts title="auth.ts"
+admin({
+    defaultRole: false //pass false to disable default role assignment
+})
+```
+
+### impersonationSessionDuration
+
+The duration of the impersonation session in seconds. Defaults to 1 hour.
+
+```ts title="auth.ts"
+admin({
+    impersonationSessionDuration: 60 * 60 * 24 // 1 day
+})
+```
+
+### Default Ban Reason
+
+The default ban reason for a user created by the admin. Defaults to `No reason`.
+
+```ts title="auth.ts"
+admin({
+    defaultBanReason: "Spamming"
+})
+```
+
+### Default Ban Expires In
+
+The default ban expires in for a user created by the admin in seconds. Defaults to `undefined` (meaning the ban never expires).
+
+```ts title="auth.ts"
+admin({
+    defaultBanExpiresIn: 60 * 60 * 24 // 1 day
+})
+```
+
+

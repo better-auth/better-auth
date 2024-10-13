@@ -7,6 +7,7 @@ import {
 } from "../../api";
 import type { BetterAuthPlugin, Session, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
+import { getDate } from "../../utils/date";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -38,13 +39,55 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
-export const admin = () => {
+interface AdminOptions {
+	/**
+	 * The default role for a user created by the admin
+	 *
+	 * @default "user"
+	 */
+	defaultRole?: string | false;
+	/**
+	 * A default ban reason
+	 *
+	 * By default, no reason is provided
+	 */
+	defaultBanReason?: string;
+	/**
+	 * Number of seconds until the ban expires
+	 *
+	 * By default, the ban never expires
+	 */
+	defaultBanExpiresIn?: number;
+	/**
+	 * Duration of the impersonation session in seconds
+	 *
+	 * By default, the impersonation session lasts 1 hour
+	 */
+	impersonationSessionDuration?: number;
+}
+
+export const admin = (options?: AdminOptions) => {
 	return {
 		id: "admin",
 		init(ctx) {
 			return {
 				options: {
 					databaseHooks: {
+						user: {
+							create: {
+								async before(user) {
+									if (options?.defaultRole === false) {
+										return;
+									}
+									return {
+										data: {
+											...user,
+											role: options?.defaultRole || "user",
+										},
+									};
+								},
+							},
+						},
 						session: {
 							create: {
 								async before(session) {
@@ -265,10 +308,13 @@ export const admin = () => {
 						ctx.body.userId,
 						{
 							banned: true,
-							banReason: ctx.body.banReason,
+							banReason:
+								ctx.body.banReason || options?.defaultBanReason || "No reason",
 							banExpires: ctx.body.banExpiresIn
 								? Date.now() + ctx.body.banExpiresIn * 1000
-								: undefined,
+								: options?.defaultBanExpiresIn
+									? Date.now() + options.defaultBanExpiresIn * 1000
+									: undefined,
 						},
 					);
 					//revoke all sessions
@@ -304,6 +350,9 @@ export const admin = () => {
 						true,
 						{
 							impersonatedBy: ctx.context.session.user.id,
+							expiresAt: options?.impersonationSessionDuration
+								? getDate(options.impersonationSessionDuration, "sec")
+								: getDate(60 * 60, "sec"), // 1 hour
 						},
 					);
 					if (!session) {
