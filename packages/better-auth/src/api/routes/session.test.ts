@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
+import type { Session } from "../../types";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter } = await getTestInstance();
@@ -134,7 +135,6 @@ describe("session", async () => {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
-
 					expect(cookies.get("better-auth.session_token")).toMatchObject({
 						value: expect.any(String),
 						"max-age": (60 * 60 * 24 * 7).toString(),
@@ -244,7 +244,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	let store = new Map<string, string>();
-	const { client, signInWithTestUser } = await getTestInstance({
+	const { client, signInWithTestUser, db } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -289,5 +289,46 @@ describe("session storage", async () => {
 				updatedAt: expect.any(String),
 			},
 		});
+	});
+
+	it("should only store session in database if option is set", async () => {
+		await signInWithTestUser();
+		const sessionCount = await db.findMany<Session>({
+			model: "session",
+		});
+		expect(sessionCount.length).toBe(0);
+		const { db: db2, signInWithTestUser: signInWithTestUser2 } =
+			await getTestInstance({
+				session: {
+					storeSessionInDatabase: false,
+				},
+			});
+		await signInWithTestUser2();
+		const sessionCount2 = await db2.findMany<Session>({
+			model: "session",
+		});
+		expect(sessionCount2.length).toBe(2);
+	});
+
+	it("should revoke session", async () => {
+		const { headers } = await signInWithTestUser();
+		const session = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).not.toBeNull();
+		await client.user.revokeSession({
+			fetchOptions: {
+				headers,
+			},
+			id: session.data?.session?.id || "",
+		});
+		const revokedSession = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(revokedSession.data).toBeNull();
 	});
 });

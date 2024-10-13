@@ -4,9 +4,22 @@ import type { BetterAuthOptions } from "../types";
 export type BetterAuthDbSchema = Record<
 	string,
 	{
+		/**
+		 * The name of the table in the database
+		 */
 		tableName: string;
+		/**
+		 * The fields of the table
+		 */
 		fields: Record<string, FieldAttribute>;
+		/**
+		 * Whether to disable migrations for this table
+		 * @default false
+		 */
 		disableMigrations?: boolean;
+		/**
+		 * The order of the table
+		 */
 		order?: number;
 	}
 >;
@@ -57,8 +70,6 @@ export const getAuthTables = (
 	} satisfies BetterAuthDbSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
-	const accountFields = options.account?.fields;
-	const userFields = options.user?.fields;
 	return {
 		user: {
 			tableName: options.user?.modelName || "user",
@@ -100,7 +111,7 @@ export const getAuthTables = (
 				...user?.fields,
 				...options.user?.additionalFields,
 			},
-			order: 0,
+			order: 1,
 		},
 		session: {
 			tableName: options.session?.modelName || "session",
@@ -133,7 +144,7 @@ export const getAuthTables = (
 				...session?.fields,
 				...options.session?.additionalFields,
 			},
-			order: 1,
+			order: 2,
 		},
 		account: {
 			tableName: options.account?.modelName || "account",
@@ -185,7 +196,7 @@ export const getAuthTables = (
 				},
 				...account?.fields,
 			},
-			order: 2,
+			order: 3,
 		},
 		verification: {
 			tableName: options.verification?.modelName || "verification",
@@ -206,6 +217,7 @@ export const getAuthTables = (
 					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
 				},
 			},
+			order: 4,
 		},
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
