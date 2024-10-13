@@ -1,7 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`adapter test > should create schema > __snapshots__/adapter.drizzle 1`] = `
-"create table "user" ("id" text primary key, "name" text not null, "email" text not null unique, "emailVerified" boolean not null, "image" text, "createdAt" date not null, "updatedAt" date not null, "twoFactorEnabled" boolean, "twoFactorSecret" text, "twoFactorBackupCodes" text);
+"create table "user" ("id" text primary key, "name" text not null, "email" text not null unique, "emailVerified" boolean not null, "image" text, "createdAt" date not null, "updatedAt" date not null, "twoFactorEnabled" boolean);
 
 create table "session" ("id" text primary key, "expiresAt" date not null, "ipAddress" text, "userAgent" text, "userId" text not null references "user" ("id"), "activeOrganizationId" text);
 
@@ -13,5 +13,7 @@ create table "organization" ("id" text primary key, "name" text not null, "slug"
 
 create table "member" ("id" text primary key, "organizationId" text not null references "organization" ("id"), "userId" text not null, "email" text not null, "role" text not null, "createdAt" date not null);
 
-create table "invitation" ("id" text primary key, "organizationId" text not null references "organization" ("id"), "email" text not null, "role" text, "status" text not null, "expiresAt" date not null, "inviterId" text not null references "user" ("id"))"
+create table "invitation" ("id" text primary key, "organizationId" text not null references "organization" ("id"), "email" text not null, "role" text, "status" text not null, "expiresAt" date not null, "inviterId" text not null references "user" ("id"));
+
+create table "twoFactor" ("id" text primary key, "secret" text not null, "backupCodes" text not null, "userId" text not null references "user" ("id"))"
 `;

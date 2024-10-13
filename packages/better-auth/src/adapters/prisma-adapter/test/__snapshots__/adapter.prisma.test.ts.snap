@@ -30,7 +30,7 @@ model Session {
   ipAddress String?
   userAgent String?
   userId    String
-  users     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
@@ -40,7 +40,7 @@ model Account {
   accountId    String
   providerId   String
   userId       String
-  users        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken  String?
   refreshToken String?
   idToken      String?
@@ -73,16 +73,14 @@ datasource db {
 }
 
 model User {
-  id                   String   @id
-  name                 String
-  email                String
-  emailVerified        Boolean
-  image                String?
-  createdAt            DateTime
-  updatedAt            DateTime
-  twoFactorEnabled     Boolean?
-  twoFactorSecret      String?
-  twoFactorBackupCodes String?
+  id               String   @id
+  name             String
+  email            String
+  emailVerified    Boolean
+  image            String?
+  createdAt        DateTime
+  updatedAt        DateTime
+  twoFactorEnabled Boolean?
 
   @@unique([email])
   @@map("user")
@@ -94,7 +92,7 @@ model Session {
   ipAddress String?
   userAgent String?
   userId    String
-  users     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
@@ -104,7 +102,7 @@ model Account {
   accountId    String
   providerId   String
   userId       String
-  users        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken  String?
   refreshToken String?
   idToken      String?
@@ -121,6 +119,16 @@ model Verification {
   expiresAt  DateTime
 
   @@map("verification")
+}
+
+model TwoFactor {
+  id          String @id
+  secret      String
+  backupCodes String
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("twoFactor")
 }
 "
 `;

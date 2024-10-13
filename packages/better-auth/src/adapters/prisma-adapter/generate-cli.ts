@@ -77,7 +77,7 @@ export async function generatePrismaSchema({
 					builder
 						.model(tableName)
 						.field(
-							`${attr.references.model.toLowerCase()}s`,
+							`${attr.references.model.toLowerCase()}`,
 							capitalizeFirstLetter(attr.references.model),
 						)
 						.attribute(
