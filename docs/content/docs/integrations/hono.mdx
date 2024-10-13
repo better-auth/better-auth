@@ -55,7 +55,7 @@ app.use(
 
 ### Middleware
 
-You can add a middleware to save the session and user in a context.
+You can add a middleware to save the `session` and `user` in a `context` and also add validations for every route.
 
 ```ts
 import { Hono } from "hono";
@@ -92,7 +92,7 @@ app.on(["POST", "GET"], "/api/auth/**", (c) => {
 serve(app);
 ```
 
-This will allow you to access the user and session object in all of your routes.
+This will allow you to access the `user` and `session` object in all of your routes.
 
 ```ts
 app.get("/session", async (c) => {
