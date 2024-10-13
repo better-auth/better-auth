@@ -45,7 +45,9 @@ export const auth = betterAuth({
     database: new Database("database.db"),
     additionalFields: {
         user: {
-            role: "string"
+            role: {
+              type: "string"
+            }
         }
     }
 })
