@@ -132,9 +132,9 @@ export const admin = (options?: AdminOptions) => {
 								statusText: "OK",
 								headers: returned.headers,
 							});
-							return {
+							return ctx.json({
 								response: response,
-							};
+							});
 						}
 					}),
 				},
@@ -158,9 +158,9 @@ export const admin = (options?: AdminOptions) => {
 							role: ctx.body.role,
 						},
 					);
-					return {
+					return ctx.json({
 						user: updatedUser as UserWithRole,
-					};
+					});
 				},
 			),
 			createUser: createAuthEndpoint(
@@ -210,9 +210,9 @@ export const admin = (options?: AdminOptions) => {
 						password: hashedPassword,
 						userId: user.id,
 					});
-					return {
+					return ctx.json({
 						user: user as UserWithRole,
-					};
+					});
 				},
 			),
 			listUsers: createAuthEndpoint(
@@ -238,9 +238,9 @@ export const admin = (options?: AdminOptions) => {
 								}
 							: undefined,
 					);
-					return {
+					return ctx.json({
 						users: users as UserWithRole[],
-					};
+					});
 				},
 			),
 			listUserSessions: createAuthEndpoint(
@@ -277,9 +277,9 @@ export const admin = (options?: AdminOptions) => {
 							banned: false,
 						},
 					);
-					return {
+					return ctx.json({
 						user: user,
-					};
+					});
 				},
 			),
 			banUser: createAuthEndpoint(
@@ -320,9 +320,9 @@ export const admin = (options?: AdminOptions) => {
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
-					return {
+					return ctx.json({
 						user: user,
-					};
+					});
 				},
 			),
 			impersonateUser: createAuthEndpoint(
@@ -362,10 +362,10 @@ export const admin = (options?: AdminOptions) => {
 						});
 					}
 					await setSessionCookie(ctx, session.id, true);
-					return {
+					return ctx.json({
 						session: session,
 						user: targetUser,
-					};
+					});
 				},
 			),
 			revokeUserSession: createAuthEndpoint(
@@ -379,9 +379,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteSession(ctx.body.sessionId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 			revokeUserSessions: createAuthEndpoint(
@@ -395,9 +395,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 			removeUser: createAuthEndpoint(
@@ -411,9 +411,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 		},
