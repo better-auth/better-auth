@@ -155,11 +155,11 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     <Tab value="mongodb">
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { monogdbAdapter } from "better-auth/adapters/mongodb";
+    import { mongodbAdapter } from "better-auth/adapters/mongodb";
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: monogdbAdapter(client)
+        database: mongodbAdapter(client)
     });
     ```
     </Tab>
