@@ -146,6 +146,7 @@ export const createInternalAdapter = (
 									}),
 									sessionExpiration,
 								);
+								return data;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
