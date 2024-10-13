@@ -3,7 +3,11 @@ import { TOTPController } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 import { TimeSpan } from "oslo";
 
 export interface OTPOptions {
@@ -27,8 +31,9 @@ export interface OTPOptions {
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (options?: OTPOptions) => {
+export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 	const opts = {
+		...options,
 		period: new TimeSpan(options?.period || 3, "m"),
 	};
 	const totp = new TOTPController({
@@ -54,7 +59,21 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			const user = ctx.context.session.user as UserWithTwoFactor;
-			const code = await totp.generate(Buffer.from(user.twoFactorSecret));
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!twoFactor) {
+				throw new APIError("BAD_REQUEST", {
+					message: "totp isn't enabled",
+				});
+			}
+			const code = await totp.generate(Buffer.from(twoFactor.secret));
 			await options.sendOTP(user, code);
 			return ctx.json({ status: true });
 		},
@@ -76,7 +95,21 @@ export const otp2fa = (options?: OTPOptions) => {
 					message: "two factor isn't enabled",
 				});
 			}
-			const toCheckOtp = await totp.generate(Buffer.from(user.twoFactorSecret));
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!twoFactor) {
+				throw new APIError("BAD_REQUEST", {
+					message: "totp isn't enabled",
+				});
+			}
+			const toCheckOtp = await totp.generate(Buffer.from(twoFactor.secret));
 			if (toCheckOtp === ctx.body.code) {
 				return ctx.context.valid();
 			} else {

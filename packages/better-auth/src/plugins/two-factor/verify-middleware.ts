@@ -106,9 +106,14 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 								status: true,
 								callbackURL: ctx.body.callbackURL,
 								redirect: true,
+								session,
+								user,
 							});
 						}
-						return ctx.json({ status: true });
+						return ctx.json({
+							session,
+							user,
+						});
 					},
 					invalid: async () => {
 						throw new APIError("UNAUTHORIZED", {

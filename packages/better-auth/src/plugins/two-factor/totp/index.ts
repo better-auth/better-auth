@@ -7,7 +7,11 @@ import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt } from "../../../crypto";
 import type { BackupCodeOptions } from "../backup-codes";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 
 export type TOTPOptions = {
 	/**
@@ -31,8 +35,9 @@ export type TOTPOptions = {
 	backupCodes?: BackupCodeOptions;
 };
 
-export const totp2fa = (options: TOTPOptions) => {
+export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const opts = {
+		...options,
 		digits: 6,
 		period: new TimeSpan(options?.period || 30, "s"),
 	};
@@ -52,9 +57,23 @@ export const totp2fa = (options: TOTPOptions) => {
 					message: "totp isn't configured",
 				});
 			}
-			const session = ctx.context.session.user as UserWithTwoFactor;
+			const user = ctx.context.session.user as UserWithTwoFactor;
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!twoFactor) {
+				throw new APIError("BAD_REQUEST", {
+					message: "totp isn't enabled",
+				});
+			}
 			const totp = new TOTPController(opts);
-			const code = await totp.generate(Buffer.from(session.twoFactorSecret));
+			const code = await totp.generate(Buffer.from(twoFactor.secret));
 			return { code };
 		},
 	);
@@ -75,7 +94,16 @@ export const totp2fa = (options: TOTPOptions) => {
 				});
 			}
 			const user = ctx.context.session.user as UserWithTwoFactor;
-			if (!user.twoFactorSecret) {
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!twoFactor || !user.twoFactorEnabled) {
 				throw new APIError("BAD_REQUEST", {
 					message: "totp isn't enabled",
 				});
@@ -84,7 +112,7 @@ export const totp2fa = (options: TOTPOptions) => {
 				totpURI: createTOTPKeyURI(
 					options?.issuer || "BetterAuth",
 					user.email,
-					Buffer.from(user.twoFactorSecret),
+					Buffer.from(twoFactor.secret),
 					opts,
 				),
 			};
@@ -110,10 +138,25 @@ export const totp2fa = (options: TOTPOptions) => {
 					message: "totp isn't configured",
 				});
 			}
+			const user = ctx.context.session.user as UserWithTwoFactor;
+			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+				model: twoFactorTable,
+				where: [
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!twoFactor || !twoFactor.enabled) {
+				throw new APIError("BAD_REQUEST", {
+					message: "totp isn't enabled",
+				});
+			}
 			const totp = new TOTPController(opts);
 			const decrypted = await symmetricDecrypt({
 				key: ctx.context.secret,
-				data: ctx.context.session.user.twoFactorSecret,
+				data: twoFactor.secret,
 			});
 			const secret = Buffer.from(decrypted);
 			const status = await totp.verify(ctx.body.code, secret);
