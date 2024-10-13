@@ -23,6 +23,7 @@ export const bearer = () => {
 						if (!token) {
 							return;
 						}
+
 						const signedToken = await serializeSigned(
 							"",
 							token,
