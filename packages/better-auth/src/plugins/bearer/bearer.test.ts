@@ -22,6 +22,7 @@ describe("bearer", async () => {
 		encryptedToken = headers
 			.get("cookie")
 			?.split("better-auth.session_token=")[1];
+		console.log(encryptedToken);
 		expect(session.data?.session.id).toBe(res.data?.session.id);
 	});
 
@@ -51,7 +52,7 @@ describe("bearer", async () => {
 		const session = await client.session({
 			fetchOptions: {
 				headers: {
-					cookie: `better-auth.session_token=${encryptedToken}`,
+					authorization: `Bearer ${encryptedToken}`,
 				},
 			},
 		});
