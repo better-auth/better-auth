@@ -245,7 +245,10 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		findUserByEmail: async (email: string) => {
+		findUserByEmail: async (
+			email: string,
+			options?: { includeAccounts: boolean },
+		) => {
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
 				where: [
@@ -256,18 +259,24 @@ export const createInternalAdapter = (
 				],
 			});
 			if (!user) return null;
-			const accounts = await adapter.findMany<Account>({
-				model: tables.account.tableName,
-				where: [
-					{
-						value: user.id,
-						field: tables.account.fields.userId.fieldName || "userId",
-					},
-				],
-			});
+			if (options?.includeAccounts) {
+				const accounts = await adapter.findMany<Account>({
+					model: tables.account.tableName,
+					where: [
+						{
+							value: user.id,
+							field: tables.account.fields.userId.fieldName || "userId",
+						},
+					],
+				});
+				return {
+					user,
+					accounts,
+				};
+			}
 			return {
 				user,
-				accounts,
+				accounts: [],
 			};
 		},
 		findUserById: async (userId: string) => {

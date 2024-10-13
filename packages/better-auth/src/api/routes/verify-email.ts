@@ -49,6 +49,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		const { email } = ctx.body;
+		const user = await ctx.context.internalAdapter.findUserByEmail(email);
+		if (!user) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User not found",
+			});
+		}
 		const token = await createEmailVerificationToken(ctx.context.secret, email);
 		const url = `${
 			ctx.context.baseURL
@@ -56,9 +62,8 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
 		await ctx.context.options.emailAndPassword.sendVerificationEmail(
-			email,
 			url,
-			token,
+			user.user,
 		);
 		return ctx.json({
 			status: true,
