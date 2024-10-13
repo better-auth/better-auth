@@ -2,7 +2,6 @@ import type { Adapter, Where } from "./../types/adapter";
 import type { BetterAuthOptions } from "../types";
 import { getAuthTables } from "./get-tables";
 import { generateId } from "../utils/id";
-import type { FieldAttribute } from "./field";
 import { convertFromDB, convertToDB } from "./utils";
 
 export function getWithHooks(
@@ -19,6 +18,10 @@ export function getWithHooks(
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: Models,
+		customCreateFn?: {
+			fn: (data: Record<string, any>) => void | Promise<any>;
+			executeMainFn?: boolean;
+		},
 	) {
 		let actualData = data;
 		const table = tables[model];
@@ -36,13 +39,19 @@ export function getWithHooks(
 			}
 		}
 
-		const created = await adapter.create<T>({
-			model: table.tableName,
-			data: {
-				id: generateId(),
-				...convertToDB(table.fields, actualData),
-			},
-		});
+		const customCreated = customCreateFn
+			? await customCreateFn.fn(actualData)
+			: null;
+		const created =
+			!customCreateFn || customCreateFn.executeMainFn
+				? await adapter.create<T>({
+						model: table.tableName,
+						data: {
+							id: generateId(),
+							...convertToDB(table.fields, actualData),
+						},
+					})
+				: customCreated;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
@@ -58,6 +67,10 @@ export function getWithHooks(
 		data: any,
 		where: Where[],
 		model: Models,
+		customUpdateFn?: {
+			fn: (data: Record<string, any>) => void | Promise<any>;
+			executeMainFn?: boolean;
+		},
 	) {
 		let actualData = data;
 
@@ -73,11 +86,18 @@ export function getWithHooks(
 			}
 		}
 
-		const updated = await adapter.update<T>({
-			model: tables[model].tableName,
-			update: convertToDB(tables[model].fields, actualData),
-			where,
-		});
+		const customUpdated = customUpdateFn
+			? await customUpdateFn.fn(actualData)
+			: null;
+
+		const updated =
+			!customUpdateFn || customUpdateFn.executeMainFn
+				? await adapter.update<T>({
+						model: tables[model].tableName,
+						update: convertToDB(tables[model].fields, actualData),
+						where,
+					})
+				: customUpdated;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;

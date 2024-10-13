@@ -94,6 +94,7 @@ export const admin = (options?: AdminOptions) => {
 									const user = (await ctx.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
+
 									if (user.banned) {
 										if (user.banExpires && user.banExpires < Date.now()) {
 											await ctx.internalAdapter.updateUser(session.userId, {

@@ -128,27 +128,30 @@ export const createInternalAdapter = (
 				userAgent: headers?.get("user-agent") || "",
 				...override,
 			};
-
-			if (secondaryStorage) {
-				const user = await adapter.findOne<User>({
-					model: tables.user.tableName,
-					where: [{ field: "id", value: userId }],
-				});
-				secondaryStorage.set(
-					data.id,
-					JSON.stringify({
-						session: data,
-						user,
-					}),
-					sessionExpiration,
-				);
-				if (options.session?.storeSessionInDatabase) {
-					await createWithHooks(data, "session");
-				}
-			} else {
-				await createWithHooks(data, "session");
-			}
-			return data;
+			const res = await createWithHooks(
+				data,
+				"session",
+				secondaryStorage
+					? {
+							fn: async (data) => {
+								const user = await adapter.findOne<User>({
+									model: tables.user.tableName,
+									where: [{ field: "id", value: userId }],
+								});
+								secondaryStorage.set(
+									data.id,
+									JSON.stringify({
+										session: data,
+										user,
+									}),
+									sessionExpiration,
+								);
+							},
+							executeMainFn: options.session?.storeSessionInDatabase,
+						}
+					: undefined,
+			);
+			return res;
 		},
 		findSession: async (sessionId: string) => {
 			if (secondaryStorage) {
@@ -204,44 +207,41 @@ export const createInternalAdapter = (
 			};
 		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
-			if (secondaryStorage) {
-				const currentSession = await secondaryStorage.get(sessionId);
-				let updatedSession: Session | null = null;
-				if (currentSession) {
-					const parsedSession = JSON.parse(currentSession) as {
-						session: Session;
-						user: User;
-					};
-					updatedSession = {
-						...parsedSession.session,
-						...session,
-					};
-					await secondaryStorage.set(
-						sessionId,
-						JSON.stringify({
-							session: updatedSession,
-							user: parsedSession.user,
-						}),
-						parsedSession.session.expiresAt
-							? new Date(parsedSession.session.expiresAt).getTime()
-							: undefined,
-					);
-				} else {
-					return null;
-				}
-				if (options.session?.storeSessionInDatabase) {
-					await updateWithHooks<Session>(
-						session,
-						[{ field: "id", value: sessionId }],
-						"session",
-					);
-				}
-				return updatedSession;
-			}
 			const updatedSession = await updateWithHooks<Session>(
 				session,
 				[{ field: "id", value: sessionId }],
 				"session",
+				secondaryStorage
+					? {
+							async fn(data) {
+								const currentSession = await secondaryStorage.get(sessionId);
+								let updatedSession: Session | null = null;
+								if (currentSession) {
+									const parsedSession = JSON.parse(currentSession) as {
+										session: Session;
+										user: User;
+									};
+									updatedSession = {
+										...parsedSession.session,
+										...data,
+									};
+									await secondaryStorage.set(
+										sessionId,
+										JSON.stringify({
+											session: updatedSession,
+											user: parsedSession.user,
+										}),
+										parsedSession.session.expiresAt
+											? new Date(parsedSession.session.expiresAt).getTime()
+											: undefined,
+									);
+								} else {
+									return null;
+								}
+							},
+							executeMainFn: options.session?.storeSessionInDatabase,
+						}
+					: undefined,
 			);
 			return updatedSession;
 		},

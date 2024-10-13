@@ -170,6 +170,7 @@ export const signInEmail = createAuthEndpoint(
 			ctx.headers,
 			ctx.body.dontRememberMe,
 		);
+
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
