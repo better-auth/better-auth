@@ -1,3 +1,4 @@
+import { Logo } from "@/components/logo";
 import { ImageResponse } from "@vercel/og";
 import { z } from "zod";
 export const runtime = "edge";
@@ -112,7 +113,11 @@ export async function GET(req: Request) {
 		const geistMono = await fetch(
 			new URL("../../../assets/GeistMono.ttf", import.meta.url),
 		).then((res) => res.arrayBuffer());
-
+		const ogData = {
+			heading: "something",
+			mode: "dark",
+			type: "something",
+		};
 		const url = new URL(req.url);
 		const urlParamsValues = Object.fromEntries(url.searchParams);
 		// this is used with the above example
@@ -134,7 +139,7 @@ export async function GET(req: Request) {
 					backgroundColor: "transparent",
 					border: "1px solid rgba(255, 255, 255, 0.1)",
 					boxShadow: "0 -20px 80px -20px rgba(28, 12, 12, 0.1) inset",
-					background: mode === "dark" ? "#1A0D0D" : "white",
+					background: mode === "dark" ? "#0a0505" : "white",
 				}}
 			>
 				<div
@@ -212,25 +217,26 @@ export async function GET(req: Request) {
 							fill="#cacaca"
 						/>
 					</svg>
-					<svg
-						width="60"
-						height="45"
-						viewBox="0 0 60 45"
-						fill="none"
-						className="w-5 h-5"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							fill-rule="evenodd"
-							clip-rule="evenodd"
-							d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
-							className="fill-black dark:fill-white"
-						/>
-					</svg>
 					<div tw="flex flex-col flex-1 py-10">
+						<svg
+							width="100"
+							height="95"
+							viewBox="0 0 60 45"
+							fill="none"
+							className="mb-10"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<path
+								fill-rule="evenodd"
+								stroke={paint}
+								clip-rule="evenodd"
+								d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
+								className="fill-black dark:fill-white"
+							/>
+						</svg>
 						<div
 							style={{ fontFamily: "GeistMono", fontWeight: "normal" }}
-							tw="relative flex text-xl uppercase font-bold tracking-tight"
+							tw="relative flex mt-10 text-xl uppercase font-bold tracking-tight"
 						>
 							{type}
 						</div>
