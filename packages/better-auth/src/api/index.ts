@@ -219,6 +219,14 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
+			if (options.onAPIError?.throw) {
+				throw e;
+			}
+			if (options.onAPIError?.onError) {
+				options.onAPIError.onError(e, ctx);
+				return;
+			}
+
 			const log = options.logger?.verboseLogging ? logger : undefined;
 			if (options.logger?.disabled !== true) {
 				if (e instanceof APIError) {
@@ -230,7 +238,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					if (typeof e === "object" && e !== null && "message" in e) {
 						const errorMessage = e.message as string;
 						if (!errorMessage || typeof errorMessage !== "string") {
-							log?.error(e);
+							logger?.error(e);
 							return;
 						}
 						if (errorMessage.includes("no such table")) {
@@ -258,10 +266,10 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 								)} to create the tables. There are missing tables in your MySQL database.`,
 							);
 						} else {
-							log?.error(e);
+							logger?.error(e);
 						}
 					} else {
-						log?.error(e);
+						logger?.error(e);
 					}
 				}
 			}
@@ -272,4 +280,4 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 export * from "./routes";
 export * from "./middlewares";
 export * from "./call";
-export { APIError } from "better-call";
+export { APIError as AuthAPIError } from "better-call";
