@@ -3,6 +3,11 @@
     "version": "0.4.7-beta.2",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/better-auth/better-auth",
+		"directory": "packages/better-auth"
+	},
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean --dts",
         "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
