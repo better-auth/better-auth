@@ -104,17 +104,22 @@ For other properties, you can check the <Link href="https://github.com/bekacru/b
 You can define a database schema for your plugin by passing a `schema` object. The schema object should have the table name as the key and the schema definition as the value.
 
 ```ts title="plugin.ts"
-const myPlugin = {
-    id: "my-plugin",
-    schema: {
-        myTable: {
-            fields: {
-                name: {
-                    type: "string"
-                }
+import { BetterAuthPlugin } from "better-auth/plugins";
+
+const myPlugin = ()=> {
+    return {
+        id: "my-plugin",
+        schema: {
+            myTable: {
+                fields: {
+                    name: {
+                        type: "string"
+                    }
+                },
+                tableName: "myTable" // optional if you want to use a different name than the key
             }
         }
-    }
+    } satisfies BetterAuthPlugin
 }
 ```
 
@@ -159,8 +164,11 @@ const myPlugin = (opts: PluginOptions)=>{
 }
 ```
 
+if you add additional fields to a `user` or `session` table, the types will be inferred automatically. 
 
-
+<Callout type="warn">
+Don't store sensitive information in `user` or `session` table. Crate a new table if you need to store sensitive information.
+</Callout>
 
 ### Middleware
 

@@ -78,55 +78,58 @@ This plugin offers two main methods to do a second factor verification:
 To enable two-factor for a user you need to call `twoFactor.enable` with the user `password`.
 
 ```ts title="two-factor.ts"
-const enableTwoFactor = async() => {
-    await client.twoFactor.enable({
-        password: "password" //the user password must be provided
-    })
-}
+await authClient.twoFactor.enable({
+    password: "password" //the user password must be provided
+}, {
+    onSuccess(){
+        //redirect the user on success
+    },
+    onError(ctx){
+        alert(ctx.error.message)
+    }
+})
 ```
 
 When a user enables two-factor authentication, 2 things happen:
 
-- An encrypted `twoFactorSecret` and `twoFactorBackupCodes` are generated.
-- `twoFactorEnabled` is set to `true`
+- An encrypted `secret` and `backupCodes` are generated.
+- `twoFactorEnabled` is set to `true` in the user table.
+
 
 ### Sign In with 2FA
 
 When a user with 2FA enabled tries to sign in via email, they will be redirected to the `twoFactorPage` (specified in your client config) unless they're using a trusted device.
 
 ```ts title="sign-in.ts"
-const signin = async () => {
-    await client.signIn.email({
-        email: "user@example.com",
-        password: "password123",
-    })
-}
+await authClient.signIn.email({
+    email: "user@example.com",
+    password: "password123",
+})
 ```
 
 By default, if a user has 2FA enabled, they will be redirected to the `twoFactorPage`. If you want to manage the 2FA verification directly within your application instead, simply pass `redirect:false` to the client plugin and handle the verification in the callback.
 
 ```ts title="sing-in.ts"
-import { client } from "better-auth/client";
+import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 
-const client = createAuthClient({
+const authClient = createAuthClient({
     plugins: [twoFactorClient({
         redirect: false
     })]
 })
 
-const signin = async () => {
-    await client.signIn.email({
+await authClient.signIn.email({
         email: "user@example.com",
         password: "password123",
     }, {
-         async onSuccess(context) {
-                if (context.data.twoFactorRedirect) {
-                    // Handle the 2FA verification in place
-                }
+        async onSuccess(context) {
+            if (context.data.twoFactorRedirect) {
+                // Handle the 2FA verification in place
+            }
         }
-    })
-}
+    }
+})
 ```
 
 
@@ -204,7 +207,7 @@ export const auth = betterAuth({
 Sending an OTP is done by calling the `twoFactor.sendOtp` function. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
 ```ts
-const { data, error } = await client.twoFactor.sendOtp()
+const { data, error } = await authClient.twoFactor.sendOtp()
 if (data) {
     // redirect or show the user to enter the code
 }
@@ -216,7 +219,7 @@ After the user has entered their OTP code, you can verify it
 
 ```ts
 const verifyOtp = async (code: string) => {
-    await client.twoFactor.verifyOtp({ code }, {
+    await authClient.twoFactor.verifyOtp({ code }, {
         onSuccess(){
             //redirect the user on success
         },
@@ -235,7 +238,7 @@ Backup codes are generated and stored in the database. This can be used to recov
 Generate backup codes for account recovery:
 
 ```ts
-const { data, error } = await client.twoFactor.generateBackupCodes()
+const { data, error } = await authClient.twoFactor.generateBackupCodes()
 if (data) {
     // Show the backup codes to the user
 }
@@ -246,7 +249,7 @@ if (data) {
 You can now allow users to provider backup code as account recover method.
 
 ```ts
-await client.twoFactor.verifyBackupCode({code: ""}, {
+await authClient.twoFactor.verifyBackupCode({code: ""}, {
     onSuccess(){
         //redirect the user on success
     },
