@@ -128,7 +128,10 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email",
 			});
 		}
-		const user = await ctx.context.internalAdapter.findUserByEmail(email);
+		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
+			includeAccounts: true,
+		});
+
 		if (!user) {
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });

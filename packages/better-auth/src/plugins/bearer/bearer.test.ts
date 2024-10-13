@@ -8,10 +8,10 @@ describe("bearer", async () => {
 	});
 
 	let token: string;
+	let encryptedToken: string | undefined;
 	it("should get session", async () => {
-		const { res } = await signInWithTestUser();
+		const { res, headers } = await signInWithTestUser();
 		token = res.data?.session.id || "";
-
 		const session = await client.session({
 			fetchOptions: {
 				headers: {
@@ -19,6 +19,9 @@ describe("bearer", async () => {
 				},
 			},
 		});
+		encryptedToken = headers
+			.get("cookie")
+			?.split("better-auth.session_token=")[1];
 		expect(session.data?.session.id).toBe(res.data?.session.id);
 	});
 
@@ -42,5 +45,16 @@ describe("bearer", async () => {
 			headers,
 		});
 		expect(session?.session.id).toBe(token);
+	});
+
+	it("should work with encrypted token", async () => {
+		const session = await client.session({
+			fetchOptions: {
+				headers: {
+					cookie: `better-auth.session_token=${encryptedToken}`,
+				},
+			},
+		});
+		expect(session.data?.session).toBeDefined();
 	});
 });

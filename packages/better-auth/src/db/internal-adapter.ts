@@ -294,6 +294,7 @@ export const createInternalAdapter = (
 		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
 			const _account = await createWithHooks(
 				{
+					id: generateId(),
 					...account,
 				},
 				"account",

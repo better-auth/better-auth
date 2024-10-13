@@ -11,6 +11,7 @@ import type {
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseAdditionalUserInput } from "../../db/schema";
+import { getDate } from "../../utils/date";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -93,13 +94,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			 * Link the account to the user
 			 */
 			const hash = await ctx.context.password.hash(password);
-			await ctx.context.internalAdapter.linkAccount({
-				id: generateRandomString(32, alphabet("a-z", "0-9", "A-Z")),
+			const account = await ctx.context.internalAdapter.linkAccount({
 				userId: createdUser.id,
 				providerId: "credential",
 				accountId: createdUser.id,
 				password: hash,
+				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
+
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
 				ctx.request,
