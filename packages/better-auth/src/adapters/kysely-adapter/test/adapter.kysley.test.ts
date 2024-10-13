@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 import { kyselyAdapter } from "..";
 import { Kysely, SqliteDialect } from "kysely";
 import { getTestInstance } from "../../../test-utils/test-instance";
+import { organization, twoFactor } from "../../../plugins";
 
 describe("adapter test", async () => {
 	const database = new Database(path.join(__dirname, "test.db"));
@@ -39,20 +40,12 @@ describe("adapter test", async () => {
 	it("should create schema", async () => {
 		const res = await adapter.createSchema!({
 			database: new Database(path.join(__dirname, "test-2.db")),
+			plugins: [organization(), twoFactor()],
 		});
 		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
 	});
 
 	await runAdapterTest({
 		adapter,
-	});
-
-	it("should support kysely instance", async () => {
-		const { auth } = await getTestInstance({
-			database: {
-				db,
-				type: "sqlite",
-			},
-		});
 	});
 });

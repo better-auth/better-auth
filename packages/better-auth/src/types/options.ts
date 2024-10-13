@@ -192,6 +192,18 @@ export interface BetterAuthOptions {
 		additionalFields?: {
 			[key: string]: FieldAttribute;
 		};
+		/**
+		 * By default if secondary storage is provided
+		 * the session is stored in the secondary storage.
+		 *
+		 * Set this to true to store the session in the database
+		 * as well.
+		 *
+		 * Reads are always done from the secondary storage.
+		 *
+		 * @default false
+		 */
+		storeSessionInDatabase?: boolean;
 	};
 	account?: {
 		modelName?: string;

@@ -18,8 +18,19 @@ export function toNextJsHandler(auth: Auth | Auth["handler"]) {
  * If not, it redirects to the redirectTo URL.
  */
 export function authMiddleware(options: {
+	/**
+	 * The base path of the auth API
+	 * @default "/api/auth"
+	 */
 	basePath?: string;
+	/**
+	 * The URL to redirect to if the user is not authenticated
+	 * @default "/"
+	 */
 	redirectTo?: string;
+	/**
+	 * A custom redirect function
+	 */
 	customRedirect?: (
 		session: {
 			user: User;
@@ -29,9 +40,6 @@ export function authMiddleware(options: {
 	) => Promise<any>;
 }) {
 	return async (request: NextRequest) => {
-		// if (request.method !== "GET") {
-		// 	return NextResponse.next();
-		// }
 		const url = new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
 		const fullURL = `${url}${basePath}/session`;

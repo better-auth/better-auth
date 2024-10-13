@@ -45,6 +45,7 @@ function getDatabaseType(
 
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
+
 	if ("db" in db) {
 		return {
 			kysely: db.db,
