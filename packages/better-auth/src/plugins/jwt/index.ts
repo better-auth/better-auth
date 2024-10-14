@@ -91,7 +91,7 @@ export const jwt = (options?: JwtOptions) => {
 
 		endpoints: {
 			getJwks: createAuthEndpoint(
-				"/.well-known/jwks.json",
+				"/jwks",
 				{
 					method: 'GET',
 				},
