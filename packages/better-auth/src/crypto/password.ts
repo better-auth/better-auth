@@ -1,6 +1,7 @@
 import { decodeHex, encodeHex } from "oslo/encoding";
 import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
+
 const config = {
 	N: 16384,
 	r: 16,
@@ -13,6 +14,7 @@ async function generateKey(password: string, salt: string) {
 		N: config.N,
 		p: config.p,
 		r: config.r,
+		dkLen: config.dkLen,
 		maxmem: 128 * config.N * config.r * 2,
 	});
 }
