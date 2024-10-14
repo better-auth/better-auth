@@ -350,8 +350,8 @@ export default function UserCard(props: {
 						setIsSignOut(true);
 						await signOut({
 							fetchOptions: {
-								body: {
-									callbackURL: "/",
+								onSuccess() {
+									router.push("/");
 								},
 							},
 						});

@@ -3,7 +3,6 @@ import {
 	bearer,
 	organization,
 	passkey,
-	phoneNumber,
 	twoFactor,
 	admin,
 } from "better-auth/plugins";
