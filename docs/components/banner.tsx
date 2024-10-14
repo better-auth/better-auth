@@ -6,7 +6,7 @@ import Link from "next/link";
 export function BetaNotice() {
 	return (
 		<Banner
-			id="public-beta"
+			id="beta-notice-1"
 			className="lg:text-sm tracking-tight text-xs hidden md:flex bg-gradient-to-tr from-white to-stone-100 border dark:from-stone-900 dark:to-stone-950"
 		>
 			🚧 Heads up! We're still in beta. It isn't quite production-ready just
