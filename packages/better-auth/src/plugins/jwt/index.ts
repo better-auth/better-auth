@@ -166,7 +166,7 @@ export const jwt = (options?: JwtOptions) => {
 						// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
 						...((ctx.context.session.session as any).impersonatedBy!) ? { impersonatedBy: (ctx.context.session.session as any).impersonatedBy } : {},
 					})
-						.setProtectedHeader({ alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA" })
+						.setProtectedHeader({ alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA", kid: key.id })
 						.setIssuedAt()
 						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
