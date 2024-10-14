@@ -38,21 +38,6 @@ Better Auth is framework-agnostic authentication (and authorization) library for
 
 Authentication in the TypeScript ecosystem is a half-solved problem. Other open-source libraries often requires a lot of additional code for anything beyond basic authentication. Rather than just pushing third-party services as the solution, I believe we can do better as a community—hence, Better Auth.
 
-### Goals
-****
-
-- **Be Comprehensive**: save users from reinventing the wheel as much as possible.
-- **Prioritize Best Practices**: provide best practices rather than overwhelming configuration options.
-- **Framework Agnostic**: Support most frameworks and avoid framework specific features and solutions if possible.
-- **Consistency**: Provide a consistent and predictable API across all platforms
-- **Type Safety**: Value type-safety and embrace typescript magic when necessary.
-
-### Non-Goals
-****
-
-- **JWT-Based Authentication**: We won’t support JWT-based auth unless provided by a third-party plugin.
-- **Extensive Customization**: Our focus is on giving you opinionated, best-practice defaults, rather than enabling deep customization.
-
 ## Contribution
 
 Better Auth is free and open source project licensed under the [MIT License](./LICENSE.md). You are free to do whatever you want with it.
