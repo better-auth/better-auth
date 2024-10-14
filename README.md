@@ -28,7 +28,7 @@
 
 
 > [!WARNING]
-> **Note:** 🚧 This project is currently in beta. Features and APIs may change.
+> *🚧 **Note:** This project is in beta and not yet recommended for production use. Features and APIs are still evolving and may change frequently. For more details, check out our [roadmap](https://github.com/orgs/better-auth/projects/2) to the v1 stable release.
 
 ## About the Project
 
