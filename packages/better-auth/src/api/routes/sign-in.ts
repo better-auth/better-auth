@@ -53,20 +53,10 @@ export const signInOAuth = createAuthEndpoint(
 		const currentURL = c.query?.currentURL
 			? new URL(c.query?.currentURL)
 			: null;
-		const trustedOrigins = [
-			c.context.baseURL,
-			...(c.context.options.trustedOrigins || []),
-		];
+
 		const callbackURL = c.body.callbackURL?.startsWith("http")
 			? c.body.callbackURL
 			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
-
-		const callbackOrigin = new URL(callbackURL).origin;
-		if (!trustedOrigins.includes(callbackOrigin)) {
-			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid callback URL",
-			});
-		}
 
 		const state = generateState(
 			callbackURL || currentURL?.origin || c.context.baseURL,

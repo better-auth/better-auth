@@ -32,18 +32,17 @@ export const redirectURLMiddleware = createAuthMiddleware(async (ctx) => {
 				message: "Invalid callback URL",
 			});
 		}
-	} else {
-		if (currentURL !== ctx.context.baseURL) {
-			const currentURLOrigin = new URL(currentURL).origin;
-			if (!trustedOrigins.includes(currentURLOrigin)) {
-				logger.error("Invalid current URL", {
-					currentURL,
-					trustedOrigins,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: "Invalid callback URL",
-				});
-			}
+	}
+	if (currentURL !== ctx.context.baseURL) {
+		const currentURLOrigin = new URL(currentURL).origin;
+		if (!trustedOrigins.includes(currentURLOrigin)) {
+			logger.error("Invalid current URL", {
+				currentURL,
+				trustedOrigins,
+			});
+			throw new APIError("FORBIDDEN", {
+				message: "Invalid callback URL",
+			});
 		}
 	}
 });

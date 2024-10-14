@@ -79,6 +79,7 @@ describe("Social Providers", async () => {
 				},
 			},
 		);
+
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			state: expect.any(String),
@@ -107,5 +108,27 @@ describe("Social Providers", async () => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
+	});
+
+	it("should be protected from callback URL attacks", async () => {
+		const signInRes = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "https://evil.com/callback",
+			},
+			{
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+					);
+				},
+			},
+		);
+		expect(signInRes.error?.status).toBe(403);
+		expect(signInRes.error?.message).toBe("Invalid callback URL");
 	});
 });
