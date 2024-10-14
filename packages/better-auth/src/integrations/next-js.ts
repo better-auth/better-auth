@@ -3,7 +3,13 @@ import type { Auth } from "../auth";
 import type { Session, User } from "../db/schema";
 import { NextRequest, NextResponse } from "next/server";
 
-export function toNextJsHandler(auth: Auth | Auth["handler"]) {
+export function toNextJsHandler(
+	auth:
+		| {
+				handler: (request: Request) => Promise<Response>;
+		  }
+		| ((request: Request) => Promise<Response>),
+) {
 	const handler = async (request: Request) => {
 		return "handler" in auth ? auth.handler(request) : auth(request);
 	};
