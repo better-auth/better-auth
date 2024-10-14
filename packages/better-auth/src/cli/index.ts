@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
+import "dotenv/config";
 
 async function main() {
 	const program = new Command().name("better-auth");

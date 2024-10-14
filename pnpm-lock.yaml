@@ -1480,6 +1480,9 @@ importers:
       defu:
         specifier: ^6.1.4
         version: 6.1.4
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
       kysely:
         specifier: ^0.27.4
         version: 0.27.4
