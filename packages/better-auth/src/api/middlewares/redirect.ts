@@ -16,11 +16,8 @@ export const redirectURLMiddleware = createAuthMiddleware(async (ctx) => {
 	const clientCurrentURL = ctx.headers?.get("referer");
 	const currentURL =
 		ctx.query?.currentURL || clientCurrentURL || ctx.context.baseURL;
+	const trustedOrigins = ctx.context.trustedOrigins;
 
-	const trustedOrigins = [
-		ctx.context.baseURL ? new URL(ctx.context.baseURL).origin : undefined,
-		...(ctx.context.options.trustedOrigins || []),
-	];
 	if (callbackURL?.includes("http")) {
 		const callbackOrigin = new URL(callbackURL).origin;
 		if (!trustedOrigins.includes(callbackOrigin)) {

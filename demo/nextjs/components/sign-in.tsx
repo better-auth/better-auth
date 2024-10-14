@@ -192,7 +192,11 @@ export default function SignIn() {
 						className="gap-2"
 						onClick={async () => {
 							await signIn.passkey({
-								callbackURL: "/dashboard",
+								fetchOptions: {
+									onResponse(context) {
+										router.push("/dashboard");
+									},
+								},
 							});
 						}}
 					>

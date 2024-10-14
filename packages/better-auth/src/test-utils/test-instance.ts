@@ -47,6 +47,7 @@ export async function getTestInstance<
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
+		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);
