@@ -7,10 +7,10 @@ import { OrganizationCard } from "./organization-card";
 export default async function DashboardPage() {
 	const [session, activeSessions] = await Promise.all([
 		auth.api.getSession({
-			headers: headers(),
+			headers: await headers(),
 		}),
 		auth.api.listSessions({
-			headers: headers(),
+			headers: await headers(),
 		}),
 	]).catch((e) => {
 		throw redirect("/sign-in");

@@ -62,7 +62,7 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data, isPending, error } = useSession(props.session);
+	const { data, isPending, error } = useSession();
 	const [ua, setUa] = useState<UAParser.UAParserInstance>();
 
 	const session = data || props.session;
@@ -216,7 +216,7 @@ export default function UserCard(props: {
 					<div className="flex flex-col gap-2">
 						<p className="text-sm">Two Factor</p>
 						<div className="flex gap-2">
-							{session?.user.twoFactorEnabled && (
+							{!!session?.user.twoFactorEnabled && (
 								<Dialog>
 									<DialogTrigger asChild>
 										<Button variant="outline" className="gap-2">
@@ -350,8 +350,8 @@ export default function UserCard(props: {
 						setIsSignOut(true);
 						await signOut({
 							fetchOptions: {
-								body: {
-									callbackURL: "/",
+								onSuccess() {
+									router.push("/");
 								},
 							},
 						});

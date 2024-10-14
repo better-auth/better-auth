@@ -1456,6 +1456,9 @@ importers:
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
+      '@noble/hashes':
+        specifier: ^1.5.0
+        version: 1.5.0
       '@simplewebauthn/browser':
         specifier: ^10.0.0
         version: 10.0.0
@@ -3629,6 +3632,10 @@ packages:
 
   '@noble/ciphers@0.6.0':
     resolution: {integrity: sha512-mIbq/R9QXk5/cTfESb1OKtyFnk7oc1Om/8onA1158K9/OZUQFDEVy55jVTato+xmp3XX6F6Qh0zz0Nc1AxAlRQ==}
+
+  '@noble/hashes@1.5.0':
+    resolution: {integrity: sha512-1j6kQFb7QRru7eKN3ZDvRcP13rugwdxZqCjbiAVZfIJwgj2A65UmT4TgARXGlXgnRkORLTDTrO19ZErt7+QXgA==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@node-rs/argon2-android-arm-eabi@1.7.0':
     resolution: {integrity: sha512-udDqkr5P9E+wYX1SZwAVPdyfYvaF4ry9Tm+R9LkfSHbzWH0uhU6zjIwNRp7m+n4gx691rk+lqqDAIP8RLKwbhg==}
@@ -16298,6 +16305,8 @@ snapshots:
     optional: true
 
   '@noble/ciphers@0.6.0': {}
+
+  '@noble/hashes@1.5.0': {}
 
   '@node-rs/argon2-android-arm-eabi@1.7.0':
     optional: true

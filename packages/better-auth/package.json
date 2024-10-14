@@ -90,6 +90,7 @@
         "@nanostores/solid": "^0.4.2",
         "@nanostores/vue": "^0.10.0",
         "@noble/ciphers": "^0.6.0",
+        "@noble/hashes": "^1.5.0",
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "better-call": "0.2.6",
