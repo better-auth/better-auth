@@ -56,7 +56,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		const {
-			data: { callbackURL, currentURL, code: stateCode },
+			data: { callbackURL, currentURL },
 		} = parsedState;
 
 		const storedState = await c.getSignedCookie(
@@ -64,8 +64,8 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.secret,
 		);
 
-		if (storedState !== stateCode) {
-			logger.error("OAuth state mismatch", storedState, stateCode);
+		if (storedState !== c.query.state) {
+			logger.error("OAuth state mismatch");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);

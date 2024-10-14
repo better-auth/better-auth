@@ -4,6 +4,7 @@ import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -22,6 +23,7 @@ export const forgetPassword = createAuthEndpoint(
 			 */
 			redirectTo: z.string(),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -32,7 +34,8 @@ export const forgetPassword = createAuthEndpoint(
 				message: "Reset password isn't enabled",
 			});
 		}
-		const { email } = ctx.body;
+		const { email, redirectTo } = ctx.body;
+
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
 		});
@@ -56,7 +59,7 @@ export const forgetPassword = createAuthEndpoint(
 			Buffer.from(ctx.context.secret),
 			{
 				email: user.user.email,
-				redirectTo: ctx.body.redirectTo,
+				redirectTo: redirectTo,
 			},
 			{
 				expiresIn: new TimeSpan(1, "h"),

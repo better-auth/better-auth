@@ -125,7 +125,6 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			method: "POST",
 			body: z.object({
 				code: z.string(),
-				callbackURL: z.string().optional(),
 			}),
 			use: [verifyTwoFactorMiddleware],
 		},

@@ -6,6 +6,7 @@ import { generateState } from "../../utils/state";
 import { createAuthEndpoint } from "../call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -31,6 +32,7 @@ export const signInOAuth = createAuthEndpoint(
 			 */
 			provider: z.enum(oAuthProviderList),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -72,7 +74,7 @@ export const signInOAuth = createAuthEndpoint(
 		);
 		await c.setSignedCookie(
 			cookie.state.name,
-			state.code,
+			state,
 			c.context.secret,
 			cookie.state.options,
 		);
@@ -84,7 +86,7 @@ export const signInOAuth = createAuthEndpoint(
 			cookie.pkCodeVerifier.options,
 		);
 		const url = await provider.createAuthorizationURL({
-			state: state.state,
+			state: state,
 			codeVerifier,
 		});
 		url.searchParams.set(
@@ -93,7 +95,7 @@ export const signInOAuth = createAuthEndpoint(
 		);
 		return c.json({
 			url: url.toString(),
-			state: state.state,
+			state: state,
 			codeVerifier,
 			redirect: true,
 		});
@@ -114,6 +116,7 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			dontRememberMe: z.boolean().default(false).optional(),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {

@@ -27,7 +27,6 @@ export const getPasskeyActions = (
 		opts?: {
 			autoFill?: boolean;
 			email?: string;
-			callbackURL?: string;
 			fetchOptions?: BetterFetchOption;
 		},
 		options?: BetterFetchOption,
@@ -38,7 +37,6 @@ export const getPasskeyActions = (
 				method: "POST",
 				body: {
 					email: opts?.email,
-					callbackURL: opts?.callbackURL,
 				},
 			},
 		);

@@ -8,7 +8,7 @@ export function generateState(callbackURL?: string, currentURL?: string) {
 		callbackURL,
 		currentURL,
 	});
-	return { state, code };
+	return state;
 }
 
 export function parseState(state: string) {
