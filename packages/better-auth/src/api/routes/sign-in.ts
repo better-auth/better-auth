@@ -57,12 +57,12 @@ export const signInOAuth = createAuthEndpoint(
 			? c.body.callbackURL
 			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
 
-		const state = generateState(
+		const state = await generateState(
 			callbackURL || currentURL?.origin || c.context.options.baseURL,
 		);
 		await c.setSignedCookie(
 			cookie.state.name,
-			state,
+			state.hash,
 			c.context.secret,
 			cookie.state.options,
 		);
@@ -74,7 +74,7 @@ export const signInOAuth = createAuthEndpoint(
 			cookie.pkCodeVerifier.options,
 		);
 		const url = await provider.createAuthorizationURL({
-			state: state,
+			state: state.raw,
 			codeVerifier,
 		});
 		url.searchParams.set(

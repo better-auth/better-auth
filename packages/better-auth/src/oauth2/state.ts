@@ -1,19 +1,15 @@
 import { generateState as generateStateOAuth } from "oslo/oauth2";
 import { z } from "zod";
-import { BetterAuthError } from "../error/better-auth-error";
+import { hashToBase64 } from "../crypto/hash";
 
-export function generateState(callbackURL?: string) {
+export async function generateState(callbackURL?: string) {
 	const code = generateStateOAuth();
-	const state = JSON.stringify({
+	const raw = JSON.stringify({
 		code,
 		callbackURL,
 	});
-	if (state.length > 4000) {
-		throw new BetterAuthError(
-			"State is too long to be safely stored in a cookie. Make sure the callbackURL is not too long.",
-		);
-	}
-	return state;
+	const hash = await hashToBase64(raw);
+	return { raw, hash };
 }
 
 export function parseState(state: string) {

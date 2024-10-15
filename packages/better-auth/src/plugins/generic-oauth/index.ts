@@ -18,6 +18,7 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 } from "../../oauth2";
+import { compareHash } from "../../crypto/hash";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -204,13 +205,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const callbackURL = ctx.body.callbackURL?.startsWith("http")
 						? ctx.body.callbackURL
 						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
-					const state = generateState(
+					const state = await generateState(
 						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
 					);
 					const cookie = ctx.context.authCookies;
 					await ctx.setSignedCookie(
 						cookie.state.name,
-						state,
+						state.hash,
 						ctx.context.secret,
 						cookie.state.options,
 					);
@@ -231,7 +232,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								`${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 						},
 						authorizationEndpoint: finalAuthUrl,
-						state: state,
+						state: state.raw,
 						codeVerifier: codeVerifier,
 						scopes: scopes || [],
 						disablePkce: !pkce,
@@ -309,7 +310,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						ctx.context.authCookies.state.name,
 						ctx.context.secret,
 					);
-					if (storedState !== state) {
+					if (!storedState) {
+						logger.error("No stored state found");
+						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
+					}
+					const isValidState = await compareHash(state, storedState);
+					if (!isValidState) {
 						logger.error("OAuth code mismatch");
 						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
 					}
