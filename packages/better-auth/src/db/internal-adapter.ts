@@ -399,11 +399,11 @@ export const createInternalAdapter = (
 				},
 				[
 					{
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 					{
-						field: "providerId",
+						field: tables.account.fields.type.fieldName || "providerId",
 						value: "credential",
 					},
 				],

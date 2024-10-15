@@ -40,11 +40,15 @@ export const username = () => {
 						model: "account",
 						where: [
 							{
-								field: "userId",
+								field:
+									ctx.context.tables.account.fields.userId.fieldName ||
+									"userId",
 								value: user.id,
 							},
 							{
-								field: "providerId",
+								field:
+									ctx.context.tables.account.fields.type.fieldName ||
+									"providerId",
 								value: "credential",
 							},
 						],
