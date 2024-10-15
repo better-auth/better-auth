@@ -42,9 +42,9 @@ Better Auth provides a set of functions to manage sessions.
 The `listSessions` function returns a list of sessions that are active for the user.
 
 ```ts title="client.ts"
-import { client } from "@/lib/client"
+import { authClient } from "@/lib/client"
 
-const sessions = await client.user.listSessions()
+const sessions = await authClient.user.listSessions()
 ```
 
 ### Revoke Session
@@ -54,7 +54,7 @@ When a user signs out of a device, the session is automatically ended. However, 
 To end a session, use the `revokeSession` function. Just pass the session ID as a parameter.
 
 ```ts title="client.ts"
-await client.user.revokeSession({
+await authClient.user.revokeSession({
     id: session.id,
 })
 ```
@@ -64,7 +64,7 @@ await client.user.revokeSession({
 To revoke all sessions, you can use the `revokeSessions` function.
 
 ```ts title="client.ts"
-await client.user.revokeSessions()
+await authClient.user.revokeSessions()
 ```
 
 ### Revoking Sessions on Password Change
@@ -72,7 +72,7 @@ await client.user.revokeSessions()
 You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePAssword` function.
 
 ```ts title="auth.ts"
-await user.changePassword({
+await authClient.user.changePassword({
     newPassword: newPassword,
     currentPassword: currentPassword,
     revokeOtherSessions: signOutDevices,

@@ -31,17 +31,17 @@ The phone number plugin extends the authentication system by allowing users to s
     <Step>
         ### Migrate the database
 
-        Run the migration or generate the schema to add the necessary fields to your **user** table.
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```bash
-            npx better-auth migrate
+            npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
             ```bash
-            npx better-auth generate
+            npx @better-auth/cli generate
             ```
             </Tab>
         </Tabs>

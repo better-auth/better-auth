@@ -45,42 +45,18 @@ export async function migrateAction(opts: any) {
 
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
-			const { confirm } = await prompts({
-				type: "confirm",
-				name: "confirm",
-				message: "Do you want to run prisma migrate dev?",
-				initial: false,
-			});
-			if (confirm) {
-				const spinner = yoctoSpinner({
-					text: "running prisma migrate dev...",
-				});
-				await exec("npx", ["prisma", "migrate", "dev"]);
-				spinner.stop();
-				process.exit(0);
-			}
+			logger.error(
+				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
+			);
 			process.exit(0);
 		}
 		if (db.id === "drizzle") {
-			const { confirm } = await prompts({
-				type: "confirm",
-				name: "confirm",
-				message: "Do you want to run drizzle migrate?",
-				initial: false,
-			});
-			if (confirm) {
-				const spinner = yoctoSpinner({
-					text: "running drizzle migrate...",
-				}).start();
-				await exec("npx", ["drizzle-kit", "migrate"]);
-				spinner.stop();
-				process.exit(0);
-			}
-			process.exit(1);
+			logger.error(
+				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
+			);
+			process.exit(0);
 		}
-		logger.error(
-			"Migrate command only works isn't supported for this adapter.",
-		);
+		logger.error("Migrate command isn't supported for this adapter.");
 		process.exit(1);
 	}
 

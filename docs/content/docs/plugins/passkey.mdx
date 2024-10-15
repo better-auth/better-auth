@@ -34,18 +34,24 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
         })
         ```
     </Step>
-    <Step>
-        ### Migarate database
+      <Step>
+        ### Migrate the database
 
-        Migrate your database to add the necessary tables and fields.
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-        If you're using the CLI:
-    
-        ```bash
-        npx better-auth migrate
-        ```
-
-        If you need to create the tables manually, see the [Schema](#schema) section.
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
     </Step>
     <Step>  
         ### Add the client plugin

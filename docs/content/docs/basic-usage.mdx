@@ -137,10 +137,10 @@ import { github } from "better-auth/social-providers"
 export const auth = betterAuth({
     //...rest of the options
     socialProviders: { // [!code highlight]
-       github: { // [!code highlight]
-        clientId: process.env.GITHUB_CLIENT_ID!, // [!code highlight]
-        clientSecret: process.env.GITHUB_CLIENT_SECRET!, // [!code highlight]
-       } // [!code highlight]
+        github: { // [!code highlight]
+            clientId: process.env.GITHUB_CLIENT_ID!, // [!code highlight]
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!, // [!code highlight]
+        } // [!code highlight]
     }, // [!code highlight]
 })
 ```
@@ -191,10 +191,10 @@ It has the following properties:
 - **isPending**: a boolean that indicates whether the session is being loaded.
 - **error**: an error object that contains any errors that occurred while loading the session.
 
-<Tabs items={["Vanilla","React", "Vue","Svelte", "Solid"]} defaultValue="React">
+<Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="React">
     <Tab value="React">
         ```tsx title="user.tsx"
-        import { authClient } from "@/lib/auth-client" // [!code highlight]
+        import { authClient } from "@/lib/auth-client" // import the auth client // [!code highlight] 
 
         export function User(){
 
@@ -281,7 +281,7 @@ The server provides a `session` object that you can use to access the session da
 <Tabs items={["NextJs", "Nuxt", "Svelte", "Astro", "Hono"]}>
     <Tab value="NextJs">
     ```ts title="server.ts"
-    import { auth } from "./auth";
+    import { auth } from "./auth"; // path to your Better Auth server instance
     import { headers } from "next/headers";
 
     const session = await auth.api.getSession({
@@ -389,16 +389,16 @@ now two factor related routes and method will be available on the server.
 
 After adding the plugin, you'll need to add the required tables to your database. You can do this by running the `migrate` command, or by using the `generate` command to create the schema and handle the migration manually.
 
-using the `migrate` command:
-
-```bash title="terminal"
-npx better-auth migrate
-```
-
 generating the schema:
 
 ```bash title="terminal"
-npx better-auth generate
+npx @better-auth/cli generate
+```
+
+using the `migrate` command:
+
+```bash title="terminal"
+npx @better-auth/cli migrate
 ```
 
 <Callout>
@@ -418,7 +418,7 @@ import { twoFactorClient } from "better-auth/client/plugins"; // [!code highligh
 const authClient = createAuthClient({
     plugins: [ // [!code highlight]
         twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // [!code highlight]
+            twoFactorPage: "/two-factor" // the page to redirect if a user need to verify 2nd factor // [!code highlight]
         }) // [!code highlight]
     ] // [!code highlight]
 })

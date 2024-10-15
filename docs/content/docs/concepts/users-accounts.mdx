@@ -25,7 +25,7 @@ The user table can be extended by plugins to store additional data. When a plugi
 To update user information, you can use the `updateUser` function provided by the client. The `updateUser` function takes an object with the following properties:
 
 ```ts
-await user.update({
+await authClient.user.update({
     image: "https://example.com/image.jpg",
     name: "John Doe",
 })
@@ -36,7 +36,7 @@ await user.update({
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
 
 ```ts
-await user.changePassword({
+await authClient.user.changePassword({
     newPassword: "newPassword123",
     currentPassword: "oldPassword123",
     revokeOtherSessions: true, // revoke all other sessions the user is signed into
@@ -48,7 +48,7 @@ await user.changePassword({
 If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
 
 ```ts
-await user.setPassword({
+await authClient.user.setPassword({
     password,
 });
 ```
