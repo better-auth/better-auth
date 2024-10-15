@@ -27,7 +27,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema");
 	});
 
 	it("should generate drizzle schema", async () => {

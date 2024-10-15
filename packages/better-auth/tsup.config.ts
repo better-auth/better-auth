@@ -28,6 +28,7 @@ export default defineConfig((env) => {
 			node: "./src/integrations/node.ts",
 		},
 		format: ["esm"],
+		minify: true,
 		splitting: false,
 		bundle: true,
 		skipNodeModulesBundle: true,
