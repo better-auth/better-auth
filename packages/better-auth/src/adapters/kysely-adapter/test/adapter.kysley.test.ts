@@ -37,14 +37,6 @@ describe("adapter test", async () => {
 		},
 	});
 
-	it("should create schema", async () => {
-		const res = await adapter.createSchema!({
-			database: new Database(path.join(__dirname, "test-2.db")),
-			plugins: [organization(), twoFactor()],
-		});
-		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
-	});
-
 	await runAdapterTest({
 		adapter,
 	});

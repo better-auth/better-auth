@@ -225,16 +225,6 @@ export const kyselyAdapter = (
 
 			await query.execute();
 		},
-		async createSchema(options) {
-			const { compileMigrations } = await getMigrations(options);
-			const migrations = await compileMigrations();
-			return {
-				code: migrations,
-				fileName: `./better-auth_migrations/${new Date()
-					.toISOString()
-					.replace(/:/g, "-")}.sql`,
-			};
-		},
 	};
 };
 export * from "./dialect";
