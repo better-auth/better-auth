@@ -4,6 +4,8 @@ import { generatePrismaSchema } from "../src/generators/prisma";
 import { twoFactor, username } from "better-auth/plugins";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { generateMigrations } from "../src/generators/kysely";
+import Database from "better-sqlite3";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -25,7 +27,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchSnapshot();
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
 	});
 
 	it("should generate drizzle schema", async () => {
@@ -49,6 +51,17 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchSnapshot();
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.ts");
+	});
+
+	it("should generate kysely schema", async () => {
+		const schema = await generateMigrations({
+			file: "test.sql",
+			options: {
+				database: new Database(":memory:"),
+			},
+			adapter: {} as any,
+		});
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
 	});
 });

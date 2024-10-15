@@ -1,10 +1,12 @@
 import { logger, type Adapter, type BetterAuthOptions } from "better-auth";
 import { generateDrizzleSchema } from "./drizzle";
 import { generatePrismaSchema } from "./prisma";
+import { generateMigrations } from "./kysely";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
 	drizzle: generateDrizzleSchema,
+	kysely: generateMigrations,
 };
 
 export const getGenerator = (opts: {

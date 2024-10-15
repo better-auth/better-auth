@@ -36,11 +36,13 @@ export async function generateAction(opts: any) {
 		);
 		return;
 	}
-	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
+
 	const adapter = await getAdapter(config, true).catch((e) => {
 		logger.error(e.message);
 		process.exit(1);
 	});
+
+	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await getGenerator({
 		adapter,
