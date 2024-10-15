@@ -51,7 +51,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.ts");
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
 	});
 
 	it("should generate kysely schema", async () => {
