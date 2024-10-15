@@ -1,22 +1,23 @@
 import { z } from "zod";
 import { APIError } from "better-call";
-import type { BetterAuthPlugin, OAuth2Tokens, User } from "../../types";
+import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateState, parseState } from "../../utils/state";
+import { generateState, parseState } from "../../oauth2/state";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { logger } from "../../utils/logger";
-import {
-	createAuthorizationURL,
-	validateAuthorizationCode,
-} from "../../social-providers/utils";
 
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { getAccountTokens } from "../../utils/getAccount";
+import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../../api/middlewares/redirect";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	type OAuth2Tokens,
+} from "../../oauth2";
 
 /**
  * Configuration interface for generic OAuth providers.

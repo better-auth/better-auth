@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import * as schema from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
-import { getMigrations } from "../../../cli/utils/get-migration";
+import { getMigrations } from "../../../db/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -26,13 +26,6 @@ describe("adapter test", async () => {
 	const adapter = drizzleAdapter(db, {
 		provider: "pg",
 		schema,
-	});
-
-	it("should create schema", async () => {
-		const res = await adapter.createSchema!({
-			database: new Database(path.join(__dirname, "test.db")),
-		});
-		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
 	});
 
 	await runAdapterTest({

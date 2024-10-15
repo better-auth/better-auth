@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runAdapterTest } from "../../test";
-import { getMigrations } from "../../../cli/utils/get-migration";
+import { getMigrations } from "../../../db/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";

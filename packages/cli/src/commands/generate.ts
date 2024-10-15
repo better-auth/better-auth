@@ -1,15 +1,15 @@
 import { Command } from "commander";
-import { getConfig } from "../get-config";
+import { getConfig } from "../utils/get-config";
 import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
-import { logger } from "../../utils/logger";
+import { logger } from "better-auth";
 import yoctoSpinner from "yocto-spinner";
 import prompts from "prompts";
-import { getAdapter } from "../../db/utils";
 import fs from "fs/promises";
 import chalk from "chalk";
-import { generatePrismaSchema } from "../../adapters/prisma-adapter/generate-cli";
+import { getAdapter } from "better-auth/db";
+import { getGenerator } from "../generators";
 
 export const generate = new Command("generate")
 	.option(
@@ -53,54 +53,38 @@ export const generate = new Command("generate")
 			process.exit(1);
 		});
 
-		let code = "";
-		let fileName = "";
-		let append = false;
-		let overwrite = false;
-		if (adapter.id === "prisma") {
-			spinner.text = "generating schema...";
-			const result = await generatePrismaSchema({
-				options: config,
-				file: options.output,
-				provider: adapter.options?.provider || "pg",
-			});
-			code = result.code;
-			fileName = result.fileName;
-		} else {
-			if (!adapter.createSchema) {
-				logger.error("The adapter does not support schema generation.");
-				process.exit(1);
-			}
-			const result = await adapter.createSchema(config, options.output);
-			code = result.code;
-			fileName = result.fileName;
-			append = result.append || false;
-			overwrite = result.overwrite || false;
-		}
+		const schema = await getGenerator({
+			adapter,
+			file: options.output,
+			options: config,
+		});
+
 		spinner.stop();
-		if (!code) {
+		if (!schema.code) {
 			logger.success("Your schema is already up to date.");
 			process.exit(0);
 		}
-		if (append || overwrite) {
+		if (schema.append || schema.overwrite) {
 			const { confirm } = await prompts({
 				type: "confirm",
 				name: "confirm",
-				message: `The file ${fileName} already exists. Do you want to ${chalk.yellow(
-					`${overwrite ? "overwrite" : "append"}`,
+				message: `The file ${
+					schema.fileName
+				} already exists. Do you want to ${chalk.yellow(
+					`${schema.overwrite ? "overwrite" : "append"}`,
 				)} the schema to the file?`,
 			});
 			if (confirm) {
-				const exist = existsSync(path.join(cwd, fileName));
+				const exist = existsSync(path.join(cwd, schema.fileName));
 				if (!exist) {
-					await fs.mkdir(path.dirname(path.join(cwd, fileName)), {
+					await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
 						recursive: true,
 					});
 				}
-				if (overwrite) {
-					await fs.writeFile(path.join(cwd, fileName), code);
+				if (schema.overwrite) {
+					await fs.writeFile(path.join(cwd, schema.fileName), schema.code);
 				} else {
-					await fs.appendFile(path.join(cwd, fileName), code);
+					await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
 				}
 				logger.success(`🚀 schema was appended successfully!`);
 				process.exit(0);
@@ -114,7 +98,7 @@ export const generate = new Command("generate")
 			type: "confirm",
 			name: "confirm",
 			message: `Do you want to generate the schema to ${chalk.yellow(
-				fileName,
+				schema.fileName,
 			)}?`,
 		});
 		if (!confirm) {
@@ -123,14 +107,19 @@ export const generate = new Command("generate")
 		}
 
 		if (!options.output) {
-			const dirExist = existsSync(path.dirname(path.join(cwd, fileName)));
+			const dirExist = existsSync(
+				path.dirname(path.join(cwd, schema.fileName)),
+			);
 			if (!dirExist) {
-				await fs.mkdir(path.dirname(path.join(cwd, fileName)), {
+				await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
 					recursive: true,
 				});
 			}
 		}
-		await fs.writeFile(options.output || path.join(cwd, fileName), code);
+		await fs.writeFile(
+			options.output || path.join(cwd, schema.fileName),
+			schema.code,
+		);
 		logger.success(`🚀 schema was generated successfully!`);
 		process.exit(0);
 	});

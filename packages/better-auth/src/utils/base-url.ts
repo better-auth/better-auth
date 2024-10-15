@@ -1,4 +1,4 @@
-import { BetterAuthError } from "../error/better-auth-error";
+import { BetterAuthError } from "../error";
 
 function checkHasPath(url: string): boolean {
 	try {

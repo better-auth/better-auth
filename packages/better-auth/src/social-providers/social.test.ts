@@ -4,7 +4,7 @@ import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
-import { getOAuth2Tokens } from "./utils";
+import { getOAuth2Tokens } from "../oauth2";
 
 vi.mock("./utils", async (importOriginal) => {
 	const original = (await importOriginal()) as any;

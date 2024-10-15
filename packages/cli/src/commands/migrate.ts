@@ -1,14 +1,14 @@
 import { Command } from "commander";
-import { getConfig } from "../get-config";
 import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
-import { logger } from "../../utils/logger";
-import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
 import yoctoSpinner from "yocto-spinner";
 import chalk from "chalk";
 import prompts from "prompts";
-import { getMigrations } from "../utils/get-migration";
+import { logger } from "better-auth";
+import { getAdapter, getMigrations } from "better-auth/db";
+import { getConfig } from "../utils/get-config";
+
 export const migrate = new Command("migrate")
 	.option(
 		"-c, --cwd <cwd>",
@@ -42,10 +42,8 @@ export const migrate = new Command("migrate")
 			);
 			return;
 		}
-		const db = await createKyselyAdapter(config).catch((e) => {
-			logger.error(e);
-			process.exit(1);
-		});
+
+		const db = await getAdapter(config, true);
 
 		if (!db) {
 			logger.error(
@@ -53,6 +51,12 @@ export const migrate = new Command("migrate")
 			);
 			process.exit(1);
 		}
+
+		if (db.id !== "kysely") {
+			logger.error("Migrate command only works with built-in Kysely adapter.");
+			process.exit(1);
+		}
+
 		const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
 		const { toBeAdded, toBeCreated, runMigrations } =

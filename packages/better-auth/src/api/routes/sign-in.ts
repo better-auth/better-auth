@@ -1,12 +1,11 @@
 import { APIError } from "better-call";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
-import { oAuthProviderList } from "../../social-providers";
-import { generateState } from "../../utils/state";
+import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
-import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../middlewares/redirect";
+import { socialProviderList } from "../../social-providers";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -30,7 +29,7 @@ export const signInOAuth = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(oAuthProviderList),
+			provider: z.enum(socialProviderList),
 		}),
 		use: [redirectURLMiddleware],
 	},

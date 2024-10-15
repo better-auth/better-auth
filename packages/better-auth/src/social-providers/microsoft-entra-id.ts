@@ -1,10 +1,10 @@
-import type { ProviderOptions } from ".";
+import type { ProviderOptions } from "../oauth2";
 import {
 	getRedirectURI,
 	validateAuthorizationCode,
 	createAuthorizationURL,
-} from "./utils";
-import type { OAuthProvider } from "./types";
+} from "../oauth2";
+import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { parseJWT } from "oslo/jwt";
 import { logger } from "../utils/logger";

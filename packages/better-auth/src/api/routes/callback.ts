@@ -2,13 +2,13 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { parseState } from "../../utils/state";
+import { parseState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { getAccountTokens } from "../../utils/getAccount";
+import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
-import type { OAuth2Tokens } from "../../social-providers";
+import type { OAuth2Tokens } from "../../oauth2";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
