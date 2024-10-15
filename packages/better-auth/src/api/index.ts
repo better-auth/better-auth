@@ -49,7 +49,11 @@ export function getEndpoints<
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
 			? T extends BetterAuthPlugin
-				? T["endpoints"]
+				? T extends {
+						endpoints: infer E;
+					}
+					? E
+					: {}
 				: {}
 			: {}
 	>;
@@ -108,7 +112,7 @@ export function getEndpoints<
 	};
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {
-		api[key] = async (context: any) => {
+		api[key] = async (context = {} as any) => {
 			let c = await ctx;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
@@ -123,7 +127,7 @@ export function getEndpoints<
 								...context,
 								context: {
 									...c,
-									...context.context,
+									...context?.context,
 								},
 							});
 							if (hookRes && "context" in hookRes) {

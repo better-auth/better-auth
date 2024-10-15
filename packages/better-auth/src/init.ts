@@ -49,9 +49,6 @@ export const init = async (options: BetterAuthOptions) => {
 				"You are using the default secret. Please set `BETTER_AUTH_SECRET` or `AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
 			);
 		}
-		logger.warn(
-			"You are using the default secret. This is not recommended. Please set `BETTER_AUTH_SECRET` or `AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
-		);
 	}
 
 	options = {

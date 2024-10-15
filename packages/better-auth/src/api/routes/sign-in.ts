@@ -58,8 +58,7 @@ export const signInOAuth = createAuthEndpoint(
 			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
 
 		const state = generateState(
-			callbackURL || currentURL?.origin || c.context.baseURL,
-			c.query?.currentURL,
+			callbackURL || currentURL?.origin || c.context.options.baseURL,
 		);
 		await c.setSignedCookie(
 			cookie.state.name,

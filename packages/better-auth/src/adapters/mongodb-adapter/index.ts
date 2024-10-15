@@ -84,6 +84,7 @@ export const mongodbAdapter = (mongo: Db) => {
 				.toArray();
 
 			const result = res[0];
+
 			if (!result) {
 				return null;
 			}
@@ -108,16 +109,25 @@ export const mongodbAdapter = (mongo: Db) => {
 			const { model, where, update } = data;
 			const wheres = whereConvertor(where);
 
-			const res = await db.collection(model).findOneAndUpdate(
+			if (where.length === 1) {
+				const res = await db.collection(model).findOneAndUpdate(
+					//@ts-expect-error
+					wheres,
+					{
+						$set: update,
+					},
+					{ returnDocument: "after" },
+				);
+				return removeMongoId(res);
+			}
+			const res = await db.collection(model).updateMany(
 				//@ts-expect-error
 				wheres,
 				{
 					$set: update,
 				},
-				{ returnDocument: "after" },
 			);
-
-			return removeMongoId(res);
+			return {};
 		},
 		async delete(data) {
 			const { model, where } = data;

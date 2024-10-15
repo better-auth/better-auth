@@ -31,6 +31,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 					<BetaNotice />
 					<NavbarProvider>
 						<Navbar />
+
 						{children}
 					</NavbarProvider>
 				</RootProvider>
