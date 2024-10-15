@@ -17,34 +17,27 @@ export const bearer = () => {
 						);
 					},
 					handler: async (c) => {
-						const token =
+						let token =
 							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
 							c.headers?.get("authorization")?.replace("Bearer ", "");
+
 						if (!token) {
 							return;
 						}
 
-						let signedToken = "";
+						if (!token.includes(".")) {
+							token = await serializeSigned("", token, c.context.secret);
+						}
 
-						if (token.includes(".")) {
-							signedToken = token;
-						} else {
-							signedToken = await serializeSigned("", token, c.context.secret);
-						}
-						if (c.request) {
-							c.request.headers.set(
+						const headers = c.request?.headers || c.headers;
+
+						if (headers) {
+							headers.set(
 								"cookie",
-								`${
-									c.context.authCookies.sessionToken.name
-								}=${signedToken.replace("=", "")}`,
-							);
-						}
-						if (c.headers) {
-							c.headers.set(
-								"cookie",
-								`${
-									c.context.authCookies.sessionToken.name
-								}=${signedToken.replace("=", "")}`,
+								c.context.authCookies.sessionToken.name.concat(
+									"=",
+									token.replace("=", ""),
+								),
 							);
 						}
 						return {

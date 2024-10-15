@@ -51,7 +51,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					requireHeaders: true,
 					body: z.object({
 						email: z.string().email(),
-						callbackURL: z.string().optional(),
+						callbackURL: z.string().url().optional()
 					}),
 					use: [redirectURLMiddleware],
 				},
@@ -96,7 +96,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "GET",
 					query: z.object({
 						token: z.string(),
-						callbackURL: z.string().optional(),
+						callbackURL: z.string().url().optional(),
 					}),
 					requireHeaders: true,
 				},
