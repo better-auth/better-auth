@@ -204,8 +204,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						? ctx.body.callbackURL
 						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
 					const state = generateState(
-						callbackURL || currentURL?.origin || ctx.context.baseURL,
-						ctx.query?.currentURL,
+						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
 					);
 					const cookie = ctx.context.authCookies;
 					await ctx.setSignedCookie(
