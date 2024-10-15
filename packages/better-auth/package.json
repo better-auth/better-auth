@@ -19,12 +19,7 @@
         "typecheck": "tsc --noEmit"
     },
     "main": "./dist/index.js",
-    "module": "./dist/index.js",
-    "publishConfig": {
-        "executableFiles": [
-            "./dist/cli.js"
-        ]
-    },
+    "module": "./dist/index.js", 
     "exports": {
         ".": "./dist/index.js", 
         "./social-providers": "./dist/social.js",

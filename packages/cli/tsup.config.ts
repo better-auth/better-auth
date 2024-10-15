@@ -1,11 +1,11 @@
 import { defineConfig } from "tsup";
-export default defineConfig((env) => {
-	return {
-		entry: ["./src/index.ts"],
-		format: ["esm"],
-		splitting: false,
-		bundle: true,
-		skipNodeModulesBundle: true,
-		target: "es2022",
-	};
+
+export default defineConfig({
+	clean: true,
+	entry: ["src/index.ts"],
+	format: ["esm"],
+	sourcemap: true,
+	minify: true,
+	target: "esnext",
+	outDir: "dist",
 });

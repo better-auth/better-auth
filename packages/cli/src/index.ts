@@ -8,7 +8,6 @@ import "dotenv/config";
 async function main() {
 	const program = new Command();
 	program
-		.name("better-auth")
 		.addCommand(migrate)
 		.addCommand(generate)
 		.version("0.0.1")
