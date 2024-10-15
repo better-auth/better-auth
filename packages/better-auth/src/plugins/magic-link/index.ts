@@ -26,6 +26,18 @@ interface MagicLinkOptions {
 	 * @default false
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * Rate limit configuration.
+	 *
+	 * @default {
+	 *  window: 60,
+	 *  max: 5,
+	 * }
+	 */
+	rateLimit?: {
+		window: number;
+		max: number;
+	};
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
@@ -90,16 +102,21 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { token, callbackURL } = ctx.query;
+					const toRedirectTo = callbackURL?.startsWith("http")
+						? callbackURL
+						: callbackURL
+							? `${ctx.context.options.baseURL}${callbackURL}`
+							: ctx.context.options.baseURL;
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(token);
 					if (!tokenValue) {
-						throw ctx.redirect(`${callbackURL}?error=INVALID_TOKEN`);
+						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${callbackURL}?error=EXPIRED_TOKEN`);
+						throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -107,11 +124,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const email = tokenValue.value;
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					let userId: string = user?.user.id || "";
-					const toRedirectTo = callbackURL?.startsWith("http")
-						? callbackURL
-						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
+
 					if (!user) {
 						if (!options.disableSignUp) {
 							const newUser = await ctx.context.internalAdapter.createUser({
@@ -143,5 +156,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 			),
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return (
+						path.startsWith("/sign-in/magic-link") ||
+						path.startsWith("/magic-link/verify")
+					);
+				},
+				window: options.rateLimit?.window || 60,
+				max: options.rateLimit?.max || 5,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };
