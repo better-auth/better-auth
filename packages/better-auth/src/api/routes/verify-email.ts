@@ -118,8 +118,7 @@ export const verifyEmail = createAuthEndpoint(
 			emailVerified: true,
 		});
 		if (ctx.query.callbackURL) {
-			console.log("Redirecting to", ctx.query.callbackURL);
-			throw ctx.redirect("/");
+			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
 			status: true,

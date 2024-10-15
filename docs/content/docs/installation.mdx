@@ -118,11 +118,16 @@ You can also use any Kysely dialect in the database configuration.
 import { betterAuth } from "better-auth";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 
-export const auth = betterAuth({
-  database: new LibsqlDialect({
+const dialect = new LibsqlDialect({
     url: process.env.TURSO_DATABASE_URL || "",
     authToken: process.env.TURSO_AUTH_TOKEN || "",
-  }),
+})
+
+export const auth = betterAuth({
+  database: {
+    dialect,
+    type: "sqlite"
+  }
 });
 ```
 
