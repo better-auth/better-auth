@@ -1,12 +1,11 @@
 {
 	"compilerOptions": {
 		"esModuleInterop": true,
-		"lib": ["es2022", "dom", "dom.iterable"],
 		"skipLibCheck": true,
 		"target": "es2022",
 		"allowJs": true,
 		"resolveJsonModule": true,
-		"module": "Preserve",
+		"module": "ESNext",
 		"noEmit": true,
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",

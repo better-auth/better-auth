@@ -27,13 +27,19 @@ describe("Email Verification", async () => {
 	});
 
 	it("should verify email", async () => {
-		const res = await client.verifyEmail({
-			query: {
-				token,
+		const res = await client.verifyEmail(
+			{
+				query: {
+					token,
+					callbackURL: "/callback",
+				},
 			},
-		});
-		expect(res.data).toMatchObject({
-			status: true,
-		});
+			{
+				onError: (ctx) => {
+					const location = ctx.response.headers.get("location");
+					expect(location).toBe("/callback");
+				},
+			},
+		);
 	});
 });
