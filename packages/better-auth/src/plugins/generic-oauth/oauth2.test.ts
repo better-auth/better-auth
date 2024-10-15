@@ -77,7 +77,7 @@ describe("oauth2", async () => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
-		const callbackResponse = await betterFetch(location, {
+		await betterFetch(location, {
 			method: "GET",
 			customFetchImpl,
 			headers,

@@ -2,13 +2,14 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { parseState } from "../../utils/state";
+import { parseState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { getAccountTokens } from "../../utils/getAccount";
+import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
-import type { OAuth2Tokens } from "../../social-providers";
+import type { OAuth2Tokens } from "../../oauth2";
+import { compareHash } from "../../crypto/hash";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -64,7 +65,15 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.secret,
 		);
 
-		if (storedState !== c.query.state) {
+		if (!storedState) {
+			logger.error("No stored state found");
+			throw c.redirect(
+				`${c.context.baseURL}/error?error=please_restart_the_process`,
+			);
+		}
+
+		const isValidState = await compareHash(c.query.state, storedState);
+		if (!isValidState) {
 			logger.error("OAuth state mismatch");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
@@ -83,6 +92,7 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/callback/${provider.id}`,
 			);
 		} catch (e) {
+			console.log(e);
 			c.context.logger.error(e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,

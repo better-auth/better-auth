@@ -1,14 +1,15 @@
 import { loadConfig } from "c12";
-import type { BetterAuthOptions } from "../types";
-import { logger } from "../utils/logger";
+import type { BetterAuthOptions } from "better-auth";
+import { logger } from "better-auth";
 import path from "path";
 // @ts-ignore
 import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
-import { BetterAuthError } from "../error/better-auth-error";
-import { addSvelteKitEnvModules } from "./utils/add-svelte-kit-env-modules";
+import { BetterAuthError } from "better-auth";
+import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+
 let possiblePaths = ["auth.ts", "auth.tsx"];
 
 possiblePaths = [
@@ -46,7 +47,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
 			for (const _ of aliasPaths) {
-				result[alias[0]] = "../";
+				result[alias[0] || ""] = "../";
 			}
 		}
 		addSvelteKitEnvModules(result);

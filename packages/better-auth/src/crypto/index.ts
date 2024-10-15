@@ -50,3 +50,8 @@ export const symmetricDecrypt = async ({
 	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
 	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
 };
+
+export * from "./buffer";
+export * from "./password";
+export * from "./random";
+export * from "./buffer";

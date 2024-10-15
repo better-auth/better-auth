@@ -178,6 +178,38 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
+	test("should update with multiple where", async () => {
+		await adapter.update({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: user.name,
+				},
+				{
+					field: "email",
+					value: user.email,
+				},
+			],
+			update: {
+				email: "updated@email.com",
+			},
+		});
+		const updatedUser = await adapter.findOne<User>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "updated@email.com",
+				},
+			],
+		});
+		expect(updatedUser).toMatchObject({
+			name: user.name,
+			email: "updated@email.com",
+		});
+	});
+
 	test("delete model", async () => {
 		await adapter.delete({
 			model: "user",

@@ -9,10 +9,7 @@ export const checkCallbackURL = (
 	callbackURL: string,
 	ctx: GenericEndpointContext,
 ) => {
-	const trustedOrigins = [
-		ctx.context.baseURL,
-		...(ctx.context.options.trustedOrigins || []),
-	];
+	const trustedOrigins = ctx.context.trustedOrigins;
 	const callbackOrigin = callbackURL ? new URL(callbackURL).origin : null;
 	if (callbackOrigin && !trustedOrigins.includes(callbackOrigin)) {
 		throw new APIError("FORBIDDEN", {

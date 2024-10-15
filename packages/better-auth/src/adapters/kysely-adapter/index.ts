@@ -1,7 +1,7 @@
 import type { Kysely } from "kysely";
 import type { FieldAttribute } from "../../db";
 import type { Adapter, Where } from "../../types";
-import { getMigrations } from "../../cli/utils/get-migration";
+import { getMigrations } from "../../db/get-migration";
 
 function convertWhere(w?: Where[]) {
 	if (!w)
@@ -225,15 +225,7 @@ export const kyselyAdapter = (
 
 			await query.execute();
 		},
-		async createSchema(options) {
-			const { compileMigrations } = await getMigrations(options);
-			const migrations = await compileMigrations();
-			return {
-				code: migrations,
-				fileName: `./better-auth_migrations/${new Date()
-					.toISOString()
-					.replace(/:/g, "-")}.sql`,
-			};
-		},
 	};
 };
+export * from "./dialect";
+export * from "./types";

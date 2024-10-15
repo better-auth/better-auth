@@ -8,7 +8,6 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	OAuthProvider,
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
@@ -20,8 +19,9 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger, logger } from "./utils/logger";
-import { oAuthProviderList, oAuthProviders } from "./social-providers";
-import { BetterAuthError } from "./error/better-auth-error";
+import { socialProviderList, socialProviders } from "./social-providers";
+import { BetterAuthError } from "./error";
+import type { OAuthProvider } from "./oauth2";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -61,7 +61,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const cookies = getCookies(options);
 
 	const tables = getAuthTables(options);
-	const socialProviders = Object.keys(options.socialProviders || {})
+	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
 			const value = options.socialProviders?.[key as "github"]!;
 			if (value.enabled === false) {
@@ -72,13 +72,13 @@ export const init = async (options: BetterAuthOptions) => {
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return oAuthProviders[key as (typeof oAuthProviderList)[number]](value);
+			return socialProviders[key as (typeof socialProviderList)[number]](value);
 		})
 		.filter((x) => x !== null);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
-		socialProviders,
+		socialProviders: providers,
 		options,
 		tables,
 		trustedOrigins: getTrustedOrigins(options),

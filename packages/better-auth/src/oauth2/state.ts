@@ -1,14 +1,15 @@
 import { generateState as generateStateOAuth } from "oslo/oauth2";
 import { z } from "zod";
+import { hashToBase64 } from "../crypto/hash";
 
-export function generateState(callbackURL?: string, currentURL?: string) {
+export async function generateState(callbackURL?: string) {
 	const code = generateStateOAuth();
-	const state = JSON.stringify({
+	const raw = JSON.stringify({
 		code,
 		callbackURL,
-		currentURL,
 	});
-	return state;
+	const hash = await hashToBase64(raw);
+	return { raw, hash };
 }
 
 export function parseState(state: string) {

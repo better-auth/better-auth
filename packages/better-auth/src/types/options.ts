@@ -1,8 +1,7 @@
 import type { Dialect, Kysely, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProviderList } from "../social-providers/types";
-import type { SocialProviders } from "../social-providers";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -218,7 +217,7 @@ export interface BetterAuthOptions {
 			/**
 			 * List of trusted providers
 			 */
-			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
+			trustedProviders?: Array<SocialProviderList[number] | "email-password">;
 		};
 	};
 	/**

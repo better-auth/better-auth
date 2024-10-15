@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.4.9-beta.8",
+    "version": "0.4.9",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "repository": {
@@ -19,15 +19,9 @@
         "typecheck": "tsc --noEmit"
     },
     "main": "./dist/index.js",
-    "module": "./dist/index.js",
-    "bin": "./dist/cli.js",
-    "publishConfig": {
-        "executableFiles": [
-            "./dist/cli.js"
-        ]
-    },
+    "module": "./dist/index.js", 
     "exports": {
-        ".": "./dist/index.js",
+        ".": "./dist/index.js", 
         "./social-providers": "./dist/social.js",
         "./client": {
             "import": "./dist/client.js",
@@ -38,10 +32,14 @@
             "types": "./dist/client/plugins.d.ts"
         },
         "./types": "./dist/types.js",
+        "./crypto": "./dist/crypto.js",
+        "./cookies": "./dist/cookies.js",
+        "./oauth2": "./dist/oauth2.js",
         "./react": "./dist/react.js",
         "./preact": "./dist/preact.js",
         "./solid": "./dist/solid.js",
         "./api": "./dist/api.js",
+        "./db": "./dist/db.js",
         "./vue": "./dist/vue.js",
         "./plugins": "./dist/plugins.js",
         "./plugins/access": "./dist/access.js",
@@ -53,7 +51,8 @@
         "./node": "./dist/node.js",
         "./adapters/prisma": "./dist/adapters/prisma.js",
         "./adapters/drizzle": "./dist/adapters/drizzle.js",
-        "./adapters/mongodb": "./dist/adapters/mongodb.js"
+        "./adapters/mongodb": "./dist/adapters/mongodb.js",
+        "./adapters/kysely": "./dist/adapters/index.js"
     },
     "devDependencies": {
         "@prisma/client": "^5.19.1",
@@ -81,10 +80,7 @@
         "vue": "^3.5.0"
     },
     "dependencies": {
-        "@babel/preset-react": "^7.24.7",
-        "@babel/preset-typescript": "^7.24.7",
         "@better-fetch/fetch": "^1.1.9",
-        "@mrleebo/prisma-ast": "^0.12.0",
         "@nanostores/query": "^0.3.4",
         "@nanostores/react": "^0.7.3",
         "@nanostores/solid": "^0.4.2",
@@ -94,21 +90,14 @@
         "@simplewebauthn/browser": "^10.0.0",
         "@simplewebauthn/server": "^10.0.1",
         "better-call": "0.2.6",
-        "c12": "^2.0.1",
-        "chalk": "^5.3.0",
-        "commander": "^12.1.0",
         "consola": "^3.2.3",
         "defu": "^6.1.4",
-        "dotenv": "^16.4.5",
         "kysely": "^0.27.4",
         "nanoid": "^5.0.7",
         "nanostores": "^0.11.2",
         "oslo": "^1.2.1",
-        "prompts": "^2.4.2",
-        "tinyexec": "^0.3.0",
-        "yocto-spinner": "^0.1.1",
-        "zod": "^3.22.5",
-        "jose": "^5.9.4"
+        "jose": "^5.9.4",
+        "zod": "^3.22.5"
     },
     "files": [
         "dist/*",

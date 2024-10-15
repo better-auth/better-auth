@@ -1,5 +1,4 @@
 import type { User } from "../db/schema";
-import type { oAuthProviderList } from ".";
 import type { LiteralString } from "../types/helper";
 
 export interface OAuth2Tokens {
@@ -35,8 +34,6 @@ export interface OAuthProvider<
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
 }
-
-export type OAuthProviderList = typeof oAuthProviderList;
 
 export type ProviderOptions = {
 	/**

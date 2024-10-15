@@ -124,7 +124,6 @@ export default function SignIn() {
 							onClick={async () => {
 								await signIn.social({
 									provider: "discord",
-									callbackURL: "/dashboard",
 								});
 							}}
 						>

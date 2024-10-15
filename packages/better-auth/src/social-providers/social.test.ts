@@ -4,9 +4,9 @@ import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
-import { getOAuth2Tokens } from "./utils";
+import { getOAuth2Tokens } from "../oauth2";
 
-vi.mock("./utils", async (importOriginal) => {
+vi.mock("../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
 	return {
 		...original,
@@ -60,6 +60,7 @@ describe("Social Providers", async () => {
 		},
 	});
 	let state = "";
+
 	const headers = new Headers();
 	it("should be able to add social providers", async () => {
 		const signInRes = await client.signIn.social(
@@ -82,11 +83,14 @@ describe("Social Providers", async () => {
 
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
-			state: expect.any(String),
 			codeVerifier: expect.any(String),
+			state: {
+				hash: expect.any(String),
+				raw: expect.any(String),
+			},
 			redirect: true,
 		});
-		state = signInRes.data?.state || "";
+		state = signInRes.data?.state.raw || "";
 	});
 
 	it("should be able to sign in with social providers", async () => {

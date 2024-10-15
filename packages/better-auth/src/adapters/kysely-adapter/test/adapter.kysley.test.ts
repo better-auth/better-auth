@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runAdapterTest } from "../../test";
-import { getMigrations } from "../../../cli/utils/get-migration";
+import { getMigrations } from "../../../db/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -35,14 +35,6 @@ describe("adapter test", async () => {
 			boolean: true,
 			date: true,
 		},
-	});
-
-	it("should create schema", async () => {
-		const res = await adapter.createSchema!({
-			database: new Database(path.join(__dirname, "test-2.db")),
-			plugins: [organization(), twoFactor()],
-		});
-		expect(res.code).toMatchSnapshot("__snapshots__/adapter.drizzle");
 	});
 
 	await runAdapterTest({
