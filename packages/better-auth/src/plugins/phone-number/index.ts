@@ -97,7 +97,7 @@ export const phoneNumber = (options?: {
 							},
 							{
 								field:
-									ctx.context.tables.account.fields.type.fieldName ||
+									ctx.context.tables.account.fields.providerId.fieldName ||
 									"providerId",
 								value: "credential",
 							},

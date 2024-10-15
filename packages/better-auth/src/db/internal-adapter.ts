@@ -403,7 +403,7 @@ export const createInternalAdapter = (
 						value: userId,
 					},
 					{
-						field: tables.account.fields.type.fieldName || "providerId",
+						field: tables.account.fields.providerId.fieldName || "providerId",
 						value: "credential",
 					},
 				],
