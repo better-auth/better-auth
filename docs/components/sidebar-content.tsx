@@ -662,6 +662,11 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "JWT",
+				icon: () => <Key className="w-4 h-4" />,
+				href: "/docs/plugins/jwt",
+			},
+			{
 				title: "Authorization",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",

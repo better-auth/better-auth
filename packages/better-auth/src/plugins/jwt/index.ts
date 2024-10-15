@@ -156,6 +156,7 @@ export const jwt = (options?: JwtOptions) => {
 						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 						.setExpirationTime(options?.jwt?.expirationTime ?? '15m')
+						.setSubject(ctx.context.session.user.id)
 						.sign(privateKey)
 
 					return ctx.json({
