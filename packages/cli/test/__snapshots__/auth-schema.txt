@@ -1,7 +1,4 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`adapter test > should create schema > __snapshots__/adapter.drizzle 1`] = `
-"import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 			
 export const user = pgTable("user", {
 					id: text("id").primaryKey(),
@@ -10,7 +7,9 @@ export const user = pgTable("user", {
  emailVerified: boolean('emailVerified').notNull(),
  image: text('image'),
  createdAt: timestamp('createdAt').notNull(),
- updatedAt: timestamp('updatedAt').notNull()
+ updatedAt: timestamp('updatedAt').notNull(),
+ twoFactorEnabled: boolean('twoFactorEnabled'),
+ username: text('username').unique()
 				});
 
 export const session = pgTable("session", {
@@ -39,5 +38,10 @@ export const verification = pgTable("verification", {
  value: text('value').notNull(),
  expiresAt: timestamp('expiresAt').notNull()
 				});
-"
-`;
+
+export const twoFactor = pgTable("twoFactor", {
+					id: text("id").primaryKey(),
+					secret: text('secret').notNull(),
+ backupCodes: text('backupCodes').notNull(),
+ userId: text('userId').notNull().references(()=> user.id)
+				});

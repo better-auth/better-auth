@@ -25,15 +25,21 @@ The username plugin wraps the email and password authenticator and adds username
     <Step>
         ### Migrate the database
 
-        Run the migration to add the required fields to the user table.
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-        This will add the following fields to the **user** table:
-
-        - `username`: The username of the user.
-
-        ```bash
-        npx better-auth migrate
-        ```
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
     </Step>
     <Step>
         ### Add the client plugin

@@ -1,21 +1,17 @@
+import { getAuthTables, type FieldType } from "better-auth/db";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { existsSync } from "fs";
-import { getAuthTables } from "../../db/get-tables";
-import type { BetterAuthOptions } from "../../types";
 import path from "path";
 import fs from "fs/promises";
-import { capitalizeFirstLetter } from "../../utils/misc";
-import type { FieldType } from "../../db";
+import { capitalizeFirstLetter } from "better-auth";
+import type { SchemaGenerator } from "./types";
 
-export async function generatePrismaSchema({
-	provider,
+export const generatePrismaSchema: SchemaGenerator = async ({
+	adapter,
 	options,
 	file,
-}: {
-	options: BetterAuthOptions;
-	file?: string;
-	provider: string;
-}) {
+}) => {
+	const provider = adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
@@ -31,9 +27,9 @@ export async function generatePrismaSchema({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
-			const fields = tables[table].fields;
-			const originalTable = tables[table].tableName;
-			const tableName = capitalizeFirstLetter(originalTable);
+			const fields = tables[table]?.fields;
+			const originalTable = tables[table]?.tableName;
+			const tableName = capitalizeFirstLetter(originalTable || "");
 			function getType(type: FieldType, isOptional: boolean) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
@@ -55,7 +51,7 @@ export async function generatePrismaSchema({
 				builder.model(tableName).field("id", "String").attribute("id");
 
 			for (const field in fields) {
-				const attr = fields[field];
+				const attr = fields[field]!;
 
 				if (prismaModel) {
 					const isAlreadyExist = builder.findByType("field", {
@@ -69,7 +65,7 @@ export async function generatePrismaSchema({
 
 				builder
 					.model(tableName)
-					.field(field, getType(attr.type, !attr.required));
+					.field(field, getType(attr.type, !attr?.required));
 				if (attr.unique) {
 					builder.model(tableName).blockAttribute(`unique([${field}])`);
 				}
@@ -98,7 +94,7 @@ export async function generatePrismaSchema({
 		code: schema.trim() === schemaPrisma.trim() ? "" : schema,
 		fileName: filePath,
 	};
-}
+};
 
 const getNewPrisma = (provider: string) => `generator client {
     provider = "prisma-client-js"

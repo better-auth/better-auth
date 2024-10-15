@@ -1,4 +1,4 @@
-import type { OAuth2Tokens } from "../social-providers";
+import type { OAuth2Tokens } from ".";
 
 export function getAccountTokens(tokens: OAuth2Tokens) {
 	const accessToken = tokens.accessToken;

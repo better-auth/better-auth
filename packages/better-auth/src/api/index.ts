@@ -30,7 +30,6 @@ import {
 	updateUser,
 } from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
-import chalk from "chalk";
 import { onRequestRateLimit } from "./rate-limiter";
 
 export function getEndpoints<
@@ -239,42 +238,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					}
 					log?.error(e.message);
 				} else {
-					if (typeof e === "object" && e !== null && "message" in e) {
-						const errorMessage = e.message as string;
-						if (!errorMessage || typeof errorMessage !== "string") {
-							logger?.error(e);
-							return;
-						}
-						if (errorMessage.includes("no such table")) {
-							logger?.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your SQLite database.`,
-							);
-						} else if (
-							errorMessage.includes("relation") &&
-							errorMessage.includes("does not exist")
-						) {
-							logger.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your PostgreSQL database.`,
-							);
-						} else if (
-							errorMessage.includes("Table") &&
-							errorMessage.includes("doesn't exist")
-						) {
-							logger?.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your MySQL database.`,
-							);
-						} else {
-							logger?.error(e);
-						}
-					} else {
-						logger?.error(e);
-					}
+					logger?.error(e);
 				}
 			}
 		},

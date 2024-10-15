@@ -18,7 +18,7 @@ import { sessionMiddleware } from "../../api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
-import { BetterAuthError } from "../../error/better-auth-error";
+import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
 
 interface WebAuthnChallengeValue {

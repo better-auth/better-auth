@@ -26,23 +26,25 @@ The Anonymous plugin allows users to have an authenticated experience without re
     ```
   </Step>
 
-  <Step>
-    ### Migrate your database
+    <Step>
+        ### Migrate the database
 
-    Run the migration command to create the necessary tables in your database.
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-    ```bash title="terminal"
-    npx better-auth migrate # [!code highlight]
-    ```
-
-    Alternatively, you can generate the required tables with:
-
-    ```bash title="terminal"
-    npx better-auth generate
-    ```
-
-    Refer to the [Schema section](#schema) to see which fields this plugin requires. You can also manually add these fields to your database if necessary.
-  </Step>
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
 
   <Step>
     ### Add the client plugin

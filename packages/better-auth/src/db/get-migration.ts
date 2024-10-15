@@ -1,14 +1,13 @@
 import {
-	sql,
 	type AlterTableColumnAlteringBuilder,
 	type CreateTableBuilder,
 } from "kysely";
-import type { FieldAttribute, FieldType } from "../../db";
-import { logger } from "../../utils/logger";
-import type { BetterAuthOptions } from "../../types";
+import type { FieldAttribute, FieldType } from ".";
+import { logger } from "../utils/logger";
+import type { BetterAuthOptions } from "../types";
+import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
+import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
-import { createKyselyAdapter } from "../../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../../adapters/kysely-adapter/types";
 
 const postgresMap = {
 	string: ["character varying", "text"],

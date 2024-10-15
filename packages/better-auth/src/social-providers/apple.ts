@@ -1,6 +1,6 @@
-import type { OAuthProvider, ProviderOptions } from ".";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { parseJWT } from "oslo/jwt";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import { getRedirectURI, validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
