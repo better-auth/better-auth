@@ -27,14 +27,15 @@ describe("Email Verification", async () => {
 	});
 
 	it("should verify email", async () => {
-		await client.verifyEmail({
+		const res = await client.verifyEmail({
 			query: {
 				token,
 			},
 		});
+		expect(res.data?.status).toBe(true);
 	});
 
-	it("should verify email", async () => {
+	it("should redirect to callback", async () => {
 		await client.verifyEmail(
 			{
 				query: {
