@@ -119,6 +119,7 @@ export const jwt = (options?: JwtOptions) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					let key = await adapter.getLatestKey();
+					const privateKeyEncryptionEnabled = !options?.jwks?.disablePrivateKeyEncryption;
 
 					if (key === undefined) {
 						const { publicKey, privateKey } = await generateKeyPair(options?.jwks?.keyPairConfig?.alg ?? "EdDSA", options?.jwks?.keyPairConfig ?? { crv: 'Ed25519' });
@@ -130,43 +131,27 @@ export const jwt = (options?: JwtOptions) => {
 						let jwk: Partial<Jwk> = {
 							id: crypto.randomUUID(),
 							publicKey: JSON.stringify(publicWebKey),
+							privateKey: privateKeyEncryptionEnabled ?
+								JSON.stringify(encryptPrivateKey(stringifiedPrivateWebKey, ctx.context.options.secret!)) :
+								stringifiedPrivateWebKey,
 							createdAt: new Date(),
 						};
-
-						if (!options?.jwks?.disablePrivateKeyEncryption) {
-							// Since a default secret is set if none is provided, this should be safe
-							const { iv, encryptedPrivateKey, authTag } = encryptPrivateKey(stringifiedPrivateWebKey, ctx.context.options.secret!);
-
-							jwk.privateKey = encryptedPrivateKey;
-							jwk.privateKeyIv = iv;
-							jwk.privateKeyAuthTag = authTag;
-						} else {
-							jwk.privateKey = stringifiedPrivateWebKey;
-							jwk.privateKeyIv = undefined;
-							jwk.privateKeyAuthTag = undefined;
-						}
 
 						key = await adapter.createJwk(jwk as Jwk);
 					}
 
-					let decryptedPrivateWebKey = decryptPrivateKey({
-						encryptedPrivateKey: key.privateKey,
-						iv: key.privateKeyIv!,
-						authTag: key.privateKeyAuthTag!,
-					}, ctx.context.options.secret!);
+					let privateWebKey = privateKeyEncryptionEnabled ? decryptPrivateKey(JSON.parse(key.privateKey), ctx.context.options.secret!) : key.privateKey;
 
-					const privateKey = await importJWK(JSON.parse(decryptedPrivateWebKey));
+					const privateKey = await importJWK(JSON.parse(privateWebKey));
 
 					const payload = (!options?.jwt?.definePayload) ? ctx.context.session.user : await options?.jwt.definePayload(ctx.context.session.user);
-
-
 
 					const jwt = await new SignJWT({
 						...payload,
 						// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
 						...((ctx.context.session.session as any).impersonatedBy!) ? { impersonatedBy: (ctx.context.session.session as any).impersonatedBy } : {},
 					})
-						.setProtectedHeader({ alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA", kid: key.id })
+						.setProtectedHeader({ alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA" })
 						.setIssuedAt()
 						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)

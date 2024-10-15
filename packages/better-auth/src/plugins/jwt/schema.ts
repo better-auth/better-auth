@@ -1,4 +1,4 @@
-import type { PluginSchema } from "../../types/plugins";
+import type { PluginSchema } from "../../types";
 import { z } from "zod";
 
 export const schema: PluginSchema = {
@@ -12,14 +12,6 @@ export const schema: PluginSchema = {
 				type: 'string',
 				required: true,
 			},
-			privateKeyIv: {
-				type: 'string',
-				required: false,
-			},
-			privateKeyAuthTag: {
-				type: 'string',
-				required: false,
-			},
 			createdAt: {
 				type: 'date',
 				required: true,
@@ -32,8 +24,6 @@ export const jwk = z.object({
 	id: z.string(),
 	publicKey: z.string(),
 	privateKey: z.string(),
-	privateKeyIv: z.string().optional(),
-	privateKeyAuthTag: z.string().optional(),
 	createdAt: z.date(),
 });
 
