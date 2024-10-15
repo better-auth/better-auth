@@ -9,9 +9,9 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 
 ### Create API Route
 
-We need to mount the handler to an API route. Create a route file inside `/api/[...auth]` directory. And add the following code:
+We need to mount the handler to an API route. Create a route file inside `/api/auth/[...all]` directory. And add the following code:
 
-```ts title="api/[...auth]/route.ts"
+```ts title="api/auth/[...all]/route.ts"
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
@@ -19,7 +19,7 @@ export const { GET, POST } = toNextJsHandler(auth.handler);
 ```
 
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `/api/[...auth]`
+ You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
 ## Create a client
