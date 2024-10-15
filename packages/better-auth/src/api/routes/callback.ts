@@ -92,7 +92,6 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/callback/${provider.id}`,
 			);
 		} catch (e) {
-			console.log(e);
 			c.context.logger.error(e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
