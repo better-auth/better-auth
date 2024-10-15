@@ -27,7 +27,15 @@ describe("Email Verification", async () => {
 	});
 
 	it("should verify email", async () => {
-		const res = await client.verifyEmail(
+		await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+	});
+
+	it("should verify email", async () => {
+		await client.verifyEmail(
 			{
 				query: {
 					token,

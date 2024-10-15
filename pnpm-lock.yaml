@@ -1340,8 +1340,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(encoding@0.1.13)
       better-call:
-        specifier: 0.2.6
-        version: 0.2.6
+        specifier: 0.2.7
+        version: 0.2.7
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -6634,8 +6634,8 @@ packages:
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
 
-  better-call@0.2.6:
-    resolution: {integrity: sha512-RoIOW8Qm/y3FBIkAMaGlgpc/mc7g2i9HJ6lHdyiORXdUpzm1tv9eWD73aeeOmxVcJaQ9F65e6aIL+6kMsmO2hA==}
+  better-call@0.2.7:
+    resolution: {integrity: sha512-FPMquk39xxhRxZ/jtQx083cduIGUBgJu/27YUFLk6/ul87P8haxeHyaNSUOfadvQ63DY2Aqtm4KjRe28sQWcXg==}
 
   better-sqlite3@11.3.0:
     resolution: {integrity: sha512-iHt9j8NPYF3oKCNOO5ZI4JwThjt3Z6J6XrcwG85VNMVzv1ByqrHWv5VILEbCMFWDsoHhXvQ7oC8vgRXFAKgl9w==}
@@ -21103,13 +21103,13 @@ snapshots:
       set-cookie-parser: 2.7.0
       typescript: 5.6.2
 
-  better-call@0.2.6:
+  better-call@0.2.7:
     dependencies:
       '@better-fetch/fetch': 1.1.9
       '@types/set-cookie-parser': 2.4.10
       rou3: 0.5.1
       set-cookie-parser: 2.7.0
-      typescript: 5.6.2
+      typescript: 5.6.3
 
   better-sqlite3@11.3.0:
     dependencies:
