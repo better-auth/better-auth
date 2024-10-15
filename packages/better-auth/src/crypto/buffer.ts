@@ -1,5 +1,8 @@
+/**
+ * Compare two buffers in constant time.
+ */
 export function constantTimeEqual(
-	a: ArrayBuffer,
+	a: ArrayBuffer | Uint8Array,
 	b: ArrayBuffer | Uint8Array,
 ): boolean {
 	const aBuffer = new Uint8Array(a);

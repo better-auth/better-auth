@@ -68,7 +68,6 @@ export const phoneNumber = (options?: {
 						phoneNumber: z.string(),
 						password: z.string(),
 						dontRememberMe: z.boolean().optional(),
-						callbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -152,8 +151,6 @@ export const phoneNumber = (options?: {
 					return ctx.json({
 						user: user,
 						session,
-						redirect: !!ctx.body.callbackURL,
-						url: ctx.body.callbackURL,
 					});
 				},
 			),
@@ -167,7 +164,6 @@ export const phoneNumber = (options?: {
 						email: z.string().email(),
 						password: z.string(),
 						image: z.string().optional(),
-						callbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -226,21 +222,6 @@ export const phoneNumber = (options?: {
 							},
 						);
 
-						if (ctx.body.callbackURL) {
-							return ctx.json(
-								{
-									user: updated,
-									session: res.session,
-								},
-								{
-									body: {
-										url: ctx.body.callbackURL,
-										redirect: true,
-										...res,
-									},
-								},
-							);
-						}
 						return ctx.json({
 							user: updated,
 							session: res.session,

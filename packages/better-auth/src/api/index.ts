@@ -30,7 +30,6 @@ import {
 	updateUser,
 } from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
-import chalk from "chalk";
 import { onRequestRateLimit } from "./rate-limiter";
 
 export function getEndpoints<
@@ -50,7 +49,11 @@ export function getEndpoints<
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
 			? T extends BetterAuthPlugin
-				? T["endpoints"]
+				? T extends {
+						endpoints: infer E;
+					}
+					? E
+					: {}
 				: {}
 			: {}
 	>;
@@ -109,7 +112,7 @@ export function getEndpoints<
 	};
 	let api: Record<string, any> = {};
 	for (const [key, value] of Object.entries(endpoints)) {
-		api[key] = async (context: any) => {
+		api[key] = async (context = {} as any) => {
 			let c = await ctx;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
@@ -124,7 +127,7 @@ export function getEndpoints<
 								...context,
 								context: {
 									...c,
-									...context.context,
+									...context?.context,
 								},
 							});
 							if (hookRes && "context" in hookRes) {
@@ -219,6 +222,14 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
+			if (options.onAPIError?.throw) {
+				throw e;
+			}
+			if (options.onAPIError?.onError) {
+				options.onAPIError.onError(e, ctx);
+				return;
+			}
+
 			const log = options.logger?.verboseLogging ? logger : undefined;
 			if (options.logger?.disabled !== true) {
 				if (e instanceof APIError) {
@@ -227,42 +238,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					}
 					log?.error(e.message);
 				} else {
-					if (typeof e === "object" && e !== null && "message" in e) {
-						const errorMessage = e.message as string;
-						if (!errorMessage || typeof errorMessage !== "string") {
-							log?.error(e);
-							return;
-						}
-						if (errorMessage.includes("no such table")) {
-							logger?.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your SQLite database.`,
-							);
-						} else if (
-							errorMessage.includes("relation") &&
-							errorMessage.includes("does not exist")
-						) {
-							logger.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your PostgreSQL database.`,
-							);
-						} else if (
-							errorMessage.includes("Table") &&
-							errorMessage.includes("doesn't exist")
-						) {
-							logger?.error(
-								`Please run ${chalk.green(
-									"npx better-auth migrate",
-								)} to create the tables. There are missing tables in your MySQL database.`,
-							);
-						} else {
-							log?.error(e);
-						}
-					} else {
-						log?.error(e);
-					}
+					logger?.error(e);
 				}
 			}
 		},

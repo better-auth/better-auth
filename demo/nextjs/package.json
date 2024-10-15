@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
+    "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

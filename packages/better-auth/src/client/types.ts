@@ -67,8 +67,10 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 						Pl extends {
 							$InferServerPlugin: infer Plug;
 						}
-							? Plug extends BetterAuthPlugin
-								? Plug["endpoints"]
+							? Plug extends {
+									endpoints: infer Endpoints;
+								}
+								? Endpoints
 								: {}
 							: {}
 					>

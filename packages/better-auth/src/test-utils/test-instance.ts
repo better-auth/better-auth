@@ -4,7 +4,7 @@ import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, User } from "../types";
-import { getMigrations } from "../cli/utils/get-migration";
+import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
@@ -47,6 +47,7 @@ export async function getTestInstance<
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
+		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);

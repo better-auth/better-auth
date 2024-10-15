@@ -124,7 +124,6 @@ export default function SignIn() {
 							onClick={async () => {
 								await signIn.social({
 									provider: "discord",
-									callbackURL: "/dashboard",
 								});
 							}}
 						>
@@ -192,7 +191,11 @@ export default function SignIn() {
 						className="gap-2"
 						onClick={async () => {
 							await signIn.passkey({
-								callbackURL: "/dashboard",
+								fetchOptions: {
+									onResponse(context) {
+										router.push("/dashboard");
+									},
+								},
 							});
 						}}
 					>

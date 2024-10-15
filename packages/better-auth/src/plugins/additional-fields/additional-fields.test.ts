@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "./client";
-import { twoFactor } from "../two-factor";
+import { twoFactor, twoFactorClient } from "../two-factor";
 
 describe("additionalFields", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -84,14 +84,14 @@ describe("additionalFields", async () => {
 						},
 					},
 				}),
-				twoFactor(),
+				twoFactorClient(),
 			],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
-
+		expectTypeOf(client.twoFactor).toMatchTypeOf<{}>();
 		const res = await client.signUp.email({
 			email: "test4@test.com",
 			name: "test4",

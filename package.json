@@ -1,5 +1,5 @@
 {
-    "name": "root",
+    "name": "@better-auth/root",
     "private": true,
     "type": "module",
     "version": "0.0.2-beta.8",
@@ -7,6 +7,7 @@
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
+        "dev:dts": "turbo --filter \"./packages/*\" dev:dts",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
         "format": "biome format . --write",
         "lint": "biome check .",

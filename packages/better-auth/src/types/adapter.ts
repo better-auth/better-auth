@@ -5,7 +5,7 @@ import type { BetterAuthOptions } from "./options";
  */
 export type Where = {
 	operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; //eq by default
-	value: string;
+	value: string | number | boolean;
 	field: string;
 	connector?: "AND" | "OR"; //AND by default
 };
@@ -35,6 +35,10 @@ export interface Adapter {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
+	/**
+	 * ⚠︎ Update may not return the updated data
+	 * if multiple where clauses are provided
+	 */
 	update: <T>(data: {
 		model: string;
 		where: Where[];

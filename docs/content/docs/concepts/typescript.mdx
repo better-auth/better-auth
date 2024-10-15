@@ -43,11 +43,14 @@ import Database from "better-sqlite3"
 
 export const auth = betterAuth({
     database: new Database("database.db"),
-    additionalFields: {
-        user: {
-            role: "string"
+    user: {
+       additionalFields: {
+          role: {
+              type: "string"
+            } 
         }
     }
+   
 })
 
 type Session = typeof auth.$Infer.Session

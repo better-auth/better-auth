@@ -1,8 +1,7 @@
-import { auth } from "./_auth";
+import { auth } from "./auth";
 
 Bun.serve({
-	fetch(request, server) {
-		auth;
-		return new Response("Hello, World!");
-	},
+	fetch: auth.handler,
+	port: 4000,
 });
+console.log("Server running on port 4000");

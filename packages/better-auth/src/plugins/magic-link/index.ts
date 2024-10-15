@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import { createEmailVerificationToken } from "../../api/routes";
 import { validateJWT, type JWT } from "oslo/jwt";
 import { setSessionCookie } from "../../cookies";
+import { redirectURLMiddleware } from "../../api/middlewares/redirect";
 
 interface MagicLinkOptions {
 	/**
@@ -36,6 +37,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						callbackURL: z.string().optional(),
 						currentURL: z.string().optional(),
 					}),
+					use: [redirectURLMiddleware],
 				},
 				async (ctx) => {
 					const { email } = ctx.body;

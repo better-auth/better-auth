@@ -24,7 +24,7 @@
 
 
 > [!WARNING]
-> **Note:** 🚧 This project is currently in beta. Features and APIs may change.
+> *🚧 **Note:** This project is in beta and not yet recommended for production use. Features and APIs are still evolving and may change frequently. For more details, check out our [roadmap](https://github.com/orgs/better-auth/projects/2) to the v1 stable release.
 
 Better Auth is framework-agnostic authentication (and authorization) library for TypeScript. It provides a comprehensive set of features out of the box and includes a plugin ecosystem that simplifies adding advanced functionalities with minimal code in short amount of time. Whether you need 2FA, multi-tenant support, or other complex features. It lets you focus on building your actual application instead of reinventing the wheel. 
 

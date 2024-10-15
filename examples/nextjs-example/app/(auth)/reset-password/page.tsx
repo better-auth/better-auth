@@ -18,16 +18,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-export default function ResetPassword({
-	params,
-}: {
-	params: { token: string };
-}) {
+export default function ResetPassword() {
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState("");
-	const token = params.token;
 	const router = useRouter();
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();

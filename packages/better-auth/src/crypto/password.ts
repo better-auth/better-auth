@@ -1,6 +1,6 @@
-import { scrypt } from "node:crypto";
 import { decodeHex, encodeHex } from "oslo/encoding";
 import { constantTimeEqual } from "./buffer";
+import { scryptAsync } from "@noble/hashes/scrypt";
 
 const config = {
 	N: 16384,
@@ -9,28 +9,13 @@ const config = {
 	dkLen: 64,
 };
 
-async function generateKey(
-	password: string,
-	salt: string,
-): Promise<ArrayBuffer> {
-	return await new Promise<ArrayBuffer>((resolve, reject) => {
-		scrypt(
-			password.normalize("NFKC"),
-			salt!,
-			config.dkLen,
-			{
-				N: config.N,
-				p: config.p,
-				r: config.r,
-				// errors when 128 * N * r > `maxmem` (approximately)
-				maxmem: 128 * config.N * config.r * 2,
-			},
-			(err, buff) => {
-				if (err) return reject(err);
-				// @ts-ignore
-				return resolve(buff);
-			},
-		);
+async function generateKey(password: string, salt: string) {
+	return await scryptAsync(password.normalize("NFKC"), salt, {
+		N: config.N,
+		p: config.p,
+		r: config.r,
+		dkLen: config.dkLen,
+		maxmem: 128 * config.N * config.r * 2,
 	});
 }
 

@@ -8,6 +8,7 @@ describe("init", async () => {
 	const database = new Database(":memory:");
 	it("should match config", () => {
 		const res = init({
+			baseURL: "http://localhost:3000",
 			database,
 		});
 		expect(res).toMatchSnapshot();
@@ -16,6 +17,7 @@ describe("init", async () => {
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
 		const res = await init({
+			baseURL: "http://localhost:3000",
 			database,
 			plugins: [
 				{
@@ -43,6 +45,7 @@ describe("init", async () => {
 		expect(ctx.baseURL).toBe(`http://localhost:3000${customPath}`);
 
 		const res = betterAuth({
+			baseURL: "http://localhost:3000",
 			database,
 			basePath: customPath,
 		});

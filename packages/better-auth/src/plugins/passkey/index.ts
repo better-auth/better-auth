@@ -18,7 +18,7 @@ import { sessionMiddleware } from "../../api";
 import { getSessionFromCtx } from "../../api/routes";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
-import { BetterAuthError } from "../../error/better-auth-error";
+import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
 
 interface WebAuthnChallengeValue {
@@ -26,7 +26,6 @@ interface WebAuthnChallengeValue {
 	userData: {
 		id: string;
 	};
-	callbackURL?: string;
 }
 
 export interface PasskeyOptions {
@@ -178,7 +177,6 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z
 						.object({
 							email: z.string().optional(),
-							callbackURL: z.string().optional(),
 						})
 						.optional(),
 				},
@@ -212,7 +210,6 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 					const data = {
 						expectedChallenge: options.challenge,
-						callbackURL: ctx.body?.callbackURL,
 						userData: {
 							id: session?.user.id || "",
 						},
@@ -370,7 +367,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							message: "Challenge not found",
 						});
 					}
-					const { expectedChallenge, callbackURL } = JSON.parse(
+					const { expectedChallenge } = JSON.parse(
 						data.value,
 					) as WebAuthnChallengeValue;
 					const passkey = await ctx.context.adapter.findOne<Passkey>({
@@ -432,13 +429,6 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						await setSessionCookie(ctx, s.id);
-						if (callbackURL) {
-							return ctx.json({
-								url: callbackURL,
-								redirect: true,
-								session: s,
-							});
-						}
 						return ctx.json(
 							{
 								session: s,

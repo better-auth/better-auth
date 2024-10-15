@@ -9,7 +9,7 @@ import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 
-export const oAuthProviders = {
+export const socialProviders = {
 	apple,
 	discord,
 	facebook,
@@ -21,12 +21,12 @@ export const oAuthProviders = {
 	twitter,
 };
 
-export const oAuthProviderList = Object.keys(oAuthProviders) as [
+export const socialProviderList = Object.keys(socialProviders) as [
 	"github",
-	...(keyof typeof oAuthProviders)[],
+	...(keyof typeof socialProviders)[],
 ];
 
-export type SocialProviders = typeof oAuthProviders extends {
+export type SocialProviders = typeof socialProviders extends {
 	[key in infer K]: infer V;
 }
 	? V extends (options: infer V) => any
@@ -43,4 +43,5 @@ export * from "./spotify";
 export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
-export * from "./types";
+
+export type SocialProviderList = typeof socialProviderList;

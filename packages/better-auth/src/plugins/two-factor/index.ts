@@ -14,12 +14,28 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
-	const totp = totp2fa({
-		issuer: options?.issuer || "better-auth",
-		...options?.totpOptions,
-	});
-	const backupCode = backupCode2fa(options?.backupCodeOptions);
-	const otp = otp2fa(options?.otpOptions);
+	const opts = {
+		twoFactorTable: options?.twoFactorTable || ("twoFactor" as const),
+	};
+	const totp = totp2fa(
+		{
+			issuer: options?.issuer || "better-auth",
+			...options?.totpOptions,
+		},
+		opts.twoFactorTable,
+	);
+	const backupCode = backupCode2fa(
+		{
+			...options?.backupCodeOptions,
+		},
+		opts.twoFactorTable,
+	);
+	const otp = otp2fa(
+		{
+			...options?.otpOptions,
+		},
+		opts.twoFactorTable,
+	);
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -56,19 +72,17 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.secret,
 						options?.backupCodeOptions,
 					);
-					await ctx.context.adapter.update({
-						model: "user",
-						update: {
-							twoFactorSecret: encryptedSecret,
-							twoFactorEnabled: true,
-							twoFactorBackupCodes: backupCodes.encryptedBackupCodes,
+					await ctx.context.internalAdapter.updateUser(user.id, {
+						twoFactorEnabled: true,
+					});
+
+					const res = await ctx.context.adapter.create({
+						model: opts.twoFactorTable,
+						data: {
+							secret: encryptedSecret,
+							backupCodes: backupCodes.encryptedBackupCodes,
+							userId: user.id,
 						},
-						where: [
-							{
-								field: "id",
-								value: user.id,
-							},
-						],
 					});
 					return ctx.json({ status: true });
 				},
@@ -94,14 +108,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: "Invalid password",
 						});
 					}
-					await ctx.context.adapter.update({
-						model: "user",
-						update: {
-							twoFactorEnabled: false,
-						},
+					await ctx.context.internalAdapter.updateUser(user.id, {
+						twoFactorEnabled: false,
+					});
+					await ctx.context.adapter.delete({
+						model: opts.twoFactorTable,
 						where: [
 							{
-								field: "id",
+								field: "userId",
 								value: user.id,
 							},
 						],
@@ -220,15 +234,29 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						required: false,
 						defaultValue: false,
 					},
-					twoFactorSecret: {
+				},
+			},
+			twoFactor: {
+				tableName: opts.twoFactorTable,
+				fields: {
+					secret: {
 						type: "string",
-						required: false,
+						required: true,
 						returned: false,
 					},
-					twoFactorBackupCodes: {
+					backupCodes: {
 						type: "string",
-						required: false,
+						required: true,
 						returned: false,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						returned: false,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 				},
 			},

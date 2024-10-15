@@ -4,6 +4,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const updateUser = createAuthEndpoint(
 	"/user/update",
@@ -13,7 +14,7 @@ export const updateUser = createAuthEndpoint(
 			name: z.string().optional(),
 			image: z.string().optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sessionMiddleware, redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { name, image } = ctx.body;

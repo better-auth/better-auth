@@ -4,8 +4,13 @@ import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 import { APIError } from "better-call";
+import { setSessionCookie } from "../../../cookies";
 
 export interface BackupCodeOptions {
 	/**
@@ -52,21 +57,21 @@ export async function generateBackupCodes(
 
 export async function verifyBackupCode(
 	data: {
-		user: UserWithTwoFactor;
+		backupCodes: string;
 		code: string;
 	},
 	key: string,
 ) {
-	const codes = await getBackupCodes(data.user, key);
+	const codes = await getBackupCodes(data.backupCodes, key);
 	if (!codes) {
 		return false;
 	}
 	return codes.includes(data.code);
 }
 
-export async function getBackupCodes(user: UserWithTwoFactor, key: string) {
+export async function getBackupCodes(backupCodes: string, key: string) {
 	const secret = Buffer.from(
-		await symmetricDecrypt({ key, data: user.twoFactorBackupCodes }),
+		await symmetricDecrypt({ key, data: backupCodes }),
 	).toString("utf-8");
 	const data = JSON.parse(secret);
 	const result = z.array(z.string()).safeParse(data);
@@ -76,7 +81,10 @@ export async function getBackupCodes(user: UserWithTwoFactor, key: string) {
 	return null;
 }
 
-export const backupCode2fa = (options?: BackupCodeOptions) => {
+export const backupCode2fa = (
+	options: BackupCodeOptions,
+	twoFactorTable: string,
+) => {
 	return {
 		id: "backup_code",
 		endpoints: {
@@ -87,13 +95,32 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					method: "POST",
 					body: z.object({
 						code: z.string(),
+						/**
+						 * Disable setting the session cookie
+						 */
+						disableSession: z.boolean().optional(),
 					}),
 					use: [verifyTwoFactorMiddleware],
 				},
 				async (ctx) => {
+					const user = ctx.context.session.user as UserWithTwoFactor;
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+						model: twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+					if (!twoFactor) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Backup codes aren't enabled",
+						});
+					}
 					const validate = verifyBackupCode(
 						{
-							user: ctx.context.session.user,
+							backupCodes: twoFactor.backupCodes,
 							code: ctx.body.code,
 						},
 						ctx.context.secret,
@@ -103,7 +130,13 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 							message: "Invalid backup code",
 						});
 					}
-					return ctx.json({ status: true });
+					if (!ctx.body.disableSession) {
+						await setSessionCookie(ctx, ctx.context.session.id);
+					}
+					return ctx.json({
+						user: user,
+						session: ctx.context.session,
+					});
 				},
 			),
 			generateBackupCodes: createAuthEndpoint(
@@ -113,19 +146,24 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
+					const user = ctx.context.session.user as UserWithTwoFactor;
+					if (!user.twoFactorEnabled) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Two factor isn't enabled",
+						});
+					}
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						options,
 					);
 					await ctx.context.adapter.update({
-						model: "user",
+						model: twoFactorTable,
 						update: {
-							twoFactorEnabled: true,
-							twoFactorBackupCodes: backupCodes.encryptedBackupCodes,
+							backupCodes: backupCodes.encryptedBackupCodes,
 						},
 						where: [
 							{
-								field: "id",
+								field: "userId",
 								value: ctx.context.session.user.id,
 							},
 						],
@@ -144,7 +182,29 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const backupCodes = getBackupCodes(user, ctx.context.secret);
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+						model: twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+					if (!twoFactor) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Backup codes aren't enabled",
+						});
+					}
+					const backupCodes = getBackupCodes(
+						twoFactor.backupCodes,
+						ctx.context.secret,
+					);
+					if (!backupCodes) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Backup codes aren't enabled",
+						});
+					}
 					return ctx.json({
 						status: true,
 						backupCodes: backupCodes,

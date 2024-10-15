@@ -3,6 +3,7 @@ import { createJWT, validateJWT, type JWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -38,6 +39,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 			email: z.string().email(),
 			callbackURL: z.string().optional(),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendVerificationEmail) {

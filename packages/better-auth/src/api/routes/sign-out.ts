@@ -2,16 +2,12 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
-		body: z.optional(
-			z.object({
-				callbackURL: z.string().optional(),
-			}),
-		),
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(
@@ -25,11 +21,8 @@ export const signOut = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);
-		return ctx.json(null, {
-			body: {
-				redirect: !!ctx.body?.callbackURL,
-				url: ctx.body?.callbackURL,
-			},
+		return ctx.json({
+			success: true,
 		});
 	},
 );

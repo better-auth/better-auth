@@ -1,14 +1,13 @@
 import type { Dialect, Kysely, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProviderList } from "../social-providers/types";
-import type { SocialProviders } from "../social-providers";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
-import type { EligibleCookies } from "../cookies";
+import type { AuthContext } from ".";
 
 export interface BetterAuthOptions {
 	/**
@@ -218,7 +217,7 @@ export interface BetterAuthOptions {
 			/**
 			 * List of trusted providers
 			 */
-			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
+			trustedProviders?: Array<SocialProviderList[number] | "email-password">;
 		};
 	};
 	/**
@@ -435,5 +434,23 @@ export interface BetterAuthOptions {
 				after?: (verification: Verification) => Promise<void>;
 			};
 		};
+	};
+	/**
+	 * API error handling
+	 */
+	onAPIError?: {
+		/**
+		 * Throw an error on API error
+		 *
+		 * @default false
+		 */
+		throw?: boolean;
+		/**
+		 * Custom error handler
+		 *
+		 * @param error
+		 * @param ctx - Auth context
+		 */
+		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 	};
 }

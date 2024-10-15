@@ -1,5 +1,5 @@
 import type { FieldAttribute } from ".";
-import { BetterAuthError } from "../error/better-auth-error";
+import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getAuthTables } from "./get-tables";

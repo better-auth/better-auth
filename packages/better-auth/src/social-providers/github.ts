@@ -1,10 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from ".";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getRedirectURI,
 	validateAuthorizationCode,
-} from "./utils";
+} from "../oauth2";
 
 export interface GithubProfile {
 	login: string;

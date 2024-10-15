@@ -16,7 +16,6 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 			 * every sign in request within this time.
 			 */
 			trustDevice: z.boolean().optional(),
-			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
@@ -101,14 +100,10 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 								trustDeviceCookie.options,
 							);
 						}
-						if (ctx.body.callbackURL) {
-							return ctx.json({
-								status: true,
-								callbackURL: ctx.body.callbackURL,
-								redirect: true,
-							});
-						}
-						return ctx.json({ status: true });
+						return ctx.json({
+							session,
+							user,
+						});
 					},
 					invalid: async () => {
 						throw new APIError("UNAUTHORIZED", {

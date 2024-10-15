@@ -1,12 +1,12 @@
 import { parseJWT } from "oslo/jwt";
-import type { OAuthProvider, ProviderOptions } from ".";
-import { BetterAuthError } from "../error/better-auth-error";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { BetterAuthError } from "../error";
 import { logger } from "../utils/logger";
 import {
 	createAuthorizationURL,
 	getRedirectURI,
 	validateAuthorizationCode,
-} from "./utils";
+} from "../oauth2";
 
 export interface GoogleProfile {
 	aud: string;

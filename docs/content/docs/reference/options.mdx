@@ -250,6 +250,23 @@ list of trusted origins. This will disable CSRF token check for the provided ori
 />
 
 
+### `onAPIError`
+
+`OnAPIErrorOptions` - Options for handling API errors.
+
+<TypeTable
+  type={{
+        throw: {
+            description: "Throw the error.",
+            type: 'boolean',
+            default: false
+        },
+        onError: {
+            description: "Custom error handler.",
+            type: '(error: Error, ctx: APIContext) => void'
+        }
+    }}
+/>
 
 ### `logger`
 

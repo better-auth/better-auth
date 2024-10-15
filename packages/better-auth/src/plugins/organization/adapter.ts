@@ -5,7 +5,7 @@ import { getDate } from "../../utils/date";
 import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
 import type { Invitation, Member, Organization } from "./schema";
-import { BetterAuthError } from "../../error/better-auth-error";
+import { BetterAuthError } from "../../error";
 
 export const getOrgAdapter = (
 	adapter: Adapter,
