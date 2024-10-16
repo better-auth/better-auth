@@ -10,14 +10,15 @@ export const getCSRFToken = createAuthEndpoint(
 		metadata: HIDE_METADATA,
 	},
 	async (ctx) => {
-		const csrfToken = await ctx.getSignedCookie(
+		const csrfCookie = await ctx.getSignedCookie(
 			ctx.context.authCookies.csrfToken.name,
 			ctx.context.secret,
 		);
 
-		if (csrfToken) {
+		if (csrfCookie) {
+			const [token, _] = csrfCookie.split("!") || [null, null];
 			return {
-				csrfToken,
+				csrfToken: token,
 			};
 		}
 
