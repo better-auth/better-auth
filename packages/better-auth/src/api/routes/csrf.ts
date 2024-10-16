@@ -16,7 +16,7 @@ export const getCSRFToken = createAuthEndpoint(
 		);
 
 		if (csrfCookie) {
-			const [token, _] = csrfCookie?.split("!") || [null, null];
+			const [token, _] = csrfCookie.split("!") || [null, null];
 			return {
 				csrfToken: token,
 			};

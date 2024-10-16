@@ -44,7 +44,7 @@ export const csrfMiddleware = createAuthMiddleware(
 			!csrfCookie ||
 			!token ||
 			!hash ||
-			csrfCookie !== csrfToken
+			token !== csrfToken
 		) {
 			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
 				maxAge: 0,
