@@ -24,7 +24,11 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		accessTokenExpiresAt: data.expires_at
 			? new Date((Date.now() + data.expires_in) * 1000)
 			: undefined,
-		scopes: data.scope?.split(" ") || [],
+		scopes: data?.scope
+			? typeof data.scope === "string"
+				? data.scope.split(" ")
+				: data.scope
+			: [],
 		idToken: data.id_token,
 	};
 }
