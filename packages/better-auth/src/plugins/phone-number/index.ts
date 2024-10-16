@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
-import { signUpEmail } from "../../api/routes/sign-up";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx, sessionMiddleware } from "../../api";
 import { getDate } from "../../utils/date";
@@ -75,7 +74,6 @@ export const phoneNumber = (options?: {
 					method: "POST",
 					body: z.object({
 						phoneNumber: z.string(),
-						password: z.string(),
 						dontRememberMe: z.boolean().optional(),
 					}),
 				},
@@ -90,9 +88,8 @@ export const phoneNumber = (options?: {
 						],
 					});
 					if (!user) {
-						await ctx.context.password.hash(ctx.body.password);
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: "Invalid phone number",
 						});
 					}
 					const account = await ctx.context.adapter.findOne<Account>({
@@ -127,16 +124,7 @@ export const phoneNumber = (options?: {
 							message: "Unexpected error",
 						});
 					}
-					const validPassword = await ctx.context.password.verify(
-						currentPassword,
-						ctx.body.password,
-					);
-					if (!validPassword) {
-						ctx.context.logger.error("Invalid password");
-						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
-						});
-					}
+					
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx.request,
