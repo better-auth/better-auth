@@ -21,8 +21,8 @@ import { jwt, bearer } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [ // [!code highlight]
-        jwt() // [!code highlight]
-        baerer() //this allows you to pass the session as a bearer token  // [!code highlight] 
+        jwt(), // [!code highlight]
+        bearer() //this allows you to pass the session as a bearer token  // [!code highlight] 
     ] // [!code highlight]
 })
 ```
@@ -100,9 +100,9 @@ In the case a JWT with a different kid is received it is recommended to fetch th
 
 ## Schema
 
-The organization plugin adds the following tables to the database:
+The jwt plugin adds the following tables to the database:
 
-### Organization
+### JWKS
 
 Table Name: `jwks`
 
