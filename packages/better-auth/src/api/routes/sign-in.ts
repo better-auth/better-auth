@@ -76,11 +76,8 @@ export const signInOAuth = createAuthEndpoint(
 		const url = await provider.createAuthorizationURL({
 			state: state.raw,
 			codeVerifier,
+			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
-		url.searchParams.set(
-			"redirect_uri",
-			`${c.context.baseURL}/callback/${c.body.provider}`,
-		);
 		return c.json({
 			url: url.toString(),
 			state: state,
