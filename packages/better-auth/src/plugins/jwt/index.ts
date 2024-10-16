@@ -88,7 +88,6 @@ export const jwt = (options?: JwtOptions) => {
 
 	return {
 		id: 'jwt',
-
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",
