@@ -29,7 +29,7 @@ export const facebook = (options: FacebookOptions) => {
 				authorizationEndpoint: "https://www.facebook.com/v21.0/dialog/oauth",
 				scopes: _scopes,
 				state,
-        redirectURI
+				redirectURI,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
