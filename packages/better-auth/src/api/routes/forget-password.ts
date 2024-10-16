@@ -87,24 +87,19 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		const callbackURL = ctx.query.callbackURL;
+		const redirectTo = callbackURL.startsWith("http")
+			? callbackURL
+			: `${ctx.context.options.baseURL}${callbackURL}`;
 		if (!token || !callbackURL) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
-			});
+			throw ctx.redirect(`${ctx.context.baseURL}/error?error=INVALID_TOKEN`);
 		}
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
 			);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
-			});
+			throw ctx.redirect(`${redirectTo}?error=INVALID_TOKEN`);
 		}
-		const redirectTo = callbackURL.startsWith("http")
-			? callbackURL
-			: `${ctx.context.options.baseURL}${callbackURL}`;
-
 		throw ctx.redirect(`${redirectTo}?token=${token}`);
 	},
 );
@@ -130,16 +125,16 @@ export const resetPassword = createAuthEndpoint(
 			});
 		}
 		const { newPassword } = ctx.body;
+		const id = `reset-password:${token}`;
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(
-				`reset-password:${token}`,
-			);
+			await ctx.context.internalAdapter.findVerificationValue(id);
+
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid token",
 			});
 		}
-
+		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);

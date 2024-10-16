@@ -51,4 +51,20 @@ describe("forget password", async (it) => {
 		});
 		expect(newCred.data?.session).toBeDefined();
 	});
+
+	it("shouldn't allow the token to be used twice", async () => {
+		const newPassword = "new-password";
+		const res = await client.resetPassword(
+			{
+				newPassword,
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+	});
 });
