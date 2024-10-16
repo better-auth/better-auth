@@ -25,7 +25,7 @@ export const forgetPassword = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
 			ctx.context.logger.error(
-				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPasswordToken function to your auth config!",
+				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPasswordToken function in your auth config!",
 			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Reset password isn't enabled",

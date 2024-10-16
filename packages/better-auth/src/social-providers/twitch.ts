@@ -1,5 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { logger } from "../utils";
+import { parseJWT } from "oslo/jwt";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface TwitchProfile {
@@ -21,13 +23,15 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export interface TwitchOptions extends ProviderOptions {}
+export interface TwitchOptions extends ProviderOptions {
+	claims?: string[];
+}
 export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.scope || scopes || ["activity:write", "read"];
+			const _scopes = options.scope || scopes || ["user:read:email", "openid"];
 			return createAuthorizationURL({
 				id: "twitch",
 				redirectURI,
@@ -35,6 +39,11 @@ export const twitch = (options: TwitchOptions) => {
 				authorizationEndpoint: "https://id.twitch.tv/oauth2/authorize",
 				scopes: _scopes,
 				state,
+				claims: options.claims || [
+					"email",
+					"email_verified",
+					"preferred_username",
+				],
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -46,18 +55,12 @@ export const twitch = (options: TwitchOptions) => {
 			});
 		},
 		async getUserInfo(token) {
-			const { data: profile, error } = await betterFetch<TwitchProfile>(
-				"https://api.twitch.tv/helix/users",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
-					},
-				},
-			);
-			if (error) {
+			const idToken = token.idToken;
+			if (!idToken) {
+				logger.error("No idToken found in token");
 				return null;
 			}
+			const profile = parseJWT(idToken)?.payload as TwitchProfile;
 			return {
 				user: {
 					id: profile.sub,

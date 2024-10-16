@@ -26,11 +26,10 @@ export const facebook = (options: FacebookOptions) => {
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
-				authorizationEndpoint: "https://www.facebook.com/v16.0/dialog/oauth",
+				authorizationEndpoint: "https://www.facebook.com/v21.0/dialog/oauth",
 				scopes: _scopes,
 				state,
 				redirectURI,
-				codeVerifier,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -39,12 +38,12 @@ export const facebook = (options: FacebookOptions) => {
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
 				options,
-				tokenEndpoint: "https://graph.facebook.com/v16.0/oauth/access_token",
+				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});
 		},
 		async getUserInfo(token) {
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
-				"https://graph.facebook.com/me",
+				"https://graph.facebook.com/me?fields=id,name,email,picture",
 				{
 					auth: {
 						type: "Bearer",

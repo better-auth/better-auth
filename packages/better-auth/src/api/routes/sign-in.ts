@@ -39,7 +39,7 @@ export const signInOAuth = createAuthEndpoint(
 		);
 		if (!provider) {
 			c.context.logger.error(
-				"Provider not found. Make sure to add the provider to your auth config",
+				"Provider not found. Make sure to add the provider in your auth config",
 				{
 					provider: c.body.provider,
 				},
