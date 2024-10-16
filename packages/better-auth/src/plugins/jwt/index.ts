@@ -1,61 +1,60 @@
-import type { BetterAuthPlugin, User } from '../../types';
-import { type Jwk, schema } from './schema';
-import { getJwksAdapter } from './adapter';
-import { exportJWK, generateKeyPair, importJWK, SignJWT } from 'jose';
-import { decryptPrivateKey, encryptPrivateKey } from './utils';
-import { createAuthEndpoint, sessionMiddleware } from '../../api';
+import type { BetterAuthPlugin, User } from "../../types";
+import { type Jwk, schema } from "./schema";
+import { getJwksAdapter } from "./adapter";
+import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
+import { decryptPrivateKey, encryptPrivateKey } from "./utils";
+import { createAuthEndpoint, sessionMiddleware } from "../../api";
 
 type JWKOptions =
 	| {
-		alg: 'EdDSA'; // EdDSA with either Ed25519 or Ed448 curve
-		crv?: 'Ed25519' | 'Ed448';
-	}
+			alg: "EdDSA"; // EdDSA with either Ed25519 or Ed448 curve
+			crv?: "Ed25519" | "Ed448";
+	  }
 	| {
-		alg: 'ES256'; // ECDSA with P-256 curve
-		crv?: never; // Only one valid option, no need for crv
-	}
+			alg: "ES256"; // ECDSA with P-256 curve
+			crv?: never; // Only one valid option, no need for crv
+	  }
 	| {
-		alg: 'RS256'; // RSA with SHA-256
-		modulusLength?: number; // Default to 2048 or higher
-	}
+			alg: "RS256"; // RSA with SHA-256
+			modulusLength?: number; // Default to 2048 or higher
+	  }
 	| {
-		alg: 'PS256'; // RSA-PSS with SHA-256
-		modulusLength?: number; // Default to 2048 or higher
-	}
+			alg: "PS256"; // RSA-PSS with SHA-256
+			modulusLength?: number; // Default to 2048 or higher
+	  }
 	| {
-		alg: 'ECDH-ES'; // Key agreement algorithm with P-256 as default curve
-		crv?: 'P-256' | 'P-384' | 'P-521';
-	}
+			alg: "ECDH-ES"; // Key agreement algorithm with P-256 as default curve
+			crv?: "P-256" | "P-384" | "P-521";
+	  }
 	| {
-		alg: 'ES512'; // ECDSA with P-521 curve
-		crv?: never; // Only P-521 for ES512
-	};
-
+			alg: "ES512"; // ECDSA with P-521 curve
+			crv?: never; // Only P-521 for ES512
+	  };
 
 export interface JwtOptions {
 	jwks?: {
 		/**
 		 * Key pair configuration
 		 * @description A subset of the options available for the generateKeyPair function
-		 * 
+		 *
 		 * @see https://github.com/panva/jose/blob/main/src/runtime/node/generate.ts
-		 * 
+		 *
 		 * @default { alg: 'EdDSA', crv: 'Ed25519' }
 		 */
-		keyPairConfig?: JWKOptions,
+		keyPairConfig?: JWKOptions;
 
 		/**
 		 * Disable private key encryption
 		 * @description Disable the encryption of the private key in the database
-		 * 
+		 *
 		 * @default false
 		 */
-		disablePrivateKeyEncryption?: boolean,
-	},
+		disablePrivateKeyEncryption?: boolean;
+	};
 
 	jwt?: {
-		issuer?: string,
-		audience?: string,
+		issuer?: string;
+		audience?: string;
 		/**
 		 * Set the "exp" (Expiration Time) Claim.
 		 *
@@ -79,20 +78,21 @@ export interface JwtOptions {
 		 *
 		 * @default 15m
 		 */
-		expirationTime?: number | string | Date,
-		definePayload?: ((user: User) => Promise<Record<string, any>> | Record<string, any>);
-	}
+		expirationTime?: number | string | Date;
+		definePayload?: (
+			user: User,
+		) => Promise<Record<string, any>> | Record<string, any>;
+	};
 }
 
 export const jwt = (options?: JwtOptions) => {
-
 	return {
-		id: 'jwt',
+		id: "jwt",
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				"/jwks",
 				{
-					method: 'GET',
+					method: "GET",
 				},
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
@@ -105,12 +105,13 @@ export const jwt = (options?: JwtOptions) => {
 							kid: keySet.id,
 						})),
 					});
-				}),
+				},
+			),
 
 			getToken: createAuthEndpoint(
-				'/token',
+				"/token",
 				{
-					method: 'GET',
+					method: "GET",
 					requireHeaders: true,
 					use: [sessionMiddleware],
 				},
@@ -118,10 +119,14 @@ export const jwt = (options?: JwtOptions) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					let key = await adapter.getLatestKey();
-					const privateKeyEncryptionEnabled = !options?.jwks?.disablePrivateKeyEncryption;
+					const privateKeyEncryptionEnabled =
+						!options?.jwks?.disablePrivateKeyEncryption;
 
 					if (key === undefined) {
-						const { publicKey, privateKey } = await generateKeyPair(options?.jwks?.keyPairConfig?.alg ?? "EdDSA", options?.jwks?.keyPairConfig ?? { crv: 'Ed25519' });
+						const { publicKey, privateKey } = await generateKeyPair(
+							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							options?.jwks?.keyPairConfig ?? { crv: "Ed25519" },
+						);
 
 						const publicWebKey = await exportJWK(publicKey);
 						const privateWebKey = await exportJWK(privateKey);
@@ -130,38 +135,58 @@ export const jwt = (options?: JwtOptions) => {
 						let jwk: Partial<Jwk> = {
 							id: crypto.randomUUID(),
 							publicKey: JSON.stringify(publicWebKey),
-							privateKey: privateKeyEncryptionEnabled ?
-								JSON.stringify(encryptPrivateKey(stringifiedPrivateWebKey, ctx.context.options.secret!)) :
-								stringifiedPrivateWebKey,
+							privateKey: privateKeyEncryptionEnabled
+								? JSON.stringify(
+										encryptPrivateKey(
+											stringifiedPrivateWebKey,
+											ctx.context.options.secret!,
+										),
+									)
+								: stringifiedPrivateWebKey,
 							createdAt: new Date(),
 						};
 
 						key = await adapter.createJwk(jwk as Jwk);
 					}
 
-					let privateWebKey = privateKeyEncryptionEnabled ? decryptPrivateKey(JSON.parse(key.privateKey), ctx.context.options.secret!) : key.privateKey;
+					let privateWebKey = privateKeyEncryptionEnabled
+						? decryptPrivateKey(
+								JSON.parse(key.privateKey),
+								ctx.context.options.secret!,
+							)
+						: key.privateKey;
 
 					const privateKey = await importJWK(JSON.parse(privateWebKey));
 
-					const payload = (!options?.jwt?.definePayload) ? ctx.context.session.user : await options?.jwt.definePayload(ctx.context.session.user);
+					const payload = !options?.jwt?.definePayload
+						? ctx.context.session.user
+						: await options?.jwt.definePayload(ctx.context.session.user);
 
 					const jwt = await new SignJWT({
 						...payload,
 						// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
-						...((ctx.context.session.session as any).impersonatedBy!) ? { impersonatedBy: (ctx.context.session.session as any).impersonatedBy } : {},
+						...((ctx.context.session.session as any).impersonatedBy!
+							? {
+									impersonatedBy: (ctx.context.session.session as any)
+										.impersonatedBy,
+								}
+							: {}),
 					})
-						.setProtectedHeader({ alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA" })
+						.setProtectedHeader({
+							alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+						})
 						.setIssuedAt()
 						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
 						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-						.setExpirationTime(options?.jwt?.expirationTime ?? '15m')
+						.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
 						.setSubject(ctx.context.session.user.id)
-						.sign(privateKey)
+						.sign(privateKey);
 
 					return ctx.json({
-						token: jwt
+						token: jwt,
 					});
-				}),
+				},
+			),
 		},
 		schema,
 	} satisfies BetterAuthPlugin;

@@ -7,9 +7,7 @@ import { importJWK, jwtVerify } from "jose";
 
 describe("jwt", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [
-			jwt(),
-		],
+		plugins: [jwt()],
 		logger: {
 			verboseLogging: true,
 		},
@@ -28,10 +26,10 @@ describe("jwt", async (it) => {
 
 	it("Get a token", async () => {
 		const token = await client.token({
-				fetchOptions: {
-					headers
-				}
-			})
+			fetchOptions: {
+				headers,
+			},
+		});
 
 		expect(token.data?.token).toBeDefined();
 	});
@@ -40,26 +38,26 @@ describe("jwt", async (it) => {
 		// If no JWK exists, this makes sure it gets added.
 		// TODO: Replace this with a generate JWKS endpoint once it exists.
 		const token = await client.token({
-				fetchOptions: {
-					headers
-				}
-			})
+			fetchOptions: {
+				headers,
+			},
+		});
 
 		expect(token.data?.token).toBeDefined();
 
-		const jwks = await client.jwks()
+		const jwks = await client.jwks();
 
 		expect(jwks.data?.keys).length.above(0);
 	});
 
 	it("Signed tokens can be validated with the JWKS", async () => {
 		const token = await client.token({
-				fetchOptions: {
-					headers
-				}
-			})
+			fetchOptions: {
+				headers,
+			},
+		});
 
-		const jwks = await client.jwks()
+		const jwks = await client.jwks();
 
 		const publicWebKey = await importJWK(jwks.data?.keys[0]);
 

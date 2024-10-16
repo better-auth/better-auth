@@ -5,19 +5,19 @@ export const schema: PluginSchema = {
 	jwks: {
 		fields: {
 			publicKey: {
-				type: 'string',
+				type: "string",
 				required: true,
 			},
 			privateKey: {
-				type: 'string',
+				type: "string",
 				required: true,
 			},
 			createdAt: {
-				type: 'date',
+				type: "date",
 				required: true,
 			},
 		},
-	}
+	},
 };
 
 export const jwk = z.object({

@@ -1,9 +1,7 @@
 import type { Adapter } from "../../types";
 import type { Jwk } from "./schema";
 
-export const getJwksAdapter = (
-	adapter: Adapter
-) => {
+export const getJwksAdapter = (adapter: Adapter) => {
 	return {
 		getAllKeys: async () => {
 			return await adapter.findMany<Jwk>({
