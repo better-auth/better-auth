@@ -17,11 +17,12 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { jwt } from "better-auth/plugins"
+import { jwt, bearer } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [ // [!code highlight]
         jwt() // [!code highlight]
+        baerer() //this allows you to pass the session as a bearer token  // [!code highlight] 
     ] // [!code highlight]
 })
 ```
@@ -63,6 +64,16 @@ To get the token, call the `/token`, this will return the following:
   { 
     "token": "ey..."
   }
+```
+
+Make sure to include the token in the Authorization header of your requests.
+
+```ts
+await fetch("/api/auth/token", {
+  headers: {
+    "Authorization": `Bearer ${token}`
+  },
+})
 ```
 
 ### Verifying the token
