@@ -107,5 +107,9 @@ export const auth = betterAuth({
 			clientId: process.env.MICROSOFT_CLIENT_ID || "",
 			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
 		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
+		},
 	},
 });

@@ -5,6 +5,8 @@ import {
 	getRedirectURI,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { logger } from "../utils";
+import { parseJWT } from "oslo/jwt";
 
 export interface TwitchProfile {
 	/**
@@ -57,18 +59,12 @@ export const twitch = (options: TwitchOptions) => {
 			});
 		},
 		async getUserInfo(token) {
-			const { data: profile, error } = await betterFetch<TwitchProfile>(
-				"https://api.twitch.tv/helix/users",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
-					},
-				},
-			);
-			if (error) {
+			const idToken = token.idToken;
+			if (!idToken) {
+				logger.error("No idToken found in token");
 				return null;
 			}
+			const profile = parseJWT(idToken)?.payload as TwitchProfile;
 			return {
 				user: {
 					id: profile.sub,

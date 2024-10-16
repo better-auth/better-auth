@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { Key, Loader2 } from "lucide-react";
+import { Key, Loader2, TwitchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -128,6 +128,28 @@ export default function SignIn() {
 							}}
 						>
 							<DiscordLogoIcon />
+						</Button>
+						<Button
+							variant="outline"
+							className="w-full gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitch",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.2em"
+								height="1.2em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
+								></path>
+							</svg>
 						</Button>
 						<Button
 							variant="outline"
