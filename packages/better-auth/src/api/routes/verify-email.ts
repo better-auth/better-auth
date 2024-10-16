@@ -101,17 +101,10 @@ export const verifyEmail = createAuthEndpoint(
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
-			{ includeAccounts: true },
 		);
 		if (!user) {
 			throw new APIError("BAD_REQUEST", {
 				message: "User not found",
-			});
-		}
-		const account = user.accounts.find((a) => a.providerId === "credential");
-		if (!account) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Account not found",
 			});
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
