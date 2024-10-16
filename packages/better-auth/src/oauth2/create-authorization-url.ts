@@ -8,6 +8,7 @@ export async function createAuthorizationURL({
 	state,
 	codeVerifier,
 	scopes,
+	claims,
 	disablePkce,
 }: {
 	id: string;
@@ -17,6 +18,7 @@ export async function createAuthorizationURL({
 	codeVerifier?: string;
 	scopes: string[];
 	disablePkce?: boolean;
+	claims?: string[];
 }) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
@@ -31,6 +33,21 @@ export async function createAuthorizationURL({
 		const codeChallenge = await generateCodeChallenge(codeVerifier);
 		url.searchParams.set("code_challenge_method", "S256");
 		url.searchParams.set("code_challenge", codeChallenge);
+	}
+	if (claims) {
+		const claimsObj = claims.reduce(
+			(acc, claim) => {
+				acc[claim] = null;
+				return acc;
+			},
+			{} as Record<string, null>,
+		);
+		url.searchParams.set(
+			"claims",
+			JSON.stringify({
+				id_token: { email: null, email_verified: null, ...claimsObj },
+			}),
+		);
 	}
 	return url;
 }
