@@ -115,6 +115,11 @@ export interface BetterAuthOptions {
 		 */
 		sendResetPassword?: (url: string, user: User) => Promise<void>;
 		/**
+		 * Number of seconds the reset password token is valid for.
+		 * @default 1 hour
+		 */
+		resetPasswordTokenExpiresIn?: number;
+		/**
 		 * @param user the user to send the verification email to
 		 * @param url the url to send the verification email to
 		 * it contains the token as well

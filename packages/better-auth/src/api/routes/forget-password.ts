@@ -1,6 +1,3 @@
-import { TimeSpan } from "oslo";
-import { createJWT, parseJWT, type JWT } from "oslo/jwt";
-import { validateJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
@@ -54,22 +51,20 @@ export const forgetPassword = createAuthEndpoint(
 				},
 			);
 		}
-		const token = await createJWT(
-			"HS256",
-			Buffer.from(ctx.context.secret),
-			{
-				email: user.user.email,
-				redirectTo: redirectTo,
-			},
-			{
-				expiresIn: new TimeSpan(1, "h"),
-				issuer: "better-auth",
-				subject: "forget-password",
-				audiences: [user.user.email],
-				includeIssuedTimestamp: true,
-			},
+		const defaultExpiresIn = 60 * 60 * 1;
+		const expiresAt = new Date(
+			Date.now() +
+				1000 *
+					(ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+						defaultExpiresIn),
 		);
-		const url = `${ctx.context.baseURL}/reset-password/${token}`;
+		const verificationToken = ctx.context.uuid();
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: user.user.id,
+			identifier: `reset-password:${verificationToken}`,
+			expiresAt,
+		});
+		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			url,
 			user.user,
@@ -84,33 +79,32 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
+		query: z.object({
+			callbackURL: z.string(),
+		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { token } = ctx.params;
-		let decodedToken: JWT;
-		const schema = z.object({
-			email: z.string(),
-			redirectTo: z.string(),
-		});
-		try {
-			decodedToken = await validateJWT(
-				"HS256",
-				Buffer.from(ctx.context.secret),
-				token,
-			);
-			if (!decodedToken.expiresAt || decodedToken.expiresAt < new Date()) {
-				throw Error("Token expired");
-			}
-		} catch (e) {
-			const decoded = parseJWT(token);
-			const jwt = schema.safeParse(decoded?.payload);
-			if (jwt.success) {
-				throw ctx.redirect(`${jwt.data?.redirectTo}?error=invalid_token`);
-			} else {
-				throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_token`);
-			}
+		const callbackURL = ctx.query.callbackURL;
+		if (!token || !callbackURL) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid token",
+			});
 		}
-		const { redirectTo } = schema.parse(decodedToken.payload);
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(
+				`reset-password:${token}`,
+			);
+		if (!verification || verification.expiresAt < new Date()) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid token",
+			});
+		}
+		const redirectTo = callbackURL.startsWith("http")
+			? callbackURL
+			: `${ctx.context.options.baseURL}${callbackURL}`;
+
 		throw ctx.redirect(`${redirectTo}?token=${token}`);
 	},
 );
@@ -118,92 +112,60 @@ export const forgetPasswordCallback = createAuthEndpoint(
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		method: "POST",
 		query: z
 			.object({
-				currentURL: z.string(),
+				token: z.string(),
 			})
 			.optional(),
+		method: "POST",
 		body: z.object({
 			newPassword: z.string(),
-			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
-		const token = ctx.query?.currentURL.split("?token=")[1];
+		const token = ctx.query?.token;
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Token not found",
 			});
 		}
 		const { newPassword } = ctx.body;
-		try {
-			const jwt = await validateJWT(
-				"HS256",
-				Buffer.from(ctx.context.secret),
-				token,
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(
+				`reset-password:${token}`,
 			);
-			const email = z
-				.string()
-				.email()
-				.parse((jwt.payload as { email: string }).email);
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
-				return ctx.json(
-					{
-						error: "User not found",
-						data: null,
-					},
-					{
-						status: 400,
-						body: {
-							message: "failed to reset password",
-						},
-					},
-				);
-			}
-			if (
-				newPassword.length <
-					(ctx.context.options.emailAndPassword?.minPasswordLength || 8) ||
-				newPassword.length >
-					(ctx.context.options.emailAndPassword?.maxPasswordLength || 32)
-			) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Password is too short or too long",
-				});
-			}
-			const hashedPassword = await ctx.context.password.hash(newPassword);
-			const updatedUser = await ctx.context.internalAdapter.updatePassword(
-				user.user.id,
-				hashedPassword,
-			);
-			if (!updatedUser) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Failed to update password",
-				});
-			}
-			return ctx.json(
-				{
-					error: null,
-					data: {
-						status: true,
-						url: ctx.body.callbackURL,
-						redirect: !!ctx.body.callbackURL,
-					},
-				},
-				{
-					body: {
-						status: true,
-						url: ctx.body.callbackURL,
-						redirect: !!ctx.body.callbackURL,
-					},
-				},
-			);
-		} catch (e) {
-			ctx.context.logger.error("Failed to reset password", e);
+		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Failed to reset password",
+				message: "Invalid token",
 			});
 		}
+
+		const userId = verification.value;
+		const hashedPassword = await ctx.context.password.hash(newPassword);
+		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+		const account = accounts.find((ac) => ac.providerId === "credential");
+		if (!account) {
+			await ctx.context.internalAdapter.createAccount({
+				userId,
+				providerId: "credential",
+				password: hashedPassword,
+				accountId: ctx.context.uuid(),
+			});
+			return ctx.json({
+				status: true,
+			});
+		}
+		const updatedUser = await ctx.context.internalAdapter.updatePassword(
+			userId,
+			hashedPassword,
+		);
+		if (!updatedUser) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Failed to update password",
+			});
+		}
+		return ctx.json({
+			status: true,
+		});
 	},
 );

@@ -8,7 +8,7 @@ describe("forget password", async (it) => {
 		emailAndPassword: {
 			enabled: true,
 			async sendResetPassword(url, user) {
-				token = url.split("/").pop() || "";
+				token = url.split("?")[0].split("/").pop() || "";
 				await mockSendEmail();
 			},
 		},
@@ -29,10 +29,11 @@ describe("forget password", async (it) => {
 			},
 			{
 				query: {
-					currentURL: `http://localhost:3000/reset-password?token=${token}`,
+					token,
 				},
 			},
 		);
+
 		expect(res.data).toMatchObject({
 			status: true,
 		});

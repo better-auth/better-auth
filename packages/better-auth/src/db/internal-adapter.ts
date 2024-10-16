@@ -49,6 +49,22 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
+		createAccount: async <T>(
+			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
+				Partial<Account> &
+				Record<string, any>,
+		) => {
+			const createdAccount = await createWithHooks(
+				{
+					id: generateId(),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...account,
+				},
+				"account",
+			);
+			return createdAccount as T & Account;
+		},
 		listSessions: async (userId: string) => {
 			const sessions = await adapter.findMany<Session>({
 				model: tables.session.tableName,
