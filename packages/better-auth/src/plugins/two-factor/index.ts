@@ -76,9 +76,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						twoFactorEnabled: true,
 					});
 
-					const res = await ctx.context.adapter.create({
+					await ctx.context.adapter.create({
 						model: opts.twoFactorTable,
 						data: {
+							id: ctx.context.uuid(),
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
