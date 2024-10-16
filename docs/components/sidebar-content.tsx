@@ -661,11 +661,7 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-			{
-				title: "JWT",
-				icon: () => <Key className="w-4 h-4" />,
-				href: "/docs/plugins/jwt",
-			},
+
 			{
 				title: "Authorization",
 				group: true,
@@ -705,11 +701,43 @@ export const contents: Content[] = [
 				href: "/docs/plugins/1st-party-plugins",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
-
 			{
 				title: "Bearer",
 				icon: () => <Key className="w-4 h-4" />,
 				href: "/docs/plugins/bearer",
+			},
+			{
+				title: "JWT",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 256 257"
+					>
+						<path
+							className="fill-foreground opacity-70"
+							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
+						></path>
+						<path
+							className="fill-foreground opacity-70"
+							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
+						></path>
+						<path
+							className="fill-foreground opacity-70"
+							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
+						></path>
+						<path
+							className="fill-foreground"
+							d="M190.267 128.385L256 106.816l-11.811-36.461l-65.734 21.312l-19.257 26.447zm-124.534 0L0 149.697l11.811 36.461l65.734-21.311l19.257-26.448z"
+						></path>
+						<path
+							className="fill-foreground"
+							d="m77.545 164.847l-40.57 55.975l31.069 22.596l40.827-55.976v-32.61zm100.91-73.18l40.57-55.976l-31.069-22.596l-40.57 55.976v32.61z"
+						></path>
+					</svg>
+				),
+				href: "/docs/plugins/jwt",
 			},
 		],
 	},
