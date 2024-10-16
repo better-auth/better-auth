@@ -3,10 +3,6 @@ import { getBaseURL } from "../utils/base-url";
 import { base64url } from "oslo/encoding";
 import type { OAuth2Tokens } from "./types";
 
-export function getRedirectURI(providerId: string, redirectURI?: string) {
-	return redirectURI || `${getBaseURL()}/callback/${providerId}`;
-}
-
 export async function generateCodeChallenge(codeVerifier: string) {
 	const codeChallengeBytes = await sha256(
 		new TextEncoder().encode(codeVerifier),

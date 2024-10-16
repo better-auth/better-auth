@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import {
-	createAuthorizationURL,
-	getRedirectURI,
-	validateAuthorizationCode,
-} from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface FacebookProfile {
 	id: string;
@@ -25,7 +21,7 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		async createAuthorizationURL({ state, scopes }) {
+		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.scope || scopes || ["email", "public_profile"];
 			return await createAuthorizationURL({
 				id: "facebook",
@@ -33,13 +29,14 @@ export const facebook = (options: FacebookOptions) => {
 				authorizationEndpoint: "https://www.facebook.com/v21.0/dialog/oauth",
 				scopes: _scopes,
 				state,
+        redirectURI
 			});
 		},
-		validateAuthorizationCode: async (code, _, redirectURI) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI:
-					redirectURI || getRedirectURI("facebook", options.redirectURI),
+				codeVerifier,
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});

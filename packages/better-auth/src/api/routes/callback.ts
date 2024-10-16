@@ -79,18 +79,17 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-
 		const codeVerifier = await c.getSignedCookie(
 			c.context.authCookies.pkCodeVerifier.name,
 			c.context.secret,
 		);
 		let tokens: OAuth2Tokens;
 		try {
-			tokens = await provider.validateAuthorizationCode(
-				c.query.code,
+			tokens = await provider.validateAuthorizationCode({
+				code: c.query.code,
 				codeVerifier,
-				`${c.context.baseURL}/callback/${provider.id}`,
-			);
+				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			});
 		} catch (e) {
 			c.context.logger.error(e);
 			throw c.redirect(
