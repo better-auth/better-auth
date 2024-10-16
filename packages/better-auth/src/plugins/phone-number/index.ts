@@ -46,6 +46,15 @@ export const phoneNumber = (options?: {
 	 * by default any string is accepted
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean;
+	/**
+	 * Sign up user after phone number verification
+	 *
+	 * the user will be signed up with the temporary email
+	 * and the phone number will be updated after verification
+	 *
+	 * @default false
+	 */
+	signUpOnVerification?: boolean;
 }) => {
 	const opts = {
 		phoneNumber: "phoneNumber",
@@ -158,88 +167,88 @@ export const phoneNumber = (options?: {
 					});
 				},
 			),
-			signUpPhoneNumber: createAuthEndpoint(
-				"/sign-up/phone-number",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string().min(3).max(20),
-						name: z.string(),
-						email: z.string().email(),
-						password: z.string(),
-						image: z.string().optional(),
-					}),
-				},
-				async (ctx) => {
-					if (
-						options?.phoneNumberValidator &&
-						!options.phoneNumberValidator(ctx.body.phoneNumber)
-					) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid phone number",
-						});
-					}
+			// signUpPhoneNumber: createAuthEndpoint(
+			// 	"/sign-up/phone-number",
+			// 	{
+			// 		method: "POST",
+			// 		body: z.object({
+			// 			phoneNumber: z.string().min(3).max(20),
+			// 			name: z.string(),
+			// 			email: z.string().email(),
+			// 			password: z.string(),
+			// 			image: z.string().optional(),
+			// 		}),
+			// 	},
+			// 	async (ctx) => {
+			// 		if (
+			// 			options?.phoneNumberValidator &&
+			// 			!options.phoneNumberValidator(ctx.body.phoneNumber)
+			// 		) {
+			// 			throw new APIError("BAD_REQUEST", {
+			// 				message: "Invalid phone number",
+			// 			});
+			// 		}
 
-					const existing = await ctx.context.adapter.findOne<User>({
-						model: ctx.context.tables.user.tableName,
-						where: [
-							{
-								field: opts.phoneNumber,
-								value: ctx.body.phoneNumber,
-							},
-						],
-					});
-					if (existing) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Phone number already exists",
-						});
-					}
-					try {
-						const res = await signUpEmail()({
-							...ctx,
-							options: {
-								...ctx.context.options,
-							},
-							_flag: "json",
-						});
+			// 		const existing = await ctx.context.adapter.findOne<User>({
+			// 			model: ctx.context.tables.user.tableName,
+			// 			where: [
+			// 				{
+			// 					field: opts.phoneNumber,
+			// 					value: ctx.body.phoneNumber,
+			// 				},
+			// 			],
+			// 		});
+			// 		if (existing) {
+			// 			throw new APIError("BAD_REQUEST", {
+			// 				message: "Phone number already exists",
+			// 			});
+			// 		}
+			// 		try {
+			// 			const res = await signUpEmail()({
+			// 				...ctx,
+			// 				options: {
+			// 					...ctx.context.options,
+			// 				},
+			// 				_flag: "json",
+			// 			});
 
-						if (options?.otp?.sendOTPonSignUp) {
-							if (!options.otp.sendOTP) {
-								logger.warn("sendOTP not implemented");
-								throw new APIError("NOT_IMPLEMENTED", {
-									message: "sendOTP not implemented",
-								});
-							}
-							const code = generateOTP(options?.otp?.otpLength || 6);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: code,
-								identifier: ctx.body.phoneNumber,
-								expiresAt: getDate(opts.otp.expiresIn, "sec"),
-							});
-							await options.otp.sendOTP(ctx.body.phoneNumber, code);
-						}
+			// 			if (options?.otp?.sendOTPonSignUp) {
+			// 				if (!options.otp.sendOTP) {
+			// 					logger.warn("sendOTP not implemented");
+			// 					throw new APIError("NOT_IMPLEMENTED", {
+			// 						message: "sendOTP not implemented",
+			// 					});
+			// 				}
+			// 				const code = generateOTP(options?.otp?.otpLength || 6);
+			// 				await ctx.context.internalAdapter.createVerificationValue({
+			// 					value: code,
+			// 					identifier: ctx.body.phoneNumber,
+			// 					expiresAt: getDate(opts.otp.expiresIn, "sec"),
+			// 				});
+			// 				await options.otp.sendOTP(ctx.body.phoneNumber, code);
+			// 			}
 
-						const updated = await ctx.context.internalAdapter.updateUserByEmail(
-							res.user.email,
-							{
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-							},
-						);
+			// 			const updated = await ctx.context.internalAdapter.updateUserByEmail(
+			// 				res.user.email,
+			// 				{
+			// 					[opts.phoneNumber]: ctx.body.phoneNumber,
+			// 				},
+			// 			);
 
-						return ctx.json({
-							user: updated,
-							session: res.session,
-						});
-					} catch (e) {
-						if (e instanceof APIError) {
-							throw e;
-						}
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create user",
-						});
-					}
-				},
-			),
+			// 			return ctx.json({
+			// 				user: updated,
+			// 				session: res.session,
+			// 			});
+			// 		} catch (e) {
+			// 			if (e instanceof APIError) {
+			// 				throw e;
+			// 			}
+			// 			throw new APIError("INTERNAL_SERVER_ERROR", {
+			// 				message: "Failed to create user",
+			// 			});
+			// 		}
+			// 	},
+			// ),
 			sendVerificationCode: createAuthEndpoint(
 				"/phone-number/send-verification-code",
 				{
@@ -405,6 +414,7 @@ export const phoneNumber = (options?: {
 						type: "boolean",
 						required: false,
 						returned: true,
+						input: false,
 					},
 				},
 			},
