@@ -25,22 +25,29 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export interface TwitchOptions extends ProviderOptions {}
+export interface TwitchOptions extends ProviderOptions {
+	claims?: string[];
+}
 export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes }) {
-			const _scopes = options.scope || scopes || ["activity:write", "read"];
+			const _scopes = options.scope || scopes || ["user:read:email", "openid"];
 			return createAuthorizationURL({
 				id: "twitch",
 				options,
 				authorizationEndpoint: "https://id.twitch.tv/oauth2/authorize",
 				scopes: _scopes,
 				state,
+				claims: options.claims || [
+					"email",
+					"email_verified",
+					"preferred_username",
+				],
 			});
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async (code, _, redirectURI) => {
 			return validateAuthorizationCode({
 				code,
 				redirectURI:
