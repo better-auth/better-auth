@@ -90,11 +90,15 @@ export const phoneNumber = (options?: {
 						model: ctx.context.tables.account.tableName,
 						where: [
 							{
-								field: "userId",
+								field:
+									ctx.context.tables.account.fields.userId.fieldName ||
+									"userId",
 								value: user.id,
 							},
 							{
-								field: "providerId",
+								field:
+									ctx.context.tables.account.fields.providerId.fieldName ||
+									"providerId",
 								value: "credential",
 							},
 						],

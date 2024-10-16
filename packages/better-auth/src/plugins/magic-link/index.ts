@@ -2,10 +2,9 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import { createEmailVerificationToken } from "../../api/routes";
-import { validateJWT, type JWT } from "oslo/jwt";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../../api/middlewares/redirect";
+import { alphabet, generateRandomString } from "../../crypto";
 
 interface MagicLinkOptions {
 	/**
@@ -21,6 +20,24 @@ interface MagicLinkOptions {
 		url: string;
 		token: string;
 	}) => Promise<void> | void;
+	/**
+	 * Disable sign up if user is not found.
+	 *
+	 * @default false
+	 */
+	disableSignUp?: boolean;
+	/**
+	 * Rate limit configuration.
+	 *
+	 * @default {
+	 *  window: 60,
+	 *  max: 5,
+	 * }
+	 */
+	rateLimit?: {
+		window: number;
+		max: number;
+	};
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
@@ -35,32 +52,32 @@ export const magicLink = (options: MagicLinkOptions) => {
 					body: z.object({
 						email: z.string().email(),
 						callbackURL: z.string().optional(),
-						currentURL: z.string().optional(),
 					}),
 					use: [redirectURLMiddleware],
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						throw new APIError("UNAUTHORIZED", {
-							message: "User not found",
-						});
-					}
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						email,
+					const verificationToken = generateRandomString(
+						32,
+						alphabet("a-z", "A-Z"),
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: verificationToken,
+						value: email,
+						expiresAt: new Date(
+							Date.now() + (options.expiresIn || 60 * 5) * 1000,
+						),
+					});
 					const url = `${
 						ctx.context.baseURL
-					}/magic-link/verify?token=${token}&callbackURL=${
-						ctx.body.callbackURL || ctx.body.currentURL
+					}/magic-link/verify?token=${verificationToken}&callbackURL=${
+						ctx.body.callbackURL || "/"
 					}`;
 					try {
 						await options.sendMagicLink({
 							email,
 							url,
-							token,
+							token: verificationToken,
 						});
 					} catch (e) {
 						ctx.context.logger.error("Failed to send magic link", e);
@@ -85,48 +102,49 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { token, callbackURL } = ctx.query;
-					let jwt: JWT;
-					try {
-						jwt = await validateJWT(
-							"HS256",
-							Buffer.from(ctx.context.secret),
-							token,
-						);
-					} catch (e) {
-						ctx.context.logger.error("Failed to verify email", e);
-						if (callbackURL) {
-							throw ctx.redirect(`${callbackURL}?error=INVALID_TOKEN`);
-						}
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid token",
-						});
+					const toRedirectTo = callbackURL?.startsWith("http")
+						? callbackURL
+						: callbackURL
+							? `${ctx.context.options.baseURL}${callbackURL}`
+							: ctx.context.options.baseURL;
+					const tokenValue =
+						await ctx.context.internalAdapter.findVerificationValue(token);
+					if (!tokenValue) {
+						throw ctx.redirect(`${toRedirectTo}?error=INVALID_TOKEN`);
 					}
-					const schema = z.object({
-						email: z.string().email(),
-					});
-					const parsed = schema.parse(jwt.payload);
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						parsed.email,
+					if (tokenValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							tokenValue.id,
+						);
+						throw ctx.redirect(`${toRedirectTo}?error=EXPIRED_TOKEN`);
+					}
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						tokenValue.id,
 					);
+					const email = tokenValue.value;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					let userId: string = user?.user.id || "";
+
 					if (!user) {
-						if (callbackURL) {
-							throw ctx.redirect(`${callbackURL}?error=USER_NOT_FOUND`);
+						if (!options.disableSignUp) {
+							const newUser = await ctx.context.internalAdapter.createUser({
+								email: email,
+								name: email,
+							});
+							userId = newUser.id;
+							if (!userId) {
+								throw ctx.redirect(`${toRedirectTo}?error=USER_NOT_CREATED`);
+							}
+						} else {
+							throw ctx.redirect(`${toRedirectTo}?error=USER_NOT_FOUND`);
 						}
-						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
-						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
-						user.user.id,
+						userId,
 						ctx.headers,
 					);
 					if (!session) {
-						if (callbackURL) {
-							throw ctx.redirect(`${callbackURL}?error=SESSION_NOT_CREATED`);
-						}
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Unable to create session",
-						});
+						throw ctx.redirect(`${toRedirectTo}?error=SESSION_NOT_CREATED`);
 					}
 					await setSessionCookie(ctx, session.id);
 					if (!callbackURL) {
@@ -138,5 +156,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 			),
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return (
+						path.startsWith("/sign-in/magic-link") ||
+						path.startsWith("/magic-link/verify")
+					);
+				},
+				window: options.rateLimit?.window || 60,
+				max: options.rateLimit?.max || 5,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };

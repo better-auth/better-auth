@@ -32,8 +32,23 @@ describe("Email Verification", async () => {
 				token,
 			},
 		});
-		expect(res.data).toMatchObject({
-			status: true,
-		});
+		expect(res.data?.status).toBe(true);
+	});
+
+	it("should redirect to callback", async () => {
+		await client.verifyEmail(
+			{
+				query: {
+					token,
+					callbackURL: "/callback",
+				},
+			},
+			{
+				onError: (ctx) => {
+					const location = ctx.response.headers.get("location");
+					expect(location).toBe("/callback");
+				},
+			},
+		);
 	});
 });

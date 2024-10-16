@@ -134,7 +134,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				{
 					user: createdUser,
 					session,
-					error: null,
 				},
 				{
 					body: body.callbackURL

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
 import { createAuthClient } from "../../client";
@@ -10,16 +10,15 @@ describe("magic link", async () => {
 		token: "",
 		url: "",
 	};
-	const { auth, customFetchImpl, testUser, sessionSetter } =
-		await getTestInstance({
-			plugins: [
-				magicLink({
-					async sendMagicLink(data) {
-						verificationEmail = data;
-					},
-				}),
-			],
-		});
+	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+	});
 
 	const client = createAuthClient({
 		plugins: [magicLinkClient()],
@@ -55,5 +54,46 @@ describe("magic link", async () => {
 		});
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+	});
+
+	it("shouldn't verify magic link with the same token", async () => {
+		await client.magicLink.verify(
+			{
+				query: {
+					token: new URL(verificationEmail.url).searchParams.get("token") || "",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=INVALID_TOKEN");
+				},
+			},
+		);
+	});
+
+	it("shouldn't verify magic link with an expired token", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token = verificationEmail.token;
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+					callbackURL: "/callback",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=EXPIRED_TOKEN");
+				},
+			},
+		);
 	});
 });

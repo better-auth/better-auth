@@ -22,6 +22,7 @@ import { createLogger, logger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import { BetterAuthError } from "./error";
 import type { OAuthProvider } from "./oauth2";
+import { generateId } from "./utils";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -104,6 +105,7 @@ export const init = async (options: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		db,
+		uuid: generateId,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -147,6 +149,7 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
+	uuid: (size?: number) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;

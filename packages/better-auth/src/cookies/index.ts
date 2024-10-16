@@ -8,7 +8,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL?.startsWith("https://") ||
+			: (options.baseURL ? options.baseURL.startsWith("https://") : false) ||
 				process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
