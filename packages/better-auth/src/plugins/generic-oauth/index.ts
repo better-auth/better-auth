@@ -302,8 +302,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					const state = ctx.query.state;
 					const {
-						data: { callbackURL, currentURL, code },
+						data: { callbackURL, currentURL },
 					} = parsedState;
+					const code = ctx.query.code;
 					const errorURL =
 						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
 					const storedState = await ctx.getSignedCookie(
