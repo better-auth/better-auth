@@ -118,7 +118,7 @@ await authClient.signIn.email({
 
 By default, if a user has 2FA enabled, they will be redirected to the `twoFactorPage`. If you want to manage the 2FA verification directly within your application instead, simply pass `redirect:false` to the client plugin and handle the verification in the callback.
 
-```ts title="sing-in.ts"
+```ts title="sign-in.ts"
 import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 

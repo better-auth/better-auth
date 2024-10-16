@@ -65,6 +65,11 @@ List of all the available options for configuring Better Auth.
       description: "Send reset password token to user's email.",
       type: '(token: string, user: User) => Promise<void>',
     },
+    resetPasswordTokenExpiresIn: {
+        description: "Expiration time for the reset password token. The value should be in seconds.",
+        type: 'number',
+        default: 60 * 60 * 1 // 1 hour
+    },
     sendVerificationEmail: {
       description: "Send verification email to user's email. It takes email and data that contains `url` and `token` props.",
       type: `(email: string, data: Data) => Promise<void>`

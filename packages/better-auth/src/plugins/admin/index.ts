@@ -171,7 +171,7 @@ export const admin = (options?: AdminOptions) => {
 						email: z.string(),
 						password: z.string(),
 						name: z.string(),
-						role: z.enum(["user", "admin"]),
+						role: z.string(),
 						/**
 						 * extra fields for user
 						 */

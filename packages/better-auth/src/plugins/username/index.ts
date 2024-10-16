@@ -122,15 +122,7 @@ export const username = () => {
 						...ctx,
 						_flag: "json",
 					});
-					if (res.error) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: res.error,
-								status: 400,
-							},
-						});
-					}
+
 					const updated = await ctx.context.internalAdapter.updateUserByEmail(
 						res.user?.email,
 						{
