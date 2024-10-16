@@ -2,11 +2,7 @@ import { parseJWT } from "oslo/jwt";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { BetterAuthError } from "../error";
 import { logger } from "../utils/logger";
-import {
-	createAuthorizationURL,
-	getRedirectURI,
-	validateAuthorizationCode,
-} from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface GoogleProfile {
 	aud: string;
@@ -52,6 +48,7 @@ export const google = (options: GoogleOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
 			const _scopes = options.scope || scopes || ["email", "profile"];
+
 			const url = createAuthorizationURL({
 				id: "google",
 				options,
@@ -59,15 +56,15 @@ export const google = (options: GoogleOptions) => {
 				scopes: _scopes,
 				state,
 				codeVerifier,
+				redirectURI,
 			});
 			return url;
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI:
-					redirectURI || getRedirectURI("google", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});

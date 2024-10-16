@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import {
-	createAuthorizationURL,
-	getRedirectURI,
-	validateAuthorizationCode,
-} from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface GithubProfile {
 	login: string;
@@ -61,7 +57,7 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "Github",
-		createAuthorizationURL({ state, scopes, codeVerifier }) {
+		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.scope || scopes || ["user:email"];
 			return createAuthorizationURL({
 				id: "github",
@@ -69,13 +65,14 @@ export const github = (options: GithubOptions) => {
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
 				scopes: _scopes,
 				state,
+				redirectURI,
 				codeVerifier,
 			});
 		},
-		validateAuthorizationCode: async (code, _, redirect) => {
+		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || getRedirectURI("google", redirect),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
 			});

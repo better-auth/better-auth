@@ -227,15 +227,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						options: {
 							clientId,
 							clientSecret,
-							redirectURI:
-								redirectURI ||
-								`${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.raw,
 						codeVerifier: codeVerifier,
 						scopes: scopes || [],
 						disablePkce: !pkce,
+						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
 					if (responseType && responseType !== "code") {
