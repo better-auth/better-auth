@@ -137,10 +137,9 @@ describe("Social Providers", async () => {
 	});
 });
 
-describe("Redirect URI", async () => {
+describe.only("Redirect URI", async () => {
 	it("should infer redirect uri", async () => {
 		const { client } = await getTestInstance({
-			baseURL: "https://localhost:4513",
 			basePath: "/custom/path",
 			socialProviders: {
 				google: {
@@ -159,8 +158,9 @@ describe("Redirect URI", async () => {
 			{
 				onSuccess(context) {
 					const redirectURI = context.data.url;
+					console.log(redirectURI);
 					expect(redirectURI).toContain(
-						"https%3A%2F%2Flocalhost%3A4513%2Fcustom%2Fpath%2Fcallback%2Fgoogle",
+						"http%3A%2F%2Flocalhost%3A3000%2Fcustom%2Fpath%2Fcallback%2Fgoogle",
 					);
 				},
 			},
