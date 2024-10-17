@@ -10,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { compareHash } from "../../crypto/hash";
+import { createEmailVerificationToken } from "./verify-email";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -172,17 +173,44 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				await c.context.internalAdapter.createOAuthUser(data.data, {
-					...getAccountTokens(tokens),
-					id: `${provider.id}:${user.id}`,
-					providerId: provider.id,
-					accountId: user.id.toString(),
-					userId: id,
-				});
+				const trustedProviders =
+					c.context.options.account?.accountLinking?.trustedProviders;
+				const isTrustedProvider = trustedProviders
+					? trustedProviders.includes(provider.id as "apple")
+					: true;
+				const emailVerified = user.emailVerified || isTrustedProvider;
+				const created = await c.context.internalAdapter.createOAuthUser(
+					{
+						...data.data,
+						emailVerified,
+					},
+					{
+						...getAccountTokens(tokens),
+						id: `${provider.id}:${user.id}`,
+						providerId: provider.id,
+						accountId: user.id.toString(),
+						userId: id,
+					},
+				);
+				if (
+					!emailVerified &&
+					created &&
+					c.context.options.emailVerification?.sendOnSignUp
+				) {
+					const token = await createEmailVerificationToken(
+						c.context.secret,
+						user.email,
+					);
+					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+					await c.context.options.emailVerification?.sendVerificationEmail?.(
+						created.user,
+						url,
+						token,
+					);
+				}
 			} catch (e) {
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "unable_to_create_user");
-				c.setHeader("Location", url.toString());
 				throw c.redirect(url.toString());
 			}
 		}
