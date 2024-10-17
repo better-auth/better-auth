@@ -22,8 +22,7 @@ describe("init", async () => {
 		});
 		expect(res.options.baseURL).toBe("http://localhost:3000");
 		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
-	
-	})
+	});
 
 	it("should respect base path", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
@@ -32,22 +31,22 @@ describe("init", async () => {
 			basePath: "/custom-path",
 		});
 		expect(res.baseURL).toBe("http://localhost:3000/custom-path");
-	})
+	});
 
 	it("should work with base path", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
-		const {client} = await getTestInstance({
+		const { client } = await getTestInstance({
 			basePath: "/custom-path",
-		})
+		});
 
 		await client.$fetch("/ok", {
 			onSuccess: (ctx) => {
 				expect(ctx.data).toMatchObject({
-					ok: true
-				})
-			}
+					ok: true,
+				});
+			},
 		});
-	})
+	});
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";

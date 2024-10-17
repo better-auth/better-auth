@@ -19,7 +19,7 @@ export const getCSRFToken = createAuthEndpoint(
 			const [token, _] = csrfCookie.split("!") || [null, null];
 			return ctx.json({
 				csrfToken: token,
-			})
+			});
 		}
 
 		const token = generateRandomString(32, alphabet("a-z", "0-9", "A-Z"));
@@ -33,6 +33,6 @@ export const getCSRFToken = createAuthEndpoint(
 		);
 		return ctx.json({
 			csrfToken: token,
-		})
+		});
 	},
 );
