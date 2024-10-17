@@ -43,6 +43,7 @@ export const twitch = (options: TwitchOptions) => {
 					"email",
 					"email_verified",
 					"preferred_username",
+					"picture",
 				],
 			});
 		},
