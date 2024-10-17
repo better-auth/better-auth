@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { init } from "./init";
 import Database from "better-sqlite3";
 import { betterAuth } from "./auth";
@@ -7,6 +7,9 @@ import { getTestInstance } from "./test-utils/test-instance";
 
 describe("init", async () => {
 	const database = new Database(":memory:");
+
+
+
 	it("should match config", async () => {
 		const res = await init({
 			baseURL: "http://localhost:3000",
@@ -16,27 +19,25 @@ describe("init", async () => {
 	});
 
 	it("should infer BASE_URL from env", async () => {
-		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
+		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5147");
 		const res = await init({
 			database,
 		});
-		expect(res.options.baseURL).toBe("http://localhost:3000");
-		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
-		vi.restoreAllMocks();
+		expect(res.options.baseURL).toBe("http://localhost:5147");
+		expect(res.baseURL).toBe("http://localhost:5147/api/auth");
+		vi.unstubAllEnvs()
 	});
 
 	it("should respect base path", async () => {
-		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
 		const res = await init({
 			database,
 			basePath: "/custom-path",
+			baseURL: "http://localhost:5147",
 		});
-		expect(res.baseURL).toBe("http://localhost:3000/custom-path");
-		vi.restoreAllMocks();
+		expect(res.baseURL).toBe("http://localhost:5147/custom-path");
 	});
 
 	it("should work with base path", async () => {
-		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
 		const { client } = await getTestInstance({
 			basePath: "/custom-path",
 		});
