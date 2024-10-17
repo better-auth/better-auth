@@ -2,10 +2,9 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../db/schema";
-import { signUpEmail } from "../../api/routes/sign-up";
+import type { User } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto/random";
-import { getSessionFromCtx, sessionMiddleware } from "../../api";
+import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { logger } from "../../utils/logger";
 import { setSessionCookie } from "../../cookies";
@@ -20,228 +19,76 @@ function generateOTP(size: number) {
 }
 
 export const phoneNumber = (options?: {
-	otp?: {
-		/**
-		 * Length of the OTP code
-		 * @default 6
-		 */
-		otpLength?: number;
-		sendOTP?: (phoneNumber: string, code: string) => Promise<void> | void;
-		verifyOTP?: (
-			phoneNumber: string,
-			code: string,
-		) => Promise<boolean> | boolean;
-		sendOTPonSignUp?: boolean;
-		sendOTPonUpdate?: boolean;
-		/**
-		 * Expiry time of the OTP code in seconds
-		 * @default 300
-		 */
-		expiresIn?: number;
-	};
-	enableAutoSignIn?: boolean;
+	/**
+	 * Length of the OTP code
+	 * @default 6
+	 */
+	otpLength?: number;
+	/**
+	 * Send OTP code to the user
+	 *
+	 * @param phoneNumber
+	 * @param code
+	 * @returns
+	 */
+	sendOTP: (phoneNumber: string, code: string) => Promise<void> | void;
+	/**
+	 * custom function to verify the OTP code
+	 */
+	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean> | boolean;
+	/**
+	 * Expiry time of the OTP code in seconds
+	 * @default 300
+	 */
+	expiresIn?: number;
 	/**
 	 * Function to validate phone number
 	 *
 	 * by default any string is accepted
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean;
+	/**
+	 * Sign up user after phone number verification
+	 *
+	 * the user will be signed up with the temporary email
+	 * and the phone number will be updated after verification
+	 */
+	signUpOnVerification?: {
+		/**
+		 * When a user signs up, a temporary email will be need to be created
+		 * to sign up the user. This function should return a temporary email
+		 * for the user given the phone number
+		 *
+		 * @param phoneNumber
+		 * @returns string (temporary email)
+		 */
+		getTempEmail: (phoneNumber: string) => string;
+		/**
+		 * When a user signs up, a temporary name will be need to be created
+		 * to sign up the user. This function should return a temporary name
+		 * for the user given the phone number
+		 *
+		 * @param phoneNumber
+		 * @returns string (temporary name)
+		 *
+		 * @default phoneNumber - the phone number will be used as the name
+		 */
+		getTempName?: (phoneNumber: string) => string;
+	};
 }) => {
 	const opts = {
 		phoneNumber: "phoneNumber",
 		phoneNumberVerified: "phoneNumberVerified",
-		otp: {
-			code: "code",
-			phoneNumber: "phoneNumber",
-			createdAt: "createdAt",
-			expiresIn: options?.otp?.expiresIn || 300,
-		},
+		code: "code",
+		createdAt: "createdAt",
+		expiresIn: options?.expiresIn || 300,
+		otpLength: options?.otpLength || 6,
 	};
 	return {
 		id: "phone-number",
 		endpoints: {
-			signInPhoneNumber: createAuthEndpoint(
-				"/sign-in/phone-number",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string(),
-						password: z.string(),
-						dontRememberMe: z.boolean().optional(),
-					}),
-				},
-				async (ctx) => {
-					const user = await ctx.context.adapter.findOne<User>({
-						model: "user",
-						where: [
-							{
-								field: opts.phoneNumber,
-								value: ctx.body.phoneNumber,
-							},
-						],
-					});
-					if (!user) {
-						await ctx.context.password.hash(ctx.body.password);
-						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
-						});
-					}
-					const account = await ctx.context.adapter.findOne<Account>({
-						model: ctx.context.tables.account.tableName,
-						where: [
-							{
-								field:
-									ctx.context.tables.account.fields.userId.fieldName ||
-									"userId",
-								value: user.id,
-							},
-							{
-								field:
-									ctx.context.tables.account.fields.providerId.fieldName ||
-									"providerId",
-								value: "credential",
-							},
-						],
-					});
-					if (!account) {
-						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
-						});
-					}
-					const currentPassword = account?.password;
-					if (!currentPassword) {
-						ctx.context.logger.warn(
-							"Unexpectedly password is missing for the user",
-							user,
-						);
-						throw new APIError("UNAUTHORIZED", {
-							message: "Unexpected error",
-						});
-					}
-					const validPassword = await ctx.context.password.verify(
-						currentPassword,
-						ctx.body.password,
-					);
-					if (!validPassword) {
-						ctx.context.logger.error("Invalid password");
-						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
-						});
-					}
-					const session = await ctx.context.internalAdapter.createSession(
-						user.id,
-						ctx.request,
-					);
-					if (!session) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: "Failed to create session",
-								status: 500,
-							},
-						});
-					}
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						session.id,
-						ctx.context.secret,
-						ctx.body.dontRememberMe
-							? {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: undefined,
-								}
-							: ctx.context.authCookies.sessionToken.options,
-					);
-					return ctx.json({
-						user: user,
-						session,
-					});
-				},
-			),
-			signUpPhoneNumber: createAuthEndpoint(
-				"/sign-up/phone-number",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string().min(3).max(20),
-						name: z.string(),
-						email: z.string().email(),
-						password: z.string(),
-						image: z.string().optional(),
-					}),
-				},
-				async (ctx) => {
-					if (
-						options?.phoneNumberValidator &&
-						!options.phoneNumberValidator(ctx.body.phoneNumber)
-					) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid phone number",
-						});
-					}
-
-					const existing = await ctx.context.adapter.findOne<User>({
-						model: ctx.context.tables.user.tableName,
-						where: [
-							{
-								field: opts.phoneNumber,
-								value: ctx.body.phoneNumber,
-							},
-						],
-					});
-					if (existing) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Phone number already exists",
-						});
-					}
-					try {
-						const res = await signUpEmail()({
-							...ctx,
-							options: {
-								...ctx.context.options,
-							},
-							_flag: "json",
-						});
-
-						if (options?.otp?.sendOTPonSignUp) {
-							if (!options.otp.sendOTP) {
-								logger.warn("sendOTP not implemented");
-								throw new APIError("NOT_IMPLEMENTED", {
-									message: "sendOTP not implemented",
-								});
-							}
-							const code = generateOTP(options?.otp?.otpLength || 6);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: code,
-								identifier: ctx.body.phoneNumber,
-								expiresAt: getDate(opts.otp.expiresIn, "sec"),
-							});
-							await options.otp.sendOTP(ctx.body.phoneNumber, code);
-						}
-
-						const updated = await ctx.context.internalAdapter.updateUserByEmail(
-							res.user.email,
-							{
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-							},
-						);
-
-						return ctx.json({
-							user: updated,
-							session: res.session,
-						});
-					} catch (e) {
-						if (e instanceof APIError) {
-							throw e;
-						}
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create user",
-						});
-					}
-				},
-			),
-			sendVerificationCode: createAuthEndpoint(
-				"/phone-number/send-verification-code",
+			sendPhoneNumberOTP: createAuthEndpoint(
+				"/phone-number/send-otp",
 				{
 					method: "POST",
 					body: z.object({
@@ -249,21 +96,19 @@ export const phoneNumber = (options?: {
 					}),
 				},
 				async (ctx) => {
-					if (!options?.otp?.sendOTP) {
+					if (!options?.sendOTP) {
 						logger.warn("sendOTP not implemented");
 						throw new APIError("NOT_IMPLEMENTED", {
 							message: "sendOTP not implemented",
 						});
 					}
-					const code = generateOTP(options?.otp?.otpLength || 6);
-
+					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: code,
 						identifier: ctx.body.phoneNumber,
-						expiresAt: getDate(opts.otp.expiresIn, "sec"),
+						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-
-					await options.otp.sendOTP(ctx.body.phoneNumber, code);
+					await options.sendOTP(ctx.body.phoneNumber, code);
 					return ctx.json(
 						{ code },
 						{
@@ -279,8 +124,25 @@ export const phoneNumber = (options?: {
 				{
 					method: "POST",
 					body: z.object({
+						/**
+						 * Phone number
+						 */
 						phoneNumber: z.string(),
+						/**
+						 * OTP code
+						 */
 						code: z.string(),
+						/**
+						 * Disable session creation after verification
+						 * @default false
+						 */
+						disableSession: z.boolean().optional(),
+						/**
+						 * This checks if there is a session already
+						 * and updates the phone number with the provided
+						 * phone number
+						 */
+						updatePhoneNumber: z.boolean().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -305,7 +167,28 @@ export const phoneNumber = (options?: {
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
-					const user = await ctx.context.adapter.findOne<User>({
+
+					if (ctx.body.updatePhoneNumber) {
+						const session = await getSessionFromCtx(ctx);
+						if (!session) {
+							throw new APIError("UNAUTHORIZED", {
+								message: "Session not found",
+							});
+						}
+						const user = await ctx.context.internalAdapter.updateUser(
+							session.user.id,
+							{
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+						);
+						return ctx.json({
+							user: user as UserWithPhoneNumber,
+							session: session.session,
+						});
+					}
+
+					let user = await ctx.context.adapter.findOne<User>({
 						model: ctx.context.tables.user.tableName,
 						where: [
 							{
@@ -315,9 +198,23 @@ export const phoneNumber = (options?: {
 						],
 					});
 					if (!user) {
-						throw new APIError("NOT_FOUND", {
-							message: "User with phone number not found",
-						});
+						if (options?.signUpOnVerification) {
+							user = await ctx.context.internalAdapter.createUser({
+								email: `temp-${ctx.body.phoneNumber}`,
+								name: ctx.body.phoneNumber,
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							});
+							if (!user) {
+								throw new APIError("INTERNAL_SERVER_ERROR", {
+									message: "Failed to create user",
+								});
+							}
+						} else {
+							throw new APIError("BAD_REQUEST", {
+								message: "Phone number not found",
+							});
+						}
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
@@ -325,69 +222,27 @@ export const phoneNumber = (options?: {
 							[opts.phoneNumberVerified]: true,
 						},
 					);
-					if (options?.enableAutoSignIn) {
-						const session = await getSessionFromCtx(ctx);
+
+					if (!ctx.body.disableSession) {
+						const session = await ctx.context.internalAdapter.createSession(
+							user.id,
+							ctx.request,
+						);
 						if (!session) {
-							const session = await ctx.context.internalAdapter.createSession(
-								user.id,
-								ctx.request,
-							);
-							if (!session) {
-								throw new APIError("INTERNAL_SERVER_ERROR", {
-									message: "Failed to create session",
-								});
-							}
-							await setSessionCookie(ctx, session.id);
-							return ctx.json({
-								user: updatedUser as UserWithPhoneNumber,
-								session,
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: "Failed to create session",
 							});
 						}
+						await setSessionCookie(ctx, session.id);
+						return ctx.json({
+							user: updatedUser as UserWithPhoneNumber,
+							session,
+						});
 					}
 
 					return ctx.json({
 						user: updatedUser as UserWithPhoneNumber,
 						session: null,
-					});
-				},
-			),
-			updatePhoneNumber: createAuthEndpoint(
-				"/phone-number/update",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string(),
-					}),
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					if (options?.otp?.sendOTPonUpdate) {
-						if (!options.otp.sendOTP) {
-							logger.warn("sendOTP not implemented");
-							throw new APIError("NOT_IMPLEMENTED", {
-								message: "sendOTP not implemented",
-							});
-						}
-						const code = generateOTP(options?.otp?.otpLength || 6);
-						await ctx.context.adapter.create({
-							model: ctx.context.tables.verification.tableName,
-							data: {
-								code,
-								phoneNumber: ctx.body.phoneNumber,
-								createdAt: getDate(opts.otp.expiresIn, "sec"),
-							},
-						});
-						await options.otp.sendOTP(ctx.body.phoneNumber, code);
-					}
-					const user = await ctx.context.internalAdapter.updateUser(
-						ctx.context.session.user.id,
-						{
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: false,
-						},
-					);
-					return ctx.json({
-						user: user as UserWithPhoneNumber,
 					});
 				},
 			),
@@ -405,6 +260,7 @@ export const phoneNumber = (options?: {
 						type: "boolean",
 						required: false,
 						returned: true,
+						input: false,
 					},
 				},
 			},
