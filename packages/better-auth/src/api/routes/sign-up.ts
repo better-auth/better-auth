@@ -104,16 +104,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				password: hash,
 				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
-			const session = await ctx.context.internalAdapter.createSession(
-				createdUser.id,
-				ctx.request,
-			);
-			if (!session) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Failed to create session",
-				});
-			}
-			await setSessionCookie(ctx, session.id);
 			if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
@@ -130,6 +120,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					token,
 				);
 			}
+			const session = await ctx.context.internalAdapter.createSession(
+				createdUser.id,
+				ctx.request,
+			);
+			if (!session) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Failed to create session",
+				});
+			}
+			await setSessionCookie(ctx, session.id);
 			return ctx.json(
 				{
 					user: createdUser,

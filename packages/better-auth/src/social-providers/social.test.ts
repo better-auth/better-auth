@@ -158,7 +158,6 @@ describe("Redirect URI", async () => {
 			{
 				onSuccess(context) {
 					const redirectURI = context.data.url;
-
 					expect(redirectURI).toContain(
 						"http%3A%2F%2Flocalhost%3A3000%2Fcustom%2Fpath%2Fcallback%2Fgoogle",
 					);
