@@ -22,6 +22,7 @@ describe("init", async () => {
 		});
 		expect(res.options.baseURL).toBe("http://localhost:3000");
 		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
+		vi.restoreAllMocks();
 	});
 
 	it("should respect base path", async () => {
@@ -31,6 +32,7 @@ describe("init", async () => {
 			basePath: "/custom-path",
 		});
 		expect(res.baseURL).toBe("http://localhost:3000/custom-path");
+		vi.restoreAllMocks();
 	});
 
 	it("should work with base path", async () => {
