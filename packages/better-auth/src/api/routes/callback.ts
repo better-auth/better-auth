@@ -203,8 +203,8 @@ export const callbackOAuth = createAuthEndpoint(
 					);
 					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 					await c.context.options.emailVerification?.sendVerificationEmail?.(
-						url,
 						created.user,
+						url,
 						token,
 					);
 				}

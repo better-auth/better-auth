@@ -9,7 +9,7 @@ describe("Email Verification", async () => {
 			enabled: true,
 		},
 		emailVerification: {
-			async sendVerificationEmail(url, user, _token) {
+			async sendVerificationEmail(user, url, _token) {
 				token = _token;
 				mockSendEmail(user.email, url);
 			},

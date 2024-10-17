@@ -93,14 +93,15 @@ export interface BetterAuthOptions {
 	 */
 	emailVerification?: {
 		/**
-		 * @param user the user to send the verification email to
+		 * @param user the user to send the
+		 * verification email to
 		 * @param url the url to send the verification email to
 		 * it contains the token as well
 		 * @param token the token to send the verification email to
 		 */
 		sendVerificationEmail?: (
-			url: string,
 			user: User,
+			url: string,
 			token: string,
 		) => Promise<void>;
 		/**
@@ -109,7 +110,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default false
 		 */
-		sendEmailVerificationOnSignUp?: boolean;
+		sendOnSignUp?: boolean;
 	};
 	/**
 	 * Email and password authentication
@@ -134,9 +135,9 @@ export interface BetterAuthOptions {
 		 */
 		minPasswordLength?: number;
 		/**
-		 * send reset password email
+		 * send reset password
 		 */
-		sendResetPassword?: (url: string, user: User) => Promise<void>;
+		sendResetPassword?: (user: User, url: string) => Promise<void>;
 		/**
 		 * Number of seconds the reset password token is valid for.
 		 * @default 1 hour

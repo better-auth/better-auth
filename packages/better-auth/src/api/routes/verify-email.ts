@@ -64,8 +64,8 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
-			url,
 			user.user,
+			url,
 			token,
 		);
 		return ctx.json({
