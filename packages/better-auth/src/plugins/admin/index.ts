@@ -225,6 +225,12 @@ export const admin = (options?: AdminOptions) => {
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
+						where: z.array(z.object({
+							field: z.string(),
+							value: z.string().or(z.number()).or(z.boolean()),
+							operator: z.enum(["eq", "ne", "gt", "lt", "gte", "lte"]),
+							connector: z.enum(["AND", "OR"]).optional()
+						})).optional()
 					}),
 				},
 				async (ctx) => {
@@ -237,6 +243,8 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
+						ctx.query?.where
+						
 					);
 					return ctx.json({
 						users: users as UserWithRole[],
