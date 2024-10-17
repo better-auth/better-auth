@@ -129,6 +129,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						if (!options.disableSignUp) {
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
+								emailVerified: true,
 								name: email,
 							});
 							userId = newUser.id;
