@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useSession, signOut } from "~/lib/auth-client";
-const session = useSession();
-const router = useRouter();
+const { data: session, isPending, error } = await useSession(useFetch);
 </script>
 
 
@@ -16,15 +15,15 @@ const router = useRouter();
             <CardContent>
                 <div class="flex gap-2 items-center">
                     <Avatar>
-                        <AvatarImage :src="session.data?.user.image || ''" alt="User profile" />
-                        <AvatarFallback>{{ session.data?.user.name[0] }}</AvatarFallback>
+                        <AvatarImage :src="session?.user.image || ''" alt="User profile" />
+                        <AvatarFallback>{{ session?.user.name[0] }}</AvatarFallback>
                     </Avatar>
                     <div>
                         <p class="text-sm">
-                            {{ session.data?.user?.name }}
+                            {{ session?.user?.name }}
                         </p>
                         <p class="text-xs">
-                            {{ session.data?.user?.email }}
+                            {{ session?.user?.email }}
                         </p>
                     </div>
                 </div>
@@ -32,7 +31,7 @@ const router = useRouter();
             <CardFooter>
                 <Button @click="async () => {
                     await signOut()
-                    router.push('/')
+                    // router.push('/')
                 }" variant="secondary">
                     Sing Out
                 </Button>

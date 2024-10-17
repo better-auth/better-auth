@@ -53,9 +53,43 @@ export function createAuthClient<Option extends ClientOptions>(
 	}
 	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
 
-	function useSession() {
+	type Session = ReturnType<typeof $session.get>["data"];
+
+	function useStoreSession() {
 		return useStore($session);
 	}
+
+	function useSession(): ReturnType<typeof useStoreSession>;
+	function useSession<F extends (...args: any) => any>(
+		useFetch: F,
+	): Promise<{
+		data: Ref<Session>;
+		isPending: Ref<boolean>;
+		error: Ref<{
+			message?: string;
+			status: number;
+			statusText: string;
+		}>;
+	}>;
+	function useSession<UseFetch extends <T>(...args: any) => any>(
+		useFetch?: UseFetch,
+	) {
+		if (useFetch) {
+			const ref = useStore(_sessionSignal);
+			const session = useFetch("/api/auth/session", {
+				ref,
+			}).then((res: any) => {
+				return {
+					data: res.data,
+					isPending: res.isPending,
+					error: res.error,
+				};
+			});
+			return session;
+		}
+		return useStoreSession();
+	}
+
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
