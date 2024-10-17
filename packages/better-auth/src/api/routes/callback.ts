@@ -173,12 +173,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				const trustedProviders =
-					c.context.options.account?.accountLinking?.trustedProviders;
-				const isTrustedProvider = trustedProviders
-					? trustedProviders.includes(provider.id as "apple")
-					: true;
-				const emailVerified = user.emailVerified || isTrustedProvider;
+				const emailVerified = user.emailVerified;
 				const created = await c.context.internalAdapter.createOAuthUser(
 					{
 						...data.data,
