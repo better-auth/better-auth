@@ -64,20 +64,29 @@ describe("phone-number", async (it) => {
 	});
 
 	it("should update phone number", async () => {
-		const newPhoneNumber = "+25120201212";
-		await client.phoneNumber.update({
+		const newPhoneNumber = "+0123456789";
+		await client.phoneNumber.sendOtp({
 			phoneNumber: newPhoneNumber,
 			fetchOptions: {
 				headers,
 			},
 		});
+		const res = await client.phoneNumber.verify({
+			phoneNumber: newPhoneNumber,
+			updatePhoneNumber: true,
+			code: otp,
+			fetchOptions: {
+				headers,
+			},
+		});
+		console.log(res);
 		const user = await client.session({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
-		expect(user.data?.user.phoneNumberVerified).toBe(false);
+		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
 	it("should not verify if code expired", async () => {

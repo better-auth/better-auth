@@ -2,9 +2,9 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../db/schema";
+import type { User } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto/random";
-import { getSessionFromCtx, sessionMiddleware } from "../../api";
+import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { logger } from "../../utils/logger";
 import { setSessionCookie } from "../../cookies";
@@ -36,10 +36,6 @@ export const phoneNumber = (options?: {
 	 * custom function to verify the OTP code
 	 */
 	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean> | boolean;
-	/**
-	 * Send OTP code to the user when updating phone number
-	 */
-	sendOTPonUpdate?: boolean;
 	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
@@ -141,6 +137,12 @@ export const phoneNumber = (options?: {
 						 * @default false
 						 */
 						disableSession: z.boolean().optional(),
+						/**
+						 * This checks if there is a session already
+						 * and updates the phone number with the provided
+						 * phone number
+						 */
+						updatePhoneNumber: z.boolean().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -165,6 +167,27 @@ export const phoneNumber = (options?: {
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+
+					if (ctx.body.updatePhoneNumber) {
+						const session = await getSessionFromCtx(ctx);
+						if (!session) {
+							throw new APIError("UNAUTHORIZED", {
+								message: "Session not found",
+							});
+						}
+						const user = await ctx.context.internalAdapter.updateUser(
+							session.user.id,
+							{
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+						);
+						return ctx.json({
+							user: user as UserWithPhoneNumber,
+							session: session.session,
+						});
+					}
+
 					let user = await ctx.context.adapter.findOne<User>({
 						model: ctx.context.tables.user.tableName,
 						where: [
@@ -220,46 +243,6 @@ export const phoneNumber = (options?: {
 					return ctx.json({
 						user: updatedUser as UserWithPhoneNumber,
 						session: null,
-					});
-				},
-			),
-			updatePhoneNumber: createAuthEndpoint(
-				"/phone-number/update",
-				{
-					method: "POST",
-					body: z.object({
-						phoneNumber: z.string(),
-					}),
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					if (options?.sendOTPonUpdate) {
-						if (!options.sendOTP) {
-							logger.warn("sendOTP not implemented");
-							throw new APIError("NOT_IMPLEMENTED", {
-								message: "sendOTP not implemented",
-							});
-						}
-						const code = generateOTP(opts.otpLength);
-						await ctx.context.adapter.create({
-							model: ctx.context.tables.verification.tableName,
-							data: {
-								code,
-								phoneNumber: ctx.body.phoneNumber,
-								createdAt: getDate(opts.expiresIn, "sec"),
-							},
-						});
-						await options.sendOTP(ctx.body.phoneNumber, code);
-					}
-					const user = await ctx.context.internalAdapter.updateUser(
-						ctx.context.session.user.id,
-						{
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: false,
-						},
-					);
-					return ctx.json({
-						user: user as UserWithPhoneNumber,
 					});
 				},
 			),
