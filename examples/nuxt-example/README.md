@@ -1,7 +1,6 @@
-# Nuxt Js Better Auth Example
+# Nuxt Better Auth Example
 
-
-This is an example of how to use Better Auth with Nuxt
+This is an example of how to use Better Auth with Nuxt.
 
 **Implements the following features:**
 Email & Password . Social Sign-in with Google 
