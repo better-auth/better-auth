@@ -40,6 +40,8 @@ type Session = typeof auth.$Infer.Session
 Better Auth allows you to add additional fields to the user and session objects. All additional fields are properly inferred and available on the server and client side.
 
 ```ts twoslash
+// @noErrors
+
 import { betterAuth } from "better-auth"
 import Database from "better-sqlite3"
 
@@ -55,7 +57,7 @@ export const auth = betterAuth({
    
 })
 
-// type Session = typeof auth.$Infer.Session
+type Session = typeof auth.$Infer.Session
 ```
 
 In the example above, we added a `role` field to the user object. This field is now available on the `Session` type.
