@@ -89,6 +89,36 @@ export const auth = betterAuth({
 		passkey(),
 		bearer(),
 		admin(),
+		{
+			id: "last-login-ip",
+			hooks: {
+				after: [
+					{
+						matcher(context) {
+							return true;
+						},
+						async handler(ctx) {
+							const header = ctx.headers;
+							const response = ctx.context.returned;
+							if (response instanceof Response) {
+								const hasSetCookie = response.headers.get("set-cookie");
+								const hasSessionCookie = response.headers
+									.get("set-cookie")
+									?.includes("session_token");
+								if (hasSessionCookie) {
+									const ipAddress =
+										header?.get("x-forwarded-for") ||
+										header?.get("cf-connecting-ip");
+									if (ipAddress) {
+										//update the user's last login IP
+									}
+								}
+							}
+						},
+					},
+				],
+			},
+		},
 	],
 	socialProviders: {
 		github: {

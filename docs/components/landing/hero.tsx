@@ -121,7 +121,10 @@ export default function Hero() {
 											Get Started
 										</Link>
 
-										<Link href="https://github.com/better-auth/better-auth">
+										<Link
+											href="https://github.com/better-auth/better-auth"
+											target="__blank"
+										>
 											<Button
 												variant="outline"
 												size="lg"
