@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
+import { getTestInstance } from "../../test-utils/test-instance";
 
 describe(
 	"rate-limiter",
+	{
+		timeout: 10000,
+	},
 	async () => {
 		const { client, testUser } = await getTestInstance({
 			rateLimit: {
@@ -80,9 +83,6 @@ describe(
 				expect(response.error?.status).toBe(i >= 20 ? 429 : 401);
 			}
 		});
-	},
-	{
-		timeout: 10000,
 	},
 );
 

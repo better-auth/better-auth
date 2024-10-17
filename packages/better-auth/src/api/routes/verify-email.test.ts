@@ -7,6 +7,8 @@ describe("Email Verification", async () => {
 	const { auth, testUser, client } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
+		},
+		emailVerification: {
 			async sendVerificationEmail(url, user, _token) {
 				token = _token;
 				mockSendEmail(user.email, url);
