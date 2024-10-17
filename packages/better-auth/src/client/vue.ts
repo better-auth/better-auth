@@ -81,7 +81,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			}).then((res: any) => {
 				return {
 					data: res.data,
-					isPending: res.isPending,
+					isPending: false,
 					error: res.error,
 				};
 			});
