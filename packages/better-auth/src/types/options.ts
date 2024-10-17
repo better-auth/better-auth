@@ -89,6 +89,29 @@ export interface BetterAuthOptions {
 	 */
 	secondaryStorage?: SecondaryStorage;
 	/**
+	 * Email verification configuration
+	 */
+	emailVerification?: {
+		/**
+		 * @param user the user to send the verification email to
+		 * @param url the url to send the verification email to
+		 * it contains the token as well
+		 * @param token the token to send the verification email to
+		 */
+		sendVerificationEmail?: (
+			url: string,
+			user: User,
+			token: string,
+		) => Promise<void>;
+		/**
+		 * Send a verification email automatically
+		 * after sign up
+		 *
+		 * @default false
+		 */
+		sendEmailVerificationOnSignUp?: boolean;
+	};
+	/**
 	 * Email and password authentication
 	 */
 	emailAndPassword?: {
@@ -120,24 +143,6 @@ export interface BetterAuthOptions {
 		 */
 		resetPasswordTokenExpiresIn?: number;
 		/**
-		 * @param user the user to send the verification email to
-		 * @param url the url to send the verification email to
-		 * it contains the token as well
-		 * @param token the token to send the verification email to
-		 */
-		sendVerificationEmail?: (
-			url: string,
-			user: User,
-			token: string,
-		) => Promise<void>;
-		/**
-		 * Send a verification email automatically
-		 * after sign up
-		 *
-		 * @default false
-		 */
-		sendEmailVerificationOnSignUp?: boolean;
-		/**
 		 * Password hashing and verification
 		 *
 		 * By default Scrypt is used for password hashing and
@@ -149,6 +154,10 @@ export interface BetterAuthOptions {
 			hash?: (password: string) => Promise<string>;
 			verify?: (password: string, hash: string) => Promise<boolean>;
 		};
+		/**
+		 * Automatically sign in the user after sign up
+		 */
+		autoSignIn?: boolean;
 	};
 	/**
 	 * list of social providers
