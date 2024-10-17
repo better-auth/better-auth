@@ -137,7 +137,7 @@ describe("Social Providers", async () => {
 	});
 });
 
-describe.only("Redirect URI", async () => {
+describe("Redirect URI", async () => {
 	it("should infer redirect uri", async () => {
 		const { client } = await getTestInstance({
 			basePath: "/custom/path",
