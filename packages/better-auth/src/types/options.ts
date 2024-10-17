@@ -123,6 +123,14 @@ export interface BetterAuthOptions {
 		 */
 		enabled: boolean;
 		/**
+		 * Require email verification before a session
+		 * can be created for the user.
+		 *
+		 * if the user is not verified, the user will not be able to sign in
+		 * and on sign in attempts, the user will be prompted to verify their email.
+		 */
+		requireEmailVerification?: boolean;
+		/**
 		 * The maximum length of the password.
 		 *
 		 * @default 128

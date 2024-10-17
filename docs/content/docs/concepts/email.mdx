@@ -56,7 +56,42 @@ export const auth = betterAuth({
 
 This sends a verification email when a user signs up. For social logins, email verification is skipped, and the email is marked as verified unless the provider isn't listed in the `trustedProviders` option.
 
-#### 2. Manually
+
+#### 2. Require Email Verification
+
+If you enable require email verification, users must verify their email before they can log in. And every time a user tries to sign in, `sendVerificationEmail` is called.
+
+<Callout>
+    This only works if you have `sendVerificationEmail` implemented and if the user is trying to sign in with email and password.
+</Callout>
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        requireEmailVerification: true
+    }
+})
+```
+
+if a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
+
+```ts title="client.ts"
+await authClient.signIn.emailAndPassword({
+    email: "email@example.com",
+    password: "password"
+}, {
+    onError: (ctx) => {
+        // Handle the error
+        if(ctx.error.status === 403) {
+            alert("Please verify your email address")
+        }
+        //you can also show the original error message
+        alert(ctx.error.message)
+    }
+})
+```
+
+#### 3. Manually
 
 You can also manually trigger email verification by calling `sendVerificationEmail`.
 
