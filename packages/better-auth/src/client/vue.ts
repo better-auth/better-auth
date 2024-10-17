@@ -64,7 +64,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch: F,
 	): Promise<{
 		data: Ref<Session>;
-		isPending: Ref<boolean>;
+		isPending: false; //this is just to be consistent with the default hook
 		error: Ref<{
 			message?: string;
 			status: number;
