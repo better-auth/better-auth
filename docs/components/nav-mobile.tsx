@@ -216,7 +216,7 @@ export const navMenu: {
 	}[];
 }[] = [
 	{
-		name: "_helo",
+		name: "_hello",
 		path: "/",
 	},
 
