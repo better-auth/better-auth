@@ -36,7 +36,6 @@
         "./cookies": "./dist/cookies.js",
         "./oauth2": "./dist/oauth2.js",
         "./react": "./dist/react.js",
-        "./nuxt": "./dist/nuxt.js",
         "./preact": "./dist/preact.js",
         "./solid": "./dist/solid.js",
         "./api": "./dist/api.js",

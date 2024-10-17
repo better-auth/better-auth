@@ -18,7 +18,6 @@ export default defineConfig((env) => {
 			vue: "./src/client/vue.ts",
 			svelte: "./src/client/svelte.ts",
 			solid: "./src/client/solid.ts",
-			nuxt: "./src/integrations/nuxt/index.ts",
 			plugins: "./src/plugins/index.ts",
 			api: "./src/api/index.ts",
 			"client/plugins": "./src/client/plugins/index.ts",
