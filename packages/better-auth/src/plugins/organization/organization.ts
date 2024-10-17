@@ -145,6 +145,7 @@ export interface OrganizationOptions {
 		 */
 		request?: Request,
 	) => Promise<void>;
+	createDefaultOrganization: boolean;
 }
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
