@@ -24,9 +24,22 @@ export const auth = betterAuth({
 		dialect: libsql,
 		type: "sqlite",
 	},
+	emailVerification: {
+		async sendVerificationEmail(user, url) {
+			console.log("Sending verification email to", user.email);
+			const res = await resend.emails.send({
+				from,
+				to: to || user.email,
+				subject: "Verify your email address",
+				html: `<a href="${url}">Verify your email address</a>`,
+			});
+			console.log(res, user.email);
+		},
+		sendEmailVerificationOnSignUp: true,
+	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(url, user) {
+		async sendResetPassword(user, url) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -36,17 +49,6 @@ export const auth = betterAuth({
 					resetLink: url,
 				}),
 			});
-		},
-		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail(email, url) {
-			console.log("Sending verification email to", email);
-			const res = await resend.emails.send({
-				from,
-				to: to || email,
-				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
-			});
-			console.log(res, email);
 		},
 	},
 	plugins: [
@@ -89,36 +91,6 @@ export const auth = betterAuth({
 		passkey(),
 		bearer(),
 		admin(),
-		{
-			id: "last-login-ip",
-			hooks: {
-				after: [
-					{
-						matcher(context) {
-							return true;
-						},
-						async handler(ctx) {
-							const header = ctx.headers;
-							const response = ctx.context.returned;
-							if (response instanceof Response) {
-								const hasSetCookie = response.headers.get("set-cookie");
-								const hasSessionCookie = response.headers
-									.get("set-cookie")
-									?.includes("session_token");
-								if (hasSessionCookie) {
-									const ipAddress =
-										header?.get("x-forwarded-for") ||
-										header?.get("cf-connecting-ip");
-									if (ipAddress) {
-										//update the user's last login IP
-									}
-								}
-							}
-						},
-					},
-				],
-			},
-		},
 	],
 	socialProviders: {
 		github: {
