@@ -142,6 +142,38 @@ export const auth = betterAuth({
 })
 ```
 
+### MongoDB Adapter
+
+The MongoDB adapter expects a mongodb client instance and a database name. The adapter will create a new database with the provided name if it doesn't exist.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+const client = new MongoClient("mongodb://localhost:27017");
+
+export const auth = betterAuth({
+    database: mongoAdapter(client)
+})
+```
+
+#### Use Plural Form
+
+If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+export const auth = betterAuth({
+    database: mongoAdapter(client, {
+      usePlural: true
+    })
+})
+```
+
 ## CLI 
 
 
