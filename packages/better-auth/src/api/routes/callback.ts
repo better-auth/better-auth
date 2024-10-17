@@ -195,7 +195,7 @@ export const callbackOAuth = createAuthEndpoint(
 				if (
 					!emailVerified &&
 					created &&
-					c.context.options.emailVerification?.sendEmailVerificationOnSignUp
+					c.context.options.emailVerification?.sendOnSignUp
 				) {
 					const token = await createEmailVerificationToken(
 						c.context.secret,
