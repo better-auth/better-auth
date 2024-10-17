@@ -17,9 +17,9 @@ export const getCSRFToken = createAuthEndpoint(
 
 		if (csrfCookie) {
 			const [token, _] = csrfCookie.split("!") || [null, null];
-			return {
+			return ctx.json({
 				csrfToken: token,
-			};
+			})
 		}
 
 		const token = generateRandomString(32, alphabet("a-z", "0-9", "A-Z"));
@@ -31,8 +31,8 @@ export const getCSRFToken = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.authCookies.csrfToken.options,
 		);
-		return {
+		return ctx.json({
 			csrfToken: token,
-		};
+		})
 	},
 );
