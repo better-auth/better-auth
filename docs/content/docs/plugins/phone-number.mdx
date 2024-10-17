@@ -92,10 +92,8 @@ to allow users to sign up using their phone number, you can pass `signUpOnVerifi
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            otp: {
-                sendOTP: (phoneNumber, code) => {
-                    // Implement sending OTP code via SMS
-                }
+            sendOTP: (phoneNumber, code) => {
+                // Implement sending OTP code via SMS
             },
             signUpOnVerification: {
                 getTempEmail: (phoneNumber) => {
