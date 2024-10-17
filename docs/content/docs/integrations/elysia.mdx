@@ -26,10 +26,61 @@ const betterAuthView = (context: Context) => {
   }
 }
 
-const app = new Elysia().all("/*", betterAuthView).listen(3000);
+const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
 );
 
 ```
+
+### Middleware
+
+You can use [derive](https://elysiajs.com/essential/handler.html#derive) to provide session and user information before pass to view.
+
+```ts
+import { Elysia } from "elysia";
+import { auth } from "./auth";
+
+// user middleware (compute user and session and pass to routes)
+const userMiddleware = async (request: Request) => {
+  const session = await auth.api.getSession({ headers: request.headers });
+
+  if (!session) {
+    return {
+      user: null,
+      session: null
+    }
+  }
+
+  return {
+    user: session.user,
+    session: session.session
+  }
+}
+
+// user info view
+// type User can be export from `typeof auth.$Infer.Session.user`
+// type Session can be export from `typeof auth.$Infer.Session.session`
+const userInfo = (user: User | null, session: Session | null) => {
+  return {
+    user: user,
+    session: session
+  }
+}
+
+const app = new Elysia()
+  .derive(({ request }) => userMiddleware(request))
+  // about betterAuthView code, please check `Mount the handler` topic 
+  .all("/api/auth/*", betterAuthView)
+  // Example custom endpoint
+  .get("/user", ({ user, session }) => userInfo(user, session))
+  .listen(3000);
+
+console.log(
+  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+);
+
+```
+
+This will allow you to access the `user` and `session` object in all of your routes.
