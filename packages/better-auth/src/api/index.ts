@@ -152,26 +152,36 @@ export function getEndpoints<
 				});
 			} catch (e) {
 				if (e instanceof APIError) {
+					const afterPlugins = options.plugins
+						?.map((plugin) => {
+							if (plugin.hooks?.after) {
+								return plugin.hooks.after;
+							}
+						})
+						.filter((plugin) => plugin !== undefined)
+						.flat();
+
+					if (!afterPlugins?.length) {
+						throw e;
+					}
+
 					let response = new Response(JSON.stringify(e.body), {
 						status: statusCode[e.status],
 						headers: e.headers,
 					});
-					for (const plugin of options.plugins || []) {
-						if (plugin.hooks?.after) {
-							for (const hook of plugin.hooks.after) {
-								const match = hook.matcher(context);
-								if (match) {
-									const obj = Object.assign(context, {
-										context: {
-											...ctx,
-											returned: response,
-										},
-									});
-									const hookRes = await hook.handler(obj);
-									if (hookRes && "response" in hookRes) {
-										response = hookRes.response as any;
-									}
-								}
+
+					for (const hook of afterPlugins || []) {
+						const match = hook.matcher(context);
+						if (match) {
+							const obj = Object.assign(context, {
+								context: {
+									...ctx,
+									returned: response,
+								},
+							});
+							const hookRes = await hook.handler(obj);
+							if (hookRes && "response" in hookRes) {
+								response = hookRes.response as any;
 							}
 						}
 					}
