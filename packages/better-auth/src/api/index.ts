@@ -1,4 +1,4 @@
-import { APIError, type Endpoint, createRouter } from "better-call";
+import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
@@ -140,15 +140,46 @@ export function getEndpoints<
 					}
 				}
 			}
+			let endpointRes: any;
+			try {
+				//@ts-ignore
+				endpointRes = await value({
+					...context,
+					context: {
+						...c,
+						...context.context,
+					},
+				});
+			} catch (e) {
+				if (e instanceof APIError) {
+					let response = new Response(JSON.stringify(e.body), {
+						status: statusCode[e.status],
+						headers: e.headers,
+					});
+					for (const plugin of options.plugins || []) {
+						if (plugin.hooks?.after) {
+							for (const hook of plugin.hooks.after) {
+								const match = hook.matcher(context);
+								if (match) {
+									const obj = Object.assign(context, {
+										context: {
+											...ctx,
+											returned: response,
+										},
+									});
+									const hookRes = await hook.handler(obj);
+									if (hookRes && "response" in hookRes) {
+										response = hookRes.response as any;
+									}
+								}
+							}
+						}
+					}
+					return response;
+				}
 
-			//@ts-ignore
-			const endpointRes = await value({
-				...context,
-				context: {
-					...c,
-					...context.context,
-				},
-			});
+				throw e;
+			}
 			let response = endpointRes;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
