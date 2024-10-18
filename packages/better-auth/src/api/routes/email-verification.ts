@@ -5,7 +5,6 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
 import { getSessionFromCtx } from "./session";
-import { updateUser } from "./update-user";
 
 export async function createEmailVerificationToken(
 	secret: string,

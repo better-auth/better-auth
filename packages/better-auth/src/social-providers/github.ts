@@ -81,9 +81,9 @@ export const github = (options: GithubOptions) => {
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{
-					auth: {
-						type: "Bearer",
-						token: token.accessToken,
+					headers: {
+						"User-Agent": "better-auth",
+						authorization: `Bearer ${token.accessToken}`,
 					},
 				},
 			);
@@ -100,9 +100,9 @@ export const github = (options: GithubOptions) => {
 						visibility: "public" | "private";
 					}[]
 				>("https://api.github.com/user/emails", {
-					auth: {
-						type: "Bearer",
-						token: token.accessToken,
+					headers: {
+						authorization: `Bearer ${token.accessToken}`,
+						"User-Agent": "better-auth",
 					},
 				});
 				if (!error) {

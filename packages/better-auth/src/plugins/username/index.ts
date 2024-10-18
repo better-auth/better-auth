@@ -136,7 +136,6 @@ export const username = () => {
 				},
 			),
 		},
-
 		schema: {
 			user: {
 				fields: {
