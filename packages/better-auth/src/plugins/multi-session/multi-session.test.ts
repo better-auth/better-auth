@@ -17,6 +17,11 @@ describe("multi-session", async () => {
 	);
 
 	let headers = new Headers();
+	const testUser2 = {
+		email: "second-email@test.com",
+		password: "password",
+		name: "Name",
+	};
 
 	it("should set multi session when there is set-cookie header", async () => {
 		await client.signIn.email(
@@ -26,7 +31,6 @@ describe("multi-session", async () => {
 			},
 			{
 				onResponse(context) {
-					headers = context.response.headers;
 					const setCookieString = context.response.headers.get("set-cookie");
 					const setCookies = parseSetCookieHeader(setCookieString || "");
 					const sessionToken = setCookies
@@ -39,12 +43,64 @@ describe("multi-session", async () => {
 					expect(multiSession).not.toBe(null);
 					expect(multiSession).toContain(sessionToken);
 					expect(setCookieString).toContain("better-auth.session_token_multi-");
+					headers.set("cookie", `${setCookieString?.split(",").join(";")}`);
 				},
 			},
 		);
+		await client.signUp.email(testUser2, {
+			onSuccess(context) {
+				const setCookieString = context.response.headers.get("set-cookie");
+				headers.set(
+					"cookie",
+					`${headers.get("cookie")}; ${setCookieString?.split(",").join(";")}`,
+				);
+			},
+		});
 	});
 
+	it("should get active session", async () => {
+		const session = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.email).toBe(testUser2.email);
+	});
+
+	let sessionId = "";
 	it("should list all device sessions", async () => {
-		const res = await client.session.listDeviceSessions();
+		const res = await client.multiSession.listDeviceSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (res.data) {
+			sessionId = res.data[0].session.id;
+		}
+		expect(res.data).toHaveLength(2);
+	});
+
+	it("should set active session", async () => {
+		const res = await client.multiSession.setActive({
+			sessionId,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should sign-out all sessions", async () => {
+		await client.multiSession.signOutDeviceSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toBe(null);
 	});
 });

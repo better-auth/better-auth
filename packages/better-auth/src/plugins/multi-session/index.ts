@@ -5,15 +5,61 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import type { BetterAuthPlugin, Session, User } from "../../types";
 
-export const multiSession = () => {
+interface MultiSessionConfig {
+	/**
+	 * If set to true, all sessions will be signed out when the user signs out.
+	 */
+	signOutAllSessionsOnSignOut?: boolean;
+}
+
+export const multiSession = (options?: MultiSessionConfig) => {
 	return {
 		id: "multi-session",
 		endpoints: {
+			listDeviceSessions: createAuthEndpoint(
+				"/multi-session/list-device-sessions",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const cookieHeader = ctx.headers?.get("cookie");
+					if (!cookieHeader) {
+						return ctx.json([]);
+					}
+					const cookies = Object.fromEntries(parseCookies(cookieHeader));
+					const sessions: {
+						session: Session;
+						user: User;
+					}[] = [];
+					for (const key of Object.keys(cookies)) {
+						if (key.includes("_multi-")) {
+							const sessionId = await ctx.getSignedCookie(
+								key,
+								ctx.context.secret,
+							);
+							if (sessionId) {
+								const session =
+									await ctx.context.internalAdapter.findSession(sessionId);
+								if (session && session.session.expiresAt > new Date()) {
+									sessions.push(session);
+								} else {
+									ctx.setCookie(key, "", {
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: 0,
+									});
+								}
+							}
+						}
+					}
+					return ctx.json(sessions);
+				},
+			),
 			setActiveSession: createAuthEndpoint(
-				"/session/set-active",
+				"/multi-session/set-active",
 				{
 					method: "POST",
 					body: z.object({
@@ -51,15 +97,13 @@ export const multiSession = () => {
 						ctx.context.secret,
 						ctx.context.authCookies.sessionToken.options,
 					);
-					return ctx.json({
-						message: "Session set as active",
-					});
+					return ctx.json(session);
 				},
 			),
-			listDeviceSessions: createAuthEndpoint(
-				"/session/list-device-sessions",
+			signOutDeviceSessions: createAuthEndpoint(
+				"/multi-session/sign-out-device-sessions",
 				{
-					method: "GET",
+					method: "POST",
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
@@ -67,13 +111,7 @@ export const multiSession = () => {
 					if (!cookieHeader) {
 						return ctx.json([]);
 					}
-					const cookies = Object.fromEntries(
-						parseSetCookieHeader(cookieHeader).entries(),
-					);
-					const sessions: {
-						session: Session;
-						user: User;
-					}[] = [];
+					const cookies = Object.fromEntries(parseCookies(cookieHeader));
 					for (const key of Object.keys(cookies)) {
 						if (key.includes("_multi-")) {
 							const sessionId = await ctx.getSignedCookie(
@@ -83,17 +121,17 @@ export const multiSession = () => {
 							if (sessionId) {
 								const session =
 									await ctx.context.internalAdapter.findSession(sessionId);
-								if (session && session.session.expiresAt > new Date()) {
-									sessions.push(session);
-								} else {
-									ctx.setCookie(key, "", {
-										...ctx.context.authCookies.sessionToken.options,
-										maxAge: 0,
-									});
+								if (session) {
+									await ctx.context.internalAdapter.deleteSession(sessionId);
 								}
+								ctx.setCookie(key, "", {
+									...ctx.context.authCookies.sessionToken.options,
+									maxAge: 0,
+								});
 							}
 						}
 					}
+					return ctx.json([]);
 				},
 			),
 		},
@@ -137,6 +175,9 @@ export const multiSession = () => {
 						return context.path === "/sign-out";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (options?.signOutAllSessionsOnSignOut) {
+							return;
+						}
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) {
 							return;
