@@ -8,8 +8,12 @@ export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: (options.baseURL ? options.baseURL.startsWith("https://") : false) ||
-				process.env.NODE_ENV === "production";
+			: options.baseURL !== undefined
+				? options.baseURL.startsWith("https://")
+					? true
+					: false
+				: process.env.NODE_ENV === "production";
+
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge =
