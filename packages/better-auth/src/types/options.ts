@@ -209,6 +209,23 @@ export interface BetterAuthOptions {
 		additionalFields?: {
 			[key: string]: FieldAttribute;
 		};
+		/**
+		 * Changing email configuration
+		 */
+		changeEmail?: {
+			/**
+			 * Send a verification email when the user changes their email.
+			 *
+			 * If this is set to false, the email will be changed immediately.
+			 *
+			 * @default true
+			 */
+			sendVerificationEmail?: boolean;
+			/**
+			 * Disable changing email
+			 */
+			disable?: boolean;
+		};
 	};
 	session?: {
 		modelName?: string;

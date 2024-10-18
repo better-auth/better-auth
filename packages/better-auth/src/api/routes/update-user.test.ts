@@ -4,8 +4,15 @@ import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 
 describe("updateUser", async () => {
+	let emailVerificationToken: string;
 	const { client, testUser, sessionSetter, customFetchImpl } =
-		await getTestInstance();
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail(user, url, token) {
+					emailVerificationToken = token;
+				},
+			},
+		});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
@@ -31,7 +38,27 @@ describe("updateUser", async () => {
 		expect(updated.data?.user.name).toBe("newName");
 	});
 
+	it("should update user email", async () => {
+		const newEmail = "new-email@email.com";
+		await client.user.changeEmail({
+			newEmail,
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		const res = await client.verifyEmail({
+			query: {
+				token: emailVerificationToken,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.user.email).toBe(newEmail);
+	});
+
 	it("should update the user's password", async () => {
+		const newEmail = "new-email@email.com";
 		const updated = await client.user.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
@@ -42,7 +69,7 @@ describe("updateUser", async () => {
 		});
 		expect(updated).toBeDefined();
 		const signInRes = await client.signIn.email({
-			email: testUser.email,
+			email: newEmail,
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();

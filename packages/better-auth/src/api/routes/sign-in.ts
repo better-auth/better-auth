@@ -6,7 +6,7 @@ import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../middlewares/redirect";
 import { socialProviderList } from "../../social-providers";
-import { createEmailVerificationToken } from "./verify-email";
+import { createEmailVerificationToken } from "./email-verification";
 import { logger } from "../../utils";
 
 export const signInOAuth = createAuthEndpoint(

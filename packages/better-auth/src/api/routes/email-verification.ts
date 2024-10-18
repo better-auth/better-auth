@@ -4,16 +4,23 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
+import { getSessionFromCtx, sessionMiddleware } from "./session";
+import { updateUser } from "./update-user";
 
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
+	/**
+	 * The email to update from
+	 */
+	updateTo?: string,
 ) {
 	const token = await createJWT(
 		"HS256",
 		Buffer.from(secret),
 		{
 			email: email.toLowerCase(),
+			updateTo,
 		},
 		{
 			expiresIn: new TimeSpan(1, "h"),
@@ -43,9 +50,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
-			ctx.context.logger.error(
-				"Verification email isn't enabled. Pass `sendVerificationEmail` in `emailAndPassword` options to enable it.",
-			);
+			ctx.context.logger.error("Verification email isn't enabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
 			});
@@ -82,6 +87,7 @@ export const verifyEmail = createAuthEndpoint(
 			token: z.string(),
 			callbackURL: z.string().optional(),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { token } = ctx.query;
@@ -97,6 +103,7 @@ export const verifyEmail = createAuthEndpoint(
 
 		const schema = z.object({
 			email: z.string().email(),
+			updateTo: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
@@ -107,6 +114,40 @@ export const verifyEmail = createAuthEndpoint(
 				message: "User not found",
 			});
 		}
+		if (parsed.updateTo) {
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				if (ctx.query.callbackURL) {
+					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+				}
+				throw new APIError("UNAUTHORIZED", {
+					message: "Session not found",
+				});
+			}
+			if (session.user.email !== parsed.email) {
+				if (ctx.query.callbackURL) {
+					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+				}
+				throw new APIError("UNAUTHORIZED", {
+					message: "Invalid session",
+				});
+			}
+
+			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+				parsed.email,
+				{
+					email: parsed.updateTo,
+					emailVerified: true,
+				},
+			);
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				user: updatedUser,
+				status: true,
+			});
+		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
 		});
@@ -114,6 +155,7 @@ export const verifyEmail = createAuthEndpoint(
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
+			user: null,
 			status: true,
 		});
 	},

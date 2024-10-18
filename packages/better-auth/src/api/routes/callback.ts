@@ -10,7 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { compareHash } from "../../crypto/hash";
-import { createEmailVerificationToken } from "./verify-email";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
