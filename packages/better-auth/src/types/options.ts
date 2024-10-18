@@ -129,6 +129,12 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		sendOnSignUp?: boolean;
+		/**
+		 * Allow updating the email without verification
+		 *
+		 * @default false
+		 */
+		allowEmailUpdateWithoutVerification?: boolean;
 	};
 	/**
 	 * Email and password authentication

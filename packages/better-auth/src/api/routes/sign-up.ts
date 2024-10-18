@@ -1,6 +1,6 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
-import { createEmailVerificationToken } from "./verify-email";
+import { createEmailVerificationToken } from "./email";
 import { setSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import type {
