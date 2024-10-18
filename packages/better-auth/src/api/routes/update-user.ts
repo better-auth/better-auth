@@ -230,6 +230,15 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware, redirectURLMiddleware],
 	},
 	async (ctx) => {
+		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
+			ctx.body.newEmail,
+		);
+		if (existingUser) {
+			ctx.context.logger.error("Email already exists");
+			throw new APIError("BAD_REQUEST", {
+				message: "Couldn't update your email",
+			});
+		}
 		if (ctx.context.options.user?.changeEmail?.disable === true) {
 			ctx.context.logger.error("Change email is disabled.");
 			throw new APIError("BAD_REQUEST", {

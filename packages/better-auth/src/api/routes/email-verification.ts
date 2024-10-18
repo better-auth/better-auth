@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
-import { getSessionFromCtx, sessionMiddleware } from "./session";
+import { getSessionFromCtx } from "./session";
 import { updateUser } from "./update-user";
 
 export async function createEmailVerificationToken(
@@ -137,9 +137,16 @@ export const verifyEmail = createAuthEndpoint(
 				parsed.email,
 				{
 					email: parsed.updateTo,
-					emailVerified: true,
 				},
 			);
+
+			//send verification email to the new email
+			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+				updatedUser,
+				`${ctx.context.baseURL}/verify-email?token=${token}`,
+				token,
+			);
+
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
