@@ -1,17 +1,12 @@
-import { useStore } from "@nanostores/vue";
-import type { DeepReadonly, Ref } from "vue";
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
-import type {
-	BetterAuthClientPlugin,
-	ClientOptions,
-	InferActions,
-	InferClientAPI,
-	IsSignal,
-} from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import { getSessionAtom } from "./session-atom";
-import type { UnionToIntersection } from "../types/helper";
+import {useStore} from "@nanostores/vue";
+import type {DeepReadonly, Ref} from "vue";
+import {getClientConfig} from "./config";
+import {capitalizeFirstLetter} from "../utils/misc";
+import type {BetterAuthClientPlugin, ClientOptions, InferActions, InferClientAPI, IsSignal,} from "./types";
+import {createDynamicPathProxy} from "./proxy";
+import {getSessionAtom} from "./session-atom";
+import type {UnionToIntersection} from "../types/helper";
+import {getBaseURL} from "../utils/base-url";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -76,10 +71,8 @@ export function createAuthClient<Option extends ClientOptions>(
 	) {
 		if (useFetch) {
 			const ref = useStore(_sessionSignal);
-			const basePath = options?.baseURL
-				? new URL(options.baseURL).pathname
-				: "/api/auth";
-			const session = useFetch(`${basePath}/session`, {
+			const baseUrl = getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL) ?? "/api/auth";
+			return useFetch(`${baseUrl}/session`, {
 				ref,
 			}).then((res: any) => {
 				return {
@@ -88,7 +81,6 @@ export function createAuthClient<Option extends ClientOptions>(
 					error: res.error,
 				};
 			});
-			return session;
 		}
 		return useStoreSession();
 	}
