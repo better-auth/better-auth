@@ -5,6 +5,7 @@ import { getAuthTables } from "./get-tables";
 import type { Account, Session, User, Verification } from "./schema";
 import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
+import { getIp } from "../utils/get-request-ip";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -145,7 +146,7 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
-				ipAddress: headers?.get("x-forwarded-for") || "",
+				ipAddress: request ? getIp(request) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...override,
 			};
