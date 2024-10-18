@@ -184,7 +184,6 @@ export const callbackOAuth = createAuthEndpoint(
 						id: `${provider.id}:${user.id}`,
 						providerId: provider.id,
 						accountId: user.id.toString(),
-						userId: id,
 					},
 				);
 				if (

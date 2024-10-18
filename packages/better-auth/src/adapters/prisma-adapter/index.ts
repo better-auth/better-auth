@@ -52,8 +52,24 @@ export const prismaAdapter = (
 	prisma: any,
 	{
 		provider,
+		generateId,
 	}: {
-		provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
+		provider:
+			| "sqlite"
+			| "cockroachdb"
+			| "mysql"
+			| "postgresql"
+			| "sqlserver"
+			| "mongodb";
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?: ((size?: number) => string) | false;
 	},
 ): Adapter => {
 	const db: PrismaClient = prisma;
@@ -61,7 +77,9 @@ export const prismaAdapter = (
 		id: "prisma",
 		async create(data) {
 			const { model, data: val, select } = data;
-
+			if (generateId !== undefined) {
+				val.id = generateId ? generateId() : undefined;
+			}
 			return await db[model].create({
 				data: val,
 				...(select?.length
