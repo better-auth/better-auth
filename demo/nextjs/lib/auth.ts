@@ -120,3 +120,6 @@ export const auth = betterAuth({
 		multiSession(),
 	],
 });
+
+
+auth.api.changeEmail

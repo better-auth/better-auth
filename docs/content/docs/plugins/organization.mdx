@@ -74,16 +74,7 @@ To create an organization, you need to provide:
 - `logo`: The logo of the organization. (Optional)
 
 ```ts title="client.ts"
-import { createAuthClient } from "better-auth/client"
-import { organizationClient } from "better-auth/client/plugins"
-
-const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        organizationClient() // [!code highlight]
-    ] // [!code highlight]
-})
-// ---cut---
-const data = await client.organization.create({
+await client.organization.create({
     name: "My Organization",
     slug: "my-org",
     logo: "https://example.com/logo.png"
