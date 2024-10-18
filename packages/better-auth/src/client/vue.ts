@@ -1,12 +1,18 @@
-import {useStore} from "@nanostores/vue";
-import type {DeepReadonly, Ref} from "vue";
-import {getClientConfig} from "./config";
-import {capitalizeFirstLetter} from "../utils/misc";
-import type {BetterAuthClientPlugin, ClientOptions, InferActions, InferClientAPI, IsSignal,} from "./types";
-import {createDynamicPathProxy} from "./proxy";
-import {getSessionAtom} from "./session-atom";
-import type {UnionToIntersection} from "../types/helper";
-import {getBaseURL} from "../utils/base-url";
+import { useStore } from "@nanostores/vue";
+import type { DeepReadonly, Ref } from "vue";
+import { getClientConfig } from "./config";
+import { capitalizeFirstLetter } from "../utils/misc";
+import type {
+	BetterAuthClientPlugin,
+	ClientOptions,
+	InferActions,
+	InferClientAPI,
+	IsSignal
+} from "./types";
+import { createDynamicPathProxy } from "./proxy";
+import { getSessionAtom } from "./session-atom";
+import type { UnionToIntersection } from "../types/helper";
+import { getBaseURL } from "../utils/base-url";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
