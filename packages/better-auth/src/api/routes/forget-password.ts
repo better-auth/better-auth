@@ -107,11 +107,11 @@ export const forgetPasswordCallback = createAuthEndpoint(
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		query: z
-			.object({
+		query: z.optional(
+			z.object({
 				token: z.string(),
-			})
-			.optional(),
+			}),
+		),
 		method: "POST",
 		body: z.object({
 			newPassword: z.string(),
