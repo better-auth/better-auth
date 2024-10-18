@@ -7,7 +7,7 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
-	IsSignal
+	IsSignal,
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
 import { getSessionAtom } from "./session-atom";
@@ -77,7 +77,9 @@ export function createAuthClient<Option extends ClientOptions>(
 	) {
 		if (useFetch) {
 			const ref = useStore(_sessionSignal);
-			const baseUrl = getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL) ?? "/api/auth";
+			const baseUrl =
+				getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL) ??
+				"/api/auth";
 			return useFetch(`${baseUrl}/session`, {
 				ref,
 			}).then((res: any) => {
