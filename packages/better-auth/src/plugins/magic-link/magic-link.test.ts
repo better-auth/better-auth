@@ -96,4 +96,34 @@ describe("magic link", async () => {
 			},
 		);
 	});
+	
+	it("should use custom generateToken function", async () => {
+		const customGenerateToken = vi.fn(() => "custom_token");
+		
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				magicLink({
+  				async sendMagicLink(data) {
+  					verificationEmail = data;
+  				},
+					generateToken: customGenerateToken,
+				}),
+			],
+		});
+
+		const customClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000/api/auth",
+		});
+
+		await customClient.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		expect(customGenerateToken).toHaveBeenCalled();
+		expect(verificationEmail.token).toBe("custom_token");
+	});
 });

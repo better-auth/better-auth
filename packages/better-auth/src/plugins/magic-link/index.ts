@@ -38,6 +38,12 @@ interface MagicLinkOptions {
 		window: number;
 		max: number;
 	};
+	/**
+	 * Custom token generation method
+	 *
+	 * @default generateRandomString(32, alphabet("a-z", "A-Z"))
+	 */
+	generateToken?: (email: string) => Promise<string>
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
@@ -57,10 +63,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-					const verificationToken = generateRandomString(
-						32,
-						alphabet("a-z", "A-Z"),
-					);
+					const verificationToken = options?.generateToken 
+  					? await options.generateToken(email)
+  					: generateRandomString(32, alphabet("a-z", "A-Z"));
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
 						value: email,
