@@ -121,5 +121,4 @@ export const auth = betterAuth({
 	],
 });
 
-
-auth.api.changeEmail
+auth.api.changeEmail;
