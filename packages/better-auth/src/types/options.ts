@@ -129,12 +129,6 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		sendOnSignUp?: boolean;
-		/**
-		 * Allow updating the email without verification
-		 *
-		 * @default false
-		 */
-		allowEmailUpdateWithoutVerification?: boolean;
 	};
 	/**
 	 * Email and password authentication
@@ -214,6 +208,23 @@ export interface BetterAuthOptions {
 		 */
 		additionalFields?: {
 			[key: string]: FieldAttribute;
+		};
+		/**
+		 * Changing email configuration
+		 */
+		changeEmail?: {
+			/**
+			 * Send a verification email when the user changes their email.
+			 * 
+			 * If this is set to false, the email will be changed immediately.
+			 * 
+			 * @default true
+			 */
+			sendVerificationEmail?: boolean;
+			/**
+			 * Disable changing email
+			 */
+			disable?: boolean;
 		};
 	};
 	session?: {

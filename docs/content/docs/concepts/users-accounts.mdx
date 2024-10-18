@@ -31,6 +31,70 @@ await authClient.user.update({
 })
 ```
 
+### Change Email
+
+To change the email of a user, you can use the `changeEmail` function provided by the client. The `changeEmail` function take a `newEmail` as argument. The `password` is used to verify the user. Before the email is changed, the user is required to verify the new email.
+
+```ts
+await authClient.user.changeEmail({
+    newEmail: "new-email@email.com",
+    callbackURL: "/dashbaord", // optional - redirect the user to this URL after the email is verified
+});
+```
+
+after the email is changed, the user is required to verify the new email. So a verification email is sent to the new email. Once the email is verified, the email is updated in the user table. If you want to disable this behavior, you can set `sendVerificationEmail` to `false`.
+
+**Disable Email verification**
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            sendVerificationEmail: false,
+        }
+    }
+})
+```
+To change a user's email, the `changeEmail` function is available through the client. It takes `newEmail` and `password` as parameters, where the `password` is used to verify the user. A verification email is sent to the new email, and the email is updated in the user table after verification.
+
+```ts
+await authClient.user.changeEmail({
+    newEmail: "new-email@email.com",
+    password: "password123",
+    callbackURL: "/dashboard", // optional: redirect the user after verification
+});
+``` 
+
+By default, a verification email is required for the change to take effect. You can disable this by setting `sendVerificationEmail` to `false`.
+
+### Disable Email Verification
+
+To skip the email verification step:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            sendVerificationEmail: false,
+        }
+    }
+});
+```
+
+### Disable Change Email Feature
+
+To disable the ability for users to change their email:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            disable: true,
+        }
+    }
+});
+```
+
 ### Change Password
 
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
