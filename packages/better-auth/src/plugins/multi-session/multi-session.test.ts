@@ -16,6 +16,8 @@ describe("multi-session", async () => {
 		},
 	);
 
+	let headers = new Headers();
+
 	it("should set multi session when there is set-cookie header", async () => {
 		await client.signIn.email(
 			{
@@ -24,6 +26,7 @@ describe("multi-session", async () => {
 			},
 			{
 				onResponse(context) {
+					headers = context.response.headers;
 					const setCookieString = context.response.headers.get("set-cookie");
 					const setCookies = parseSetCookieHeader(setCookieString || "");
 					const sessionToken = setCookies
@@ -39,5 +42,9 @@ describe("multi-session", async () => {
 				},
 			},
 		);
+	});
+
+	it("should list all device sessions", async () => {
+		const res = await client.session.listDeviceSessions();
 	});
 });
