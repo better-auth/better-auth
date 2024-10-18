@@ -152,7 +152,7 @@ export function getEndpoints<
 				});
 			} catch (e) {
 				if (e instanceof APIError) {
-					let response = new Response(e.message, {
+					let response = new Response(JSON.stringify(e.body), {
 						status: statusCode[e.status],
 						headers: e.headers,
 					});
