@@ -44,6 +44,10 @@ await authClient.user.changeEmail({
 
 after they verify their email, the new email is updated in the user table. And a verification email is sent to the new email. 
 
+<Callout>
+    If the user existing email wasn't verified, the email is updated without the verification step.
+</Callout>
+
 If you want to disable this behavior, you can set `sendVerificationEmail` to `false`. Which will automatically update the email without the verification step. (This is not recommended)
 
 **Disable Email verification**
