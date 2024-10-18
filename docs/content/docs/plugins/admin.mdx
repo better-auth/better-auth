@@ -99,6 +99,7 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 - `offset`: The number of users to skip.
 - `sortBy`: The field to sort the users by.
 - `sortDirection`: The direction to sort the users by. Defaults to `asc`.
+- `filter`: The filter to apply to the users. It can be an array of objects.
 
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
@@ -107,6 +108,13 @@ const users = await authClient.admin.listUsers({
         offset: 0,
         sortBy: "createdAt",
         sortDirection: "desc"
+        filter: [
+          {
+            field: "name",
+            operator: "eq",
+            value: "John",
+          }
+        ]
     }
 });
 ```

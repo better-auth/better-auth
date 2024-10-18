@@ -225,10 +225,10 @@ export const admin = (options?: AdminOptions) => {
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
-						where: z.array(z.object({
+						filter: z.array(z.object({
 							field: z.string(),
 							value: z.string().or(z.number()).or(z.boolean()),
-							operator: z.enum(["eq", "ne", "gt", "lt", "gte", "lte"]),
+							operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
 							connector: z.enum(["AND", "OR"]).optional()
 						})).optional()
 					}),
@@ -243,7 +243,7 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
-						ctx.query?.where
+						ctx.query?.filter
 						
 					);
 					return ctx.json({
