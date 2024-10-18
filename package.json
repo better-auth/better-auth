@@ -13,7 +13,7 @@
         "lint": "biome check .",
         "lint:fix": "biome check . --apply",
         "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
-        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag beta --no-git-checks",
+        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag next --no-git-checks",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck"
     },

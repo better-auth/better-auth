@@ -6,6 +6,8 @@ import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../middlewares/redirect";
 import { socialProviderList } from "../../social-providers";
+import { createEmailVerificationToken } from "./email-verification";
+import { logger } from "../../utils";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -39,7 +41,7 @@ export const signInOAuth = createAuthEndpoint(
 		);
 		if (!provider) {
 			c.context.logger.error(
-				"Provider not found. Make sure to add the provider to your auth config",
+				"Provider not found. Make sure to add the provider in your auth config",
 				{
 					provider: c.body.provider,
 				},
@@ -76,11 +78,8 @@ export const signInOAuth = createAuthEndpoint(
 		const url = await provider.createAuthorizationURL({
 			state: state.raw,
 			codeVerifier,
+			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
-		url.searchParams.set(
-			"redirect_uri",
-			`${c.context.baseURL}/callback/${c.body.provider}`,
-		);
 		return c.json({
 			url: url.toString(),
 			state: state,
@@ -133,6 +132,36 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email or password",
 			});
 		}
+
+		if (
+			ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+			!user.user.emailVerified
+		) {
+			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
+				logger.error(
+					"Email verification is required but no email verification handler is provided",
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Email is not verified.",
+				});
+			}
+			const token = await createEmailVerificationToken(
+				ctx.context.secret,
+				user.user.email,
+			);
+			const url = `${ctx.context.options.baseURL}/verify-email?token=${token}`;
+			await ctx.context.options.emailVerification.sendVerificationEmail(
+				user.user,
+				url,
+				token,
+			);
+			ctx.context.logger.error("Email not verified", { email });
+			throw new APIError("FORBIDDEN", {
+				message:
+					"Email is not verified. Check your email for a verification link",
+			});
+		}
+
 		const credentialAccount = user.accounts.find(
 			(a) => a.providerId === "credential",
 		);
@@ -159,6 +188,7 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email or password",
 			});
 		}
+
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.headers,

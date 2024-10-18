@@ -333,14 +333,13 @@ const myPluginClient = {
         return {
             myCustomAction: async (data: {
                 foo: string,
-                fetchOptions?: BetteFetchOptions
-            })=>{
+            }, fetchOptions?: BetteFetchOptions)=>{
                 const res = $fetch("/custom/action", {
                     method: "POST",
                     body: {
                         foo: data.foo
                     }
-                    ...data.fetchOptions
+                    ...fetchOptions
                 })
                 return res
             }
@@ -350,7 +349,9 @@ const myPluginClient = {
 ```
 
 <Callout>
-    As a general rule, make sure to accept only one argument in the function and make sure you also optionally accept a `fetchOptions` object. This is to make sure the user can pass additional options to the fetch call. And return and object with the `data` and `error` key.
+As a general guideline, ensure that each function accepts only one argument, with an optional second argument for fetchOptions to allow users to pass additional options to the fetch call. The function should return an object containing data and error keys.
+
+If your use case involves actions beyond API calls, feel free to deviate from this rule.
 </Callout>
 
 **getAtoms**

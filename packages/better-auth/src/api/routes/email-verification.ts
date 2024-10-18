@@ -4,16 +4,22 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
+import { getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
+	/**
+	 * The email to update from
+	 */
+	updateTo?: string,
 ) {
 	const token = await createJWT(
 		"HS256",
 		Buffer.from(secret),
 		{
 			email: email.toLowerCase(),
+			updateTo,
 		},
 		{
 			expiresIn: new TimeSpan(1, "h"),
@@ -42,10 +48,8 @@ export const sendVerificationEmail = createAuthEndpoint(
 		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
-		if (!ctx.context.options.emailAndPassword?.sendVerificationEmail) {
-			ctx.context.logger.error(
-				"Verification email isn't enabled. Pass `sendVerificationEmail` in `emailAndPassword` options to enable it.",
-			);
+		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+			ctx.context.logger.error("Verification email isn't enabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
 			});
@@ -63,9 +67,9 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}/verify-email?token=${token}&callbackURL=${
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
-		await ctx.context.options.emailAndPassword.sendVerificationEmail(
-			url,
+		await ctx.context.options.emailVerification.sendVerificationEmail(
 			user.user,
+			url,
 			token,
 		);
 		return ctx.json({
@@ -82,6 +86,7 @@ export const verifyEmail = createAuthEndpoint(
 			token: z.string(),
 			callbackURL: z.string().optional(),
 		}),
+		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { token } = ctx.query;
@@ -97,31 +102,66 @@ export const verifyEmail = createAuthEndpoint(
 
 		const schema = z.object({
 			email: z.string().email(),
+			updateTo: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
-			{ includeAccounts: true },
 		);
 		if (!user) {
 			throw new APIError("BAD_REQUEST", {
 				message: "User not found",
 			});
 		}
-		const account = user.accounts.find((a) => a.providerId === "credential");
-		if (!account) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Account not found",
+		if (parsed.updateTo) {
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				if (ctx.query.callbackURL) {
+					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+				}
+				throw new APIError("UNAUTHORIZED", {
+					message: "Session not found",
+				});
+			}
+			if (session.user.email !== parsed.email) {
+				if (ctx.query.callbackURL) {
+					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+				}
+				throw new APIError("UNAUTHORIZED", {
+					message: "Invalid session",
+				});
+			}
+
+			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+				parsed.email,
+				{
+					email: parsed.updateTo,
+				},
+			);
+
+			//send verification email to the new email
+			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+				updatedUser,
+				`${ctx.context.baseURL}/verify-email?token=${token}`,
+				token,
+			);
+
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				user: updatedUser,
+				status: true,
 			});
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
 		});
 		if (ctx.query.callbackURL) {
-			console.log("Redirecting to", ctx.query.callbackURL);
-			throw ctx.redirect("/");
+			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
+			user: null,
 			status: true,
 		});
 	},

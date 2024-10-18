@@ -70,6 +70,15 @@ export interface BetterAuthOptions {
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
+				/**
+				 * Custom generateId function.
+				 *
+				 * If not provided, nanoid will be used.
+				 * If set to false, the database's auto generated id will be used.
+				 *
+				 * @default nanoid
+				 */
+				generateId?: ((size?: number) => string) | false;
 		  }
 		| Adapter
 		| {
@@ -81,6 +90,15 @@ export interface BetterAuthOptions {
 				 * Database type between postgres, mysql and sqlite
 				 */
 				type: KyselyDatabaseType;
+				/**
+				 * Custom generateId function.
+				 *
+				 * If not provided, nanoid will be used.
+				 * If set to false, the database's auto generated id will be used.
+				 *
+				 * @default nanoid
+				 */
+				generateId?: ((size?: number) => string) | false;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -88,6 +106,30 @@ export interface BetterAuthOptions {
 	 * This is used to store session and rate limit data.
 	 */
 	secondaryStorage?: SecondaryStorage;
+	/**
+	 * Email verification configuration
+	 */
+	emailVerification?: {
+		/**
+		 * @param user the user to send the
+		 * verification email to
+		 * @param url the url to send the verification email to
+		 * it contains the token as well
+		 * @param token the token to send the verification email to
+		 */
+		sendVerificationEmail?: (
+			user: User,
+			url: string,
+			token: string,
+		) => Promise<void>;
+		/**
+		 * Send a verification email automatically
+		 * after sign up
+		 *
+		 * @default false
+		 */
+		sendOnSignUp?: boolean;
+	};
 	/**
 	 * Email and password authentication
 	 */
@@ -98,6 +140,14 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		enabled: boolean;
+		/**
+		 * Require email verification before a session
+		 * can be created for the user.
+		 *
+		 * if the user is not verified, the user will not be able to sign in
+		 * and on sign in attempts, the user will be prompted to verify their email.
+		 */
+		requireEmailVerification?: boolean;
 		/**
 		 * The maximum length of the password.
 		 *
@@ -111,27 +161,14 @@ export interface BetterAuthOptions {
 		 */
 		minPasswordLength?: number;
 		/**
-		 * send reset password email
+		 * send reset password
 		 */
-		sendResetPassword?: (url: string, user: User) => Promise<void>;
+		sendResetPassword?: (user: User, url: string) => Promise<void>;
 		/**
-		 * @param user the user to send the verification email to
-		 * @param url the url to send the verification email to
-		 * it contains the token as well
-		 * @param token the token to send the verification email to
+		 * Number of seconds the reset password token is valid for.
+		 * @default 1 hour
 		 */
-		sendVerificationEmail?: (
-			url: string,
-			user: User,
-			token: string,
-		) => Promise<void>;
-		/**
-		 * Send a verification email automatically
-		 * after sign up
-		 *
-		 * @default false
-		 */
-		sendEmailVerificationOnSignUp?: boolean;
+		resetPasswordTokenExpiresIn?: number;
 		/**
 		 * Password hashing and verification
 		 *
@@ -144,6 +181,10 @@ export interface BetterAuthOptions {
 			hash?: (password: string) => Promise<string>;
 			verify?: (password: string, hash: string) => Promise<boolean>;
 		};
+		/**
+		 * Automatically sign in the user after sign up
+		 */
+		autoSignIn?: boolean;
 	};
 	/**
 	 * list of social providers
@@ -167,6 +208,23 @@ export interface BetterAuthOptions {
 		 */
 		additionalFields?: {
 			[key: string]: FieldAttribute;
+		};
+		/**
+		 * Changing email configuration
+		 */
+		changeEmail?: {
+			/**
+			 * Send a verification email when the user changes their email.
+			 *
+			 * If this is set to false, the email will be changed immediately.
+			 *
+			 * @default true
+			 */
+			sendVerificationEmail?: boolean;
+			/**
+			 * Disable changing email
+			 */
+			disable?: boolean;
 		};
 	};
 	session?: {

@@ -71,15 +71,6 @@ To signup a user with username, you can use the `signUp.username` function provi
 - `callbackURL`: The url to redirect to after the user has signed up. (optional)
 
 ```ts title="client.ts" 
-import { createAuthClient } from "better-auth/client"
-import { usernameClient } from "better-auth/client/plugins"
-const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        usernameClient() // [!code highlight]
-    ] // [!code highlight]
-})
-// ---cut---
-
 const data = await client.signUp.username({
     username: "test",
     email: "test@email.com",
@@ -98,15 +89,6 @@ To signin a user with username, you can use the `signIn.username` function provi
 - `callbackURL`: The url to redirect to after the user has signed in. (optional)
 
 ```ts title="client.ts" 
-import { createAuthClient } from "better-auth/client"
-import { usernameClient } from "better-auth/client/plugins"
-const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        usernameClient() // [!code highlight]
-    ] // [!code highlight]
-})
-// ---cut---
-
 const data = await client.signIn.username({
     username: "test",
     password: "password1234",

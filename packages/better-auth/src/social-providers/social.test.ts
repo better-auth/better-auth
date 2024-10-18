@@ -136,3 +136,61 @@ describe("Social Providers", async () => {
 		expect(signInRes.error?.message).toBe("Invalid callback URL");
 	});
 });
+
+describe("Redirect URI", async () => {
+	it("should infer redirect uri", async () => {
+		const { client } = await getTestInstance({
+			basePath: "/custom/path",
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				onSuccess(context) {
+					const redirectURI = context.data.url;
+					expect(redirectURI).toContain(
+						"http%3A%2F%2Flocalhost%3A3000%2Fcustom%2Fpath%2Fcallback%2Fgoogle",
+					);
+				},
+			},
+		);
+	});
+
+	it("should respect custom redirect uri", async () => {
+		const { auth, customFetchImpl, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					redirectURI: "https://test.com/callback",
+				},
+			},
+		});
+
+		await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				onSuccess(context) {
+					const redirectURI = context.data.url;
+					expect(redirectURI).toContain(
+						"redirect_uri=https%3A%2F%2Ftest.com%2Fcallback",
+					);
+				},
+			},
+		);
+	});
+});

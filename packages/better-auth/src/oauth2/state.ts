@@ -1,6 +1,7 @@
 import { generateState as generateStateOAuth } from "oslo/oauth2";
 import { z } from "zod";
 import { hashToBase64 } from "../crypto/hash";
+import { APIError } from "better-call";
 
 export async function generateState(callbackURL?: string) {
 	const code = generateStateOAuth();

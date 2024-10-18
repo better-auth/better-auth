@@ -1,9 +1,5 @@
 import type { ProviderOptions } from "../oauth2";
-import {
-	getRedirectURI,
-	validateAuthorizationCode,
-	createAuthorizationURL,
-} from "../oauth2";
+import { validateAuthorizationCode, createAuthorizationURL } from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { parseJWT } from "oslo/jwt";
@@ -50,14 +46,14 @@ export const microsoft = (options: MicrosoftOptions) => {
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				scopes,
+				redirectURI: data.redirectURI,
 			});
 		},
-		validateAuthorizationCode(code, codeVerifier, redirectURI) {
+		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI:
-					redirectURI || getRedirectURI("microsoft", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
 			});

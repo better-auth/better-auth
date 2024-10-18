@@ -5,11 +5,13 @@ import {
 	passkey,
 	twoFactor,
 	admin,
+	multiSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -19,14 +21,29 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
+const database = new Database("auth.db");
+
 export const auth = betterAuth({
 	database: {
 		dialect: libsql,
 		type: "sqlite",
 	},
+	emailVerification: {
+		async sendVerificationEmail(user, url) {
+			console.log("Sending verification email to", user.email);
+			const res = await resend.emails.send({
+				from,
+				to: to || user.email,
+				subject: "Verify your email address",
+				html: `<a href="${url}">Verify your email address</a>`,
+			});
+			console.log(res, user.email);
+		},
+		sendEmailVerificationOnSignUp: true,
+	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(url, user) {
+		async sendResetPassword(user, url) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -37,16 +54,27 @@ export const auth = betterAuth({
 				}),
 			});
 		},
-		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail(email, url) {
-			console.log("Sending verification email to", email);
-			const res = await resend.emails.send({
-				from,
-				to: to || email,
-				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
-			});
-			console.log(res, email);
+	},
+	socialProviders: {
+		github: {
+			clientId: process.env.GITHUB_CLIENT_ID || "",
+			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+		},
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID || "",
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+		},
+		discord: {
+			clientId: process.env.DISCORD_CLIENT_ID || "",
+			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+		},
+		microsoft: {
+			clientId: process.env.MICROSOFT_CLIENT_ID || "",
+			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
 	},
 	plugins: [
@@ -89,23 +117,8 @@ export const auth = betterAuth({
 		passkey(),
 		bearer(),
 		admin(),
+		multiSession(),
 	],
-	socialProviders: {
-		github: {
-			clientId: process.env.GITHUB_CLIENT_ID || "",
-			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-		},
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-		},
-		discord: {
-			clientId: process.env.DISCORD_CLIENT_ID || "",
-			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-		},
-		microsoft: {
-			clientId: process.env.MICROSOFT_CLIENT_ID || "",
-			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-		},
-	},
 });
+
+auth.api.changeEmail;

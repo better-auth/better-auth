@@ -22,6 +22,7 @@ import { createLogger, logger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import { BetterAuthError } from "./error";
 import type { OAuthProvider } from "./oauth2";
+import { generateId } from "./utils";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -57,6 +58,11 @@ export const init = async (options: BetterAuthOptions) => {
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		emailAndPassword: {
+			...options.emailAndPassword,
+			enabled: options.emailAndPassword?.enabled ?? false,
+			autoSignIn: true,
+		},
 	};
 	const cookies = getCookies(options);
 
@@ -104,6 +110,7 @@ export const init = async (options: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		db,
+		uuid: generateId,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -147,6 +154,7 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
+	uuid: (size?: number) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;

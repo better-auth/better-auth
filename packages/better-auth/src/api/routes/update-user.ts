@@ -5,6 +5,7 @@ import { setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const updateUser = createAuthEndpoint(
 	"/user/update",
@@ -210,5 +211,90 @@ export const deleteUser = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		return ctx.json(null);
+	},
+);
+
+export const changeEmail = createAuthEndpoint(
+	"/user/change-email",
+	{
+		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string().optional(),
+			})
+			.optional(),
+		body: z.object({
+			newEmail: z.string().email(),
+			callbackURL: z.string().optional(),
+		}),
+		use: [sessionMiddleware, redirectURLMiddleware],
+	},
+	async (ctx) => {
+		if (ctx.context.options.user?.changeEmail?.disable === true) {
+			ctx.context.logger.error("Change email is disabled.");
+			throw new APIError("BAD_REQUEST", {
+				message: "Change email is disabled",
+			});
+		}
+
+		if (ctx.body.newEmail === ctx.context.session.user.email) {
+			ctx.context.logger.error("Email is the same");
+			throw new APIError("BAD_REQUEST", {
+				message: "Email is the same",
+			});
+		}
+
+		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
+			ctx.body.newEmail,
+		);
+		if (existingUser) {
+			ctx.context.logger.error("Email already exists");
+			throw new APIError("BAD_REQUEST", {
+				message: "Couldn't update your email",
+			});
+		}
+
+		if (
+			ctx.context.options.user?.changeEmail?.sendVerificationEmail === false ||
+			ctx.context.session.user.emailVerified !== true
+		) {
+			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+				ctx.context.session.user.email,
+				{
+					email: ctx.body.newEmail,
+				},
+			);
+			return ctx.json({
+				user: updatedUser,
+				status: true,
+			});
+		}
+
+		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+			ctx.context.logger.error("Verification email isn't enabled.");
+			throw new APIError("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
+			});
+		}
+
+		const token = await createEmailVerificationToken(
+			ctx.context.secret,
+			ctx.context.session.user.email,
+			ctx.body.newEmail,
+		);
+		const url = `${
+			ctx.context.baseURL
+		}/verify-email?token=${token}&callbackURL=${
+			ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		}`;
+		await ctx.context.options.emailVerification.sendVerificationEmail(
+			ctx.context.session.user,
+			url,
+			token,
+		);
+		return ctx.json({
+			user: null,
+			status: true,
+		});
 	},
 );

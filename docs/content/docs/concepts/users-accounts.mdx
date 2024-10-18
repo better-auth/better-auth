@@ -31,6 +31,47 @@ await authClient.user.update({
 })
 ```
 
+### Change Email
+
+To change the email of a user, you can use the `changeEmail` function provided by the client. The `changeEmail` function take a `newEmail` as argument. Before the email is changed, the user is required to verify their existing email.
+
+```ts
+await authClient.user.changeEmail({
+    newEmail: "new-email@email.com",
+    callbackURL: "/dashboard", // optional - redirect the user to this URL after the email is verified
+});
+```
+
+after they verify their email, the new email is updated in the user table. And a verification email is sent to the new email. 
+
+If you want to disable this behavior, you can set `sendVerificationEmail` to `false`. Which will automatically update the email without the verification step. (This is not recommended)
+
+**Disable Email verification**
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            sendVerificationEmail: false,
+        }
+    }
+})
+```
+
+**Disable Change Email Feature**
+
+To disable the ability for users to change their email:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            disable: true,
+        }
+    }
+});
+```
+ 
 ### Change Password
 
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:

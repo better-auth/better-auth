@@ -9,3 +9,4 @@ export * from "../../plugins/anonymous/client";
 export * from "../../plugins/additional-fields/client";
 export * from "../../plugins/admin/client";
 export * from "../../plugins/generic-oauth/client";
+export * from "../../plugins/multi-session/client";

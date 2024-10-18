@@ -171,7 +171,7 @@ export const admin = (options?: AdminOptions) => {
 						email: z.string(),
 						password: z.string(),
 						name: z.string(),
-						role: z.enum(["user", "admin"]),
+						role: z.string(),
 						/**
 						 * extra fields for user
 						 */
@@ -225,6 +225,16 @@ export const admin = (options?: AdminOptions) => {
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
+						filter: z
+							.array(
+								z.object({
+									field: z.string(),
+									value: z.string().or(z.number()).or(z.boolean()),
+									operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
+									connector: z.enum(["AND", "OR"]).optional(),
+								}),
+							)
+							.optional(),
 					}),
 				},
 				async (ctx) => {
@@ -237,6 +247,7 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
+						ctx.query?.filter,
 					);
 					return ctx.json({
 						users: users as UserWithRole[],

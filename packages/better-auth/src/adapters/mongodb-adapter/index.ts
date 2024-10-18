@@ -1,4 +1,4 @@
-import type { Db, MongoClient } from "mongodb";
+import type { Db } from "mongodb";
 import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
@@ -56,22 +56,42 @@ function selectConvertor(selects: string[]) {
 	return selectConstruct;
 }
 
-export const mongodbAdapter = (mongo: Db) => {
+export const mongodbAdapter = (
+	mongo: Db,
+	opts?: {
+		usePlural?: boolean;
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?: ((size?: number) => string) | false;
+	},
+) => {
 	const db = mongo;
+	const getModelName = (name: string) => (opts?.usePlural ? `${name}s` : name);
 	return {
 		id: "mongodb",
 		async create(data) {
 			const { model, data: val } = data;
-			//@ts-expect-error
-			const res = await db.collection(model).insertOne({
+
+			if (opts?.generateId !== undefined) {
+				val.id = opts.generateId ? opts.generateId() : undefined;
+			}
+
+			const res = await db.collection(getModelName(model)).insertOne({
 				...val,
 			});
 			const id_ = res.insertedId;
-			const returned = { id: id_, ...val };
+			const returned = { ...val, id: id_ };
 			return removeMongoId(returned);
 		},
 		async findOne(data) {
 			const { model, where, select } = data;
+
 			const wheres = whereConvertor(where);
 			let selects = {};
 			if (select) {
@@ -79,7 +99,7 @@ export const mongodbAdapter = (mongo: Db) => {
 			}
 
 			const res = await db
-				.collection(model)
+				.collection(getModelName(model))
 				.find({ ...wheres }, { projection: selects })
 				.toArray();
 
@@ -95,7 +115,7 @@ export const mongodbAdapter = (mongo: Db) => {
 			const { model, where, limit, offset, sortBy } = data;
 			const wheres = whereConvertor(where);
 			const toReturn = await db
-				.collection(model)
+				.collection(getModelName(model))
 				.find()
 				// @ts-expect-error
 				.filter(wheres)
@@ -110,7 +130,7 @@ export const mongodbAdapter = (mongo: Db) => {
 			const wheres = whereConvertor(where);
 
 			if (where.length === 1) {
-				const res = await db.collection(model).findOneAndUpdate(
+				const res = await db.collection(getModelName(model)).findOneAndUpdate(
 					//@ts-expect-error
 					wheres,
 					{
@@ -120,7 +140,7 @@ export const mongodbAdapter = (mongo: Db) => {
 				);
 				return removeMongoId(res);
 			}
-			const res = await db.collection(model).updateMany(
+			const res = await db.collection(getModelName(model)).updateMany(
 				//@ts-expect-error
 				wheres,
 				{
@@ -132,8 +152,11 @@ export const mongodbAdapter = (mongo: Db) => {
 		async delete(data) {
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
-			//@ts-expect-error
-			const res = await db.collection(model).findOneAndDelete(wheres);
+
+			const res = await db
+				.collection(getModelName(model))
+				//@ts-expect-error
+				.findOneAndDelete(wheres);
 		},
 	} satisfies Adapter;
 };

@@ -227,15 +227,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						options: {
 							clientId,
 							clientSecret,
-							redirectURI:
-								redirectURI ||
-								`${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state: state.raw,
 						codeVerifier: codeVerifier,
 						scopes: scopes || [],
 						disablePkce: !pkce,
+						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
 					if (responseType && responseType !== "code") {
@@ -302,8 +301,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					const state = ctx.query.state;
 					const {
-						data: { callbackURL, currentURL, code },
+						data: { callbackURL, currentURL },
 					} = parsedState;
+					const code = ctx.query.code;
 					const errorURL =
 						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
 					const storedState = await ctx.getSignedCookie(
@@ -435,7 +435,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								id: `${provider.providerId}:${user.data.id}`,
 								providerId: provider.providerId,
 								accountId: user.data.id,
-								userId: userId!,
 							});
 						} catch (e) {
 							const url = new URL(errorURL);

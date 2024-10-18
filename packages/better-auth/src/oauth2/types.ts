@@ -19,14 +19,14 @@ export interface OAuthProvider<
 		state: string;
 		codeVerifier: string;
 		scopes?: string[];
-		redirectURI?: string;
+		redirectURI: string;
 	}) => Promise<URL> | URL;
 	name: string;
-	validateAuthorizationCode: (
-		code: string,
-		codeVerifier?: string,
-		redirectURI?: string,
-	) => Promise<OAuth2Tokens>;
+	validateAuthorizationCode: (data: {
+		code: string;
+		redirectURI: string;
+		codeVerifier?: string;
+	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
 		user: Omit<User, "createdAt" | "updatedAt">;
 		data: T;

@@ -35,7 +35,7 @@ If you're not using a frontend framework, you can still import the vanilla clien
  ]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from  "better-auth/client"
+            import { createAuthClient } from "better-auth/client"
             export const client = createAuthClient()
             ```
     </Tab>
@@ -93,11 +93,6 @@ You can use `auth.api` to call the API from the server side. Here is an example 
 ---
 import { UserCard } from "@/components/user-card";
 import { auth } from "@/auth";
-
-const activeSessions = await auth.api
-	.listSessions({
-		headers: Astro.request.headers,
-	});
 
 const session = await auth.api.getSession({
 	headers: Astro.request.headers,

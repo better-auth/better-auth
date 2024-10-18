@@ -8,7 +8,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL?.startsWith("https://") ||
+			: (options.baseURL ? options.baseURL.startsWith("https://") : false) ||
 				process.env.NODE_ENV === "production";
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
@@ -205,6 +205,16 @@ export function parseSetCookieHeader(
 		cookieMap.set(name, cookieObj);
 	});
 
+	return cookieMap;
+}
+export function parseCookies(cookieHeader: string) {
+	const cookies = cookieHeader.split("; ");
+	const cookieMap = new Map<string, string>();
+
+	cookies.forEach((cookie) => {
+		const [name, value] = cookie.split("=");
+		cookieMap.set(name, value);
+	});
 	return cookieMap;
 }
 

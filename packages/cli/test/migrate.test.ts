@@ -85,7 +85,9 @@ describe("migrate auth instance with plugins", () => {
 			config: "test/auth.ts",
 			y: true,
 		});
-		const res = db.prepare("INSERT INTO plugin (test) VALUES ('test')").run();
+		const res = db
+			.prepare("INSERT INTO plugin (id, test) VALUES (?, ?)")
+			.run("1", "test");
 		expect(res.changes).toBe(1);
 	});
 });

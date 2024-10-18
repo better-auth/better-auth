@@ -10,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { compareHash } from "../../crypto/hash";
+import { createEmailVerificationToken } from "./email-verification";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -79,20 +80,18 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-
 		const codeVerifier = await c.getSignedCookie(
 			c.context.authCookies.pkCodeVerifier.name,
 			c.context.secret,
 		);
 		let tokens: OAuth2Tokens;
 		try {
-			tokens = await provider.validateAuthorizationCode(
-				c.query.code,
+			tokens = await provider.validateAuthorizationCode({
+				code: c.query.code,
 				codeVerifier,
-				`${c.context.baseURL}/callback/${provider.id}`,
-			);
+				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			});
 		} catch (e) {
-			console.log(e);
 			c.context.logger.error(e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
@@ -174,17 +173,38 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				await c.context.internalAdapter.createOAuthUser(data.data, {
-					...getAccountTokens(tokens),
-					id: `${provider.id}:${user.id}`,
-					providerId: provider.id,
-					accountId: user.id.toString(),
-					userId: id,
-				});
+				const emailVerified = user.emailVerified;
+				const created = await c.context.internalAdapter.createOAuthUser(
+					{
+						...data.data,
+						emailVerified,
+					},
+					{
+						...getAccountTokens(tokens),
+						id: `${provider.id}:${user.id}`,
+						providerId: provider.id,
+						accountId: user.id.toString(),
+					},
+				);
+				if (
+					!emailVerified &&
+					created &&
+					c.context.options.emailVerification?.sendOnSignUp
+				) {
+					const token = await createEmailVerificationToken(
+						c.context.secret,
+						user.email,
+					);
+					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+					await c.context.options.emailVerification?.sendVerificationEmail?.(
+						created.user,
+						url,
+						token,
+					);
+				}
 			} catch (e) {
 				const url = new URL(currentURL || callbackURL);
 				url.searchParams.set("error", "unable_to_create_user");
-				c.setHeader("Location", url.toString());
 				throw c.redirect(url.toString());
 			}
 		}

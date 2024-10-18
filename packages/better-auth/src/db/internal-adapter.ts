@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "../types";
-import type { Adapter } from "../types/adapter";
+import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User, Verification } from "./schema";
@@ -19,13 +19,16 @@ export const createInternalAdapter = (
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
-		createOAuthUser: async (user: User, account: Account) => {
+		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
 			try {
 				const createdUser = await createWithHooks(user, "user");
 				const createdAccount = await createWithHooks(account, "account");
 				return {
 					user: createdUser,
-					account: createdAccount,
+					account: {
+						...createdAccount,
+						userId: createdUser.id,
+					},
 				};
 			} catch (e) {
 				console.log(e);
@@ -49,6 +52,22 @@ export const createInternalAdapter = (
 			);
 			return createdUser as T & User;
 		},
+		createAccount: async <T>(
+			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
+				Partial<Account> &
+				Record<string, any>,
+		) => {
+			const createdAccount = await createWithHooks(
+				{
+					id: generateId(),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...account,
+				},
+				"account",
+			);
+			return createdAccount as T & Account;
+		},
 		listSessions: async (userId: string) => {
 			const sessions = await adapter.findMany<Session>({
 				model: tables.session.tableName,
@@ -68,12 +87,14 @@ export const createInternalAdapter = (
 				field: string;
 				direction: "asc" | "desc";
 			},
+			where?: Where[],
 		) => {
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				limit,
 				offset,
 				sortBy,
+				where,
 			});
 			return users;
 		},
@@ -399,11 +420,11 @@ export const createInternalAdapter = (
 				},
 				[
 					{
-						field: "userId",
+						field: tables.account.fields.userId.fieldName || "userId",
 						value: userId,
 					},
 					{
-						field: "providerId",
+						field: tables.account.fields.providerId.fieldName || "providerId",
 						value: "credential",
 					},
 				],

@@ -1,4 +1,4 @@
-import { APIError, type Endpoint, createRouter } from "better-call";
+import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
@@ -13,6 +13,7 @@ import {
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
+	changeEmail,
 	signInEmail,
 	signInOAuth,
 	signOut,
@@ -95,6 +96,7 @@ export function getEndpoints<
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
+		changeEmail,
 		changePassword,
 		setPassword,
 		updateUser,
@@ -140,15 +142,56 @@ export function getEndpoints<
 					}
 				}
 			}
+			let endpointRes: any;
+			try {
+				//@ts-ignore
+				endpointRes = await value({
+					...context,
+					context: {
+						...c,
+						...context.context,
+					},
+				});
+			} catch (e) {
+				if (e instanceof APIError) {
+					const afterPlugins = options.plugins
+						?.map((plugin) => {
+							if (plugin.hooks?.after) {
+								return plugin.hooks.after;
+							}
+						})
+						.filter((plugin) => plugin !== undefined)
+						.flat();
 
-			//@ts-ignore
-			const endpointRes = await value({
-				...context,
-				context: {
-					...c,
-					...context.context,
-				},
-			});
+					if (!afterPlugins?.length) {
+						throw e;
+					}
+
+					let response = new Response(JSON.stringify(e.body), {
+						status: statusCode[e.status],
+						headers: e.headers,
+					});
+
+					for (const hook of afterPlugins || []) {
+						const match = hook.matcher(context);
+						if (match) {
+							const obj = Object.assign(context, {
+								context: {
+									...ctx,
+									returned: response,
+								},
+							});
+							const hookRes = await hook.handler(obj);
+							if (hookRes && "response" in hookRes) {
+								response = hookRes.response as any;
+							}
+						}
+					}
+					return response;
+				}
+
+				throw e;
+			}
 			let response = endpointRes;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
