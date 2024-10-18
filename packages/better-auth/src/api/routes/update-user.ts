@@ -230,7 +230,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware, redirectURLMiddleware],
 	},
 	async (ctx) => {
-		if(ctx.context.options.user?.changeEmail?.disable === true) {
+		if (ctx.context.options.user?.changeEmail?.disable === true) {
 			ctx.context.logger.error("Change email is disabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Change email is disabled",

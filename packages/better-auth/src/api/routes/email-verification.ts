@@ -13,7 +13,7 @@ export async function createEmailVerificationToken(
 	/**
 	 * The email to update from
 	 */
-	updateTo?: string
+	updateTo?: string,
 ) {
 	const token = await createJWT(
 		"HS256",
@@ -117,7 +117,7 @@ export const verifyEmail = createAuthEndpoint(
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
 			if (!session) {
-				if(ctx.query.callbackURL) {
+				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
 				throw new APIError("UNAUTHORIZED", {
@@ -125,7 +125,7 @@ export const verifyEmail = createAuthEndpoint(
 				});
 			}
 			if (session.user.email !== parsed.email) {
-				if(ctx.query.callbackURL) {
+				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
 				throw new APIError("UNAUTHORIZED", {
@@ -147,7 +147,6 @@ export const verifyEmail = createAuthEndpoint(
 				user: updatedUser,
 				status: true,
 			});
-			
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
@@ -161,4 +160,3 @@ export const verifyEmail = createAuthEndpoint(
 		});
 	},
 );
-

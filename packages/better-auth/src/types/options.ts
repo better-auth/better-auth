@@ -215,9 +215,9 @@ export interface BetterAuthOptions {
 		changeEmail?: {
 			/**
 			 * Send a verification email when the user changes their email.
-			 * 
+			 *
 			 * If this is set to false, the email will be changed immediately.
-			 * 
+			 *
 			 * @default true
 			 */
 			sendVerificationEmail?: boolean;

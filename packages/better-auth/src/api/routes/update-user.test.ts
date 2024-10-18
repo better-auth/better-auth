@@ -10,8 +10,8 @@ describe("updateUser", async () => {
 			emailVerification: {
 				async sendVerificationEmail(user, url, token) {
 					emailVerificationToken = token;
-				},	
-			}
+				},
+			},
 		});
 	const headers = new Headers();
 	const session = await client.signIn.email({
@@ -39,9 +39,9 @@ describe("updateUser", async () => {
 	});
 
 	it("should update user email", async () => {
-		const newEmail = "new-email@email.com"
-	    await client.user.changeEmail({
-			newEmail ,
+		const newEmail = "new-email@email.com";
+		await client.user.changeEmail({
+			newEmail,
 			fetchOptions: {
 				headers: headers,
 			},
@@ -51,15 +51,14 @@ describe("updateUser", async () => {
 				token: emailVerificationToken,
 			},
 			fetchOptions: {
-				headers
-			}
-		})
-	    expect(res.data?.user.email).toBe(newEmail);
-	})
-
+				headers,
+			},
+		});
+		expect(res.data?.user.email).toBe(newEmail);
+	});
 
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com"
+		const newEmail = "new-email@email.com";
 		const updated = await client.user.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
@@ -81,7 +80,6 @@ describe("updateUser", async () => {
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
-	
 	it("should revoke other sessions", async () => {
 		const newHeaders = new Headers();
 		await client.user.changePassword({
