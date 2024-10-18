@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "../types";
-import type { Adapter } from "../types/adapter";
+import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
 import type { Account, Session, User, Verification } from "./schema";
@@ -87,12 +87,14 @@ export const createInternalAdapter = (
 				field: string;
 				direction: "asc" | "desc";
 			},
+			where?: Where[],
 		) => {
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				limit,
 				offset,
 				sortBy,
+				where,
 			});
 			return users;
 		},
