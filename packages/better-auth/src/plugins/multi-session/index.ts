@@ -197,12 +197,10 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
 						const currentMultiSessions =
-							Object.keys(cookies).filter(isMultiSessionCookie).length;
-						const toBeAdded = Object.keys(setCookies).filter((key) =>
-							key.includes("session_token"),
-						).length;
+							Object.keys(cookies).filter(isMultiSessionCookie).length +
+							(cookieString.includes("session_token") ? 1 : 0);
 
-						if (currentMultiSessions + toBeAdded > opts.maximumSessions) {
+						if (currentMultiSessions > opts.maximumSessions) {
 							throw new APIError("UNAUTHORIZED", {
 								message: "Maximum number of device sessions reached.",
 							});
