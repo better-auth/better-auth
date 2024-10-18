@@ -125,8 +125,8 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					return ctx.json(session);
 				},
 			),
-			signOutDeviceSession: createAuthEndpoint(
-				"/multi-session/sign-out-device-session",
+			DeviceSession: createAuthEndpoint(
+				"/multi-session/revoke",
 				{
 					method: "POST",
 					body: z.object({

@@ -109,7 +109,7 @@ describe("multi-session", async () => {
 	});
 
 	it("should sign-out a session", async () => {
-		await client.multiSession.signOutDeviceSession({
+		await client.multiSession.revoke({
 			fetchOptions: {
 				headers,
 			},
