@@ -40,18 +40,10 @@ describe("updateUser", async () => {
 
 	it("should update user email", async () => {
 		const newEmail = "new-email@email.com";
-		await client.user.changeEmail({
+		const res = await client.user.changeEmail({
 			newEmail,
 			fetchOptions: {
 				headers: headers,
-			},
-		});
-		const res = await client.verifyEmail({
-			query: {
-				token: emailVerificationToken,
-			},
-			fetchOptions: {
-				headers,
 			},
 		});
 		expect(res.data?.user.email).toBe(newEmail);
