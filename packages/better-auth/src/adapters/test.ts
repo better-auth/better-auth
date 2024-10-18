@@ -135,6 +135,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		await adapter.create({
 			model: "user",
 			data: {
+				id: "3",
 				name: "a",
 				email: "a@email.com",
 				emailVerified: true,
@@ -149,6 +150,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				direction: "asc",
 			},
 		});
+
 		expect(res[0].name).toBe("a");
 
 		const res2 = await adapter.findMany<User>({
@@ -238,7 +240,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			where: [
 				{
 					field: "id",
-					value: "3",
+					value: "5",
 				},
 			],
 		});

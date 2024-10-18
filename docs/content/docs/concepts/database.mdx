@@ -519,6 +519,41 @@ res.user.lang // > "fr"
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
 
+### ID Generation
+
+By default, Better Auth uses `nanoId` to generate unique IDs for users, sessions, and other entities. You can customize the ID generation by providing a custom function to your adapter or database configuration.
+
+**Example: Built In Kysley Adapter**
+```ts title="auth.ts" 
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+   database: {
+      db: db,
+      generateId: () => {
+         // custom id generation logic
+      }
+   }
+})
+```
+
+**Example: Prisma Adapter**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   database: prismaAdapter(prisma, {
+      provider: "sqlite",
+      generateId: () => {
+         // custom id generation logic
+      }
+   })
+})
+```
+
+You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
+
 ### Database Hooks
 
 Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in BetterAuth. You can create hooks for the following models: **user**, **session**, and **account**.

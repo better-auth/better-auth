@@ -1,4 +1,4 @@
-import type { Db, MongoClient } from "mongodb";
+import type { Db } from "mongodb";
 import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
@@ -60,6 +60,15 @@ export const mongodbAdapter = (
 	mongo: Db,
 	opts?: {
 		usePlural?: boolean;
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?: ((size?: number) => string) | false;
 	},
 ) => {
 	const db = mongo;
@@ -68,12 +77,16 @@ export const mongodbAdapter = (
 		id: "mongodb",
 		async create(data) {
 			const { model, data: val } = data;
-			//@ts-expect-error
+
+			if (opts?.generateId !== undefined) {
+				val.id = opts.generateId ? opts.generateId() : undefined;
+			}
+
 			const res = await db.collection(getModelName(model)).insertOne({
 				...val,
 			});
 			const id_ = res.insertedId;
-			const returned = { id: id_, ...val };
+			const returned = { ...val, id: id_ };
 			return removeMongoId(returned);
 		},
 		async findOne(data) {

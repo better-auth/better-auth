@@ -435,7 +435,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								id: `${provider.providerId}:${user.data.id}`,
 								providerId: provider.providerId,
 								accountId: user.data.id,
-								userId: userId!,
 							});
 						} catch (e) {
 							const url = new URL(errorURL);

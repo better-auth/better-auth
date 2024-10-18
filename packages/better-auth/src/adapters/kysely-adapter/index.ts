@@ -1,7 +1,6 @@
 import type { Kysely } from "kysely";
 import type { FieldAttribute } from "../../db";
 import type { Adapter, Where } from "../../types";
-import { getMigrations } from "../../db/get-migration";
 
 function convertWhere(w?: Where[]) {
 	if (!w)
@@ -87,6 +86,15 @@ export interface KyselyAdapterConfig {
 		boolean: boolean;
 		date: boolean;
 	};
+	/**
+	 * Custom generateId function.
+	 *
+	 * If not provided, nanoid will be used.
+	 * If set to false, the database's auto generated id will be used.
+	 *
+	 * @default nanoid
+	 */
+	generateId?: ((size?: number) => string) | false;
 }
 
 export const kyselyAdapter = (
@@ -99,6 +107,9 @@ export const kyselyAdapter = (
 			let { model, data: val, select } = data;
 			if (config?.transform) {
 				val = transformFrom(val, config.transform);
+			}
+			if (config?.generateId !== undefined) {
+				val.id = config.generateId ? config.generateId() : undefined;
 			}
 			let res = await db
 				.insertInto(model)
