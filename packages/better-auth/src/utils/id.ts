@@ -1,5 +1,9 @@
-import { alphabet, generateRandomString } from "../crypto/random";
+import {
+	alphabet,
+	generateRandomString as generateRandom,
+} from "../crypto/random";
+import { nanoid } from "nanoid";
 
 export const generateId = (size?: number) => {
-	return generateRandomString(size || 21, alphabet("a-z", "0-9", "A-Z"));
+	return nanoid(size);
 };

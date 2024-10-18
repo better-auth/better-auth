@@ -29,7 +29,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Exmaple: Mysql**
+**Example: Mysql**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { createPool } from "mysql2/promise"
@@ -137,6 +137,38 @@ export const auth = betterAuth({
         user: schema.users,
       },
       //if all of them are just using plural form, you can just pass the option below
+      usePlural: true
+    })
+})
+```
+
+### MongoDB Adapter
+
+The MongoDB adapter expects a mongodb client instance and a database name. The adapter will create a new database with the provided name if it doesn't exist.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+const client = new MongoClient("mongodb://localhost:27017");
+
+export const auth = betterAuth({
+    database: mongoAdapter(client)
+})
+```
+
+#### Use Plural Form
+
+If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+export const auth = betterAuth({
+    database: mongoAdapter(client, {
       usePlural: true
     })
 })
@@ -486,6 +518,41 @@ res.user.lang // > "fr"
 <Callout>
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
+
+### ID Generation
+
+By default, Better Auth uses `nanoId` to generate unique IDs for users, sessions, and other entities. You can customize the ID generation by providing a custom function to your adapter or database configuration.
+
+**Example: Built In Kysley Adapter**
+```ts title="auth.ts" 
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+   database: {
+      db: db,
+      generateId: () => {
+         // custom id generation logic
+      }
+   }
+})
+```
+
+**Example: Prisma Adapter**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   database: prismaAdapter(prisma, {
+      provider: "sqlite",
+      generateId: () => {
+         // custom id generation logic
+      }
+   })
+})
+```
+
+You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
 
 ### Database Hooks
 

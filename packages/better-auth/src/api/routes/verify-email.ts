@@ -42,7 +42,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
-		if (!ctx.context.options.emailAndPassword?.sendVerificationEmail) {
+		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error(
 				"Verification email isn't enabled. Pass `sendVerificationEmail` in `emailAndPassword` options to enable it.",
 			);
@@ -63,9 +63,9 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}/verify-email?token=${token}&callbackURL=${
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
-		await ctx.context.options.emailAndPassword.sendVerificationEmail(
-			url,
+		await ctx.context.options.emailVerification.sendVerificationEmail(
 			user.user,
+			url,
 			token,
 		);
 		return ctx.json({

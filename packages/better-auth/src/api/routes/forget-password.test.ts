@@ -7,7 +7,7 @@ describe("forget password", async (it) => {
 	const { client, testUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
-			async sendResetPassword(url, user) {
+			async sendResetPassword(user, url) {
 				token = url.split("?")[0].split("/").pop() || "";
 				await mockSendEmail();
 			},

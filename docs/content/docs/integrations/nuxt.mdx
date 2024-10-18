@@ -35,20 +35,20 @@ Create a client instance. You can name the file anything you want. Here we are c
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/vue" // make sure to import from better-auth/vue
 
-export const client = createAuthClient({
+export const authClient = createAuthClient({
     //you can pass client configuration here
 })
 ```
 
 Once you have created the client, you can use it to sign up, sign in, and perform other actions.
-Some of the actinos are reactive. The client use [nano-store](https://github.com/nanostores/nanostores) to store the state and re-render the components when the state changes.
+Some of the actinos are reactive.
 
 ### Example usage
 
 ```vue title="index.vue"
 <script setup lang="ts">
-import { client } from "~/lib/client"
-const session = client.useSession()
+import { authClient } from "~/lib/client"
+const session = authClient.useSession()
 </script>
 
 <template>
@@ -66,4 +66,39 @@ const session = client.useSession()
         </div>
     </div>
 </template>
+```
+
+### SSR Usage
+
+If you are using Nuxt with SSR, you can use the `useSession` function in the `setup` function of your page component and pass `useFetch` to make it work with SSR.
+
+```vue title="index.vue"
+<script setup lang="ts">
+import { authClient } from "~/lib/auth-clietn";
+
+const { data: session } = authClient.useSession(useFetch);
+</script>
+
+<template>
+    <p>
+        {{ session }}
+    </p>
+</template>
+```
+
+
+### Middleware
+
+To add middleware to your nuxt project, you can use the `useSession` method from the client.
+
+```ts title="middleware/auth.global.ts"
+import { authClient } from "~/lib/auth-client"l
+export default defineNuxtRouteMiddleware(async (to, from) => {
+	const { data: session } = await authClient.useSession(useFetch); 
+	if (!session.value) {
+		if (to.path === "/dashboard") {
+			return navigateTo("/");
+		}
+	}
+});
 ```

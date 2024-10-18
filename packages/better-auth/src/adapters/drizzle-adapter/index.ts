@@ -11,6 +11,15 @@ export interface DrizzleAdapterOptions {
 	 * has an object with a key "users" instead of "user"
 	 */
 	usePlural?: boolean;
+	/**
+	 * Custom generateId function.
+	 *
+	 * If not provided, nanoid will be used.
+	 * If set to false, the database's auto generated id will be used.
+	 *
+	 * @default nanoid
+	 */
+	generateId?: ((size?: number) => string) | false;
 }
 
 function getSchema(
@@ -85,6 +94,10 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
+			if (options.generateId !== undefined) {
+				val.id = options.generateId ? options.generateId() : undefined;
+			}
+
 			const mutation = db.insert(schemaModel).values(val);
 			if (databaseType !== "mysql") return (await mutation.returning())[0];
 

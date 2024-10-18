@@ -24,9 +24,22 @@ export const auth = betterAuth({
 		dialect: libsql,
 		type: "sqlite",
 	},
+	emailVerification: {
+		async sendVerificationEmail(user, url) {
+			console.log("Sending verification email to", user.email);
+			const res = await resend.emails.send({
+				from,
+				to: to || user.email,
+				subject: "Verify your email address",
+				html: `<a href="${url}">Verify your email address</a>`,
+			});
+			console.log(res, user.email);
+		},
+		sendEmailVerificationOnSignUp: true,
+	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(url, user) {
+		async sendResetPassword(user, url) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -36,17 +49,6 @@ export const auth = betterAuth({
 					resetLink: url,
 				}),
 			});
-		},
-		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail(email, url) {
-			console.log("Sending verification email to", email);
-			const res = await resend.emails.send({
-				from,
-				to: to || email,
-				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
-			});
-			console.log(res, email);
 		},
 	},
 	plugins: [
@@ -106,6 +108,10 @@ export const auth = betterAuth({
 		microsoft: {
 			clientId: process.env.MICROSOFT_CLIENT_ID || "",
 			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
 	},
 });

@@ -19,13 +19,16 @@ export const createInternalAdapter = (
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
-		createOAuthUser: async (user: User, account: Account) => {
+		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
 			try {
 				const createdUser = await createWithHooks(user, "user");
 				const createdAccount = await createWithHooks(account, "account");
 				return {
 					user: createdUser,
-					account: createdAccount,
+					account: {
+						...createdAccount,
+						userId: createdUser.id,
+					},
 				};
 			} catch (e) {
 				console.log(e);
