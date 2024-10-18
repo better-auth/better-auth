@@ -39,7 +39,7 @@ export const csrfMiddleware = createAuthMiddleware(
 			ctx.context.secret,
 		);
 		const [token, hash] = csrfCookie?.split("!") || [null, null];
-		if (!csrfToken || !csrfCookie || !token || !hash || token !== csrfToken) {
+		if (!csrfToken || !token || !hash || token !== csrfToken) {
 			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
 				maxAge: 0,
 			});
