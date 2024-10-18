@@ -1,4 +1,3 @@
-import { alphabet, generateRandomString } from "../../crypto/random";
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./verify-email";

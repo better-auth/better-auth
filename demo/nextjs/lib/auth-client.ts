@@ -4,6 +4,7 @@ import {
 	passkeyClient,
 	twoFactorClient,
 	adminClient,
+	multiSessionClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ export const client = createAuthClient({
 		}),
 		passkeyClient(),
 		adminClient(),
+		multiSessionClient(),
 	],
 	fetchOptions: {
 		onError(e) {

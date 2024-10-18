@@ -16,10 +16,12 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
 		return (
 			<div className="relative">
 				<Input
-					type={showPassword ? "text" : "password"}
+					{...props}
+					type="text"
+					autoComplete="new-password"
+					name="password_fake"
 					className={cn("hide-password-toggle pr-10", className)}
 					ref={ref}
-					{...props}
 				/>
 				<Button
 					type="button"
@@ -29,7 +31,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
 					onClick={() => setShowPassword((prev) => !prev)}
 					disabled={disabled}
 				>
-					{showPassword && !disabled ? (
+					{!showPassword && !disabled ? (
 						<EyeIcon className="h-4 w-4" aria-hidden="true" />
 					) : (
 						<EyeOffIcon className="h-4 w-4" aria-hidden="true" />

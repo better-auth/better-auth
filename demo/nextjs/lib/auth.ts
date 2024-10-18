@@ -5,11 +5,13 @@ import {
 	passkey,
 	twoFactor,
 	admin,
+	multiSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -18,6 +20,8 @@ const libsql = new LibsqlDialect({
 	url: process.env.TURSO_DATABASE_URL || "",
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
+
+const database = new Database("auth.db");
 
 export const auth = betterAuth({
 	database: {
@@ -47,6 +51,28 @@ export const auth = betterAuth({
 				html: `<a href="${url}">Verify your email address</a>`,
 			});
 			console.log(res, email);
+		},
+	},
+	socialProviders: {
+		github: {
+			clientId: process.env.GITHUB_CLIENT_ID || "",
+			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+		},
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID || "",
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+		},
+		discord: {
+			clientId: process.env.DISCORD_CLIENT_ID || "",
+			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+		},
+		microsoft: {
+			clientId: process.env.MICROSOFT_CLIENT_ID || "",
+			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
 	},
 	plugins: [
@@ -89,27 +115,6 @@ export const auth = betterAuth({
 		passkey(),
 		bearer(),
 		admin(),
+		multiSession(),
 	],
-	socialProviders: {
-		github: {
-			clientId: process.env.GITHUB_CLIENT_ID || "",
-			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-		},
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-		},
-		discord: {
-			clientId: process.env.DISCORD_CLIENT_ID || "",
-			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-		},
-		microsoft: {
-			clientId: process.env.MICROSOFT_CLIENT_ID || "",
-			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-		},
-		twitch: {
-			clientId: process.env.TWITCH_CLIENT_ID || "",
-			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
-		},
-	},
 });

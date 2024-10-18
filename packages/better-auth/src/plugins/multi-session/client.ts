@@ -8,5 +8,13 @@ export const multiSessionClient = () => {
 		pathMethods: {
 			"/multi-session/sign-out-device-sessions": "POST",
 		},
+		atomListeners: [
+			{
+				matcher(path) {
+					return path === "/multi-session/set-active";
+				},
+				signal: "_sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };

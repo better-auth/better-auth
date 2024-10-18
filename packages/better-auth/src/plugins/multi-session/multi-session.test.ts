@@ -7,7 +7,11 @@ import { parseSetCookieHeader } from "../../cookies";
 describe("multi-session", async () => {
 	const { auth, client, signInWithTestUser, testUser } = await getTestInstance(
 		{
-			plugins: [multiSession()],
+			plugins: [
+				multiSession({
+					maximumSessions: 2,
+				}),
+			],
 		},
 		{
 			clientOptions: {
@@ -90,17 +94,47 @@ describe("multi-session", async () => {
 		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
+	it("should throw error when setting above maximum sessions", async () => {
+		const res = await client.signUp.email(
+			{
+				email: "new-email-2@email.com",
+				password: "password",
+				name: "Name",
+			},
+			{
+				headers,
+			},
+		);
+		console.log(res);
+	});
+
+	it("should sign-out a session", async () => {
+		await client.multiSession.signOutDeviceSession({
+			fetchOptions: {
+				headers,
+			},
+			sessionId,
+		});
+		const res = await client.multiSession.listDeviceSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).toHaveLength(1);
+	});
+
 	it("should sign-out all sessions", async () => {
-		await client.multiSession.signOutDeviceSessions({
+		await client.signOut({
 			fetchOptions: {
 				headers,
 			},
 		});
-		const session = await client.session({
+
+		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(session.data).toBe(null);
+		expect(res.data).toHaveLength(0);
 	});
 });
