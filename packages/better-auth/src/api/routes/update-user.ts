@@ -224,12 +224,26 @@ export const changeEmail = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newEmail: z.string(),
+			newEmail: z.string().email(),
 			callbackURL: z.string().optional(),
 		}),
 		use: [sessionMiddleware, redirectURLMiddleware],
 	},
 	async (ctx) => {
+		if (ctx.context.options.user?.changeEmail?.disable === true) {
+			ctx.context.logger.error("Change email is disabled.");
+			throw new APIError("BAD_REQUEST", {
+				message: "Change email is disabled",
+			});
+		}
+
+		if (ctx.body.newEmail === ctx.context.session.user.email) {
+			ctx.context.logger.error("Email is the same");
+			throw new APIError("BAD_REQUEST", {
+				message: "Email is the same",
+			});
+		}
+
 		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
 			ctx.body.newEmail,
 		);
@@ -239,14 +253,10 @@ export const changeEmail = createAuthEndpoint(
 				message: "Couldn't update your email",
 			});
 		}
-		if (ctx.context.options.user?.changeEmail?.disable === true) {
-			ctx.context.logger.error("Change email is disabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Change email is disabled",
-			});
-		}
+
 		if (
-			ctx.context.options.user?.changeEmail?.sendVerificationEmail === false
+			ctx.context.options.user?.changeEmail?.sendVerificationEmail === false ||
+			ctx.context.session.user.emailVerified !== true
 		) {
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
