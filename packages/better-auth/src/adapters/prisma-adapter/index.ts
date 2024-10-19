@@ -55,10 +55,7 @@ interface PrismaClient {
 
 export const prismaAdapter = (
 	prisma: any,
-	{
-		provider,
-		generateId,
-	}: {
+	options: {
 		provider:
 			| "sqlite"
 			| "cockroachdb"
@@ -78,6 +75,7 @@ export const prismaAdapter = (
 	},
 ): Adapter => {
 	const db: PrismaClient = prisma;
+	const generateId = options.generateId;
 	return {
 		id: "prisma",
 		async create(data) {
@@ -158,5 +156,6 @@ export const prismaAdapter = (
 
 			return await db[model].deleteMany({ where: whereClause });
 		},
+		options,
 	};
 };
