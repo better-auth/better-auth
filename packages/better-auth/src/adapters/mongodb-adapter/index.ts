@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
+	
 	if (!where) return {};
 
 	const conditions = where.map((w) => {
@@ -32,6 +33,18 @@ function whereConvertor(where?: Where[]) {
 			case "ne":
 				condition = { [field]: { $ne: value } };
 				break;
+			
+			case "contains":
+				condition = { [field]: { $regex: `.*${value}.*` } };
+				break;
+			case "starts_with":
+				condition = { [field]: { $regex: `${value}.*`} };
+				break;
+			case "ends_with":
+				condition = { [field]: { $regex: `.*${value}` } };
+				break;
+				
+			
 			// Add more operators as needed
 			default:
 				throw new Error(`Unsupported operator: ${operator}`);
@@ -72,6 +85,7 @@ function selectConvertor(selects: string[]) {
 
 	return selectConstruct;
 }
+
 
 export const mongodbAdapter = (
 	mongo: Db,

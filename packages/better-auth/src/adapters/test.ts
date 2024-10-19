@@ -260,4 +260,47 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		expect(res).toBeNull();
 	});
+
+	test("should find many with contains operator", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "contains",
+					value: "se",
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should search users with startsWith", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "starts_with",
+					value: "us",
+				},
+			],
+		})
+		expect(res.length).toBe(1);
+	});
+
+	test("should search users with endsWith", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "ends_with",
+					value: "er2",
+				},
+			],
+		})
+		expect(res.length).toBe(1);
+	});
+
 }
