@@ -119,6 +119,31 @@ const users = await authClient.admin.listUsers({
 });
 ```
 
+### Search Users
+
+Allows you to search for users by their email or name adding the possibility to make more complex queries.
+
+```ts title="admin.ts"
+const users = await authClient.admin.searchUsers({
+    search: {
+        field: "email",
+        operator: "contains",
+        value: "@example.com"
+    },
+    filter: [
+        {
+            field: "banned",
+            operator: "eq",
+            value: null,
+        }
+    ],
+    limit: 10,
+    offset: 0,
+    sortBy: "createdAt",
+    sortDirection: "desc"
+})
+```
+
 ### Set User Role
 
 Changes the role of a user.

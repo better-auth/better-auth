@@ -100,6 +100,35 @@ export const createInternalAdapter = (
 			});
 			return users.map((user) => convertFromDB(tables.user.fields, user));
 		},
+		searchUsers: async (
+			searchField: string,
+			searchOperator: "contains" | "starts_with" | "ends_with",
+			searchValue: string,
+			limit?: number,
+			offset?: number,
+			sortBy?: {
+				field: string;
+				direction: "asc" | "desc";
+			},
+			where?: Where[]
+		) => {
+			
+			const users = await adapter.findMany<User>({
+				model: tables.user.tableName,
+				limit,
+				offset,
+				sortBy,
+				where: [
+					{
+						field: searchField,
+						operator: searchOperator,
+						value: searchValue,
+					},
+					...(where || []),
+				],
+			});
+			return users.map((user) => convertFromDB(tables.user.fields, user));
+		},
 		deleteUser: async (userId: string) => {
 			await adapter.delete({
 				model: tables.account.tableName,

@@ -254,6 +254,56 @@ export const admin = (options?: AdminOptions) => {
 					});
 				},
 			),
+			searchUsers: createAuthEndpoint(
+				"/admin/search-users",
+				{
+					method: "GET",
+					use: [adminMiddleware],
+					query: z.object({
+						// search by name or email
+						search: z.object( {
+							field: z.enum(["email", "name"]),
+							operator: z.enum(["contains", "starts_with", "ends_with"]).default("contains"),
+							value: z.string(),
+						}),
+						//optional filter to apply to the search
+						filter: z
+							.array(
+								z.object({
+									field: z.string(),
+									value: z.string().or(z.number()).or(z.boolean()),
+									operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
+									connector: z.enum(["AND", "OR"]).optional(),
+								}),
+							)
+							.optional(),
+
+						limit: z.string().or(z.number()).optional(),
+						offset: z.string().or(z.number()).optional(),
+						sortBy: z.string().optional(),
+						sortDirection: z.enum(["asc", "desc"]).optional(),
+					}),
+
+				},
+				async (ctx) => {
+					const users = await ctx.context.internalAdapter.searchUsers(
+						ctx.query.search.field,
+						ctx.query.search.operator,
+						ctx.query.search.value,
+						Number(ctx.query?.limit) || undefined,
+						Number(ctx.query?.offset) || undefined,
+						ctx.query?.sortBy
+							? {
+									field: ctx.query.sortBy,
+									direction: ctx.query.sortDirection || "asc",
+								}
+							: undefined,
+					);
+					return ctx.json({
+						users: users as UserWithRole[],
+					});
+				}
+			),
 			listUserSessions: createAuthEndpoint(
 				"/admin/list-user-sessions",
 				{
