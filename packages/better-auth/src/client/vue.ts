@@ -80,7 +80,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			const calculatedURL =
 				baseURL && baseURL.endsWith("/")
 					? baseURL.slice(0, baseURL.length - 1)
-					: (baseURL ?? "") + "/auth/api";
+					: (baseURL ?? "") + "/api/auth";
 			return useFetch(`${calculatedURL}/session`, {
 				ref,
 			}).then((res: any) => {
