@@ -61,7 +61,7 @@ export const init = async (options: BetterAuthOptions) => {
 		emailAndPassword: {
 			...options.emailAndPassword,
 			enabled: options.emailAndPassword?.enabled ?? false,
-			autoSignIn: true,
+			autoSignIn: options.emailAndPassword?.enabled ?? true,
 		},
 	};
 	const cookies = getCookies(options);
