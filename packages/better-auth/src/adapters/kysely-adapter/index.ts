@@ -8,29 +8,31 @@ function convertWhere(w?: Where[]) {
 			and: null,
 			or: null,
 		};
-	const and = w
-		?.filter((w) => w.connector === "AND" || !w.connector)
-		.reduce(
-			(acc, w) =>
-				({
-					...acc,
-					[w.field]: w.value,
-				}) as any,
-			{},
-		);
-	const or = w
-		?.filter((w) => w.connector === "OR")
-		.reduce(
-			(acc, w) =>
-				({
-					...acc,
-					[w.field]: w.value,
-				}) as any,
-			{},
-		);
+
+	const conditions = {
+		and: [] as any[],
+		or: [] as any[],
+	};
+
+	w.forEach((condition) => {
+		const { field, value, operator = "=", connector = "AND" } = condition;
+		const expr = (eb: any) => {
+			if (operator.toLowerCase() === "in") {
+				return eb(field, "in", Array.isArray(value) ? value : [value]);
+			}
+			return eb(field, operator, value);
+		};
+
+		if (connector === "OR") {
+			conditions.or.push(expr);
+		} else {
+			conditions.and.push(expr);
+		}
+	});
+
 	return {
-		and: Object.keys(and).length ? and : null,
-		or: Object.keys(or).length ? or : null,
+		and: conditions.and.length ? conditions.and : null,
+		or: conditions.or.length ? conditions.or : null,
 	};
 }
 
@@ -143,11 +145,11 @@ export const kyselyAdapter = (
 			const { model, where, select } = data;
 			const { and, or } = convertWhere(where);
 			let query = db.selectFrom(model).selectAll();
-			if (or) {
-				query = query.where((eb) => eb.or(or));
-			}
 			if (and) {
-				query = query.where((eb) => eb.and(and));
+				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+			}
+			if (or) {
+				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
 			let res = await query.executeTakeFirst();
 			if (select?.length) {
@@ -178,10 +180,10 @@ export const kyselyAdapter = (
 			let query = db.selectFrom(model);
 			const { and, or } = convertWhere(where);
 			if (and) {
-				query = query.where((eb) => eb.and(and));
+				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 			}
 			if (or) {
-				query = query.where((eb) => eb.or(or));
+				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
 			query = query.limit(limit || 100);
 			if (offset) {
@@ -209,10 +211,10 @@ export const kyselyAdapter = (
 
 			let query = db.updateTable(model).set(val);
 			if (and) {
-				query = query.where((eb) => eb.and(and));
+				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 			}
 			if (or) {
-				query = query.where((eb) => eb.or(or));
+				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
 			const res = (await query.returningAll().executeTakeFirst()) || null;
 			if (config?.transform) {
@@ -228,10 +230,10 @@ export const kyselyAdapter = (
 			let query = db.deleteFrom(model);
 
 			if (and) {
-				query = query.where((eb) => eb.and(and));
+				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 			}
 			if (or) {
-				query = query.where((eb) => eb.or(or));
+				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
 
 			await query.execute();

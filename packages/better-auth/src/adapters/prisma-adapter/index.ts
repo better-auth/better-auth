@@ -8,7 +8,12 @@ function whereConvertor(where?: Where[]) {
 			return;
 		}
 		return {
-			[w.field]: w.value,
+			[w.field]:
+				w.operator === "eq" || !w.operator
+					? w.value
+					: {
+							[w.operator]: w.value,
+						},
 		};
 	}
 	const and = where.filter((w) => w.connector === "AND" || !w.connector);

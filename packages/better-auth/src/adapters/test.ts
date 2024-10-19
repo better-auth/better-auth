@@ -131,6 +131,20 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
+	test("should fin many with operators", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					operator: "in",
+					value: ["1", "2"],
+				},
+			],
+		});
+		expect(res.length).toBe(2);
+	});
+
 	test("should find many with sortBy", async () => {
 		await adapter.create({
 			model: "user",
