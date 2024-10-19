@@ -1,6 +1,6 @@
 {
     "name": "better-auth",
-    "version": "0.5.2-beta.2",
+    "version": "0.5.2-beta.3",
     "description": "The most comprehensive authentication library for TypeScript.",
     "type": "module",
     "repository": {
@@ -21,38 +21,109 @@
     "main": "./dist/index.js",
     "module": "./dist/index.js",
     "exports": {
-        ".": "./dist/index.js",
-        "./social-providers": "./dist/social.js",
+        ".": {
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        },
+        "./social-providers": {
+            "import": "./dist/social.js",
+            "require": "./dist/social.cjs"
+        },
         "./client": {
             "import": "./dist/client.js",
+            "require": "./dist/client.cjs",
             "types": "./dist/client.d.ts"
         },
         "./client/plugins": {
             "import": "./dist/client/plugins.js",
+            "require": "./dist/client/plugins.cjs",
             "types": "./dist/client/plugins.d.ts"
         },
-        "./types": "./dist/types.js",
-        "./crypto": "./dist/crypto.js",
-        "./cookies": "./dist/cookies.js",
-        "./oauth2": "./dist/oauth2.js",
-        "./react": "./dist/react.js",
-        "./preact": "./dist/preact.js",
-        "./solid": "./dist/solid.js",
-        "./api": "./dist/api.js",
-        "./db": "./dist/db.js",
-        "./vue": "./dist/vue.js",
-        "./plugins": "./dist/plugins.js",
-        "./plugins/access": "./dist/access.js",
-        "./svelte-kit": "./dist/svelte-kit.js",
-        "./solid-start": "./dist/solid-start.js",
-        "./svelte": "./dist/svelte.js",
-        "./next-js": "./dist/next-js.js",
+        "./types": {
+            "import": "./dist/types.js",
+            "require": "./dist/types.cjs"
+        },
+        "./crypto": {
+            "import": "./dist/crypto.js",
+            "require": "./dist/crypto.cjs"
+        },
+        "./cookies": {
+            "import": "./dist/cookies.js",
+            "require": "./dist/cookies.cjs"
+        },
+        "./oauth2": {
+            "import": "./dist/oauth2.js",
+            "require": "./dist/oauth2.cjs"
+        },
+        "./react": {
+            "import": "./dist/react.js",
+            "require": "./dist/react.cjs"
+        },
+        "./preact": {
+            "import": "./dist/preact.js",
+            "require": "./dist/preact.cjs"
+        },
+        "./solid": {
+            "import": "./dist/solid.js",
+            "require": "./dist/solid.cjs"
+        },
+        "./api": {
+            "import": "./dist/api.js",
+            "require": "./dist/api.cjs"
+        },
+        "./db": {
+            "import": "./dist/db.js",
+            "require": "./dist/db.cjs"
+        },
+        "./vue": {
+            "import": "./dist/vue.js",
+            "require": "./dist/vue.cjs"
+        },
+        "./plugins": {
+            "import": "./dist/plugins.js",
+            "require": "./dist/plugins.cjs"
+        },
+        "./plugins/access": {
+            "import": "./dist/access.js",
+            "require": "./dist/access.cjs"
+        },
+        "./svelte-kit": {
+            "import": "./dist/svelte-kit.js",
+            "require": "./dist/svelte-kit.cjs"
+        },
+        "./solid-start": {
+            "import": "./dist/solid-start.js",
+            "require": "./dist/solid-start.cjs"
+        },
+        "./svelte": {
+            "import": "./dist/svelte.js",
+            "require": "./dist/svelte.cjs"
+        },
+        "./next-js": {
+            "import": "./dist/next-js.js",
+            "require": "./dist/next-js.cjs"
+        },
         "./package.json": "./package.json",
-        "./node": "./dist/node.js",
-        "./adapters/prisma": "./dist/adapters/prisma.js",
-        "./adapters/drizzle": "./dist/adapters/drizzle.js",
-        "./adapters/mongodb": "./dist/adapters/mongodb.js",
-        "./adapters/kysely": "./dist/adapters/index.js"
+        "./node": {
+            "import": "./dist/node.js",
+            "require": "./dist/node.cjs"
+        },
+        "./adapters/prisma": {
+            "import": "./dist/adapters/prisma.js",
+            "require": "./dist/adapters/prisma.cjs"
+        },
+        "./adapters/drizzle": {
+            "import": "./dist/adapters/drizzle.js",
+            "require": "./dist/adapters/drizzle.cjs"
+        },
+        "./adapters/mongodb": {
+            "import": "./dist/adapters/mongodb.js",
+            "require": "./dist/adapters/mongodb.cjs"
+        },
+        "./adapters/kysely": {
+            "import": "./dist/adapters/index.js",
+            "require": "./dist/adapters/index.cjs"
+        }
     },
     "devDependencies": {
         "@prisma/client": "^5.19.1",
