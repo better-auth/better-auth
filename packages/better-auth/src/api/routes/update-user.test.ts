@@ -5,14 +5,18 @@ import { parseSetCookieHeader } from "../../cookies";
 
 describe("updateUser", async () => {
 	let emailVerificationToken: string;
-	const { client, testUser, sessionSetter, customFetchImpl } =
-		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail(user, url, token) {
-					emailVerificationToken = token;
-				},
+	const { client, testUser, sessionSetter } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail(user, url, token) {
+				emailVerificationToken = token;
 			},
-		});
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,

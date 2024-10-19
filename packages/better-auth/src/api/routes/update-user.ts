@@ -230,7 +230,7 @@ export const changeEmail = createAuthEndpoint(
 		use: [sessionMiddleware, redirectURLMiddleware],
 	},
 	async (ctx) => {
-		if (ctx.context.options.user?.changeEmail?.disable === true) {
+		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Change email is disabled",
@@ -243,7 +243,6 @@ export const changeEmail = createAuthEndpoint(
 				message: "Email is the same",
 			});
 		}
-
 		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
 			ctx.body.newEmail,
 		);
@@ -253,11 +252,10 @@ export const changeEmail = createAuthEndpoint(
 				message: "Couldn't update your email",
 			});
 		}
-
-		if (
-			ctx.context.options.user?.changeEmail?.sendVerificationEmail === false ||
-			ctx.context.session.user.emailVerified !== true
-		) {
+		/**
+		 * If the email is not verified, we can update the email
+		 */
+		if (ctx.context.session.user.emailVerified !== true) {
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
@@ -270,6 +268,9 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
+		/**
+		 * If the email is verified, we need to send a verification email
+		 */
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw new APIError("BAD_REQUEST", {

@@ -170,15 +170,14 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				const emailVerified = user.emailVerified;
+				const emailVerified = user.emailVerified || false;
 				const created = await c.context.internalAdapter.createOAuthUser(
 					{
 						...data.data,
-						emailVerified: emailVerified || false,
+						emailVerified,
 					},
 					{
 						...getAccountTokens(tokens),
-						id: `${provider.id}:${user.id}`,
 						providerId: provider.id,
 						accountId: user.id.toString(),
 					},

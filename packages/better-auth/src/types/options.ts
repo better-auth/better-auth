@@ -220,17 +220,20 @@ export interface BetterAuthOptions {
 		 */
 		changeEmail?: {
 			/**
+			 * Enable changing email
+			 * @default false
+			 */
+			enabled: boolean;
+			/**
 			 * Send a verification email when the user changes their email.
 			 *
-			 * If this is set to false, the email will be changed immediately.
-			 *
-			 * @default true
+			 * @default false
 			 */
-			sendVerificationEmail?: boolean;
-			/**
-			 * Disable changing email
-			 */
-			disable?: boolean;
+			sendChangeEmailVerification?: (
+				user: User,
+				url: string,
+				token: string,
+			) => Promise<void>;
 		};
 	};
 	session?: {
