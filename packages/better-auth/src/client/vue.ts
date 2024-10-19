@@ -77,11 +77,8 @@ export function createAuthClient<Option extends ClientOptions>(
 		if (useFetch) {
 			const ref = useStore(_sessionSignal);
 			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
-			const calculatedURL =
-				baseURL && baseURL.endsWith("/")
-					? baseURL.slice(0, baseURL.length - 1)
-					: (baseURL ?? "") + "/api/auth";
-			return useFetch(`${calculatedURL}/session`, {
+			const authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
+			return useFetch(`${authPath}/session`, {
 				ref,
 			}).then((res: any) => {
 				return {
