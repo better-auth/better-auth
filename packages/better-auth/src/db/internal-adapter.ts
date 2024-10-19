@@ -29,7 +29,7 @@ export const createInternalAdapter = (
 					user: createdUser,
 					account: {
 						...createdAccount,
-						userId: createdUser.id,
+						userId: createdUser.id || user.id,
 					},
 				};
 			} catch (e) {
