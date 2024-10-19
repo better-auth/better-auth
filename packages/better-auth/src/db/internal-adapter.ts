@@ -24,13 +24,16 @@ export const createInternalAdapter = (
 		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
 			try {
 				const createdUser = await createWithHooks(user, "user");
-				const createdAccount = await createWithHooks(account, "account");
-				return {
-					user: createdUser,
-					account: {
-						...createdAccount,
+				const createdAccount = await createWithHooks(
+					{
+						...account,
 						userId: createdUser.id || user.id,
 					},
+					"account",
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
 				};
 			} catch (e) {
 				console.log(e);
