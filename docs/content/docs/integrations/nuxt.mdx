@@ -41,7 +41,7 @@ export const authClient = createAuthClient({
 ```
 
 Once you have created the client, you can use it to sign up, sign in, and perform other actions.
-Some of the actinos are reactive.
+Some of the actions are reactive.
 
 ### Example usage
 
@@ -72,9 +72,11 @@ const session = authClient.useSession()
 
 If you are using Nuxt with SSR, you can use the `useSession` function in the `setup` function of your page component and pass `useFetch` to make it work with SSR.
 
+Note that you cannot pass a `baseURL` or `fetchOptions.baseURL` to the client while using the same nuxt app as a backend since it will throw a 401 on request using the complete url.
+
 ```vue title="index.vue"
 <script setup lang="ts">
-import { authClient } from "~/lib/auth-clietn";
+import { authClient } from "~/lib/auth-client";
 
 const { data: session } = authClient.useSession(useFetch);
 </script>
