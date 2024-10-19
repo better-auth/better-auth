@@ -5,6 +5,7 @@ exports[`init > should match config 1`] = `
   "adapter": {
     "create": [Function],
     "delete": [Function],
+    "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
