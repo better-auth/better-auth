@@ -132,30 +132,27 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const userId = dbUser?.user.id;
 		if (dbUser) {
-			//check if user has already linked this provider
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
 			);
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders
-				? trustedProviders.includes(provider.id as "apple")
-				: true;
-
-			if (!hasBeenLinked && (!user.emailVerified || !isTrustedProvider)) {
-				let url: URL;
-				try {
-					url = new URL(currentURL || callbackURL);
-					url.searchParams.set("error", "account_not_linked");
-				} catch (e) {
-					throw c.redirect(
-						`${c.context.baseURL}/error?error=account_not_linked`,
-					);
-				}
-				throw c.redirect(url.toString());
-			}
-
 			if (!hasBeenLinked) {
+				const trustedProviders =
+					c.context.options.account?.accountLinking?.trustedProviders;
+				const isTrustedProvider = trustedProviders?.includes(
+					provider.id as "apple",
+				);
+				if (!isTrustedProvider) {
+					let url: URL;
+					try {
+						url = new URL(currentURL || callbackURL);
+						url.searchParams.set("error", "account_not_linked");
+					} catch (e) {
+						throw c.redirect(
+							`${c.context.baseURL}/error?error=account_not_linked`,
+						);
+					}
+					throw c.redirect(url.toString());
+				}
 				try {
 					await c.context.internalAdapter.linkAccount({
 						providerId: provider.id,
