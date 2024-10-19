@@ -70,11 +70,10 @@ function whereConvertor(where: Where[], schemaModel: any) {
 		if (w.operator === "starts_with") {
 			return [like(schemaModel[w.field], `${w.value}%`)];
 		}
-		
+
 		if (w.operator === "ends_with") {
 			return [like(schemaModel[w.field], `%${w.value}`)];
 		}
-
 
 		return [eq(schemaModel[w.field], w.value)];
 	}

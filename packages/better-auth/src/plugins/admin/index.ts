@@ -261,9 +261,11 @@ export const admin = (options?: AdminOptions) => {
 					use: [adminMiddleware],
 					query: z.object({
 						// search by name or email
-						search: z.object( {
+						search: z.object({
 							field: z.enum(["email", "name"]),
-							operator: z.enum(["contains", "starts_with", "ends_with"]).default("contains"),
+							operator: z
+								.enum(["contains", "starts_with", "ends_with"])
+								.default("contains"),
 							value: z.string(),
 						}),
 						//optional filter to apply to the search
@@ -283,7 +285,6 @@ export const admin = (options?: AdminOptions) => {
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
 					}),
-
 				},
 				async (ctx) => {
 					const users = await ctx.context.internalAdapter.searchUsers(
@@ -302,7 +303,7 @@ export const admin = (options?: AdminOptions) => {
 					return ctx.json({
 						users: users as UserWithRole[],
 					});
-				}
+				},
 			),
 			listUserSessions: createAuthEndpoint(
 				"/admin/list-user-sessions",

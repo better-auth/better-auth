@@ -6,19 +6,19 @@ function operatorToPrismaOperator(operator: string) {
 			return "startsWith";
 		case "ends_with":
 			return "endsWith";
-	default:
-		return operator;
+		default:
+			return operator;
 	}
 }
 
-function whereConvertor( where?: Where[]) {
+function whereConvertor(where?: Where[]) {
 	if (!where) return {};
 	if (where.length === 1) {
 		const w = where[0];
 		if (!w) {
 			return;
 		}
-		
+
 		return {
 			[w.field]:
 				w.operator === "eq" || !w.operator
@@ -53,7 +53,6 @@ function whereConvertor( where?: Where[]) {
 		OR: orClause.length ? orClause : undefined,
 	};
 }
-
 
 interface PrismaClient {
 	[model: string]: {
@@ -115,7 +114,7 @@ export const prismaAdapter = (
 		async findOne(data) {
 			const { model, where, select } = data;
 			const whereClause = whereConvertor(where);
-			
+
 			return await db[model].findFirst({
 				where: whereClause,
 				...(select?.length
@@ -132,9 +131,8 @@ export const prismaAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
-			
+
 			const whereClause = whereConvertor(where);
-			
 
 			return await db[model].findMany({
 				where: whereClause,
@@ -149,7 +147,7 @@ export const prismaAdapter = (
 		},
 		async update(data) {
 			const { model, where, update } = data;
-			const whereClause = whereConvertor( where);
+			const whereClause = whereConvertor(where);
 			if (where.length === 1) {
 				return await db[model].update({
 					where: whereClause,

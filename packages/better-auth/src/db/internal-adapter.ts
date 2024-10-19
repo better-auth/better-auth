@@ -110,9 +110,8 @@ export const createInternalAdapter = (
 				field: string;
 				direction: "asc" | "desc";
 			},
-			where?: Where[]
+			where?: Where[],
 		) => {
-			
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				limit,

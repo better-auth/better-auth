@@ -17,26 +17,22 @@ function convertWhere(w?: Where[]) {
 	w.forEach((condition) => {
 		const { field, value, operator = "=", connector = "AND" } = condition;
 		const expr = (eb: any) => {
-
 			if (operator.toLowerCase() === "in") {
 				return eb(field, "in", Array.isArray(value) ? value : [value]);
 			}
 
 			if (operator === "contains") {
-				
-				return eb(field, 'like', `%${value}%`);
+				return eb(field, "like", `%${value}%`);
 			}
-			
+
 			if (operator === "starts_with") {
-
-				return eb(field, 'like', `${value}%`);
+				return eb(field, "like", `${value}%`);
 			}
-			
+
 			if (operator === "ends_with") {
-				return eb(field, 'like', `%${value}`);
+				return eb(field, "like", `%${value}`);
 			}
 
-			
 			return eb(field, operator, value);
 		};
 

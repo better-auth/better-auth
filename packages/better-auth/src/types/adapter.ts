@@ -4,7 +4,17 @@ import type { BetterAuthOptions } from "./options";
  * Adapter where clause
  */
 export type Where = {
-	operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with"; //eq by default
+	operator?:
+		| "eq"
+		| "ne"
+		| "lt"
+		| "lte"
+		| "gt"
+		| "gte"
+		| "in"
+		| "contains"
+		| "starts_with"
+		| "ends_with"; //eq by default
 	value: string | number | boolean | string[] | number[];
 	field: string;
 	connector?: "AND" | "OR"; //AND by default

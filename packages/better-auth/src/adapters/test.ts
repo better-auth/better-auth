@@ -285,7 +285,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 					value: "us",
 				},
 			],
-		})
+		});
 		expect(res.length).toBe(1);
 	});
 
@@ -299,8 +299,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 					value: "er2",
 				},
 			],
-		})
+		});
 		expect(res.length).toBe(1);
 	});
-
 }
