@@ -83,7 +83,6 @@ export const createInternalAdapter = (
 			return sessions;
 		},
 		listUsers: async (
-			
 			limit?: number,
 			offset?: number,
 			sortBy?: {
