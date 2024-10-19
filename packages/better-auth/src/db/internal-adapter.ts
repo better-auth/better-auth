@@ -6,6 +6,7 @@ import type { Account, Session, User, Verification } from "./schema";
 import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
+import { convertFromDB } from "./utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -97,7 +98,7 @@ export const createInternalAdapter = (
 				sortBy,
 				where,
 			});
-			return users;
+			return users.map((user) => convertFromDB(tables.user.fields, user));
 		},
 		deleteUser: async (userId: string) => {
 			await adapter.delete({
@@ -225,8 +226,8 @@ export const createInternalAdapter = (
 				return null;
 			}
 			return {
-				session,
-				user,
+				session: convertFromDB(tables.session.fields, session)!,
+				user: convertFromDB(tables.user.fields, user)!,
 			};
 		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
@@ -356,8 +357,10 @@ export const createInternalAdapter = (
 					],
 				});
 				return {
-					user,
-					accounts,
+					user: convertFromDB(tables.user.fields, user),
+					accounts: accounts.map((account) =>
+						convertFromDB(tables.account.fields, account),
+					),
 				};
 			}
 			return {
@@ -409,7 +412,12 @@ export const createInternalAdapter = (
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
-				[{ field: "email", value: email }],
+				[
+					{
+						field: tables.user.fields.email.fieldName || "email",
+						value: email,
+					},
+				],
 				"user",
 			);
 			return user;
@@ -443,7 +451,9 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return accounts;
+			return accounts.map(
+				(account) => convertFromDB(tables.account.fields, account) as Account,
+			);
 		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
 			const account = await updateWithHooks<Account>(
@@ -474,7 +484,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return verification;
+			return convertFromDB(tables.verification.fields, verification);
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({

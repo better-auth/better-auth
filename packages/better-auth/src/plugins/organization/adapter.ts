@@ -112,32 +112,31 @@ export const getOrgAdapter = (
 			userId: string;
 			organizationId: string;
 		}) => {
-			const member = await adapter.findOne<Member>({
-				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: data.userId,
-					},
-					{
-						field: "organizationId",
-						value: data.organizationId,
-					},
-				],
-			});
-			if (!member) {
-				return null;
-			}
-			const user = await adapter.findOne<User>({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: member.userId,
-					},
-				],
-			});
-			if (!user) {
+			const [member, user] = await Promise.all([
+				await adapter.findOne<Member>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: data.userId,
+						},
+						{
+							field: "organizationId",
+							value: data.organizationId,
+						},
+					],
+				}),
+				await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							field: "id",
+							value: data.userId,
+						},
+					],
+				}),
+			]);
+			if (!user || !member) {
 				return null;
 			}
 			return {
@@ -293,72 +292,54 @@ export const getOrgAdapter = (
 		 * @requires db
 		 */
 		findFullOrganization: async (orgId: string, db?: Kysely<any>) => {
-			const org = await adapter.findOne<Organization>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: orgId,
-					},
-				],
-			});
-			if (!org) {
-				return null;
-			}
-
-			const invitations = await adapter.findMany<Invitation>({
-				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: orgId,
-					},
-				],
-			});
-
-			const members = await adapter.findMany<Member>({
-				model: "member",
-				where: [
-					{
-						field: "organizationId",
-						value: orgId,
-					},
-				],
-			});
-
-			const membersWithUsers = await Promise.all(
-				members.map(async (member) => {
-					const user = await adapter.findOne<User>({
-						model: "user",
-						where: [
-							{
-								field: "id",
-								value: member.userId,
-							},
-						],
-					});
-					if (!user) {
-						throw new BetterAuthError(
-							"Unexpected error: User not found for member",
-						);
-					}
-					return {
-						...member,
-						user: {
-							id: user.id,
-							name: user.name,
-							email: user.email,
-							image: user.image,
-						},
-					};
+			const [org, invitations, members] = await Promise.all([
+				adapter.findOne<Organization>({
+					model: "organization",
+					where: [{ field: "id", value: orgId }],
 				}),
-			);
-			const fullOrg = {
+				adapter.findMany<Invitation>({
+					model: "invitation",
+					where: [{ field: "organizationId", value: orgId }],
+				}),
+				adapter.findMany<Member>({
+					model: "member",
+					where: [{ field: "organizationId", value: orgId }],
+				}),
+			]);
+
+			if (!org) return null;
+
+			const userIds = members.map((member) => member.userId);
+			const users = await adapter.findMany<User>({
+				model: "user",
+				where: [{ field: "id", value: userIds, operator: "in" }],
+			});
+
+			const userMap = new Map(users.map((user) => [user.id, user]));
+
+			const membersWithUsers = members.map((member) => {
+				const user = userMap.get(member.userId);
+				if (!user) {
+					throw new BetterAuthError(
+						"Unexpected error: User not found for member",
+					);
+				}
+				return {
+					...member,
+					user: {
+						id: user.id,
+						name: user.name,
+						email: user.email,
+						image: user.image,
+					},
+				};
+			});
+
+			return {
 				...org,
 				invitations,
 				members: membersWithUsers,
 			};
-			return fullOrg;
 		},
 		listOrganizations: async (userId: string) => {
 			const members = await adapter.findMany<Member>({
@@ -370,25 +351,24 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-			const organizationIds = members?.map((member) => member.organizationId);
-			if (!organizationIds) {
+
+			if (!members || members.length === 0) {
 				return [];
 			}
-			const organizations: Organization[] = [];
-			for (const id of organizationIds) {
-				const organization = await adapter.findOne<Organization>({
-					model: "organization",
-					where: [
-						{
-							field: "id",
-							value: id,
-						},
-					],
-				});
-				if (organization) {
-					organizations.push(organization);
-				}
-			}
+
+			const organizationIds = members.map((member) => member.organizationId);
+
+			const organizations = await adapter.findMany<Organization>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: organizationIds,
+						operator: "in",
+					},
+				],
+			});
+
 			return organizations;
 		},
 		createInvitation: async ({
