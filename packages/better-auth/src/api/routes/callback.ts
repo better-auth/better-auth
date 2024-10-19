@@ -213,7 +213,6 @@ export const callbackOAuth = createAuthEndpoint(
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				message: "Unable to create user",
 			});
-		//create session
 		try {
 			const session = await c.context.internalAdapter.createSession(
 				userId || id,

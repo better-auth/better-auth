@@ -7,6 +7,7 @@ import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { convertFromDB } from "./utils";
+import { BetterAuthError } from "../error";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -24,6 +25,10 @@ export const createInternalAdapter = (
 		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
 			try {
 				const createdUser = await createWithHooks(user, "user");
+				if (!createdUser) return null;
+				if (!createdUser.id) {
+					throw new BetterAuthError("User Id not returned from database");
+				}
 				const createdAccount = await createWithHooks(account, "account");
 				return {
 					user: createdUser,
