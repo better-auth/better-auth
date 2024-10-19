@@ -36,7 +36,7 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendEmailVerificationOnSignUp: true,
+		sendOnSignUp: true,
 	},
 	emailAndPassword: {
 		enabled: true,
