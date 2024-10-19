@@ -79,7 +79,8 @@ describe("multi-session", async () => {
 			},
 		});
 		if (res.data) {
-			sessionId = res.data[0].session.id;
+			sessionId =
+				res.data.find((s) => s.user.email === testUser.email)?.session.id || "";
 		}
 		expect(res.data).toHaveLength(2);
 	});
@@ -105,7 +106,7 @@ describe("multi-session", async () => {
 				headers,
 			},
 		);
-		console.log(res);
+		expect(res.error?.status).toBe(401);
 	});
 
 	it("should sign-out a session", async () => {

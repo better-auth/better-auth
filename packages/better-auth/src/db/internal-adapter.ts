@@ -230,6 +230,69 @@ export const createInternalAdapter = (
 				user: convertFromDB(tables.user.fields, user)!,
 			};
 		},
+		findSessions: async (sessionIds: string[]) => {
+			if (secondaryStorage) {
+				const sessions: {
+					session: Session;
+					user: User;
+				}[] = [];
+				for (const sessionId of sessionIds) {
+					const sessionStringified = await secondaryStorage.get(sessionId);
+					if (sessionStringified) {
+						const s = JSON.parse(sessionStringified);
+						const session = {
+							session: {
+								...s.session,
+								expiresAt: new Date(s.session.expiresAt),
+							},
+							user: {
+								...s.user,
+								createdAt: new Date(s.user.createdAt),
+								updatedAt: new Date(s.user.updatedAt),
+							},
+						} as {
+							session: Session;
+							user: User;
+						};
+						sessions.push(session);
+					}
+				}
+				return sessions;
+			}
+
+			const sessions = await adapter.findMany<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "id",
+						value: sessionIds,
+						operator: "in",
+					},
+				],
+			});
+			const userIds = sessions.map((session) => session.userId);
+			const users = await adapter.findMany<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: userIds,
+						operator: "in",
+					},
+				],
+			});
+			return sessions.map((session) => {
+				const user = users.find((u) => u.id === session.userId);
+				if (!user) return null;
+				return {
+					session: convertFromDB(tables.session.fields, session)!,
+					user: convertFromDB(tables.user.fields, user)!,
+				};
+			}) as {
+				session: Session;
+				user: User;
+			}[];
+		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
 			const updatedSession = await updateWithHooks<Session>(
 				session,
