@@ -11,7 +11,6 @@ import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -20,8 +19,6 @@ const libsql = new LibsqlDialect({
 	url: process.env.TURSO_DATABASE_URL || "",
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
-
-const database = new Database("auth.db");
 
 export const auth = betterAuth({
 	database: {
