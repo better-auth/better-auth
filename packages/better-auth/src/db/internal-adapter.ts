@@ -357,14 +357,14 @@ export const createInternalAdapter = (
 					],
 				});
 				return {
-					user: convertFromDB(tables.user.fields, user),
-					accounts: accounts.map((account) =>
-						convertFromDB(tables.account.fields, account),
+					user: convertFromDB(tables.user.fields, user)!,
+					accounts: accounts.map(
+						(account) => convertFromDB(tables.account.fields, account)!,
 					),
 				};
 			}
 			return {
-				user,
+				user: convertFromDB(tables.user.fields, user)!,
 				accounts: [],
 			};
 		},
