@@ -79,7 +79,6 @@ describe("phone-number", async (it) => {
 				headers,
 			},
 		});
-		console.log(res);
 		const user = await client.session({
 			fetchOptions: {
 				headers,
