@@ -455,10 +455,6 @@ export const admin = (options?: AdminOptions) => {
 					impersonatedBy: {
 						type: "string",
 						required: false,
-						references: {
-							model: "user",
-							field: "id",
-						},
 					},
 				},
 			},
