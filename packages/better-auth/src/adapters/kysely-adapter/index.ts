@@ -221,7 +221,6 @@ export const kyselyAdapter = (
 				const schema = config.transform.schema[model];
 				return schema ? transformTo(res, schema, config.transform) : res;
 			}
-
 			return res as any;
 		},
 		async delete(data) {

@@ -122,7 +122,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 			}
 
-			if (!ctx.context.options.emailAndPassword.autoSignIn) {
+			if (
+				!ctx.context.options.emailAndPassword.autoSignIn ||
+				ctx.context.options.emailAndPassword.requireEmailVerification
+			) {
 				return ctx.json(
 					{
 						user: createdUser,

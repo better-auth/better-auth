@@ -94,7 +94,7 @@ export const signInEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z.string().email(),
+			email: z.string(),
 			password: z.string(),
 			callbackURL: z.string().optional(),
 			/**
@@ -115,6 +115,12 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		const { email, password } = ctx.body;
+		const isValidEmail = z.string().email().safeParse(email);
+		if (!isValidEmail.success) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid email",
+			});
+		}
 		const checkEmail = z.string().email().safeParse(email);
 		if (!checkEmail.success) {
 			throw new APIError("BAD_REQUEST", {
