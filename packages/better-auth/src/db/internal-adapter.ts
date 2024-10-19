@@ -83,6 +83,7 @@ export const createInternalAdapter = (
 			return sessions;
 		},
 		listUsers: async (
+			
 			limit?: number,
 			offset?: number,
 			sortBy?: {
@@ -97,34 +98,6 @@ export const createInternalAdapter = (
 				offset,
 				sortBy,
 				where,
-			});
-			return users.map((user) => convertFromDB(tables.user.fields, user));
-		},
-		searchUsers: async (
-			searchField: string,
-			searchOperator: "contains" | "starts_with" | "ends_with",
-			searchValue: string,
-			limit?: number,
-			offset?: number,
-			sortBy?: {
-				field: string;
-				direction: "asc" | "desc";
-			},
-			where?: Where[],
-		) => {
-			const users = await adapter.findMany<User>({
-				model: tables.user.tableName,
-				limit,
-				offset,
-				sortBy,
-				where: [
-					{
-						field: searchField,
-						operator: searchOperator,
-						value: searchValue,
-					},
-					...(where || []),
-				],
 			});
 			return users.map((user) => convertFromDB(tables.user.fields, user));
 		},

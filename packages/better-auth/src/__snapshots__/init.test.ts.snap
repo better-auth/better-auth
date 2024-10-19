@@ -93,7 +93,6 @@ exports[`init > should match config 1`] = `
     "linkAccount": [Function],
     "listSessions": [Function],
     "listUsers": [Function],
-    "searchUsers": [Function],
     "updateAccount": [Function],
     "updatePassword": [Function],
     "updateSession": [Function],
