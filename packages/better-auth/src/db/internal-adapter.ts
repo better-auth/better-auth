@@ -21,11 +21,23 @@ export const createInternalAdapter = (
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
-		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
+			account: Omit<Account, "userId" | "id"> & Partial<Account>,
+		) => {
 			try {
-				const createdUser = await createWithHooks(user, "user");
+				const createdUser = await createWithHooks(
+					{
+						id: generateId(),
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+					},
+					"user",
+				);
 				const createdAccount = await createWithHooks(
 					{
+						id: generateId(),
 						...account,
 						userId: createdUser.id || user.id,
 					},
