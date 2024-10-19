@@ -248,6 +248,51 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(findRes).toBeNull();
 	});
 
+	test("should delete many", async () => {
+		for (const id of ["to-be-delete1", "to-be-delete2", "to-be-delete3"]) {
+			await adapter.create({
+				model: "user",
+				data: {
+					id,
+					name: "to-be-deleted",
+					email: `email@test-${id}.com`,
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		const findResFirst = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		expect(findResFirst.length).toBe(3);
+		await adapter.deleteMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		const findRes = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		expect(findRes.length).toBe(0);
+	});
+
 	test("shouldn't throw on record not found", async () => {
 		const res = await adapter.findOne({
 			model: "user",

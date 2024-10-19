@@ -164,5 +164,11 @@ export const mongodbAdapter = (
 				.collection(getModelName(model))
 				.findOneAndDelete(wheres);
 		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const wheres = whereConvertor(where);
+
+			const res = await db.collection(getModelName(model)).deleteMany(wheres);
+		},
 	} satisfies Adapter;
 };

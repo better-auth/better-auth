@@ -238,6 +238,20 @@ export const kyselyAdapter = (
 
 			await query.execute();
 		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const { and, or } = convertWhere(where);
+			let query = db.deleteFrom(model);
+
+			if (and) {
+				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+			}
+			if (or) {
+				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+			}
+
+			await query.execute();
+		},
 	};
 };
 export * from "./dialect";

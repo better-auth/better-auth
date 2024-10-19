@@ -110,7 +110,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -119,7 +119,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await adapter.delete<User>({
+			await adapter.deleteMany({
 				model: tables.user.tableName,
 				where: [
 					{

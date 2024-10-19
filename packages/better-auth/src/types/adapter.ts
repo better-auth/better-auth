@@ -45,6 +45,7 @@ export interface Adapter {
 		update: Record<string, any>;
 	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	deleteMany: (data: { model: string; where: Where[] }) => Promise<void>;
 	/**
 	 *
 	 * @param options
