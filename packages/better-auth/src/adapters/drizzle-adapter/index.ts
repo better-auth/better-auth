@@ -205,6 +205,15 @@ export const drizzleAdapter = (
 
 			return res[0];
 		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
+			const wheres = whereConvertor(where, schemaModel);
+			await db.delete(schemaModel).where(...wheres);
+		},
 		options,
 	};
 };
