@@ -228,9 +228,13 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							Object.entries(cookies).map(async ([key, value]) => {
 								if (isMultiSessionCookie(key)) {
 									ctx.setCookie(key, "", { maxAge: 0 });
-									await ctx.context.internalAdapter.deleteSession(
-										key.split("_multi-")[1],
-									);
+									try {
+										await ctx.context.internalAdapter.deleteSession(
+											key.split("_multi-")[1],
+										);
+									} catch (e) {
+										// ignore
+									}
 								}
 							}),
 						);
