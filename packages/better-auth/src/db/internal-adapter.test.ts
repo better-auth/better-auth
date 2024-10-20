@@ -20,6 +20,12 @@ describe("adapter test", async () => {
 				return (id++).toString();
 			},
 		},
+		user: {
+			fields: {
+				email: "email_address",
+				emailVerified: "email_verified",
+			},
+		},
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
 		(await getMigrations(opts)).runMigrations();

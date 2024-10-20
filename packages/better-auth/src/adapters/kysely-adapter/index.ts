@@ -55,21 +55,15 @@ function transformTo(
 	transform: KyselyAdapterConfig["transform"],
 ) {
 	for (const key in val) {
-		if (
-			val[key] === 0 &&
-			fields[key]?.type === "boolean" &&
-			transform?.boolean
-		) {
+		const field =
+			fields[key] || Object.values(fields).find((f) => f.fieldName === key);
+		if (val[key] === 0 && field.type === "boolean" && transform?.boolean) {
 			val[key] = false;
 		}
-		if (
-			val[key] === 1 &&
-			fields[key]?.type === "boolean" &&
-			transform?.boolean
-		) {
+		if (val[key] === 1 && field?.type === "boolean" && transform?.boolean) {
 			val[key] = true;
 		}
-		if (fields[key]?.type === "date") {
+		if (field?.type === "date") {
 			if (!(val[key] instanceof Date)) {
 				val[key] = new Date(val[key]);
 			}
