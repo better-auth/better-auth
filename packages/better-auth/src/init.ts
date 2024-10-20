@@ -216,7 +216,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it in your auth config.",
 		);
 	}
-	const trustedOrigins = [new URL(baseURL).origin];
+	const trustedOrigins = [baseURL];
 	if (options.trustedOrigins) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
