@@ -30,7 +30,7 @@ export const removeMember = createAuthEndpoint(
 				},
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
 			organizationId: orgId,
@@ -121,7 +121,7 @@ export const updateMemberRole = createAuthEndpoint(
 				},
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
 			organizationId: orgId,

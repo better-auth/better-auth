@@ -36,7 +36,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 			});
 		}
 		const sessions = await ctx.context.adapter.findMany<Session>({
-			model: "session",
+			model: ctx.context.tables.session.tableName,
 			where: [
 				{
 					field: "userId",
@@ -60,7 +60,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 		for (const session of activeSessions) {
 			const hashToMatch = await hs256(ctx.context.secret, session.id);
 			const user = await ctx.context.adapter.findOne<UserWithTwoFactor>({
-				model: "user",
+				model: ctx.context.tables.user.tableName,
 				where: [
 					{
 						field: "id",

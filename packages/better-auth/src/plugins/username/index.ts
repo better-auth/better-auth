@@ -21,7 +21,7 @@ export const username = () => {
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<User>({
-						model: "user",
+						model: ctx.context.tables.user.tableName,
 						where: [
 							{
 								field: "username",
@@ -37,7 +37,7 @@ export const username = () => {
 						});
 					}
 					const account = await ctx.context.adapter.findOne<Account>({
-						model: "account",
+						model: ctx.context.tables.account.tableName,
 						where: [
 							{
 								field:
