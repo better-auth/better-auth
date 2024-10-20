@@ -68,7 +68,7 @@ The phone number plugin extends the authentication system by allowing users to s
 To send an OTP to a user's phone number for verification, you can use the `sendVerificationCode` endpoint.
 
 ```ts title="client.ts"
-await client.phoneNumber.sendOTP({
+await client.phoneNumber.sendOtp({
     phoneNumber: "+1234567890"
 })
 ```
@@ -115,7 +115,7 @@ Updating phone number uses the same process as verifying a phone number. The use
 
 
 ```ts title="client.ts"
-await client.phoneNumber.sendOTP({
+await client.phoneNumber.sendOtp({
     phoneNumber: "+1234567890" // New phone number
 })
 ```
