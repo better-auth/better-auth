@@ -139,6 +139,33 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
+		const credentialAccount = user.accounts.find(
+			(a) => a.providerId === "credential",
+		);
+		if (!credentialAccount) {
+			ctx.context.logger.error("Credential account not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
+			});
+		}
+		const currentPassword = credentialAccount?.password;
+		if (!currentPassword) {
+			ctx.context.logger.error("Password not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Unexpected error",
+			});
+		}
+		const validPassword = await ctx.context.password.verify(
+			currentPassword,
+			password,
+		);
+		if (!validPassword) {
+			ctx.context.logger.error("Invalid password");
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
+			});
+		}
+
 		if (
 			ctx.context.options?.emailAndPassword?.requireEmailVerification &&
 			!user.user.emailVerified
@@ -165,33 +192,6 @@ export const signInEmail = createAuthEndpoint(
 			throw new APIError("FORBIDDEN", {
 				message:
 					"Email is not verified. Check your email for a verification link",
-			});
-		}
-
-		const credentialAccount = user.accounts.find(
-			(a) => a.providerId === "credential",
-		);
-		if (!credentialAccount) {
-			ctx.context.logger.error("Credential account not found", { email });
-			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
-			});
-		}
-		const currentPassword = credentialAccount?.password;
-		if (!currentPassword) {
-			ctx.context.logger.error("Password not found", { email });
-			throw new APIError("UNAUTHORIZED", {
-				message: "Unexpected error",
-			});
-		}
-		const validPassword = await ctx.context.password.verify(
-			currentPassword,
-			password,
-		);
-		if (!validPassword) {
-			ctx.context.logger.error("Invalid password");
-			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
 			});
 		}
 
