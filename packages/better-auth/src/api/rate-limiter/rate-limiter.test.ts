@@ -9,6 +9,7 @@ describe(
 	async () => {
 		const { client, testUser } = await getTestInstance({
 			rateLimit: {
+				enabled: true,
 				window: 10,
 				max: 20,
 			},
@@ -89,6 +90,9 @@ describe(
 describe("custom rate limiting storage", async () => {
 	let store = new Map<string, string>();
 	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+		},
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
