@@ -38,7 +38,7 @@ export const createOrganization = createAuthEndpoint(
 				message: "You are not allowed to create an organization",
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, options);
+		const adapter = getOrgAdapter(ctx.context, options);
 
 		const userOrganizations = await adapter.listOrganizations(user.id);
 		const hasReachedOrgLimit =
@@ -109,7 +109,7 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
 			organizationId: orgId,
@@ -173,7 +173,7 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
 			organizationId: orgId,
@@ -232,7 +232,7 @@ export const getFullOrganization = createAuthEndpoint(
 				status: 400,
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const organization = await adapter.findFullOrganization(
 			orgId,
 			ctx.context.db || undefined,
@@ -256,7 +256,7 @@ export const setActiveOrganization = createAuthEndpoint(
 		use: [orgSessionMiddleware, orgMiddleware],
 	},
 	async (ctx) => {
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const session = ctx.context.session;
 		let orgId = ctx.body.orgId;
 		if (orgId === null) {
@@ -300,7 +300,7 @@ export const listOrganization = createAuthEndpoint(
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const organizations = await adapter.listOrganizations(
 			ctx.context.session.user.id,
 		);
