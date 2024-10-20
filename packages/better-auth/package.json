@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean --dts",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4000 tsup --clean --dts",
     "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
     "dev:dts": "NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
