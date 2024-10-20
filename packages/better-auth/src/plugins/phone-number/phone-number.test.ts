@@ -103,7 +103,7 @@ describe("phone-number", async (it) => {
 	});
 });
 
-describe.only("phone auth flow", async () => {
+describe("phone auth flow", async () => {
 	let otp = "";
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
