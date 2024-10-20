@@ -145,6 +145,9 @@ export const prismaAdapter = (
 		},
 		async update(data) {
 			const { model, where, update } = data;
+			if (update.id) {
+				update.id = undefined;
+			}
 			const whereClause = whereConvertor(where);
 			if (where.length === 1) {
 				return await db[model].update({
