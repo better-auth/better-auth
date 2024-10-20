@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("updateUser", async () => {
-	let emailVerificationToken: string;
-	const { client, testUser, sessionSetter } = await getTestInstance({
+	const sendChangeEmail = vi.fn();
+	let emailVerificationToken = "";
+	const { client, testUser, sessionSetter, db } = await getTestInstance({
 		emailVerification: {
 			async sendVerificationEmail(user, url, token) {
 				emailVerificationToken = token;
@@ -12,6 +13,9 @@ describe("updateUser", async () => {
 		user: {
 			changeEmail: {
 				enabled: true,
+				sendChangeEmailVerification: async (user, newEmail, url, token) => {
+					sendChangeEmail(user, newEmail, url, token);
+				},
 			},
 		},
 	});
@@ -49,6 +53,35 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(res.data?.user.email).toBe(newEmail);
+	});
+
+	it("should send email verification before update", async () => {
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: "new-email@email.com",
+				},
+			],
+		});
+		await client.user.changeEmail({
+			newEmail: "new-email-2@email.com",
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		expect(sendChangeEmail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "new-email@email.com",
+			}),
+			"new-email-2@email.com",
+			expect.any(String),
+			expect.any(String),
+		);
 	});
 
 	it("should update the user's password", async () => {
