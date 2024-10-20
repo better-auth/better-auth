@@ -1,3 +1,4 @@
+import { env } from "std-env";
 import { BetterAuthError } from "../error";
 
 function checkHasPath(url: string): boolean {
@@ -24,7 +25,6 @@ export function getBaseURL(url?: string, path?: string) {
 	if (url) {
 		return withPath(url, path);
 	}
-	const env: any = typeof process !== "undefined" ? process.env : {};
 	const fromEnv =
 		env.BETTER_AUTH_URL ||
 		env.NEXT_PUBLIC_BETTER_AUTH_URL ||

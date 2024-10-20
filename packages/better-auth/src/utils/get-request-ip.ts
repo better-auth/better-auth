@@ -1,6 +1,8 @@
+import { isTest } from "std-env";
+
 export function getIp(req: Request | Headers): string | null {
 	const testIP = "127.0.0.1";
-	if (process.env.NODE_ENV === "test") {
+	if (isTest) {
 		return testIP;
 	}
 	const keys = [
