@@ -137,7 +137,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 			});
 
-		const userId = dbUser?.user.id;
+		let userId = dbUser?.user.id;
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
@@ -181,6 +181,7 @@ export const callbackOAuth = createAuthEndpoint(
 						accountId: user.id.toString(),
 					},
 				);
+				userId = created?.user.id;
 				if (
 					!emailVerified &&
 					created &&
@@ -203,12 +204,12 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		}
 
-		if (!userId && !id) {
+		if (!userId) {
 			redirectOnError("unable_to_create_user");
 		}
 
 		const session = await c.context.internalAdapter.createSession(
-			userId || id,
+			userId!,
 			c.request,
 		);
 		if (!session) {

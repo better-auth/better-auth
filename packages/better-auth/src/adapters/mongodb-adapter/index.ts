@@ -152,6 +152,10 @@ export const mongodbAdapter = (
 			const { model, where, update } = data;
 			const wheres = whereConvertor(where);
 
+			if (update.id) {
+				update.id = undefined;
+			}
+
 			if (where.length === 1) {
 				const res = await db.collection(getModelName(model)).findOneAndUpdate(
 					wheres,

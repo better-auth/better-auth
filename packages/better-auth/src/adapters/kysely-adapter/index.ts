@@ -216,6 +216,10 @@ export const kyselyAdapter = (
 				val = transformFrom(val, config.transform);
 			}
 
+			if (val.id) {
+				val.id = undefined;
+			}
+
 			let query = db.updateTable(model).set(val);
 			if (and) {
 				query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));

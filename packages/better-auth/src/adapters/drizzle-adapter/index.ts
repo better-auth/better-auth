@@ -194,6 +194,9 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
+			if (update.id) {
+				update.id = undefined;
+			}
 			const wheres = whereConvertor(where, schemaModel);
 			const mutation = db
 				.update(schemaModel)
