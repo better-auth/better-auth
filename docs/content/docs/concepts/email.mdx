@@ -42,14 +42,14 @@ You can initiate email verification in two ways:
 
 #### 1. During Sign-up
 
-To automatically send a verification email at signup, set `emailVerification.sendOnSignup` to `true`. 
+To automatically send a verification email at signup, set `emailVerification.sendOnSignUp` to `true`. 
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
     emailVerification: {
-        sendOnSignup: true
+        sendOnSignUp: true
     }
 })
 ```
