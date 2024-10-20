@@ -94,7 +94,10 @@ const users = await authClient.admin.listUsers({
 });
 ```
 By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
-
+- `search`: The search query to apply to the users. It can be an object with the following properties:
+    - `field`: The field to search on, which can be `email` or `name`.
+    - `operator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
+    - `value`: The value to search for.
 - `limit`: The number of users to return.
 - `offset`: The number of users to skip.
 - `sortBy`: The field to sort the users by.
@@ -104,6 +107,11 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
     query: {
+        search: {
+            field: "email",
+            operator: "contains",
+            value: "@example.com"
+        },
         limit: 10,
         offset: 0,
         sortBy: "createdAt",

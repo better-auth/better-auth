@@ -1,5 +1,16 @@
 import type { Adapter, Where } from "../../types";
 
+function operatorToPrismaOperator(operator: string) {
+	switch (operator) {
+		case "starts_with":
+			return "startsWith";
+		case "ends_with":
+			return "endsWith";
+		default:
+			return operator;
+	}
+}
+
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
 	if (where.length === 1) {
@@ -7,12 +18,13 @@ function whereConvertor(where?: Where[]) {
 		if (!w) {
 			return;
 		}
+
 		return {
 			[w.field]:
 				w.operator === "eq" || !w.operator
 					? w.value
 					: {
-							[w.operator]: w.value,
+							[operatorToPrismaOperator(w.operator)]: w.value,
 						},
 		};
 	}
@@ -24,7 +36,7 @@ function whereConvertor(where?: Where[]) {
 				w.operator === "eq" || !w.operator
 					? w.value
 					: {
-							[w.operator]: w.value,
+							[operatorToPrismaOperator(w.operator)]: w.value,
 						},
 		};
 	});
@@ -117,6 +129,7 @@ export const prismaAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
+
 			const whereClause = whereConvertor(where);
 
 			return await db[model].findMany({

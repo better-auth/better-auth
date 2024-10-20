@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or, SQL, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, or, SQL, inArray, like } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
 import { BetterAuthError } from "../../error";
 
@@ -53,6 +53,7 @@ function whereConvertor(where: Where[], schemaModel: any) {
 		if (!w) {
 			return [];
 		}
+
 		if (w.operator === "in") {
 			if (!Array.isArray(w.value)) {
 				throw new BetterAuthError(
@@ -61,6 +62,19 @@ function whereConvertor(where: Where[], schemaModel: any) {
 			}
 			return [inArray(schemaModel[w.field], w.value)];
 		}
+
+		if (w.operator === "contains") {
+			return [like(schemaModel[w.field], `%${w.value}%`)];
+		}
+
+		if (w.operator === "starts_with") {
+			return [like(schemaModel[w.field], `${w.value}%`)];
+		}
+
+		if (w.operator === "ends_with") {
+			return [like(schemaModel[w.field], `%${w.value}`)];
+		}
+
 		return [eq(schemaModel[w.field], w.value)];
 	}
 	const andGroup = where.filter((w) => w.connector === "AND" || !w.connector);

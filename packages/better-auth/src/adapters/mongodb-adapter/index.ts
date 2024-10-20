@@ -32,6 +32,17 @@ function whereConvertor(where?: Where[]) {
 			case "ne":
 				condition = { [field]: { $ne: value } };
 				break;
+
+			case "contains":
+				condition = { [field]: { $regex: `.*${value}.*` } };
+				break;
+			case "starts_with":
+				condition = { [field]: { $regex: `${value}.*` } };
+				break;
+			case "ends_with":
+				condition = { [field]: { $regex: `.*${value}` } };
+				break;
+
 			// Add more operators as needed
 			default:
 				throw new Error(`Unsupported operator: ${operator}`);

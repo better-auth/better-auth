@@ -221,6 +221,15 @@ export const admin = (options?: AdminOptions) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
+						search: z
+							.object({
+								field: z.enum(["email", "name"]),
+								operator: z
+									.enum(["contains", "starts_with", "ends_with"])
+									.default("contains"),
+								value: z.string(),
+							})
+							.optional(),
 						limit: z.string().or(z.number()).optional(),
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
@@ -238,6 +247,20 @@ export const admin = (options?: AdminOptions) => {
 					}),
 				},
 				async (ctx) => {
+					const where = [];
+
+					if (ctx.query?.search) {
+						where.push({
+							field: ctx.query.search.field,
+							operator: ctx.query.search.operator,
+							value: ctx.query.search.value,
+						});
+					}
+
+					if (ctx.query?.filter) {
+						where.push(...(ctx.query.filter || []));
+					}
+
 					const users = await ctx.context.internalAdapter.listUsers(
 						Number(ctx.query?.limit) || undefined,
 						Number(ctx.query?.offset) || undefined,
@@ -247,7 +270,8 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
-						ctx.query?.filter,
+
+						where.length ? where : undefined,
 					);
 					return ctx.json({
 						users: users as UserWithRole[],
