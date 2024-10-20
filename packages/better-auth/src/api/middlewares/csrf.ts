@@ -18,14 +18,17 @@ export const csrfMiddleware = createAuthMiddleware(
 		) {
 			return;
 		}
-		const origin = ctx.headers?.get("origin") || "";
+		const originHeader = ctx.headers?.get("origin") || "";
 		/**
 		 * If origin is the same as baseURL or if the
 		 * origin is in the trustedOrigins then we
 		 * don't need to check the CSRF token.
 		 */
-		if (ctx.context.trustedOrigins.includes(origin)) {
-			return;
+		if (originHeader) {
+			const origin = new URL(originHeader).origin;
+			if (ctx.context.trustedOrigins.includes(origin)) {
+				return;
+			}
 		}
 
 		const csrfToken = ctx.body?.csrfToken;

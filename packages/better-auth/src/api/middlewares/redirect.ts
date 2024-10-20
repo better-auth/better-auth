@@ -3,43 +3,33 @@ import { createAuthMiddleware } from "../call";
 import { logger } from "../../utils/logger";
 
 /**
- * This middleware is used to validate the callbackURL and currentURL.
- * It checks if the callbackURL is a valid URL and if it's in the trustedOrigins
- * to avoid open redirect attacks.
+ * Middleware to validate callbackURL and currentURL against trustedOrigins,
+ * preventing open redirect attacks.
  */
 export const redirectURLMiddleware = createAuthMiddleware(async (ctx) => {
-	const callbackURL =
-		ctx.body?.callbackURL ||
-		ctx.query?.callbackURL ||
-		ctx.query?.redirectTo ||
-		ctx.body?.redirectTo;
-	const clientCurrentURL = ctx.headers?.get("referer");
-	const currentURL =
-		ctx.query?.currentURL || clientCurrentURL || ctx.context.baseURL;
-	const trustedOrigins = ctx.context.trustedOrigins;
+	const { body, query, headers, context } = ctx;
 
-	if (callbackURL?.includes("http")) {
-		const callbackOrigin = new URL(callbackURL).origin;
-		if (!trustedOrigins.includes(callbackOrigin)) {
-			logger.error("Invalid callback URL", {
-				callbackURL,
-				trustedOrigins,
-			});
-			throw new APIError("FORBIDDEN", {
-				message: "Invalid callback URL",
-			});
+	const callbackURL =
+		body?.callbackURL ||
+		query?.callbackURL ||
+		query?.redirectTo ||
+		body?.redirectTo;
+	const currentURL =
+		query?.currentURL || headers?.get("referer") || context.baseURL;
+	const trustedOrigins = context.trustedOrigins;
+
+	const validateURL = (url: string | undefined, label: string) => {
+		if (url?.startsWith("http")) {
+			const isTrustedOrigin = trustedOrigins.some((origin) =>
+				url.startsWith(origin),
+			);
+			if (!isTrustedOrigin) {
+				logger.error(`Invalid ${label}`, { [label]: url, trustedOrigins });
+				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+			}
 		}
-	}
-	if (currentURL !== ctx.context.baseURL) {
-		const currentURLOrigin = new URL(currentURL).origin;
-		if (!trustedOrigins.includes(currentURLOrigin)) {
-			logger.error("Invalid current URL", {
-				currentURL,
-				trustedOrigins,
-			});
-			throw new APIError("FORBIDDEN", {
-				message: "Invalid callback URL",
-			});
-		}
-	}
+	};
+
+	validateURL(callbackURL, "callbackURL");
+	validateURL(currentURL, "currentURL");
 });

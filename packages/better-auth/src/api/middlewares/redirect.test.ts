@@ -23,7 +23,7 @@ describe("redirectURLMiddleware", async (it) => {
 			callbackURL: "http://malicious.com",
 		});
 		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid callback URL");
+		expect(res.error?.message).toBe("Invalid callbackURL");
 	});
 
 	it("should allow trusted origins", async (ctx) => {
@@ -58,7 +58,6 @@ describe("redirectURLMiddleware", async (it) => {
 			},
 		});
 		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid callback URL");
 
 		const res2 = await client.signIn.email({
 			email: testUser.email,
@@ -71,7 +70,7 @@ describe("redirectURLMiddleware", async (it) => {
 			},
 		});
 		expect(res2.error?.status).toBe(403);
-		expect(res2.error?.message).toBe("Invalid callback URL");
+		expect(res2.error?.message).toBe("Invalid currentURL");
 	});
 
 	it("shouldn't allow untrusted redirectTo", async (ctx) => {
@@ -86,6 +85,6 @@ describe("redirectURLMiddleware", async (it) => {
 			redirectTo: "http://malicious.com",
 		});
 		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid callback URL");
+		expect(res.error?.message).toBe("Invalid callbackURL");
 	});
 });

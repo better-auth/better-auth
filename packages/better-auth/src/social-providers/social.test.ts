@@ -133,7 +133,7 @@ describe("Social Providers", async () => {
 			},
 		);
 		expect(signInRes.error?.status).toBe(403);
-		expect(signInRes.error?.message).toBe("Invalid callback URL");
+		expect(signInRes.error?.message).toBe("Invalid callbackURL");
 	});
 });
 
