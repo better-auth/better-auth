@@ -2,6 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { Auth } from "../auth";
 import type { Session, User } from "../db/schema";
 import { NextRequest, NextResponse } from "next/server";
+import { getBaseURL } from "../utils/base-url";
 
 export function toNextJsHandler(
 	auth:
@@ -46,7 +47,7 @@ export function authMiddleware(options: {
 	) => Promise<any>;
 }) {
 	return async (request: NextRequest) => {
-		const baseUrl = process.env.BETTER_AUTH_URL || new URL(request.url).origin;
+		const baseUrl = getBaseURL() || new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
 		const fullURL = `${baseUrl}${basePath}/session`;
 
