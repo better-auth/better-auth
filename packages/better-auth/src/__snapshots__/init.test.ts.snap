@@ -138,7 +138,7 @@ exports[`init > should match config 1`] = `
     "verify": [Function],
   },
   "rateLimit": {
-    "enabled": true,
+    "enabled": false,
     "max": 100,
     "storage": "memory",
     "window": 60,
