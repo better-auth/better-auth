@@ -45,6 +45,12 @@ export async function getTestInstance<
 		emailAndPassword: {
 			enabled: true,
 		},
+		advanced: {
+			disableCSRFCheck: true,
+		},
+		rateLimit: {
+			enabled: false,
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
@@ -159,6 +165,9 @@ export async function getTestInstance<
 		),
 		fetchOptions: {
 			customFetchImpl,
+			headers: {
+				origin: "http://localhost:" + (config?.port || 3000),
+			},
 		},
 	});
 	return {
