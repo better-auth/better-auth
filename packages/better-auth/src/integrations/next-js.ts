@@ -46,9 +46,9 @@ export function authMiddleware(options: {
 	) => Promise<any>;
 }) {
 	return async (request: NextRequest) => {
-		const url = new URL(request.url).origin;
+		const baseUrl = process.env.BETTER_AUTH_URL || new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
-		const fullURL = `${url}${basePath}/session`;
+		const fullURL = `${baseUrl}${basePath}/session`;
 
 		const res = await betterFetch<{
 			session: Session;
@@ -66,7 +66,7 @@ export function authMiddleware(options: {
 			return options.customRedirect(session, request);
 		}
 		if (!session) {
-			return NextResponse.redirect(new URL(options.redirectTo || "/", url));
+			return NextResponse.redirect(new URL(options.redirectTo || "/", baseUrl));
 		}
 		return NextResponse.next();
 	};
