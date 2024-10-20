@@ -20,7 +20,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
-import { getBaseURL } from "../../utils/base-url";
+import { getBaseURL } from "../../utils/url";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
