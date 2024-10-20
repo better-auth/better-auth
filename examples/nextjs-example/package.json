@@ -1,10 +1,11 @@
 {
-  "name": "@example/nextjs-example",
+  "name": "@better-auth/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "pnpm migrate && next dev",
     "dev:secure": "next dev --experimental-https",
+    "migrate": "pnpx @better-auth/cli@latest migrate",
     "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start",
