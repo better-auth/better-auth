@@ -1,5 +1,4 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { Auth } from "../auth";
 import type { Session, User } from "../db/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { getBaseURL } from "../utils/url";
