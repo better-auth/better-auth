@@ -1,4 +1,3 @@
-import { APIError } from "better-call";
 import { z } from "zod";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
@@ -115,7 +114,15 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-		//find user in db
+
+		function redirectOnError(error: string) {
+			throw c.redirect(
+				`${
+					currentURL || callbackURL || `${c.context.baseURL}/error`
+				}?error=${error}`,
+			);
+		}
+
 		const dbUser = await c.context.internalAdapter
 			.findUserByEmail(user.email, {
 				includeAccounts: true,
@@ -141,17 +148,11 @@ export const callbackOAuth = createAuthEndpoint(
 				const isTrustedProvider = trustedProviders?.includes(
 					provider.id as "apple",
 				);
-				if (!isTrustedProvider) {
-					let url: URL;
-					try {
-						url = new URL(currentURL || callbackURL);
-						url.searchParams.set("error", "account_not_linked");
-					} catch (e) {
-						throw c.redirect(
-							`${c.context.baseURL}/error?error=account_not_linked`,
-						);
-					}
-					throw c.redirect(url.toString());
+				if (
+					(!isTrustedProvider && !user.emailVerified) ||
+					!c.context.options.account?.accountLinking?.enabled
+				) {
+					redirectOnError("account_not_linked");
 				}
 				try {
 					await c.context.internalAdapter.linkAccount({
@@ -162,10 +163,8 @@ export const callbackOAuth = createAuthEndpoint(
 						...getAccountTokens(tokens),
 					});
 				} catch (e) {
-					console.log(e);
-					throw c.redirect(
-						`${c.context.baseURL}/error?error=failed_linking_account`,
-					);
+					logger.error("Unable to link account", e);
+					redirectOnError("unable_to_link_account");
 				}
 			}
 		} else {
@@ -199,40 +198,23 @@ export const callbackOAuth = createAuthEndpoint(
 					);
 				}
 			} catch (e) {
-				const url = new URL(currentURL || callbackURL);
-				url.searchParams.set("error", "unable_to_create_user");
-				throw c.redirect(url.toString());
+				logger.error("Unable to create user", e);
+				redirectOnError("unable_to_create_user");
 			}
 		}
-		//this should never happen
-		if (!userId && !id)
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: "Unable to create user",
-			});
-		//create session
-		try {
-			const session = await c.context.internalAdapter.createSession(
-				userId || id,
-				c.request,
-			);
-			if (!session) {
-				const url = new URL(currentURL || callbackURL);
-				url.searchParams.set("error", "unable_to_create_session");
-				throw c.redirect(url.toString());
-			}
-			try {
-				await setSessionCookie(c, session.id);
-			} catch (e) {
-				c.context.logger.error("Unable to set session cookie", e);
-				const url = new URL(currentURL || callbackURL);
-				url.searchParams.set("error", "unable_to_create_session");
-				throw c.redirect(url.toString());
-			}
-		} catch {
-			const url = new URL(currentURL || callbackURL || "");
-			url.searchParams.set("error", "unable_to_create_session");
-			throw c.redirect(url.toString());
+
+		if (!userId && !id) {
+			redirectOnError("unable_to_create_user");
 		}
+
+		const session = await c.context.internalAdapter.createSession(
+			userId || id,
+			c.request,
+		);
+		if (!session) {
+			redirectOnError("unable_to_create_session");
+		}
+		await setSessionCookie(c, session.id);
 		throw c.redirect(callbackURL);
 	},
 );

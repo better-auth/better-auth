@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("updateUser", async () => {
 	let emailVerificationToken: string;
