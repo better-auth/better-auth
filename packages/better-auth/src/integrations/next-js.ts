@@ -66,7 +66,7 @@ export function authMiddleware(options: {
 			return options.customRedirect(session, request);
 		}
 		if (!session) {
-			return NextResponse.redirect(new URL(options.redirectTo || "/", url));
+			return NextResponse.redirect(new URL(options.redirectTo || "/", baseUrl));
 		}
 		return NextResponse.next();
 	};
