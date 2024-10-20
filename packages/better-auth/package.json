@@ -138,6 +138,79 @@
       "require": "./dist/adapters/mongodb.cjs"
     }
   },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "node": [
+        "./dist/node.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
+      ],
+      "vue": [
+        "./dist/vue.d.ts"
+      ],
+      "svelte": [
+        "./dist/svelte.d.ts"
+      ],
+      "social-providers": [
+        "./dist/social.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ],
+      "client/plugins": [
+        "./dist/client/plugins.d.ts"
+      ],
+      "types": [
+        "./dist/types.d.ts"
+      ],
+      "crypto": [
+        "./dist/crypto.d.ts"
+      ],
+      "cookies": [
+        "./dist/cookies.d.ts"
+      ],
+      "oauth2": [
+        "./dist/oauth2.d.ts"
+      ],
+      "solid": [
+        "./dist/solid.d.ts"
+      ],
+      "api": [
+        "./dist/api.d.ts"
+      ],
+      "db": [
+        "./dist/db.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins.d.ts"
+      ],
+      "plugins/access": [
+        "./dist/access.d.ts"
+      ],
+      "svelte-kit": [
+        "./dist/svelte-kit.d.ts"
+      ],
+      "solid-start": [
+        "./dist/solid-start.d.ts"
+      ],
+      "next-js": [
+        "./dist/next-js.d.ts"
+      ],
+      "adapters/prisma": [
+        "./dist/adapters/prisma.d.ts"
+      ],
+      "adapters/drizzle": [
+        "./dist/adapters/drizzle.d.ts"
+      ],
+      "adapters/mongodb": [
+        "./dist/adapters/mongodb.d.ts"
+      ]
+    }
+  },
   "devDependencies": {
     "@prisma/client": "^5.19.1",
     "@simplewebauthn/types": "^10.0.0",
