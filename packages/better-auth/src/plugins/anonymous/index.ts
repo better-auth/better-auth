@@ -3,7 +3,7 @@ import type { BetterAuthPlugin } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/base-url";
+import { getOrigin } from "../../utils/url";
 
 export interface AnonymousOptions {
 	/**
