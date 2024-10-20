@@ -10,16 +10,19 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		credentials: "include",
 		method: "GET",
 		...options?.fetchOptions,
-		plugins: [
-			...(!options?.disableCSRFTokenCheck ? [csrfPlugin] : []),
-			redirectPlugin,
-			addCurrentURL,
-			...(options?.fetchOptions?.plugins?.filter((pl) => pl !== undefined) ||
-				[]),
-			...(options?.plugins
-				?.flatMap((plugin) => plugin.fetchPlugins)
-				.filter((pl) => pl !== undefined) || []),
-		],
+		plugins: options?.disableDefaultFetchPlugins
+			? options.fetchOptions?.plugins
+			: [
+					...(!options?.disableCSRFTokenCheck ? [csrfPlugin] : []),
+					redirectPlugin,
+					addCurrentURL,
+					...(options?.fetchOptions?.plugins?.filter(
+						(pl) => pl !== undefined,
+					) || []),
+					...(options?.plugins
+						?.flatMap((plugin) => plugin.fetchPlugins)
+						.filter((pl) => pl !== undefined) || []),
+				],
 	});
 
 	const plugins = options?.plugins || [];
