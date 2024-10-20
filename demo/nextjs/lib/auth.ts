@@ -38,6 +38,11 @@ export const auth = betterAuth({
 		},
 		sendOnSignUp: true,
 	},
+	account: {
+		accountLinking: {
+			trustedProviders: ["google", "github"],
+		},
+	},
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword(user, url) {

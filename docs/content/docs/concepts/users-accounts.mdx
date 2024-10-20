@@ -122,23 +122,13 @@ The account table stores the authentication data of the user. The account table 
 
 ### Account linking
 
-Account linking allows users to connect multiple authentication methods to a single account. Better Auth supports linking social sign-on or OAuth providers to an existing account if the provider returns a verified email. If the email isn't verified, the account can't be linked.
-
-```ts
-const auth = new BetterAuth({
-    account: {
-        accountLinking: {
-            enabled: false,
-        }
-    },
-});
-```
+Account linking allows users to connect multiple authentication methods to a single account. Better Auth supports linking social sign-on or OAuth providers to an existing account if the provider returns a verified email.
 
 You can also specify a list of trusted providers. If a user signs in using a trusted provider, the account is linked, even if the email verification status is not provided.
 
 If account linking is disabled, accounts cannot be linked, regardless of the provider or email verification.
 
-```ts
+```ts title="auth.ts"
 const auth = new BetterAuth({
     account: {
         accountLinking: {
