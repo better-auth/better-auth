@@ -174,6 +174,7 @@ export const jwt = (options?: JwtOptions) => {
 					})
 						.setProtectedHeader({
 							alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							kid: key.id,
 						})
 						.setIssuedAt()
 						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
