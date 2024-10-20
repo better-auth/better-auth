@@ -69,12 +69,6 @@ export interface BetterAuthOptions {
 		| Dialect
 		| Adapter
 		| {
-				postgres?: PostgresPool;
-				mysql?: MysqlPool;
-				sqlite?: BetterSqlite3Database;
-				generateId?: ((size?: number) => string) | false;
-		  }
-		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
 				/**
