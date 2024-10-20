@@ -38,7 +38,7 @@ export const createInvitation = createAuthEndpoint(
 				message: "Organization not found",
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
 			organizationId: orgId,
@@ -125,7 +125,7 @@ export const acceptInvitation = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const invitation = await adapter.findInvitationById(ctx.body.invitationId);
 		if (
 			!invitation ||
@@ -182,7 +182,7 @@ export const rejectInvitation = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const invitation = await adapter.findInvitationById(ctx.body.invitationId);
 		if (
 			!invitation ||
@@ -220,7 +220,7 @@ export const cancelInvitation = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const invitation = await adapter.findInvitationById(ctx.body.invitationId);
 		if (!invitation) {
 			throw new APIError("BAD_REQUEST", {
@@ -269,7 +269,7 @@ export const getInvitation = createAuthEndpoint(
 				message: "Not authenticated",
 			});
 		}
-		const adapter = getOrgAdapter(ctx.context.adapter, ctx.context.orgOptions);
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const invitation = await adapter.findInvitationById(ctx.query.id);
 		if (
 			!invitation ||

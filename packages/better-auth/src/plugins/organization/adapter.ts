@@ -1,16 +1,17 @@
 import type { Kysely } from "kysely";
 import type { Session, User } from "../../db/schema";
-import type { Adapter } from "../../types/adapter";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
 import type { Invitation, Member, Organization } from "./schema";
 import { BetterAuthError } from "../../error";
+import type { AuthContext } from "../../types";
 
 export const getOrgAdapter = (
-	adapter: Adapter,
+	context: AuthContext,
 	options?: OrganizationOptions,
 ) => {
+	const adapter = context.adapter;
 	return {
 		findOrganizationBySlug: async (slug: string) => {
 			const organization = await adapter.findOne<Organization>({
@@ -87,7 +88,7 @@ export const getOrgAdapter = (
 				return null;
 			}
 			const user = await adapter.findOne<User>({
-				model: "user",
+				model: context.tables.user.tableName,
 				where: [
 					{
 						field: "id",
@@ -127,7 +128,7 @@ export const getOrgAdapter = (
 					],
 				}),
 				await adapter.findOne<User>({
-					model: "user",
+					model: context.tables.user.tableName,
 					where: [
 						{
 							field: "id",
@@ -163,7 +164,7 @@ export const getOrgAdapter = (
 				return null;
 			}
 			const user = await adapter.findOne<User>({
-				model: "user",
+				model: context.tables.user.tableName,
 				where: [
 					{
 						field: "id",
@@ -263,7 +264,7 @@ export const getOrgAdapter = (
 		},
 		setActiveOrganization: async (sessionId: string, orgId: string | null) => {
 			const session = await adapter.update<Session>({
-				model: "session",
+				model: context.tables.session.tableName,
 				where: [
 					{
 						field: "id",
@@ -311,7 +312,7 @@ export const getOrgAdapter = (
 
 			const userIds = members.map((member) => member.userId);
 			const users = await adapter.findMany<User>({
-				model: "user",
+				model: context.tables.user.tableName,
 				where: [{ field: "id", value: userIds, operator: "in" }],
 			});
 
