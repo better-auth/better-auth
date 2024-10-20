@@ -12,7 +12,7 @@ import type {
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
-import { getBaseURL } from "./utils/base-url";
+import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
@@ -216,7 +216,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it in your auth config.",
 		);
 	}
-	const trustedOrigins = [baseURL];
+	const trustedOrigins = [new URL(baseURL).origin];
 	if (options.trustedOrigins) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
