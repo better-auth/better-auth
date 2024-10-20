@@ -4,6 +4,7 @@ import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
+import { env, isProduction } from "std-env";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -11,7 +12,7 @@ import type {
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
-import { getBaseURL } from "./utils/base-url";
+import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
@@ -40,12 +41,12 @@ export const init = async (options: BetterAuthOptions) => {
 
 	const secret =
 		options.secret ||
-		process.env.BETTER_AUTH_SECRET ||
-		process.env.AUTH_SECRET ||
+		env.BETTER_AUTH_SECRET ||
+		env.AUTH_SECRET ||
 		DEFAULT_SECRET;
 
 	if (secret === DEFAULT_SECRET) {
-		if (process.env.NODE_ENV === "production") {
+		if (isProduction) {
 			throw new BetterAuthError(
 				"You are using the default secret. Please set `BETTER_AUTH_SECRET` or `AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
 			);
@@ -61,7 +62,7 @@ export const init = async (options: BetterAuthOptions) => {
 		emailAndPassword: {
 			...options.emailAndPassword,
 			enabled: options.emailAndPassword?.enabled ?? false,
-			autoSignIn: true,
+			autoSignIn: options.emailAndPassword?.autoSignIn ?? true,
 		},
 	};
 	const cookies = getCookies(options);
@@ -96,8 +97,7 @@ export const init = async (options: BetterAuthOptions) => {
 		secret,
 		rateLimit: {
 			...options.rateLimit,
-			enabled:
-				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
+			enabled: options.rateLimit?.enabled ?? isProduction,
 			window: options.rateLimit?.window || 60,
 			max: options.rateLimit?.max || 100,
 			storage:
@@ -220,7 +220,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 	if (options.trustedOrigins) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
-	const envTrustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}

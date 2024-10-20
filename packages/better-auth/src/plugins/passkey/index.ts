@@ -20,6 +20,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
+import { env } from "std-env";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -73,7 +74,7 @@ export type Passkey = {
 };
 
 export const passkey = (options?: PasskeyOptions) => {
-	const baseURL = process.env.BETTER_AUTH_URL;
+	const baseURL = env.BETTER_AUTH_URL;
 	const rpID =
 		options?.rpID ||
 		baseURL?.replace("http://", "").replace("https://", "").split(":")[0] ||

@@ -30,6 +30,30 @@ describe("generate", async () => {
 		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.txt");
 	});
 
+	it("should generate prisma schema for mongodb", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "mongodb",
+				},
+			),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "mongodb",
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-mongodb.txt",
+		);
+	});
+
 	it("should generate drizzle schema", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",

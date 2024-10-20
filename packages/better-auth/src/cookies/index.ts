@@ -3,13 +3,18 @@ import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
+import { env, isProduction } from "std-env";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: (options.baseURL ? options.baseURL.startsWith("https://") : false) ||
-				process.env.NODE_ENV === "production";
+			: options.baseURL !== undefined
+				? options.baseURL.startsWith("https://")
+					? true
+					: false
+				: isProduction;
+
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 	const sessionMaxAge =
@@ -103,8 +108,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL?.startsWith("https://") ||
-				process.env.NODE_ENV === "production";
+			: options.baseURL?.startsWith("https://") || isProduction;
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const cookiePrefix = "better-auth";
 
@@ -121,7 +125,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 			: undefined;
 		return {
 			name:
-				process.env.NODE_ENV === "production"
+				env.NODE_ENV === "production"
 					? `${secureCookiePrefix}${cookiePrefix}.${cookieName}`
 					: `${cookiePrefix}.${cookieName}`,
 			options: {

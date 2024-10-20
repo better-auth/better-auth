@@ -43,12 +43,27 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
+				if (type === "string[]") {
+					return isOptional ? "String[]" : "String[]";
+				}
+				if (type === "number[]") {
+					return isOptional ? "Int[]" : "Int[]";
+				}
 			}
 			const prismaModel = builder.findByType("model", {
 				name: tableName,
 			});
-			!prismaModel &&
-				builder.model(tableName).field("id", "String").attribute("id");
+			if (!prismaModel) {
+				if (provider === "mongodb") {
+					builder
+						.model(tableName)
+						.field("id", "String")
+						.attribute("id")
+						.attribute(`map("_id")`);
+				} else {
+					builder.model(tableName).field("id", "String").attribute("id");
+				}
+			}
 
 			for (const field in fields) {
 				const attr = fields[field]!;

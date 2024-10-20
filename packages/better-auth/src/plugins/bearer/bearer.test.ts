@@ -22,7 +22,6 @@ describe("bearer", async () => {
 		encryptedToken = headers
 			.get("cookie")
 			?.split("better-auth.session_token=")[1];
-		console.log(encryptedToken);
 		expect(session.data?.session.id).toBe(res.data?.session.id);
 	});
 

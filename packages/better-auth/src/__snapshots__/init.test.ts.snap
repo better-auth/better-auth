@@ -5,6 +5,7 @@ exports[`init > should match config 1`] = `
   "adapter": {
     "create": [Function],
     "delete": [Function],
+    "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
@@ -87,6 +88,7 @@ exports[`init > should match config 1`] = `
     "deleteVerificationValue": [Function],
     "findAccounts": [Function],
     "findSession": [Function],
+    "findSessions": [Function],
     "findUserByEmail": [Function],
     "findUserById": [Function],
     "findVerificationValue": [Function],
@@ -136,7 +138,7 @@ exports[`init > should match config 1`] = `
     "verify": [Function],
   },
   "rateLimit": {
-    "enabled": true,
+    "enabled": false,
     "max": 100,
     "storage": "memory",
     "window": 60,

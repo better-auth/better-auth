@@ -1,18 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("updateUser", async () => {
 	let emailVerificationToken: string;
-	const { client, testUser, sessionSetter, customFetchImpl } =
-		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail(user, url, token) {
-					emailVerificationToken = token;
-				},
+	const { client, testUser, sessionSetter } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail(user, url, token) {
+				emailVerificationToken = token;
 			},
-		});
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
@@ -40,18 +42,10 @@ describe("updateUser", async () => {
 
 	it("should update user email", async () => {
 		const newEmail = "new-email@email.com";
-		await client.user.changeEmail({
+		const res = await client.user.changeEmail({
 			newEmail,
 			fetchOptions: {
 				headers: headers,
-			},
-		});
-		const res = await client.verifyEmail({
-			query: {
-				token: emailVerificationToken,
-			},
-			fetchOptions: {
-				headers,
 			},
 		});
 		expect(res.data?.user.email).toBe(newEmail);

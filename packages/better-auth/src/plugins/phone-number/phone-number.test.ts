@@ -1,8 +1,9 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
+import { changeEmail } from "../../api";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -79,7 +80,6 @@ describe("phone-number", async (it) => {
 				headers,
 			},
 		});
-		console.log(res);
 		const user = await client.session({
 			fetchOptions: {
 				headers,
@@ -100,5 +100,99 @@ describe("phone-number", async (it) => {
 			code: otp,
 		});
 		expect(res.error?.status).toBe(400);
+	});
+});
+
+describe("phone auth flow", async () => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP(_, code) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	it("should send otp", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: "+251911121314",
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toHaveLength(6);
+	});
+
+	it("should verify phone number and create user & session", async () => {
+		const res = await client.phoneNumber.verify({
+			phoneNumber: "+251911121314",
+			code: otp,
+		});
+		expect(res.data?.user.phoneNumberVerified).toBe(true);
+		expect(res.data?.user.email).toBe("temp-+251911121314");
+		expect(res.data?.session).toBeDefined();
+	});
+
+	let headers = new Headers();
+	it("should go through send-verify and sign-in the user", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: "+251911121314",
+		});
+		const res = await client.phoneNumber.verify(
+			{
+				phoneNumber: "+251911121314",
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.session).toBeDefined();
+	});
+
+	const newEmail = "new-email@email.com";
+	it("should set password and update user", async () => {
+		const res = await client.user.setPassword({
+			newPassword: "password",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error).toBe(null);
+		const changedEmailRes = await client.user.changeEmail({
+			newEmail,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(changedEmailRes.error).toBe(null);
+		expect(changedEmailRes.data?.user.email).toBe(newEmail);
+	});
+
+	it("should sign in with new email", async () => {
+		const res = await client.signIn.email({
+			email: newEmail,
+			password: "password",
+		});
+		expect(res.error).toBe(null);
 	});
 });

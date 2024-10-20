@@ -9,7 +9,7 @@ import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
-import { getBaseURL } from "../utils/base-url";
+import { getBaseURL } from "../utils/url";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -44,6 +44,12 @@ export async function getTestInstance<
 		database: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: true,
+		},
+		rateLimit: {
+			enabled: false,
 		},
 	} satisfies BetterAuthOptions;
 
@@ -159,6 +165,9 @@ export async function getTestInstance<
 		),
 		fetchOptions: {
 			customFetchImpl,
+			headers: {
+				origin: "http://localhost:" + (config?.port || 3000),
+			},
 		},
 	});
 	return {

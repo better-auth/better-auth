@@ -3,41 +3,69 @@ import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
-	if (where.length === 1) {
-		const w = where[0];
-		if (!w) {
-			return;
-		}
-		return {
-			[w.field]: w.value,
-		};
-	}
-	const and = where.filter((w) => w.connector === "AND" || !w.connector);
-	const or = where.filter((w) => w.connector === "OR");
 
-	const andClause = and.map((w) => {
-		return {
-			[w.field]:
-				w.operator === "eq" || !w.operator
-					? w.value
-					: {
-							[w.field]: w.value,
-						},
-		};
+	const conditions = where.map((w) => {
+		const { field, value, operator = "eq", connector = "AND" } = w;
+		let condition: any;
+
+		switch (operator.toLowerCase()) {
+			case "eq":
+				condition = { [field]: value };
+				break;
+			case "in":
+				condition = {
+					[field]: { $in: Array.isArray(value) ? value : [value] },
+				};
+				break;
+			case "gt":
+				condition = { [field]: { $gt: value } };
+				break;
+			case "gte":
+				condition = { [field]: { $gte: value } };
+				break;
+			case "lt":
+				condition = { [field]: { $lt: value } };
+				break;
+			case "lte":
+				condition = { [field]: { $lte: value } };
+				break;
+			case "ne":
+				condition = { [field]: { $ne: value } };
+				break;
+
+			case "contains":
+				condition = { [field]: { $regex: `.*${value}.*` } };
+				break;
+			case "starts_with":
+				condition = { [field]: { $regex: `${value}.*` } };
+				break;
+			case "ends_with":
+				condition = { [field]: { $regex: `.*${value}` } };
+				break;
+
+			// Add more operators as needed
+			default:
+				throw new Error(`Unsupported operator: ${operator}`);
+		}
+
+		return { condition, connector };
 	});
-	const orClause = or.map((w) => {
-		return {
-			[w.field]: w.value,
-		};
-	});
+
+	const andConditions = conditions
+		.filter((c) => c.connector === "AND")
+		.map((c) => c.condition);
+	const orConditions = conditions
+		.filter((c) => c.connector === "OR")
+		.map((c) => c.condition);
 
 	let clause = {};
-	if (andClause.length) {
-		clause = { ...clause, $and: andClause };
+	if (andConditions.length) {
+		clause = { ...clause, $and: andConditions };
 	}
-	if (orClause.length) {
-		clause = { ...clause, $or: orClause };
+	if (orConditions.length) {
+		clause = { ...clause, $or: orConditions };
 	}
+
 	return clause;
 }
 
@@ -98,12 +126,9 @@ export const mongodbAdapter = (
 				selects = selectConvertor(select);
 			}
 
-			const res = await db
+			const result = await db
 				.collection(getModelName(model))
-				.find({ ...wheres }, { projection: selects })
-				.toArray();
-
-			const result = res[0];
+				.findOne(wheres, { projection: selects });
 
 			if (!result) {
 				return null;
@@ -116,9 +141,7 @@ export const mongodbAdapter = (
 			const wheres = whereConvertor(where);
 			const toReturn = await db
 				.collection(getModelName(model))
-				.find()
-				// @ts-expect-error
-				.filter(wheres)
+				.find(wheres)
 				.skip(offset || 0)
 				.limit(limit || 100)
 				.sort(sortBy?.field || "id", sortBy?.direction === "desc" ? -1 : 1)
@@ -129,9 +152,12 @@ export const mongodbAdapter = (
 			const { model, where, update } = data;
 			const wheres = whereConvertor(where);
 
+			if (update.id) {
+				update.id = undefined;
+			}
+
 			if (where.length === 1) {
 				const res = await db.collection(getModelName(model)).findOneAndUpdate(
-					//@ts-expect-error
 					wheres,
 					{
 						$set: update,
@@ -140,13 +166,9 @@ export const mongodbAdapter = (
 				);
 				return removeMongoId(res);
 			}
-			const res = await db.collection(getModelName(model)).updateMany(
-				//@ts-expect-error
-				wheres,
-				{
-					$set: update,
-				},
-			);
+			const res = await db.collection(getModelName(model)).updateMany(wheres, {
+				$set: update,
+			});
 			return {};
 		},
 		async delete(data) {
@@ -155,8 +177,13 @@ export const mongodbAdapter = (
 
 			const res = await db
 				.collection(getModelName(model))
-				//@ts-expect-error
 				.findOneAndDelete(wheres);
+		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const wheres = whereConvertor(where);
+
+			const res = await db.collection(getModelName(model)).deleteMany(wheres);
 		},
 	} satisfies Adapter;
 };

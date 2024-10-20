@@ -47,8 +47,8 @@ export function getWithHooks(
 				? await adapter.create<T>({
 						model: table.tableName,
 						data: {
-							id: generateId(),
 							...convertToDB(table.fields, actualData),
+							id: actualData.id || generateId(),
 						},
 					})
 				: customCreated;

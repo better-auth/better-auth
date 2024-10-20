@@ -58,6 +58,7 @@ export interface ClientOptions {
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
 	disableCSRFTokenCheck?: boolean;
+	disableDefaultFetchPlugins?: boolean;
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<

@@ -13,7 +13,7 @@ To call an API endpoint on the server, import your `auth` instance and call the 
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
-import { headers } from "next/server";
+import { headers } from "next/headers";
 
 export const auth = betterAuth({
     //...

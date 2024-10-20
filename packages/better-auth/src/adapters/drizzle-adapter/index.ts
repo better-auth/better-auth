@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, or, SQL, inArray, like } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
 import { BetterAuthError } from "../../error";
 
@@ -53,6 +53,28 @@ function whereConvertor(where: Where[], schemaModel: any) {
 		if (!w) {
 			return [];
 		}
+
+		if (w.operator === "in") {
+			if (!Array.isArray(w.value)) {
+				throw new BetterAuthError(
+					`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+				);
+			}
+			return [inArray(schemaModel[w.field], w.value)];
+		}
+
+		if (w.operator === "contains") {
+			return [like(schemaModel[w.field], `%${w.value}%`)];
+		}
+
+		if (w.operator === "starts_with") {
+			return [like(schemaModel[w.field], `${w.value}%`)];
+		}
+
+		if (w.operator === "ends_with") {
+			return [like(schemaModel[w.field], `%${w.value}`)];
+		}
+
 		return [eq(schemaModel[w.field], w.value)];
 	}
 	const andGroup = where.filter((w) => w.connector === "AND" || !w.connector);
@@ -60,6 +82,14 @@ function whereConvertor(where: Where[], schemaModel: any) {
 
 	const andClause = and(
 		...andGroup.map((w) => {
+			if (w.operator === "in") {
+				if (!Array.isArray(w.value)) {
+					throw new BetterAuthError(
+						`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+					);
+				}
+				return inArray(schemaModel[w.field], w.value);
+			}
 			return eq(schemaModel[w.field], w.value);
 		}),
 	);
@@ -142,12 +172,11 @@ export const drizzleAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
-
 			const schemaModel = getSchema(model, {
 				schema,
 				usePlural: options.usePlural,
 			});
-			const wheres = where ? whereConvertor(where, schemaModel) : [];
+			const filters = where ? whereConvertor(where, schemaModel) : [];
 			const fn = sortBy?.direction === "desc" ? desc : asc;
 			const res = await db
 				.select()
@@ -155,7 +184,7 @@ export const drizzleAdapter = (
 				.limit(limit || 100)
 				.offset(offset || 0)
 				.orderBy(fn(schemaModel[sortBy?.field || "id"]))
-				.where(...(wheres.length ? wheres : []));
+				.where(...(filters.length ? filters : []));
 
 			return res;
 		},
@@ -165,6 +194,9 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
+			if (update.id) {
+				update.id = undefined;
+			}
 			const wheres = whereConvertor(where, schemaModel);
 			const mutation = db
 				.update(schemaModel)
@@ -189,6 +221,15 @@ export const drizzleAdapter = (
 			const res = await db.delete(schemaModel).where(...wheres);
 
 			return res[0];
+		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
+			const wheres = whereConvertor(where, schemaModel);
+			await db.delete(schemaModel).where(...wheres);
 		},
 		options,
 	};

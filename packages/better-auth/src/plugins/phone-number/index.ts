@@ -215,13 +215,17 @@ export const phoneNumber = (options?: {
 								message: "Phone number not found",
 							});
 						}
-					}
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
+					} else {
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							[opts.phoneNumberVerified]: true,
-						},
-					);
+						});
+					}
+
+					if (!user) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to update user",
+						});
+					}
 
 					if (!ctx.body.disableSession) {
 						const session = await ctx.context.internalAdapter.createSession(
@@ -235,13 +239,13 @@ export const phoneNumber = (options?: {
 						}
 						await setSessionCookie(ctx, session.id);
 						return ctx.json({
-							user: updatedUser as UserWithPhoneNumber,
+							user,
 							session,
 						});
 					}
 
 					return ctx.json({
-						user: updatedUser as UserWithPhoneNumber,
+						user,
 						session: null,
 					});
 				},

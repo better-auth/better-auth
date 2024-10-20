@@ -99,7 +99,6 @@ export const verifyEmail = createAuthEndpoint(
 				message: "Invalid token",
 			});
 		}
-
 		const schema = z.object({
 			email: z.string().email(),
 			updateTo: z.string().optional(),

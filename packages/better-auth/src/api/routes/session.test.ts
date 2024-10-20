@@ -147,7 +147,10 @@ describe("session", async () => {
 		);
 		const expiresAt = new Date(res.data?.session?.expiresAt || "");
 		const now = new Date();
-		expect(expiresAt.getDate()).toBeGreaterThan(now.getDate() + 6);
+
+		expect(expiresAt.getTime()).toBeGreaterThan(
+			now.getTime() + 6 * 24 * 60 * 60 * 1000,
+		);
 	});
 
 	it("should clear session on sign out", async () => {

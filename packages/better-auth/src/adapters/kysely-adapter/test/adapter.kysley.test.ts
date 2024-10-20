@@ -3,12 +3,9 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runAdapterTest } from "../../test";
 import { getMigrations } from "../../../db/get-migration";
 import path from "path";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { kyselyAdapter } from "..";
 import { Kysely, SqliteDialect } from "kysely";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { organization, twoFactor } from "../../../plugins";
 
 describe("adapter test", async () => {
 	const database = new Database(path.join(__dirname, "test.db"));

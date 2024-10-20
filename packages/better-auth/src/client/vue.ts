@@ -12,7 +12,6 @@ import type {
 import { createDynamicPathProxy } from "./proxy";
 import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
-import { getBaseURL } from "../utils/base-url";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -77,10 +76,9 @@ export function createAuthClient<Option extends ClientOptions>(
 	) {
 		if (useFetch) {
 			const ref = useStore(_sessionSignal);
-			const baseUrl =
-				getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL) ??
-				"/api/auth";
-			return useFetch(`${baseUrl}/session`, {
+			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
+			const authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
+			return useFetch(`${authPath}/session`, {
 				ref,
 			}).then((res: any) => {
 				return {
