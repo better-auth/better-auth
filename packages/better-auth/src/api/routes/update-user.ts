@@ -271,7 +271,7 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		if (!ctx.context.options.user.changeEmail.sendChangeEmailVerification) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
@@ -288,8 +288,9 @@ export const changeEmail = createAuthEndpoint(
 		}/verify-email?token=${token}&callbackURL=${
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
-		await ctx.context.options.emailVerification.sendVerificationEmail(
+		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			ctx.context.session.user,
+			ctx.body.newEmail,
 			url,
 			token,
 		);
