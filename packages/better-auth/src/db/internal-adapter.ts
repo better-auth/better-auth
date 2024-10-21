@@ -286,6 +286,7 @@ export const createInternalAdapter = (
 				],
 			});
 			const userIds = sessions.map((session) => session.userId);
+			if (!userIds.length) return [];
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				where: [
