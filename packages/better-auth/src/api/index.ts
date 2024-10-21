@@ -99,7 +99,7 @@ export function getEndpoints<
 		changeEmail,
 		changePassword,
 		setPassword,
-		updateUser: updateUser<Option>(),
+		updateUser,
 		deleteUser,
 		forgetPasswordCallback,
 		listSessions: listSessions<Option>(),
