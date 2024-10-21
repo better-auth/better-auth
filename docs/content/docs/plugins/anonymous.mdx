@@ -79,7 +79,7 @@ const user = await client.signIn.anonymous()
 Once the user is signed in, you can link an account to their anonymous profile. Currently, only email/password linking is supported.
 
 ```ts title="example.ts"
-const user = await client.anonymous.linkAccount({
+const user = await client.user.linkAnonymous({
     email: "user@email.com",
     password: "secure-password"
 })

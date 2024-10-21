@@ -98,6 +98,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							providerId: "credential",
 							password: hash,
 							accountId: updatedUser.id,
+							isAnonymous: false,
 						});
 					if (!updateUserAccount) {
 						return ctx.json(null, {
