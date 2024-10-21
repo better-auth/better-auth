@@ -11,6 +11,7 @@ import {
 import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
 import { contents } from "./sidebar-content";
 import { MobileThemeToggle, ThemeToggle } from "./theme-toggler";
+import { cn } from "@/lib/utils";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -75,7 +76,16 @@ export const NavbarMobile = () => {
 	const { isOpen, toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="fixed top-[50px] left-0  px-4 mx-auto w-full h-auto md:hidden transform-gpu [border:1px_solid_rgba(255,255,255,.1)] z-[100] bg-background">
+		<div
+			style={{
+				WebkitBackdropFilter: "blur(16px)",
+				backdropFilter: "blur(16px)",
+			}}
+			className={cn(
+				"blurredNav",
+				"fixed top-[50px] z-50 left-0  px-4 mx-auto w-full h-auto backdrop-blur-lg dark:bg-stone-900/90 md:hidden transform-gpu [] [box-shadow:0_-40px_80px_-20px_#8686f01f_inset]",
+			)}
+		>
 			<AnimatePresence>
 				{isOpen && (
 					<FadeIn

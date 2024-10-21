@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root  {
+  :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
@@ -28,9 +28,9 @@
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%
+    --chart-5: 27 87% 67%;
   }
-  .dark  {
+  .dark {
     --background: 360 50% 5%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
@@ -58,9 +58,6 @@
   }
 }
 
-
-
-
 @layer base {
   * {
     @apply border-border;
@@ -73,4 +70,8 @@
 /* hide scrollbar */
 ::-webkit-scrollbar {
   display: none;
+}
+.blurredNav {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
