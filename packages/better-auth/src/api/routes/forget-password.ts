@@ -109,7 +109,8 @@ export const resetPassword = createAuthEndpoint(
 	{
 		query: z.optional(
 			z.object({
-				token: z.string(),
+				token: z.string().optional(),
+				currentURL: z.string().optional(),
 			}),
 		),
 		method: "POST",
@@ -118,7 +119,11 @@ export const resetPassword = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
-		const token = ctx.query?.token;
+		const token =
+			ctx.query?.token ||
+			(ctx.query?.currentURL
+				? new URL(ctx.query.currentURL).searchParams.get("token")
+				: "");
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Token not found",
