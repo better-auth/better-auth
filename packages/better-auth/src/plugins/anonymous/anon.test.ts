@@ -41,6 +41,7 @@ describe("anonymous", async () => {
 		});
 		expect(linkedAccount.data?.user).toBeDefined();
 		expect(linkedAccount.data?.session).toBeDefined();
+		expect(linkedAccount.data?.user.isAnonymous).toBeFalsy();
 	});
 
 	it("should sign in after link", async () => {
