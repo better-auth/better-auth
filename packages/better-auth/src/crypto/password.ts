@@ -1,7 +1,7 @@
 import { decodeHex, encodeHex } from "oslo/encoding";
 import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
-import { getRandomValues } from "crypto";
+import { getRandomValues } from "uncrypto";
 
 const config = {
 	N: 16384,

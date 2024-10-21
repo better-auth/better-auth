@@ -1,5 +1,4 @@
 import { sha256 } from "oslo/crypto";
-import { getBaseURL } from "../utils/url";
 import { base64url } from "oslo/encoding";
 import type { OAuth2Tokens } from "./types";
 
