@@ -141,7 +141,7 @@ exports[`init > should match config 1`] = `
     "enabled": false,
     "max": 100,
     "storage": "memory",
-    "window": 60,
+    "window": 10,
   },
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",
