@@ -22,6 +22,7 @@ import { toast } from "sonner";
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");
+	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -91,6 +92,19 @@ export function SignUp() {
 						/>
 					</div>
 					<div className="grid gap-2">
+						<Label htmlFor="username">Username</Label>
+						<Input
+							id="username"
+							type="text"
+							placeholder="Username"
+							required
+							onChange={(e) => {
+								setUsername(e.target.value);
+							}}
+							value={username}
+						/>
+					</div>
+					<div className="grid gap-2">
 						<Label htmlFor="password">Password</Label>
 						<PasswordInput
 							id="password"
@@ -151,6 +165,7 @@ export function SignUp() {
 							await signUp.email({
 								email,
 								password,
+								username,
 								name: `${firstName} ${lastName}`,
 								image: image ? await convertImageToBase64(image) : "",
 								callbackURL: "/dashboard",
