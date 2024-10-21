@@ -44,6 +44,7 @@ describe("username", async (it) => {
 				headers,
 			},
 		});
+
 		expect(res.data?.user.username).toBe("new-username-2");
 	});
 });

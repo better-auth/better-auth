@@ -28,6 +28,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				image?: string;
 				[key: string]: any;
 			};
+
 			if (body.email) {
 				throw new APIError("BAD_REQUEST", {
 					message: "You can't update email",
@@ -35,12 +36,13 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
-			if (!image && !name) {
+			if (!image && !name && Object.keys(rest).length === 0) {
 				return ctx.json({
 					user: session.user,
 				});
 			}
 			const additionalFields = parseUserInput(ctx.context.options, rest);
+			console.log({ additionalFields });
 			const user = await ctx.context.internalAdapter.updateUserByEmail(
 				session.user.email,
 				{
