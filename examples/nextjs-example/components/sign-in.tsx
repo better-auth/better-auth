@@ -38,11 +38,10 @@ export default function SignIn() {
 			<CardContent>
 				<div className="grid gap-4">
 					<div className="grid gap-2">
-						<Label htmlFor="email">Email</Label>
+						<Label htmlFor="email">Email/Username</Label>
 						<Input
 							id="email"
-							type="email"
-							placeholder="m@example.com"
+							placeholder="Email or Username"
 							required
 							onChange={(e) => {
 								setEmail(e.target.value);
@@ -82,25 +81,51 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							await signIn.email(
-								{
-									email: email,
-									password: password,
-									callbackURL: "/dashboard",
-									dontRememberMe: !rememberMe,
-								},
-								{
-									onRequest: () => {
-										setLoading(true);
+							if (email.includes("@")) {
+								await signIn.email(
+									{
+										email: email,
+										password: password,
+										dontRememberMe: !rememberMe,
 									},
-									onResponse: () => {
-										setLoading(false);
+									{
+										onRequest: () => {
+											setLoading(true);
+										},
+										onResponse: () => {
+											setLoading(false);
+										},
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: () => {
+											router.push("/dashboard");
+										},
 									},
-									onError: (ctx) => {
-										toast.error(ctx.error.message);
+								);
+							} else {
+								await signIn.username(
+									{
+										username: email,
+										password: password,
+										dontRememberMe: !rememberMe,
 									},
-								},
-							);
+									{
+										onRequest: () => {
+											setLoading(true);
+										},
+										onResponse: () => {
+											setLoading(false);
+										},
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: () => {
+											router.push("/dashboard");
+										},
+									},
+								);
+							}
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}

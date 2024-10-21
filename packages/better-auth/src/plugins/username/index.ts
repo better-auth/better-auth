@@ -3,9 +3,22 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
-import { signUpEmail } from "../../api/routes/sign-up";
+import { sessionMiddleware } from "../../api";
 
-export const username = () => {
+interface UsernameOptions {
+	rateLimit?: {
+		signIn?: {
+			window: number;
+			max: number;
+		};
+		update?: {
+			window: number;
+			max: number;
+		};
+	};
+}
+
+export const username = (options?: UsernameOptions) => {
 	return {
 		id: "username",
 		endpoints: {
@@ -47,7 +60,7 @@ export const username = () => {
 							},
 							{
 								field:
-									ctx.context.tables.account.fields.type.fieldName ||
+									ctx.context.tables.account.fields.providerId.fieldName ||
 									"providerId",
 								value: "credential",
 							},
@@ -105,33 +118,25 @@ export const username = () => {
 					});
 				},
 			),
-			signUpUsername: createAuthEndpoint(
-				"/sign-up/username",
+			updateUsername: createAuthEndpoint(
+				"/update-username",
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string().min(3).max(20),
-						name: z.string(),
-						email: z.string().email(),
-						password: z.string(),
-						image: z.string().optional(),
+						username: z.string(),
 					}),
+					use: [sessionMiddleware],
 				},
 				async (ctx) => {
-					const res = await signUpEmail()({
-						...ctx,
-						_flag: "json",
-					});
-
-					const updated = await ctx.context.internalAdapter.updateUserByEmail(
-						res.user?.email,
+					const user = ctx.context.session.user;
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
 						{
 							username: ctx.body.username,
 						},
 					);
 					return ctx.json({
-						user: updated,
-						session: res.session,
+						user: updatedUser,
 					});
 				},
 			),
@@ -148,5 +153,21 @@ export const username = () => {
 				},
 			},
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/sign-in/username";
+				},
+				window: options?.rateLimit?.signIn?.window || 10,
+				max: options?.rateLimit?.signIn?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/update-username";
+				},
+				window: options?.rateLimit?.update?.window || 10,
+				max: options?.rateLimit?.update?.max || 3,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };

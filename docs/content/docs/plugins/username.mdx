@@ -61,22 +61,14 @@ The username plugin wraps the email and password authenticator and adds username
 
 ### Signup with username
 
-To signup a user with username, you can use the `signUp.username` function provided by the client. The `signUp` function takes an object with the following properties:
+To sign up a user with username, you can use the existing `singUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
 
-- `username`: The username of the user.
-- `email`: The email address of the user.
-- `password`: The password of the user. It should be at least 8 characters long and max 32 by default. 
-- `name`: The name of the user.
-- `image`: The image of the user. (optional)
-- `callbackURL`: The url to redirect to after the user has signed up. (optional)
-
-```ts title="client.ts" 
-const data = await client.signUp.username({
-    username: "test",
-    email: "test@email.com",
+```ts title="client.ts"
+const data = await client.signUp.email({
+    email: "email@domain.com",
+    name: "Test User",
     password: "password1234",
-    name: "test",
-    image: "https://example.com/image.png",
+    username: "test"
 })
 ```
 
@@ -86,12 +78,23 @@ To signin a user with username, you can use the `signIn.username` function provi
 
 - `username`: The username of the user.
 - `password`: The password of the user.
-- `callbackURL`: The url to redirect to after the user has signed in. (optional)
 
 ```ts title="client.ts" 
 const data = await client.signIn.username({
     username: "test",
     password: "password1234",
+})
+```
+
+### Update username
+
+To update the username of a user, you can use the `updateUsername` function provided by the client. The `updateUsername` function takes an object with the following properties:
+
+- `username`: The new username of the user.
+
+```ts title="client.ts"
+const data = await client.updateUsername({
+    username: "new-username"
 })
 ```
 
@@ -110,6 +113,28 @@ The plugin requires 1 field to be added to the user table:
     ]}
 />
 
-## Options
+## Rate Limiting
 
-The username plugin doesn't require any configuration. It just needs to be added to the server and client.
+The username plugin rate limits both `signIn.username` and `updateUsername` functions. The rate limit is set to 3 requests per 10 seconds. The rate limit can be configured by passing the `rateLimit` option to the plugin.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            rateLimit: {
+                signIn:{ 
+                    window: 10,
+                    limit: 5
+                },
+                updateUsername: {
+                    window: 10,
+                    limit: 5
+                }
+            }
+        })
+    ]
+})
+```
