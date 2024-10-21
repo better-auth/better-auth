@@ -38,7 +38,7 @@ describe("username", async (it) => {
 		expect(res.data?.session).toBeDefined();
 	});
 	it("should update username", async () => {
-		const res = await client.updateUsername({
+		const res = await client.user.update({
 			username: "new-username-2",
 			fetchOptions: {
 				headers,
