@@ -304,9 +304,15 @@ export interface BetterAuthOptions {
 		 * Default window to use for rate limiting. The value
 		 * should be in seconds.
 		 *
-		 * @default 60 sec
+		 * @default 10 seconds
 		 */
 		window?: number;
+		/**
+		 * The default maximum number of requests allowed within the window.
+		 *
+		 * @default 100 requests
+		 */
+		max?: number;
 		/**
 		 * Custom rate limit rules to apply to
 		 * specific paths.
@@ -323,12 +329,6 @@ export interface BetterAuthOptions {
 				max: number;
 			};
 		};
-		/**
-		 * The default maximum number of requests allowed within the window.
-		 *
-		 * @default 100
-		 */
-		max?: number;
 		/**
 		 * Storage configuration
 		 *

@@ -98,7 +98,7 @@ export const init = async (options: BetterAuthOptions) => {
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,
-			window: options.rateLimit?.window || 60,
+			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
 				options.rateLimit?.storage || options.secondaryStorage
