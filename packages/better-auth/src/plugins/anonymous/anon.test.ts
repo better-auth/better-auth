@@ -35,7 +35,7 @@ describe("anonymous", async () => {
 	});
 
 	it("link anonymous user account", async () => {
-		const linkedAccount = await client.user.linkAnonymous({
+		const linkedAccount = await client.anonymous.linkAccount({
 			email: "valid-email@email.com",
 			password: "valid-password",
 		});
