@@ -3,22 +3,8 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
-import { sessionMiddleware } from "../../api";
 
-interface UsernameOptions {
-	rateLimit?: {
-		signIn?: {
-			window: number;
-			max: number;
-		};
-		update?: {
-			window: number;
-			max: number;
-		};
-	};
-}
-
-export const username = (options?: UsernameOptions) => {
+export const username = () => {
 	return {
 		id: "username",
 		endpoints: {
@@ -118,28 +104,6 @@ export const username = (options?: UsernameOptions) => {
 					});
 				},
 			),
-			updateUsername: createAuthEndpoint(
-				"/update-username",
-				{
-					method: "POST",
-					body: z.object({
-						username: z.string(),
-					}),
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					const user = ctx.context.session.user;
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							username: ctx.body.username,
-						},
-					);
-					return ctx.json({
-						user: updatedUser,
-					});
-				},
-			),
 		},
 		schema: {
 			user: {
@@ -153,21 +117,5 @@ export const username = (options?: UsernameOptions) => {
 				},
 			},
 		},
-		rateLimit: [
-			{
-				pathMatcher(path) {
-					return path === "/sign-in/username";
-				},
-				window: options?.rateLimit?.signIn?.window || 10,
-				max: options?.rateLimit?.signIn?.max || 3,
-			},
-			{
-				pathMatcher(path) {
-					return path === "/update-username";
-				},
-				window: options?.rateLimit?.update?.window || 10,
-				max: options?.rateLimit?.update?.max || 3,
-			},
-		],
 	} satisfies BetterAuthPlugin;
 };
