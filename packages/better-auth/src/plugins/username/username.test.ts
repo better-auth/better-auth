@@ -25,7 +25,7 @@ describe("username", async (it) => {
 		expect(res.data?.user.username).toBe("new-username");
 	});
 	const headers = new Headers();
-	it("should signin with username", async () => {
+	it("should sign-in with username", async () => {
 		const res = await client.signIn.username(
 			{
 				username: "new-username",

@@ -42,7 +42,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				});
 			}
 			const additionalFields = parseUserInput(ctx.context.options, rest);
-			console.log({ additionalFields });
 			const user = await ctx.context.internalAdapter.updateUserByEmail(
 				session.user.email,
 				{

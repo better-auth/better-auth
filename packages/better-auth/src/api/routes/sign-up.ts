@@ -69,7 +69,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: "Password is too long",
 				});
 			}
-
 			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
@@ -82,15 +81,28 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
-			const createdUser = await ctx.context.internalAdapter.createUser({
-				email: email.toLowerCase(),
-				name,
-				image,
-				...additionalData,
-				emailVerified: false,
-			});
+			let createdUser: User;
+			try {
+				createdUser = await ctx.context.internalAdapter.createUser({
+					email: email.toLowerCase(),
+					name,
+					image,
+					...additionalData,
+					emailVerified: false,
+				});
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+			} catch (e) {
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message: "Failed to create user",
+					details: e,
+				});
+			}
 			if (!createdUser) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "Failed to create user",
 				});
 			}
