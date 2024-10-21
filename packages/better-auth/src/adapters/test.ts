@@ -293,6 +293,18 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(findRes.length).toBe(0);
 	});
 
+	test("shouldn't throw on delete record not found", async () => {
+		await adapter.delete({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: "5",
+				},
+			],
+		});
+	});
+
 	test("shouldn't throw on record not found", async () => {
 		const res = await adapter.findOne({
 			model: "user",

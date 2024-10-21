@@ -164,7 +164,9 @@ export const prismaAdapter = (
 			const { model, where } = data;
 			const whereClause = whereConvertor(where);
 
-			return await db[model].delete({ where: whereClause });
+			return await db[model].delete({ where: whereClause }).catch((e) => {
+				//handle delete gracefully (if not found)
+			});
 		},
 		async deleteMany(data) {
 			const { model, where } = data;

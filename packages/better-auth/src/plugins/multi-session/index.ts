@@ -119,7 +119,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					return ctx.json(session);
 				},
 			),
-			DeviceSession: createAuthEndpoint(
+			revokeDeviceSession: createAuthEndpoint(
 				"/multi-session/revoke",
 				{
 					method: "POST",
@@ -143,7 +143,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionId);
-					if (!session || session.session.expiresAt < new Date()) {
+					if (!session) {
 						ctx.setCookie(multiSessionCookieName, "", {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
@@ -228,13 +228,13 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							Object.entries(cookies).map(async ([key, value]) => {
 								if (isMultiSessionCookie(key)) {
 									ctx.setCookie(key, "", { maxAge: 0 });
-									try {
-										await ctx.context.internalAdapter.deleteSession(
-											key.split("_multi-")[1],
-										);
-									} catch (e) {
-										// ignore
-									}
+									const id = key.split("_multi-")[1];
+									/**
+									 * Adapter fails if deleting a session that doesn't exist
+									 */
+									await ctx.context.internalAdapter
+										.deleteSession(id)
+										.catch((e) => {});
 								}
 							}),
 						);
