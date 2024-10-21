@@ -401,7 +401,7 @@ export const createInternalAdapter = (
 				}
 				return;
 			}
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: tables.session.tableName,
 				where: [
 					{
