@@ -13,7 +13,7 @@ describe("adapter test", async () => {
 	const pgDb = new Kysely({
 		dialect: new PostgresDialect({
 			pool: new Pool({
-				connectionString: "postgres://user:password@localhost:5433/better_auth",
+				connectionString: "postgres://user:password@localhost:5432/better_auth",
 			}),
 		}),
 	});
