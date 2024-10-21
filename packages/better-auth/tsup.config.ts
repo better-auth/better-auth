@@ -27,7 +27,7 @@ export default defineConfig((env) => {
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 		},
-		format: ["esm", "cjs"],
+		format: ["esm"],
 		minify: true,
 		splitting: false,
 		bundle: true,

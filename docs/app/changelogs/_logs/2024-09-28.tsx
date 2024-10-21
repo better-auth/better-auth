@@ -17,10 +17,8 @@ const ChangelogOne = () => {
 		<AnimatePresence>
 			<div className="flex flex-col gap-4 items-start justify-center max-w-full md:max-w-2xl">
 				<div className="flex flex-col gap-2">
-					<h2 className="text-2xl font-bold tracking-tighter">
-						Public Beta Release
-					</h2>
-					<p>The first public beta release of better-auth is now available!</p>
+					<h2 className="text-2xl font-bold tracking-tighter">Beta Release</h2>
+					<p>The first beta release of better-auth is now available!</p>
 				</div>
 				<p className="text-gray-600 dark:text-gray-300 text-[0.855rem]"></p>
 				<div className="flex flex-col gap-2">
