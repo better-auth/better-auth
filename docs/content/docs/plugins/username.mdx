@@ -88,12 +88,10 @@ const data = await client.signIn.username({
 
 ### Update username
 
-To update the username of a user, you can use the `updateUsername` function provided by the client. The `updateUsername` function takes an object with the following properties:
-
-- `username`: The new username of the user.
+To update the username of a user, you can use the `user.update` function provided by the client.
 
 ```ts title="client.ts"
-const data = await client.updateUsername({
+const data = await client.user.update({
     username: "new-username"
 })
 ```
@@ -112,29 +110,3 @@ The plugin requires 1 field to be added to the user table:
         },
     ]}
 />
-
-## Rate Limiting
-
-The username plugin rate limits both `signIn.username` and `updateUsername` functions. The rate limit is set to 3 requests per 10 seconds. The rate limit can be configured by passing the `rateLimit` option to the plugin.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { username } from "better-auth/plugins"
-
-const auth = betterAuth({
-    plugins: [
-        username({
-            rateLimit: {
-                signIn:{ 
-                    window: 10,
-                    limit: 5
-                },
-                updateUsername: {
-                    window: 10,
-                    limit: 5
-                }
-            }
-        })
-    ]
-})
-```
