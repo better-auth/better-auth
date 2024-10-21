@@ -1,4 +1,5 @@
 //https://github.com/pilcrowOnPaper/oslo/blob/main/src/crypto/random.ts
+import { getRandomValues } from "crypto";
 
 export function byteToBinary(byte: number): string {
 	return byte.toString(2).padStart(8, "0");
@@ -14,7 +15,7 @@ export function bytesToInteger(bytes: Uint8Array): number {
 
 export function random(): number {
 	const buffer = new ArrayBuffer(8);
-	const bytes = crypto.getRandomValues(new Uint8Array(buffer));
+	const bytes = getRandomValues(new Uint8Array(buffer));
 
 	// sets the exponent value (11 bits) to 01111111111 (1023)
 	// since the bias is 1023 (2 * (11 - 1) - 1), 1023 - 1023 = 0

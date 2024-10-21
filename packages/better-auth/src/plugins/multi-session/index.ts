@@ -6,7 +6,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import type { BetterAuthPlugin, Session, User } from "../../types";
+import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
 	/**
