@@ -12,6 +12,8 @@ import type { Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
+import { createTOTPKeyURI } from "oslo/otp";
+import { TimeSpan } from "oslo";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -72,8 +74,20 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.secret,
 						options?.backupCodeOptions,
 					);
-					await ctx.context.internalAdapter.updateUser(user.id, {
-						twoFactorEnabled: true,
+					if (options?.skipVerificationOnEnable) {
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							twoFactorEnabled: true,
+						});
+					}
+					//delete existing two factor
+					await ctx.context.adapter.deleteMany({
+						model: opts.twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
 					});
 
 					await ctx.context.adapter.create({
@@ -85,7 +99,16 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							userId: user.id,
 						},
 					});
-					return ctx.json({ status: true });
+					const totpURI = createTOTPKeyURI(
+						options?.issuer || "BetterAuth",
+						user.email,
+						Buffer.from(secret),
+						{
+							digits: options?.totpOptions?.digits || 6,
+							period: new TimeSpan(options?.totpOptions?.period || 30, "s"),
+						},
+					);
+					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
 			disableTwoFactor: createAuthEndpoint(

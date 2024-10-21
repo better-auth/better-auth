@@ -27,6 +27,11 @@ export interface TwoFactorOptions {
 	 * @default "userTwoFactor"
 	 */
 	twoFactorTable?: string;
+	/**
+	 * Skip verification on enabling two factor authentication.
+	 * @default false
+	 */
+	skipVerificationOnEnable?: boolean;
 }
 
 export interface UserWithTwoFactor extends User {

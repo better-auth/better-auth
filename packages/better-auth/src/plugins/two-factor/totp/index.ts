@@ -147,7 +147,8 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 					},
 				],
 			});
-			if (!twoFactor || !twoFactor.enabled) {
+
+			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
 					message: "totp isn't enabled",
 				});
@@ -162,6 +163,13 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			if (!status) {
 				return ctx.context.invalid();
 			}
+
+			if (!user.twoFactorEnabled) {
+				await ctx.context.internalAdapter.updateUser(user.id, {
+					twoFactorEnabled: true,
+				});
+			}
+
 			return ctx.context.valid();
 		},
 	);
