@@ -62,8 +62,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 					return ctx.json({ user: newUser, session });
 				},
 			),
-			linkAnonymous: createAuthEndpoint(
-				"/user/link-anonymous",
+			linkAccount: createAuthEndpoint(
+				"/anonymous/link-account",
 				{
 					method: "POST",
 					body: z.object({
