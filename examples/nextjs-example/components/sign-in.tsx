@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { Key, Loader2 } from "lucide-react";
+import { Key, Loader2, TwitchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -38,11 +38,10 @@ export default function SignIn() {
 			<CardContent>
 				<div className="grid gap-4">
 					<div className="grid gap-2">
-						<Label htmlFor="email">Email</Label>
+						<Label htmlFor="email">Email/Username</Label>
 						<Input
 							id="email"
-							type="email"
-							placeholder="m@example.com"
+							placeholder="Email or Username"
 							required
 							onChange={(e) => {
 								setEmail(e.target.value);
@@ -82,25 +81,51 @@ export default function SignIn() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							await signIn.email(
-								{
-									email: email,
-									password: password,
-									callbackURL: "/dashboard",
-									dontRememberMe: !rememberMe,
-								},
-								{
-									onRequest: () => {
-										setLoading(true);
+							if (email.includes("@")) {
+								await signIn.email(
+									{
+										email: email,
+										password: password,
+										dontRememberMe: !rememberMe,
 									},
-									onResponse: () => {
-										setLoading(false);
+									{
+										onRequest: () => {
+											setLoading(true);
+										},
+										onResponse: () => {
+											setLoading(false);
+										},
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: () => {
+											router.push("/dashboard");
+										},
 									},
-									onError: (ctx) => {
-										toast.error(ctx.error.message);
+								);
+							} else {
+								await signIn.username(
+									{
+										username: email,
+										password: password,
+										dontRememberMe: !rememberMe,
 									},
-								},
-							);
+									{
+										onRequest: () => {
+											setLoading(true);
+										},
+										onResponse: () => {
+											setLoading(false);
+										},
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: () => {
+											router.push("/dashboard");
+										},
+									},
+								);
+							}
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
@@ -124,11 +149,32 @@ export default function SignIn() {
 							onClick={async () => {
 								await signIn.social({
 									provider: "discord",
-									callbackURL: "/dashboard",
 								});
 							}}
 						>
 							<DiscordLogoIcon />
+						</Button>
+						<Button
+							variant="outline"
+							className="w-full gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitch",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.2em"
+								height="1.2em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
+								></path>
+							</svg>
 						</Button>
 						<Button
 							variant="outline"

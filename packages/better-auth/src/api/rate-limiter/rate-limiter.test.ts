@@ -15,13 +15,13 @@ describe(
 			},
 		});
 
-		it("should return 429 after 7 request for sign-in", async () => {
-			for (let i = 0; i < 10; i++) {
+		it("should return 429 after 3 request for sign-in", async () => {
+			for (let i = 0; i < 5; i++) {
 				const response = await client.signIn.email({
 					email: testUser.email,
 					password: testUser.password,
 				});
-				if (i >= 7) {
+				if (i >= 3) {
 					expect(response.error?.status).toBe(429);
 				} else {
 					expect(response.error).toBeNull();
@@ -32,12 +32,12 @@ describe(
 		it("should reset the limit after the window period", async () => {
 			vi.useFakeTimers();
 			vi.advanceTimersByTime(11000);
-			for (let i = 0; i < 10; i++) {
+			for (let i = 0; i < 5; i++) {
 				const res = await client.signIn.email({
 					email: testUser.email,
 					password: testUser.password,
 				});
-				if (i >= 7) {
+				if (i >= 3) {
 					expect(res.error?.status).toBe(429);
 				} else {
 					expect(res.error).toBeNull();
@@ -109,12 +109,12 @@ describe("custom rate limiting storage", async () => {
 	it("should use custom storage", async () => {
 		await client.session();
 		expect(store.size).toBe(2);
-		for (let i = 0; i < 10; i++) {
+		for (let i = 0; i < 4; i++) {
 			const response = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
 			});
-			if (i >= 7) {
+			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
 			} else {
 				expect(response.error).toBeNull();

@@ -149,9 +149,7 @@ export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any>,
 ) {
-	const schema = {
-		...options.user?.additionalFields,
-	};
+	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
 }
 

@@ -234,6 +234,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						type: "boolean",
 						required: false,
 						defaultValue: false,
+						input: false,
 					},
 				},
 			},

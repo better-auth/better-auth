@@ -458,19 +458,23 @@ export const admin = (options?: AdminOptions) => {
 					role: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banned: {
 						type: "boolean",
 						defaultValue: false,
 						required: false,
+						input: false,
 					},
 					banReason: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banExpires: {
 						type: "number",
 						required: false,
+						input: false,
 					},
 				},
 			},

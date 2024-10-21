@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
-import { signUpEmail } from "../../api/routes/sign-up";
 
 export const username = () => {
 	return {
@@ -47,7 +46,7 @@ export const username = () => {
 							},
 							{
 								field:
-									ctx.context.tables.account.fields.type.fieldName ||
+									ctx.context.tables.account.fields.providerId.fieldName ||
 									"providerId",
 								value: "credential",
 							},
@@ -102,36 +101,6 @@ export const username = () => {
 					return ctx.json({
 						user: user,
 						session,
-					});
-				},
-			),
-			signUpUsername: createAuthEndpoint(
-				"/sign-up/username",
-				{
-					method: "POST",
-					body: z.object({
-						username: z.string().min(3).max(20),
-						name: z.string(),
-						email: z.string().email(),
-						password: z.string(),
-						image: z.string().optional(),
-					}),
-				},
-				async (ctx) => {
-					const res = await signUpEmail()({
-						...ctx,
-						_flag: "json",
-					});
-
-					const updated = await ctx.context.internalAdapter.updateUserByEmail(
-						res.user?.email,
-						{
-							username: ctx.body.username,
-						},
-					);
-					return ctx.json({
-						user: updated,
-						session: res.session,
 					});
 				},
 			),

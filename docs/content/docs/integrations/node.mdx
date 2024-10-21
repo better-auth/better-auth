@@ -27,3 +27,21 @@ app.listen(port, () => {
 ```
 
 After completing the setup, start your server. Better Auth will be ready to use. You can send a `GET` request to the `/ok` endpoint (`/api/auth/ok`) to verify that the server is running.
+
+### Getting the User Session
+
+To retrieve the user's session, you can use the `getSession` method provided by the `auth` object. This method requires the request headers to be passed in a specific format. To simplify this process, Better Auth provides a `fromNodeHeaders` helper function that converts Node.js request headers to the format expected by Better Auth (a `Headers` object).
+
+Here's an example of how to use `getSession` in an Express route:
+
+```ts title="server.ts"
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth"; //your better auth instance
+
+app.get("/api/me", async (req, res) => {
+ 	const session = await auth.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+	return res.json(session);
+});
+```
