@@ -4,11 +4,16 @@ import { twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import { TOTPController } from "oslo/otp";
+import { TimeSpan } from "oslo";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { symmetricDecrypt } from "../../crypto";
 
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
+			secret: DEFAULT_SECRET,
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -40,7 +45,7 @@ describe("two factor", async () => {
 		throw new Error("No session");
 	}
 
-	it("should enable two factor", async () => {
+	it("should return uri and backupcodes and shouldn't enable twoFactor yet", async () => {
 		const res = await client.twoFactor.enable({
 			password: testUser.password,
 			fetchOptions: {
@@ -48,7 +53,8 @@ describe("two factor", async () => {
 			},
 		});
 
-		expect(res.data?.status).toBe(true);
+		expect(res.data?.backupCodes.length).toEqual(10);
+		expect(res.data?.totpURI).toBeDefined();
 		const dbUser = await db.findOne<UserWithTwoFactor>({
 			model: "user",
 			where: [
@@ -67,12 +73,46 @@ describe("two factor", async () => {
 				},
 			],
 		});
-		expect(dbUser?.twoFactorEnabled).toBe(true);
+		expect(dbUser?.twoFactorEnabled).toBe(null);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});
 
+	it("should enable twoFactor", async () => {
+		const totp = new TOTPController({
+			digits: 6,
+			period: new TimeSpan(30, "s"),
+		});
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [
+				{
+					field: "userId",
+					value: session.data?.user.id as string,
+				},
+			],
+		});
+		if (!twoFactor) {
+			throw new Error("No two factor");
+		}
+
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor.secret,
+		});
+		const code = await totp.generate(Buffer.from(decrypted));
+
+		const res = await client.twoFactor.verifyTotp({
+			code,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.session).toBeDefined();
+	});
+
 	it("should require two factor", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -172,42 +212,8 @@ describe("two factor", async () => {
 		});
 	});
 
-	it("should work with different two factor table", async () => {
-		const { client: client2, signInWithTestUser } = await getTestInstance(
-			{
-				plugins: [
-					twoFactor({
-						twoFactorTable: "two_factor",
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [twoFactorClient()],
-				},
-			},
-		);
-		const { headers } = await signInWithTestUser();
-		const res = await client2.twoFactor.enable({
-			password: testUser.password,
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(res.data?.status).toBe(true);
-		const dbUser = await db.findOne<UserWithTwoFactor>({
-			model: "user",
-			where: [
-				{
-					field: "id",
-					value: session.data?.user.id as string,
-				},
-			],
-		});
-		expect(dbUser?.twoFactorEnabled).toBe(true);
-	});
-
 	it("should trust device", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,

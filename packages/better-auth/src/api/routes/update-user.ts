@@ -42,7 +42,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				});
 			}
 			const additionalFields = parseUserInput(ctx.context.options, rest);
-			console.log({ additionalFields });
 			const user = await ctx.context.internalAdapter.updateUserByEmail(
 				session.user.email,
 				{
@@ -229,6 +228,10 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		const sessionCookie = ctx.context.authCookies.sessionToken;
+		ctx.setCookie(sessionCookie.name, "", {
+			maxAge: 0,
+		});
 		return ctx.json(null);
 	},
 );

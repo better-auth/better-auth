@@ -2,6 +2,7 @@ import { xchacha20poly1305 } from "@noble/ciphers/chacha";
 import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/ciphers/utils";
 import { managedNonce } from "@noble/ciphers/webcrypto";
 import { sha256 } from "oslo/crypto";
+import crypto from "uncrypto";
 
 export async function hs256(secretKey: string, message: string) {
 	const enc = new TextEncoder();

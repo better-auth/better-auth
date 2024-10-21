@@ -6,7 +6,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import type { BetterAuthPlugin, Session, User } from "../../types";
+import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
 	/**
@@ -50,7 +50,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								),
 						)
 					).filter((v) => v !== undefined);
-
+					if (!sessionIds.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionIds);
 
@@ -229,12 +229,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								if (isMultiSessionCookie(key)) {
 									ctx.setCookie(key, "", { maxAge: 0 });
 									const id = key.split("_multi-")[1];
-									/**
-									 * Adapter fails if deleting a session that doesn't exist
-									 */
-									await ctx.context.internalAdapter
-										.deleteSession(id)
-										.catch((e) => {});
+									await ctx.context.internalAdapter.deleteSession(id);
 								}
 							}),
 						);
