@@ -110,7 +110,7 @@ export default function UserCard(props: {
 						</Avatar>
 						<div className="grid gap-1">
 							<p className="text-sm font-medium leading-none">
-								{session?.user.name} ({session?.user.username})
+								{session?.user.name}
 							</p>
 							<p className="text-sm">{session?.user.email}</p>
 						</div>
