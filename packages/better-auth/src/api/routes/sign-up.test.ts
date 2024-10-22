@@ -1,4 +1,4 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, expectTypeOf, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
 
@@ -10,6 +10,18 @@ describe("sign-up with custom fields", async (it) => {
 				fields: {
 					providerId: "provider_id",
 					accountId: "account_id",
+				},
+			},
+			user: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						required: false,
+					},
+					newField2: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			emailVerification: {
@@ -29,7 +41,7 @@ describe("sign-up with custom fields", async (it) => {
 			body: {
 				email: "email@test.com",
 				password: "password",
-				name: "name",
+				name: "Test Name",
 			},
 		});
 		user = res.user;
@@ -42,5 +54,28 @@ describe("sign-up with custom fields", async (it) => {
 
 	it("should send verification email", async () => {
 		expect(mockFn).toHaveBeenCalledWith(user, expect.any(String));
+	});
+
+	it("should infer the correct types", async () => {
+		const user = await auth.api.signUpEmail({
+			body: {
+				email: "email@test.com",
+				password: "password",
+				name: "name",
+				// @ts-expect-error
+				newField: 4,
+				newField2: "test",
+			},
+		});
+		expectTypeOf(user.user).toMatchTypeOf<{
+			id: string;
+			email: string;
+			emailVerified: boolean;
+			name: string;
+			image?: string;
+			newField?: string;
+			createdAt: Date;
+			updatedAt: Date;
+		}>();
 	});
 });
