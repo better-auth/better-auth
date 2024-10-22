@@ -8,6 +8,7 @@ import { microsoft } from "./microsoft-entra-id";
 import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
+import { dropbox } from "./dropbox";
 
 export const socialProviders = {
 	apple,
@@ -19,6 +20,7 @@ export const socialProviders = {
 	spotify,
 	twitch,
 	twitter,
+	dropbox,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -43,5 +45,6 @@ export * from "./spotify";
 export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
+export * from "./dropbox";
 
 export type SocialProviderList = typeof socialProviderList;
