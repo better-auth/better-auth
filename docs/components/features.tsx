@@ -90,7 +90,7 @@ export default function Features({ stars }: { stars: string | null }) {
 							</div>
 						</div>
 						<p className="text-left text-sm mt-2 text-muted-foreground">
-							Allow users to sign in with their accounts, including Github,
+							Allow users to sign in with their accounts, including GitHub,
 							Google, Discord, Twitter, and more.{" "}
 							<a className="text-gray-50" href="#" target="_blank">
 								Learn more
