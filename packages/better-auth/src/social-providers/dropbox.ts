@@ -70,7 +70,7 @@ export const dropbox = (options: DropboxOptions) => {
 					id: profile.account_id,
 					name: profile.name?.display_name,
 					email: profile.email,
-					emailVerified: false,
+					emailVerified: profile.email_verified || false,
 					image: profile.profile_photo_url,
 				},
 				data: profile,
