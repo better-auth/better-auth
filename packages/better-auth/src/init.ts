@@ -34,7 +34,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	if (!baseURL) {
-		throw new BetterAuthError(
+		logger.error(
 			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it your auth config.",
 		);
 	}
@@ -47,8 +47,8 @@ export const init = async (options: BetterAuthOptions) => {
 
 	if (secret === DEFAULT_SECRET) {
 		if (isProduction) {
-			throw new BetterAuthError(
-				"You are using the default secret. Please set `BETTER_AUTH_SECRET` or `AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+			logger.error(
+				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
 			);
 		}
 	}
@@ -89,7 +89,7 @@ export const init = async (options: BetterAuthOptions) => {
 		options,
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
-		baseURL: baseURL,
+		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
@@ -212,9 +212,7 @@ function getInternalPlugins(options: BetterAuthOptions) {
 function getTrustedOrigins(options: BetterAuthOptions) {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	if (!baseURL) {
-		throw new BetterAuthError(
-			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it in your auth config.",
-		);
+		return [];
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
 	if (options.trustedOrigins) {
