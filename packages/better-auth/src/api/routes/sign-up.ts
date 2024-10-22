@@ -75,7 +75,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: "Failed to create user",
+					message: "User with this email already exists",
 				});
 			}
 
