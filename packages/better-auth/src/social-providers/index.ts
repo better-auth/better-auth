@@ -9,6 +9,7 @@ import { spotify } from "./spotify";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
+import { linkedin } from "./linkedin";
 
 export const socialProviders = {
 	apple,
@@ -21,6 +22,7 @@ export const socialProviders = {
 	twitch,
 	twitter,
 	dropbox,
+	linkedin,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -46,5 +48,6 @@ export * from "./twitch";
 export * from "./facebook";
 export * from "./twitter";
 export * from "./dropbox";
+export * from "./linkedin";
 
 export type SocialProviderList = typeof socialProviderList;
