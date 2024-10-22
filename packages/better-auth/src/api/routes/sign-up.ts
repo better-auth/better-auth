@@ -6,6 +6,8 @@ import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
+	InferSession,
+	InferUser,
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
@@ -140,7 +142,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			) {
 				return ctx.json(
 					{
-						user: createdUser,
+						user: createdUser as InferUser<O>,
 						session: null,
 					},
 					{
@@ -169,8 +171,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			await setSessionCookie(ctx, session.id);
 			return ctx.json(
 				{
-					user: createdUser,
-					session,
+					user: createdUser as InferUser<O>,
+					session: session as InferSession<O>,
 				},
 				{
 					body: body.callbackURL

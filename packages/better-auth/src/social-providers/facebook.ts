@@ -58,7 +58,7 @@ export const facebook = (options: FacebookOptions) => {
 					id: profile.id,
 					name: profile.name,
 					email: profile.email,
-					picture: profile.picture.data.url,
+					image: profile.picture.data.url,
 					emailVerified: profile.email_verified,
 				},
 				data: profile,
