@@ -11,30 +11,30 @@ import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
 
 export const socialProviders = {
-  apple,
-  discord,
-  facebook,
-  github,
-  microsoft,
-  google,
-  spotify,
-  twitch,
-  twitter,
-  dropbox,
+	apple,
+	discord,
+	facebook,
+	github,
+	microsoft,
+	google,
+	spotify,
+	twitch,
+	twitter,
+	dropbox,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
-  "github",
-  ...(keyof typeof socialProviders)[]
+	"github",
+	...(keyof typeof socialProviders)[],
 ];
 
 export type SocialProviders = typeof socialProviders extends {
-  [key in infer K]: infer V;
+	[key in infer K]: infer V;
 }
-  ? V extends (options: infer V) => any
-    ? Partial<Record<K, Prettify<V & { enabled?: boolean }>>>
-    : never
-  : never;
+	? V extends (options: infer V) => any
+		? Partial<Record<K, Prettify<V & { enabled?: boolean }>>>
+		: never
+	: never;
 
 export * from "./github";
 export * from "./google";
