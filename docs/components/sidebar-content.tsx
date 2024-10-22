@@ -420,7 +420,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Github",
+				title: "GitHub",
 				href: "/docs/authentication/github",
 				icon: () => (
 					<svg

@@ -17,7 +17,7 @@ export function BetaNotice() {
 				href="https://github.com/better-auth/better-auth/issues"
 			>
 				{" "}
-				Github.
+				GitHub.
 			</Link>{" "}
 		</Banner>
 	);

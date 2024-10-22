@@ -115,7 +115,7 @@ export default function SignInCard() {
 						}}
 					>
 						<GitHubLogoIcon />
-						Continue with Github
+						Continue with GitHub
 					</Button>
 					<Button
 						variant="outline"
