@@ -8,6 +8,7 @@ export default defineConfig((env) => {
 			client: "./src/client/index.ts",
 			crypto: "./src/crypto/index.ts",
 			cookies: "./src/cookies/index.ts",
+			minimal: "./src/minimal/index.ts",
 			"adapters/prisma": "./src/adapters/prisma-adapter/index.ts",
 			"adapters/drizzle": "./src/adapters/drizzle-adapter/index.ts",
 			"adapters/mongodb": "./src/adapters/mongodb-adapter/index.ts",
