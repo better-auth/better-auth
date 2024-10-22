@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4000 tsup --clean --dts",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup --clean --dts",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
     "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
@@ -24,6 +24,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./minimal": {
+      "types": "./dist/minimal.d.ts",
+      "import": "./dist/minimal.js"
     },
     "./social-providers": {
       "types": "./dist/social.d.ts",
