@@ -59,7 +59,7 @@ describe("sign-up with custom fields", async (it) => {
 	it("should infer the correct types", async () => {
 		const user = await auth.api.signUpEmail({
 			body: {
-				email: "email@test.com",
+				email: "email2@test.com",
 				password: "password",
 				name: "name",
 				// @ts-expect-error
