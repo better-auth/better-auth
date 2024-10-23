@@ -166,7 +166,6 @@ export function getEndpoints<
 					if (!afterPlugins?.length) {
 						throw e;
 					}
-
 					let response = new Response(JSON.stringify(e.body), {
 						status: statusCode[e.status],
 						headers: e.headers,
@@ -189,7 +188,6 @@ export function getEndpoints<
 					}
 					return response;
 				}
-
 				throw e;
 			}
 			let response = endpointRes;
