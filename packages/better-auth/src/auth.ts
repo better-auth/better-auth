@@ -30,6 +30,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 					getBaseURL(undefined, basePath) || `${url.origin}${basePath}`;
 				ctx.options.baseURL = baseURL;
 				ctx.baseURL = baseURL;
+				ctx.trustedOrigins = [url.origin];
 			}
 			if (!ctx.options.baseURL) {
 				return new Response("Base URL not set", { status: 400 });
