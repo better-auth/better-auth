@@ -452,7 +452,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!session) {
 							throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 						}
-						await setSessionCookie(ctx, session.id);
+						await setSessionCookie(ctx, {
+							session,
+							user: user.data,
+						});
 					} catch {
 						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 					}

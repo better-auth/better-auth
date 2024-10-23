@@ -196,9 +196,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							).length + (cookieString.includes("session_token") ? 1 : 0);
 
 						if (currentMultiSessions > opts.maximumSessions) {
-							throw new APIError("UNAUTHORIZED", {
-								message: "Maximum number of device sessions reached.",
-							});
+							return;
 						}
 
 						await ctx.setSignedCookie(

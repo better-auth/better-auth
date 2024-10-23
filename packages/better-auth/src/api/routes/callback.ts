@@ -96,14 +96,16 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-		const user = await provider.getUserInfo(tokens).then((res) => res?.user);
+		const userInfo = await provider
+			.getUserInfo(tokens)
+			.then((res) => res?.user);
 		const id = generateId();
 		const data = userSchema.safeParse({
-			...user,
+			...userInfo,
 			id,
 		});
 
-		if (!user || data.success === false) {
+		if (!userInfo || data.success === false) {
 			logger.error("Unable to get user info", data.error);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
@@ -124,7 +126,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		const dbUser = await c.context.internalAdapter
-			.findUserByEmail(user.email, {
+			.findUserByEmail(userInfo.email, {
 				includeAccounts: true,
 			})
 			.catch((e) => {
@@ -137,7 +139,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 			});
 
-		let userId = dbUser?.user.id;
+		let user = dbUser?.user;
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
@@ -149,7 +151,7 @@ export const callbackOAuth = createAuthEndpoint(
 					provider.id as "apple",
 				);
 				if (
-					(!isTrustedProvider && !user.emailVerified) ||
+					(!isTrustedProvider && !userInfo.emailVerified) ||
 					!c.context.options.account?.accountLinking?.enabled
 				) {
 					redirectOnError("account_not_linked");
@@ -157,8 +159,8 @@ export const callbackOAuth = createAuthEndpoint(
 				try {
 					await c.context.internalAdapter.linkAccount({
 						providerId: provider.id,
-						accountId: user.id.toString(),
-						id: `${provider.id}:${user.id}`,
+						accountId: userInfo.id.toString(),
+						id: `${provider.id}:${userInfo.id}`,
 						userId: dbUser.user.id,
 						...getAccountTokens(tokens),
 					});
@@ -169,7 +171,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} else {
 			try {
-				const emailVerified = user.emailVerified || false;
+				const emailVerified = userInfo.emailVerified || false;
 				const created = await c.context.internalAdapter.createOAuthUser(
 					{
 						...data.data,
@@ -178,13 +180,13 @@ export const callbackOAuth = createAuthEndpoint(
 					{
 						...getAccountTokens(tokens),
 						providerId: provider.id,
-						accountId: user.id.toString(),
+						accountId: userInfo.id.toString(),
 					},
 				);
-				userId = created?.user.id;
+				user = created?.user;
 				if (
 					!emailVerified &&
-					created &&
+					user &&
 					c.context.options.emailVerification?.sendOnSignUp
 				) {
 					const token = await createEmailVerificationToken(
@@ -193,7 +195,7 @@ export const callbackOAuth = createAuthEndpoint(
 					);
 					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 					await c.context.options.emailVerification?.sendVerificationEmail?.(
-						created.user,
+						user,
 						url,
 						token,
 					);
@@ -204,18 +206,21 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		}
 
-		if (!userId) {
-			redirectOnError("unable_to_create_user");
+		if (!user) {
+			return redirectOnError("unable_to_create_user");
 		}
 
 		const session = await c.context.internalAdapter.createSession(
-			userId!,
+			user.id,
 			c.request,
 		);
 		if (!session) {
 			redirectOnError("unable_to_create_session");
 		}
-		await setSessionCookie(c, session.id);
+		await setSessionCookie(c, {
+			session,
+			user,
+		});
 		throw c.redirect(callbackURL);
 	},
 );

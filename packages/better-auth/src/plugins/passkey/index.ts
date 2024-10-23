@@ -429,7 +429,18 @@ export const passkey = (options?: PasskeyOptions) => {
 								message: "Unable to create session",
 							});
 						}
-						await setSessionCookie(ctx, s.id);
+						const user = await ctx.context.internalAdapter.findUserById(
+							passkey.userId,
+						);
+						if (!user) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: "User not found",
+							});
+						}
+						await setSessionCookie(ctx, {
+							session: s,
+							user,
+						});
 						return ctx.json(
 							{
 								session: s,

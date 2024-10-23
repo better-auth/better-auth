@@ -230,7 +230,21 @@ export interface BetterAuthOptions {
 		};
 	};
 	session?: {
+		/**
+		 * The model name for the session.
+		 *
+		 * @default "session"
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  userId: "user_id"
+		 * }
+		 */
 		fields?: Partial<Record<keyof Session, string>>;
 		/**
 		 * Expiration time for the session token. The value
@@ -263,6 +277,21 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		storeSessionInDatabase?: boolean;
+		/**
+		 * Enable caching session in cookie
+		 */
+		cacheSessionInCookie?: {
+			/**
+			 * max age of the cookie
+			 * @default 10 minutes (10 * 60)
+			 */
+			maxAge?: number;
+			/**
+			 * Disable caching session in cookie
+			 * @default false
+			 */
+			disabled?: boolean;
+		};
 	};
 	account?: {
 		modelName?: string;

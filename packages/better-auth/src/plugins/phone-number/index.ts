@@ -237,7 +237,10 @@ export const phoneNumber = (options?: {
 								message: "Failed to create session",
 							});
 						}
-						await setSessionCookie(ctx, session.id);
+						await setSessionCookie(ctx, {
+							session,
+							user,
+						});
 						return ctx.json({
 							user,
 							session,
