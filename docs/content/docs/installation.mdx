@@ -32,19 +32,12 @@ BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL**
+2. **Set Base URL (optional)**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
 ```
 
-3. **Trusted Origins (optional)**
-
-If the requests are coming from different origins (not the base url), you can add them to the trusted origins.
-
-```txt title=".env"
-BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:3000,https://example.com" //Add your trusted origins here
-```
 </Step>
 
 <Step>
@@ -55,9 +48,9 @@ Create a file named `auth.ts` in one of these locations:
    - `lib/` folder
    - `utils/` folder
 
-You can also nest any of these folders under `src/` or `app/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`).
+You can also nest any of these folders under `src/`, `app/` or `server/` folder. (e.g. `src/lib/auth.ts`, `app/lib/auth.ts`).
 
-And in this file, import Better Auth and create your instance. Make sure to export the auth instance with the variable name `auth` or as a `default` export.
+And in this file, import Better Auth and create your auth instance. Make sure to export the auth instance with the variable name `auth` or as a `default` export.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -193,7 +186,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     npx @better-auth/cli generate
     ```
 
-    **Migrate**: Directly creates the required tables in the database. (only available for Kysely adapter)
+    **Migrate**: Directly creates the required tables in the database. (only available for built-in Kysely adapter)
 
     ```bash title="Terminal"
     npx @better-auth/cli migrate
@@ -244,7 +237,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -338,6 +331,28 @@ Better Auth supports any backend framework with standard Request and Response ob
     export const POST: APIRoute = async (ctx) => {
         return auth.handler(ctx.request);
     };
+    ```
+    </Tab>
+    <Tab value="elysia">
+    ```ts
+    import { Elysia } from "elysia";
+    import { auth } from "./auth";
+
+    const betterAuthView = (context: Context) => {
+        const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
+        // validate request method
+        if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
+            return auth.handler(context.request);
+        } else {
+            context.error(405)
+        }
+    }
+
+    const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
+
+    console.log(
+    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+    );
     ```
     </Tab>
 </Tabs>

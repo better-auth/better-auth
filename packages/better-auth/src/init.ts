@@ -21,7 +21,6 @@ import {
 } from "./cookies";
 import { createLogger, logger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
-import { BetterAuthError } from "./error";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 
@@ -32,12 +31,6 @@ export const init = async (options: BetterAuthOptions) => {
 
 	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
-
-	if (!baseURL) {
-		logger.error(
-			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it your auth config.",
-		);
-	}
 
 	const secret =
 		options.secret ||
