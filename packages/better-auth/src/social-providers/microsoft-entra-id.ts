@@ -33,6 +33,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
 	const authorizationEndpoint = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
+
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
@@ -56,6 +57,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
+				authType: "basic",
 			});
 		},
 		async getUserInfo(token) {

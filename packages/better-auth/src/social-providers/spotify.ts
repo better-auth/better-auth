@@ -36,6 +36,7 @@ export const spotify = (options: SpotifyOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
+				authType: "basic",
 			});
 		},
 		async getUserInfo(token) {

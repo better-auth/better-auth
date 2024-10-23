@@ -26,6 +26,7 @@ export interface TwitchProfile {
 export interface TwitchOptions extends ProviderOptions {
 	claims?: string[];
 }
+
 export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
@@ -53,6 +54,7 @@ export const twitch = (options: TwitchOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+				authType: "body",
 			});
 		},
 		async getUserInfo(token) {

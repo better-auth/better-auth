@@ -75,6 +75,7 @@ export const github = (options: GithubOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
+				authType: "basic",
 			});
 		},
 		async getUserInfo(token) {

@@ -1,5 +1,5 @@
 import { sha256 } from "oslo/crypto";
-import { base64url } from "oslo/encoding";
+import { base64, base64url } from "oslo/encoding";
 import type { OAuth2Tokens } from "./types";
 
 export async function generateCodeChallenge(codeVerifier: string) {
@@ -9,6 +9,14 @@ export async function generateCodeChallenge(codeVerifier: string) {
 	return base64url.encode(new Uint8Array(codeChallengeBytes), {
 		includePadding: false,
 	});
+}
+
+export function encodeBasicCredentials(
+	username: string,
+	password: string,
+): string {
+	const bytes = new TextEncoder().encode(`${username}:${password}`);
+	return base64.encode(bytes);
 }
 
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {

@@ -116,6 +116,7 @@ export const twitter = (options: TwitterOption) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+				authType: "basic",
 			});
 		},
 		async getUserInfo(token) {

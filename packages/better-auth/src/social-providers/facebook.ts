@@ -38,6 +38,7 @@ export const facebook = (options: FacebookOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
+				authType: "body",
 			});
 		},
 		async getUserInfo(token) {
