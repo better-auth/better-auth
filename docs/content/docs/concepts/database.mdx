@@ -149,12 +149,12 @@ The MongoDB adapter expects a mongodb client instance and a database name. The a
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
-import { mongoAdapter } from "better-auth/adapters/mongodb";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
 const client = new MongoClient("mongodb://localhost:27017");
 
 export const auth = betterAuth({
-    database: mongoAdapter(client)
+    database: mongodbAdapter(client)
 })
 ```
 
