@@ -12,7 +12,7 @@ import type {
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/session",
+		"/get-session",
 		{
 			method: "GET",
 			requireHeaders: true,

@@ -121,7 +121,7 @@ describe("updateUser", async () => {
 		const cookie = newHeaders.get("cookie");
 		const oldCookie = headers.get("cookie");
 		expect(cookie).not.toBe(oldCookie);
-		const sessionAttempt = await client.session({
+		const sessionAttempt = await client.getSession({
 			fetchOptions: {
 				headers: headers,
 			},

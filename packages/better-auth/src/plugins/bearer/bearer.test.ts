@@ -12,7 +12,7 @@ describe("bearer", async () => {
 	it("should get session", async () => {
 		const { res, headers } = await signInWithTestUser();
 		token = res.data?.session.id || "";
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
 					authorization: `Bearer ${token}`,
@@ -48,7 +48,7 @@ describe("bearer", async () => {
 	});
 
 	it("should work with encrypted token", async () => {
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
 					authorization: `Bearer ${encryptedToken}`,

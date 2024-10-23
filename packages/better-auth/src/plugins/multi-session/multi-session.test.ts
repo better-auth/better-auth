@@ -64,7 +64,7 @@ describe("multi-session", async () => {
 	});
 
 	it("should get active session", async () => {
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},

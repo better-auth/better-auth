@@ -152,7 +152,7 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateId(),
+				id: generateId(32),
 				userId,
 				/**
 				 * If the user doesn't want to be remembered
