@@ -80,7 +80,7 @@ describe("adapter test", async () => {
 			},
 		});
 		const { headers } = await signInWithTestUser();
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},

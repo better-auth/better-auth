@@ -145,7 +145,7 @@ describe("additionalFields", async () => {
 		const client = createAuthClient({
 			plugins: [inferAdditionalFields<typeof auth>()],
 		});
-		type t = Awaited<ReturnType<typeof client.session>>["data"];
+		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
 		expectTypeOf<t>().toMatchTypeOf<{
 			user: {
 				id: string;
@@ -174,7 +174,7 @@ describe("additionalFields", async () => {
 				}),
 			],
 		});
-		type t = Awaited<ReturnType<typeof client.session>>["data"];
+		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
 		expectTypeOf<t>().toMatchTypeOf<{
 			user: {
 				id: string;

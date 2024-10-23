@@ -80,7 +80,7 @@ describe(
 
 		it("non-special-rules limits", async () => {
 			for (let i = 0; i < 25; i++) {
-				const response = await client.session();
+				const response = await client.getSession();
 				expect(response.error?.status).toBe(i >= 20 ? 429 : 401);
 			}
 		});
@@ -107,7 +107,7 @@ describe("custom rate limiting storage", async () => {
 	});
 
 	it("should use custom storage", async () => {
-		await client.session();
+		await client.getSession();
 		expect(store.size).toBe(2);
 		for (let i = 0; i < 4; i++) {
 			const response = await client.signIn.email({

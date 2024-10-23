@@ -33,7 +33,7 @@ describe("session", async () => {
 	});
 
 	it("should return null when not authenticated", async () => {
-		const response = await client.session();
+		const response = await client.getSession();
 		expect(response.data).toBeNull();
 	});
 
@@ -66,7 +66,7 @@ describe("session", async () => {
 		const nearExpiryDate = new Date();
 		nearExpiryDate.setDate(nearExpiryDate.getDate() + 6);
 		vi.setSystemTime(nearExpiryDate);
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -110,7 +110,7 @@ describe("session", async () => {
 		expect(new Date(expiresAt).valueOf()).toBeLessThanOrEqual(
 			getDate(1000 * 60 * 60 * 24).valueOf(),
 		);
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -178,7 +178,7 @@ describe("session", async () => {
 				headers,
 			},
 		});
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -230,7 +230,7 @@ describe("session", async () => {
 			},
 			id: res.data?.session?.id || "",
 		});
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -269,7 +269,7 @@ describe("session storage", async () => {
 		expect(store.size).toBe(1);
 		const { headers } = await signInWithTestUser();
 		expect(store.size).toBe(2);
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -315,7 +315,7 @@ describe("session storage", async () => {
 
 	it("should revoke session", async () => {
 		const { headers } = await signInWithTestUser();
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -327,7 +327,7 @@ describe("session storage", async () => {
 			},
 			id: session.data?.session?.id || "",
 		});
-		const revokedSession = await client.session({
+		const revokedSession = await client.getSession({
 			fetchOptions: {
 				headers,
 			},

@@ -37,6 +37,26 @@ export const auth = betterAuth({
 
 Better Auth provides a set of functions to manage sessions.
 
+### Get Session
+
+The `getSession` function retrieves the current active session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.getSession()
+```
+
+### Use Session
+
+The `useSession` action provides a reactive way to access the current session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.useSession()
+```
+
 ### List Sessions
 
 The `listSessions` function returns a list of sessions that are active for the user.
