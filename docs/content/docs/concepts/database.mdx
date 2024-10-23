@@ -521,7 +521,13 @@ res.user.lang // > "fr"
 
 ### ID Generation
 
-By default, Better Auth uses `nanoId` to generate unique IDs for users, sessions, and other entities. You can customize the ID generation by providing a custom function to your adapter or database configuration.
+Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can pass your own function through the adapter or database configuration.
+
+**Guidelines:**
+
+- IDs need to be in string format.
+- he ID should be unique for each entity type (like users, sessions, etc.).
+- Since the session ID acts as the token, it should be both unique and sufficiently long for security.
 
 **Example: Built In Kysley Adapter**
 ```ts title="auth.ts" 
