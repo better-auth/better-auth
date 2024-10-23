@@ -1343,8 +1343,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(encoding@0.1.13)
       better-call:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: 0.2.11
+        version: 0.2.11
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -6928,8 +6928,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-call@0.2.10:
-    resolution: {integrity: sha512-0CGMi5koQsTbK5OiCysH37KhMJnIyaVEtBKeHco2wYhdVwA7PXna7Y/4cqolm2Ji8uxKKIXG5B6h+Sfak7kQIA==}
+  better-call@0.2.11:
+    resolution: {integrity: sha512-Hl9+dYCqUcadp/jzE72HYwg8afhK/R8joACyy8XIlLUMlrgUoRvDvJnWbu7HWPBEjkDUM+xGWYxYCHHSTi9Cxw==}
 
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
@@ -21866,7 +21866,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-call@0.2.10:
+  better-call@0.2.11:
     dependencies:
       '@better-fetch/fetch': 1.1.9
       rou3: 0.5.1
