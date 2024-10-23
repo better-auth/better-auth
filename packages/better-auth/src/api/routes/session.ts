@@ -33,12 +33,16 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionData.name,
 					ctx.context.secret,
 				);
+				const dontRememberMe = await ctx.getSignedCookie(
+					ctx.context.authCookies.dontRememberToken.name,
+					ctx.context.secret,
+				);
 				/**
 				 * If session data is present in the cookie, return it
 				 */
 				if (
 					sessionData &&
-					!ctx.context.options.session?.cacheSessionInCookie?.disabled
+					ctx.context.options.session?.cacheSessionInCookie?.enabled
 				) {
 					const session = JSON.parse(sessionData)?.session;
 					console.log({ session });
@@ -68,10 +72,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						status: 401,
 					});
 				}
-				const dontRememberMe = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
-					ctx.context.secret,
-				);
+
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 */

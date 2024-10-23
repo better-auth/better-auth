@@ -287,10 +287,10 @@ export interface BetterAuthOptions {
 			 */
 			maxAge?: number;
 			/**
-			 * Disable caching session in cookie
+			 * Enable caching session in cookie
 			 * @default false
 			 */
-			disabled?: boolean;
+			enabled?: boolean;
 		};
 	};
 	account?: {
