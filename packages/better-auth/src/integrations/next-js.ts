@@ -49,7 +49,7 @@ export function authMiddleware(options: {
 	return async (request: NextRequest) => {
 		const baseUrl = env.BETTER_AUTH_URL || new URL(request.url).origin;
 		const basePath = options?.basePath || "/api/auth";
-		const fullURL = `${baseUrl}${basePath}/session`;
+		const fullURL = `${baseUrl}${basePath}/get-session`;
 
 		const res = await betterFetch<{
 			session: Session;
