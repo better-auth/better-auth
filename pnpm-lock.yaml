@@ -318,7 +318,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.1.11
+        version: 1.1.12
 
   docs:
     dependencies:
@@ -1343,8 +1343,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(encoding@0.1.13)
       better-call:
-        specifier: 0.2.9
-        version: 0.2.9
+        specifier: 0.2.11
+        version: 0.2.11
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -1399,7 +1399,7 @@ importers:
         version: 11.3.0
       drizzle-orm:
         specifier: ^0.33.0
-        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.30)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
+        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
       happy-dom:
         specifier: ^15.7.4
         version: 15.7.4
@@ -1486,7 +1486,7 @@ importers:
         version: 16.4.5
       drizzle-orm:
         specifier: ^0.33.0
-        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.30)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
+        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
       prisma:
         specifier: ^5.19.1
         version: 5.20.0
@@ -5709,8 +5709,8 @@ packages:
   '@types/better-sqlite3@7.6.11':
     resolution: {integrity: sha512-i8KcD3PgGtGBLl3+mMYA8PdKkButvPyARxA7IQAd6qeslht13qxb1zzO8dRCtE7U3IoJS782zDBAeoKiM695kg==}
 
-  '@types/bun@1.1.11':
-    resolution: {integrity: sha512-0N7D/H/8sbf9JMkaG5F3+I/cB4TlhKTkO9EskEWP8XDr8aVcDe4EywSnU4cnyZy6tar1dq70NeFNkqMEUigthw==}
+  '@types/bun@1.1.12':
+    resolution: {integrity: sha512-UkewJesRDP3+AW30Gc8hvxuIt+vHgYZXmVOKaXV8xnwAnMXTAs3XZDsa/jW+LSdAYhHslokSm72lq63FYYjZqA==}
 
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
@@ -6928,11 +6928,11 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
+  better-call@0.2.11:
+    resolution: {integrity: sha512-Hl9+dYCqUcadp/jzE72HYwg8afhK/R8joACyy8XIlLUMlrgUoRvDvJnWbu7HWPBEjkDUM+xGWYxYCHHSTi9Cxw==}
+
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
-
-  better-call@0.2.9:
-    resolution: {integrity: sha512-JeTrw5Escp+BedLnu25n++x15ydV/iuOLy+JBP2PRCv7rAc5QapBqMGJ5e/IST+Ig6UHRgTH3FIodyr3hUvFmw==}
 
   better-sqlite3@11.3.0:
     resolution: {integrity: sha512-iHt9j8NPYF3oKCNOO5ZI4JwThjt3Z6J6XrcwG85VNMVzv1ByqrHWv5VILEbCMFWDsoHhXvQ7oC8vgRXFAKgl9w==}
@@ -7035,8 +7035,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  bun-types@1.1.30:
-    resolution: {integrity: sha512-mGh7NLisOXskBU62DxLS+/nwmLlCYHYAkCzdo4DZ9+fzrpP41hAdOqaN4DO6tQfenHb4pYb0/shw29k4/6I2yQ==}
+  bun-types@1.1.32:
+    resolution: {integrity: sha512-Lxgux4InO/WRjSAEy3iyDscsnDXR8+3rgNDeZYjPAizFYjUraoNuMl9PuRd9XMgFZgdyQwaUX7/QHmOw5KGFQw==}
 
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
@@ -10113,10 +10113,12 @@ packages:
 
   libsql@0.3.19:
     resolution: {integrity: sha512-Aj5cQ5uk/6fHdmeW0TiXK42FqUlwx7ytmMLPSaUQPin5HKKKuUPD62MAbN4OEweGBBI7q1BekoEN4gPUEL6MZA==}
+    cpu: [x64, arm64, wasm32]
     os: [darwin, linux, win32]
 
   libsql@0.4.5:
     resolution: {integrity: sha512-sorTJV6PNt94Wap27Sai5gtVLIea4Otb2LUiAUyr3p6BPOScGMKGt5F1b5X/XgkNtcsDKeX5qfeBDj+PdShclQ==}
+    cpu: [x64, arm64, wasm32]
     os: [darwin, linux, win32]
 
   lilconfig@2.1.0:
@@ -19797,9 +19799,9 @@ snapshots:
     dependencies:
       '@types/node': 20.16.9
 
-  '@types/bun@1.1.11':
+  '@types/bun@1.1.12':
     dependencies:
-      bun-types: 1.1.30
+      bun-types: 1.1.32
 
   '@types/cookie@0.6.0': {}
 
@@ -21864,6 +21866,12 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
+  better-call@0.2.11:
+    dependencies:
+      '@better-fetch/fetch': 1.1.9
+      rou3: 0.5.1
+      uncrypto: 0.1.3
+
   better-call@0.2.3-beta.2:
     dependencies:
       '@better-fetch/fetch': 1.1.9
@@ -21871,12 +21879,6 @@ snapshots:
       rou3: 0.5.1
       set-cookie-parser: 2.7.0
       typescript: 5.6.2
-
-  better-call@0.2.9:
-    dependencies:
-      '@better-fetch/fetch': 1.1.9
-      rou3: 0.5.1
-      uncrypto: 0.1.3
 
   better-sqlite3@11.3.0:
     dependencies:
@@ -22021,7 +22023,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  bun-types@1.1.30:
+  bun-types@1.1.32:
     dependencies:
       '@types/node': 20.12.14
       '@types/ws': 8.5.12
@@ -23176,7 +23178,7 @@ snapshots:
 
   dotenv@16.4.5: {}
 
-  drizzle-orm@0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.30)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1):
+  drizzle-orm@0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.9)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20241011.0
       '@libsql/client': 0.12.0
@@ -23185,7 +23187,7 @@ snapshots:
       '@types/pg': 8.11.10
       '@types/react': 18.3.9
       better-sqlite3: 11.3.0
-      bun-types: 1.1.30
+      bun-types: 1.1.32
       kysely: 0.27.4
       mysql2: 3.11.3
       pg: 8.13.0
