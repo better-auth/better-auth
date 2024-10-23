@@ -6,6 +6,7 @@ import { createInternalAdapter } from "./internal-adapter";
 import { getAdapter } from "./utils";
 import { getMigrations } from "./get-migration";
 import { SqliteDialect } from "kysely";
+import { getTestInstance } from "../test-utils/test-instance";
 
 describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
@@ -69,5 +70,21 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(user?.user.id).toBe(user?.account.userId);
+	});
+	it("should find session with custom userId", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			session: {
+				fields: {
+					userId: "user_id",
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const session = await client.session({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.session).toBeDefined();
 	});
 });
