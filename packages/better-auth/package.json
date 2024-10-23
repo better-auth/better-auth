@@ -214,7 +214,7 @@
     "vue": "^3.5.0"
   },
   "dependencies": {
-    "@better-fetch/fetch": "^1.1.9",
+    "@better-fetch/fetch": "1.1.12",
     "@nanostores/query": "^0.3.4",
     "@nanostores/react": "^0.7.3",
     "@nanostores/solid": "^0.4.2",
