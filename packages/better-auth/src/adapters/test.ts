@@ -131,10 +131,25 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
+	test("should fin many with operators", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					operator: "in",
+					value: ["1", "2"],
+				},
+			],
+		});
+		expect(res.length).toBe(2);
+	});
+
 	test("should find many with sortBy", async () => {
 		await adapter.create({
 			model: "user",
 			data: {
+				id: "3",
 				name: "a",
 				email: "a@email.com",
 				emailVerified: true,
@@ -149,6 +164,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				direction: "asc",
 			},
 		});
+
 		expect(res[0].name).toBe("a");
 
 		const res2 = await adapter.findMany<User>({
@@ -178,6 +194,38 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
+	test("should update with multiple where", async () => {
+		await adapter.update({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: user.name,
+				},
+				{
+					field: "email",
+					value: user.email,
+				},
+			],
+			update: {
+				email: "updated@email.com",
+			},
+		});
+		const updatedUser = await adapter.findOne<User>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "updated@email.com",
+				},
+			],
+		});
+		expect(updatedUser).toMatchObject({
+			name: user.name,
+			email: "updated@email.com",
+		});
+	});
+
 	test("delete model", async () => {
 		await adapter.delete({
 			model: "user",
@@ -200,16 +248,115 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(findRes).toBeNull();
 	});
 
+	test("should delete many", async () => {
+		for (const id of ["to-be-delete1", "to-be-delete2", "to-be-delete3"]) {
+			await adapter.create({
+				model: "user",
+				data: {
+					id,
+					name: "to-be-deleted",
+					email: `email@test-${id}.com`,
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		const findResFirst = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		expect(findResFirst.length).toBe(3);
+		await adapter.deleteMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		const findRes = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					value: "to-be-deleted",
+				},
+			],
+		});
+		expect(findRes.length).toBe(0);
+	});
+
+	test("shouldn't throw on delete record not found", async () => {
+		await adapter.delete({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: "5",
+				},
+			],
+		});
+	});
+
 	test("shouldn't throw on record not found", async () => {
 		const res = await adapter.findOne({
 			model: "user",
 			where: [
 				{
 					field: "id",
-					value: "3",
+					value: "5",
 				},
 			],
 		});
 		expect(res).toBeNull();
+	});
+
+	test("should find many with contains operator", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "contains",
+					value: "se",
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should search users with startsWith", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "starts_with",
+					value: "us",
+				},
+			],
+		});
+		expect(res.length).toBe(1);
+	});
+
+	test("should search users with endsWith", async () => {
+		const res = await adapter.findMany({
+			model: "user",
+			where: [
+				{
+					field: "name",
+					operator: "ends_with",
+					value: "er2",
+				},
+			],
+		});
+		expect(res.length).toBe(1);
 	});
 }

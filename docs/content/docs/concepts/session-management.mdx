@@ -27,7 +27,7 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     //... other config options
     session: {
-        expiresIn: 60 * 60 * 24 * 7 // 7 days,
+        expiresIn: 60 * 60 * 24 * 7, // 7 days
         updateAge: 60 * 60 * 24 // 1 day (every 1 day the session expiration is updated)
     }
 })
@@ -37,14 +37,34 @@ export const auth = betterAuth({
 
 Better Auth provides a set of functions to manage sessions.
 
+### Get Session
+
+The `getSession` function retrieves the current active session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.getSession()
+```
+
+### Use Session
+
+The `useSession` action provides a reactive way to access the current session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.useSession()
+```
+
 ### List Sessions
 
 The `listSessions` function returns a list of sessions that are active for the user.
 
 ```ts title="client.ts"
-import { client } from "@/lib/client"
+import { authClient } from "@/lib/client"
 
-const sessions = await client.user.listSessions()
+const sessions = await authClient.user.listSessions()
 ```
 
 ### Revoke Session
@@ -54,7 +74,7 @@ When a user signs out of a device, the session is automatically ended. However, 
 To end a session, use the `revokeSession` function. Just pass the session ID as a parameter.
 
 ```ts title="client.ts"
-await client.user.revokeSession({
+await authClient.user.revokeSession({
     id: session.id,
 })
 ```
@@ -64,7 +84,7 @@ await client.user.revokeSession({
 To revoke all sessions, you can use the `revokeSessions` function.
 
 ```ts title="client.ts"
-await client.user.revokeSessions()
+await authClient.user.revokeSessions()
 ```
 
 ### Revoking Sessions on Password Change
@@ -72,7 +92,7 @@ await client.user.revokeSessions()
 You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePAssword` function.
 
 ```ts title="auth.ts"
-await user.changePassword({
+await authClient.user.changePassword({
     newPassword: newPassword,
     currentPassword: currentPassword,
     revokeOtherSessions: signOutDevices,

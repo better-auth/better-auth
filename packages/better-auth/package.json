@@ -1,114 +1,242 @@
 {
-    "name": "better-auth",
-    "version": "0.4.7",
-    "description": "The most comprehensive authentication library for TypeScript.",
-    "type": "module",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/better-auth/better-auth",
-		"directory": "packages/better-auth"
-	},
-    "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=4000' tsup --clean --dts",
-        "dev": "NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
-        "dev:dts": "NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
-        "test": "pnpm prisma:push && vitest",
-        "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
-        "test:adapters": "pnpm prisma:push && vitest adapters",
-        "bump": "bumpp",
-        "typecheck": "tsc --noEmit"
+  "name": "better-auth",
+  "version": "0.5.3-beta.16",
+  "description": "The most comprehensive authentication library for TypeScript.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/better-auth"
+  },
+  "scripts": {
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4000 tsup --clean --dts",
+    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
+    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
+    "test": "pnpm prisma:push && vitest",
+    "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
+    "test:adapters": "pnpm prisma:push && vitest adapters",
+    "bump": "bumpp",
+    "typecheck": "tsc --noEmit"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
-    "main": "./dist/index.js",
-    "module": "./dist/index.js",
-    "bin": "./dist/cli.js",
-    "publishConfig": {
-        "executableFiles": [
-            "./dist/cli.js"
-        ]
+    "./social-providers": {
+      "types": "./dist/social.d.ts",
+      "import": "./dist/social.js"
     },
-    "exports": {
-        ".": "./dist/index.js",
-        "./social-providers": "./dist/social.js",
-        "./client": {
-            "import": "./dist/client.js",
-            "types": "./dist/client.d.ts"
-        },
-        "./client/plugins": {
-            "import": "./dist/client/plugins.js",
-            "types": "./dist/client/plugins.d.ts"
-        },
-        "./types": "./dist/types.js",
-        "./react": "./dist/react.js",
-        "./preact": "./dist/preact.js",
-        "./solid": "./dist/solid.js",
-        "./api": "./dist/api.js",
-        "./vue": "./dist/vue.js",
-        "./plugins": "./dist/plugins.js",
-        "./plugins/access": "./dist/access.js",
-        "./svelte-kit": "./dist/svelte-kit.js",
-        "./solid-start": "./dist/solid-start.js",
-        "./svelte": "./dist/svelte.js",
-        "./next-js": "./dist/next-js.js",
-        "./package.json": "./package.json",
-        "./node": "./dist/node.js",
-        "./adapters/prisma": "./dist/adapters/prisma.js",
-        "./adapters/drizzle": "./dist/adapters/drizzle.js",
-        "./adapters/mongodb": "./dist/adapters/mongodb.js"
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     },
-    "devDependencies": {
-        "@prisma/client": "^5.19.1",
-        "@simplewebauthn/types": "^10.0.0",
-        "@types/better-sqlite3": "^7.6.11",
-        "@types/pg": "^8.11.6",
-        "@types/prompts": "^2.4.9",
-        "@types/react": "^18.3.3",
-        "better-sqlite3": "^11.3.0",
-        "drizzle-orm": "^0.33.0",
-        "happy-dom": "^15.7.4",
-        "hono": "^4.5.4",
-        "listhen": "^1.7.2",
-        "mongodb": "^6.9.0",
-        "mysql2": "^3.11.0",
-        "next": "^14.2.8",
-        "oauth2-mock-server": "^7.1.2",
-        "pg": "^8.12.0",
-        "prisma": "^5.19.1",
-        "react": "^18.3.1",
-        "solid-js": "^1.8.18",
-        "tsup": "^8.2.4",
-        "typescript": "5.6.1-rc",
-        "vitest": "^1.6.0",
-        "vue": "^3.5.0"
+    "./client/plugins": {
+      "types": "./dist/client/plugins.d.ts",
+      "import": "./dist/client/plugins.js"
     },
-    "dependencies": {
-        "@babel/preset-react": "^7.24.7",
-        "@babel/preset-typescript": "^7.24.7",
-        "@better-fetch/fetch": "^1.1.9",
-        "@mrleebo/prisma-ast": "^0.12.0",
-        "@nanostores/query": "^0.3.4",
-        "@nanostores/react": "^0.7.3",
-        "@nanostores/solid": "^0.4.2",
-        "@nanostores/vue": "^0.10.0",
-        "@noble/ciphers": "^0.6.0",
-        "@simplewebauthn/browser": "^10.0.0",
-        "@simplewebauthn/server": "^10.0.1",
-        "better-call": "0.2.6",
-        "c12": "^2.0.1",
-        "chalk": "^5.3.0",
-        "commander": "^12.1.0",
-        "consola": "^3.2.3",
-        "defu": "^6.1.4",
-        "kysely": "^0.27.4",
-        "nanoid": "^5.0.7",
-        "nanostores": "^0.11.2",
-        "oslo": "^1.2.1",
-        "prompts": "^2.4.2",
-        "tinyexec": "^0.3.0",
-        "yocto-spinner": "^0.1.1",
-        "zod": "^3.22.5"
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
     },
-    "files": [
-        "dist/*",
-        "./package.json"
-    ]
+    "./crypto": {
+      "types": "./dist/crypto.d.ts",
+      "import": "./dist/crypto.js"
+    },
+    "./cookies": {
+      "types": "./dist/cookies.d.ts",
+      "import": "./dist/cookies.js"
+    },
+    "./oauth2": {
+      "types": "./dist/oauth2.d.ts",
+      "import": "./dist/oauth2.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./solid": {
+      "types": "./dist/solid.d.ts",
+      "import": "./dist/solid.js"
+    },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
+    "./plugins/access": {
+      "types": "./dist/access.d.ts",
+      "import": "./dist/access.js"
+    },
+    "./svelte-kit": {
+      "types": "./dist/svelte-kit.d.ts",
+      "import": "./dist/svelte-kit.js"
+    },
+    "./solid-start": {
+      "types": "./dist/solid-start.d.ts",
+      "import": "./dist/solid-start.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    },
+    "./next-js": {
+      "types": "./dist/next-js.d.ts",
+      "import": "./dist/next-js.js"
+    },
+    "./package.json": "./package.json",
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./adapters/prisma": {
+      "types": "./dist/adapters/prisma.d.ts",
+      "import": "./dist/adapters/prisma.js"
+    },
+    "./adapters/drizzle": {
+      "types": "./dist/adapters/drizzle.d.ts",
+      "import": "./dist/adapters/drizzle.js"
+    },
+    "./adapters/mongodb": {
+      "types": "./dist/adapters/mongodb.d.ts",
+      "import": "./dist/adapters/mongodb.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "node": [
+        "./dist/node.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
+      ],
+      "vue": [
+        "./dist/vue.d.ts"
+      ],
+      "svelte": [
+        "./dist/svelte.d.ts"
+      ],
+      "social-providers": [
+        "./dist/social.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ],
+      "client/plugins": [
+        "./dist/client/plugins.d.ts"
+      ],
+      "types": [
+        "./dist/types.d.ts"
+      ],
+      "crypto": [
+        "./dist/crypto.d.ts"
+      ],
+      "cookies": [
+        "./dist/cookies.d.ts"
+      ],
+      "oauth2": [
+        "./dist/oauth2.d.ts"
+      ],
+      "solid": [
+        "./dist/solid.d.ts"
+      ],
+      "api": [
+        "./dist/api.d.ts"
+      ],
+      "db": [
+        "./dist/db.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins.d.ts"
+      ],
+      "plugins/access": [
+        "./dist/access.d.ts"
+      ],
+      "svelte-kit": [
+        "./dist/svelte-kit.d.ts"
+      ],
+      "solid-start": [
+        "./dist/solid-start.d.ts"
+      ],
+      "next-js": [
+        "./dist/next-js.d.ts"
+      ],
+      "adapters/prisma": [
+        "./dist/adapters/prisma.d.ts"
+      ],
+      "adapters/drizzle": [
+        "./dist/adapters/drizzle.d.ts"
+      ],
+      "adapters/mongodb": [
+        "./dist/adapters/mongodb.d.ts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.19.1",
+    "@simplewebauthn/types": "^10.0.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/pg": "^8.11.6",
+    "@types/prompts": "^2.4.9",
+    "@types/react": "^18.3.3",
+    "better-sqlite3": "^11.3.0",
+    "drizzle-orm": "^0.33.0",
+    "happy-dom": "^15.7.4",
+    "hono": "^4.5.4",
+    "listhen": "^1.7.2",
+    "mongodb": "^6.9.0",
+    "mysql2": "^3.11.0",
+    "next": "^14.2.8",
+    "oauth2-mock-server": "^7.1.2",
+    "pg": "^8.12.0",
+    "prisma": "^5.19.1",
+    "react": "^18.3.1",
+    "solid-js": "^1.8.18",
+    "tsup": "^8.2.4",
+    "typescript": "5.6.1-rc",
+    "vitest": "^1.6.0",
+    "vue": "^3.5.0"
+  },
+  "dependencies": {
+    "@better-fetch/fetch": "^1.1.9",
+    "@nanostores/query": "^0.3.4",
+    "@nanostores/react": "^0.7.3",
+    "@nanostores/solid": "^0.4.2",
+    "@nanostores/vue": "^0.10.0",
+    "@noble/ciphers": "^0.6.0",
+    "@noble/hashes": "^1.5.0",
+    "@simplewebauthn/browser": "^10.0.0",
+    "@simplewebauthn/server": "^10.0.1",
+    "better-call": "0.2.11",
+    "consola": "^3.2.3",
+    "defu": "^6.1.4",
+    "jose": "^5.9.4",
+    "kysely": "^0.27.4",
+    "nanoid": "^5.0.7",
+    "nanostores": "^0.11.2",
+    "oslo": "^1.2.1",
+    "std-env": "^3.7.0",
+    "uncrypto": "^0.1.3",
+    "zod": "^3.22.5"
+  },
+  "files": [
+    "dist/*",
+    "./package.json"
+  ]
 }

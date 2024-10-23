@@ -7,8 +7,8 @@ describe("forget password", async (it) => {
 	const { client, testUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
-			async sendResetPassword(url, user) {
-				token = url.split("/").pop() || "";
+			async sendResetPassword(user, url) {
+				token = url.split("?")[0].split("/").pop() || "";
 				await mockSendEmail();
 			},
 		},
@@ -29,10 +29,11 @@ describe("forget password", async (it) => {
 			},
 			{
 				query: {
-					currentURL: `http://localhost:3000/reset-password?token=${token}`,
+					token,
 				},
 			},
 		);
+
 		expect(res.data).toMatchObject({
 			status: true,
 		});
@@ -49,5 +50,21 @@ describe("forget password", async (it) => {
 			password: "new-password",
 		});
 		expect(newCred.data?.session).toBeDefined();
+	});
+
+	it("shouldn't allow the token to be used twice", async () => {
+		const newPassword = "new-password";
+		const res = await client.resetPassword(
+			{
+				newPassword,
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
 	});
 });

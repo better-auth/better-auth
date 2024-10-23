@@ -27,23 +27,25 @@ The Admin plugin provides a set of administrative functions for user management 
     ```
   </Step>
 
-  <Step>
-    ### Migrate your database
+    <Step>
+        ### Migrate the database
 
-    Run the migration command to create the necessary tables in your database.
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-    ```bash title="terminal"
-    npx better-auth migrate
-    ```
-
-    Or, you can generate the required tables with:
-
-    ```bash title="terminal"
-    npx better-auth generate
-    ```
-
-    Refer to the [Schema section](#schema) to see which fields this plugin requires. You can also manually add these fields to your database.
-  </Step>
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
 
   <Step>
     ### Add the client plugin
@@ -92,19 +94,35 @@ const users = await authClient.admin.listUsers({
 });
 ```
 By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
-
+- `search`: The search query to apply to the users. It can be an object with the following properties:
+    - `field`: The field to search on, which can be `email` or `name`.
+    - `operator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
+    - `value`: The value to search for.
 - `limit`: The number of users to return.
 - `offset`: The number of users to skip.
 - `sortBy`: The field to sort the users by.
 - `sortDirection`: The direction to sort the users by. Defaults to `asc`.
+- `filter`: The filter to apply to the users. It can be an array of objects.
 
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
     query: {
+        search: {
+            field: "email",
+            operator: "contains",
+            value: "@example.com"
+        },
         limit: 10,
         offset: 0,
         sortBy: "createdAt",
         sortDirection: "desc"
+        filter: [
+          {
+            field: "name",
+            operator: "eq",
+            value: "John",
+          }
+        ]
     }
 });
 ```

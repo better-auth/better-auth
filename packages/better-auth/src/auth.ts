@@ -3,7 +3,7 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type { InferPluginTypes, InferSession, InferUser } from "./types";
-import { getBaseURL } from "./utils/base-url";
+import { getBaseURL } from "./utils/url";
 
 type InferAPI<API> = Omit<
 	API,

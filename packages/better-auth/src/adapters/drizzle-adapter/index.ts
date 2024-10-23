@@ -1,11 +1,6 @@
-import { and, asc, desc, eq, or, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, or, SQL, inArray, like } from "drizzle-orm";
 import type { Adapter, Where } from "../../types";
-import type { FieldType } from "../../db";
-import { getAuthTables } from "../../db/get-tables";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import { BetterAuthError } from "../../error/better-auth-error";
-import chalk from "chalk";
+import { BetterAuthError } from "../../error";
 
 export interface DrizzleAdapterOptions {
 	schema?: Record<string, any>;
@@ -16,6 +11,15 @@ export interface DrizzleAdapterOptions {
 	 * has an object with a key "users" instead of "user"
 	 */
 	usePlural?: boolean;
+	/**
+	 * Custom generateId function.
+	 *
+	 * If not provided, nanoid will be used.
+	 * If set to false, the database's auto generated id will be used.
+	 *
+	 * @default nanoid
+	 */
+	generateId?: ((size?: number) => string) | false;
 }
 
 function getSchema(
@@ -49,6 +53,28 @@ function whereConvertor(where: Where[], schemaModel: any) {
 		if (!w) {
 			return [];
 		}
+
+		if (w.operator === "in") {
+			if (!Array.isArray(w.value)) {
+				throw new BetterAuthError(
+					`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+				);
+			}
+			return [inArray(schemaModel[w.field], w.value)];
+		}
+
+		if (w.operator === "contains") {
+			return [like(schemaModel[w.field], `%${w.value}%`)];
+		}
+
+		if (w.operator === "starts_with") {
+			return [like(schemaModel[w.field], `${w.value}%`)];
+		}
+
+		if (w.operator === "ends_with") {
+			return [like(schemaModel[w.field], `%${w.value}`)];
+		}
+
 		return [eq(schemaModel[w.field], w.value)];
 	}
 	const andGroup = where.filter((w) => w.connector === "AND" || !w.connector);
@@ -56,6 +82,14 @@ function whereConvertor(where: Where[], schemaModel: any) {
 
 	const andClause = and(
 		...andGroup.map((w) => {
+			if (w.operator === "in") {
+				if (!Array.isArray(w.value)) {
+					throw new BetterAuthError(
+						`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+					);
+				}
+				return inArray(schemaModel[w.field], w.value);
+			}
 			return eq(schemaModel[w.field], w.value);
 		}),
 	);
@@ -90,6 +124,10 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
+			if (options.generateId !== undefined) {
+				val.id = options.generateId ? options.generateId() : undefined;
+			}
+
 			const mutation = db.insert(schemaModel).values(val);
 			if (databaseType !== "mysql") return (await mutation.returning())[0];
 
@@ -134,12 +172,11 @@ export const drizzleAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
-
 			const schemaModel = getSchema(model, {
 				schema,
 				usePlural: options.usePlural,
 			});
-			const wheres = where ? whereConvertor(where, schemaModel) : [];
+			const filters = where ? whereConvertor(where, schemaModel) : [];
 			const fn = sortBy?.direction === "desc" ? desc : asc;
 			const res = await db
 				.select()
@@ -147,7 +184,7 @@ export const drizzleAdapter = (
 				.limit(limit || 100)
 				.offset(offset || 0)
 				.orderBy(fn(schemaModel[sortBy?.field || "id"]))
-				.where(...(wheres.length ? wheres : []));
+				.where(...(filters.length ? filters : []));
 
 			return res;
 		},
@@ -157,6 +194,9 @@ export const drizzleAdapter = (
 				schema,
 				usePlural: options.usePlural,
 			});
+			if (update.id) {
+				update.id = undefined;
+			}
 			const wheres = whereConvertor(where, schemaModel);
 			const mutation = db
 				.update(schemaModel)
@@ -182,67 +222,15 @@ export const drizzleAdapter = (
 
 			return res[0];
 		},
-		async createSchema(options, file) {
-			const tables = getAuthTables(options);
-			const filePath = file || "./auth-schema.ts";
-			const timestampAndBoolean =
-				databaseType !== "sqlite" ? "timestamp, boolean" : "";
-			const int = databaseType === "mysql" ? "int" : "integer";
-			let code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-			`;
-
-			const fileExist = existsSync(filePath);
-
-			for (const table in tables) {
-				const tableName = tables[table].tableName;
-				const fields = tables[table].fields;
-				function getType(name: string, type: FieldType) {
-					if (type === "string") {
-						return `text('${name}')`;
-					}
-					if (type === "number") {
-						return `${int}('${name}')`;
-					}
-					if (type === "boolean") {
-						if (databaseType === "sqlite") {
-							return `integer('${name}', {
-								mode: "boolean"
-							})`;
-						}
-						return `boolean('${name}')`;
-					}
-					if (type === "date") {
-						if (databaseType === "sqlite") {
-							return `integer('${name}', {
-								mode: "timestamp"
-							})`;
-						}
-						return `timestamp('${name}')`;
-					}
-				}
-				const schema = `export const ${table} = ${databaseType}Table("${tableName}", {
-					id: text("id").primaryKey(),
-					${Object.keys(fields)
-						.map((field) => {
-							const attr = fields[field];
-							return `${field}: ${getType(field, attr.type)}${
-								attr.required ? ".notNull()" : ""
-							}${attr.unique ? ".unique()" : ""}${
-								attr.references
-									? `.references(()=> ${attr.references.model}.${attr.references.field})`
-									: ""
-							}`;
-						})
-						.join(",\n ")}
-				});`;
-				code += `\n${schema}\n`;
-			}
-
-			return {
-				code: code,
-				fileName: filePath,
-				overwrite: fileExist,
-			};
+		async deleteMany(data) {
+			const { model, where } = data;
+			const schemaModel = getSchema(model, {
+				schema,
+				usePlural: options.usePlural,
+			});
+			const wheres = whereConvertor(where, schemaModel);
+			await db.delete(schemaModel).where(...wheres);
 		},
+		options,
 	};
 };

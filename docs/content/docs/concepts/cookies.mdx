@@ -9,7 +9,9 @@ Core Better Auth cookies like `session` and `csrf` will follow `betterauth.${coo
 
 All cookies are `httpOnly` and `secure` if the server is running in production mode.
 
-### Cross Subdomain Cookies (🧪 Expiremental)
+### Cross Subdomain Cookies (🧪 Experimental)
+
+Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
 
 By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To do this, set `crossSubDomainCookies` to `true` in the `advanced` object of the auth options.
 
@@ -28,16 +30,20 @@ export const auth = betterAuth({
 })
 ```
 
+<Callout type="warn">
+This feature is experimental and may not work as expected in all scenarios. And this is specefically to share session cookies across subdomains.
+</Callout>
+
 ### Disable CSRF Cookie (⚠︎ Not Recommended)
 
-If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true` in the `advanced` object in the auth options.
+If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true` in the `advanced` object in the auth options. If you disable the CSRF cookie, you should make sure that your framework handles CSRF protection itself.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
     advanced: {
-        disableCsrfCheck: true
+        disableCSRFCheck: true
     }
 })
 ```
@@ -58,13 +64,19 @@ export const auth = betterAuth({
 
 ## CSRF Protection
 
-Better Auth uses multiple ways to protect your app from cross-site request forgery attacks. First better auth cookies are marked as `HttpOnly` and `Secure` by default. This makes them inaccessible to client-side scripts and ensures that they can only be sent over HTTPS. And all cookies use the `SameSite=Lax` attribute by default. Which prevents them from being sent on a cross-site request. 
+**Cross-Site Request Forgery (CSRF) Protection in Better Auth**
 
-Second, Better Auth uses CSRF tokens. By default, CSRF token check is disabled for the same origin as `baseURL`. For other origins, whenever a `POST` request is made, the CSRF token check is enforced.
+Better Auth protects your app from CSRF attacks in two ways:
 
-You can change this behavior using the `disableCSRFTokenCheck` option on the client. 
+1. **Secure Cookies**: All cookies are marked as `HttpOnly`, `Secure`, and use the `SameSite=Lax` attribute. This ensures they’re inaccessible to client-side scripts, only sent over HTTPS, and not shared across sites. 
 
-Once you set `disableCSRFTokenCheck` to `true`, CSRF token check is completely disabled for the client making the request. Now if a request comes from an untrusted origin, it will fail with a `403` error. To allow requests from untrusted origins, you can specify the list of origins in `trustedOrigins` option on the server. All origins specified in `trustedOrigins` are excluded from CSRF token check.
+2. **CSRF Tokens**: By default, CSRF token checks are disabled for the same origin as `baseURL`, since CSRF attacks only affect browser requests. For other origins, CSRF tokens are required for `POST` requests. It uses double submit cookies to validate the token. Each session has a unique CSRF token that is sent as a cookie and a header in every request. If the two don’t match, the request is rejected.
+
+You can adjust this behavior:
+- Use `disableCSRFTokenCheck: true` on the client to skip token checks entirely. 
+- To allow untrusted origins, specify them in the `trustedOrigins` option on the server. These origins will be exempt from CSRF checks.
+
+Untrusted requests without valid tokens will result in a `403` error.
 
 <Callout type="warn">
 You can also disable CSRF token check for all clients by setting `advanced.disableCSRFCheck` option on the server. You should only do this if your framework handles CSRF protection itself.

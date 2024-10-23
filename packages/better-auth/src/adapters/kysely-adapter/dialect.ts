@@ -6,7 +6,6 @@ import {
 	SqliteDialect,
 } from "kysely";
 import type { BetterAuthOptions } from "../../types";
-import { logger } from "../../utils/logger";
 import type { KyselyDatabaseType } from "./types";
 
 function getDatabaseType(

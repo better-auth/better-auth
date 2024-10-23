@@ -1,44 +1,78 @@
+import Database from "better-sqlite3";
 import { betterAuth } from "better-auth";
-import { organization, passkey, twoFactor } from "better-auth/plugins";
+import {
+	bearer,
+	organization,
+	passkey,
+	twoFactor,
+	admin,
+	multiSession,
+	username,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
+
+const database = new Database("better-auth.sqlite");
+
 export const auth = betterAuth({
-	database: {
-		provider: "sqlite",
-		url: "./db.sqlite",
+	database,
+	emailVerification: {
+		async sendVerificationEmail(user, url) {
+			console.log("Sending verification email to", user.email);
+			const res = await resend.emails.send({
+				from,
+				to: to || user.email,
+				subject: "Verify your email address",
+				html: `<a href="${url}">Verify your email address</a>`,
+			});
+			console.log(res, user.email);
+		},
+		sendOnSignUp: true,
+	},
+	account: {
+		accountLinking: {
+			trustedProviders: ["google", "github"],
+		},
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(token, user) {
-			const res = await resend.emails.send({
+		async sendResetPassword(user, url) {
+			await resend.emails.send({
 				from,
 				to: user.email,
 				subject: "Reset your password",
 				react: reactResetPasswordEmail({
 					username: user.email,
-					resetLink: `${
-						process.env.NODE_ENV === "development"
-							? "http://localhost:3000"
-							: process.env.NEXT_PUBLIC_APP_URL ||
-								process.env.VERCEL_URL ||
-								process.env.BETTER_AUTH_URL
-					}/reset-password/${token}`,
+					resetLink: url,
 				}),
 			});
 		},
-		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail(email, url) {
-			const res = await resend.emails.send({
-				from,
-				to: to || email,
-				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
-			});
-			console.log(res, email);
+	},
+	socialProviders: {
+		github: {
+			clientId: process.env.GITHUB_CLIENT_ID || "",
+			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+		},
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID || "",
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+		},
+		discord: {
+			clientId: process.env.DISCORD_CLIENT_ID || "",
+			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+		},
+		microsoft: {
+			clientId: process.env.MICROSOFT_CLIENT_ID || "",
+			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
 	},
 	plugins: [
@@ -68,21 +102,20 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			otpOptions: {
-				sendOTP(user, otp) {
-					console.log({ otp });
+				async sendOTP(user, otp) {
+					await resend.emails.send({
+						from,
+						to: user.email,
+						subject: "Your OTP",
+						html: `Your OTP is ${otp}`,
+					});
 				},
 			},
 		}),
 		passkey(),
+		bearer(),
+		admin(),
+		multiSession(),
+		username(),
 	],
-	socialProviders: {
-		github: {
-			clientId: process.env.GITHUB_CLIENT_ID || "",
-			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-		},
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-		},
-	},
 });

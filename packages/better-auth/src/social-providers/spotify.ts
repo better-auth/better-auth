@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from ".";
-import {
-	createAuthorizationURL,
-	getRedirectURI,
-	validateAuthorizationCode,
-} from "./utils";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface SpotifyProfile {
 	id: string;
@@ -21,7 +17,7 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
-		createAuthorizationURL({ state, scopes, codeVerifier }) {
+		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.scope || scopes || ["user-read-email"];
 			return createAuthorizationURL({
 				id: "spotify",
@@ -30,14 +26,14 @@ export const spotify = (options: SpotifyOptions) => {
 				scopes: _scopes,
 				state,
 				codeVerifier,
+				redirectURI,
 			});
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI:
-					redirectURI || getRedirectURI("spotify", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});

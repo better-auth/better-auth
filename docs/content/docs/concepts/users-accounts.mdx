@@ -25,18 +25,65 @@ The user table can be extended by plugins to store additional data. When a plugi
 To update user information, you can use the `updateUser` function provided by the client. The `updateUser` function takes an object with the following properties:
 
 ```ts
-await user.update({
+await authClient.user.update({
     image: "https://example.com/image.jpg",
     name: "John Doe",
 })
 ```
+### Change Email
 
+To allow users to change their email, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+        }
+    }
+})
+```
+
+For users with a verified email, provide the `sendChangeEmailVerification` function. This function triggers when a user changes their email, sending a verification email with a URL and token. If the current email isn't verified, the change happens immediately without verification.
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            sendChangeEmailVerification: async (user, newEmail, url, token) => {
+                await sendEmail({
+                    to: newEmail,
+                    subject: 'Verify your email change',
+                    text: `Click the link to verify: ${url}`
+                })
+            }
+        }
+    }
+})
+```
+
+Once enabled, use the `changeEmail` function on the client to update a user’s email. The user must verify their current email before changing it.
+
+```ts
+await authClient.user.changeEmail({
+    newEmail: "new-email@email.com",
+    callbackURL: "/dashboard", //to redirect after verification
+});
+```
+
+After verification, the new email is updated in the user table, and a confirmation is sent to the new address.
+
+<Callout type="warn">
+    If the current email is unverified, the new email is updated without the verification step.
+</Callout>
+ 
 ### Change Password
 
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
 
 ```ts
-await user.changePassword({
+await authClient.user.changePassword({
     newPassword: "newPassword123",
     currentPassword: "oldPassword123",
     revokeOtherSessions: true, // revoke all other sessions the user is signed into
@@ -48,7 +95,7 @@ await user.changePassword({
 If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
 
 ```ts
-await user.setPassword({
+await authClient.user.setPassword({
     password,
 });
 ```
@@ -75,28 +122,27 @@ The account table stores the authentication data of the user. The account table 
 
 ### Account linking
 
-Account linking allows users to link multiple authentication methods to the same account. This is useful when users want to sign in using different methods.
+Account linking allows users to connect multiple authentication methods to a single account. Better Auth supports linking social sign-on or OAuth providers to an existing account if the provider returns a verified email.
 
-By default Better Auth allows account linking for all providers. You can disable account linking by setting `accountLinking.enabled` to `false`.
-```ts
+You can also specify a list of trusted providers. If a user signs in using a trusted provider, the account is linked, even if the email verification status is not provided.
+
+If account linking is disabled, accounts cannot be linked, regardless of the provider or email verification.
+
+```ts title="auth.ts"
 const auth = new BetterAuth({
     account: {
-       accountLinking: {
-            enabled: false,
-       }
+        accountLinking: {
+            enabled: true,
+            trustedProviders: ["google", "github"],
+        }
     },
 });
 ```
 
-You can also specify, the list of providers that should be trusted. When a user signs in using a trusted provider, if the provider returns a verfied email, the user is automatically signed in.
+To link a credential-based account (email and password), users can either go through the "forgot password" flow or use the `setPassword` function if they are already logged in.
 
 ```ts
-const auth = new BetterAuth({
-    account: {
-       accountLinking: {
-            enabled: true,
-            trustedProviders: ["email-password", "google"],
-       }
-    },
+await authClient.user.setPassword({
+    password,
 });
 ```

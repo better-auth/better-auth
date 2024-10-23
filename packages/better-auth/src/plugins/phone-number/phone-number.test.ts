@@ -1,8 +1,9 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
+import { changeEmail } from "../../api";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -10,9 +11,12 @@ describe("phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				otp: {
-					async sendOTP(_, code) {
-						otp = code;
+				async sendOTP(_, code) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
 					},
 				},
 			}),
@@ -29,116 +33,65 @@ describe("phone-number", async (it) => {
 
 	const headers = new Headers();
 
-	it("should sign-up with phone number", async () => {
-		const res = await client.signUp.phoneNumber({
-			email: "valid-email@email.com",
-			name: "Test User",
-			phoneNumber: "+251911121314",
-			password: "valid-password",
+	const testPhoneNumber = "+251911121314";
+	it("should send verification code", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
 		});
-
-		expect(res.data).toMatchObject({
-			user: {
-				id: expect.any(String),
-				name: "Test User",
-				email: "valid-email@email.com",
-				emailVerified: false,
-				image: null,
-				createdAt: expect.any(String),
-				updatedAt: expect.any(String),
-				phoneNumber: "+251911121314",
-			},
-			session: {
-				id: expect.any(String),
-				userId: expect.any(String),
-				expiresAt: expect.any(String),
-				ipAddress: "",
-				userAgent: "",
-			},
-		});
+		expect(res.error).toBe(null);
+		expect(otp).toHaveLength(6);
 	});
 
-	it("should sing-in with phone-number", async () => {
-		const res = await client.signIn.phoneNumber(
+	it("should verify phone number", async () => {
+		const res = await client.phoneNumber.verify(
 			{
-				phoneNumber: "+251911121314",
-				password: "valid-password",
+				phoneNumber: testPhoneNumber,
+				code: otp,
 			},
 			{
 				onSuccess: sessionSetter(headers),
 			},
 		);
-
-		expect(res.data).toMatchObject({
-			user: {
-				id: expect.any(String),
-				name: "Test User",
-				email: "valid-email@email.com",
-				emailVerified: false,
-				image: null,
-				createdAt: expect.any(String),
-				updatedAt: expect.any(String),
-				phoneNumber: "+251911121314",
-			},
-			session: {
-				id: expect.any(String),
-				userId: expect.any(String),
-				expiresAt: expect.any(String),
-				ipAddress: "",
-				userAgent: "",
-			},
-		});
-	});
-
-	it("should send verification code", async () => {
-		await client.phoneNumber.sendVerificationCode({
-			phoneNumber: "+251911121314",
-		});
-		expect(otp).toHaveLength(6);
-	});
-
-	it("should verify phone number", async () => {
-		const res = await client.phoneNumber.verify({
-			phoneNumber: "+251911121314",
-			code: otp,
-		});
-		const user = await client.session({
-			fetchOptions: {
-				headers,
-			},
-		});
 		expect(res.error).toBe(null);
-		expect(user.data?.user.phoneNumberVerified).toBe(true);
+		expect(res.data?.user.phoneNumberVerified).toBe(true);
 	});
 
 	it("shouldn't verify again with the same code", async () => {
 		const res = await client.phoneNumber.verify({
-			phoneNumber: "+251911121314",
+			phoneNumber: testPhoneNumber,
 			code: otp,
 		});
 		expect(res.error?.status).toBe(400);
 	});
 
 	it("should update phone number", async () => {
-		const newPhoneNumber = "+25120201212";
-		await client.phoneNumber.update({
+		const newPhoneNumber = "+0123456789";
+		await client.phoneNumber.sendOtp({
 			phoneNumber: newPhoneNumber,
 			fetchOptions: {
 				headers,
 			},
 		});
-		const user = await client.session({
+		const res = await client.phoneNumber.verify({
+			phoneNumber: newPhoneNumber,
+			updatePhoneNumber: true,
+			code: otp,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const user = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(user.data?.user.phoneNumber).toBe(newPhoneNumber);
-		expect(user.data?.user.phoneNumberVerified).toBe(false);
+		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
 	it("should not verify if code expired", async () => {
 		vi.useFakeTimers();
-		await client.phoneNumber.sendVerificationCode({
+		await client.phoneNumber.sendOtp({
 			phoneNumber: "+25120201212",
 		});
 		vi.advanceTimersByTime(1000 * 60 * 5 + 1); // 5 minutes + 1ms
@@ -148,41 +101,98 @@ describe("phone-number", async (it) => {
 		});
 		expect(res.error?.status).toBe(400);
 	});
+});
 
-	it("should work with custom config", async () => {
-		let otpCode = "";
-		const { auth } = await getTestInstance({
-			plugins: [
-				phoneNumber({
-					otp: {
-						sendOTPonSignUp: true,
-						otpLength: 4,
-						async sendOTP(_, code) {
-							otpCode = code;
-						},
-						expiresIn: 120,
+describe("phone auth flow", async () => {
+	let otp = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP(_, code) {
+					otp = code;
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
 					},
-				}),
-			],
-		});
-		await auth.api.signUpPhoneNumber({
-			body: {
-				email: "test@email.com",
-				phoneNumber: "+25120201212",
-				password: "password",
-				name: "test",
+				},
+			}),
+		],
+		user: {
+			changeEmail: {
+				enabled: true,
 			},
-		});
+		},
+	});
 
-		expect(otpCode).toHaveLength(4);
-		vi.useFakeTimers();
-		vi.advanceTimersByTime(1000 * 60 * 2);
-		const res = await auth.api.verifyPhoneNumber({
-			body: {
-				phoneNumber: "+25120201212",
-				code: otpCode,
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	it("should send otp", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: "+251911121314",
+		});
+		expect(res.error).toBe(null);
+		expect(otp).toHaveLength(6);
+	});
+
+	it("should verify phone number and create user & session", async () => {
+		const res = await client.phoneNumber.verify({
+			phoneNumber: "+251911121314",
+			code: otp,
+		});
+		expect(res.data?.user.phoneNumberVerified).toBe(true);
+		expect(res.data?.user.email).toBe("temp-+251911121314");
+		expect(res.data?.session).toBeDefined();
+	});
+
+	let headers = new Headers();
+	it("should go through send-verify and sign-in the user", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: "+251911121314",
+		});
+		const res = await client.phoneNumber.verify(
+			{
+				phoneNumber: "+251911121314",
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.session).toBeDefined();
+	});
+
+	const newEmail = "new-email@email.com";
+	it("should set password and update user", async () => {
+		const res = await client.user.setPassword({
+			newPassword: "password",
+			fetchOptions: {
+				headers,
 			},
 		});
-		expect(res.user.phoneNumberVerified).toBe(true);
+		expect(res.error).toBe(null);
+		const changedEmailRes = await client.user.changeEmail({
+			newEmail,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(changedEmailRes.error).toBe(null);
+		expect(changedEmailRes.data?.user.email).toBe(newEmail);
+	});
+
+	it("should sign in with new email", async () => {
+		const res = await client.signIn.email({
+			email: newEmail,
+			password: "password",
+		});
+		expect(res.error).toBe(null);
 	});
 });

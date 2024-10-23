@@ -132,9 +132,9 @@ export const admin = (options?: AdminOptions) => {
 								statusText: "OK",
 								headers: returned.headers,
 							});
-							return {
+							return ctx.json({
 								response: response,
-							};
+							});
 						}
 					}),
 				},
@@ -158,9 +158,9 @@ export const admin = (options?: AdminOptions) => {
 							role: ctx.body.role,
 						},
 					);
-					return {
+					return ctx.json({
 						user: updatedUser as UserWithRole,
-					};
+					});
 				},
 			),
 			createUser: createAuthEndpoint(
@@ -171,7 +171,7 @@ export const admin = (options?: AdminOptions) => {
 						email: z.string(),
 						password: z.string(),
 						name: z.string(),
-						role: z.enum(["user", "admin"]),
+						role: z.string(),
 						/**
 						 * extra fields for user
 						 */
@@ -210,9 +210,9 @@ export const admin = (options?: AdminOptions) => {
 						password: hashedPassword,
 						userId: user.id,
 					});
-					return {
+					return ctx.json({
 						user: user as UserWithRole,
-					};
+					});
 				},
 			),
 			listUsers: createAuthEndpoint(
@@ -221,13 +221,46 @@ export const admin = (options?: AdminOptions) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
+						search: z
+							.object({
+								field: z.enum(["email", "name"]),
+								operator: z
+									.enum(["contains", "starts_with", "ends_with"])
+									.default("contains"),
+								value: z.string(),
+							})
+							.optional(),
 						limit: z.string().or(z.number()).optional(),
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
+						filter: z
+							.array(
+								z.object({
+									field: z.string(),
+									value: z.string().or(z.number()).or(z.boolean()),
+									operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
+									connector: z.enum(["AND", "OR"]).optional(),
+								}),
+							)
+							.optional(),
 					}),
 				},
 				async (ctx) => {
+					const where = [];
+
+					if (ctx.query?.search) {
+						where.push({
+							field: ctx.query.search.field,
+							operator: ctx.query.search.operator,
+							value: ctx.query.search.value,
+						});
+					}
+
+					if (ctx.query?.filter) {
+						where.push(...(ctx.query.filter || []));
+					}
+
 					const users = await ctx.context.internalAdapter.listUsers(
 						Number(ctx.query?.limit) || undefined,
 						Number(ctx.query?.offset) || undefined,
@@ -237,10 +270,12 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
+
+						where.length ? where : undefined,
 					);
-					return {
+					return ctx.json({
 						users: users as UserWithRole[],
-					};
+					});
 				},
 			),
 			listUserSessions: createAuthEndpoint(
@@ -277,9 +312,9 @@ export const admin = (options?: AdminOptions) => {
 							banned: false,
 						},
 					);
-					return {
+					return ctx.json({
 						user: user,
-					};
+					});
 				},
 			),
 			banUser: createAuthEndpoint(
@@ -320,9 +355,9 @@ export const admin = (options?: AdminOptions) => {
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
-					return {
+					return ctx.json({
 						user: user,
-					};
+					});
 				},
 			),
 			impersonateUser: createAuthEndpoint(
@@ -362,10 +397,10 @@ export const admin = (options?: AdminOptions) => {
 						});
 					}
 					await setSessionCookie(ctx, session.id, true);
-					return {
+					return ctx.json({
 						session: session,
 						user: targetUser,
-					};
+					});
 				},
 			),
 			revokeUserSession: createAuthEndpoint(
@@ -379,9 +414,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteSession(ctx.body.sessionId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 			revokeUserSessions: createAuthEndpoint(
@@ -395,9 +430,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 			removeUser: createAuthEndpoint(
@@ -411,9 +446,9 @@ export const admin = (options?: AdminOptions) => {
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
-					return {
+					return ctx.json({
 						success: true,
-					};
+					});
 				},
 			),
 		},
@@ -423,19 +458,23 @@ export const admin = (options?: AdminOptions) => {
 					role: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banned: {
 						type: "boolean",
 						defaultValue: false,
 						required: false,
+						input: false,
 					},
 					banReason: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banExpires: {
 						type: "number",
 						required: false,
+						input: false,
 					},
 				},
 			},
@@ -444,10 +483,6 @@ export const admin = (options?: AdminOptions) => {
 					impersonatedBy: {
 						type: "string",
 						required: false,
-						references: {
-							model: "user",
-							field: "id",
-						},
 					},
 				},
 			},

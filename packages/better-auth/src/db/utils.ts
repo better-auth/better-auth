@@ -1,15 +1,12 @@
 import type { FieldAttribute } from ".";
-import { BetterAuthError } from "../error/better-auth-error";
+import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
 import { getAuthTables } from "./get-tables";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 
-export async function getAdapter(
-	options: BetterAuthOptions,
-	isCli?: boolean,
-): Promise<Adapter> {
+export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
 		throw new BetterAuthError("Database configuration is required");
 	}
@@ -33,6 +30,10 @@ export async function getAdapter(
 			date: true,
 			boolean: databaseType === "sqlite",
 		},
+		generateId:
+			"generateId" in options.database
+				? options.database.generateId
+				: undefined,
 	});
 }
 

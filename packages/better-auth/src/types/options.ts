@@ -1,8 +1,7 @@
 import type { Dialect, Kysely, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
-import type { OAuthProviderList } from "../social-providers/types";
-import type { SocialProviders } from "../social-providers";
+import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
 import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -68,11 +67,20 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| BetterSqlite3Database
 		| Dialect
+		| Adapter
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
+				/**
+				 * Custom generateId function.
+				 *
+				 * If not provided, nanoid will be used.
+				 * If set to false, the database's auto generated id will be used.
+				 *
+				 * @default nanoid
+				 */
+				generateId?: ((size?: number) => string) | false;
 		  }
-		| Adapter
 		| {
 				/**
 				 * Kysely instance
@@ -82,6 +90,15 @@ export interface BetterAuthOptions {
 				 * Database type between postgres, mysql and sqlite
 				 */
 				type: KyselyDatabaseType;
+				/**
+				 * Custom generateId function.
+				 *
+				 * If not provided, nanoid will be used.
+				 * If set to false, the database's auto generated id will be used.
+				 *
+				 * @default nanoid
+				 */
+				generateId?: ((size?: number) => string) | false;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -89,6 +106,30 @@ export interface BetterAuthOptions {
 	 * This is used to store session and rate limit data.
 	 */
 	secondaryStorage?: SecondaryStorage;
+	/**
+	 * Email verification configuration
+	 */
+	emailVerification?: {
+		/**
+		 * @param user the user to send the
+		 * verification email to
+		 * @param url the url to send the verification email to
+		 * it contains the token as well
+		 * @param token the token to send the verification email to
+		 */
+		sendVerificationEmail?: (
+			user: User,
+			url: string,
+			token: string,
+		) => Promise<void>;
+		/**
+		 * Send a verification email automatically
+		 * after sign up
+		 *
+		 * @default false
+		 */
+		sendOnSignUp?: boolean;
+	};
 	/**
 	 * Email and password authentication
 	 */
@@ -99,6 +140,14 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		enabled: boolean;
+		/**
+		 * Require email verification before a session
+		 * can be created for the user.
+		 *
+		 * if the user is not verified, the user will not be able to sign in
+		 * and on sign in attempts, the user will be prompted to verify their email.
+		 */
+		requireEmailVerification?: boolean;
 		/**
 		 * The maximum length of the password.
 		 *
@@ -112,27 +161,14 @@ export interface BetterAuthOptions {
 		 */
 		minPasswordLength?: number;
 		/**
-		 * send reset password email
+		 * send reset password
 		 */
-		sendResetPassword?: (url: string, user: User) => Promise<void>;
+		sendResetPassword?: (user: User, url: string) => Promise<void>;
 		/**
-		 * @param user the user to send the verification email to
-		 * @param url the url to send the verification email to
-		 * it contains the token as well
-		 * @param token the token to send the verification email to
+		 * Number of seconds the reset password token is valid for.
+		 * @default 1 hour
 		 */
-		sendVerificationEmail?: (
-			url: string,
-			user: User,
-			token: string,
-		) => Promise<void>;
-		/**
-		 * Send a verification email automatically
-		 * after sign up
-		 *
-		 * @default false
-		 */
-		sendEmailVerificationOnSignUp?: boolean;
+		resetPasswordTokenExpiresIn?: number;
 		/**
 		 * Password hashing and verification
 		 *
@@ -145,6 +181,10 @@ export interface BetterAuthOptions {
 			hash?: (password: string) => Promise<string>;
 			verify?: (password: string, hash: string) => Promise<boolean>;
 		};
+		/**
+		 * Automatically sign in the user after sign up
+		 */
+		autoSignIn?: boolean;
 	};
 	/**
 	 * list of social providers
@@ -168,6 +208,25 @@ export interface BetterAuthOptions {
 		 */
 		additionalFields?: {
 			[key: string]: FieldAttribute;
+		};
+		/**
+		 * Changing email configuration
+		 */
+		changeEmail?: {
+			/**
+			 * Enable changing email
+			 * @default false
+			 */
+			enabled: boolean;
+			/**
+			 * Send a verification email when the user changes their email.
+			 */
+			sendChangeEmailVerification?: (
+				user: User,
+				newEmail: string,
+				url: string,
+				token: string,
+			) => Promise<void>;
 		};
 	};
 	session?: {
@@ -218,7 +277,7 @@ export interface BetterAuthOptions {
 			/**
 			 * List of trusted providers
 			 */
-			trustedProviders?: Array<OAuthProviderList[number] | "email-password">;
+			trustedProviders?: Array<SocialProviderList[number] | "email-password">;
 		};
 	};
 	/**
@@ -245,9 +304,15 @@ export interface BetterAuthOptions {
 		 * Default window to use for rate limiting. The value
 		 * should be in seconds.
 		 *
-		 * @default 60 sec
+		 * @default 10 seconds
 		 */
 		window?: number;
+		/**
+		 * The default maximum number of requests allowed within the window.
+		 *
+		 * @default 100 requests
+		 */
+		max?: number;
 		/**
 		 * Custom rate limit rules to apply to
 		 * specific paths.
@@ -264,12 +329,6 @@ export interface BetterAuthOptions {
 				max: number;
 			};
 		};
-		/**
-		 * The default maximum number of requests allowed within the window.
-		 *
-		 * @default 100
-		 */
-		max?: number;
 		/**
 		 * Storage configuration
 		 *

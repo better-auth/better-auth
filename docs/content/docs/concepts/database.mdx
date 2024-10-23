@@ -29,7 +29,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Exmaple: Mysql**
+**Example: Mysql**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { createPool } from "mysql2/promise"
@@ -44,7 +44,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Exmaple: Custom Dialect using libsql**
+**Example: Custom Dialect using libsql**
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -142,6 +142,38 @@ export const auth = betterAuth({
 })
 ```
 
+### MongoDB Adapter
+
+The MongoDB adapter expects a mongodb client instance and a database name. The adapter will create a new database with the provided name if it doesn't exist.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+const client = new MongoClient("mongodb://localhost:27017");
+
+export const auth = betterAuth({
+    database: mongoAdapter(client)
+})
+```
+
+#### Use Plural Form
+
+If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongoAdapter } from "better-auth/adapters/mongodb";
+
+export const auth = betterAuth({
+    database: mongoAdapter(client, {
+      usePlural: true
+    })
+})
+```
+
 ## CLI 
 
 
@@ -149,18 +181,18 @@ Better Auth comes with a CLI tool to manage database migrations and generate sch
 
 ### Running Migrations
 
-The cli checks your database and prompts you to add missing tables or update existing ones with new columns.
+The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is only supported for the built-in Kysely adapter. For other adapters, you can use the `generate` command to create the schema and handle the migration through your ORM.
 
 ```bash
-npx better-auth migrate
+npx @better-auth/cli migrate
 ```
 
-### Generting Schema
+### Generating Schema
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
 ```bash
-npx better-auth generate
+npx @better-auth/cli generate
 ```
 
 See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
@@ -486,6 +518,41 @@ res.user.lang // > "fr"
 <Callout>
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
+
+### ID Generation
+
+By default, Better Auth uses `nanoId` to generate unique IDs for users, sessions, and other entities. You can customize the ID generation by providing a custom function to your adapter or database configuration.
+
+**Example: Built In Kysley Adapter**
+```ts title="auth.ts" 
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+   database: {
+      db: db,
+      generateId: () => {
+         // custom id generation logic
+      }
+   }
+})
+```
+
+**Example: Prisma Adapter**
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   database: prismaAdapter(prisma, {
+      provider: "sqlite",
+      generateId: () => {
+         // custom id generation logic
+      }
+   })
+})
+```
+
+You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
 
 ### Database Hooks
 

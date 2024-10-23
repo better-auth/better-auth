@@ -23,17 +23,23 @@ export const auth = betterAuth({
 </Step>
 
 <Step>
-    ### Migarate database
+    ### Migrate the database
 
-    Migrate your database to add the necessary tables and fields.
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-    If you're using the CLI:
-  
-    ```bash
-    npx better-auth migrate
-    ```
-
-    If you need to create the tables manually, see the [Schema](#schema) section.
+    <Tabs items={["migrate", "generate"]}>
+        <Tab value="migrate">
+        ```bash
+        npx @better-auth/cli migrate
+        ```
+        </Tab>
+        <Tab value="generate">
+        ```bash
+        npx @better-auth/cli generate
+        ```
+        </Tab>
+    </Tabs>
+    See the [Schema](#schema) section to add the fields manually.
 </Step>
 
 <Step>
@@ -68,16 +74,7 @@ To create an organization, you need to provide:
 - `logo`: The logo of the organization. (Optional)
 
 ```ts title="client.ts"
-import { createAuthClient } from "better-auth/client"
-import { organizationClient } from "better-auth/client/plugins"
-
-const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        organizationClient() // [!code highlight]
-    ] // [!code highlight]
-})
-// ---cut---
-const data = await client.organization.create({
+await client.organization.create({
     name: "My Organization",
     slug: "my-org",
     logo: "https://example.com/logo.png"
@@ -109,7 +106,7 @@ const auth = betterAuth({
 
 ### List User's Organizations
 
-To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implments a reactive way to get the orSvelteganizations that the user is a member of.
+To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implments a reactive way to get the organizations that the user is a member of.
 
 <Tabs items={["React", "Vue", "Svelte"]} defaultValue="React">
 <Tab value="React">
@@ -354,7 +351,7 @@ await client.organization.removeMember({
 
 ### Update Member Role
 
-To updadate the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
+To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
 
 ```ts title="client.ts"
 await client.organization.updateMemberRole({

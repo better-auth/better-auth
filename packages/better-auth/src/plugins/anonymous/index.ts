@@ -3,7 +3,7 @@ import type { BetterAuthPlugin } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/base-url";
+import { getOrigin } from "../../utils/url";
 
 export interface AnonymousOptions {
 	/**
@@ -62,8 +62,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 					return ctx.json({ user: newUser, session });
 				},
 			),
-			linkAnonymous: createAuthEndpoint(
-				"/user/link-anonymous",
+			linkAccount: createAuthEndpoint(
+				"/anonymous/link-account",
 				{
 					method: "POST",
 					body: z.object({
@@ -80,6 +80,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 					if (email && password) {
 						updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
 							email: email,
+							isAnonymous: false,
 						});
 					}
 					if (!updatedUser) {

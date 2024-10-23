@@ -28,8 +28,10 @@ export default function Layout({ children }: { children: ReactNode }) {
 				className={`${GeistSans.variable} ${GeistMono.variable} font-sans relative`}
 			>
 				<RootProvider>
+					<BetaNotice />
 					<NavbarProvider>
 						<Navbar />
+
 						{children}
 					</NavbarProvider>
 				</RootProvider>

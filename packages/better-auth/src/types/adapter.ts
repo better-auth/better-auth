@@ -4,8 +4,18 @@ import type { BetterAuthOptions } from "./options";
  * Adapter where clause
  */
 export type Where = {
-	operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; //eq by default
-	value: string;
+	operator?:
+		| "eq"
+		| "ne"
+		| "lt"
+		| "lte"
+		| "gt"
+		| "gte"
+		| "in"
+		| "contains"
+		| "starts_with"
+		| "ends_with"; //eq by default
+	value: string | number | boolean | string[] | number[];
 	field: string;
 	connector?: "AND" | "OR"; //AND by default
 };
@@ -15,7 +25,7 @@ export type Where = {
  */
 export interface Adapter {
 	id: string;
-	create: <T, R = T>(data: {
+	create: <T extends { id?: string } & Record<string, any>, R = T>(data: {
 		model: string;
 		data: T;
 		select?: string[];
@@ -35,12 +45,17 @@ export interface Adapter {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
+	/**
+	 * ⚠︎ Update may not return the updated data
+	 * if multiple where clauses are provided
+	 */
 	update: <T>(data: {
 		model: string;
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<T | null>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	deleteMany: (data: { model: string; where: Where[] }) => Promise<void>;
 	/**
 	 *
 	 * @param options

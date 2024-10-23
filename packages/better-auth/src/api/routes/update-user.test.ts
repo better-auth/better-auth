@@ -1,11 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("updateUser", async () => {
-	const { client, testUser, sessionSetter, customFetchImpl } =
-		await getTestInstance();
+	const sendChangeEmail = vi.fn();
+	let emailVerificationToken = "";
+	const { client, testUser, sessionSetter, db } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail(user, url, token) {
+				emailVerificationToken = token;
+			},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailVerification: async (user, newEmail, url, token) => {
+					sendChangeEmail(user, newEmail, url, token);
+				},
+			},
+		},
+	});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
@@ -31,7 +44,48 @@ describe("updateUser", async () => {
 		expect(updated.data?.user.name).toBe("newName");
 	});
 
+	it("should update user email", async () => {
+		const newEmail = "new-email@email.com";
+		const res = await client.user.changeEmail({
+			newEmail,
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		expect(res.data?.user.email).toBe(newEmail);
+	});
+
+	it("should send email verification before update", async () => {
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: "new-email@email.com",
+				},
+			],
+		});
+		await client.user.changeEmail({
+			newEmail: "new-email-2@email.com",
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		expect(sendChangeEmail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "new-email@email.com",
+			}),
+			"new-email-2@email.com",
+			expect.any(String),
+			expect.any(String),
+		);
+	});
+
 	it("should update the user's password", async () => {
+		const newEmail = "new-email@email.com";
 		const updated = await client.user.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
@@ -42,7 +96,7 @@ describe("updateUser", async () => {
 		});
 		expect(updated).toBeDefined();
 		const signInRes = await client.signIn.email({
-			email: testUser.email,
+			email: newEmail,
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();
@@ -67,7 +121,7 @@ describe("updateUser", async () => {
 		const cookie = newHeaders.get("cookie");
 		const oldCookie = headers.get("cookie");
 		expect(cookie).not.toBe(oldCookie);
-		const sessionAttempt = await client.session({
+		const sessionAttempt = await client.getSession({
 			fetchOptions: {
 				headers: headers,
 			},

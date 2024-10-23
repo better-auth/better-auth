@@ -1,6 +1,6 @@
-import type { OAuthProvider, ProviderOptions } from ".";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { parseJWT } from "oslo/jwt";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import { validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -61,12 +61,11 @@ export const apple = (options: AppleOptions) => {
 				}&scope=${_scope.join(" ")}&state=${state}`,
 			);
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI:
-					redirectURI || getRedirectURI("apple", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
 			});

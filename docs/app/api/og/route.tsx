@@ -8,102 +8,6 @@ const ogSchema = z.object({
 	type: z.string(),
 });
 
-function GridPattern({
-	width = 40,
-	height = 40,
-	x = -1,
-	y = -1,
-	squares,
-	strokeDasharray = "1 1 1",
-}: {
-	width?: number;
-	height?: number;
-	x?: number;
-	y?: number;
-	squares?: [number, number][];
-	strokeDasharray?: string;
-}) {
-	const id = Math.random().toString(36).substr(2, 9);
-
-	return (
-		<svg
-			width="100%"
-			height="100%"
-			style={{
-				pointerEvents: "none",
-				position: "absolute",
-				top: 0,
-				left: 0,
-				height: "100%",
-				width: "100%",
-				fill: "rgba(0, 0, 0, 0.602)",
-				stroke: "rgba(13, 14, 17, 0.777)",
-			}}
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<defs
-				style={{
-					width: "100%",
-					height: "100%",
-				}}
-			>
-				<pattern
-					id={id}
-					width={width}
-					height={height}
-					patternUnits="userSpaceOnUse"
-					x={x}
-					y={y}
-				>
-					<path
-						d={`M.5 ${height}V.5H${width}`}
-						fill="none"
-						stroke="rgba(9, 2, 2, 0.009)"
-						strokeDasharray={strokeDasharray}
-					/>
-				</pattern>
-			</defs>
-			<defs
-				style={{
-					width: "100%",
-					height: "100%",
-				}}
-			>
-				<pattern
-					id={id}
-					width={width}
-					height={height}
-					patternUnits="userSpaceOnUse"
-					x={x}
-					y={y}
-				>
-					<path
-						d={`M.5 ${height}V.5H${width}`}
-						fill="none"
-						stroke="rgba(255,255,255,0.1)"
-						strokeDasharray={strokeDasharray}
-					/>
-				</pattern>
-			</defs>
-			<rect width="100%" height="100%" strokeWidth={0} fill={`url(#${id})`} />
-			{squares && (
-				<svg x={x} y={y}>
-					{squares.map(([squareX, squareY]) => (
-						<rect
-							key={`${squareX}-${squareY}`}
-							width={width - 1}
-							height={height - 1}
-							x={squareX * width + 1}
-							y={squareY * height + 1}
-							fill="rgba(255,255,255,0.05)"
-						/>
-					))}
-				</svg>
-			)}
-		</svg>
-	);
-}
-
 export async function GET(req: Request) {
 	try {
 		const geist = await fetch(
@@ -112,18 +16,14 @@ export async function GET(req: Request) {
 		const geistMono = await fetch(
 			new URL("../../../assets/GeistMono.ttf", import.meta.url),
 		).then((res) => res.arrayBuffer());
-
 		const url = new URL(req.url);
 		const urlParamsValues = Object.fromEntries(url.searchParams);
-		// this is used with the above example
-		// const validParams = ogSchema.parse(ogData);
 		const validParams = ogSchema.parse(urlParamsValues);
-
-		const { heading, type, mode } = validParams;
+		const { heading, type } = validParams;
 		const trueHeading =
 			heading.length > 140 ? `${heading.substring(0, 140)}...` : heading;
 
-		const paint = mode === "dark" ? "#fff" : "#000000";
+		const paint = "#fff";
 
 		const fontSize = trueHeading.length > 100 ? "30px" : "60px";
 		return new ImageResponse(
@@ -134,23 +34,12 @@ export async function GET(req: Request) {
 					backgroundColor: "transparent",
 					border: "1px solid rgba(255, 255, 255, 0.1)",
 					boxShadow: "0 -20px 80px -20px rgba(28, 12, 12, 0.1) inset",
-					background: mode === "dark" ? "#1A0D0D" : "white",
+					background: "#0a0505",
 				}}
 			>
 				<div
 					tw={`relative flex flex-col w-full h-full border-2 border-[${paint}]/20 p-8}`}
 				>
-					<GridPattern
-						width={40}
-						height={40}
-						squares={[
-							[1, 3],
-							[2, 1],
-							[5, 3],
-							[4, 1],
-							[-1, -1],
-						]}
-					/>
 					<svg
 						style={{
 							position: "absolute",
@@ -212,26 +101,42 @@ export async function GET(req: Request) {
 							fill="#cacaca"
 						/>
 					</svg>
-					<svg
-						width="60"
-						height="45"
-						viewBox="0 0 60 45"
-						fill="none"
-						className="w-5 h-5"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							fill-rule="evenodd"
-							clip-rule="evenodd"
-							d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
-							className="fill-black dark:fill-white"
-						/>
-					</svg>
 					<div tw="flex flex-col flex-1 py-10">
+						<svg
+							width="100"
+							height="95"
+							viewBox="0 0 60 45"
+							fill="none"
+							className="mb-10"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<path
+								fill-rule="evenodd"
+								stroke={paint}
+								clip-rule="evenodd"
+								d="M0 0H15V15H30V30H15V45H0V30V15V0ZM45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
+								fill="white"
+							/>
+						</svg>
 						<div
 							style={{ fontFamily: "GeistMono", fontWeight: "normal" }}
-							tw="relative flex text-xl uppercase font-bold tracking-tight"
+							tw="relative flex mt-10 text-xl uppercase font-bold gap-2 items-center"
 						>
+							{type === "documentaiton" ? (
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="1.2em"
+									height="1.2em"
+									viewBox="0 0 24 24"
+								>
+									<path
+										fill="currentColor"
+										fillRule="evenodd"
+										d="M4.172 3.172C3 4.343 3 6.229 3 10v4c0 3.771 0 5.657 1.172 6.828S7.229 22 11 22h2c3.771 0 5.657 0 6.828-1.172S21 17.771 21 14v-4c0-3.771 0-5.657-1.172-6.828S16.771 2 13 2h-2C7.229 2 5.343 2 4.172 3.172M8 9.25a.75.75 0 0 0 0 1.5h8a.75.75 0 0 0 0-1.5zm0 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5z"
+										clipRule="evenodd"
+									></path>
+								</svg>
+							) : null}
 							{type}
 						</div>
 						<div
@@ -252,33 +157,28 @@ export async function GET(req: Request) {
 							tw="flex text-xl"
 							style={{ fontFamily: "GeistSans", fontWeight: "semibold" }}
 						>
-							Better Auth
+							Better Auth.
 						</div>
 						<div tw="flex gap-2 items-center text-xl">
-							<div
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.2em"
+								height="1.2em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34c-.46-1.16-1.11-1.47-1.11-1.47c-.91-.62.07-.6.07-.6c1 .07 1.53 1.03 1.53 1.03c.87 1.52 2.34 1.07 2.91.83c.09-.65.35-1.09.63-1.34c-2.22-.25-4.55-1.11-4.55-4.92c0-1.11.38-2 1.03-2.71c-.1-.25-.45-1.29.1-2.64c0 0 .84-.27 2.75 1.02c.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02c.55 1.35.2 2.39.1 2.64c.65.71 1.03 1.6 1.03 2.71c0 3.82-2.34 4.66-4.57 4.91c.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2"
+								></path>
+							</svg>
+							<span
 								style={{
 									fontFamily: "GeistSans",
 								}}
 								tw="flex ml-2"
 							>
-								<svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-									<path
-										d="M30 44v-8a9.6 9.6 0 0 0-2-7c6 0 12-4 12-11 .16-2.5-.54-4.96-2-7 .56-2.3.56-4.7 0-7 0 0-2 0-6 3-5.28-1-10.72-1-16 0-4-3-6-3-6-3-.6 2.3-.6 4.7 0 7a10.806 10.806 0 0 0-2 7c0 7 6 11 12 11a9.43 9.43 0 0 0-1.7 3.3c-.34 1.2-.44 2.46-.3 3.7v8"
-										stroke={paint}
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M18 36c-9.02 4-10-4-14-4"
-										stroke={paint}
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
 								github.com/better-auth/better-auth
-							</div>
+							</span>
 						</div>
 					</div>
 				</div>

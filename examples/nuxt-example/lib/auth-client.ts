@@ -1,8 +1,6 @@
 import { createAuthClient } from "better-auth/vue";
 
-export const client = createAuthClient({
-	baseURL: "http://localhost:3000",
-});
+export const authClient = createAuthClient();
 
 export const {
 	signIn,
@@ -11,4 +9,4 @@ export const {
 	useSession,
 	forgetPassword,
 	resetPassword,
-} = client;
+} = authClient;

@@ -1,17 +1,19 @@
-import { alphabet, generateRandomString } from "../../crypto/random";
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
-import { createEmailVerificationToken } from "./verify-email";
+import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
+	InferSession,
+	InferUser,
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseAdditionalUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -30,6 +32,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				callbackURL: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
+			use: [redirectURLMiddleware],
 		},
 		async (ctx) => {
 			if (!ctx.context.options.emailAndPassword?.enabled) {
@@ -43,7 +46,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			} & {
 				[key: string]: any;
 			};
-			const { name, email, password, image, ...additionalFields } = body;
+			const { name, email, password, image, callbackURL, ...additionalFields } =
+				body;
 			const isValidEmail = z.string().email().safeParse(email);
 
 			if (!isValidEmail.success) {
@@ -59,6 +63,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: "Password is too short",
 				});
 			}
+
 			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 			if (password.length > maxPasswordLength) {
 				ctx.context.logger.error("Password is too long");
@@ -70,7 +75,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: "The email has already been taken",
+					message: "User with this email already exists",
 				});
 			}
 
@@ -78,15 +83,28 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
-			const createdUser = await ctx.context.internalAdapter.createUser({
-				email: email.toLowerCase(),
-				name,
-				image,
-				...additionalData,
-				emailVerified: false,
-			});
+			let createdUser: User;
+			try {
+				createdUser = await ctx.context.internalAdapter.createUser({
+					email: email.toLowerCase(),
+					name,
+					image,
+					...additionalData,
+					emailVerified: false,
+				});
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+			} catch (e) {
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message: "Failed to create user",
+					details: e,
+				});
+			}
 			if (!createdUser) {
-				throw new APIError("BAD_REQUEST", {
+				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "Failed to create user",
 				});
 			}
@@ -101,6 +119,46 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				password: hash,
 				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
+			if (ctx.context.options.emailVerification?.sendOnSignUp) {
+				const token = await createEmailVerificationToken(
+					ctx.context.secret,
+					createdUser.email,
+				);
+				const url = `${
+					ctx.context.baseURL
+				}/verify-email?token=${token}&callbackURL=${
+					body.callbackURL || ctx.query?.currentURL || "/"
+				}`;
+				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+					createdUser,
+					url,
+					token,
+				);
+			}
+
+			if (
+				!ctx.context.options.emailAndPassword.autoSignIn ||
+				ctx.context.options.emailAndPassword.requireEmailVerification
+			) {
+				return ctx.json(
+					{
+						user: createdUser as InferUser<O>,
+						session: null,
+					},
+					{
+						body: body.callbackURL
+							? {
+									url: body.callbackURL,
+									redirect: true,
+								}
+							: {
+									user: createdUser,
+									session: null,
+								},
+					},
+				);
+			}
+
 			const session = await ctx.context.internalAdapter.createSession(
 				createdUser.id,
 				ctx.request,
@@ -111,27 +169,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 			await setSessionCookie(ctx, session.id);
-			if (ctx.context.options.emailAndPassword.sendEmailVerificationOnSignUp) {
-				const token = await createEmailVerificationToken(
-					ctx.context.secret,
-					createdUser.email,
-				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					body.callbackURL || ctx.query?.currentURL || "/"
-				}`;
-				await ctx.context.options.emailAndPassword.sendVerificationEmail?.(
-					url,
-					createdUser,
-					token,
-				);
-			}
 			return ctx.json(
 				{
-					user: createdUser,
-					session,
-					error: null,
+					user: createdUser as InferUser<O>,
+					session: session as InferSession<O>,
 				},
 				{
 					body: body.callbackURL

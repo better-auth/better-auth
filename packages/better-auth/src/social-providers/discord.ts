@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from ".";
-import { getRedirectURI, validateAuthorizationCode } from "./utils";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { validateAuthorizationCode } from "../oauth2";
 
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
@@ -80,7 +80,7 @@ export const discord = (options: DiscordOptions) => {
 	return {
 		id: "discord",
 		name: "Discord",
-		createAuthorizationURL({ state, scopes }) {
+		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.scope || scopes || ["identify", "email"];
 			return new URL(
 				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
@@ -88,15 +88,14 @@ export const discord = (options: DiscordOptions) => {
 				)}&response_type=code&client_id=${
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
-					getRedirectURI("discord", options.redirectURI),
+					options.redirectURI || redirectURI,
 				)}&state=${state}`,
 			);
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI:
-					redirectURI || getRedirectURI("discord", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
 			});

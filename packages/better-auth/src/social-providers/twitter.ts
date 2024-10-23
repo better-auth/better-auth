@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from ".";
-import {
-	createAuthorizationURL,
-	getRedirectURI,
-	validateAuthorizationCode,
-} from "./utils";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface TwitterProfile {
 	data: {
@@ -110,14 +106,14 @@ export const twitter = (options: TwitterOption) => {
 				scopes: _scopes,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
+				redirectURI: data.redirectURI,
 			});
 		},
-		validateAuthorizationCode: async (code, codeVerifier, redirectURI) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI:
-					redirectURI || getRedirectURI("twitch", options.redirectURI),
+				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
 			});

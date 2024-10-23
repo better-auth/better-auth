@@ -32,10 +32,18 @@ BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL (optional)**
+2. **Set Base URL**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
+```
+
+3. **Trusted Origins (optional)**
+
+If the requests are coming from different origins (not the base url), you can add them to the trusted origins.
+
+```txt title=".env"
+BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:3000,https://example.com" //Add your trusted origins here
 ```
 </Step>
 
@@ -110,11 +118,16 @@ You can also use any Kysely dialect in the database configuration.
 import { betterAuth } from "better-auth";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 
-export const auth = betterAuth({
-  database: new LibsqlDialect({
+const dialect = new LibsqlDialect({
     url: process.env.TURSO_DATABASE_URL || "",
     authToken: process.env.TURSO_AUTH_TOKEN || "",
-  }),
+})
+
+export const auth = betterAuth({
+  database: {
+    dialect,
+    type: "sqlite"
+  }
 });
 ```
 
@@ -132,7 +145,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
         const prisma = new PrismaClient();
         export const auth = betterAuth({
             database: prismaAdapter(prisma, {
-                    provider: "sqlite", // or "mysql", "postgresql", ...etc
+                provider: "sqlite", // or "mysql", "postgresql", ...etc
             }),
         });
     ```
@@ -146,7 +159,7 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 
     export const auth = betterAuth({
         database: drizzleAdapter(db, {
-                provider: "pg", // or "mysql", "sqlite"
+            provider: "pg", // or "mysql", "sqlite"
         })
     });
     ```
@@ -174,16 +187,16 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 
     Better Auth’s comes with a CLI tool to help manage schema required by the library.
 
-    **Migrate**: Directly creates the required tables in the database.
-
-    ```bash title="Terminal"
-    npx better-auth migrate
-    ```
-
     **Generate**: Generates an ORM schema or SQL migration file.
 
     ```bash title="Terminal"
-    npx better-auth generate
+    npx @better-auth/cli generate
+    ```
+
+    **Migrate**: Directly creates the required tables in the database. (only available for Kysely adapter)
+
+    ```bash title="Terminal"
+    npx @better-auth/cli migrate
     ```
 
     see the [CLI documentation](/docs/concepts/cli) for more information.
@@ -356,7 +369,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
     <Tab value="react" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/react"
-            export const client = createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -364,7 +377,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
     <Tab value="vue" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/vue"
-            export const client = createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -372,7 +385,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
     <Tab value="svelte" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/svelte"
-            export const client = createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -380,7 +393,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
     <Tab value="solid" title="lib/auth-client.ts">
             ```ts title="lib/auth-client.ts"
             import { createAuthClient } from "better-auth/solid"
-            export const client = createAuthClient({
+            export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
             ```
@@ -394,8 +407,6 @@ Tip: You can also export specific methods if you prefer:
 export const { signIn, signUp, useSession } = createAuthClient()
 ```
 </Step>
-
-
 
 <Step>
 ### 🎉 That's it!

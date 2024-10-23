@@ -4,15 +4,15 @@ import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
+import { env, isProduction } from "std-env";
 import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	OAuthProvider,
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
-import { getBaseURL } from "./utils/base-url";
+import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
@@ -20,7 +20,10 @@ import {
 	getCookies,
 } from "./cookies";
 import { createLogger, logger } from "./utils/logger";
-import { oAuthProviderList, oAuthProviders } from "./social-providers";
+import { socialProviderList, socialProviders } from "./social-providers";
+import { BetterAuthError } from "./error";
+import type { OAuthProvider } from "./oauth2";
+import { generateId } from "./utils";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -28,20 +31,27 @@ export const init = async (options: BetterAuthOptions) => {
 	const internalPlugins = getInternalPlugins(options);
 
 	const { kysely: db } = await createKyselyAdapter(options);
-	const baseURL = getBaseURL(options.baseURL, options.basePath) || "";
+	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	/**
-	 * Add baseURL to trusted origins if it exists
-	 */
-	if (baseURL) {
-		options.trustedOrigins = [...(options.trustedOrigins || []), baseURL];
+	if (!baseURL) {
+		logger.error(
+			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it your auth config.",
+		);
 	}
 
 	const secret =
 		options.secret ||
-		process.env.BETTER_AUTH_SECRET ||
-		process.env.AUTH_SECRET ||
+		env.BETTER_AUTH_SECRET ||
+		env.AUTH_SECRET ||
 		DEFAULT_SECRET;
+
+	if (secret === DEFAULT_SECRET) {
+		if (isProduction) {
+			logger.error(
+				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+			);
+		}
+	}
 
 	options = {
 		...options,
@@ -49,11 +59,16 @@ export const init = async (options: BetterAuthOptions) => {
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		emailAndPassword: {
+			...options.emailAndPassword,
+			enabled: options.emailAndPassword?.enabled ?? false,
+			autoSignIn: options.emailAndPassword?.autoSignIn ?? true,
+		},
 	};
 	const cookies = getCookies(options);
 
 	const tables = getAuthTables(options);
-	const socialProviders = Object.keys(options.socialProviders || {})
+	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
 			const value = options.socialProviders?.[key as "github"]!;
 			if (value.enabled === false) {
@@ -64,16 +79,17 @@ export const init = async (options: BetterAuthOptions) => {
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return oAuthProviders[key as (typeof oAuthProviderList)[number]](value);
+			return socialProviders[key as (typeof socialProviderList)[number]](value);
 		})
 		.filter((x) => x !== null);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
-		socialProviders,
+		socialProviders: providers,
 		options,
 		tables,
-		baseURL: baseURL,
+		trustedOrigins: getTrustedOrigins(options),
+		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
@@ -81,9 +97,8 @@ export const init = async (options: BetterAuthOptions) => {
 		secret,
 		rateLimit: {
 			...options.rateLimit,
-			enabled:
-				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
-			window: options.rateLimit?.window || 60,
+			enabled: options.rateLimit?.enabled ?? isProduction,
+			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
 				options.rateLimit?.storage || options.secondaryStorage
@@ -95,6 +110,7 @@ export const init = async (options: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		db,
+		uuid: generateId,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -119,6 +135,7 @@ export type AuthContext = {
 	options: BetterAuthOptions;
 	appName: string;
 	baseURL: string;
+	trustedOrigins: string[];
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
@@ -137,6 +154,7 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
+	uuid: (size?: number) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
@@ -189,4 +207,20 @@ function getInternalPlugins(options: BetterAuthOptions) {
 		//TODO: add internal plugin
 	}
 	return plugins;
+}
+
+function getTrustedOrigins(options: BetterAuthOptions) {
+	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	if (!baseURL) {
+		return [];
+	}
+	const trustedOrigins = [new URL(baseURL).origin];
+	if (options.trustedOrigins) {
+		trustedOrigins.push(...options.trustedOrigins);
+	}
+	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
+	if (envTrustedOrigins) {
+		trustedOrigins.push(...envTrustedOrigins.split(","));
+	}
+	return trustedOrigins;
 }

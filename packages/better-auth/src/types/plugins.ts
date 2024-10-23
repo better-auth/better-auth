@@ -7,11 +7,12 @@ import type { DeepPartial, LiteralString } from "./helper";
 import type { Adapter, AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
-	[table: string]: {
+	[table in string]: {
 		fields: {
 			[field in string]: FieldAttribute;
 		};
 		disableMigration?: boolean;
+		tableName?: string;
 	};
 };
 

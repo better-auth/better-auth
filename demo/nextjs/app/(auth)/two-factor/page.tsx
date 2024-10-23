@@ -32,7 +32,7 @@ export default function Component() {
 				code: totpCode,
 			})
 			.then((res) => {
-				if (res.data?.status) {
+				if (res.data?.session) {
 					setSuccess(true);
 					setError("");
 				} else {

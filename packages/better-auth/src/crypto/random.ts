@@ -1,4 +1,5 @@
 //https://github.com/pilcrowOnPaper/oslo/blob/main/src/crypto/random.ts
+import crypto from "uncrypto";
 
 export function byteToBinary(byte: number): string {
 	return byte.toString(2).padStart(8, "0");

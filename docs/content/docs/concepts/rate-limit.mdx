@@ -15,7 +15,7 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     rateLimit: {
-        window: 60, // time window in seconds
+        window: 10, // time window in seconds
         max: 100, // max requests in the window
     },
 })
@@ -23,7 +23,7 @@ export const auth = betterAuth({
 
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
 
-"/sign-in/email": Limited to 7 requests within 10 seconds.
+"/sign-in/email": Limited to 3 requests within 10 seconds.
 
 In addition to that, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has the following custom rules:
 - "/two-factor/verify": Limited to 3 requests within 10 seconds.
@@ -73,7 +73,7 @@ export const auth = betterAuth({
 make sure to run `migrate` to create the rate limit table in your database.
 
 ```bash
-npx better-auth migrate
+npx @better-auth/cli migrate
 ```
 
 **Custom Storage**

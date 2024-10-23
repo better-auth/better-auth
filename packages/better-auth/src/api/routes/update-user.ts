@@ -1,40 +1,60 @@
-import { z } from "zod";
+import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
+import { redirectURLMiddleware } from "../middlewares/redirect";
+import { createEmailVerificationToken } from "./email-verification";
+import type { toZod } from "../../types/to-zod";
+import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
+import { parseUserInput } from "../../db/schema";
 
-export const updateUser = createAuthEndpoint(
-	"/user/update",
-	{
-		method: "POST",
-		body: z.object({
-			name: z.string().optional(),
-			image: z.string().optional(),
-		}),
-		use: [sessionMiddleware],
-	},
-	async (ctx) => {
-		const { name, image } = ctx.body;
-		const session = ctx.context.session;
-		if (!image && !name) {
+export const updateUser = <O extends BetterAuthOptions>() =>
+	createAuthEndpoint(
+		"/user/update",
+		{
+			method: "POST",
+			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
+				name: ZodOptional<ZodString>;
+				image: ZodOptional<ZodString>;
+			}> &
+				toZod<AdditionalUserFieldsInput<O>>,
+			use: [sessionMiddleware, redirectURLMiddleware],
+		},
+		async (ctx) => {
+			const body = ctx.body as {
+				name?: string;
+				image?: string;
+				[key: string]: any;
+			};
+
+			if (body.email) {
+				throw new APIError("BAD_REQUEST", {
+					message: "You can't update email",
+				});
+			}
+			const { name, image, ...rest } = body;
+			const session = ctx.context.session;
+			if (!image && !name && Object.keys(rest).length === 0) {
+				return ctx.json({
+					user: session.user,
+				});
+			}
+			const additionalFields = parseUserInput(ctx.context.options, rest);
+			const user = await ctx.context.internalAdapter.updateUserByEmail(
+				session.user.email,
+				{
+					name,
+					image,
+					...additionalFields,
+				},
+			);
 			return ctx.json({
-				user: session.user,
+				user,
 			});
-		}
-		const user = await ctx.context.internalAdapter.updateUserByEmail(
-			session.user.email,
-			{
-				name,
-				image,
-			},
-		);
-		return ctx.json({
-			user,
-		});
-	},
-);
+		},
+	);
 
 export const changePassword = createAuthEndpoint(
 	"/user/change-password",
@@ -208,6 +228,97 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		const sessionCookie = ctx.context.authCookies.sessionToken;
+		ctx.setCookie(sessionCookie.name, "", {
+			maxAge: 0,
+		});
 		return ctx.json(null);
+	},
+);
+
+export const changeEmail = createAuthEndpoint(
+	"/user/change-email",
+	{
+		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string().optional(),
+			})
+			.optional(),
+		body: z.object({
+			newEmail: z.string().email(),
+			callbackURL: z.string().optional(),
+		}),
+		use: [sessionMiddleware, redirectURLMiddleware],
+	},
+	async (ctx) => {
+		if (!ctx.context.options.user?.changeEmail?.enabled) {
+			ctx.context.logger.error("Change email is disabled.");
+			throw new APIError("BAD_REQUEST", {
+				message: "Change email is disabled",
+			});
+		}
+
+		if (ctx.body.newEmail === ctx.context.session.user.email) {
+			ctx.context.logger.error("Email is the same");
+			throw new APIError("BAD_REQUEST", {
+				message: "Email is the same",
+			});
+		}
+		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
+			ctx.body.newEmail,
+		);
+		if (existingUser) {
+			ctx.context.logger.error("Email already exists");
+			throw new APIError("BAD_REQUEST", {
+				message: "Couldn't update your email",
+			});
+		}
+		/**
+		 * If the email is not verified, we can update the email
+		 */
+		if (ctx.context.session.user.emailVerified !== true) {
+			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+				ctx.context.session.user.email,
+				{
+					email: ctx.body.newEmail,
+				},
+			);
+			return ctx.json({
+				user: updatedUser,
+				status: true,
+			});
+		}
+
+		/**
+		 * If the email is verified, we need to send a verification email
+		 */
+		if (!ctx.context.options.user.changeEmail.sendChangeEmailVerification) {
+			ctx.context.logger.error("Verification email isn't enabled.");
+			throw new APIError("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
+			});
+		}
+
+		const token = await createEmailVerificationToken(
+			ctx.context.secret,
+			ctx.context.session.user.email,
+			ctx.body.newEmail,
+		);
+		const url = `${
+			ctx.context.baseURL
+		}/verify-email?token=${token}&callbackURL=${
+			ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		}`;
+		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
+			ctx.context.session.user,
+			ctx.body.newEmail,
+			url,
+			token,
+		);
+		return ctx.json({
+			user: null,
+			status: true,
+		});
 	},
 );

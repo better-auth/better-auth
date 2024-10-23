@@ -4,11 +4,14 @@ import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, User } from "../types";
-import { getMigrations } from "../cli/utils/get-migration";
+import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
+import { getBaseURL } from "../utils/url";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import { Pool } from "pg";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -21,6 +24,7 @@ export async function getTestInstance<
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
 	},
+	testWith?: "sqlite" | "postgres",
 ) {
 	/**
 	 * create db folder if not exists
@@ -28,6 +32,15 @@ export async function getTestInstance<
 	await fs.mkdir(".db", { recursive: true });
 	const randomStr = generateRandomString(4, alphabet("a-z"));
 	const dbName = `./.db/test-${randomStr}.db`;
+
+	const postgres = new Kysely({
+		dialect: new PostgresDialect({
+			pool: new Pool({
+				connectionString: "postgres://user:password@localhost:5432/better_auth",
+			}),
+		}),
+	});
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -40,13 +53,23 @@ export async function getTestInstance<
 			},
 		},
 		secret: "better-auth.secret",
-		database: new Database(dbName),
+		database:
+			testWith === "postgres"
+				? { db: postgres, type: "postgres" }
+				: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: true,
+		},
+		rateLimit: {
+			enabled: false,
 		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
+		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
 	} as O extends undefined ? typeof opts : O & typeof opts);
@@ -75,7 +98,14 @@ export async function getTestInstance<
 	await createTestUser();
 
 	afterAll(async () => {
-		await fs.unlink(dbName);
+		if (testWith === "postgres") {
+			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+				postgres,
+			);
+			await postgres.destroy();
+		} else {
+			await fs.unlink(dbName);
+		}
 	});
 
 	async function signInWithTestUser() {
@@ -151,11 +181,15 @@ export async function getTestInstance<
 
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL:
-			options?.baseURL ||
-			"http://localhost:" + (config?.port || 3000) + "/api/auth",
+		baseURL: getBaseURL(
+			options?.baseURL || "http://localhost:" + (config?.port || 3000),
+			options?.basePath || "/api/auth",
+		),
 		fetchOptions: {
 			customFetchImpl,
+			headers: {
+				origin: "http://localhost:" + (config?.port || 3000),
+			},
 		},
 	});
 	return {

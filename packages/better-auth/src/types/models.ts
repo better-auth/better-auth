@@ -6,7 +6,8 @@ import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
-	InferFieldsFromOptions<Options, "user", "input">;
+	InferFieldsFromPlugins<Options, "user", "input"> &
+		InferFieldsFromOptions<Options, "user", "input">;
 
 export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user"> &

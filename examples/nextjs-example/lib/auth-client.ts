@@ -3,6 +3,9 @@ import {
 	organizationClient,
 	passkeyClient,
 	twoFactorClient,
+	adminClient,
+	multiSessionClient,
+	usernameClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 
@@ -10,9 +13,13 @@ export const client = createAuthClient({
 	plugins: [
 		organizationClient(),
 		twoFactorClient({
+			redirect: true,
 			twoFactorPage: "/two-factor",
 		}),
 		passkeyClient(),
+		adminClient(),
+		multiSessionClient(),
+		usernameClient(),
 	],
 	fetchOptions: {
 		onError(e) {

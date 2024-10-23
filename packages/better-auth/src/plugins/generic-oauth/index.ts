@@ -1,21 +1,24 @@
 import { z } from "zod";
 import { APIError } from "better-call";
-import type { BetterAuthPlugin, OAuth2Tokens, User } from "../../types";
+import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateState, parseState } from "../../utils/state";
+import { generateState, parseState } from "../../oauth2/state";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { logger } from "../../utils/logger";
-import {
-	createAuthorizationURL,
-	validateAuthorizationCode,
-} from "../../social-providers/utils";
 
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { getAccountTokens } from "../../utils/getAccount";
+import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
+import { redirectURLMiddleware } from "../../api/middlewares/redirect";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+	type OAuth2Tokens,
+} from "../../oauth2";
+import { compareHash } from "../../crypto/hash";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -147,6 +150,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						providerId: z.string(),
 						callbackURL: z.string().optional(),
 					}),
+					use: [redirectURLMiddleware],
 				},
 				async (ctx) => {
 					const { providerId } = ctx.body;
@@ -201,14 +205,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const callbackURL = ctx.body.callbackURL?.startsWith("http")
 						? ctx.body.callbackURL
 						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
-					const state = generateState(
-						callbackURL || currentURL?.origin || ctx.context.baseURL,
-						ctx.query?.currentURL,
+					const state = await generateState(
+						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
 					);
 					const cookie = ctx.context.authCookies;
 					await ctx.setSignedCookie(
 						cookie.state.name,
-						state.code,
+						state.hash,
 						ctx.context.secret,
 						cookie.state.options,
 					);
@@ -224,15 +227,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						options: {
 							clientId,
 							clientSecret,
-							redirectURI:
-								redirectURI ||
-								`${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
-						state: state.state,
+						state: state.raw,
 						codeVerifier: codeVerifier,
 						scopes: scopes || [],
 						disablePkce: !pkce,
+						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
 					if (responseType && responseType !== "code") {
@@ -249,7 +251,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return {
 						url: authUrl.toString(),
-						state: state.state,
+						state: state,
 						codeVerifier,
 						redirect: true,
 					};
@@ -297,18 +299,24 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							`${ctx.context.baseURL}/error?error=invalid_state`,
 						);
 					}
+					const state = ctx.query.state;
 					const {
-						data: { callbackURL, currentURL, code },
+						data: { callbackURL, currentURL },
 					} = parsedState;
+					const code = ctx.query.code;
 					const errorURL =
 						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
-					const storedCode = await ctx.getSignedCookie(
+					const storedState = await ctx.getSignedCookie(
 						ctx.context.authCookies.state.name,
 						ctx.context.secret,
 					);
-
-					if (storedCode !== code) {
-						logger.error("OAuth code mismatch", storedCode, code);
+					if (!storedState) {
+						logger.error("No stored state found");
+						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
+					}
+					const isValidState = await compareHash(state, storedState);
+					if (!isValidState) {
+						logger.error("OAuth code mismatch");
 						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
 					}
 					let finalTokenUrl = provider.tokenUrl;
@@ -427,7 +435,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								id: `${provider.providerId}:${user.data.id}`,
 								providerId: provider.providerId,
 								accountId: user.data.id,
-								userId: userId!,
 							});
 						} catch (e) {
 							const url = new URL(errorURL);

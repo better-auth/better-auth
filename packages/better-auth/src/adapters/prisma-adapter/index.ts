@@ -1,5 +1,16 @@
 import type { Adapter, Where } from "../../types";
 
+function operatorToPrismaOperator(operator: string) {
+	switch (operator) {
+		case "starts_with":
+			return "startsWith";
+		case "ends_with":
+			return "endsWith";
+		default:
+			return operator;
+	}
+}
+
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
 	if (where.length === 1) {
@@ -7,8 +18,14 @@ function whereConvertor(where?: Where[]) {
 		if (!w) {
 			return;
 		}
+
 		return {
-			[w.field]: w.value,
+			[w.field]:
+				w.operator === "eq" || !w.operator
+					? w.value
+					: {
+							[operatorToPrismaOperator(w.operator)]: w.value,
+						},
 		};
 	}
 	const and = where.filter((w) => w.connector === "AND" || !w.connector);
@@ -19,7 +36,7 @@ function whereConvertor(where?: Where[]) {
 				w.operator === "eq" || !w.operator
 					? w.value
 					: {
-							[w.operator]: w.value,
+							[operatorToPrismaOperator(w.operator)]: w.value,
 						},
 		};
 	});
@@ -50,18 +67,34 @@ interface PrismaClient {
 
 export const prismaAdapter = (
 	prisma: any,
-	{
-		provider,
-	}: {
-		provider: "sqlite" | "cockroachdb" | "mysql" | "postgresql" | "sqlserver";
+	options: {
+		provider:
+			| "sqlite"
+			| "cockroachdb"
+			| "mysql"
+			| "postgresql"
+			| "sqlserver"
+			| "mongodb";
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?: ((size?: number) => string) | false;
 	},
 ): Adapter => {
 	const db: PrismaClient = prisma;
+	const generateId = options.generateId;
 	return {
 		id: "prisma",
 		async create(data) {
 			const { model, data: val, select } = data;
-
+			if (generateId !== undefined) {
+				val.id = generateId ? generateId() : undefined;
+			}
 			return await db[model].create({
 				data: val,
 				...(select?.length
@@ -96,6 +129,7 @@ export const prismaAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
+
 			const whereClause = whereConvertor(where);
 
 			return await db[model].findMany({
@@ -111,9 +145,17 @@ export const prismaAdapter = (
 		},
 		async update(data) {
 			const { model, where, update } = data;
+			if (update.id) {
+				update.id = undefined;
+			}
 			const whereClause = whereConvertor(where);
-
-			return await db[model].update({
+			if (where.length === 1) {
+				return await db[model].update({
+					where: whereClause,
+					data: update,
+				});
+			}
+			return await db[model].updateMany({
 				where: whereClause,
 				data: update,
 			});
@@ -122,7 +164,16 @@ export const prismaAdapter = (
 			const { model, where } = data;
 			const whereClause = whereConvertor(where);
 
-			return await db[model].delete({ where: whereClause });
+			return await db[model].delete({ where: whereClause }).catch((e) => {
+				//handle delete gracefully (if not found)
+			});
 		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const whereClause = whereConvertor(where);
+
+			return await db[model].deleteMany({ where: whereClause });
+		},
+		options,
 	};
 };

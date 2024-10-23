@@ -17,7 +17,7 @@ const features = [
 	"Rate Limiting",
 	"Session Management",
 ];
-const session = useSession();
+const { data: session } = await useSession(useFetch);
 </script>
 
 <template>
@@ -39,6 +39,7 @@ const session = useSession();
                     features and capabilities. <br />
                 </p>
 
+
                 <div class="flex flex-col gap-3 pt-2 flex-wrap">
                     <div class="border-y py-2 border-dotted bg-secondary/60 opacity-80">
                         <div class="text-xs flex items-center gap-2 justify-center text-muted-foreground">
@@ -58,12 +59,12 @@ const session = useSession();
                     </div>
                 </div>
                 <div class="flex items-center gap-2 mt-2 mx-auto">
-                    <NuxtLink to="/sign-in" v-if="!session.data">
+                    <NuxtLink to="/sign-in" v-if="!session">
                         <Button variant="outline" class="rounded-none">
                             Sign In
                         </Button>
                     </NuxtLink>
-                    <NuxtLink to="/dashboard" v-if="session.data">
+                    <NuxtLink to="/dashboard" v-if="session">
                         <Button variant="outline" class="rounded-none">
                             Dashboard
                         </Button>

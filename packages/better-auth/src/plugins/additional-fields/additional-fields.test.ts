@@ -3,24 +3,25 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "./client";
-import { twoFactor } from "../two-factor";
+import { twoFactor, twoFactorClient } from "../two-factor";
 
 describe("additionalFields", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [twoFactor()],
-		user: {
-			additionalFields: {
-				newField: {
-					type: "string",
-					defaultValue: "default-value",
-				},
-				nonRequiredFiled: {
-					type: "string",
-					required: false,
+	const { auth, signInWithTestUser, customFetchImpl, sessionSetter } =
+		await getTestInstance({
+			plugins: [twoFactor()],
+			user: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: "default-value",
+					},
+					nonRequiredFiled: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
-		},
-	});
+		});
 
 	it("should extends fields", async () => {
 		const { headers } = await signInWithTestUser();
@@ -73,6 +74,44 @@ describe("additionalFields", async () => {
 		expect(res.data?.user.newField).toBe("new-field");
 	});
 
+	it("should infer additional fields on update", async () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						newField: {
+							type: "string",
+						},
+					},
+				}),
+			],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "test5@test.com",
+				name: "test5",
+				password: "test-password",
+				newField: "new-field",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const res = await client.user.update({
+			name: "test",
+			newField: "updated-field",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.user.newField).toBe("updated-field");
+	});
+
 	it("should work with other plugins", async () => {
 		const client = createAuthClient({
 			plugins: [
@@ -84,14 +123,14 @@ describe("additionalFields", async () => {
 						},
 					},
 				}),
-				twoFactor(),
+				twoFactorClient(),
 			],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
-
+		expectTypeOf(client.twoFactor).toMatchTypeOf<{}>();
 		const res = await client.signUp.email({
 			email: "test4@test.com",
 			name: "test4",
@@ -106,7 +145,7 @@ describe("additionalFields", async () => {
 		const client = createAuthClient({
 			plugins: [inferAdditionalFields<typeof auth>()],
 		});
-		type t = Awaited<ReturnType<typeof client.session>>["data"];
+		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
 		expectTypeOf<t>().toMatchTypeOf<{
 			user: {
 				id: string;
@@ -135,7 +174,7 @@ describe("additionalFields", async () => {
 				}),
 			],
 		});
-		type t = Awaited<ReturnType<typeof client.session>>["data"];
+		type t = Awaited<ReturnType<typeof client.getSession>>["data"];
 		expectTypeOf<t>().toMatchTypeOf<{
 			user: {
 				id: string;

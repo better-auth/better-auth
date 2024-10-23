@@ -22,6 +22,16 @@ export interface TwoFactorOptions {
 	 * Backup code options
 	 */
 	backupCodeOptions?: BackupCodeOptions;
+	/**
+	 * Table name for two factor authentication.
+	 * @default "userTwoFactor"
+	 */
+	twoFactorTable?: string;
+	/**
+	 * Skip verification on enabling two factor authentication.
+	 * @default false
+	 */
+	skipVerificationOnEnable?: boolean;
 }
 
 export interface UserWithTwoFactor extends User {
@@ -29,18 +39,16 @@ export interface UserWithTwoFactor extends User {
 	 * If the user has enabled two factor authentication.
 	 */
 	twoFactorEnabled: boolean;
-	/**
-	 * The secret used to generate the TOTP or OTP.
-	 */
-	twoFactorSecret: string;
-	/**
-	 * List of backup codes separated by a
-	 * comma
-	 */
-	twoFactorBackupCodes: string;
 }
 
 export interface TwoFactorProvider {
 	id: LiteralString;
 	endpoints?: Record<string, AuthEndpoint>;
+}
+
+export interface TwoFactorTable {
+	userId: string;
+	secret: string;
+	backupCodes: string;
+	enabled: boolean;
 }

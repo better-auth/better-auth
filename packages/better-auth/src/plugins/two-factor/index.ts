@@ -12,14 +12,32 @@ import type { Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
+import { createTOTPKeyURI } from "oslo/otp";
+import { TimeSpan } from "oslo";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
-	const totp = totp2fa({
-		issuer: options?.issuer || "better-auth",
-		...options?.totpOptions,
-	});
-	const backupCode = backupCode2fa(options?.backupCodeOptions);
-	const otp = otp2fa(options?.otpOptions);
+	const opts = {
+		twoFactorTable: options?.twoFactorTable || ("twoFactor" as const),
+	};
+	const totp = totp2fa(
+		{
+			issuer: options?.issuer || "better-auth",
+			...options?.totpOptions,
+		},
+		opts.twoFactorTable,
+	);
+	const backupCode = backupCode2fa(
+		{
+			...options?.backupCodeOptions,
+		},
+		opts.twoFactorTable,
+	);
+	const otp = otp2fa(
+		{
+			...options?.otpOptions,
+		},
+		opts.twoFactorTable,
+	);
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -56,21 +74,41 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.secret,
 						options?.backupCodeOptions,
 					);
-					await ctx.context.adapter.update({
-						model: "user",
-						update: {
-							twoFactorSecret: encryptedSecret,
+					if (options?.skipVerificationOnEnable) {
+						await ctx.context.internalAdapter.updateUser(user.id, {
 							twoFactorEnabled: true,
-							twoFactorBackupCodes: backupCodes.encryptedBackupCodes,
-						},
+						});
+					}
+					//delete existing two factor
+					await ctx.context.adapter.deleteMany({
+						model: opts.twoFactorTable,
 						where: [
 							{
-								field: "id",
+								field: "userId",
 								value: user.id,
 							},
 						],
 					});
-					return ctx.json({ status: true });
+
+					await ctx.context.adapter.create({
+						model: opts.twoFactorTable,
+						data: {
+							id: ctx.context.uuid(),
+							secret: encryptedSecret,
+							backupCodes: backupCodes.encryptedBackupCodes,
+							userId: user.id,
+						},
+					});
+					const totpURI = createTOTPKeyURI(
+						options?.issuer || "BetterAuth",
+						user.email,
+						Buffer.from(secret),
+						{
+							digits: options?.totpOptions?.digits || 6,
+							period: new TimeSpan(options?.totpOptions?.period || 30, "s"),
+						},
+					);
+					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
 			disableTwoFactor: createAuthEndpoint(
@@ -94,14 +132,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: "Invalid password",
 						});
 					}
-					await ctx.context.adapter.update({
-						model: "user",
-						update: {
-							twoFactorEnabled: false,
-						},
+					await ctx.context.internalAdapter.updateUser(user.id, {
+						twoFactorEnabled: false,
+					});
+					await ctx.context.adapter.delete({
+						model: opts.twoFactorTable,
 						where: [
 							{
-								field: "id",
+								field: "userId",
 								value: user.id,
 							},
 						],
@@ -219,16 +257,31 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						type: "boolean",
 						required: false,
 						defaultValue: false,
+						input: false,
 					},
-					twoFactorSecret: {
+				},
+			},
+			twoFactor: {
+				tableName: opts.twoFactorTable,
+				fields: {
+					secret: {
 						type: "string",
-						required: false,
+						required: true,
 						returned: false,
 					},
-					twoFactorBackupCodes: {
+					backupCodes: {
 						type: "string",
-						required: false,
+						required: true,
 						returned: false,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						returned: false,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 				},
 			},
