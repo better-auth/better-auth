@@ -190,13 +190,15 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
-
-	await ctx.setSignedCookie(
-		ctx.context.authCookies.sessionData.name,
-		JSON.stringify(session),
-		ctx.context.secret,
-		ctx.context.authCookies.sessionData.options,
-	);
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cacheSessionInCookie?.enabled;
+	shouldStoreSessionDataInCookie &&
+		(await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionData.name,
+			JSON.stringify(session),
+			ctx.context.secret,
+			ctx.context.authCookies.sessionData.options,
+		));
 }
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
