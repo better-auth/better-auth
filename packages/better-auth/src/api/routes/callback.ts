@@ -166,6 +166,10 @@ export const callbackOAuth = createAuthEndpoint(
 					logger.error("Unable to link account", e);
 					redirectOnError("unable_to_link_account");
 				}
+			} else {
+				await c.context.internalAdapter.updateAccount(hasBeenLinked.id, {
+					...getAccountTokens(tokens),
+				});
 			}
 		} else {
 			try {
