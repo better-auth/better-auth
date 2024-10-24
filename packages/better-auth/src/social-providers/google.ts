@@ -31,13 +31,15 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions {}
+export interface GoogleOptions extends ProviderOptions {
+	accessType?: "offline" | "online";
+}
 
 export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
@@ -47,9 +49,10 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
-			const _scopes = options.scope || scopes || ["email", "profile"];
+			const _scopes = scopes || ["email", "profile", "openid"];
+			options.scope && _scopes.push(...options.scope);
 
-			const url = createAuthorizationURL({
+			const url = await createAuthorizationURL({
 				id: "google",
 				options,
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
@@ -58,6 +61,8 @@ export const google = (options: GoogleOptions) => {
 				codeVerifier,
 				redirectURI,
 			});
+			options.accessType &&
+				url.searchParams.set("access_type", options.accessType);
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

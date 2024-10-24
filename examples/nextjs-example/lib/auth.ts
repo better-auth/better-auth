@@ -10,7 +10,6 @@ import {
 	username,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 
@@ -61,6 +60,7 @@ export const auth = betterAuth({
 		google: {
 			clientId: process.env.GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+			accessType: "offline",
 		},
 		discord: {
 			clientId: process.env.DISCORD_CLIENT_ID || "",
