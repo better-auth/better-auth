@@ -18,18 +18,18 @@ import {
 	signInOAuth,
 	signOut,
 	verifyEmail,
+	linkSocialAccount,
+	listUserAccounts,
+	changePassword,
+	deleteUser,
+	setPassword,
+	updateUser,
 } from "./routes";
 import { getCSRFToken } from "./routes/csrf";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
 import { error } from "./routes/error";
 import { logger } from "../utils/logger";
-import {
-	changePassword,
-	deleteUser,
-	setPassword,
-	updateUser,
-} from "./routes/update-user";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 
@@ -105,6 +105,8 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		linkSocialAccount,
+		listUserAccounts,
 	};
 	const endpoints = {
 		...baseEndpoints,
