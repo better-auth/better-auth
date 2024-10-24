@@ -23,96 +23,119 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./social-providers": {
       "types": "./dist/social.d.ts",
-      "import": "./dist/social.js"
+      "import": "./dist/social.js",
+      "require": "./dist/social.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/client.js"
+      "import": "./dist/client.js",
+      "require": "./dist/client.cjs"
     },
     "./client/plugins": {
       "types": "./dist/client/plugins.d.ts",
-      "import": "./dist/client/plugins.js"
+      "import": "./dist/client/plugins.js",
+      "require": "./dist/client/plugins.cjs"
     },
     "./types": {
       "types": "./dist/types.d.ts",
-      "import": "./dist/types.js"
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
     },
     "./crypto": {
       "types": "./dist/crypto.d.ts",
-      "import": "./dist/crypto.js"
+      "import": "./dist/crypto.js",
+      "require": "./dist/crypto.cjs"
     },
     "./cookies": {
       "types": "./dist/cookies.d.ts",
-      "import": "./dist/cookies.js"
+      "import": "./dist/cookies.js",
+      "require": "./dist/cookies.cjs"
     },
     "./oauth2": {
       "types": "./dist/oauth2.d.ts",
-      "import": "./dist/oauth2.js"
+      "import": "./dist/oauth2.js",
+      "require": "./dist/oauth2.cjs"
     },
     "./react": {
       "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
     },
     "./solid": {
       "types": "./dist/solid.d.ts",
-      "import": "./dist/solid.js"
+      "import": "./dist/solid.js",
+      "require": "./dist/solid.cjs"
     },
     "./api": {
       "types": "./dist/api.d.ts",
-      "import": "./dist/api.js"
+      "import": "./dist/api.js",
+      "require": "./dist/api.cjs"
     },
     "./db": {
       "types": "./dist/db.d.ts",
-      "import": "./dist/db.js"
+      "import": "./dist/db.js",
+      "require": "./dist/db.cjs"
     },
     "./vue": {
       "types": "./dist/vue.d.ts",
-      "import": "./dist/vue.js"
+      "import": "./dist/vue.js",
+      "require": "./dist/vue.cjs"
     },
     "./plugins": {
       "types": "./dist/plugins.d.ts",
-      "import": "./dist/plugins.js"
+      "import": "./dist/plugins.js",
+      "require": "./dist/plugins.cjs"
     },
     "./plugins/access": {
       "types": "./dist/access.d.ts",
-      "import": "./dist/access.js"
+      "import": "./dist/access.js",
+      "require": "./dist/access.cjs"
     },
     "./svelte-kit": {
       "types": "./dist/svelte-kit.d.ts",
-      "import": "./dist/svelte-kit.js"
+      "import": "./dist/svelte-kit.js",
+      "require": "./dist/svelte-kit.cjs"
     },
     "./solid-start": {
       "types": "./dist/solid-start.d.ts",
-      "import": "./dist/solid-start.js"
+      "import": "./dist/solid-start.js",
+      "require": "./dist/solid-start.cjs"
     },
     "./svelte": {
       "types": "./dist/svelte.d.ts",
-      "import": "./dist/svelte.js"
+      "import": "./dist/svelte.js",
+      "require": "./dist/svelte.cjs"
     },
     "./next-js": {
       "types": "./dist/next-js.d.ts",
-      "import": "./dist/next-js.js"
+      "import": "./dist/next-js.js",
+      "require": "./dist/next-js.cjs"
     },
     "./package.json": "./package.json",
     "./node": {
       "types": "./dist/node.d.ts",
-      "import": "./dist/node.js"
+      "import": "./dist/node.js",
+      "require": "./dist/node.cjs"
     },
     "./adapters/prisma": {
       "types": "./dist/adapters/prisma.d.ts",
-      "import": "./dist/adapters/prisma.js"
+      "import": "./dist/adapters/prisma.js",
+      "require": "./dist/adapters/prisma.cjs"
     },
     "./adapters/drizzle": {
       "types": "./dist/adapters/drizzle.d.ts",
-      "import": "./dist/adapters/drizzle.js"
+      "import": "./dist/adapters/drizzle.js",
+      "require": "./dist/adapters/drizzle.cjs"
     },
     "./adapters/mongodb": {
       "types": "./dist/adapters/mongodb.d.ts",
-      "import": "./dist/adapters/mongodb.js"
+      "import": "./dist/adapters/mongodb.js",
+      "require": "./dist/adapters/mongodb.cjs"
     }
   },
   "typesVersions": {
