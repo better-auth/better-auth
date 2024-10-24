@@ -99,6 +99,7 @@ export const discord = (options: DiscordOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
+				authType: "basic",
 			});
 		},
 		async getUserInfo(token) {

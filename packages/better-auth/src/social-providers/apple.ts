@@ -69,6 +69,7 @@ export const apple = (options: AppleOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
+				authType: "body",
 			});
 		},
 		async getUserInfo(token) {

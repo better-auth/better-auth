@@ -346,6 +346,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: provider.clientSecret,
 							},
 							tokenEndpoint: finalTokenUrl,
+							authType: "basic",
 						});
 					} catch (e) {
 						ctx.context.logger.error(e);

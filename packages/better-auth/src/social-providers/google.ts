@@ -72,6 +72,7 @@ export const google = (options: GoogleOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
+				authType: "body",
 			});
 		},
 		async getUserInfo(token) {

@@ -12,4 +12,5 @@ export * from "./anonymous";
 export * from "./admin";
 export * from "./generic-oauth";
 export * from "./jwt";
+export * from "./sso";
 export * from "./multi-session";
