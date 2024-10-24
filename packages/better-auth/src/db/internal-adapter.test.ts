@@ -1,5 +1,4 @@
-import { describe } from "node:test";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, describe } from "vitest";
 import type { BetterAuthOptions } from "../types";
 import Database from "better-sqlite3";
 import { createInternalAdapter } from "./internal-adapter";
