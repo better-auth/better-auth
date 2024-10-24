@@ -76,6 +76,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.52.2",
     "react-resizable-panels": "^2.1.2",
+    "react-use-measure": "^2.1.1",
     "recharts": "^2.12.7",
     "rehype-mermaid": "^2.1.0",
     "remark-codesandbox": "^0.10.1",
