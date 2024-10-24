@@ -208,7 +208,14 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
-		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
+		await setSessionCookie(
+			ctx,
+			{
+				session,
+				user: user.user,
+			},
+			ctx.body.dontRememberMe,
+		);
 		return ctx.json({
 			user: user.user,
 			session,

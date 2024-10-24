@@ -79,7 +79,14 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 				if (hashToMatch === hash) {
 					return {
 						valid: async () => {
-							await setSessionCookie(ctx, session.id, false);
+							await setSessionCookie(
+								ctx,
+								{
+									session,
+									user,
+								},
+								false,
+							);
 							if (ctx.body.trustDevice) {
 								const trustDeviceCookie = ctx.context.createAuthCookie(
 									TRUST_DEVICE_COOKIE_NAME,

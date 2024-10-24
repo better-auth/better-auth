@@ -147,7 +147,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!session) {
 						throw ctx.redirect(`${toRedirectTo}?error=SESSION_NOT_CREATED`);
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: user?.user!,
+					});
 					if (!callbackURL) {
 						return ctx.json({
 							status: true,

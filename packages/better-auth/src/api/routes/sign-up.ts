@@ -168,7 +168,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: "Failed to create session",
 				});
 			}
-			await setSessionCookie(ctx, session.id);
+			await setSessionCookie(ctx, {
+				session,
+				user: createdUser,
+			});
 			return ctx.json(
 				{
 					user: createdUser as InferUser<O>,

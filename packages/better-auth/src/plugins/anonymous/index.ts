@@ -58,7 +58,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
 					return ctx.json({ user: newUser, session });
 				},
 			),
@@ -121,7 +124,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: updatedUser,
+					});
 					return ctx.json({ session, user: updatedUser });
 				},
 			),

@@ -133,7 +133,10 @@ export const changePassword = createAuthEndpoint(
 				});
 			}
 			// set the new session cookie
-			await setSessionCookie(ctx, newSession.id);
+			await setSessionCookie(ctx, {
+				session: newSession,
+				user: session.user,
+			});
 		}
 
 		return ctx.json(session.user);

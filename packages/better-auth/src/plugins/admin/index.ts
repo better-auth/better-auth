@@ -396,7 +396,14 @@ export const admin = (options?: AdminOptions) => {
 							message: "Failed to create session",
 						});
 					}
-					await setSessionCookie(ctx, session.id, true);
+					await setSessionCookie(
+						ctx,
+						{
+							session: session,
+							user: targetUser,
+						},
+						true,
+					);
 					return ctx.json({
 						session: session,
 						user: targetUser,
