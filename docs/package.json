@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "next build --turbo",
+    "build": "next build",
     "dev": "next dev",
     "start": "next start",
     "typecheck": "tsc --noEmit",
