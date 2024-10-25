@@ -15,6 +15,14 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		createdAt: new Date(),
 		updatedAt: new Date(),
 	};
+	const user2 = {
+		id: "2",
+		name: "user2",
+		email: "test@email.com",
+		emailVerified: true,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+	};
 
 	test("create model", async () => {
 		const res = await adapter.create({
@@ -28,6 +36,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			name: user.name,
 			email: user.email,
 		});
+		user.id = res.id;
 	});
 
 	test("find model", async () => {
@@ -108,37 +117,31 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should find many with where", async () => {
-		await adapter.create({
+		const createRes = await adapter.create({
 			model: "user",
-			data: {
-				id: "2",
-				name: "user2",
-				email: "test@email.com",
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
+			data: user2,
 		});
 		const res = await adapter.findMany({
 			model: "user",
 			where: [
 				{
 					field: "id",
-					value: "2",
+					value: createRes.id,
 				},
 			],
 		});
+		user2.id = createRes.id;
 		expect(res.length).toBe(1);
 	});
 
-	test("should fin many with operators", async () => {
+	test("should find many with operators", async () => {
 		const res = await adapter.findMany({
 			model: "user",
 			where: [
 				{
 					field: "id",
 					operator: "in",
-					value: ["1", "2"],
+					value: [user.id, user2.id],
 				},
 			],
 		});

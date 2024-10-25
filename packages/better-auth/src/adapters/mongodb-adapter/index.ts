@@ -7,40 +7,45 @@ function whereConvertor(where?: Where[]) {
 	const conditions = where.map((w) => {
 		const { field, value, operator = "eq", connector = "AND" } = w;
 		let condition: any;
-
+		function getField(field: string) {
+			if (field === "id") {
+				return "_id";
+			}
+			return field;
+		}
 		switch (operator.toLowerCase()) {
 			case "eq":
-				condition = { [field]: value };
+				condition = { [getField(field)]: value };
 				break;
 			case "in":
 				condition = {
-					[field]: { $in: Array.isArray(value) ? value : [value] },
+					[getField(field)]: { $in: Array.isArray(value) ? value : [value] },
 				};
 				break;
 			case "gt":
-				condition = { [field]: { $gt: value } };
+				condition = { [getField(field)]: { $gt: value } };
 				break;
 			case "gte":
-				condition = { [field]: { $gte: value } };
+				condition = { [getField(field)]: { $gte: value } };
 				break;
 			case "lt":
-				condition = { [field]: { $lt: value } };
+				condition = { [getField(field)]: { $lt: value } };
 				break;
 			case "lte":
-				condition = { [field]: { $lte: value } };
+				condition = { [getField(field)]: { $lte: value } };
 				break;
 			case "ne":
-				condition = { [field]: { $ne: value } };
+				condition = { [getField(field)]: { $ne: value } };
 				break;
 
 			case "contains":
-				condition = { [field]: { $regex: `.*${value}.*` } };
+				condition = { [getField(field)]: { $regex: `.*${value}.*` } };
 				break;
 			case "starts_with":
-				condition = { [field]: { $regex: `${value}.*` } };
+				condition = { [getField(field)]: { $regex: `${value}.*` } };
 				break;
 			case "ends_with":
-				condition = { [field]: { $regex: `.*${value}` } };
+				condition = { [getField(field)]: { $regex: `.*${value}` } };
 				break;
 
 			// Add more operators as needed
@@ -88,15 +93,6 @@ export const mongodbAdapter = (
 	mongo: Db,
 	opts?: {
 		usePlural?: boolean;
-		/**
-		 * Custom generateId function.
-		 *
-		 * If not provided, nanoid will be used.
-		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @default nanoid
-		 */
-		generateId?: ((size?: number) => string) | false;
 	},
 ) => {
 	const db = mongo;
@@ -105,11 +101,7 @@ export const mongodbAdapter = (
 		id: "mongodb",
 		async create(data) {
 			const { model, data: val } = data;
-
-			if (opts?.generateId !== undefined) {
-				val.id = opts.generateId ? opts.generateId() : undefined;
-			}
-
+			val.id = undefined;
 			const res = await db.collection(getModelName(model)).insertOne({
 				...val,
 			});
@@ -144,7 +136,7 @@ export const mongodbAdapter = (
 				.find(wheres)
 				.skip(offset || 0)
 				.limit(limit || 100)
-				.sort(sortBy?.field || "id", sortBy?.direction === "desc" ? -1 : 1)
+				.sort(sortBy?.field || "_id", sortBy?.direction === "desc" ? -1 : 1)
 				.toArray();
 			return toReturn.map(removeMongoId);
 		},
@@ -166,7 +158,7 @@ export const mongodbAdapter = (
 				);
 				return removeMongoId(res);
 			}
-			const res = await db.collection(getModelName(model)).updateMany(wheres, {
+			await db.collection(getModelName(model)).updateMany(wheres, {
 				$set: update,
 			});
 			return {};
