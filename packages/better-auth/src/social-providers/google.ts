@@ -33,6 +33,7 @@ export interface GoogleProfile {
 
 export interface GoogleOptions extends ProviderOptions {
 	accessType?: "offline" | "online";
+	prompt?: "none" | "consent" | "select_account";
 }
 
 export const google = (options: GoogleOptions) => {
@@ -63,6 +64,7 @@ export const google = (options: GoogleOptions) => {
 			});
 			options.accessType &&
 				url.searchParams.set("access_type", options.accessType);
+			options.prompt && url.searchParams.set("prompt", options.prompt);
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
