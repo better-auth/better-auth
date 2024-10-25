@@ -1,7 +1,7 @@
 import { createMDX } from "fumadocs-mdx/next";
 
 export const withMDX = createMDX({
-	configPath: "./source.config.ts"
+	configPath: "./source.config.ts",
 });
 
 export default withMDX({
