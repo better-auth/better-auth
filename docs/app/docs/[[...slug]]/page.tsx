@@ -12,7 +12,7 @@ import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
-import { Callout } from "fumadocs-ui/components/callout";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 
 export default async function Page({
 	params,
@@ -48,6 +48,7 @@ export default async function Page({
 			<DocsBody>
 				<MDX
 					components={{
+						...defaultMdxComponents,
 						Link: ({
 							className,
 							...props
@@ -63,7 +64,6 @@ export default async function Page({
 						Step,
 						Steps,
 						Tab,
-						Callout,
 						Tabs,
 						GenerateSecret,
 						AnimatePresence,
