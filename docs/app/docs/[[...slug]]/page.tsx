@@ -12,6 +12,7 @@ import { TypeTable } from "fumadocs-ui/components/type-table";
 import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
+import { Callout } from "fumadocs-ui/components/callout";
 
 export default async function Page({
 	params,
@@ -62,6 +63,7 @@ export default async function Page({
 						Step,
 						Steps,
 						Tab,
+						Callout,
 						Tabs,
 						GenerateSecret,
 						AnimatePresence,
