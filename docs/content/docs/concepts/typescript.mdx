@@ -9,7 +9,7 @@ Better Auth is designed to be type-safe. Both the client and server are built wi
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.
 
-```ts title="client.ts" twoslash
+```ts title="client.ts" 
 import { createAuthClient } from "better-auth/client"
 
 const client = createAuthClient()
@@ -21,7 +21,7 @@ The `Session` type includes both `session` and `user` properties. The user prope
 
 You can also infer types on the server side.
 
-```ts title="auth.ts" twoslash
+```ts title="auth.ts" 
 import { betterAuth } from "better-auth"
 import Database from "better-sqlite3"
 
@@ -37,7 +37,7 @@ type Session = typeof auth.$Infer.Session
 
 Better Auth allows you to add additional fields to the user and session objects. All additional fields are properly inferred and available on the server and client side.
 
-```ts twoslash
+```ts 
 import { betterAuth } from "better-auth"
 import Database from "better-sqlite3"
 
