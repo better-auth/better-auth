@@ -205,11 +205,9 @@ export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		maxAge: 0,
 	});
-	ctx.setCookie(
-		ctx.context.authCookies.sessionData.name, "", {
-			maxAge: 0
-		}
-	)
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		maxAge: 0,
+	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 		maxAge: 0,
 	});

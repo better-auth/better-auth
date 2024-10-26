@@ -210,7 +210,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
-						deleteSessionCookie(ctx)
+						deleteSessionCookie(ctx);
 						const hash = await hs256(ctx.context.secret, response.session.id);
 						const cookieName = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,

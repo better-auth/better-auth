@@ -40,10 +40,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				/**
 				 * If session data is present in the cookie, return it
 				 */
-				if (
-					sessionData &&
-					ctx.context.options.session?.cookieCache?.enabled
-				) {
+				if (sessionData && ctx.context.options.session?.cookieCache?.enabled) {
 					const session = JSON.parse(sessionData)?.session;
 					console.log({ session });
 					if (session?.expiresAt > new Date()) {

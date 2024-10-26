@@ -231,7 +231,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		deleteSessionCookie(ctx)
+		deleteSessionCookie(ctx);
 		return ctx.json(null);
 	},
 );
