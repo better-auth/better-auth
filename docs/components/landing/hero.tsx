@@ -1,57 +1,26 @@
 "use client";
+
+import { Fragment, useId, useState } from "react";
+import useMeasure from "react-use-measure";
+import Link from "next/link";
+import clsx from "clsx";
+
 import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
-import clsx from "clsx";
 import { Github, Icon } from "lucide-react";
 import { useTheme } from "next-themes";
-import Link from "next/link";
 import { Highlight, themes } from "prism-react-renderer";
-import { Fragment, useEffect, useId, useState } from "react";
-import { LayoutGroup, motion } from "framer-motion";
+import {
+	AnimatePresence,
+	LayoutGroup,
+	motion,
+	MotionConfig,
+} from "framer-motion";
 import { Icons } from "../icons";
 import { Cover } from "../ui/cover";
 import { PulicBetaBadge } from "../beta/badge";
 
-function Glow() {
-	const id = useId();
-
-	return (
-		<div className="absolute  inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent via-stone-800/5 to-transparent/1  lg:right-[calc(max(2rem,50%-38rem)+40rem)] lg:min-w-[1rem]">
-			<svg
-				className="absolute -bottom-48 left-[-40%] h-[2rem] w-[10%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-[80rem]"
-				aria-hidden="true"
-			>
-				<defs>
-					<radialGradient id={`${id}-desktop`} cx="100%">
-						<stop offset="0%" stopColor="rgba(214, 211, 209, 0.05)" />
-						<stop offset="53.95%" stopColor="rgba(214, 200, 209, 0.02)" />
-						<stop offset="100%" stopColor="rgba(10, 14, 23, 0)" />
-					</radialGradient>
-					<radialGradient id={`${id}-mobile`} cy="100%">
-						<stop offset="0%" stopColor="rgba(56, 189, 248, 0.05)" />
-						<stop offset="53.95%" stopColor="rgba(0, 71, 255, 0.02)" />
-						<stop offset="100%" stopColor="rgba(10, 14, 23, 0)" />
-					</radialGradient>
-				</defs>
-				<rect
-					width="40%"
-					height="40%"
-					fill={`url(#${id}-desktop)`}
-					className="hidden lg:block"
-				/>
-				<rect
-					width="100%"
-					height="100%"
-					fill={`url(#${id}-mobile)`}
-					className="lg:hidden"
-				/>
-			</svg>
-			<div className="absolute inset-x-0 bottom-0 right-0 h-px bg-white/5 mix-blend-overlay lg:left-auto lg:top-0 lg:h-auto lg:w-px" />
-		</div>
-	);
-}
-
-const tabs = [
+const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
 		name: "auth.ts",
 		code: `export const auth = betterAuth({
@@ -88,35 +57,32 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 }
 
 export default function Hero() {
-	const theme = useTheme();
-	const [activeTab, setActiveTab] = useState("auth.ts");
-	const code = tabs.find((tab) => tab.name === activeTab)?.code ?? "";
 	return (
-		<section className="w-full mx-auto px-10 flex min-h-[85vh] py-16 items-center justify-center gap-20">
-			<div className="overflow-hidden bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:px-10">
-				<div className="grid max-w-full mx-auto grid-cols-1 items-center gap-x-8 gap-y-16 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12 py-2 lg:py-4">
+		<section className="mx-auto flex min-h-[85vh] w-full items-center justify-center gap-20 px-10 py-16">
+			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
+				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
 								<PulicBetaBadge text="Beta" />
-								<div className="flex mt-2 items-center gap-2 relative">
+								<div className="relative mt-2 flex items-center gap-2">
 									<Cover>
-										<p className="inline  dark:text-white opacity-90 2xl md:text-3xl lg:text-5xl tracking-tight  relative">
+										<p className="2xl relative inline tracking-tight opacity-90 md:text-3xl lg:text-5xl dark:text-white">
 											Better Auth.
 										</p>
 									</Cover>
 								</div>
 							</div>
 
-							<p className="mt-3 md:text-2xl tracking-tight dark:text-zinc-300 text-zinc-800">
+							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight md:text-2xl">
 								The most comprehensive authentication library for TypeScript.
 							</p>
 							{
 								<>
-									<div className="mt-8 flex w-fit gap-4 font-sans md:justify-center lg:justify-start flex-col md:flex-row">
+									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start">
 										<Link
 											href="/docs"
-											className="px-4 md:px-8 py-1.5  border-2 border-black dark:border-stone-100 uppercase bg-white text-black transition duration-200 text-sm shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] dark:hover:shadow-sm hover:shadow-sm"
+											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
 										>
 											Get Started
 										</Link>
@@ -128,7 +94,7 @@ export default function Hero() {
 											<Button
 												variant="outline"
 												size="lg"
-												className="flex rounded-none items-center gap-2"
+												className="flex items-center gap-2 rounded-none"
 											>
 												<Github size={16} />
 												View on GitHub
@@ -140,136 +106,159 @@ export default function Hero() {
 						</div>
 					</div>
 
-					<div className="relative lg:static xl:pl-10 hidden md:block">
+					<div className="relative hidden md:block lg:static xl:pl-10">
 						<div className="relative">
-							<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-5 blur-lg" />
-							<div className="absolute inset-0 rounded-none bg-gradient-to-tr from-stone-300 via-stone-300/70 to-blue-300 opacity-5" />
-							<LayoutGroup>
-								<motion.div
-									layoutId="hero"
-									className="relative rounded-sm bg-gradient-to-tr from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-950/90  ring-1 ring-white/10 backdrop-blur-lg"
-								>
-									<div className="absolute -top-px left-0 right-0 h-px " />
-									<div className="absolute -bottom-px left-11 right-20 h-px" />
-									<div className="pl-4 pt-4">
-										<TrafficLightsIcon className="h-2.5 w-auto stroke-slate-500/30" />
-
-										<div className="mt-4 flex space-x-2 text-xs">
-											{tabs.map((tab) => (
-												<motion.div
-													key={tab.name}
-													onClick={() => setActiveTab(tab.name)}
-													className={clsx(
-														"flex h-6 rounded-full cursor-pointer",
-														activeTab === tab.name
-															? "bg-gradient-to-r from-stone-400/90 via-stone-400 to-orange-400/20 p-px font-medium text-stone-300"
-															: "text-slate-500",
-													)}
-												>
-													<div
-														className={clsx(
-															"flex items-center rounded-full px-2.5",
-															tab.name === activeTab && "bg-stone-800",
-														)}
-													>
-														{tab.name}
-													</div>
-												</motion.div>
-											))}
-										</div>
-
-										<div className="mt-6 flex items-start px-1 text-sm">
-											<div
-												aria-hidden="true"
-												className="select-none border-r border-slate-300/5 pr-4 font-mono text-slate-600"
-											>
-												{Array.from({
-													length: code.split("\n").length,
-												}).map((_, index) => (
-													<Fragment key={index}>
-														{(index + 1).toString().padStart(2, "0")}
-														<br />
-													</Fragment>
-												))}
-											</div>
-											<Highlight
-												key={theme.resolvedTheme}
-												code={code}
-												language={"javascript"}
-												theme={{
-													...(theme.resolvedTheme === "light"
-														? themes.oneLight
-														: themes.synthwave84),
-
-													plain: {
-														backgroundColor: "transparent",
-													},
-												}}
-											>
-												{({
-													className,
-													style,
-													tokens,
-													getLineProps,
-													getTokenProps,
-												}) => (
-													<pre
-														className={clsx(
-															className,
-															"flex overflow-x-auto pb-6",
-														)}
-														style={style}
-													>
-														<code className="px-4">
-															{tokens.map((line, lineIndex) => (
-																<div
-																	key={lineIndex}
-																	{...getLineProps({ line })}
-																>
-																	{line.map((token, tokenIndex) => (
-																		<span
-																			key={tokenIndex}
-																			{...getTokenProps({ token })}
-																		/>
-																	))}
-																</div>
-															))}
-														</code>
-													</pre>
-												)}
-											</Highlight>
-											<Link
-												href="https://demo.better-auth.com"
-												target="_blank"
-												className="ml-auto mr-4 flex items-center gap-2 mt-auto mb-4 cursor-pointer px-3 py-1 shadow-md shadow-primary-foreground hover:opacity-70 transition-all ease-in-out"
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="1em"
-													height="1em"
-													viewBox="0 0 24 24"
-												>
-													<path
-														fill="currentColor"
-														d="M10 20H8V4h2v2h2v3h2v2h2v2h-2v2h-2v3h-2z"
-													></path>
-												</svg>
-												<p className="text-sm">Demo</p>
-											</Link>
-										</div>
-									</div>
-								</motion.div>
-							</LayoutGroup>
+							<div className="from-sky-300 via-sky-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5 blur-lg" />
+							<div className="from-stone-300 via-stone-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5" />
+							<CodePreview />
 						</div>
 					</div>
 				</div>
 			</div>
 			<GridPattern
-				className="absolute inset-x-0 -top-14 -z-10 h-full w-full dark:fill-secondary/30 fill-neutral-100 dark:stroke-secondary/30 stroke-neutral-700/5 [mask-image:linear-gradient(to_bottom_left,white_40%,transparent_50%)]"
+				className="fill-neutral-100 stroke-neutral-700/5 absolute inset-x-0 -top-14 -z-10 h-full w-full [mask-image:linear-gradient(to_bottom_left,white_40%,transparent_50%)] dark:fill-secondary/30 dark:stroke-secondary/30"
 				yOffset={-96}
 				interactive
 			/>
 		</section>
+	);
+}
+
+function CodePreview() {
+	const [currentTab, setCurrentTab] = useState<"auth.ts" | "client.ts">(
+		"auth.ts",
+	);
+
+	const theme = useTheme();
+
+	const code = tabs.find((tab) => tab.name === currentTab)?.code ?? "";
+
+	const [ref, { height }] = useMeasure();
+
+	return (
+		<AnimatePresence initial={false}>
+			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
+				<motion.div
+					animate={{ height: height > 0 ? height : undefined }}
+					className="from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+				>
+					<div ref={ref}>
+						<div className="absolute -top-px left-0 right-0 h-px" />
+						<div className="absolute -bottom-px left-11 right-20 h-px" />
+						<div className="pl-4 pt-4">
+							<TrafficLightsIcon className="stroke-slate-500/30 h-2.5 w-auto" />
+
+							<div className="mt-4 flex space-x-2 text-xs">
+								{tabs.map((tab) => (
+									<button
+										key={tab.name}
+										onClick={() => setCurrentTab(tab.name)}
+										className={clsx(
+											"relative isolate flex h-6 cursor-pointer items-center justify-center rounded-full px-2.5",
+											currentTab === tab.name
+												? "text-stone-300"
+												: "text-slate-500",
+										)}
+									>
+										{tab.name}
+										{tab.name === currentTab && (
+											<motion.div
+												layoutId="tab-code-preview"
+												className="bg-stone-800 absolute inset-0 -z-10 rounded-full"
+											/>
+										)}
+									</button>
+								))}
+							</div>
+
+							<div className="mt-6 flex flex-col items-start px-1 text-sm">
+								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									transition={{ duration: 0.5 }}
+									key={currentTab}
+									className="flex items-start px-1 text-sm"
+								>
+									<div
+										aria-hidden="true"
+										className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono"
+									>
+										{Array.from({
+											length: code.split("\n").length,
+										}).map((_, index) => (
+											<Fragment key={index}>
+												{(index + 1).toString().padStart(2, "0")}
+												<br />
+											</Fragment>
+										))}
+									</div>
+									<Highlight
+										key={theme.resolvedTheme}
+										code={code}
+										language={"javascript"}
+										theme={{
+											...(theme.resolvedTheme === "light"
+												? themes.oneLight
+												: themes.synthwave84),
+
+											plain: {
+												backgroundColor: "transparent",
+											},
+										}}
+									>
+										{({
+											className,
+											style,
+											tokens,
+											getLineProps,
+											getTokenProps,
+										}) => (
+											<pre
+												className={clsx(className, "flex overflow-x-auto pb-6")}
+												style={style}
+											>
+												<code className="px-4">
+													{tokens.map((line, lineIndex) => (
+														<div key={lineIndex} {...getLineProps({ line })}>
+															{line.map((token, tokenIndex) => (
+																<span
+																	key={tokenIndex}
+																	{...getTokenProps({ token })}
+																/>
+															))}
+														</div>
+													))}
+												</code>
+											</pre>
+										)}
+									</Highlight>
+								</motion.div>
+								<motion.div layout className="self-end">
+									<Link
+										href="https://demo.better-auth.com"
+										target="_blank"
+										className="shadow-md shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="1em"
+											height="1em"
+											viewBox="0 0 24 24"
+										>
+											<path
+												fill="currentColor"
+												d="M10 20H8V4h2v2h2v3h2v2h2v2h-2v2h-2v3h-2z"
+											></path>
+										</svg>
+										<p className="text-sm">Demo</p>
+									</Link>
+								</motion.div>
+							</div>
+						</div>
+					</div>
+				</motion.div>
+			</MotionConfig>
+		</AnimatePresence>
 	);
 }
 

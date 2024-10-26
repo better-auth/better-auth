@@ -98,7 +98,8 @@ export const twitter = (options: TwitterOption) => {
 		id: "twitter",
 		name: "Twitter",
 		createAuthorizationURL(data) {
-			const _scopes = options.scope || data.scopes || ["account_info.read"];
+			const _scopes = data.scopes || ["account_info.read"];
+			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "twitter",
 				options,

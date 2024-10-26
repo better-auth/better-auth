@@ -30,7 +30,8 @@ export const dropbox = (options: DropboxOptions) => {
 			codeVerifier,
 			redirectURI,
 		}) => {
-			const _scopes = options.scope || scopes || ["account_info.read"];
+			const _scopes = scopes || ["account_info.read"];
+			options.scope && _scopes.push(...options.scope);
 			return await createAuthorizationURL({
 				id: "dropbox",
 				options,

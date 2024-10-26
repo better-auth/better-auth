@@ -37,7 +37,7 @@ const client = createAuthClient({
 
 ## Creating a Plugin
 
-To create a plugin you need to pass an object that satsfies the `BetterAuthPlugin` interface.
+To create a plugin you need to pass an object that satisfies the `BetterAuthPlugin` interface.
 
 The only required property is `id`, which is a unique identifier for the plugin.
 
@@ -49,7 +49,7 @@ const myPlugin = {
 
 ### Endpoints
 
-To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and teh value being `AuthEndpoint`.
+To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and the value being `AuthEndpoint`.
 
 To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
 
@@ -83,7 +83,7 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `authCookie`: The defualt cookie configuration for core auth cookies.
 - `logger`: The logger instance used by Better Auth.
 - `db`: The kysely instance used by Better Auth to interact with the database.
-- `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for peroframnce reasons)
+- `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for performance reasons)
 - `intenralAdapter`: this are intenral db calls that are used by Better Auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
 - `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on
 
