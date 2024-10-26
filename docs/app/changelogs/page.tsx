@@ -68,15 +68,23 @@ const ChangelogPage = () => {
 					</p>
 				</div>
 			</div>
-			<div className="px-4 md:px-8 pb-12 md:py-12">
+			<div className="px-4 relative md:px-8 pb-12 md:py-12">
+				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_3px] bg-repeat-y"></div>
+
 				<div className="max-w-2xl">
 					<MDX
 						components={{
 							h2: (props) => (
 								<h2
-									className="text-2xl mt-16 font-bold tracking-tighter"
+									className="text-2xl relative mt-16 font-bold flex-col flex justify-center tracking-tighter"
 									{...props}
-								/>
+								>
+									<time className="text-gray-500 dark:text-white/80 text-sm block md:absolute md:left-[-140px] font-normal tracking-normal">
+										{props.children?.toString().includes("date=") &&
+											props.children?.toString().split("date=")[1]}
+									</time>
+									{props.children?.toString().split("date=")[0].trim()}
+								</h2>
 							),
 							h3: (props) => (
 								<h3 className="text-xl tracking-tighter" {...props} />
