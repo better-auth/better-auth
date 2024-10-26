@@ -181,21 +181,22 @@ export const callbackOAuth = createAuthEndpoint(
 		} else {
 			try {
 				const emailVerified = userInfo.emailVerified || false;
-				const created = await c.context.internalAdapter.createOAuthUser(
-					{
-						...data.data,
-						emailVerified,
-					},
-					{
-						accessToken: tokens.accessToken,
-						idToken: tokens.idToken,
-						refreshToken: tokens.refreshToken,
-						expiresAt: tokens.accessTokenExpiresAt,
-						providerId: provider.id,
-						accountId: userInfo.id.toString(),
-					},
-				);
-				user = created?.user;
+				user = await c.context.internalAdapter
+					.createOAuthUser(
+						{
+							...data.data,
+							emailVerified,
+						},
+						{
+							accessToken: tokens.accessToken,
+							idToken: tokens.idToken,
+							refreshToken: tokens.refreshToken,
+							expiresAt: tokens.accessTokenExpiresAt,
+							providerId: provider.id,
+							accountId: userInfo.id.toString(),
+						},
+					)
+					.then((res) => res?.user);
 				if (
 					!emailVerified &&
 					user &&
