@@ -19,122 +19,29 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
-			"default": "./dist/index.js"
-		},
-		"./social-providers": {
-			"types": "./dist/social.d.ts",
-			"import": "./dist/social.js",
-			"default": "./dist/social.js"
-		},
-		"./client": {
-			"types": "./dist/client.d.ts",
-			"import": "./dist/client.js",
-			"default": "./dist/client.js"
-		},
-		"./client/plugins": {
-			"types": "./dist/client/plugins.d.ts",
-			"import": "./dist/client/plugins.js",
-			"default": "./dist/client/plugins.js"
-		},
-		"./types": {
-			"types": "./dist/types.d.ts",
-			"import": "./dist/types.js",
-			"default": "./dist/types.js"
-		},
-		"./crypto": {
-			"types": "./dist/crypto.d.ts",
-			"import": "./dist/crypto.js",
-			"default": "./dist/crypto.js"
-		},
-		"./cookies": {
-			"types": "./dist/cookies.d.ts",
-			"import": "./dist/cookies.js",
-			"default": "./dist/cookies.js"
-		},
-		"./oauth2": {
-			"types": "./dist/oauth2.d.ts",
-			"import": "./dist/oauth2.js",
-			"default": "./dist/oauth2.js"
-		},
-		"./react": {
-			"types": "./dist/react.d.ts",
-			"import": "./dist/react.js",
-			"default": "./dist/react.js"
-		},
-		"./solid": {
-			"types": "./dist/solid.d.ts",
-			"import": "./dist/solid.js",
-			"default": "./dist/solid.js"
-		},
-		"./api": {
-			"types": "./dist/api.d.ts",
-			"import": "./dist/api.js",
-			"default": "./dist/api.js"
-		},
-		"./db": {
-			"types": "./dist/db.d.ts",
-			"import": "./dist/db.js",
-			"default": "./dist/db.js"
-		},
-		"./vue": {
-			"types": "./dist/vue.d.ts",
-			"import": "./dist/vue.js",
-			"default": "./dist/vue.js"
-		},
-		"./plugins": {
-			"types": "./dist/plugins.d.ts",
-			"import": "./dist/plugins.js",
-			"default": "./dist/plugins.js"
-		},
-		"./plugins/access": {
-			"types": "./dist/access.d.ts",
-			"import": "./dist/access.js",
-			"default": "./dist/access.js"
-		},
-		"./svelte-kit": {
-			"types": "./dist/svelte-kit.d.ts",
-			"import": "./dist/svelte-kit.js",
-			"default": "./dist/svelte-kit.js"
-		},
-		"./solid-start": {
-			"types": "./dist/solid-start.d.ts",
-			"import": "./dist/solid-start.js",
-			"default": "./dist/solid-start.js"
-		},
-		"./svelte": {
-			"types": "./dist/svelte.d.ts",
-			"import": "./dist/svelte.js",
-			"default": "./dist/svelte.js"
-		},
-		"./next-js": {
-			"types": "./dist/next-js.d.ts",
-			"import": "./dist/next-js.js",
-			"default": "./dist/next-js.js"
-		},
-		"./package.json": "./package.json",
-		"./node": {
-			"types": "./dist/node.d.ts",
-			"import": "./dist/node.js",
-			"default": "./dist/node.js"
-		},
-		"./adapters/prisma": {
-			"types": "./dist/adapters/prisma.d.ts",
-			"import": "./dist/adapters/prisma.js",
-			"default": "./dist/adapters/prisma.js"
-		},
-		"./adapters/drizzle": {
-			"types": "./dist/adapters/drizzle.d.ts",
-			"import": "./dist/adapters/drizzle.js",
-			"default": "./dist/adapters/drizzle.js"
-		},
-		"./adapters/mongodb": {
-			"types": "./dist/adapters/mongodb.d.ts",
-			"import": "./dist/adapters/mongodb.js",
-			"default": "./dist/adapters/mongodb.js"
-		}
+		".": "./dist/index.js",
+		"./social-providers": "./dist/social.js",
+		"./client": "./dist/client.js",
+		"./client/plugins": "./dist/client/plugins.js",
+		"./types": "./dist/types.js",
+		"./crypto": "./dist/crypto.js",
+		"./cookies": "./dist/cookies.js",
+		"./oauth2": "./dist/oauth2.js",
+		"./react": "./dist/react.js",
+		"./solid": "./dist/solid.js",
+		"./api": "./dist/api.js",
+		"./db": "./dist/db.js",
+		"./vue": "./dist/vue.js",
+		"./plugins": "./dist/plugins.js",
+		"./plugins/access": "./dist/access.js",
+		"./svelte-kit": "./dist/svelte-kit.js",
+		"./solid-start": "./dist/solid-start.js",
+		"./svelte": "./dist/svelte.js",
+		"./next-js": "./dist/next-js.js",
+		"./node": "./dist/node.js",
+		"./adapters/prisma": "./dist/adapters/prisma.js",
+		"./adapters/drizzle": "./dist/adapters/drizzle.js",
+		"./adapters/mongodb": "./dist/adapters/mongodb.js"
 	},
 	"typesVersions": {
 		"*": {

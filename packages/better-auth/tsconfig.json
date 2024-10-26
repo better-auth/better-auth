@@ -8,6 +8,7 @@
 		"module": "ESNext",
 		"noEmit": true,
 		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
 		"isolatedModules": true,
