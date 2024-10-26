@@ -82,6 +82,20 @@ export default function SignUp() {
 }
 ```
 
+By default, the user is automatically logged in after signing up. This behaviour can be changed by configuring your `auth-config`
+
+```js
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //...rest of the options
+    emailAndPassword: {
+    	enabled: true,
+    	autoSignIn: false //defaults to true // [!code highlight]
+  },
+})
+```
+
 ### Signin
 
 To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
