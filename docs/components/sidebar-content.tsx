@@ -708,7 +708,7 @@ export const contents: Content[] = [
 						<g
 							fill="none"
 							stroke="currentColor"
-							stroke-linecap="round"
+							strokeLinecap="round"
 							strokeLinejoin="round"
 							strokeWidth="2"
 						>

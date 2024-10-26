@@ -1,6 +1,5 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
-import { alphabet, generateRandomString } from "../../crypto/random";
 import { setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
@@ -150,6 +149,9 @@ export const setPassword = createAuthEndpoint(
 			 */
 			newPassword: z.string(),
 		}),
+		metadata: {
+			SERVER_ONLY: true,
+		},
 		use: [sessionMiddleware],
 	},
 	async (ctx) => {
