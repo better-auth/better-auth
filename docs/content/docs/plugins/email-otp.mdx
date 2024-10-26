@@ -24,14 +24,10 @@ You can't register a user using the email OTP plugin. You can only sign in or ve
     export const auth = betterAuth({
         // ... other config options
         plugins: [
-            emailOTP({
-                    async sendVerificationOTP({
-                        email,
-                        otp,
-                        type
-                    }) {
-						// Implement the sendVerificationOTP method to send the OTP to the user's email address
-					},
+            emailOTP({ // [!code highlight]
+                    async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
+						// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
+					}, // [!code highlight]
             }) // [!code highlight]
         ]
     })
