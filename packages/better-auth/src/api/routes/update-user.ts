@@ -1,7 +1,7 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { alphabet, generateRandomString } from "../../crypto/random";
-import { setSessionCookie } from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { redirectURLMiddleware } from "../middlewares/redirect";
@@ -133,7 +133,10 @@ export const changePassword = createAuthEndpoint(
 				});
 			}
 			// set the new session cookie
-			await setSessionCookie(ctx, newSession.id);
+			await setSessionCookie(ctx, {
+				session: newSession,
+				user: session.user,
+			});
 		}
 
 		return ctx.json(session.user);
@@ -228,10 +231,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		const sessionCookie = ctx.context.authCookies.sessionToken;
-		ctx.setCookie(sessionCookie.name, "", {
-			maxAge: 0,
-		});
+		deleteSessionCookie(ctx);
 		return ctx.json(null);
 	},
 );

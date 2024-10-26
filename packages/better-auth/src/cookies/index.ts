@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
 import { env, isProduction } from "std-env";
+import type { Session, User } from "../types";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
@@ -43,6 +44,21 @@ export function getCookies(options: BetterAuthOptions) {
 				path: "/",
 				secure: !!secureCookiePrefix,
 				maxAge: sessionMaxAge,
+				...(crossSubdomainEnabled ? { domain } : {}),
+			} satisfies CookieOptions,
+		},
+		/**
+		 * This cookie is used to store the session data in the cookie
+		 * This is useful for when you want to cache the session in the cookie
+		 */
+		sessionData: {
+			name: `${secureCookiePrefix}${cookiePrefix}.session_data`,
+			options: {
+				httpOnly: true,
+				sameSite,
+				path: "/",
+				secure: !!secureCookiePrefix,
+				maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
@@ -144,7 +160,10 @@ export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
-	sessionToken: string,
+	session: {
+		session: Session;
+		user: User;
+	},
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
 ) {
@@ -156,7 +175,7 @@ export async function setSessionCookie(
 
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
-		sessionToken,
+		session.session.id,
 		ctx.context.secret,
 		{
 			...options,
@@ -171,10 +190,22 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cookieCache?.enabled;
+	shouldStoreSessionDataInCookie &&
+		(await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionData.name,
+			JSON.stringify(session),
+			ctx.context.secret,
+			ctx.context.authCookies.sessionData.options,
+		));
 }
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+		maxAge: 0,
+	});
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {

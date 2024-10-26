@@ -131,7 +131,10 @@ export const backupCode2fa = (
 						});
 					}
 					if (!ctx.body.disableSession) {
-						await setSessionCookie(ctx, ctx.context.session.id);
+						await setSessionCookie(ctx, {
+							session: ctx.context.session,
+							user,
+						});
 					}
 					return ctx.json({
 						user: user,
