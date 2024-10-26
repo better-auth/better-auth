@@ -1,6 +1,6 @@
 {
 	"name": "better-auth",
-	"version": "0.5.4-beta.6",
+	"version": "0.5.4-beta.7",
 	"description": "The most comprehensive authentication library for TypeScript.",
 	"type": "module",
 	"repository": {
@@ -9,7 +9,7 @@
 		"directory": "packages/better-auth"
 	},
 	"scripts": {
-		"build": "cross-env NODE_OPTIONS=--max-old-space-size=4000 tsup --clean --dts",
+		"build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts",
 		"dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
 		"dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
 		"test": "pnpm prisma:push && vitest",
