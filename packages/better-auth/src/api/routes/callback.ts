@@ -56,7 +56,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		const {
-			data: { callbackURL, currentURL },
+			data: { callbackURL, currentURL, link },
 		} = parsedState;
 
 		const storedState = await c.getSignedCookie(
@@ -112,6 +112,21 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
+		}
+
+		if (link) {
+			if (link.email !== user.email.toLowerCase()) {
+				return redirectOnError("email_doesn't_match");
+			}
+			const newAccount = await c.context.internalAdapter.createAccount({
+				userId: link.userId,
+				providerId: provider.id,
+				accountId: user.id,
+			});
+			if (!newAccount) {
+				return redirectOnError("unable_to_link_account");
+			}
+			throw c.redirect(callbackURL || currentURL || c.context.options.baseURL!);
 		}
 
 		function redirectOnError(error: string) {

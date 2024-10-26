@@ -78,43 +78,33 @@ export async function ServerComponent() {
 }
 ```
 
-
 ## Middleware
 
-You can use the `authMiddleware` to protect your routes. It's a wrapper around the Next.js middleware.
+In Next.js, middleware doesn’t have access to many Node APIs, so you can’t use the usual `auth` instance to validate sessions directly. Instead, you can use `authClient` and pass in the request’s cookies to check if a session is valid.
 
-```ts  title="middleware.ts"s
-import { authMiddleware } from "better-auth/next-js"
-
-export default authMiddleware({
-    redirectTo: "/sign-in" // redirect to this path if the user is not authenticated
-})
-
-export const config = {
-  matcher: ['/dashboard/:path*'],
-}
-```
-
-you can also pass custom redirect function
+Here’s how it looks:
 
 ```ts
-import { authMiddleware } from "better-auth/next-js";
-import { NextResponse } from "next/server";
+import { authClient } from "@/lib/auth-client";
+import { NextRequest, NextResponse } from "next/server";
 
-export default authMiddleware({
-	customRedirect: async (session, request) => {
-		const baseURL = request.nextUrl.origin;
-		if (request.nextUrl.pathname === "/sign-in" && session) {
-			return NextResponse.redirect(new URL("/dashboard", baseURL));
-		}
-		if (request.nextUrl.pathname === "/dashboard" && !session) {
-			return NextResponse.redirect(new URL("/sign-in", baseURL));
-		}
-		return NextResponse.next();
-	},
-});
+export default async function authMiddleware(request: NextRequest) {
+    const { data: session } = await authClient.getSession({
+        fetchOptions: {
+            headers: {
+                //get the cookie from the request
+                cookie: request.headers.get("cookie") || "",
+            },
+        },
+    });
+
+    if (!session) {
+        return NextResponse.redirect(new URL("/", request.url));
+    }
+    return NextResponse.next();
+}
 
 export const config = {
-	matcher: ["/dashboard", "/sign-in"],
+    matcher: ["/dashboard/:path*"],
 };
 ```
