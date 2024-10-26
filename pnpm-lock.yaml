@@ -1325,8 +1325,8 @@ importers:
         specifier: ^0.3.4
         version: 0.3.4(nanostores@0.11.3)
       '@nanostores/react':
-        specifier: ^0.7.3
-        version: 0.7.3(nanostores@0.11.3)(react@18.3.1)
+        specifier: ^0.8.0
+        version: 0.8.0(nanostores@0.11.3)(react@18.3.1)
       '@nanostores/solid':
         specifier: ^0.4.2
         version: 0.4.2(nanostores@0.11.3)(solid-js@1.9.1)
@@ -3579,8 +3579,8 @@ packages:
     peerDependencies:
       nanostores: '>=0.10'
 
-  '@nanostores/react@0.7.3':
-    resolution: {integrity: sha512-/XuLAMENRu/Q71biW4AZ4qmU070vkZgiQ28gaTSNRPm2SZF5zGAR81zPE1MaMB4SeOp6ZTst92NBaG75XSspNg==}
+  '@nanostores/react@0.8.0':
+    resolution: {integrity: sha512-MhbVB7NQLboq/Z9fRTDen9zib/YCffe6mn+3Xg5MOYByMX5Xx98SOZjk/Nd3yvOd/g7GjlQqwXj0KF2lPb6CEQ==}
     engines: {node: ^18.0.0 || >=20.0.0}
     peerDependencies:
       nanostores: ^0.9.0 || ^0.10.0 || ^0.11.0
@@ -16904,7 +16904,7 @@ snapshots:
       nanoevents: 9.0.0
       nanostores: 0.11.3
 
-  '@nanostores/react@0.7.3(nanostores@0.11.3)(react@18.3.1)':
+  '@nanostores/react@0.8.0(nanostores@0.11.3)(react@18.3.1)':
     dependencies:
       nanostores: 0.11.3
       react: 18.3.1

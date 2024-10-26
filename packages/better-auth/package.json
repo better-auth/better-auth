@@ -239,7 +239,7 @@
   "dependencies": {
     "@better-fetch/fetch": "1.1.12",
     "@nanostores/query": "^0.3.4",
-    "@nanostores/react": "^0.7.3",
+    "@nanostores/react": "^0.8.0",
     "@nanostores/solid": "^0.4.2",
     "@nanostores/vue": "^0.10.0",
     "@noble/ciphers": "^0.6.0",
