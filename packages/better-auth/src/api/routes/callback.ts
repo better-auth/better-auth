@@ -117,13 +117,13 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
-			if (link.email !== user.email.toLowerCase()) {
+			if (link.email !== userInfo.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
 				userId: link.userId,
 				providerId: provider.id,
-				accountId: user.id,
+				accountId: userInfo.id,
 			});
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
@@ -153,7 +153,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 			});
 
-		let user: User | null = dbUser?.user || null;
+		let user = dbUser?.user;
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
