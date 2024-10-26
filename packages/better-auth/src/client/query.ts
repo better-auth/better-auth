@@ -27,7 +27,7 @@ export const useAuthQuery = <T>(
 	}>({
 		data: null,
 		error: null,
-		isPending: false,
+		isPending: true,
 		isRefetching: false,
 	});
 

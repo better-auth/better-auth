@@ -100,7 +100,9 @@ export const forgetPasswordCallback = createAuthEndpoint(
 		if (!verification || verification.expiresAt < new Date()) {
 			throw ctx.redirect(`${redirectTo}?error=INVALID_TOKEN`);
 		}
-		throw ctx.redirect(`${redirectTo}?token=${token}`);
+		throw ctx.redirect(
+			`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}token=${token}`,
+		);
 	},
 );
 

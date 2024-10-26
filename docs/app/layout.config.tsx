@@ -1,10 +1,8 @@
-import type { DocsLayoutProps } from "fumadocs-ui/layout";
-import type { HomeLayoutProps } from "fumadocs-ui/home-layout";
-import { pageTree } from "@/app/source";
+import { source } from "@/app/source";
 import { DocsNavbarMobileBtn } from "@/components/nav-mobile";
+import { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
-// shared configuration
-export const baseOptions: HomeLayoutProps = {
+export const baseOptions: BaseLayoutProps = {
 	nav: {
 		component: (
 			<div className="flex items-center justify-between py-4 px-2.5 md:hidden">
@@ -22,8 +20,7 @@ export const baseOptions: HomeLayoutProps = {
 	],
 };
 
-// docs layout configuration
-export const docsOptions: DocsLayoutProps = {
+export const docsOptions = {
 	...baseOptions,
-	tree: pageTree,
+	tree: source.pageTree,
 };

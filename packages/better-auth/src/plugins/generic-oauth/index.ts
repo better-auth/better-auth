@@ -6,11 +6,9 @@ import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
 import { generateCodeVerifier } from "oslo/oauth2";
 import { logger } from "../../utils/logger";
-
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
 import { redirectURLMiddleware } from "../../api/middlewares/redirect";
 import {
@@ -421,20 +419,36 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									accountId: user.data.id,
 									id: `${provider.providerId}:${user.data.id}`,
 									userId: dbUser.user.id,
-									...getAccountTokens(tokens),
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									expiresAt: tokens.accessTokenExpiresAt,
 								});
 							} catch (e) {
 								console.log(e);
 								throw ctx.redirect(`${errorURL}?error=failed_linking_account`);
 							}
+						} else {
+							await ctx.context.internalAdapter.updateAccount(
+								hasBeenLinked.id,
+								{
+									accessToken: tokens.accessToken,
+									idToken: tokens.idToken,
+									refreshToken: tokens.refreshToken,
+									expiresAt: tokens.accessTokenExpiresAt,
+								},
+							);
 						}
 					} else {
 						try {
 							await ctx.context.internalAdapter.createOAuthUser(user.data, {
-								...getAccountTokens(tokens),
 								id: `${provider.providerId}:${user.data.id}`,
 								providerId: provider.providerId,
 								accountId: user.data.id,
+								accessToken: tokens.accessToken,
+								idToken: tokens.idToken,
+								refreshToken: tokens.refreshToken,
+								expiresAt: tokens.accessTokenExpiresAt,
 							});
 						} catch (e) {
 							const url = new URL(errorURL);

@@ -184,3 +184,7 @@ dist
 .turbo/
 .tsup
 .todo
+
+
+android/
+.expo/

@@ -4,7 +4,6 @@ import { generateId } from "../../utils/id";
 import { parseState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { getAccountTokens } from "../../oauth2/get-account";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
@@ -160,12 +159,22 @@ export const callbackOAuth = createAuthEndpoint(
 						accountId: user.id.toString(),
 						id: `${provider.id}:${user.id}`,
 						userId: dbUser.user.id,
-						...getAccountTokens(tokens),
+						accessToken: tokens.accessToken,
+						idToken: tokens.idToken,
+						refreshToken: tokens.refreshToken,
+						expiresAt: tokens.accessTokenExpiresAt,
 					});
 				} catch (e) {
 					logger.error("Unable to link account", e);
 					redirectOnError("unable_to_link_account");
 				}
+			} else {
+				await c.context.internalAdapter.updateAccount(hasBeenLinked.id, {
+					accessToken: tokens.accessToken,
+					idToken: tokens.idToken,
+					refreshToken: tokens.refreshToken,
+					expiresAt: tokens.accessTokenExpiresAt,
+				});
 			}
 		} else {
 			try {
@@ -176,7 +185,10 @@ export const callbackOAuth = createAuthEndpoint(
 						emailVerified,
 					},
 					{
-						...getAccountTokens(tokens),
+						accessToken: tokens.accessToken,
+						idToken: tokens.idToken,
+						refreshToken: tokens.refreshToken,
+						expiresAt: tokens.accessTokenExpiresAt,
 						providerId: provider.id,
 						accountId: user.id.toString(),
 					},
