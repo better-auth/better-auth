@@ -169,7 +169,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						user.user.id,
 						ctx.request,
 					);
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: user.user,
+					});
 					return ctx.json({
 						session,
 						user,

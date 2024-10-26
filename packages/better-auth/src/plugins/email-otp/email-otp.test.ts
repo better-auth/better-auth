@@ -64,6 +64,7 @@ describe("email-otp", async () => {
 				},
 			},
 		);
+
 		expect(verifiedUser.data?.session).toBeDefined();
 	});
 
