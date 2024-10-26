@@ -90,7 +90,7 @@ The Prisma adapter expects a prisma client instance and a provider key that spec
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { PrismaAdapter } from "better-auth/adapters/prisma";
+import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -526,7 +526,7 @@ Better Auth uses `nanoId` by default to generate unique IDs for users, sessions,
 **Guidelines:**
 
 - IDs need to be in string format.
-- he ID should be unique for each entity type (like users, sessions, etc.).
+- The ID should be unique for each entity type (like users, sessions, etc.).
 - Since the session ID acts as the token, it should be both unique and sufficiently long for security.
 
 **Example: Built In Kysley Adapter**

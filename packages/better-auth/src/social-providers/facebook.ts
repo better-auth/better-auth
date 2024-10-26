@@ -22,7 +22,8 @@ export const facebook = (options: FacebookOptions) => {
 		id: "facebook",
 		name: "Facebook",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.scope || scopes || ["email", "public_profile"];
+			const _scopes = scopes || ["email", "public_profile"];
+			options.scope && _scopes.push(...options.scope);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
