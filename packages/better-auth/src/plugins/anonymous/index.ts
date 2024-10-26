@@ -58,7 +58,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
 					return ctx.json({ user: newUser, session });
 				},
 			),
@@ -76,13 +79,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const userId = ctx.context.session.user.id;
 					const { email, password } = ctx.body;
 					let updatedUser = null;
-					// handling both the email - password and updating the user
-					if (email && password) {
-						updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-							email: email,
-							isAnonymous: false,
-						});
-					}
+					updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
+						email: email,
+						isAnonymous: false,
+					});
 					if (!updatedUser) {
 						return ctx.json(null, {
 							status: 500,
@@ -121,7 +121,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: updatedUser,
+					});
 					return ctx.json({ session, user: updatedUser });
 				},
 			),
