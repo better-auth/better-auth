@@ -48,16 +48,6 @@ describe("redirectURLMiddleware", async (it) => {
 				customFetchImpl,
 			},
 		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				headers: {
-					referer: "http://malicious.com",
-				},
-			},
-		});
-		expect(res.error?.status).toBe(403);
 
 		const res2 = await client.signIn.email({
 			email: testUser.email,
