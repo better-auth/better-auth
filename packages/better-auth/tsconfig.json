@@ -2,11 +2,12 @@
 	"compilerOptions": {
 		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"target": "es2022",
+		"target": "ES2019",
 		"allowJs": true,
 		"resolveJsonModule": true,
 		"module": "ESNext",
 		"noEmit": true,
+		"incremental": true,
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
 		"isolatedModules": true,
@@ -15,6 +16,6 @@
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true
 	},
-	"exclude": ["node_modules"],
+	"exclude": ["node_modules", "dist"],
 	"include": ["src"]
 }
