@@ -42,7 +42,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 */
 				if (
 					sessionData &&
-					ctx.context.options.session?.cacheSessionInCookie?.enabled
+					ctx.context.options.session?.cookieCache?.enabled
 				) {
 					const session = JSON.parse(sessionData)?.session;
 					console.log({ session });
