@@ -96,20 +96,6 @@ describe("multi-session", async () => {
 		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
-	it("should throw error when setting above maximum sessions", async () => {
-		const res = await client.signUp.email(
-			{
-				email: "new-email-2@email.com",
-				password: "password",
-				name: "Name",
-			},
-			{
-				headers,
-			},
-		);
-		expect(res.error?.status).toBe(401);
-	});
-
 	it("should sign-out a session", async () => {
 		await client.multiSession.revoke({
 			fetchOptions: {

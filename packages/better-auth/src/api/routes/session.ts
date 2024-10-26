@@ -29,6 +29,31 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 				}
 
+				const sessionData = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionData.name,
+					ctx.context.secret,
+				);
+				const dontRememberMe = await ctx.getSignedCookie(
+					ctx.context.authCookies.dontRememberToken.name,
+					ctx.context.secret,
+				);
+				/**
+				 * If session data is present in the cookie, return it
+				 */
+				if (sessionData && ctx.context.options.session?.cookieCache?.enabled) {
+					const session = JSON.parse(sessionData)?.session;
+					console.log({ session });
+					if (session?.expiresAt > new Date()) {
+						console.log(session);
+						return ctx.json(
+							session as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							},
+						);
+					}
+				}
+
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 
@@ -44,10 +69,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						status: 401,
 					});
 				}
-				const dontRememberMe = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
-					ctx.context.secret,
-				);
+
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 */
@@ -92,9 +114,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					const maxAge =
 						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
-					await setSessionCookie(ctx, updatedSession.id, false, {
-						maxAge,
-					});
+					await setSessionCookie(
+						ctx,
+						{
+							session: updatedSession,
+							user: session.user,
+						},
+						false,
+						{
+							maxAge,
+						},
+					);
 					return ctx.json({
 						session: updatedSession,
 						user: session.user,

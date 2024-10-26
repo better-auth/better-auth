@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-fetch/fetch": "1.1.12",
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",
     "@libsql/kysely-libsql": "^0.4.1",
@@ -66,9 +67,9 @@
     "next": "15.0.0-canary.185",
     "next-themes": "^0.3.0",
     "prisma": "^5.19.1",
-    "react": "19.0.0-rc-7771d3a7-20240827",
+    "react": "19.0.0-rc-cae764ce-20241025",
     "react-day-picker": "8.10.1",
-    "react-dom": "19.0.0-rc-7771d3a7-20240827",
+    "react-dom": "19.0.0-rc-cae764ce-20241025",
     "react-hook-form": "^7.53.0",
     "react-qr-code": "^2.0.15",
     "react-resizable-panels": "^2.1.2",

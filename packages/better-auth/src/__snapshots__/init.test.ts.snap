@@ -52,6 +52,16 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
+    "sessionData": {
+      "name": "better-auth.session_data",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 300,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
     "sessionToken": {
       "name": "better-auth.session_token",
       "options": {

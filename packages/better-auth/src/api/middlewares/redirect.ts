@@ -7,15 +7,14 @@ import { logger } from "../../utils/logger";
  * preventing open redirect attacks.
  */
 export const redirectURLMiddleware = createAuthMiddleware(async (ctx) => {
-	const { body, query, headers, context } = ctx;
+	const { body, query, context } = ctx;
 
 	const callbackURL =
 		body?.callbackURL ||
 		query?.callbackURL ||
 		query?.redirectTo ||
 		body?.redirectTo;
-	const currentURL =
-		query?.currentURL || headers?.get("referer") || context.baseURL;
+	const currentURL = query?.currentURL;
 	const trustedOrigins = context.trustedOrigins;
 
 	const validateURL = (url: string | undefined, label: string) => {

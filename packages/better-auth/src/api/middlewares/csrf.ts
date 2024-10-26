@@ -2,6 +2,7 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { hs256 } from "../../crypto";
 import { createAuthMiddleware } from "../call";
+import { deleteSessionCookie } from "../../cookies";
 
 export const csrfMiddleware = createAuthMiddleware(
 	{
@@ -43,9 +44,6 @@ export const csrfMiddleware = createAuthMiddleware(
 		);
 		const [token, hash] = csrfCookie?.split("!") || [null, null];
 		if (!csrfToken || !token || !hash || token !== csrfToken) {
-			ctx.setCookie(ctx.context.authCookies.csrfToken.name, "", {
-				maxAge: 0,
-			});
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid CSRF Token",
 			});
