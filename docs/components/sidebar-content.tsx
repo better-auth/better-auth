@@ -2,7 +2,10 @@ import {
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
+	Mail,
 	Mailbox,
+	MailboxIcon,
+	Mails,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -677,6 +680,11 @@ export const contents: Content[] = [
 				title: "Magic Link",
 				href: "/docs/plugins/magic-link",
 				icon: () => <Mailbox className="w-4 h-4" />,
+			},
+			{
+				title: "Email OTP",
+				href: "/docs/plugins/email-otp",
+				icon: () => <Mail className="w-4 h-4" />,
 			},
 			{
 				title: "Passkey",
