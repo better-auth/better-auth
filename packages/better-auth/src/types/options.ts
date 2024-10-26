@@ -280,10 +280,10 @@ export interface BetterAuthOptions {
 		/**
 		 * Enable caching session in cookie
 		 */
-		cacheSessionInCookie?: {
+		cookieCache?: {
 			/**
 			 * max age of the cookie
-			 * @default 10 minutes (10 * 60)
+			 * @default 5 minutes (5 * 60)
 			 */
 			maxAge?: number;
 			/**

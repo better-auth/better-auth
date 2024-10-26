@@ -58,7 +58,7 @@ export function getCookies(options: BetterAuthOptions) {
 				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
-				maxAge: options.session?.cacheSessionInCookie?.maxAge || 60 * 10,
+				maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
@@ -191,7 +191,7 @@ export async function setSessionCookie(
 		);
 	}
 	const shouldStoreSessionDataInCookie =
-		ctx.context.options.session?.cacheSessionInCookie?.enabled;
+		ctx.context.options.session?.cookieCache?.enabled;
 	shouldStoreSessionDataInCookie &&
 		(await ctx.setSignedCookie(
 			ctx.context.authCookies.sessionData.name,
@@ -205,6 +205,11 @@ export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		maxAge: 0,
 	});
+	ctx.setCookie(
+		ctx.context.authCookies.sessionData.name, "", {
+			maxAge: 0
+		}
+	)
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 		maxAge: 0,
 	});
