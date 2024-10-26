@@ -112,8 +112,8 @@ To turn on cookie caching, just set `session.cookieCache` in your auth config:
 ```ts title="auth.ts"
 const auth = new BetterAuth({
     session: {
-        enabled: true,
         cookieCache: {
+            enabled: true,
             maxAge: 5 * 60 // Cache duration in seconds
         }
     }
