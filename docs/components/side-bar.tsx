@@ -37,6 +37,7 @@ export default function ArticleLayout() {
 	useEffect(() => {
 		const grp = pathname.includes("examples") ? "examples" : "docs";
 		setGroup(grp);
+		setCurrentOpen(getDefaultValue());
 	}, []);
 
 	const cts = group === "docs" ? contents : examples;
@@ -185,7 +186,7 @@ export default function ArticleLayout() {
 																<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
 																	{listItem.title}
 																</p>
-																<line className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+																<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
 															</div>
 														) : (
 															<AsideLink

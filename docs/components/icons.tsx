@@ -207,7 +207,7 @@ export const Icons = {
 			<path
 				d="M1 399.053H0.5V399.553V473V473.5H1H161.878H162.378V473V425.994C162.378 420.988 161.152 414.26 157.063 408.77C152.955 403.255 146.004 399.053 134.697 399.053H1Z"
 				stroke="currentColor"
-				stroke-opacity="0.8"
+				strokeOpacity="0.8"
 			/>
 		</svg>
 	),

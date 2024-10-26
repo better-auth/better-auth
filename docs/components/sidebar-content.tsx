@@ -2,7 +2,10 @@ import {
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
+	Mail,
 	Mailbox,
+	MailboxIcon,
+	Mails,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -679,6 +682,11 @@ export const contents: Content[] = [
 				icon: () => <Mailbox className="w-4 h-4" />,
 			},
 			{
+				title: "Email OTP",
+				href: "/docs/plugins/email-otp",
+				icon: () => <Mail className="w-4 h-4" />,
+			},
+			{
 				title: "Passkey",
 				href: "/docs/plugins/passkey",
 				icon: () => (
@@ -708,7 +716,7 @@ export const contents: Content[] = [
 						<g
 							fill="none"
 							stroke="currentColor"
-							stroke-linecap="round"
+							strokeLinecap="round"
 							strokeLinejoin="round"
 							strokeWidth="2"
 						>

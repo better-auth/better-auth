@@ -153,6 +153,9 @@ export const setPassword = createAuthEndpoint(
 			 */
 			newPassword: z.string(),
 		}),
+		metadata: {
+			SERVER_ONLY: true,
+		},
 		use: [sessionMiddleware],
 	},
 	async (ctx) => {
