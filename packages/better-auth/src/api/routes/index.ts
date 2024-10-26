@@ -9,3 +9,4 @@ export * from "./csrf";
 export * from "./error";
 export * from "./ok";
 export * from "./sign-up";
+export * from "./account";
