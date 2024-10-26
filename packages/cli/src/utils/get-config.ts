@@ -49,10 +49,13 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 		for (const [alias, aliasPaths] of obj) {
 			for (const aliasedPath of aliasPaths) {
 				const resolvedBaseUrl = path.join(cwd, baseUrl);
-				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0,-1) : alias;
-				const finalAliasedPath = aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0,-1) : aliasedPath;
+				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
+				const finalAliasedPath =
+					aliasedPath.slice(-1) === "*"
+						? aliasedPath.slice(0, -1)
+						: aliasedPath;
 
-				result[finalAlias || ""] = path.join(resolvedBaseUrl,finalAliasedPath);
+				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
 			}
 		}
 		addSvelteKitEnvModules(result);
