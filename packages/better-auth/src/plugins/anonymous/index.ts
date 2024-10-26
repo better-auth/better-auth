@@ -79,10 +79,12 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const userId = ctx.context.session.user.id;
 					const { email, password } = ctx.body;
 					let updatedUser = null;
-					updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-						email: email,
-						isAnonymous: false,
-					});
+					if (email && password) {
+						updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
+							email: email,
+							isAnonymous: false,
+						});
+					}
 					if (!updatedUser) {
 						return ctx.json(null, {
 							status: 500,
