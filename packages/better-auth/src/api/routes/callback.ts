@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { userSchema } from "../../db/schema";
+import { userSchema, type User } from "../../db/schema";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
@@ -138,7 +138,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 			});
 
-		let user = dbUser?.user;
+		let user: User | null = dbUser?.user || null;
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
