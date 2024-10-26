@@ -177,7 +177,6 @@ describe("phone auth flow", async () => {
 			},
 			headers,
 		});
-
 		const changedEmailRes = await client.user.changeEmail({
 			newEmail,
 			fetchOptions: {
