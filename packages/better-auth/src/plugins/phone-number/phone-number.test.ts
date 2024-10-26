@@ -106,7 +106,7 @@ describe("phone-number", async (it) => {
 describe("phone auth flow", async () => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
+	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
 		plugins: [
 			phoneNumber({
 				async sendOTP(_, code) {
@@ -171,13 +171,13 @@ describe("phone auth flow", async () => {
 
 	const newEmail = "new-email@email.com";
 	it("should set password and update user", async () => {
-		const res = await client.user.setPassword({
-			newPassword: "password",
-			fetchOptions: {
-				headers,
+		const res = await auth.api.setPassword({
+			body: {
+				newPassword: "password",
 			},
+			headers,
 		});
-		expect(res.error).toBe(null);
+
 		const changedEmailRes = await client.user.changeEmail({
 			newEmail,
 			fetchOptions: {
