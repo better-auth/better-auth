@@ -5,7 +5,7 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import { deleteSessionCookie, parseCookies, parseSetCookieHeader } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
@@ -143,20 +143,16 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionId);
-					if (!session) {
 						ctx.setCookie(multiSessionCookieName, "", {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
+					if (!session) {
 						return ctx.json({
 							success: true,
 						});
 					}
 					await ctx.context.internalAdapter.deleteSession(sessionId);
-					ctx.setCookie(multiSessionCookieName, "", {
-						...ctx.context.authCookies.sessionToken.options,
-						maxAge: 0,
-					});
 					return ctx.json({
 						success: true,
 					});
