@@ -9,6 +9,7 @@ import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import D from "path";
 
 let possiblePaths = ["auth.ts", "auth.tsx"];
 
@@ -41,13 +42,17 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 		const tsConfigContent = fs.readFileSync(tsConfigPath, "utf8");
 		const strippedTsConfigContent = stripJsonComments(tsConfigContent);
 		const tsConfig = JSON.parse(strippedTsConfigContent);
-		const { paths = {} } = tsConfig.compilerOptions || {};
+		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
 
 		const result: Record<string, string> = {};
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
-			for (const _ of aliasPaths) {
-				result[alias[0] || ""] = "../";
+			for (const aliasedPath of aliasPaths) {
+				const resolvedBaseUrl = path.join(cwd, baseUrl);
+				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0,-1) : alias;
+				const finalAliasedPath = aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0,-1) : aliasedPath;
+
+				result[finalAlias || ""] = path.join(resolvedBaseUrl,finalAliasedPath);
 			}
 		}
 		addSvelteKitEnvModules(result);
