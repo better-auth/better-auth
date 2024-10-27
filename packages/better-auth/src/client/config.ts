@@ -5,9 +5,10 @@ import type { AtomListener, ClientOptions } from "./types";
 import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
+	const isCredentialsSupported = "credentials" in Request.prototype;
 	const $fetch = createFetch({
 		baseURL: getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL),
-		credentials: "include",
+		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		...options?.fetchOptions,
 		plugins: options?.disableDefaultFetchPlugins
