@@ -120,4 +120,21 @@ const auth = new BetterAuth({
 });
 ```
 
-This setup reduces database calls while keeping session data reasonably fresh and secure.
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
+
+```ts title="client.ts"
+const session = await authClient.getSession({ query: {
+    disableCookieCache: true
+}})
+```
+
+or on the server
+
+```ts title="server.ts"
+auth.api.getSession({
+    query: {
+        disableCookieCache: true,
+    }, 
+    headers: req.headers, // pass the headers
+});
+```
