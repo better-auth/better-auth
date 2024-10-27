@@ -56,7 +56,7 @@ You can't register a user using the email OTP plugin. You can only sign in or ve
 Before signing in or verifying email, you need to send an OTP to the user's email address.
 
 ```ts title="example.ts"
-await authClient.emailOtp.sendVerificationOTP({
+await authClient.emailOtp.sendVerificationOtp({
     email: "user-email@email.com",
     type: "sign-in" // or "email-verification"
 })
@@ -67,7 +67,7 @@ await authClient.emailOtp.sendVerificationOTP({
 Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
 
 ```ts title="example.ts"
-const user = await authClient.signIn.emailOTP({
+const user = await authClient.signIn.emailOtp({
     email: "user-email@email.com",
     otp: "123456"
 })
