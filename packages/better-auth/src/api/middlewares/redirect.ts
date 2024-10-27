@@ -23,7 +23,11 @@ export const redirectURLMiddleware = createAuthMiddleware(async (ctx) => {
 				url.startsWith(origin),
 			);
 			if (!isTrustedOrigin) {
-				logger.error(`Invalid ${label}`, { [label]: url, trustedOrigins });
+				logger.error(`Invalid ${label}: ${url}`);
+				logger.info(
+					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
+					`Current list of trustedOrigins: ${trustedOrigins}`,
+				);
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
 		}
