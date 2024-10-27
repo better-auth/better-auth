@@ -152,9 +152,13 @@ describe("oauth2", async () => {
 	});
 
 	it("should handle server error during OAuth flow", async () => {
-		server.service.once("beforeUserinfo", (tokenResponse) => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				email: "oauth2@test.com",
+				name: "OAuth2 Test",
+				sub: "oauth2",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
 			};
 			userInfoResponse.statusCode = 500;
 		});
