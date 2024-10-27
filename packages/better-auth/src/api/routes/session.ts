@@ -15,6 +15,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
+			query: z.optional(
+				z.object({
+					/**
+					 * If cookie cache is enabled, it will disable the cache
+					 * and fetch the session from the database
+					 */
+					disableCookieCache: z.boolean(),
+				}),
+			),
 			requireHeaders: true,
 		},
 		async (ctx) => {
@@ -40,7 +49,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				/**
 				 * If session data is present in the cookie, return it
 				 */
-				if (sessionData && ctx.context.options.session?.cookieCache?.enabled) {
+				if (
+					sessionData &&
+					ctx.context.options.session?.cookieCache?.enabled &&
+					!ctx.query?.disableCookieCache
+				) {
 					const session = JSON.parse(sessionData)?.session;
 					console.log({ session });
 					if (session?.expiresAt > new Date()) {
