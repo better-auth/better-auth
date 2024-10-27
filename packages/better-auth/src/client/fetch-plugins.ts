@@ -36,14 +36,15 @@ export const csrfPlugin = {
 	async init(url, options) {
 		if (options?.method !== "GET") {
 			options = options || {};
+			const isCredentialsSupported = "credentials" in Request.prototype;
 			const { data, error } = await betterFetch<{
 				csrfToken: string;
 			}>("/csrf", {
 				body: undefined,
 				baseURL: options.baseURL,
+				...(isCredentialsSupported ? { credentials: "include" } : {}),
 				plugins: [],
 				method: "GET",
-				credentials: "include",
 				customFetchImpl: options.customFetchImpl,
 			});
 			if (error) {
