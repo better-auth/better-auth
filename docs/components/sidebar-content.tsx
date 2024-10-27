@@ -608,7 +608,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "TanStack Start",
-				icon: Icons.tanstackStart,
+				icon: Icons.tanstack,
 				href: "/docs/integrations/tanstack",
 			},
 			{
