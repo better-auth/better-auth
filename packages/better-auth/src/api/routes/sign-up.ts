@@ -11,7 +11,7 @@ import type {
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
-import { parseAdditionalUserInput } from "../../db/schema";
+import { parseUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { redirectURLMiddleware } from "../middlewares/redirect";
 import { logger } from "../../utils";
@@ -80,7 +80,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const additionalData = parseAdditionalUserInput(
+			const additionalData = parseUserInput(
 				ctx.context.options,
 				additionalFields as any,
 			);

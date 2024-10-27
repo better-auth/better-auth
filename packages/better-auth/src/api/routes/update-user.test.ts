@@ -128,4 +128,54 @@ describe("updateUser", async () => {
 		});
 		expect(sessionAttempt.data).toBeNull();
 	});
+
+	it("shouldn't pass defaults", async () => {
+		const { client, sessionSetter, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						newField: {
+							type: "string",
+							defaultValue: "default",
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const headers = new Headers();
+		await client.signUp.email({
+			email: "new-email@emial.com",
+			name: "name",
+			password: "password",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		const res = await db.update<{ newField: string }>({
+			model: "user",
+			update: {
+				newField: "new",
+			},
+			where: [
+				{
+					field: "email",
+					value: "new-email@emial.com",
+				},
+			],
+		});
+		expect(res?.newField).toBe("new");
+
+		const updated = await client.user.update({
+			name: "newName",
+			fetchOptions: {
+				headers,
+			},
+		});
+		//@ts-expect-error
+		expect(updated.data?.user.newField).toBe("new");
+	});
 });

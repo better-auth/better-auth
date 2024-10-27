@@ -41,7 +41,11 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					user: session.user,
 				});
 			}
-			const additionalFields = parseUserInput(ctx.context.options, rest);
+			const additionalFields = parseUserInput(
+				ctx.context.options,
+				rest,
+				"update",
+			);
 			const user = await ctx.context.internalAdapter.updateUserByEmail(
 				session.user.email,
 				{
