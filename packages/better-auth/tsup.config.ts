@@ -29,9 +29,8 @@ export default defineConfig((env) => {
 		},
 		format: ["esm", "cjs"],
 		minify: true,
-		splitting: false,
+		splitting: true,
 		bundle: true,
 		skipNodeModulesBundle: true,
-		target: "es2022",
 	};
 });
