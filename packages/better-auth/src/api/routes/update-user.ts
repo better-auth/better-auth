@@ -54,6 +54,13 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
+			/**
+			 * Update the session cookie with the new user data
+			 */
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user,
+			});
 			return ctx.json({
 				user,
 			});
