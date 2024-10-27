@@ -347,9 +347,9 @@ export const admin = (options?: AdminOptions) => {
 							banReason:
 								ctx.body.banReason || options?.defaultBanReason || "No reason",
 							banExpires: ctx.body.banExpiresIn
-								? Date.now() + ctx.body.banExpiresIn * 1000
+								? getDate(ctx.body.banExpiresIn, "sec")
 								: options?.defaultBanExpiresIn
-									? Date.now() + options.defaultBanExpiresIn * 1000
+									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
 					);
@@ -479,7 +479,7 @@ export const admin = (options?: AdminOptions) => {
 						input: false,
 					},
 					banExpires: {
-						type: "number",
+						type: "date",
 						required: false,
 						input: false,
 					},
