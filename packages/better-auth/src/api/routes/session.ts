@@ -21,7 +21,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z.boolean(),
+					disableCookieCache: z.boolean().optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -55,9 +55,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					!ctx.query?.disableCookieCache
 				) {
 					const session = JSON.parse(sessionData)?.session;
-					console.log({ session });
 					if (session?.expiresAt > new Date()) {
-						console.log(session);
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
