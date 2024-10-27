@@ -14,7 +14,7 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
-import { deleteSessionCookie } from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -76,8 +76,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						options?.backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
-							twoFactorEnabled: true,
+						const updatedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								twoFactorEnabled: true,
+							},
+						);
+						const newSession = await ctx.context.internalAdapter.createSession(
+							updatedUser.id,
+						);
+						/**
+						 * Update the session cookie with the new user data
+						 */
+						await setSessionCookie(ctx, {
+							session: newSession,
+							user,
 						});
 					}
 					//delete existing two factor

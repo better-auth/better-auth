@@ -12,6 +12,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
+import { setSessionCookie } from "../../../cookies";
 
 export type TOTPOptions = {
 	/**
@@ -165,8 +166,18 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			}
 
 			if (!user.twoFactorEnabled) {
-				await ctx.context.internalAdapter.updateUser(user.id, {
-					twoFactorEnabled: true,
+				const updatedUser = await ctx.context.internalAdapter.updateUser(
+					user.id,
+					{
+						twoFactorEnabled: true,
+					},
+				);
+				const newSession = await ctx.context.internalAdapter.createSession(
+					user.id,
+				);
+				await setSessionCookie(ctx, {
+					session: newSession,
+					user: updatedUser,
 				});
 			}
 
