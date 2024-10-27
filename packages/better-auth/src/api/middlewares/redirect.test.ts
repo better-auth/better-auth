@@ -4,6 +4,7 @@ import { createAuthClient } from "../../client";
 
 describe("redirectURLMiddleware", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:5000", "https://trusted.com"],
 		emailAndPassword: {
 			enabled: true,
 			async sendResetPassword(url, user) {},
@@ -76,5 +77,31 @@ describe("redirectURLMiddleware", async (it) => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+
+	it("should work with list of trusted origins ", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:5000/reset-password",
+		});
+		expect(res.data?.status).toBeTruthy();
+
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				// @ts-expect-error - query is not defined in the type
+				query: {
+					currentURL: "http://localhost:5000",
+				},
+			},
+		});
+		expect(res2.data?.session).toBeDefined();
 	});
 });
