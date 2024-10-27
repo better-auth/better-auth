@@ -601,11 +601,15 @@ export const contents: Content[] = [
 				icon: Icons.svelteKit,
 				href: "/docs/integrations/svelte-kit",
 			},
-
 			{
 				title: "Solid Start",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
+			},
+			{
+				title: "TanStack Start",
+				icon: Icons.tanstackStart,
+				href: "/docs/integrations/tanstack",
 			},
 			{
 				group: true,
