@@ -9,6 +9,7 @@ import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { compareHash } from "../../crypto/hash";
 import { createEmailVerificationToken } from "./email-verification";
+import { isDevelopment } from "std-env";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -111,6 +112,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (!callbackURL) {
+			logger.error("No callback URL found");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -168,6 +170,11 @@ export const callbackOAuth = createAuthEndpoint(
 					(!isTrustedProvider && !userInfo.emailVerified) ||
 					!c.context.options.account?.accountLinking?.enabled
 				) {
+					if (isDevelopment) {
+						logger.warn(
+							`User already exist but account isn't linked to ${provider.id}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
+						);
+					}
 					redirectOnError("account_not_linked");
 				}
 				try {

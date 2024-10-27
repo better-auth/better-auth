@@ -18,7 +18,7 @@
     "bump": "bumpp",
     "typecheck": "tsc --noEmit"
   },
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "exports": {
     ".": {
@@ -259,7 +259,6 @@
     "zod": "^3.22.5"
   },
   "files": [
-    "dist/*",
-    "./package.json"
+    "dist"
   ]
 }
