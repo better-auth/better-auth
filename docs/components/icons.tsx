@@ -259,7 +259,7 @@ export const Icons = {
 			/>
 		</svg>
 	),
-	tanstack: () => (
+	tanstack: (props?: SVGProps<any>) => (
 		<svg
 			className={cn(props?.className)}
 			xmlns="http://www.w3.org/2000/svg"
@@ -267,7 +267,7 @@ export const Icons = {
 			height="1.2em"
 			viewBox="0 0 100 100"
 		>
-			<mask id="a" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+			<mask id="a" style={{maskType: "alpha"}} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
 				<circle cx="50" cy="50" r="50" className="fill-foreground"/>
 			</mask>
 			<g mask="url(#a)">
