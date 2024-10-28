@@ -261,7 +261,7 @@ const auth = betterAuth({
             default: `true (if base URL is 'https')`
         },
         disableCSRFCheck: {
-            description: "Disable trusted origin check. ⚠︎ This may expose you to CSRF and open redirect attacks.",
+            description: "Disable csrf protection checks. ⚠︎ only use this if you know what you are doing.",
             type: 'boolean',
             default: false
         }
