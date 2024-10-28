@@ -184,7 +184,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
  */
 export const listSessions = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/user/list-sessions",
+		"/list-sessions",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
@@ -207,7 +207,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
  * revoke a single session
  */
 export const revokeSession = createAuthEndpoint(
-	"/user/revoke-session",
+	"/revoke-session",
 	{
 		method: "POST",
 		body: z.object({
@@ -242,7 +242,7 @@ export const revokeSession = createAuthEndpoint(
  * revoke all user sessions
  */
 export const revokeSessions = createAuthEndpoint(
-	"/user/revoke-sessions",
+	"/revoke-sessions",
 	{
 		method: "POST",
 		use: [sessionMiddleware],

@@ -58,7 +58,7 @@ describe("account", async () => {
 	});
 	const { headers } = await signInWithTestUser();
 	it("should list all accounts", async () => {
-		const accounts = await client.user.listAccounts({
+		const accounts = await client.listAccounts({
 			fetchOptions: {
 				headers,
 			},
@@ -67,7 +67,7 @@ describe("account", async () => {
 	});
 
 	it("should link account", async () => {
-		const linkAccountRes = await client.user.linkSocial(
+		const linkAccountRes = await client.linkSocial(
 			{
 				provider: "google",
 				callbackURL: "/callback",
@@ -110,7 +110,7 @@ describe("account", async () => {
 			},
 		});
 		const { headers: headers2 } = await signInWithTestUser();
-		const accounts = await client.user.listAccounts({
+		const accounts = await client.listAccounts({
 			fetchOptions: { headers: headers2 },
 		});
 		expect(accounts.data?.length).toBe(2);
@@ -118,7 +118,7 @@ describe("account", async () => {
 
 	it("shouldn't link existing account", async () => {
 		const { headers: headers2 } = await signInWithTestUser();
-		const linkAccountRes = await client.user.linkSocial(
+		const linkAccountRes = await client.linkSocial(
 			{
 				provider: "google",
 				callbackURL: "/callback",

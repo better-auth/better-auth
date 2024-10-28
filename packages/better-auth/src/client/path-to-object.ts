@@ -114,7 +114,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 											]
 										: [
 												Prettify<
-													T["path"] extends `/user/update`
+													T["path"] extends `/update-user`
 														? InferUserUpdateCtx<COpts>
 														: InferCtx<C>
 												>?,

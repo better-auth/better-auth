@@ -35,7 +35,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	let pluginsAtoms = {} as Record<string, Atom<any>>;
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
-		"/user/revoke-sessions": "POST",
+		"/revoke-sessions": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{
@@ -43,7 +43,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 			matcher(path) {
 				return (
 					path === "/sign-out" ||
-					path === "/user/update" ||
+					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
 					path.startsWith("/sign-up")
 				);
