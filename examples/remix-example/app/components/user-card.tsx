@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -84,7 +83,7 @@ export default function UserCard() {
 		useState<boolean>(false);
 
 	const { data: activeSessions } = useSWR("/sessions", async () => {
-		return (await authClient.user.listSessions()).data;
+		return (await authClient.listSessions()).data;
 	});
 	return (
 		<Card>

@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { client, signOut, user, useSession } from "@/lib/auth-client";
+import { client, signOut, useSession } from "@/lib/auth-client";
 import { Session } from "@/lib/auth-types";
 import { MobileIcon } from "@radix-ui/react-icons";
 import {
