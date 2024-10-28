@@ -342,13 +342,7 @@ export default function UserCard() {
 					variant="secondary"
 					onClick={async () => {
 						setIsSignOut(true);
-						await signOut({
-							fetchOptions: {
-								body: {
-									callbackURL: "/",
-								},
-							},
-						});
+						await signOut();
 						setIsSignOut(false);
 					}}
 					disabled={isSignOut}
