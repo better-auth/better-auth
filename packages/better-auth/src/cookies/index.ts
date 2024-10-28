@@ -188,6 +188,21 @@ export async function setSessionCookie(
 			ctx.context.secret,
 			ctx.context.authCookies.sessionData.options,
 		));
+	/**
+	 * If secondary storage is enabled, store the session data in the secondary storage
+	 * This is useful if the session got updated and we want to update the session data in the
+	 * secondary storage
+	 */
+	if (ctx.context.options.secondaryStorage) {
+		await ctx.context.secondaryStorage?.set(
+			session.session.id,
+			JSON.stringify({
+				user: session.user,
+				session: session.session,
+			}),
+			session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
+		);
+	}
 }
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {

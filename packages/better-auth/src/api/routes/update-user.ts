@@ -53,17 +53,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
-
-			//update the session data in the secondary storage
-			await ctx.context.secondaryStorage?.set(
-				session.session.id,
-				JSON.stringify({
-					user,
-					session: session.session,
-				}),
-				session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
-			);
-
 			/**
 			 * Update the session cookie with the new user data
 			 */
