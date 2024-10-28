@@ -174,7 +174,7 @@ export default function UserCard() {
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(activeSession.id);
-												const res = await authClient.user.revokeSession({
+												const res = await authClient.revokeSession({
 													id: activeSession.id,
 												});
 
@@ -453,7 +453,7 @@ function ChangePassword() {
 								return;
 							}
 							setLoading(true);
-							const res = await authClient.user.changePassword({
+							const res = await authClient.changePassword({
 								newPassword: newPassword,
 								currentPassword: currentPassword,
 								revokeOtherSessions: signOutDevices,

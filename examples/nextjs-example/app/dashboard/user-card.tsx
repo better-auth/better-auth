@@ -180,7 +180,7 @@ export default function UserCard(props: {
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(session.id);
-												const res = await client.user.revokeSession({
+												const res = await client.revokeSession({
 													id: session.id,
 												});
 
@@ -497,7 +497,7 @@ function ChangePassword() {
 								return;
 							}
 							setLoading(true);
-							const res = await user.changePassword({
+							const res = await client.changePassword({
 								newPassword: newPassword,
 								currentPassword: currentPassword,
 								revokeOtherSessions: signOutDevices,
@@ -610,7 +610,7 @@ function EditUserDialog(props: { session: Session | null }) {
 						disabled={isLoading}
 						onClick={async () => {
 							setIsLoading(true);
-							await user.update({
+							await user.updateUser({
 								image: image ? await convertImageToBase64(image) : undefined,
 								name: name ? name : undefined,
 								fetchOptions: {

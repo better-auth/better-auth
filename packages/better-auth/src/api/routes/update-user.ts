@@ -1,5 +1,6 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
+
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
