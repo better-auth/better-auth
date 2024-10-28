@@ -25,7 +25,7 @@ The user table can be extended by plugins to store additional data. When a plugi
 To update user information, you can use the `updateUser` function provided by the client. The `updateUser` function takes an object with the following properties:
 
 ```ts
-await authClient.user.update({
+await authClient.updateUser({
     image: "https://example.com/image.jpg",
     name: "John Doe",
 })
@@ -66,7 +66,7 @@ export const auth = betterAuth({
 Once enabled, use the `changeEmail` function on the client to update a user’s email. The user must verify their current email before changing it.
 
 ```ts
-await authClient.user.changeEmail({
+await authClient.changeEmail({
     newEmail: "new-email@email.com",
     callbackURL: "/dashboard", //to redirect after verification
 });
@@ -83,7 +83,7 @@ After verification, the new email is updated in the user table, and a confirmati
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
 
 ```ts
-await authClient.user.changePassword({
+await authClient.changePassword({
     newPassword: "newPassword123",
     currentPassword: "oldPassword123",
     revokeOtherSessions: true, // revoke all other sessions the user is signed into
@@ -95,7 +95,7 @@ await authClient.user.changePassword({
 If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
 
 ```ts
-await authClient.user.setPassword({
+await authClient.setPassword({
     password,
 });
 ```
@@ -125,7 +125,7 @@ The account table stores the authentication data of the user. The account table 
 To list user accounts you can use `client.user.listAccounts` method. Which will return all accounts associated with a user.
 
 ```ts
-const accounts = await authClient.user.listAccounts();
+const accounts = await authClient.listAccounts();
 ```
 ### Account Linking
 
@@ -165,7 +165,7 @@ Users already signed in can manually link their account to additional social pro
 - **Linking Social Accounts:** Use the `user.linkSocial` method on the client to link a social provider to the user's account.
 
   ```ts
-  await client.user.linkSocial({
+  await client.linkSocial({
       provider: "google", // Provider to link
       callbackURL: "/callback" // Callback URL after linking completes
   });

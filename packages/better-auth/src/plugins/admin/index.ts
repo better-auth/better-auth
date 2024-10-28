@@ -117,7 +117,7 @@ export const admin = (options?: AdminOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path === "/user/list-sessions";
+						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;

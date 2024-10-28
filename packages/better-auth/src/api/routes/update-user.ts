@@ -1,6 +1,6 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
-import { alphabet, generateRandomString } from "../../crypto/random";
+
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
@@ -11,7 +11,7 @@ import { parseUserInput } from "../../db/schema";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/user/update",
+		"/update-user",
 		{
 			method: "POST",
 			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
@@ -67,7 +67,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 	);
 
 export const changePassword = createAuthEndpoint(
-	"/user/change-password",
+	"/change-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -154,7 +154,7 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
-	"/user/set-password",
+	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -211,7 +211,7 @@ export const setPassword = createAuthEndpoint(
 );
 
 export const deleteUser = createAuthEndpoint(
-	"/user/delete",
+	"/delete-user",
 	{
 		method: "POST",
 		body: z.object({
@@ -250,7 +250,7 @@ export const deleteUser = createAuthEndpoint(
 );
 
 export const changeEmail = createAuthEndpoint(
-	"/user/change-email",
+	"/change-email",
 	{
 		method: "POST",
 		query: z

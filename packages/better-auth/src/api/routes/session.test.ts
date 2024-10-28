@@ -201,7 +201,7 @@ describe("session", async () => {
 			},
 		);
 
-		const response = await client.user.listSessions({
+		const response = await client.listSessions({
 			fetchOptions: {
 				headers,
 			},
@@ -227,7 +227,7 @@ describe("session", async () => {
 				onSuccess: sessionSetter(headers2),
 			},
 		});
-		await client.user.revokeSession({
+		await client.revokeSession({
 			fetchOptions: {
 				headers,
 			},
@@ -239,7 +239,7 @@ describe("session", async () => {
 			},
 		});
 		expect(session.data).toBeNull();
-		const revokeRes = await client.user.revokeSessions({
+		const revokeRes = await client.revokeSessions({
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -324,7 +324,7 @@ describe("session storage", async () => {
 			},
 		});
 		expect(session.data).not.toBeNull();
-		const res = await client.user.revokeSession({
+		const res = await client.revokeSession({
 			fetchOptions: {
 				headers,
 			},
