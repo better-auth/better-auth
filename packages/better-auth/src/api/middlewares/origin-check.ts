@@ -15,7 +15,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const { body, query, context } = ctx;
 	const originHeader =
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
-	console.log({ originHeader });
 	const callbackURL = body?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const currentURL = query?.currentURL;
@@ -28,7 +27,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		);
 		if (!isTrustedOrigin) {
 			logger.error(`Invalid ${label}: ${url}`);
-			console.log("trustedOrigins", trustedOrigins, "url", url);
 			logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${trustedOrigins}`,

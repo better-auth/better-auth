@@ -9,6 +9,9 @@ describe("redirectURLMiddleware", async (it) => {
 			enabled: true,
 			async sendResetPassword(url, user) {},
 		},
+		advanced: {
+			disableOriginCheck: false,
+		},
 	});
 
 	it("should not allow untrusted origins", async (ctx) => {
@@ -47,7 +50,7 @@ describe("redirectURLMiddleware", async (it) => {
 
 	it("shouldn't allow untrusted origin headers", async (ctx) => {
 		const client = createAuthClient({
-			baseURL: "http://malicious.com", // Untrusted origin
+			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 				headers: {
@@ -60,7 +63,23 @@ describe("redirectURLMiddleware", async (it) => {
 			password: testUser.password,
 		});
 		expect(res.error?.status).toBe(403);
-		// expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+
+	it("shouldn't allow untrusted origin subdomains", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://sub-domain.trusted.com",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("shouldn't allow untrusted currentURL", async (ctx) => {

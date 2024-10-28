@@ -2,7 +2,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type Atom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
-import { addCurrentURL, addOrigin, redirectPlugin } from "./fetch-plugins";
+import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	/* check if the credentials property is supported. Useful for cf workers */
@@ -10,18 +10,16 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	const baseURL = getBaseURL(
 		options?.fetchOptions?.baseURL || options?.baseURL,
 	);
-	/* set the origin header to the baseURL if it exists. this is useful for non browser environments */
-	const origin = baseURL ? new URL(baseURL).origin : undefined;
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		...options?.fetchOptions,
+
 		plugins: options?.disableDefaultFetchPlugins
 			? options.fetchOptions?.plugins
 			: [
 					redirectPlugin,
-					addOrigin,
 					addCurrentURL,
 					...(options?.fetchOptions?.plugins?.filter(
 						(pl) => pl !== undefined,

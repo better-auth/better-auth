@@ -63,6 +63,9 @@ export async function getTestInstance<
 		rateLimit: {
 			enabled: false,
 		},
+		advanced: {
+			disableOriginCheck: true,
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({

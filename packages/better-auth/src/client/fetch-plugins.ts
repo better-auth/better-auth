@@ -28,22 +28,3 @@ export const addCurrentURL = {
 		},
 	},
 } satisfies BetterFetchPlugin;
-
-export const addOrigin = {
-	id: "add-origin",
-	name: "Add origin",
-	init: (url, options) => {
-		return {
-			url,
-			options: {
-				...options,
-				headers: {
-					...(options?.baseURL
-						? { origin: new URL(options.baseURL).origin }
-						: {}),
-					...options?.headers,
-				},
-			},
-		};
-	},
-} satisfies BetterFetchPlugin;
