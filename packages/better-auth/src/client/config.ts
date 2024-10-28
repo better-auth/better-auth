@@ -2,18 +2,23 @@ import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type Atom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
-import { addCurrentURL, csrfPlugin, redirectPlugin } from "./fetch-plugins";
+import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
+	/* check if the credentials property is supported. Useful for cf workers */
+	const isCredentialsSupported = "credentials" in Request.prototype;
+	const baseURL = getBaseURL(
+		options?.fetchOptions?.baseURL || options?.baseURL,
+	);
 	const $fetch = createFetch({
-		baseURL: getBaseURL(options?.fetchOptions?.baseURL || options?.baseURL),
-		credentials: "include",
+		baseURL,
+		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		...options?.fetchOptions,
+
 		plugins: options?.disableDefaultFetchPlugins
 			? options.fetchOptions?.plugins
 			: [
-					...(!options?.disableCSRFTokenCheck ? [csrfPlugin] : []),
 					redirectPlugin,
 					addCurrentURL,
 					...(options?.fetchOptions?.plugins?.filter(

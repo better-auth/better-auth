@@ -62,17 +62,6 @@ export function getCookies(options: BetterAuthOptions) {
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
-		csrfToken: {
-			name: `${secureCookiePrefix}${cookiePrefix}.csrf_token`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 60 * 24 * 7,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
 		state: {
 			name: `${secureCookiePrefix}${cookiePrefix}.state`,
 			options: {

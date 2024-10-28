@@ -107,7 +107,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				$fetch,
 				() => ({
 					method: "POST",
-					credentials: "include",
 					body: {
 						orgId: activeOrgId.get(),
 					},

@@ -4,7 +4,6 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
@@ -20,7 +19,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				image: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
-			use: [sessionMiddleware, redirectURLMiddleware],
+			use: [sessionMiddleware],
 		},
 		async (ctx) => {
 			const body = ctx.body as {
@@ -263,7 +262,7 @@ export const changeEmail = createAuthEndpoint(
 			newEmail: z.string().email(),
 			callbackURL: z.string().optional(),
 		}),
-		use: [sessionMiddleware, redirectURLMiddleware],
+		use: [sessionMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {

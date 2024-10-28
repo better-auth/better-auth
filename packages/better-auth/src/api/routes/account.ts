@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { socialProviderList } from "../../social-providers";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { APIError } from "better-call";
 import { generateState, parseState, type OAuth2Tokens } from "../../oauth2";
 import { generateCodeVerifier } from "oslo/oauth2";
@@ -49,7 +48,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			provider: z.enum(socialProviderList),
 		}),
-		use: [redirectURLMiddleware, sessionMiddleware],
+		use: [sessionMiddleware],
 	},
 	async (c) => {
 		const session = c.context.session;

@@ -2,12 +2,15 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 
-describe("redirectURLMiddleware", async (it) => {
+describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:5000", "https://trusted.com"],
 		emailAndPassword: {
 			enabled: true,
 			async sendResetPassword(url, user) {},
+		},
+		advanced: {
+			disableCSRFCheck: false,
 		},
 	});
 
@@ -32,12 +35,68 @@ describe("redirectURLMiddleware", async (it) => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000",
+				},
 			},
 		});
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(res.data?.session).toBeDefined();
+	});
+
+	it("shouldn't allow untrusted origin headers", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "malicious.com",
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("shouldn't allow untrusted origin subdomains", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://sub-domain.trusted.com",
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow untrusted origin if they don't contain cookies", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://sub-domain.trusted.com",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
 		});
 		expect(res.data?.session).toBeDefined();
 	});
@@ -76,7 +135,7 @@ describe("redirectURLMiddleware", async (it) => {
 			redirectTo: "http://malicious.com",
 		});
 		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid callbackURL");
+		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
 	it("should work with list of trusted origins ", async (ctx) => {
@@ -84,6 +143,9 @@ describe("redirectURLMiddleware", async (it) => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com",
+				},
 			},
 		});
 		const res = await client.forgetPassword({

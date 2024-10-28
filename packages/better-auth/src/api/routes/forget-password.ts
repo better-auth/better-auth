@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -20,7 +19,6 @@ export const forgetPassword = createAuthEndpoint(
 			 */
 			redirectTo: z.string(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -82,7 +80,6 @@ export const forgetPasswordCallback = createAuthEndpoint(
 		query: z.object({
 			callbackURL: z.string(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { token } = ctx.params;

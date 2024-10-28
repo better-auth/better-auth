@@ -324,12 +324,13 @@ describe("session storage", async () => {
 			},
 		});
 		expect(session.data).not.toBeNull();
-		await client.user.revokeSession({
+		const res = await client.user.revokeSession({
 			fetchOptions: {
 				headers,
 			},
 			id: session.data?.session?.id || "",
 		});
+		console.log(res);
 		const revokedSession = await client.getSession({
 			fetchOptions: {
 				headers,
