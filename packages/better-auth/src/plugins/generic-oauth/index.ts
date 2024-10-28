@@ -10,7 +10,6 @@ import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
 import { setSessionCookie } from "../../cookies";
-import { redirectURLMiddleware } from "../../api/middlewares/redirect";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
@@ -148,7 +147,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						providerId: z.string(),
 						callbackURL: z.string().optional(),
 					}),
-					use: [redirectURLMiddleware],
 				},
 				async (ctx) => {
 					const { providerId } = ctx.body;

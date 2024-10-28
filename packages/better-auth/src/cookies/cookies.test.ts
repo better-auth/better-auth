@@ -41,7 +41,7 @@ describe("cookies", async () => {
 		const { client, testUser } = await getTestInstance({
 			advanced: { useSecureCookies: true },
 		});
-		await client.signIn.email(
+		const res = await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -49,10 +49,12 @@ describe("cookies", async () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
+					console.log(setCookie, context);
 					expect(setCookie).toContain("Secure");
 				},
 			},
 		);
+		console.log(res);
 	});
 
 	it("should use secure cookies when the base url is https", async () => {

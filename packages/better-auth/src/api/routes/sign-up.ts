@@ -13,7 +13,6 @@ import type {
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { logger } from "../../utils";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
@@ -33,7 +32,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				callbackURL: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
-			use: [redirectURLMiddleware],
 		},
 		async (ctx) => {
 			if (!ctx.context.options.emailAndPassword?.enabled) {

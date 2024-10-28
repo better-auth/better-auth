@@ -260,7 +260,7 @@ const auth = betterAuth({
             type: 'booleam',
             default: `true (if base URL is 'https')`
         },
-        disableOriginCheck: {
+        disableCSRFCheck: {
             description: "Disable trusted origin check. ⚠︎ This may expose you to CSRF and open redirect attacks.",
             type: 'boolean',
             default: false

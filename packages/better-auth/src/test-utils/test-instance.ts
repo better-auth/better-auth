@@ -63,15 +63,16 @@ export async function getTestInstance<
 		rateLimit: {
 			enabled: false,
 		},
-		advanced: {
-			disableOriginCheck: true,
-		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		advanced: {
+			disableCSRFCheck: true,
+			...options?.advanced,
+		},
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {

@@ -2,7 +2,7 @@ import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 
-describe("redirectURLMiddleware", async (it) => {
+describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:5000", "https://trusted.com"],
 		emailAndPassword: {
@@ -10,7 +10,7 @@ describe("redirectURLMiddleware", async (it) => {
 			async sendResetPassword(url, user) {},
 		},
 		advanced: {
-			disableOriginCheck: false,
+			disableCSRFCheck: false,
 		},
 	});
 
@@ -55,6 +55,7 @@ describe("redirectURLMiddleware", async (it) => {
 				customFetchImpl,
 				headers: {
 					origin: "malicious.com",
+					cookie: "session=123",
 				},
 			},
 		});
@@ -72,6 +73,7 @@ describe("redirectURLMiddleware", async (it) => {
 				customFetchImpl,
 				headers: {
 					origin: "http://sub-domain.trusted.com",
+					cookie: "session=123",
 				},
 			},
 		});
@@ -80,6 +82,23 @@ describe("redirectURLMiddleware", async (it) => {
 			password: testUser.password,
 		});
 		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow untrusted origin if they don't contain cookies", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://sub-domain.trusted.com",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.data?.session).toBeDefined();
 	});
 
 	it("shouldn't allow untrusted currentURL", async (ctx) => {

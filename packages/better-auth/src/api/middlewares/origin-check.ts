@@ -3,13 +3,10 @@ import { createAuthMiddleware } from "../call";
 import { logger } from "../../utils";
 
 /**
- * Middleware to validate callbackURL, redirectURL, currentURL and origin against trustedOrigins,
+ * A middleware to validate callbackURL, redirectURL, currentURL and origin against trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (
-		ctx.context.options.advanced?.disableOriginCheck ||
-		ctx.request?.method !== "POST"
-	) {
+	if (ctx.request?.method !== "POST") {
 		return;
 	}
 	const { body, query, context } = ctx;
@@ -19,6 +16,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const redirectURL = body?.redirectTo;
 	const currentURL = query?.currentURL;
 	const trustedOrigins = context.trustedOrigins;
+	const usesCookies = ctx.headers?.has("cookie");
 
 	const validateURL = (url: string | undefined, label: string) => {
 		const isTrustedOrigin = trustedOrigins.some(
@@ -34,10 +32,10 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-
+	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+		validateURL(originHeader, "origin");
+	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	currentURL && validateURL(currentURL, "currentURL");
-	//origin must always be validated
-	validateURL(originHeader, "origin");
 });

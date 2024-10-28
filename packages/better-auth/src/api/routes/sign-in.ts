@@ -4,7 +4,6 @@ import { z } from "zod";
 import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { logger } from "../../utils";
@@ -33,7 +32,6 @@ export const signInOAuth = createAuthEndpoint(
 			 */
 			provider: z.enum(socialProviderList),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -103,7 +101,6 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			dontRememberMe: z.boolean().default(false).optional(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
