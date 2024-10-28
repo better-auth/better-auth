@@ -108,7 +108,6 @@ describe("crossSubdomainCookies", () => {
 				crossSubDomainCookies: {
 					enabled: true,
 				},
-				disableCSRFCheck: true,
 			},
 		});
 

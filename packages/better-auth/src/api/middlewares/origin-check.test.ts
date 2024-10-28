@@ -32,6 +32,9 @@ describe("redirectURLMiddleware", async (it) => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000",
+				},
 			},
 		});
 		const res = await client.signIn.email({
@@ -40,6 +43,24 @@ describe("redirectURLMiddleware", async (it) => {
 			callbackURL: "http://localhost:3000/callback",
 		});
 		expect(res.data?.session).toBeDefined();
+	});
+
+	it("shouldn't allow untrusted origin headers", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://malicious.com", // Untrusted origin
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "malicious.com",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+		// expect(res.error?.message).toBe("Invalid callbackURL");
 	});
 
 	it("shouldn't allow untrusted currentURL", async (ctx) => {
@@ -76,7 +97,7 @@ describe("redirectURLMiddleware", async (it) => {
 			redirectTo: "http://malicious.com",
 		});
 		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid callbackURL");
+		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
 	it("should work with list of trusted origins ", async (ctx) => {
@@ -84,6 +105,9 @@ describe("redirectURLMiddleware", async (it) => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com",
+				},
 			},
 		});
 		const res = await client.forgetPassword({
