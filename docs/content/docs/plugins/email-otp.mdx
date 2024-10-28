@@ -116,7 +116,7 @@ export const auth = betterAuth({
 ```
 
 - `otpLength`: The length of the OTP. Defaults to 6.
-- `otpExpiry`: The expiry time of the OTP in seconds. Defaults to 300 seconds.
+- `expiresIn`: The expiry time of the OTP in seconds. Defaults to 300 seconds.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -125,7 +125,7 @@ export const auth = betterAuth({
     plugins: [
         emailOTP({
             otpLength: 8,
-            otpExpiry: 600
+            expiresIn: 600
         })
     ]
 })
