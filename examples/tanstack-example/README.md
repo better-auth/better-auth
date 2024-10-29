@@ -9,6 +9,7 @@ Email & Password . <u>User Registration</u> .
 2. Run the following commands
    ```bash
    pnpm install
+   pnpx @better-auth/cli migrate --config=app/lib/server/auth.ts
    pnpm dev
    ```
 3. Open the browser and navigate to `http://localhost:3000`

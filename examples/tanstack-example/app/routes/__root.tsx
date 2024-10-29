@@ -27,16 +27,16 @@ function RootComponent() {
 
 	useEffect(() => {
 		if (data?.user) {
-			navigate("/");
+			navigate({ to: "/" });
 		} else {
-			navigate("/auth/signin");
+			navigate({ to:"/auth/signin" });
 		}
 	}, [data, navigate]);
 
 	return (
 		<RootDocument>
 			<nav>
-				{data ? (
+				{data?.user ? (
 					<>
 						<p>Hello {data.user.name}</p>
 						<button type="button" onClick={() => signOut()}>

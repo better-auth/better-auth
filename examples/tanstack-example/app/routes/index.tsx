@@ -10,7 +10,7 @@ function Home() {
 
   return (
     <div>
-      {data && (
+      {data?.user && (
         <div>
           <p>Name: {data.user.name}</p>
           <p>Email: {data.user.email}</p>

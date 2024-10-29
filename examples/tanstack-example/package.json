@@ -8,23 +8,25 @@
     "build": "vinxi build",
     "start": "vinxi start"
   },
-  "dependencies": {
-    "@better-fetch/fetch": "1.1.12",
-    "@tanstack/react-router": "^1.77.5",
-    "@tanstack/router-plugin": "^1.76.4",
-    "@tanstack/start": "^1.77.5",
-    "better-auth": "^0.6.2",
-    "better-sqlite3": "^11.3.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vinxi": "^0.4.3",
-    "vite": "^5.4.10"
-  },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/bun": "latest",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
     "typescript": "^5.6.3",
-    "vite-tsconfig-paths": "^4.2.1"
+    "vite-tsconfig-paths": "^5.0.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.77.6",
+    "@tanstack/start": "^1.77.6",
+    "@vitejs/plugin-react": "^4.3.3",
+    "better-auth": "^0.6.2",
+    "better-sqlite3": "^11.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vinxi": "^0.4.3"
   }
 }
