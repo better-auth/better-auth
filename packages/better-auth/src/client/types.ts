@@ -57,7 +57,6 @@ export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
-	disableCSRFTokenCheck?: boolean;
 	disableDefaultFetchPlugins?: boolean;
 }
 

@@ -26,7 +26,7 @@ describe("bearer", async () => {
 	});
 
 	it("should list session", async () => {
-		const sessions = await client.user.listSessions({
+		const sessions = await client.listSessions({
 			fetchOptions: {
 				headers: {
 					authorization: `Bearer ${token}`,

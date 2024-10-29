@@ -1,17 +1,13 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { socialProviderList } from "../../social-providers";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { APIError } from "better-call";
-import { generateState, parseState, type OAuth2Tokens } from "../../oauth2";
+import { generateState } from "../../oauth2";
 import { generateCodeVerifier } from "oslo/oauth2";
-import { HIDE_METADATA, logger } from "../../utils";
-import { compareHash } from "../../crypto/hash";
-import { getSessionFromCtx, sessionMiddleware } from "./session";
-import { userSchema } from "../../db/schema";
+import { sessionMiddleware } from "./session";
 
 export const listUserAccounts = createAuthEndpoint(
-	"/user/list-accounts",
+	"/list-accounts",
 	{
 		method: "GET",
 		use: [sessionMiddleware],
@@ -26,7 +22,7 @@ export const listUserAccounts = createAuthEndpoint(
 );
 
 export const linkSocialAccount = createAuthEndpoint(
-	"/user/link-social",
+	"/link-social",
 	{
 		method: "POST",
 		requireHeaders: true,
@@ -49,7 +45,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			provider: z.enum(socialProviderList),
 		}),
-		use: [redirectURLMiddleware, sessionMiddleware],
+		use: [sessionMiddleware],
 	},
 	async (c) => {
 		const session = c.context.session;

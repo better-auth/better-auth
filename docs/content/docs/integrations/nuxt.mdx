@@ -92,7 +92,7 @@ const { data: session } = authClient.useSession(useFetch);
 To add middleware to your nuxt project, you can use the `useSession` method from the client.
 
 ```ts title="middleware/auth.global.ts"
-import { authClient } from "~/lib/auth-client"l
+import { authClient } from "~/lib/auth-client";
 export default defineNuxtRouteMiddleware(async (to, from) => {
 	const { data: session } = await authClient.useSession(useFetch); 
 	if (!session.value) {

@@ -401,7 +401,9 @@ export interface BetterAuthOptions {
 		 */
 		useSecureCookies?: boolean;
 		/**
-		 * Disable CSRF check
+		 * Disable trusted origins check
+		 *
+		 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
 		 */
 		disableCSRFCheck?: boolean;
 		/**

@@ -58,7 +58,7 @@ Now you can make authenticated API calls:
 
 ```ts title="client.ts"
 // This request is automatically authenticated
-const { data } = await authClient.user.listSessions();
+const { data } = await authClient.listSessions();
 ```
 
 ### 4. Per-Request Token (Optional)
@@ -66,7 +66,7 @@ const { data } = await authClient.user.listSessions();
 You can also provide the token for individual requests:
 
 ```ts title="client.ts"
-const { data } = await authClient.user.listSessions({
+const { data } = await authClient.listSessions({
     fetchOptions: {
         headers: {
             Authorization: `Bearer ${token}`

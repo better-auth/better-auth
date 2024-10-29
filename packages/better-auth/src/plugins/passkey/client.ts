@@ -184,7 +184,6 @@ export const passkeyClient = () => {
 				$fetch,
 				{
 					method: "GET",
-					credentials: "include",
 				},
 			);
 			return {
