@@ -1,25 +1,47 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { signIn, signOut, useSession } from '~/lib/client/auth';
+import { createFileRoute } from "@tanstack/react-router";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { useSession } from "~/lib/client/auth";
 
-export const Route = createFileRoute('/')({
-  component: Home,
-})
+export const Route = createFileRoute("/")({
+	component: Home,
+});
 
 function Home() {
-  const { data } = useSession();
+	const { data } = useSession();
 
-  return (
-    <div>
-      {data?.user && (
-        <div>
-          <p>Name: {data.user.name}</p>
-          <p>Email: {data.user.email}</p>
-          <p>Session ID: {data.session.id}</p>
-          <button type="button" onClick={() => signOut()}>
-            Sign Out
-          </button>
-        </div>
-      )}
-    </div>
-  )
+	return (
+		<div className="container flex justify-center">
+			<Card className="w-fit">
+				{data?.user && (
+					<>
+						<CardHeader>
+							<CardTitle>Welcome, {data.user.name}!</CardTitle>
+							<CardDescription>
+								You are signed in as {data.user.email}.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="flex flex-col gap-2 justify-start">
+							<div className="flex flex-col">
+								<p>Created At</p>
+								<Input
+									readOnly
+									disabled
+									value={data.user.createdAt.toLocaleString()}
+								/>
+								<p>Session ID</p>
+								<Input readOnly disabled value={data.session.id} />
+							</div>
+						</CardContent>
+					</>
+				)}
+			</Card>
+		</div>
+	);
 }
