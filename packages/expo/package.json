@@ -1,0 +1,19 @@
+{
+    "name": "@better-auth/expo",
+    "version": "0.1.0",
+    "main": "dist/index.cjs",
+    "module": "dist/index.mjs",
+    "devDependencies": {
+        "better-auth": "workspace:^",
+        "unbuild": "^2.0.0"
+    },
+    "exports": {
+        ".": {
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "dependencies": {
+        "@better-fetch/fetch": "1.1.12"
+    }
+}

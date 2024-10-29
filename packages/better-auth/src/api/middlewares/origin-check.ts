@@ -3,7 +3,7 @@ import { createAuthMiddleware } from "../call";
 import { logger } from "../../utils";
 
 /**
- * A middleware to validate callbackURL, redirectURL, currentURL and origin against trustedOrigins.
+ * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST") {
@@ -32,6 +32,10 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
+	console.log({
+		originHeader,
+		trustedOrigins,
+	});
 	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
 		validateURL(originHeader, "origin");
 	}

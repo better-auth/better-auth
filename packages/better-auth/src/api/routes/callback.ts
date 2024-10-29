@@ -7,7 +7,7 @@ import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
-import { compareHash } from "../../crypto/hash";
+import { compareHash, hmac } from "../../crypto/hash";
 import { createEmailVerificationToken } from "./email-verification";
 import { isDevelopment } from "std-env";
 
@@ -47,42 +47,28 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-
-		const parsedState = parseState(c.query.state);
+		const [state, signature] = c.query.state.split(".");
+		const parsedState = parseState(state);
 		if (!parsedState.success) {
 			c.context.logger.error("Unable to parse state");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-
-		const {
-			data: { callbackURL, currentURL, link },
-		} = parsedState;
-
-		const storedState = await c.getSignedCookie(
-			c.context.authCookies.state.name,
-			c.context.secret,
-		);
-
-		if (!storedState) {
-			logger.error("No stored state found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-
-		const isValidState = await compareHash(c.query.state, storedState);
+		const isValidState = await hmac.verify({
+			value: state,
+			signature,
+			secret: c.context.secret,
+		});
 		if (!isValidState) {
 			logger.error("OAuth state mismatch");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-		const codeVerifier = await c.getSignedCookie(
-			c.context.authCookies.pkCodeVerifier.name,
-			c.context.secret,
-		);
+		const {
+			data: { callbackURL, errorURL, link, codeVerifier },
+		} = parsedState;
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
@@ -130,13 +116,13 @@ export const callbackOAuth = createAuthEndpoint(
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}
-			throw c.redirect(callbackURL || currentURL || c.context.options.baseURL!);
+			throw c.redirect(errorURL || callbackURL || c.context.options.baseURL!);
 		}
 
 		function redirectOnError(error: string) {
 			throw c.redirect(
 				`${
-					currentURL || callbackURL || `${c.context.baseURL}/error`
+					errorURL || callbackURL || `${c.context.baseURL}/error`
 				}?error=${error}`,
 			);
 		}
@@ -256,6 +242,8 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
-		throw c.redirect(callbackURL);
+
+		const url = new URL(callbackURL);
+		throw c.redirect(url.toString());
 	},
 );

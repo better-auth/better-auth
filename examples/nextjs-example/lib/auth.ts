@@ -8,10 +8,12 @@ import {
 	admin,
 	multiSession,
 	username,
+	createAuthMiddleware,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { z } from "zod";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -23,13 +25,13 @@ export const auth = betterAuth({
 	emailVerification: {
 		async sendVerificationEmail(user, url) {
 			console.log("Sending verification email to", user.email);
-			const res = await resend.emails.send({
-				from,
-				to: to || user.email,
-				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
-			});
-			console.log(res, user.email);
+			// const res = await resend.emails.send({
+			// 	from,
+			// 	to: to || user.email,
+			// 	subject: "Verify your email address",
+			// 	html: `<a href="${url}">Verify your email address</a>`,
+			// });
+			// console.log(res, user.email);
 		},
 		sendOnSignUp: true,
 	},
@@ -61,6 +63,7 @@ export const auth = betterAuth({
 			clientId: process.env.GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
 			accessType: "offline",
+			prompt: "select_account",
 		},
 		discord: {
 			clientId: process.env.DISCORD_CLIENT_ID || "",
@@ -117,5 +120,51 @@ export const auth = betterAuth({
 		admin(),
 		multiSession(),
 		username(),
+		{
+			id: "expo",
+			hooks: {
+				after: [
+					{
+						matcher(context) {
+							return context.path?.startsWith("/callback");
+						},
+						handler: createAuthMiddleware(async (ctx) => {
+							const response = ctx.context.returned as Response;
+
+							if (response.status === 302) {
+								const location = response.headers.get("location");
+
+								if (!location) {
+									return;
+								}
+								const trustedOrigins = ctx.context.trustedOrigins.filter(
+									(origin) => !origin.startsWith("http"),
+								);
+								const isTrustedOrigin = trustedOrigins.some((origin) =>
+									location?.startsWith(origin),
+								);
+
+								if (!isTrustedOrigin) {
+									return;
+								}
+								const cookie = response.headers.get("set-cookie");
+
+								if (!cookie) {
+									return;
+								}
+								const url = new URL(location);
+								url.searchParams.set("cookie", cookie);
+								response.headers.set("location", url.toString());
+
+								return {
+									response,
+								};
+							}
+						}),
+					},
+				],
+			},
+		},
 	],
+	trustedOrigins: ["expo"],
 });

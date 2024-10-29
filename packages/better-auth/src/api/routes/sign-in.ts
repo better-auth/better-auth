@@ -1,12 +1,12 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier } from "oslo/oauth2";
+import { generateCodeVerifier, generateState } from "oslo/oauth2";
 import { z } from "zod";
-import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { logger } from "../../utils";
+import { generateState2, logger } from "../../utils";
+import { hmac } from "../../crypto/hash";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
@@ -48,40 +48,14 @@ export const signInOAuth = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const cookie = c.context.authCookies;
-		const currentURL = c.query?.currentURL
-			? new URL(c.query?.currentURL)
-			: null;
-
-		const callbackURL = c.body.callbackURL?.startsWith("http")
-			? c.body.callbackURL
-			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
-
-		const state = await generateState(
-			callbackURL || currentURL?.origin || c.context.options.baseURL,
-		);
-		await c.setSignedCookie(
-			cookie.state.name,
-			state.hash,
-			c.context.secret,
-			cookie.state.options,
-		);
-		const codeVerifier = generateCodeVerifier();
-		await c.setSignedCookie(
-			cookie.pkCodeVerifier.name,
-			codeVerifier,
-			c.context.secret,
-			cookie.pkCodeVerifier.options,
-		);
+		const { codeVerifier, state } = await generateState2(c);
 		const url = await provider.createAuthorizationURL({
-			state: state.raw,
+			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
 		return c.json({
 			url: url.toString(),
-			state: state,
-			codeVerifier,
 			redirect: true,
 		});
 	},

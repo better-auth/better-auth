@@ -1,4 +1,5 @@
 import { defineConfig } from "tsup";
+
 export default defineConfig((env) => {
 	return {
 		entry: {
@@ -28,8 +29,6 @@ export default defineConfig((env) => {
 			node: "./src/integrations/node.ts",
 		},
 		format: ["esm", "cjs"],
-		minify: true,
-		splitting: true,
 		bundle: true,
 		skipNodeModulesBundle: true,
 	};

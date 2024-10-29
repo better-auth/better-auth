@@ -1,4 +1,4 @@
-import { env } from "std-env";
+// import { env } from "std-env";
 import { BetterAuthError } from "../error";
 
 function checkHasPath(url: string): boolean {
@@ -20,6 +20,7 @@ function withPath(url: string, path = "/api/auth") {
 	path = path.startsWith("/") ? path : `/${path}`;
 	return `${url}${path}`;
 }
+const env = process.env;
 
 export function getBaseURL(url?: string, path?: string) {
 	if (url) {
