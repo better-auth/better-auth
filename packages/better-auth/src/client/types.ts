@@ -4,7 +4,7 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../types/plugins";
-import type { Atom } from "nanostores";
+import type { Atom, WritableAtom } from "nanostores";
 import type {
 	LiteralString,
 	StripEmptyObjects,
@@ -20,6 +20,12 @@ export type AtomListener = {
 	signal: "_sessionSignal" | Omit<string, "_sessionSignal">;
 };
 
+interface Store {
+	notify: (signal: string) => void;
+	listen: (signal: string, listener: () => void) => void;
+	atoms: Record<string, WritableAtom<any>>;
+}
+
 export interface BetterAuthClientPlugin {
 	id: LiteralString;
 	/**
@@ -30,7 +36,7 @@ export interface BetterAuthClientPlugin {
 	/**
 	 * Custom actions
 	 */
-	getActions?: ($fetch: BetterFetch) => Record<string, any>;
+	getActions?: ($fetch: BetterFetch, $store: Store) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.

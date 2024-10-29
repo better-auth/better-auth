@@ -7,11 +7,13 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
+	InferSessionFromClient,
+	InferUserFromClient,
 	IsSignal,
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
-import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
+import type { BetterFetchError } from "@better-fetch/fetch";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -45,21 +47,27 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsActions,
 		pluginsAtoms,
 		$fetch,
+		$store,
 		atomListeners,
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
-	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
 
-	type Session = ReturnType<typeof $session.get>["data"];
+	type Session = {
+		session: InferSessionFromClient<Option>;
+		user: InferUserFromClient<Option>;
+	};
 
-	function useStoreSession() {
-		return useStore($session);
-	}
-
-	function useSession(): ReturnType<typeof useStoreSession>;
+	function useSession(): () => DeepReadonly<
+		Ref<{
+			data: Session | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+		}>
+	>;
 	function useSession<F extends (...args: any) => any>(
 		useFetch: F,
 	): Promise<{
@@ -75,7 +83,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(_sessionSignal);
+			const ref = useStore(pluginsAtoms._sessionSignal);
 			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
 			const authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
 			return useFetch(`${authPath}/get-session`, {
@@ -88,30 +96,32 @@ export function createAuthClient<Option extends ClientOptions>(
 				};
 			});
 		}
-		return useStoreSession();
+		return resolvedHooks.useSession();
 	}
 
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
 		useSession,
+		$fetch,
+		$store,
 	};
 
 	const proxy = createDynamicPathProxy(
 		routes,
 		$fetch,
 		pluginPathMethods,
-		{
-			...pluginsAtoms,
-			_sessionSignal,
-		},
+		pluginsAtoms,
 		atomListeners,
 	);
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
-			$Infer: typeof $Infer;
+			$Infer: {
+				Session: Session;
+			};
 			$fetch: typeof $fetch;
+			$store: typeof $store;
 		};
 }
