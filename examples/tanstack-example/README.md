@@ -3,13 +3,15 @@ An example of using Better Auth with [TanStack Start](https://tanstack.com/start
 
 ## Setup
 
-To install dependencies:
+1. Move .env.example to .env and provide necessary variables
+
+2. install dependencies:
 
 ```bash
 pnpm install
 ```
 
-To migrate Better-Auth:
+3. migrate required tables:
 
 ```bash
 pnpx @better-auth/cli migrate
@@ -23,5 +25,3 @@ pnpm dev
 
 ## Preview
 ![Sign In Preview](./preview.webp)
-
-

@@ -3,7 +3,7 @@ import { Outlet, ScrollRestoration } from "@tanstack/react-router";
 import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import type * as React from "react";
 import { useEffect, useState } from "react";
-import { signOut, useSession } from "~/lib/client/auth";
+import { signOut, useSession } from "~/lib/auth-client";
 import globalStylesheet from "~/lib/style/global.css?url";
 import "~/lib/style/global.css";
 import { DoorOpen, LoaderCircle, Moon, Sun } from "lucide-react";
@@ -42,9 +42,9 @@ export const Route = createRootRoute({
 
 function RootComponent() {
 	const [theme, setTheme] = useState<"light" | "dark">("light");
-	const [loading, setLoading] = useState(true);
-	const { data, isPending } = useSession();
+	const { data, isPending, error } = useSession();
 	const { navigate } = useRouter();
+	console.log()
 
 	useEffect(() => {
 		if (!data?.user) {
@@ -61,11 +61,6 @@ function RootComponent() {
 		);
 	}, [data, navigate]);
 
-	useEffect(() => {
-		if (!isPending) {
-			setLoading(false);
-		}
-	}, [isPending]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -77,12 +72,7 @@ function RootComponent() {
 
 	return (
 		<RootDocument>
-			{loading ? (
-				<div className="flex h-screen w-screen items-center justify-center">
-					<LoaderCircle className="animate-spin h-20 w-20" />
-				</div>
-			) : (
-				<>
+			<>
 					<nav className="grid grid-cols-3 items-center w-full p-4">
 						<div className="flex items-center justify-center gap-2">
 							<svg
@@ -305,7 +295,6 @@ function RootComponent() {
 					</nav>
 					<Outlet />
 				</>
-			)}
 			<Toaster richColors position="bottom-center" />
 		</RootDocument>
 	);
