@@ -1,19 +1,25 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { AlertCircle, CheckCircle2 } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '~/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '~/components/ui/card'
-import { Input } from '~/components/ui/input'
-import { Label } from '~/components/ui/label'
-import { twoFactor } from '~/lib/auth-client'
+import { createFileRoute } from "@tanstack/react-router";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { twoFactor } from "~/lib/auth-client";
 
-export const Route = createFileRoute('/auth/two-factor')({
-  component: TwoFactor
-})
+export const Route = createFileRoute("/auth/two-factor")({
+	component: TwoFactor,
+});
 
-
-function TwoFactor(){
-    const [totpCode, setTotpCode] = useState("");
+function TwoFactor() {
+	const [totpCode, setTotpCode] = useState("");
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState(false);
 
@@ -36,8 +42,8 @@ function TwoFactor(){
 				}
 			});
 	};
-    return (
-        <main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+	return (
+		<main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
 			<Card className="w-[350px]">
 				<CardHeader>
 					<CardTitle>TOTP Verification</CardTitle>
@@ -80,5 +86,5 @@ function TwoFactor(){
 				</CardContent>
 			</Card>
 		</main>
-    )
+	);
 }

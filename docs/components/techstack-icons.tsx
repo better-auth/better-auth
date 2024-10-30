@@ -37,5 +37,5 @@ export const techStackIcons: TechStackIconType = {
 	tanstack: {
 		name: "TanStack Start",
 		icon: <Icons.tanstack className="w-10 h-10" />,
-	}
+	},
 };

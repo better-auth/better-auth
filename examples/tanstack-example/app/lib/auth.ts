@@ -1,4 +1,4 @@
-import { twoFactor } from 'better-auth/plugins';
+import { twoFactor } from "better-auth/plugins";
 import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
 
@@ -19,5 +19,5 @@ export const auth = betterAuth({
 			clientSecret: process.env.GITHUB_CLIENT_SECRET!,
 		},
 	},
-	plugins: [twoFactor()]
+	plugins: [twoFactor()],
 });

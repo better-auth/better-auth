@@ -137,12 +137,10 @@ export const jwt = (options?: JwtOptions) => {
 							publicKey: JSON.stringify(publicWebKey),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
-										await symmetricEncrypt(
-											{
-												key: ctx.context.options.secret!,
-												data: stringifiedPrivateWebKey,
-											}
-										),
+										await symmetricEncrypt({
+											key: ctx.context.options.secret!,
+											data: stringifiedPrivateWebKey,
+										}),
 									)
 								: stringifiedPrivateWebKey,
 							createdAt: new Date(),
@@ -152,12 +150,10 @@ export const jwt = (options?: JwtOptions) => {
 					}
 
 					let privateWebKey = privateKeyEncryptionEnabled
-						? await symmetricDecrypt(
-								{
-									key: ctx.context.options.secret!,
-									data: JSON.parse(key.privateKey),
-								}
-							)
+						? await symmetricDecrypt({
+								key: ctx.context.options.secret!,
+								data: JSON.parse(key.privateKey),
+							})
 						: key.privateKey;
 
 					const privateKey = await importJWK(JSON.parse(privateWebKey));
