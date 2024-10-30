@@ -1,0 +1,51 @@
+{
+  "name": "tanstack-example",
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/bun": "latest",
+    "@types/node": "^22.8.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite-tsconfig-paths": "^5.0.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.0",
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-navigation-menu": "^1.2.1",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@rn-primitives/dialog": "^1.1.0",
+    "@tanstack/react-router": "^1.77.6",
+    "@tanstack/start": "^1.77.6",
+    "@types/ua-parser-js": "^0.7.39",
+    "@vitejs/plugin-react": "^4.3.3",
+    "better-auth": "^0.6.2",
+    "better-sqlite3": "^11.5.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.454.0",
+    "next-themes": "^0.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-qr-code": "^2.0.15",
+    "sonner": "^1.5.0",
+    "tailwind-merge": "^2.5.4",
+    "tailwindcss-animate": "^1.0.7",
+    "ua-parser-js": "^0.7.39",
+    "vinxi": "^0.4.3"
+  }
+}
