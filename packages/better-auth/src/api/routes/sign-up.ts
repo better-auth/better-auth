@@ -29,7 +29,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				name: ZodString;
 				email: ZodString;
 				password: ZodString;
-				callbackURL: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
 		},
@@ -172,22 +171,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				session,
 				user: createdUser,
 			});
-			return ctx.json(
-				{
-					user: createdUser as InferUser<O>,
-					session: session as InferSession<O>,
-				},
-				{
-					body: body.callbackURL
-						? {
-								url: body.callbackURL,
-								redirect: true,
-							}
-						: {
-								user: createdUser,
-								session,
-							},
-				},
-			);
+			return ctx.json({
+				user: createdUser as InferUser<O>,
+				session: session as InferSession<O>,
+			});
 		},
 	);
