@@ -17,7 +17,7 @@ import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
-	signal: "_sessionSignal" | Omit<string, "_sessionSignal">;
+	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
 interface Store {
@@ -99,9 +99,9 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 	: {};
 /**
  * signals are just used to recall a computed value.
- * as a convention they start with "_"
+ * as a convention they start with "$"
  */
-export type IsSignal<T> = T extends `_${infer _}` ? true : false;
+export type IsSignal<T> = T extends `$${infer _}` ? true : false;
 
 export type InferPluginsFromClient<O extends ClientOptions> =
 	O["plugins"] extends Array<BetterAuthClientPlugin>

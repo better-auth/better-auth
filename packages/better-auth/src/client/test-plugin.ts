@@ -53,9 +53,9 @@ const serverPlugin = {
 } satisfies BetterAuthPlugin;
 
 export const testClientPlugin = () => {
-	const _test = atom(false);
+	const $test = atom(false);
 	let testValue = 0;
-	const computedAtom = computed(_test, () => {
+	const computedAtom = computed($test, () => {
 		return testValue++;
 	});
 	return {
@@ -63,7 +63,7 @@ export const testClientPlugin = () => {
 		getActions($fetch) {
 			return {
 				setTestAtom(value: boolean) {
-					_test.set(value);
+					$test.set(value);
 				},
 				test: {
 					signOut: async () => {},
@@ -71,13 +71,13 @@ export const testClientPlugin = () => {
 			};
 		},
 		getAtoms($fetch) {
-			const _signal = atom(false);
-			const queryAtom = useAuthQuery<any>(_signal, "/test", $fetch, {
+			const $signal = atom(false);
+			const queryAtom = useAuthQuery<any>($signal, "/test", $fetch, {
 				method: "GET",
 			});
 			return {
-				_test,
-				_signal,
+				$test,
+				$signal,
 				computedAtom,
 				queryAtom,
 			};
@@ -86,37 +86,37 @@ export const testClientPlugin = () => {
 		atomListeners: [
 			{
 				matcher: (path) => path === "/test",
-				signal: "_test",
+				signal: "$test",
 			},
 			{
 				matcher: (path) => path === "/test2/sign-out",
-				signal: "_sessionSignal",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;
 };
 export const testClientPlugin2 = () => {
-	const _test2 = atom(false);
+	const $test2 = atom(false);
 	let testValue = 0;
-	const anotherAtom = computed(_test2, () => {
+	const anotherAtom = computed($test2, () => {
 		return testValue++;
 	});
 	return {
 		id: "test",
 		getAtoms($fetch) {
 			return {
-				_test2,
+				$test2,
 				anotherAtom,
 			};
 		},
 		atomListeners: [
 			{
 				matcher: (path) => path === "/test",
-				signal: "_test",
+				signal: "$test",
 			},
 			{
 				matcher: (path) => path === "/test2/sign-out",
-				signal: "_sessionSignal",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

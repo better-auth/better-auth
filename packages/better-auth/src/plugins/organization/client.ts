@@ -22,8 +22,8 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 	options?: O,
 ) => {
 	const activeOrgId = atom<string | null | undefined>(undefined);
-	const _listOrg = atom<boolean>(false);
-	const _activeOrgSignal = atom<boolean>(false);
+	const $listOrg = atom<boolean>(false);
+	const $activeOrgSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -80,7 +80,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		}),
 		getAtoms: ($fetch) => {
 			const listOrganizations = useAuthQuery<Organization[]>(
-				_listOrg,
+				$listOrg,
 				"/organization/list",
 				$fetch,
 				{
@@ -102,7 +102,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					}
 				>
 			>(
-				[activeOrgId, _activeOrgSignal],
+				[activeOrgId, $activeOrgSignal],
 				"/organization/activate",
 				$fetch,
 				() => ({
@@ -114,8 +114,8 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			);
 
 			return {
-				_listOrg,
-				_activeOrgSignal,
+				$listOrg,
+				$activeOrgSignal,
 				activeOrganization,
 				listOrganizations,
 			};
@@ -127,13 +127,13 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						path === "/organization/create" || path === "/organization/delete"
 					);
 				},
-				signal: "_listOrg",
+				signal: "$listOrg",
 			},
 			{
 				matcher(path) {
 					return path.startsWith("/organization");
 				},
-				signal: "_activeOrgSignal",
+				signal: "$activeOrgSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;
