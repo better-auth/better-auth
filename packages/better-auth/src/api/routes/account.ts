@@ -106,7 +106,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		const url = await provider.createAuthorizationURL({
 			state: state.raw,
 			codeVerifier,
-			redirectURI: `${c.context.baseURL}/link-account/${provider.id}`,
+			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
 		return c.json({
 			url: url.toString(),
