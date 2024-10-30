@@ -5,6 +5,10 @@
     "module": "dist/index.mjs",
     "devDependencies": {
         "better-auth": "workspace:^",
+        "expo-constants": "~16.0.2",
+        "expo-linking": "~6.3.1",
+        "expo-secure-store": "~13.0.2",
+        "expo-web-browser": "~13.0.3",
         "unbuild": "^2.0.0"
     },
     "exports": {
@@ -14,6 +18,8 @@
         }
     },
     "dependencies": {
-        "@better-fetch/fetch": "1.1.12"
+        "@better-fetch/fetch": "1.1.12",
+        "nanostores": "^0.11.2",
+        "react-native": "~0.74.6"
     }
 }

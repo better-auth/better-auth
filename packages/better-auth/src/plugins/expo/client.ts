@@ -1,21 +1,30 @@
 import { atom } from "nanostores";
-import type { BetterAuthClientPlugin } from "better-auth";
-import * as SecureStore from "expo-secure-store";
-import * as Linking from "expo-linking";
-import * as Browser from "expo-web-browser";
-import * as Constants from "expo-constants";
+import type { BetterAuthClientPlugin } from "../../types";
+import { Linking } from "react-native";
 
-export const expoClient = () => {
-	let sessionNotify = () => {};
+interface ExpoClientOptions {
+	storage: {
+		getItem: (key: string) => string;
+		setItem: (key: string, value: string) => void;
+		deleteItem: (key: string) => void;
+	};
+	scheme: string;
+}
+
+export const expoClient = (options: ExpoClientOptions) => {
+	const { storage } = options;
+	let notify = () => {};
 	const cookieName = "better-auth_cookie";
-	const storeCookie = SecureStore.getItem("cookie");
+	const storeCookie = storage.getItem("cookie");
 	const hasSessionCookie = storeCookie?.includes("session_token");
 	const isAuthenticated = atom<boolean>(!!hasSessionCookie);
-	const storage = SecureStore;
+	function createURL(path: string) {
+		return `${options.scheme}/${path}`;
+	}
 	return {
 		id: "expo",
 		getActions(_, $store) {
-			sessionNotify = () => $store.notify("$sessionSignal");
+			notify = () => $store.notify("_sessionSignal");
 			return {};
 		},
 		getAtoms() {
@@ -31,28 +40,28 @@ export const expoClient = () => {
 					async onSuccess(context) {
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							await storage.setItemAsync(cookieName, setCookie);
+							await storage.setItem(cookieName, setCookie);
 						}
 						if (
 							context.data.redirect &&
 							context.request.url.toString().includes("/sign-in")
 						) {
 							const callbackURL = context.request.body?.callbackURL;
-							const to = Linking.createURL(callbackURL);
+							const to = createURL(callbackURL);
 							const signInURL = context.data?.url;
 							const result = await Browser.openAuthSessionAsync(signInURL, to);
 							if (result.type !== "success") return;
 							const url = Linking.parse(result.url);
 							const cookie = String(url.queryParams?.cookie);
 							if (!cookie) return;
-							await storage.setItemAsync(cookieName, cookie);
-							sessionNotify();
+							await SecureStore.setItemAsync(cookieName, cookie);
+							notify();
 						}
 					},
 				},
 				async init(url, options) {
 					options = options || {};
-					const cookie = await storage.getItemAsync(cookieName);
+					const cookie = await SecureStore.getItemAsync(cookieName);
 					const scheme = Constants.default.expoConfig?.scheme;
 					const schemeURL = typeof scheme === "string" ? scheme : scheme?.[0];
 					if (!schemeURL) {
@@ -72,8 +81,8 @@ export const expoClient = () => {
 					}
 					if (url.includes("/sign-out")) {
 						isAuthenticated.set(false);
-						await SecureStore.deleteItemAsync(cookieName);
-						sessionNotify();
+						storage.deleteItem(cookieName);
+						notify();
 					}
 					return {
 						url,

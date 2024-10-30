@@ -1671,7 +1671,7 @@ importers:
         version: 3.11.3
       next:
         specifier: ^14.2.8
-        version: 14.2.13(react-dom@19.0.0-rc-cae764ce-20241025(react@18.3.1))(react@18.3.1)
+        version: 14.2.13(@babel/core@7.26.0)(react-dom@19.0.0-rc-cae764ce-20241025(react@18.3.1))(react@18.3.1)
       oauth2-mock-server:
         specifier: ^7.1.2
         version: 7.1.2
@@ -1684,6 +1684,9 @@ importers:
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      react-native:
+        specifier: ~0.74.6
+        version: 0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@18.3.1)
       solid-js:
         specifier: ^1.8.18
         version: 1.9.1
@@ -1772,10 +1775,28 @@ importers:
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
+      nanostores:
+        specifier: ^0.11.2
+        version: 0.11.3
+      react-native:
+        specifier: ~0.74.6
+        version: 0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@19.0.0-rc-cae764ce-20241025)
     devDependencies:
       better-auth:
         specifier: workspace:^
         version: link:../better-auth
+      expo-constants:
+        specifier: ~16.0.2
+        version: 16.0.2(expo@51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13))
+      expo-linking:
+        specifier: ~6.3.1
+        version: 6.3.1(expo@51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13))
+      expo-secure-store:
+        specifier: ~13.0.2
+        version: 13.0.2(expo@51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13))
+      expo-web-browser:
+        specifier: ~13.0.3
+        version: 13.0.3(expo@51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13))
       unbuild:
         specifier: ^2.0.0
         version: 2.0.0(typescript@5.6.3)
@@ -25650,6 +25671,24 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.12
 
+  '@react-native/virtualized-lists@0.74.88(@types/react@18.3.12)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@19.0.0-rc-cae764ce-20241025))(react@19.0.0-rc-cae764ce-20241025)':
+    dependencies:
+      invariant: 2.2.4
+      nullthrows: 1.1.1
+      react: 19.0.0-rc-cae764ce-20241025
+      react-native: 0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@19.0.0-rc-cae764ce-20241025)
+    optionalDependencies:
+      '@types/react': 18.3.12
+
+  '@react-native/virtualized-lists@0.74.88(@types/react@18.3.9)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      invariant: 2.2.4
+      nullthrows: 1.1.1
+      react: 18.3.1
+      react-native: 0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.9
+
   '@react-native/virtualized-lists@0.74.88(@types/react@18.3.9)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@19.0.0-rc-69d4b800-20241021))(react@19.0.0-rc-69d4b800-20241021)':
     dependencies:
       invariant: 2.2.4
@@ -35778,7 +35817,7 @@ snapshots:
 
   next-tick@1.1.0: {}
 
-  next@14.2.13(react-dom@19.0.0-rc-cae764ce-20241025(react@18.3.1))(react@18.3.1):
+  next@14.2.13(@babel/core@7.26.0)(react-dom@19.0.0-rc-cae764ce-20241025(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 14.2.13
       '@swc/helpers': 0.5.5
@@ -35788,7 +35827,7 @@ snapshots:
       postcss: 8.4.31
       react: 18.3.1
       react-dom: 19.0.0-rc-cae764ce-20241025(react@18.3.1)
-      styled-jsx: 5.1.1(react@18.3.1)
+      styled-jsx: 5.1.1(@babel/core@7.26.0)(react@18.3.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 14.2.13
       '@next/swc-darwin-x64': 14.2.13
@@ -37705,6 +37744,108 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@19.0.0-rc-cae764ce-20241025):
+    dependencies:
+      '@jest/create-cache-key-function': 29.7.0
+      '@react-native-community/cli': 13.6.9(encoding@0.1.13)
+      '@react-native-community/cli-platform-android': 13.6.9(encoding@0.1.13)
+      '@react-native-community/cli-platform-ios': 13.6.9(encoding@0.1.13)
+      '@react-native/assets-registry': 0.74.88
+      '@react-native/codegen': 0.74.88(@babel/preset-env@7.26.0(@babel/core@7.26.0))
+      '@react-native/community-cli-plugin': 0.74.88(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13)
+      '@react-native/gradle-plugin': 0.74.88
+      '@react-native/js-polyfills': 0.74.88
+      '@react-native/normalize-colors': 0.74.88
+      '@react-native/virtualized-lists': 0.74.88(@types/react@18.3.12)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@19.0.0-rc-cae764ce-20241025))(react@19.0.0-rc-cae764ce-20241025)
+      abort-controller: 3.0.0
+      anser: 1.4.10
+      ansi-regex: 5.0.1
+      base64-js: 1.5.1
+      chalk: 4.1.2
+      event-target-shim: 5.0.1
+      flow-enums-runtime: 0.0.6
+      glob: 7.2.3
+      invariant: 2.2.4
+      jest-environment-node: 29.7.0
+      jsc-android: 250231.0.0
+      memoize-one: 5.2.1
+      metro-runtime: 0.80.12
+      metro-source-map: 0.80.12
+      mkdirp: 0.5.6
+      nullthrows: 1.1.1
+      pretty-format: 26.6.2
+      promise: 8.3.0
+      react: 19.0.0-rc-cae764ce-20241025
+      react-devtools-core: 5.3.2
+      react-refresh: 0.14.2
+      react-shallow-renderer: 16.15.0(react@19.0.0-rc-cae764ce-20241025)
+      regenerator-runtime: 0.13.11
+      scheduler: 0.24.0-canary-efb381bbf-20230505
+      stacktrace-parser: 0.1.10
+      whatwg-fetch: 3.6.20
+      ws: 6.2.3
+      yargs: 17.7.2
+    optionalDependencies:
+      '@types/react': 18.3.12
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@babel/preset-env'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
+  react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@18.3.1):
+    dependencies:
+      '@jest/create-cache-key-function': 29.7.0
+      '@react-native-community/cli': 13.6.9(encoding@0.1.13)
+      '@react-native-community/cli-platform-android': 13.6.9(encoding@0.1.13)
+      '@react-native-community/cli-platform-ios': 13.6.9(encoding@0.1.13)
+      '@react-native/assets-registry': 0.74.88
+      '@react-native/codegen': 0.74.88(@babel/preset-env@7.26.0(@babel/core@7.26.0))
+      '@react-native/community-cli-plugin': 0.74.88(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13)
+      '@react-native/gradle-plugin': 0.74.88
+      '@react-native/js-polyfills': 0.74.88
+      '@react-native/normalize-colors': 0.74.88
+      '@react-native/virtualized-lists': 0.74.88(@types/react@18.3.9)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      abort-controller: 3.0.0
+      anser: 1.4.10
+      ansi-regex: 5.0.1
+      base64-js: 1.5.1
+      chalk: 4.1.2
+      event-target-shim: 5.0.1
+      flow-enums-runtime: 0.0.6
+      glob: 7.2.3
+      invariant: 2.2.4
+      jest-environment-node: 29.7.0
+      jsc-android: 250231.0.0
+      memoize-one: 5.2.1
+      metro-runtime: 0.80.12
+      metro-source-map: 0.80.12
+      mkdirp: 0.5.6
+      nullthrows: 1.1.1
+      pretty-format: 26.6.2
+      promise: 8.3.0
+      react: 18.3.1
+      react-devtools-core: 5.3.2
+      react-refresh: 0.14.2
+      react-shallow-renderer: 16.15.0(react@18.3.1)
+      regenerator-runtime: 0.13.11
+      scheduler: 0.24.0-canary-efb381bbf-20230505
+      stacktrace-parser: 0.1.10
+      whatwg-fetch: 3.6.20
+      ws: 6.2.3
+      yargs: 17.7.2
+    optionalDependencies:
+      '@types/react': 18.3.9
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@babel/preset-env'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
   react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.9)(encoding@0.1.13)(react@19.0.0-rc-69d4b800-20241021):
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
@@ -38035,6 +38176,12 @@ snapshots:
       react: 19.0.0-rc-7771d3a7-20240827
       react-is: 18.3.1
     optional: true
+
+  react-shallow-renderer@16.15.0(react@19.0.0-rc-cae764ce-20241025):
+    dependencies:
+      object-assign: 4.1.1
+      react: 19.0.0-rc-cae764ce-20241025
+      react-is: 18.3.1
 
   react-smooth@4.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
@@ -39394,10 +39541,12 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.4
 
-  styled-jsx@5.1.1(react@18.3.1):
+  styled-jsx@5.1.1(@babel/core@7.26.0)(react@18.3.1):
     dependencies:
       client-only: 0.0.1
       react: 18.3.1
+    optionalDependencies:
+      '@babel/core': 7.26.0
 
   styled-jsx@5.1.6(@babel/core@7.26.0)(react@19.0.0-rc-69d4b800-20241021):
     dependencies:
@@ -39762,7 +39911,7 @@ snapshots:
       postcss: 8.4.47
       postcss-import: 15.1.0(postcss@8.4.47)
       postcss-js: 4.0.1(postcss@8.4.47)
-      postcss-load-config: 4.0.2(postcss@8.4.47)(ts-node@10.9.1(@types/node@22.8.4)(typescript@5.6.3))
+      postcss-load-config: 4.0.2(postcss@8.4.47)(ts-node@10.9.1(@types/node@22.8.4)(typescript@5.3.3))
       postcss-nested: 6.2.0(postcss@8.4.47)
       postcss-selector-parser: 6.1.2
       resolve: 1.22.8
