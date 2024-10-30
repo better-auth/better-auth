@@ -2,8 +2,8 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
-import { decryptPrivateKey, encryptPrivateKey } from "./utils";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 
 type JWKOptions =
 	| {
@@ -137,9 +137,11 @@ export const jwt = (options?: JwtOptions) => {
 							publicKey: JSON.stringify(publicWebKey),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
-										encryptPrivateKey(
-											stringifiedPrivateWebKey,
-											ctx.context.options.secret!,
+										await symmetricEncrypt(
+											{
+												key: ctx.context.options.secret!,
+												data: stringifiedPrivateWebKey,
+											}
 										),
 									)
 								: stringifiedPrivateWebKey,
@@ -150,9 +152,11 @@ export const jwt = (options?: JwtOptions) => {
 					}
 
 					let privateWebKey = privateKeyEncryptionEnabled
-						? decryptPrivateKey(
-								JSON.parse(key.privateKey),
-								ctx.context.options.secret!,
+						? await symmetricDecrypt(
+								{
+									key: ctx.context.options.secret!,
+									data: JSON.parse(key.privateKey),
+								}
 							)
 						: key.privateKey;
 
