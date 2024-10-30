@@ -94,6 +94,7 @@ export const signInEmail = createAuthEndpoint(
 		body: z.object({
 			email: z.string(),
 			password: z.string(),
+			callbackURL: z.string().optional(),
 			/**
 			 * If this is true the session will only be valid for the current browser session
 			 * @default false
@@ -215,6 +216,8 @@ export const signInEmail = createAuthEndpoint(
 		return ctx.json({
 			user: user.user,
 			session,
+			redirect: !!ctx.body.callbackURL,
+			url: ctx.body.callbackURL,
 		});
 	},
 );
