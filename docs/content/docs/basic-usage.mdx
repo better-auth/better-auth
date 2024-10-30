@@ -192,6 +192,26 @@ export default {
 </template>
 ```
 
+## Signout
+
+To signout a user, you can use the `signOut` function provided by the client.
+
+```ts title="user-card.tsx"
+await authClient.signOut();
+```
+
+you can pass `fetchOptions` to redirect onSuccess
+  
+```ts title="user-card.tsx" 
+await authClient.signOut({
+  fetchOptions: {
+    onSuccess: () => {
+      router.push("/login"); // redirect to login page
+    },
+  },
+});
+```
+
 ## Session Management
 
 Once a user is signed in, you'll want to access their session. Better Auth allows you easily to access the session data from the server and client side.
