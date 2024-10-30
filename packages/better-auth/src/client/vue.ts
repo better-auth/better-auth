@@ -83,7 +83,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		useFetch?: UseFetch,
 	) {
 		if (useFetch) {
-			const ref = useStore(pluginsAtoms._sessionSignal);
+			const ref = useStore(pluginsAtoms.$sessionSignal);
 			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
 			const authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
 			return useFetch(`${authPath}/get-session`, {

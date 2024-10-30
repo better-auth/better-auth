@@ -21,7 +21,7 @@ export function getSessionAtom<Option extends ClientOptions>(
 		method: "GET",
 	});
 	return {
-		$session: session,
-		_sessionSignal: $signal,
+		session,
+		$sessionSignal: $signal,
 	};
 }

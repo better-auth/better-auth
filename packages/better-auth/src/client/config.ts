@@ -27,12 +27,12 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 					...pluginsFetchPlugins,
 				],
 	});
-	const { _sessionSignal, $session } = getSessionAtom<O>($fetch);
+	const { $sessionSignal, session } = getSessionAtom<O>($fetch);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
-		_sessionSignal,
-		session: $session,
+		$sessionSignal,
+		session,
 	} as Record<string, WritableAtom<any>>;
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
@@ -40,7 +40,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	};
 	const atomListeners: AtomListener[] = [
 		{
-			signal: "_sessionSignal",
+			signal: "$sessionSignal",
 			matcher(path) {
 				return (
 					path === "/sign-out" ||
@@ -65,13 +65,13 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	}
 
 	const $store = {
-		notify: (signal?: Omit<string, "_sessionSignal"> | "_sessionSignal") => {
+		notify: (signal?: Omit<string, "$sessionSignal"> | "$sessionSignal") => {
 			pluginsAtoms[signal as keyof typeof pluginsAtoms].set(
 				!pluginsAtoms[signal as keyof typeof pluginsAtoms].get(),
 			);
 		},
 		listen: (
-			signal: Omit<string, "_sessionSignal"> | "_sessionSignal",
+			signal: Omit<string, "$sessionSignal"> | "$sessionSignal",
 			listener: (value: boolean, oldValue?: boolean | undefined) => void,
 		) => {
 			pluginsAtoms[signal as keyof typeof pluginsAtoms].subscribe(listener);
