@@ -1,0 +1,134 @@
+---
+title: Email OTP
+description: Email OTP plugin for Better Auth.
+---
+
+The Email OTP plugin allows user to sign-in and verify their email using a one-time password (OTP) sent to their email address.
+
+<Callout>
+You can't register a user using the email OTP plugin. You can only sign in or verify the email address.
+</Callout>
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To enable anonymous authentication, add the anonymous plugin to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { emailOTP } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            emailOTP({ // [!code highlight]
+                    async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
+						// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
+					}, // [!code highlight]
+            }) // [!code highlight]
+        ]
+    })
+    ```
+    </Step>
+    <Step>
+    ### Add the client plugin
+
+    ```ts title="client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { emailOTPClient } from "better-auth/client/plugins"
+    
+    const client = createAuthClient({
+        plugins: [
+            emailOTPClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Send OTP
+
+Before signing in or verifying email, you need to send an OTP to the user's email address.
+
+```ts title="example.ts"
+await authClient.emailOtp.sendVerificationOtp({
+    email: "user-email@email.com",
+    type: "sign-in" // or "email-verification"
+})
+```
+
+### SignIn with OTP
+
+Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
+
+```ts title="example.ts"
+const user = await authClient.signIn.emailOtp({
+    email: "user-email@email.com",
+    otp: "123456"
+})
+```
+
+### Verify Email
+
+To verify the user's email address, use the `verifyEmail()` method.
+
+```ts title="example.ts"
+const user = await authClient.emailOtp.verifyEmail({
+    email: "user-email@email.com",
+    otp: "123456"
+})
+```
+
+## Options
+
+- `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
+  - `email`: The user's email address.
+  - `otp`: The OTP to send.
+  - `type`: The type of OTP to send. Can be either "sign-in" or "email-verification".
+
+### Example
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            async sendVerificationOTP({
+                email,
+                otp,
+                type
+            }) {
+                if(type === "sign-in") {
+                    // Send the OTP for sign-in
+                } else {
+                    // Send the OTP for email verification
+                }
+            },
+        })
+    ]
+})
+```
+
+- `otpLength`: The length of the OTP. Defaults to 6.
+- `otpExpiry`: The expiry time of the OTP in seconds. Defaults to 300 seconds.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            otpLength: 8,
+            otpExpiry: 600
+        })
+    ]
+})
+```
+
+- `sendVerificationOnSignUp`: A boolean value that determines whether to send the OTP when a user signs up. Defaults to false.

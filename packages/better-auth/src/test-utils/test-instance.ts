@@ -60,9 +60,6 @@ export async function getTestInstance<
 		emailAndPassword: {
 			enabled: true,
 		},
-		advanced: {
-			disableCSRFCheck: true,
-		},
 		rateLimit: {
 			enabled: false,
 		},
@@ -72,6 +69,10 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		advanced: {
+			disableCSRFCheck: true,
+			...options?.advanced,
+		},
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
@@ -187,9 +188,6 @@ export async function getTestInstance<
 		),
 		fetchOptions: {
 			customFetchImpl,
-			headers: {
-				origin: "http://localhost:" + (config?.port || 3000),
-			},
 		},
 	});
 	return {

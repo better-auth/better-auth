@@ -8,7 +8,7 @@ export function Features() {
 	return (
 		<>
 			<div className="flex flex-col lg:flex-row bg-white dark:bg-black w-full gap-4 mx-auto px-8">
-				<Card title="BetterAuth" icon={<Logo className=" w-44" />}></Card>
+				<Card title="Better Auth" icon={<Logo className=" w-44" />}></Card>
 			</div>
 		</>
 	);

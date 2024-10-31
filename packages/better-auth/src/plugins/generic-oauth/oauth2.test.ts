@@ -53,7 +53,7 @@ describe("oauth2", async () => {
 		},
 	});
 
-	server.service.once("beforeUserinfo", (userInfoResponse, req) => {
+	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
 		userInfoResponse.body = {
 			email: "oauth2@test.com",
 			name: "OAuth2 Test",
@@ -116,6 +116,33 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
+	it("should redirect to the provider and handle the response after linked", async () => {
+		let headers = new Headers();
+		const res = await authClient.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			{
+				onSuccess(context) {
+					const parsedSetCookie = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers.set(
+						"cookie",
+						`better-auth.state=${
+							parsedSetCookie.get("better-auth.state")?.value
+						}; better-auth.pk_code_verifier=${
+							parsedSetCookie.get("better-auth.pk_code_verifier")?.value
+						}`,
+					);
+				},
+			},
+		);
+		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
 	it("should handle invalid provider ID", async () => {
 		const res = await authClient.signIn.oauth2({
 			providerId: "invalid-provider",
@@ -125,9 +152,15 @@ describe("oauth2", async () => {
 	});
 
 	it("should handle server error during OAuth flow", async () => {
-		server.service.once("beforeTokenResponse", (tokenResponse) => {
-			tokenResponse.statusCode = 500;
-			tokenResponse.body = { error: "internal_server_error" };
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2@test.com",
+				name: "OAuth2 Test",
+				sub: "oauth2",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 500;
 		});
 
 		let headers = new Headers();

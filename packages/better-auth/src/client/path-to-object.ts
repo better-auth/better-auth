@@ -90,9 +90,13 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 	[key: string]: infer T;
 }
 	? T extends Endpoint
-		? T["options"]["metadata"] extends {
-				isAction: false;
-			}
+		? T["options"]["metadata"] extends
+				| {
+						isAction: false;
+				  }
+				| {
+						SERVER_ONLY: true;
+				  }
 			? {}
 			: PathToObject<
 					T["path"],
@@ -110,7 +114,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 											]
 										: [
 												Prettify<
-													T["path"] extends `/user/update`
+													T["path"] extends `/update-user`
 														? InferUserUpdateCtx<COpts>
 														: InferCtx<C>
 												>?,

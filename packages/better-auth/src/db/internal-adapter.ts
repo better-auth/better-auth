@@ -152,7 +152,7 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateId(),
+				id: generateId(32),
 				userId,
 				/**
 				 * If the user doesn't want to be remembered
@@ -190,7 +190,7 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return res;
+			return res as Session;
 		},
 		findSession: async (sessionId: string) => {
 			if (secondaryStorage) {
@@ -214,7 +214,7 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const session = await adapter.findOne<Session>({
+			const _session = await adapter.findOne<Session>({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -224,9 +224,11 @@ export const createInternalAdapter = (
 				],
 			});
 
-			if (!session) {
+			if (!_session) {
 				return null;
 			}
+
+			const session = convertFromDB(tables.session.fields, _session)!;
 
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
@@ -241,7 +243,7 @@ export const createInternalAdapter = (
 				return null;
 			}
 			return {
-				session: convertFromDB(tables.session.fields, session)!,
+				session,
 				user: convertFromDB(tables.user.fields, user)!,
 			};
 		},
@@ -285,7 +287,10 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			const userIds = sessions.map((session) => session.userId);
+			const userIds = sessions.map((session) => {
+				const s = convertFromDB(tables.session.fields, session)!;
+				return s.userId;
+			});
 			if (!userIds.length) return [];
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,

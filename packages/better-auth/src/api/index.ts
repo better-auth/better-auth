@@ -2,7 +2,7 @@ import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
-import { csrfMiddleware } from "./middlewares/csrf";
+import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
 	callbackOAuth,
 	forgetPassword,
@@ -18,18 +18,17 @@ import {
 	signInOAuth,
 	signOut,
 	verifyEmail,
-} from "./routes";
-import { getCSRFToken } from "./routes/csrf";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
-import { logger } from "../utils/logger";
-import {
+	linkSocialAccount,
+	listUserAccounts,
 	changePassword,
 	deleteUser,
 	setPassword,
 	updateUser,
-} from "./routes/update-user";
+} from "./routes";
+import { ok } from "./routes/ok";
+import { signUpEmail } from "./routes/sign-up";
+import { error } from "./routes/error";
+import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 
@@ -87,7 +86,6 @@ export function getEndpoints<
 	const baseEndpoints = {
 		signInOAuth,
 		callbackOAuth,
-		getCSRFToken,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
@@ -105,6 +103,8 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		linkSocialAccount,
+		listUserAccounts,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -189,7 +189,6 @@ export function getEndpoints<
 					}
 					return response;
 				}
-
 				throw e;
 			}
 			let response = endpointRes;
@@ -238,7 +237,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		routerMiddleware: [
 			{
 				path: "/**",
-				middleware: csrfMiddleware,
+				middleware: originCheckMiddleware,
 			},
 			...middlewares,
 		],

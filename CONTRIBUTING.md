@@ -6,7 +6,7 @@ Thanks for taking the time to improve Better Auth! This is a small document to g
 
 **Issues**
 
-Probably the best way to get going is to see if there is open issues acknowledge by the team. Feel free to open an issue if you found a bug or a missing feature you'd like to work on, and there aren't any issues mentioning it.
+Probably the best way to get going is to see if there is open issues acknowledged by the team. Feel free to open an issue if you found a bug or a missing feature you'd like to work on, and there aren't any issues mentioning it.
 
 
 **Framework Integrations**
@@ -19,17 +19,17 @@ Right now, everything you need—framework integrations, plugins, and all the ne
 
 **Plugins**
 
-If you plant to contribute a new core plugin open an issue first. If we see fit with the plans we have in mind we'll give you a green light. If not you can still publish your plugins yourself.  
+If you plan to contribute a new core plugin open an issue first. If we see fit with the plans we have in mind we'll give you a green light. If not you can still publish your plugins yourself.  
 
 Make sure to read the plugin documentation before you start developing one.
 
 **New Core Features**
 
-Before you start working on a new core feature it's better to open an issue first. Once you have a green light you can get started.If you start working on something larger, it's a good idea to create a draft (WIP) PR at an early stage so that we can guide you to the right direction.
+Before you start working on a new core feature it's better to open an issue first. Once you have a green light you can get started. If you start working on something larger, it's a good idea to create a draft (WIP) PR at an early stage so that we can guide you in the right direction.
 
 **Security Issues**
 
-If you see any security issue we prefer, you should disclose it via an email (security@better-auth.com). All reports will be promptly addressed, and you'll be credited accordingly.
+If you see any security issue we prefer you to disclose it via an email (security@better-auth.com). All reports will be promptly addressed, and you'll be credited accordingly.
 
 ### A Few Guidelines to keep in mind
 

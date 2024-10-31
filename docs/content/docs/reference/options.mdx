@@ -51,6 +51,11 @@ List of all the available options for configuring Better Auth.
       type: 'boolean',
       default: false,
     },
+    autoSignIn: {
+      description: "Automatically login after successfull signup",
+      type: 'boolean',
+      default: true,
+    },
     minPasswordLength: {
       description: "Minimum length of the password.",
         type: 'number',
@@ -230,9 +235,18 @@ const auth = betterAuth({
     }}
 />
 
-### `trustedOrignins`
+### `trustedOrigins`
 
-list of trusted origins. This will disable CSRF token check for the provided origins. By default, CSRF token check is disabled for origins that are same as `baseURL`.
+list of trusted origins. This is very important to prevent CSRF attacks and open redirects.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    trustedOrigins: [
+        'https://example.com',
+        'https://app.example.com'
+    ]
+})
+```
 
 ### `advanced`
 
@@ -243,11 +257,11 @@ list of trusted origins. This will disable CSRF token check for the provided ori
   type={{
         useSecureCookies: {
             description: "Use secure cookies. By default, when base URL is `https` secure cookies are used.",
-            type: 'booleam',
+            type: 'boolean',
             default: `true (if base URL is 'https')`
         },
         disableCSRFCheck: {
-            description: "Disable CSRF check.",
+            description: "Disable csrf protection checks. ⚠︎ only use this if you know what you are doing.",
             type: 'boolean',
             default: false
         }

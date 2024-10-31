@@ -78,7 +78,7 @@ describe("organization", async (it) => {
 		});
 
 		expect(organization.data?.id).toBe(orgId);
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -137,7 +137,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invitation.data?.invitation.status).toBe("accepted");
-		const invitedUserSession = await client.session({
+		const invitedUserSession = await client.getSession({
 			fetchOptions: {
 				headers: headers2,
 			},

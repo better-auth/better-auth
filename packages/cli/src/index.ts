@@ -6,7 +6,7 @@ import { generate } from "./commands/generate";
 import "dotenv/config";
 
 async function main() {
-	const program = new Command();
+	const program = new Command("better-auth");
 	program
 		.addCommand(migrate)
 		.addCommand(generate)

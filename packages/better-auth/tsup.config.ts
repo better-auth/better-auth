@@ -27,11 +27,10 @@ export default defineConfig((env) => {
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 		},
-		format: ["esm"],
+		format: ["esm", "cjs"],
 		minify: true,
-		splitting: false,
+		splitting: true,
 		bundle: true,
 		skipNodeModulesBundle: true,
-		target: "es2022",
 	};
 });

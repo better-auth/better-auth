@@ -37,8 +37,9 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
-			const scopes = options.scope ||
-				data.scopes || ["openid", "profile", "email", "User.Read"];
+			const scopes = data.scopes || ["openid", "profile", "email", "User.Read"];
+			options.scope && scopes.push(...options.scope);
+
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,

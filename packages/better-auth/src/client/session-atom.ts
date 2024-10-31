@@ -17,17 +17,11 @@ export function getSessionAtom<Option extends ClientOptions>(
 	const session = useAuthQuery<{
 		user: Prettify<UserWithAdditionalFields>;
 		session: Prettify<SessionWithAdditionalFields>;
-	}>($signal, "/session", $fetch, {
+	}>($signal, "/get-session", $fetch, {
 		method: "GET",
 	});
 	return {
-		$session: session,
-		_sessionSignal: $signal,
-		$Infer: {} as {
-			Session: {
-				session: SessionWithAdditionalFields;
-				user: UserWithAdditionalFields;
-			};
-		},
+		session,
+		$sessionSignal: $signal,
 	};
 }

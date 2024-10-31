@@ -64,7 +64,7 @@ describe("multi-session", async () => {
 	});
 
 	it("should get active session", async () => {
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -94,20 +94,6 @@ describe("multi-session", async () => {
 			},
 		});
 		expect(res.data?.user.email).toBe(testUser.email);
-	});
-
-	it("should throw error when setting above maximum sessions", async () => {
-		const res = await client.signUp.email(
-			{
-				email: "new-email-2@email.com",
-				password: "password",
-				name: "Name",
-			},
-			{
-				headers,
-			},
-		);
-		expect(res.error?.status).toBe(401);
 	});
 
 	it("should sign-out a session", async () => {

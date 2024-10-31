@@ -32,7 +32,8 @@
 			"package.json",
 			".contentlayer",
 			".turbo",
-			".nuxt"
+			".nuxt",
+			".source"
 		]
 	}
 }

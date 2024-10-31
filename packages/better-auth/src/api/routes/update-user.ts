@@ -1,10 +1,9 @@
 import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
-import { alphabet, generateRandomString } from "../../crypto/random";
-import { setSessionCookie } from "../../cookies";
+
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { sessionMiddleware } from "./session";
 import { APIError } from "better-call";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
@@ -12,7 +11,7 @@ import { parseUserInput } from "../../db/schema";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/user/update",
+		"/update-user",
 		{
 			method: "POST",
 			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
@@ -20,7 +19,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				image: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
-			use: [sessionMiddleware, redirectURLMiddleware],
+			use: [sessionMiddleware],
 		},
 		async (ctx) => {
 			const body = ctx.body as {
@@ -41,7 +40,11 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					user: session.user,
 				});
 			}
-			const additionalFields = parseUserInput(ctx.context.options, rest);
+			const additionalFields = parseUserInput(
+				ctx.context.options,
+				rest,
+				"update",
+			);
 			const user = await ctx.context.internalAdapter.updateUserByEmail(
 				session.user.email,
 				{
@@ -50,6 +53,13 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
+			/**
+			 * Update the session cookie with the new user data
+			 */
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user,
+			});
 			return ctx.json({
 				user,
 			});
@@ -57,7 +67,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 	);
 
 export const changePassword = createAuthEndpoint(
-	"/user/change-password",
+	"/change-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -133,7 +143,10 @@ export const changePassword = createAuthEndpoint(
 				});
 			}
 			// set the new session cookie
-			await setSessionCookie(ctx, newSession.id);
+			await setSessionCookie(ctx, {
+				session: newSession,
+				user: session.user,
+			});
 		}
 
 		return ctx.json(session.user);
@@ -141,7 +154,7 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
-	"/user/set-password",
+	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -150,6 +163,9 @@ export const setPassword = createAuthEndpoint(
 			 */
 			newPassword: z.string(),
 		}),
+		metadata: {
+			SERVER_ONLY: true,
+		},
 		use: [sessionMiddleware],
 	},
 	async (ctx) => {
@@ -195,7 +211,7 @@ export const setPassword = createAuthEndpoint(
 );
 
 export const deleteUser = createAuthEndpoint(
-	"/user/delete",
+	"/delete-user",
 	{
 		method: "POST",
 		body: z.object({
@@ -228,16 +244,13 @@ export const deleteUser = createAuthEndpoint(
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		const sessionCookie = ctx.context.authCookies.sessionToken;
-		ctx.setCookie(sessionCookie.name, "", {
-			maxAge: 0,
-		});
+		deleteSessionCookie(ctx);
 		return ctx.json(null);
 	},
 );
 
 export const changeEmail = createAuthEndpoint(
-	"/user/change-email",
+	"/change-email",
 	{
 		method: "POST",
 		query: z
@@ -249,7 +262,7 @@ export const changeEmail = createAuthEndpoint(
 			newEmail: z.string().email(),
 			callbackURL: z.string().optional(),
 		}),
-		use: [sessionMiddleware, redirectURLMiddleware],
+		use: [sessionMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {

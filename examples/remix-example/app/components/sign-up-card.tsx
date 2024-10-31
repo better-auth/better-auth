@@ -238,7 +238,7 @@ export function SignUp() {
 						disabled={loading}
 					>
 						<GitHubLogoIcon />
-						Continue with Github
+						Continue with GitHub
 					</Button>
 				</div>
 			</CardContent>

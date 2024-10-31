@@ -56,9 +56,10 @@ export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
-		name: "Github",
+		name: "GitHub",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = options.scope || scopes || ["user:email"];
+			const _scopes = scopes || ["user:email"];
+			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "github",
 				options,
