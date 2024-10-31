@@ -99,7 +99,6 @@ describe("oauth2", async () => {
 			url: expect.stringContaining("http://localhost:8080/authorize"),
 			redirect: true,
 		});
-
 		const callbackURL = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
