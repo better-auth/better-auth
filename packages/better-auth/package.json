@@ -82,11 +82,6 @@
       "import": "./dist/db.js",
       "require": "./dist/db.cjs"
     },
-    "./expo": {
-      "types": "./dist/expo.d.ts",
-      "import": "./dist/expo.js",
-      "require": "./dist/expo.cjs"
-    },
     "./vue": {
       "types": "./dist/vue.d.ts",
       "import": "./dist/vue.js",
