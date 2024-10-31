@@ -41,9 +41,7 @@ interface ExpoClientOptions {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
 	};
-	cookies?: {
-		name?: string;
-	};
+	storagePrefix?: string;
 }
 
 interface StoredCookie {
@@ -86,7 +84,8 @@ function getCookie(cookie: string) {
 
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
-	const cookieName = opts.cookies?.name || "better-auth_cookie";
+	const cookieName = `${opts.storagePrefix || "better-auth"}_cookie`;
+	const localCacheName = `${opts.storagePrefix || "better-auth"}_session_data`;
 	const storage = opts.storage || SecureStorage;
 	const scheme = opts.scheme;
 	if (!scheme) {
@@ -123,7 +122,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 						if (context.request.url.toString().includes("/get-session")) {
 							const data = context.data;
-							storage.setItem("better-auth_session_data", JSON.stringify(data));
+							storage.setItem(localCacheName, JSON.stringify(data));
 						}
 
 						if (
@@ -168,6 +167,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							error: null,
 							isPending: false,
 						});
+						storage.setItem(localCacheName, "{}");
 					}
 					return {
 						url,
