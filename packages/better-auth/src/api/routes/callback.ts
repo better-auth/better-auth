@@ -7,9 +7,8 @@ import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
-import { compareHash, hmac } from "../../crypto/hash";
 import { createEmailVerificationToken } from "./email-verification";
-import { isDevelopment } from "std-env";
+import { isDevelopment } from "../../utils/env";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -115,6 +114,7 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 
 		let user = dbUser?.user;
+
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
@@ -127,7 +127,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 				if (
 					(!isTrustedProvider && !userInfo.emailVerified) ||
-					!c.context.options.account?.accountLinking?.enabled
+					c.context.options.account?.accountLinking?.enabled === false
 				) {
 					if (isDevelopment) {
 						logger.warn(
@@ -199,7 +199,6 @@ export const callbackOAuth = createAuthEndpoint(
 				redirectOnError("unable_to_create_user");
 			}
 		}
-
 		if (!user) {
 			return redirectOnError("unable_to_create_user");
 		}

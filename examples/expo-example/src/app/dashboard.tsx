@@ -29,11 +29,11 @@ export default function Dashboard() {
 					</View>
 				</View>
 			</CardHeader>
-			<View className="my-2">
+			<View className="my-2 flex-row items-center justify-between px-6">
 				<Button
 					variant="default"
 					size="sm"
-					className="mx-6 flex-row items-center gap-2	"
+					className="flex-row items-center gap-2	"
 				>
 					<Ionicons name="edit" size={16} color="white" />
 					<Text>Edit User</Text>

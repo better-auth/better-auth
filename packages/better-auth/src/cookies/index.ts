@@ -3,7 +3,7 @@ import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
-import { env, isProduction } from "std-env";
+import { env, isProduction } from "../utils/env";
 import type { Session, User } from "../types";
 
 export function getCookies(options: BetterAuthOptions) {

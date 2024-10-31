@@ -73,6 +73,7 @@ export const auth = betterAuth({
 		sendOnSignUp: true,
 	},
 	account: {
+		enabled: true,
 		accountLinking: {
 			trustedProviders: ["google", "github"],
 		},
@@ -99,8 +100,8 @@ export const auth = betterAuth({
 		google: {
 			clientId: process.env.GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-			accessType: "offline",
-			prompt: "select_account",
+			// accessType: "offline",
+			// prompt: "select_account",
 		},
 		discord: {
 			clientId: process.env.DISCORD_CLIENT_ID || "",
@@ -125,5 +126,5 @@ export const auth = betterAuth({
 		username(),
 		expo(),
 	],
-	trustedOrigins: ["better-auth://"],
+	trustedOrigins: ["better-auth://", "exp://"],
 });
