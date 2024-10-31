@@ -62,28 +62,6 @@ export function getCookies(options: BetterAuthOptions) {
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
-		state: {
-			name: `${secureCookiePrefix}${cookiePrefix}.state`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
-		pkCodeVerifier: {
-			name: `${secureCookiePrefix}${cookiePrefix}.pk_code_verifier`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
 		dontRememberToken: {
 			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
 			options: {
@@ -92,17 +70,6 @@ export function getCookies(options: BetterAuthOptions) {
 				path: "/",
 				secure: !!secureCookiePrefix,
 				//no max age so it expires when the browser closes
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
-		nonce: {
-			name: `${secureCookiePrefix}${cookiePrefix}.nonce`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} as CookieOptions,
 		},
