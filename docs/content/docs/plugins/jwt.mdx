@@ -185,7 +185,9 @@ For security reasons, it's recommended to keep the private key encrypted.
 
 ```ts title="auth.ts"
 jwt({
-  disablePrivateKeyEncryption: true
+  jwks: {
+    disablePrivateKeyEncryption: true
+  }
 })
 ```
 
@@ -195,11 +197,13 @@ By default the entire user object is added to the JWT payload. You can modify th
 
 ```ts title="auth.ts"
 jwt({
-  definePayload: (user) => {
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role
+  jwt: {
+    definePayload: (user) => {
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      }
     }
   }
 })
@@ -210,8 +214,10 @@ If none is given, the BASE_URL is used as the issuer and the audience is set to 
 
 ```ts title="auth.ts"
 jwt({
-  issuer: "https://example.com",
-  audience: "https://example.com",
-  expiresIn: "1h"
+  jwt: {
+    issuer: "https://example.com",
+    audience: "https://example.com",
+    expirationTime: "1h"
+  }
 })
 ```
