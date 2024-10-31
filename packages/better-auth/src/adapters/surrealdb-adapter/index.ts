@@ -1,4 +1,4 @@
-import { jsonify, surql, type Surreal } from "surrealdb";
+import { jsonify, PreparedQuery, surql, type Surreal } from "surrealdb";
 import type { Adapter, Where } from "../../types";
 
 /**
@@ -66,6 +66,12 @@ function convertIdToString(data: any) {
 	return { ...rest, id: RecordIdValueString };
 }
 
+function checkForIdInWhereClause(where: Where[]) {
+	if (where.some(({ field }) => field === "id")) {
+		return where.find(({ field }) => field === "id")?.value
+	};
+}
+
 export const surrealdbAdapter = (
 	surrealdb: Surreal,
 	opts?: {
@@ -103,10 +109,20 @@ export const surrealdbAdapter = (
 
 			const query =
 				select.length > 0
-					? `SELECT type::fields([${select
-							.map((s) => `'${s}'`)
-							.join(", ")}]) FROM type::table('${model}') WHERE ${wheres};`
-					: `SELECT * FROM type::table('${model}') WHERE ${wheres};`;
+					? 
+					new PreparedQuery(`SELECT type::fields($selects) FROM IF $thing {type::thing($model, $thing)} ELSE {type::table($model)} WHERE $wheres;`, {
+						id: select.includes("id") ? 'meta::id("id") as id, ' : undefined,
+						thing: checkForIdInWhereClause(where) || undefined,
+						selects: select,
+						model: model,
+						wheres: wheres
+					})
+					: new PreparedQuery(`SELECT * FROM IF $thing {type::thing($model, $thing)} ELSE {type::table($model)} WHERE $wheres;`, {
+						id: select.includes("id") ? 'meta::id("id") as id, ' : undefined,
+						thing: checkForIdInWhereClause(where) || undefined,
+						model: model,
+						wheres: wheres
+					});
 
 			const response = await db.query<[any[]]>(query);
 			const result = response[0][0];
@@ -114,8 +130,9 @@ export const surrealdbAdapter = (
 			if (!result) {
 				return null;
 			}
-
-			return convertIdToString(result);
+			console.log({result})
+			return result;
+			// return convertIdToString(result);
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
@@ -135,14 +152,16 @@ export const surrealdbAdapter = (
 				clauses.push(`START type::number('${offset}')`);
 			}
 
-			const query = `SELECT * FROM type::table('${model}') ${
+			const query = new PreparedQuery(`SELECT * FROM type::table($model) ${
 				clauses.length > 0 ? clauses.join(" ") : ""
-			}`;
+			}`, {
+				model: model
+			});
 
 			const response = await db.query<[any[]]>(query);
 			const result = response[0];
 
-			return convertIdToString(result);
+			return result;
 		},
 		async update(data) {
 			const { model, where, update } = data;
