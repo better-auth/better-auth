@@ -94,7 +94,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const localCacheName = `${opts.storagePrefix || "better-auth"}_session_data`;
 	const storage = opts.storage || SecureStore;
 	const scheme = opts.scheme || Constants.platform?.scheme;
-	if (!scheme) {
+	const isWeb = Platform.OS === "web";
+	if (!scheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
@@ -119,7 +120,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				name: "Expo",
 				hooks: {
 					async onSuccess(context) {
-						if (Platform.OS === "web") return;
+						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							const toSetCookie = getSetCookie(setCookie || "");
@@ -150,7 +151,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					},
 				},
 				async init(url, options) {
-					if (Platform.OS === "web") {
+					if (isWeb) {
 						return {
 							url,
 							options,
@@ -163,7 +164,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					options.headers = {
 						...options.headers,
 						cookie,
-						origin: getOrigin(scheme),
+						origin: getOrigin(scheme!),
 					};
 					if (options.body?.callbackURL) {
 						if (options.body.callbackURL.startsWith("/")) {
