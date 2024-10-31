@@ -64,9 +64,8 @@ describe("expo", async () => {
 			expoClient({
 				scheme: "better-auth",
 				storage: {
-					getItemAsync: async (key) => storage.get(key) || null,
-					setItemAsync: async (key, value) => storage.set(key, value),
-					deleteItemAsync: async (key) => storage.delete(key),
+					getItem: (key) => storage.get(key) || null,
+					setItem: async (key, value) => storage.set(key, value),
 				},
 			}),
 		],

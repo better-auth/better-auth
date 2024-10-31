@@ -2,6 +2,7 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import * as SecureStorage from "expo-secure-store";
+import { atom } from "nanostores";
 
 interface CookieAttributes {
 	value: string;
@@ -37,9 +38,8 @@ function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
 interface ExpoClientOptions {
 	scheme: string;
 	storage?: {
-		getItemAsync: (key: string) => Promise<string | null> | string | null;
-		setItemAsync: (key: string, value: string) => Promise<any> | any;
-		deleteItemAsync: (key: string) => Promise<any> | any;
+		setItem: (key: string, value: string) => any;
+		getItem: (key: string) => string | null;
 	};
 	cookies?: {
 		name?: string;
@@ -99,6 +99,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		id: "expo",
 		getActions(_, $store) {
 			store = $store;
+			const localSession = storage.getItem(cookieName);
+			localSession &&
+				$store.atoms.session.set({
+					data: JSON.parse(localSession),
+					error: null,
+					isPending: false,
+				});
 			return {};
 		},
 		fetchPlugins: [
@@ -108,8 +115,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				hooks: {
 					async onSuccess(context) {
 						const setCookie = context.response.headers.get("set-cookie");
-						const toSetCookie = getSetCookie(setCookie || "");
-						await storage.setItemAsync(cookieName, toSetCookie);
+						if (setCookie) {
+							const toSetCookie = getSetCookie(setCookie || "");
+							await storage.setItem(cookieName, toSetCookie);
+							store?.notify("$sessionSignal");
+						}
+
+						if (context.request.url.toString().includes("/get-session")) {
+							const data = context.data;
+							storage.setItem("better-auth_session_data", JSON.stringify(data));
+						}
+
 						if (
 							context.data.redirect &&
 							context.request.url.toString().includes("/sign-in")
@@ -122,14 +138,14 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));
 							if (!cookie) return;
-							await storage.setItemAsync(cookieName, getSetCookie(cookie));
+							storage.setItem(cookieName, getSetCookie(cookie));
 							store?.notify("$sessionSignal");
 						}
 					},
 				},
 				async init(url, options) {
 					options = options || {};
-					const storedCookie = await storage.getItemAsync(cookieName);
+					const storedCookie = storage.getItem(cookieName);
 					const cookie = getCookie(storedCookie || "{}");
 					options.credentials = "omit";
 					options.headers = {
@@ -146,7 +162,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						}
 					}
 					if (url.includes("/sign-out")) {
-						await storage.deleteItemAsync(cookieName);
+						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
 							data: null,
 							error: null,

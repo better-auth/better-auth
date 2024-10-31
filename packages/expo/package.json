@@ -32,5 +32,8 @@
     "expo-secure-store": "~13.0.2",
     "expo-web-browser": "~13.0.3",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "nanostores": "^0.11.2"
   }
 }

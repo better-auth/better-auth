@@ -2,7 +2,6 @@ import Database from "better-sqlite3";
 import { betterAuth } from "better-auth";
 import {
 	bearer,
-	expo,
 	organization,
 	passkey,
 	twoFactor,
@@ -13,6 +12,7 @@ import {
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { expo } from "@better-auth/expo";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";

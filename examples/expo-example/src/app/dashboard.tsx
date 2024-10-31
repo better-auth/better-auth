@@ -29,7 +29,7 @@ export default function Dashboard() {
 					</View>
 				</View>
 			</CardHeader>
-			<View className="my-2 flex-row items-center justify-between px-6">
+			<CardFooter className="justify-between">
 				<Button
 					variant="default"
 					size="sm"
@@ -38,15 +38,16 @@ export default function Dashboard() {
 					<Ionicons name="edit" size={16} color="white" />
 					<Text>Edit User</Text>
 				</Button>
-			</View>
-			<CardFooter>
 				<Button
 					variant="secondary"
+					className="flex-row items-center gap-2"
+					size="sm"
 					onPress={async () => {
 						await authClient.signOut();
 						router.push("/");
 					}}
 				>
+					<Ionicons name="logout" size={14} color="black" />
 					<Text>Sign Out</Text>
 				</Button>
 			</CardFooter>

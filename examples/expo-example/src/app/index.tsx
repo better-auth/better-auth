@@ -21,7 +21,7 @@ export default function Index() {
 				router.push("/dashboard");
 			}
 		}
-	}, [isAuthenticated]);
+	}, [isAuthenticated, navContainerRef.isReady()]);
 	return (
 		<Card className="z-50 mx-6 backdrop-blur-lg bg-gray-200/70">
 			<CardHeader className="flex items-center justify-center gap-8">
