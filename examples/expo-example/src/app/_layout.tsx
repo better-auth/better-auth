@@ -9,7 +9,7 @@ export default function RootLayout() {
 		<SafeAreaProvider>
 			<ImageBackground
 				className="z-0 flex items-center justify-center"
-				source={require("../../assets/bg-image.jpg")}
+				source={require("../../assets/bg-image.jpeg")}
 				resizeMode="cover"
 				style={StyleSheet.absoluteFill}
 			>
