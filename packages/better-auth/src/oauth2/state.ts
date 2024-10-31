@@ -1,31 +1,12 @@
-import {
-	generateCodeVerifier,
-	generateState as generateStateOAuth,
-} from "oslo/oauth2";
+import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
-import { hashToBase64, hmac } from "../crypto/hash";
+import { hmac } from "../crypto/hash";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { logger } from "../utils";
+import { checkURLValidity } from "../utils/url";
 
-export async function generateState(
-	callbackURL?: string,
-	link?: {
-		email: string;
-		userId: string;
-	},
-) {
-	const code = generateStateOAuth();
-	const raw = JSON.stringify({
-		code,
-		callbackURL,
-		link,
-	});
-	const hash = await hashToBase64(raw);
-	return { raw, hash };
-}
-
-export async function generateState2(c: GenericEndpointContext) {
+export async function generateState(c: GenericEndpointContext) {
 	const callbackURL = c.body?.callbackURL;
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
@@ -36,17 +17,27 @@ export async function generateState2(c: GenericEndpointContext) {
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
-		errorURL: c.query?.currentURL || `${c.context.baseURL}/error`,
+		errorURL: c.query?.currentURL,
 	});
 	const signedHash = await hmac.sign({
 		secret: c.context.secret,
 		value: data,
 	});
+	const state = JSON.stringify({
+		data,
+		signature: signedHash,
+	});
+	if (state.length > 1000) {
+		logger.error(
+			"The generated State is too long. Make sure your callbackURL is not too long.",
+		);
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"The generated State is too long. Make sure your callbackURL is not too long.",
+		});
+	}
 	return {
-		state: JSON.stringify({
-			data,
-			signature: signedHash,
-		}),
+		state,
 		codeVerifier,
 	};
 }
@@ -79,7 +70,21 @@ export async function parseState(c: GenericEndpointContext) {
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);
 	}
-	return JSON.parse(data.data.data) as {
+	const parsedData = z
+		.object({
+			callbackURL: z.string(),
+			codeVerifier: z.string(),
+			errorURL: z.string().optional(),
+		})
+		.parse(JSON.parse(data.data.data));
+	if (!parsedData.errorURL) {
+		parsedData.errorURL = `${c.context.baseURL}/error`;
+	}
+	const isFullURL = checkURLValidity(parsedData.callbackURL);
+	if (!isFullURL) {
+		parsedData.callbackURL = `${c.context.options.baseURL}${parsedData.callbackURL}`;
+	}
+	return parsedData as {
 		callbackURL: string;
 		codeVerifier: string;
 		link?: {

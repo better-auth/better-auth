@@ -1,11 +1,11 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier, generateState } from "oslo/oauth2";
+import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { generateState2, logger } from "../../utils";
+import { generateState, logger } from "../../utils";
 import { hmac } from "../../crypto/hash";
 
 export const signInOAuth = createAuthEndpoint(
@@ -48,12 +48,13 @@ export const signInOAuth = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const { codeVerifier, state } = await generateState2(c);
+		const { codeVerifier, state } = await generateState(c);
 		const url = await provider.createAuthorizationURL({
 			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
 			redirect: true,

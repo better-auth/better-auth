@@ -91,54 +91,27 @@ describe("oauth2", async () => {
 
 	it("should redirect to the provider and handle the response", async () => {
 		let headers = new Headers();
-		const res = await authClient.signIn.oauth2(
-			{
-				providerId: "test",
-				callbackURL: "http://localhost:3000/dashboard",
-			},
-			{
-				onSuccess(context) {
-					const parsedSetCookie = parseSetCookieHeader(
-						context.response.headers.get("Set-Cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${
-							parsedSetCookie.get("better-auth.state")?.value
-						}; better-auth.pk_code_verifier=${
-							parsedSetCookie.get("better-auth.pk_code_verifier")?.value
-						}`,
-					);
-				},
-			},
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("http://localhost:8080/authorize"),
+			redirect: true,
+		});
+		const callbackURL = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
 		);
-		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
 		let headers = new Headers();
-		const res = await authClient.signIn.oauth2(
-			{
-				providerId: "test",
-				callbackURL: "http://localhost:3000/dashboard",
-			},
-			{
-				onSuccess(context) {
-					const parsedSetCookie = parseSetCookieHeader(
-						context.response.headers.get("Set-Cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${
-							parsedSetCookie.get("better-auth.state")?.value
-						}; better-auth.pk_code_verifier=${
-							parsedSetCookie.get("better-auth.pk_code_verifier")?.value
-						}`,
-					);
-				},
-			},
-		);
+		const res = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
 		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});

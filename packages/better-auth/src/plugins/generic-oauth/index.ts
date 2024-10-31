@@ -201,23 +201,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const callbackURL = ctx.body.callbackURL?.startsWith("http")
 						? ctx.body.callbackURL
 						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
-					const state = await generateState(
-						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
-					);
-					const cookie = ctx.context.authCookies;
-					await ctx.setSignedCookie(
-						cookie.state.name,
-						state.hash,
-						ctx.context.secret,
-						cookie.state.options,
-					);
-					const codeVerifier = generateCodeVerifier();
-					await ctx.setSignedCookie(
-						cookie.pkCodeVerifier.name,
-						codeVerifier,
-						ctx.context.secret,
-						cookie.pkCodeVerifier.options,
-					);
+					const { state, codeVerifier } = await generateState(ctx);
+
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -226,8 +211,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
-						state: state.raw,
-						codeVerifier: codeVerifier,
+						state,
+						codeVerifier,
 						scopes: scopes || [],
 						disablePkce: !pkce,
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
@@ -247,8 +232,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return ctx.json({
 						url: authUrl.toString(),
-						state: state,
-						codeVerifier,
 						redirect: true,
 					});
 				},

@@ -47,3 +47,8 @@ export function getOrigin(url: string) {
 	const parsedUrl = new URL(url);
 	return parsedUrl.origin.replace("http://", "").replace("https://", "");
 }
+
+export const checkURLValidity = (url: string) => {
+	const urlPattern = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
+	return urlPattern.test(url);
+};
