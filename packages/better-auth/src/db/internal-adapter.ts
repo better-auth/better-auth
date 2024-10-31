@@ -555,7 +555,7 @@ export const createInternalAdapter = (
 				},
 				"verification",
 			);
-			return verification;
+			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
 			const verification = await adapter.findOne<Verification>({
