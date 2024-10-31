@@ -21,13 +21,7 @@ export function getSessionAtom<Option extends ClientOptions>(
 		method: "GET",
 	});
 	return {
-		$session: session,
-		_sessionSignal: $signal,
-		$Infer: {} as {
-			Session: {
-				session: SessionWithAdditionalFields;
-				user: UserWithAdditionalFields;
-			};
-		},
+		session,
+		$sessionSignal: $signal,
 	};
 }
