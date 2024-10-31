@@ -1,8 +1,9 @@
 import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
-import * as SecureStorage from "expo-secure-store";
-import { atom } from "nanostores";
+import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
 interface CookieAttributes {
 	value: string;
@@ -36,7 +37,7 @@ function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
 }
 
 interface ExpoClientOptions {
-	scheme: string;
+	scheme?: string;
 	storage?: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
@@ -82,21 +83,26 @@ function getCookie(cookie: string) {
 	return toSend;
 }
 
+function getOrigin(scheme: string) {
+	const schemeURI = Linking.createURL("", { scheme });
+	return schemeURI;
+}
+
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
 	const cookieName = `${opts.storagePrefix || "better-auth"}_cookie`;
 	const localCacheName = `${opts.storagePrefix || "better-auth"}_session_data`;
-	const storage = opts.storage || SecureStorage;
-	const scheme = opts.scheme;
+	const storage = opts.storage || SecureStore;
+	const scheme = opts.scheme || Constants.platform?.scheme;
 	if (!scheme) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
 	}
-	const schemeURL = `${scheme}://`;
 	return {
 		id: "expo",
 		getActions(_, $store) {
+			if (Platform.OS === "web") return {};
 			store = $store;
 			const localSession = storage.getItem(cookieName);
 			localSession &&
@@ -113,6 +119,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				name: "Expo",
 				hooks: {
 					async onSuccess(context) {
+						if (Platform.OS === "web") return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							const toSetCookie = getSetCookie(setCookie || "");
@@ -143,6 +150,12 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					},
 				},
 				async init(url, options) {
+					if (Platform.OS === "web") {
+						return {
+							url,
+							options,
+						};
+					}
 					options = options || {};
 					const storedCookie = storage.getItem(cookieName);
 					const cookie = getCookie(storedCookie || "{}");
@@ -150,7 +163,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					options.headers = {
 						...options.headers,
 						cookie,
-						origin: schemeURL,
+						origin: getOrigin(scheme),
 					};
 					if (options.body?.callbackURL) {
 						if (options.body.callbackURL.startsWith("/")) {

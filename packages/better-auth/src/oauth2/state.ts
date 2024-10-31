@@ -82,7 +82,8 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 	const isFullURL = checkURLValidity(parsedData.callbackURL);
 	if (!isFullURL) {
-		parsedData.callbackURL = `${c.context.options.baseURL}${parsedData.callbackURL}`;
+		const origin = new URL(c.context.baseURL).origin;
+		parsedData.callbackURL = `${origin}${parsedData.callbackURL}`;
 	}
 	return parsedData as {
 		callbackURL: string;

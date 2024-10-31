@@ -13,7 +13,8 @@
     "lint": "expo lint",
     "android": "expo run:android"
   },
-  "dependencies": { 
+  "dependencies": {
+    "@better-auth/expo": "workspace:*",
     "@expo/vector-icons": "^14.0.2",
     "@nanostores/react": "^0.8.0",
     "@react-native-async-storage/async-storage": "1.23.1",
@@ -22,9 +23,10 @@
     "@rn-primitives/separator": "^1.1.0",
     "@rn-primitives/slot": "^1.1.0",
     "@rn-primitives/types": "^1.1.0",
+    "@types/better-sqlite3": "^7.6.11",
     "babel-plugin-transform-import-meta": "^2.2.1",
+    "better-sqlite3": "^11.5.0",
     "expo": "~51.0.38",
-    "@better-auth/expo": "workspace:*",
     "expo-constants": "~16.0.2",
     "expo-font": "~12.0.9",
     "expo-linking": "~6.3.1",
@@ -36,6 +38,7 @@
     "expo-web-browser": "~13.0.3",
     "nanostores": "^0.11.2",
     "nativewind": "^4.1.21",
+    "pg": "^8.13.1",
     "react": "catalog:react18",
     "react-dom": "catalog:react18",
     "react-native": "~0.74.6",

@@ -6,9 +6,15 @@ import { authClient } from "@/lib/auth-client";
 import { View } from "react-native";
 import Ionicons from "@expo/vector-icons/AntDesign";
 import { router } from "expo-router";
+import { useEffect } from "react";
 
 export default function Dashboard() {
 	const { data: session, error } = authClient.useSession();
+	useEffect(() => {
+		if (error) {
+			router.push("/");
+		}
+	}, [error]);
 	return (
 		<Card className="w-10/12">
 			<CardHeader>
@@ -43,8 +49,13 @@ export default function Dashboard() {
 					className="flex-row items-center gap-2"
 					size="sm"
 					onPress={async () => {
-						await authClient.signOut();
-						router.push("/");
+						await authClient.signOut({
+							fetchOptions: {
+								onSuccess: () => {
+									router.push("/");
+								},
+							},
+						});
 					}}
 				>
 					<Ionicons name="logout" size={14} color="black" />

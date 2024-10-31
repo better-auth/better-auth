@@ -17,6 +17,25 @@ vi.mock("expo-web-browser", async () => {
 		}),
 	};
 });
+
+vi.mock("react-native", async () => {
+	return {
+		Platform: {
+			OS: "android",
+		},
+	};
+});
+
+vi.mock("expo-constants", async () => {
+	return {
+		default: {
+			platform: {
+				scheme: "better-auth",
+			},
+		},
+	};
+});
+
 vi.mock("expo-linking", async () => {
 	return {
 		createURL: vi.fn((url) => `better-auth://${url}`),
@@ -62,7 +81,6 @@ describe("expo", async () => {
 		},
 		plugins: [
 			expoClient({
-				scheme: "better-auth",
 				storage: {
 					getItem: (key) => storage.get(key) || null,
 					setItem: async (key, value) => storage.set(key, value),

@@ -3,14 +3,14 @@ import type { BetterAuthPlugin } from "better-auth";
 export const expo = () => {
 	return {
 		id: "expo",
-		init: () => {
+		init: (ctx) => {
+			const trustedOrigins =
+				process.env.NODE_ENV === "development"
+					? [...(ctx.options.trustedOrigins || []), "exp://"]
+					: ctx.options.trustedOrigins;
 			return {
 				options: {
-					/**
-					 * Add expo go as a trusted origin on dev
-					 */
-					trustedOrigins:
-						process.env.NODE_ENV === "development" ? ["exp://"] : [],
+					trustedOrigins,
 				},
 			};
 		},

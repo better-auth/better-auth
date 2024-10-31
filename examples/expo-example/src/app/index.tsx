@@ -99,10 +99,17 @@ export default function Index() {
 					</Button>
 					<Button
 						onPress={() => {
-							authClient.signIn.email({
-								email,
-								password,
-							});
+							authClient.signIn.email(
+								{
+									email,
+									password,
+								},
+								{
+									onError: (ctx) => {
+										alert(ctx.error.message);
+									},
+								},
+							);
 						}}
 					>
 						<Text>Continue</Text>

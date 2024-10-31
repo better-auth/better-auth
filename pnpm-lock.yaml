@@ -711,9 +711,15 @@ importers:
       '@rn-primitives/types':
         specifier: ^1.1.0
         version: 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.11
       babel-plugin-transform-import-meta:
         specifier: ^2.2.1
         version: 2.2.1(@babel/core@7.26.0)
+      better-sqlite3:
+        specifier: ^11.5.0
+        version: 11.5.0
       expo:
         specifier: ~51.0.38
         version: 51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13)
@@ -750,6 +756,9 @@ importers:
       nativewind:
         specifier: ^4.1.21
         version: 4.1.21(react-native-reanimated@3.10.1(@babel/core@7.26.0)(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-safe-area-context@4.10.5(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-svg@15.8.0(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.74.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.14(ts-node@10.9.1(@types/node@22.8.4)(typescript@5.3.3)))
+      pg:
+        specifier: ^8.13.1
+        version: 8.13.1
       react:
         specifier: catalog:react18
         version: 18.3.1
@@ -1740,7 +1749,7 @@ importers:
         version: 16.4.5
       drizzle-orm:
         specifier: ^0.33.0
-        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.12)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
+        version: 0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.12)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.1)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1)
       prisma:
         specifier: ^5.19.1
         version: 5.20.0
@@ -14319,6 +14328,15 @@ packages:
 
   pg@8.13.0:
     resolution: {integrity: sha512-34wkUTh3SxTClfoHB3pQ7bIMvw9dpFU1audQQeZG837fmHfHpr14n/AELVDoOYVDW2h5RDWU78tFjkD+erSBsw==}
+    engines: {node: '>= 8.0.0'}
+    peerDependencies:
+      pg-native: '>=3.0.1'
+    peerDependenciesMeta:
+      pg-native:
+        optional: true
+
+  pg@8.13.1:
+    resolution: {integrity: sha512-OUir1A0rPNZlX//c7ksiu7crsGZTKSOXJPgtNiHGIlC9H0lO+NC6ZDYksSgBYY/thSWhnSRBv8w1lieNNGATNQ==}
     engines: {node: '>= 8.0.0'}
     peerDependencies:
       pg-native: '>=3.0.1'
@@ -30805,7 +30823,7 @@ snapshots:
 
   dotenv@16.4.5: {}
 
-  drizzle-orm@0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.12)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.0)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1):
+  drizzle-orm@0.33.0(@cloudflare/workers-types@4.20241011.0)(@libsql/client@0.12.0)(@prisma/client@5.20.0(prisma@5.20.0))(@types/better-sqlite3@7.6.11)(@types/pg@8.11.10)(@types/react@18.3.12)(better-sqlite3@11.3.0)(bun-types@1.1.32)(kysely@0.27.4)(mysql2@3.11.3)(pg@8.13.1)(postgres@3.4.4)(prisma@5.20.0)(react@18.3.1):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20241011.0
       '@libsql/client': 0.12.0
@@ -30817,7 +30835,7 @@ snapshots:
       bun-types: 1.1.32
       kysely: 0.27.4
       mysql2: 3.11.3
-      pg: 8.13.0
+      pg: 8.13.1
       postgres: 3.4.4
       prisma: 5.20.0
       react: 18.3.1
@@ -36893,6 +36911,10 @@ snapshots:
     dependencies:
       pg: 8.13.0
 
+  pg-pool@3.7.0(pg@8.13.1):
+    dependencies:
+      pg: 8.13.1
+
   pg-protocol@1.7.0: {}
 
   pg-types@2.2.0:
@@ -36917,6 +36939,16 @@ snapshots:
     dependencies:
       pg-connection-string: 2.7.0
       pg-pool: 3.7.0(pg@8.13.0)
+      pg-protocol: 1.7.0
+      pg-types: 2.2.0
+      pgpass: 1.0.5
+    optionalDependencies:
+      pg-cloudflare: 1.1.1
+
+  pg@8.13.1:
+    dependencies:
+      pg-connection-string: 2.7.0
+      pg-pool: 3.7.0(pg@8.13.1)
       pg-protocol: 1.7.0
       pg-types: 2.2.0
       pgpass: 1.0.5

@@ -28,6 +28,16 @@ export default function SignUp() {
 			<View className="px-6">
 				<KeyboardAvoidingView>
 					<Input
+						placeholder="Name"
+						className="rounded-b-none border-b-0"
+						value={name}
+						onChangeText={(text) => {
+							setName(text);
+						}}
+					/>
+				</KeyboardAvoidingView>
+				<KeyboardAvoidingView>
+					<Input
 						placeholder="Email"
 						className="rounded-b-none border-b-0"
 						value={email}
@@ -37,14 +47,7 @@ export default function SignUp() {
 						autoCapitalize="none"
 					/>
 				</KeyboardAvoidingView>
-				<Input
-					placeholder="Name"
-					className="rounded-b-none border-b-0"
-					value={name}
-					onChangeText={(text) => {
-						setName(text);
-					}}
-				/>
+
 				<KeyboardAvoidingView>
 					<Input
 						placeholder="Password"

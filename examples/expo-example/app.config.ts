@@ -14,6 +14,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		resizeMode: "contain",
 		backgroundColor: "#1F104A",
 	},
+	web: {
+		bundler: "metro",
+		output: "server",
+	},
 	updates: {
 		fallbackToCacheTimeout: 0,
 	},
@@ -38,5 +42,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		tsconfigPaths: true,
 		typedRoutes: true,
 	},
-	plugins: ["expo-router", "expo-secure-store"],
+	plugins: [
+		[
+			"expo-router",
+			{
+				origin: "http://localhost:8081",
+			},
+		],
+		"expo-secure-store",
+	],
 });
