@@ -82,6 +82,11 @@
       "import": "./dist/db.js",
       "require": "./dist/db.cjs"
     },
+    "./expo": {
+      "types": "./dist/expo.d.ts",
+      "import": "./dist/expo.js",
+      "require": "./dist/expo.cjs"
+    },
     "./vue": {
       "types": "./dist/vue.d.ts",
       "import": "./dist/vue.js",
@@ -165,6 +170,9 @@
       "client/plugins": [
         "./dist/client/plugins.d.ts"
       ],
+      "expo": [
+        "./dist/expo.d.ts"
+      ],
       "types": [
         "./dist/types.d.ts"
       ],
@@ -221,6 +229,7 @@
     "@types/react": "^18.3.3",
     "better-sqlite3": "^11.3.0",
     "drizzle-orm": "^0.33.0",
+    "expo-web-browser": "~13.0.3",
     "happy-dom": "^15.7.4",
     "hono": "^4.5.4",
     "listhen": "^1.7.2",

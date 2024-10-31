@@ -23,20 +23,14 @@ export const callbackOAuth = createAuthEndpoint(
 		metadata: HIDE_METADATA,
 	},
 	async (c) => {
-		if (c.query.error || !c.query.code) {
-			const parsedState = parseState(c.query.state);
-			const callbackURL =
-				parsedState.data?.callbackURL || `${c.context.baseURL}/error`;
-			c.context.logger.error(c.query.error, c.params.id);
+		if (!c.query.code) {
 			throw c.redirect(
-				`${callbackURL}?error=${c.query.error || "oAuth_code_missing"}`,
+				`${c.context.baseURL}/error?error=${c.query.error || "no_code"}`,
 			);
 		}
-
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
 		);
-
 		if (!provider) {
 			c.context.logger.error(
 				"Oauth provider with id",
@@ -47,28 +41,7 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const [state, signature] = c.query.state.split(".");
-		const parsedState = parseState(state);
-		if (!parsedState.success) {
-			c.context.logger.error("Unable to parse state");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-		const isValidState = await hmac.verify({
-			value: state,
-			signature,
-			secret: c.context.secret,
-		});
-		if (!isValidState) {
-			logger.error("OAuth state mismatch");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-		const {
-			data: { callbackURL, errorURL, link, codeVerifier },
-		} = parsedState;
+		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({

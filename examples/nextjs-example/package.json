@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/nextjs",
+  "name": "@example/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": {
+  "dependencies": { 
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",
     "@libsql/kysely-libsql": "^0.4.1",

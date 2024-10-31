@@ -2,9 +2,9 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
 	...config,
-	name: "expo",
-	slug: "expo",
-	scheme: "expo",
+	name: "Better Auth",
+	slug: "better-auth",
+	scheme: "better-auth",
 	version: "0.1.0",
 	orientation: "portrait",
 	icon: "./assets/icon.png",

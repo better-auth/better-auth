@@ -2,23 +2,60 @@ import Database from "better-sqlite3";
 import { betterAuth } from "better-auth";
 import {
 	bearer,
+	expo,
 	organization,
 	passkey,
 	twoFactor,
 	admin,
 	multiSession,
 	username,
-	createAuthMiddleware,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
-import { z } from "zod";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
 
 const database = new Database("better-auth.sqlite");
+
+const twoFactorPlugin = twoFactor({
+	otpOptions: {
+		async sendOTP(user, otp) {
+			await resend.emails.send({
+				from,
+				to: user.email,
+				subject: "Your OTP",
+				html: `Your OTP is ${otp}`,
+			});
+		},
+	},
+});
+
+const organizationPlugin = organization({
+	async sendInvitationEmail(data) {
+		const res = await resend.emails.send({
+			from,
+			to: data.email,
+			subject: "You've been invited to join an organization",
+			react: reactInvitationEmail({
+				username: data.email,
+				invitedByUsername: data.inviter.user.name,
+				invitedByEmail: data.inviter.user.email,
+				teamName: data.organization.name,
+				inviteLink:
+					process.env.NODE_ENV === "development"
+						? `http://localhost:3000/accept-invitation/${data.id}`
+						: `https://${
+								process.env.NEXT_PUBLIC_APP_URL ||
+								process.env.VERCEL_URL ||
+								process.env.BETTER_AUTH_URL
+							}/accept-invitation/${data.id}`,
+			}),
+		});
+		console.log(res, data.email);
+	},
+});
 
 export const auth = betterAuth({
 	database,
@@ -79,92 +116,14 @@ export const auth = betterAuth({
 		},
 	},
 	plugins: [
-		organization({
-			async sendInvitationEmail(data) {
-				const res = await resend.emails.send({
-					from,
-					to: data.email,
-					subject: "You've been invited to join an organization",
-					react: reactInvitationEmail({
-						username: data.email,
-						invitedByUsername: data.inviter.user.name,
-						invitedByEmail: data.inviter.user.email,
-						teamName: data.organization.name,
-						inviteLink:
-							process.env.NODE_ENV === "development"
-								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `https://${
-										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL ||
-										process.env.BETTER_AUTH_URL
-									}/accept-invitation/${data.id}`,
-					}),
-				});
-				console.log(res, data.email);
-			},
-		}),
-		twoFactor({
-			otpOptions: {
-				async sendOTP(user, otp) {
-					await resend.emails.send({
-						from,
-						to: user.email,
-						subject: "Your OTP",
-						html: `Your OTP is ${otp}`,
-					});
-				},
-			},
-		}),
+		organizationPlugin,
+		twoFactorPlugin,
 		passkey(),
 		bearer(),
 		admin(),
 		multiSession(),
 		username(),
-		{
-			id: "expo",
-			hooks: {
-				after: [
-					{
-						matcher(context) {
-							return context.path?.startsWith("/callback");
-						},
-						handler: createAuthMiddleware(async (ctx) => {
-							const response = ctx.context.returned as Response;
-
-							if (response.status === 302) {
-								const location = response.headers.get("location");
-
-								if (!location) {
-									return;
-								}
-								const trustedOrigins = ctx.context.trustedOrigins.filter(
-									(origin) => !origin.startsWith("http"),
-								);
-								const isTrustedOrigin = trustedOrigins.some((origin) =>
-									location?.startsWith(origin),
-								);
-
-								if (!isTrustedOrigin) {
-									return;
-								}
-								const cookie = response.headers.get("set-cookie");
-
-								if (!cookie) {
-									return;
-								}
-								const url = new URL(location);
-								url.searchParams.set("cookie", cookie);
-								response.headers.set("location", url.toString());
-
-								return {
-									response,
-								};
-							}
-						}),
-					},
-				],
-			},
-		},
+		expo(),
 	],
-	trustedOrigins: ["expo"],
+	trustedOrigins: ["better-auth://"],
 });

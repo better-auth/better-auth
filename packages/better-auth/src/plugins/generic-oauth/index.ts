@@ -265,12 +265,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
-						const parsedState = parseState(ctx.query.state);
-						const callbackURL =
-							parsedState.data?.errorURL || `${ctx.context.baseURL}/error`;
-						ctx.context.logger.error(ctx.query.error, ctx.params.providerId);
 						throw ctx.redirect(
-							`${callbackURL}?error=${ctx.query.error || "oAuth_code_missing"}`,
+							`${ctx.context.baseURL}?error=${
+								ctx.query.error || "oAuth_code_missing"
+							}`,
 						);
 					}
 					const provider = options.config.find(
@@ -282,38 +280,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: `No config found for provider ${ctx.params.providerId}`,
 						});
 					}
-
-					const codeVerifier = await ctx.getSignedCookie(
-						ctx.context.authCookies.pkCodeVerifier.name,
-						ctx.context.secret,
-					);
-
 					let tokens: OAuth2Tokens | undefined = undefined;
-					const parsedState = parseState(ctx.query.state);
-					if (!parsedState.success) {
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=invalid_state`,
-						);
-					}
-					const state = ctx.query.state;
-					const {
-						data: { callbackURL, errorURL },
-					} = parsedState;
+					const parsedState = await parseState(ctx);
+
+					const { callbackURL, codeVerifier, errorURL } = parsedState;
 					const code = ctx.query.code;
 
-					const storedState = await ctx.getSignedCookie(
-						ctx.context.authCookies.state.name,
-						ctx.context.secret,
-					);
-					if (!storedState) {
-						logger.error("No stored state found");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
-					const isValidState = await compareHash(state, storedState);
-					if (!isValidState) {
-						logger.error("OAuth code mismatch");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
 					if (provider.discoveryUrl) {

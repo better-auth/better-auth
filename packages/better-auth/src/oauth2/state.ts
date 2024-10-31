@@ -6,6 +6,7 @@ import { z } from "zod";
 import { hashToBase64, hmac } from "../crypto/hash";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
+import { logger } from "../utils";
 
 export async function generateState(
 	callbackURL?: string,
@@ -42,24 +43,49 @@ export async function generateState2(c: GenericEndpointContext) {
 		value: data,
 	});
 	return {
-		state: `${data}.${signedHash}`,
+		state: JSON.stringify({
+			data,
+			signature: signedHash,
+		}),
 		codeVerifier,
 	};
 }
 
-export function parseState(state: string) {
+export async function parseState(c: GenericEndpointContext) {
+	const state = c.query.state;
 	const data = z
 		.object({
-			callbackURL: z.string(),
-			errorURL: z.string(),
-			codeVerifier: z.string(),
-			link: z
-				.object({
-					email: z.string(),
-					userId: z.string(),
-				})
-				.optional(),
+			data: z.string(),
+			signature: z.string(),
 		})
 		.safeParse(JSON.parse(state));
-	return data;
+	if (!data.success) {
+		logger.error("Unable to parse state", {
+			zodError: data.error,
+			state,
+		});
+		throw c.redirect(
+			`${c.context.baseURL}/error?error=please_restart_the_process`,
+		);
+	}
+	const isValidState = await hmac.verify({
+		value: data.data.data,
+		signature: data.data.signature,
+		secret: c.context.secret,
+	});
+	if (!isValidState) {
+		logger.error("OAuth state mismatch");
+		throw c.redirect(
+			`${c.context.baseURL}/error?error=please_restart_the_process`,
+		);
+	}
+	return JSON.parse(data.data.data) as {
+		callbackURL: string;
+		codeVerifier: string;
+		link?: {
+			email: string;
+			userId: string;
+		};
+		errorURL: string;
+	};
 }

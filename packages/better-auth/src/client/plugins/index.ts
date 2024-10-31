@@ -12,3 +12,4 @@ export * from "../../plugins/generic-oauth/client";
 export * from "../../plugins/jwt/client";
 export * from "../../plugins/multi-session/client";
 export * from "../../plugins/email-otp/client";
+export * from "../../plugins/expo/client";

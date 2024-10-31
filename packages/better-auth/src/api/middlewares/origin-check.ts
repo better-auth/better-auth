@@ -32,10 +32,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	console.log({
-		originHeader,
-		trustedOrigins,
-	});
 	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
 		validateURL(originHeader, "origin");
 	}
