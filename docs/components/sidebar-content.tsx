@@ -632,6 +632,17 @@ export const contents: Content[] = [
 				icon: Icons.elysia,
 				href: "/docs/integrations/elysia",
 			},
+			{
+				group: true,
+				title: "Mobile & Desktop",
+				href: "/docs/integrations",
+				icon: LucideAArrowDown,
+			},
+			{
+				title: "Expo",
+				icon: Icons.expo,
+				href: "/docs/integrations/expo",
+			},
 		],
 	},
 	{
