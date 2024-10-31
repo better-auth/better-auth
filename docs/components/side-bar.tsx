@@ -1,17 +1,13 @@
 "use client";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion";
+
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+
 import { AsideLink } from "@/components/ui/aside-link";
-import { FadeIn, FadeInStagger } from "@/components/ui/fade-in";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { usePathname, useRouter } from "next/navigation";
 import { contents, examples } from "./sidebar-content";
-import { Search } from "lucide-react";
+import { ChevronDownIcon, Search } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -20,8 +16,11 @@ import {
 	SelectValue,
 } from "./ui/select";
 import { loglib } from "@loglib/tracker";
+import { cn } from "@/lib/utils";
 
 export default function ArticleLayout() {
+	const [currentOpen, setCurrentOpen] = useState<number>(0);
+
 	const { setOpenSearch } = useSearchContext();
 	const pathname = usePathname();
 
@@ -38,6 +37,7 @@ export default function ArticleLayout() {
 	useEffect(() => {
 		const grp = pathname.includes("examples") ? "examples" : "docs";
 		setGroup(grp);
+		setCurrentOpen(getDefaultValue());
 	}, []);
 
 	const cts = group === "docs" ? contents : examples;
@@ -131,58 +131,85 @@ export default function ArticleLayout() {
 				</p>
 			</div>
 
-			<Accordion
-				type="single"
-				collapsible
-				defaultValue={`item-${getDefaultValue()}`}
-			>
-				{cts.map((item, i) => (
-					<AccordionItem value={`item-${i}`} key={item.title}>
-						<AccordionTrigger className="border-b border-lines px-5 py-2.5 text-left">
-							<div className="flex items-center gap-2">
-								{item.Icon && <item.Icon className="w-5 h-5" />}
-								{item.title}
-							</div>
-						</AccordionTrigger>
-						<AccordionContent className=" space-y-1  p-0">
-							<FadeInStagger faster>
-								{item.list.map((listItem, j) => (
-									<FadeIn
-										key={listItem.title}
-										onClick={() => {
-											loglib.track("sidebar-link-click", {
-												title: listItem.title,
-												href: listItem.href,
-											});
-										}}
+			<MotionConfig transition={{ duration: 0.4, type: "spring", bounce: 0 }}>
+				<div className="flex flex-col">
+					{cts.map((item, index) => (
+						<div key={item.title}>
+							<button
+								className="border-b w-full hover:underline border-lines text-sm px-5 py-2.5 text-left flex items-center gap-2"
+								onClick={() => {
+									if (currentOpen === index) {
+										setCurrentOpen(-1);
+									} else {
+										setCurrentOpen(index);
+									}
+								}}
+							>
+								<item.Icon className="w-5 h-5" />
+								<span className="grow">{item.title}</span>
+								<motion.div
+									animate={{ rotate: currentOpen === index ? 180 : 0 }}
+								>
+									<ChevronDownIcon
+										className={cn(
+											"h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+										)}
+									/>
+								</motion.div>
+							</button>
+							<AnimatePresence initial={false}>
+								{currentOpen === index && (
+									<motion.div
+										initial={{ opacity: 0, height: 0 }}
+										animate={{ opacity: 1, height: "auto" }}
+										exit={{ opacity: 0, height: 0 }}
+										className="relative overflow-hidden"
 									>
-										<Suspense fallback={<>Loading...</>}>
-											{listItem.group ? (
-												<div className="flex flex-row gap-2 items-center mx-5 my-1  ">
-													<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
-														{listItem.title}
-													</p>
-													<line className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
-												</div>
-											) : (
-												<AsideLink
-													href={listItem.href}
-													startWith="/docs"
-													title={listItem.title}
-													className="break-words w-[--fd-sidebar-width]"
+										<motion.div
+											// initial={{ opacity: 0, y: -20 }}
+											// animate={{ opacity: 1, y: 0 }}
+											className="text-sm"
+										>
+											{item.list.map((listItem, j) => (
+												<div
+													key={listItem.title}
+													onClick={() => {
+														loglib.track("sidebar-link-click", {
+															title: listItem.title,
+															href: listItem.href,
+														});
+													}}
 												>
-													<listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
-													{listItem.title}
-												</AsideLink>
-											)}
-										</Suspense>
-									</FadeIn>
-								))}
-							</FadeInStagger>
-						</AccordionContent>
-					</AccordionItem>
-				))}
-			</Accordion>
+													<Suspense fallback={<>Loading...</>}>
+														{listItem.group ? (
+															<div className="flex flex-row gap-2 items-center mx-5 my-1  ">
+																<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
+																	{listItem.title}
+																</p>
+																<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+															</div>
+														) : (
+															<AsideLink
+																href={listItem.href}
+																startWith="/docs"
+																title={listItem.title}
+																className="break-words w-[--fd-sidebar-width]"
+															>
+																<listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
+																{listItem.title}
+															</AsideLink>
+														)}
+													</Suspense>
+												</div>
+											))}
+										</motion.div>
+									</motion.div>
+								)}
+							</AnimatePresence>
+						</div>
+					))}
+				</div>
+			</MotionConfig>
 		</aside>
 	);
 }

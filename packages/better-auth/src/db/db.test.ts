@@ -80,7 +80,7 @@ describe("db", async () => {
 		});
 		expect(res.data?.user.email).toBe("test@email.com");
 		const { headers } = await signInWithTestUser();
-		const res2 = await client.user.update(
+		const res2 = await client.updateUser(
 			{
 				name: "New Name",
 			},

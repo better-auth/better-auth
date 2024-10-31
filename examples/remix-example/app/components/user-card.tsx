@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -84,7 +83,7 @@ export default function UserCard() {
 		useState<boolean>(false);
 
 	const { data: activeSessions } = useSWR("/sessions", async () => {
-		return (await authClient.user.listSessions()).data;
+		return (await authClient.listSessions()).data;
 	});
 	return (
 		<Card>
@@ -174,7 +173,7 @@ export default function UserCard() {
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(activeSession.id);
-												const res = await authClient.user.revokeSession({
+												const res = await authClient.revokeSession({
 													id: activeSession.id,
 												});
 
@@ -343,13 +342,7 @@ export default function UserCard() {
 					variant="secondary"
 					onClick={async () => {
 						setIsSignOut(true);
-						await signOut({
-							fetchOptions: {
-								body: {
-									callbackURL: "/",
-								},
-							},
-						});
+						await signOut();
 						setIsSignOut(false);
 					}}
 					disabled={isSignOut}
@@ -453,7 +446,7 @@ function ChangePassword() {
 								return;
 							}
 							setLoading(true);
-							const res = await authClient.user.changePassword({
+							const res = await authClient.changePassword({
 								newPassword: newPassword,
 								currentPassword: currentPassword,
 								revokeOtherSessions: signOutDevices,
@@ -564,7 +557,7 @@ function EditUserDialog(props: { session: Session | null }) {
 						disabled={isLoading}
 						onClick={async () => {
 							setIsLoading(true);
-							await authClient.user.update({
+							await authClient.updateUser({
 								image: image ? await convertImageToBase64(image) : undefined,
 								name: name ? name : undefined,
 								fetchOptions: {

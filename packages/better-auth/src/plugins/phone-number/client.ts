@@ -12,7 +12,7 @@ export const phoneNumberClient = () => {
 						path === "/phone-number/update" || path === "/phone-number/verify"
 					);
 				},
-				signal: "_sessionSignal",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

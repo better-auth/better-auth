@@ -184,7 +184,7 @@ export const DocsNavBarMobile = () => {
 										>
 											{child.group ? (
 												<div className="flex flex-row gap-2 items-center ">
-													<line className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+													<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
 													<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
 														{child.title}
 													</p>

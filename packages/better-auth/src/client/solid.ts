@@ -7,11 +7,14 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
+	InferSessionFromClient,
+	InferUserFromClient,
 	IsSignal,
 } from "./types";
 import type { Accessor } from "solid-js";
 import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
+import type { BetterFetchError } from "@better-fetch/fetch";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -49,31 +52,33 @@ export function createAuthClient<Option extends ClientOptions>(
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
-	const { $session, _sessionSignal, $Infer } = getSessionAtom<Option>($fetch);
-
-	function useSession() {
-		return useStore($session);
-	}
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
-		useSession,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,
 		$fetch,
 		pluginPathMethods,
-		{
-			...pluginsAtoms,
-			_sessionSignal,
-		},
+		pluginsAtoms,
 		atomListeners,
 	);
+	type Session = {
+		session: InferSessionFromClient<Option>;
+		user: InferUserFromClient<Option>;
+	};
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: typeof useSession;
-			$Infer: typeof $Infer;
+			useSession: () => Accessor<{
+				data: Session | null;
+				isPending: boolean;
+				isRefetching: boolean;
+				error: BetterFetchError | null;
+			}>;
+			$Infer: {
+				Session: Session;
+			};
 			$fetch: typeof $fetch;
 		};
 }

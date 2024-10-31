@@ -117,7 +117,7 @@ export const admin = (options?: AdminOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path === "/user/list-sessions";
+						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
@@ -347,9 +347,9 @@ export const admin = (options?: AdminOptions) => {
 							banReason:
 								ctx.body.banReason || options?.defaultBanReason || "No reason",
 							banExpires: ctx.body.banExpiresIn
-								? Date.now() + ctx.body.banExpiresIn * 1000
+								? getDate(ctx.body.banExpiresIn, "sec")
 								: options?.defaultBanExpiresIn
-									? Date.now() + options.defaultBanExpiresIn * 1000
+									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
 					);
@@ -396,7 +396,14 @@ export const admin = (options?: AdminOptions) => {
 							message: "Failed to create session",
 						});
 					}
-					await setSessionCookie(ctx, session.id, true);
+					await setSessionCookie(
+						ctx,
+						{
+							session: session,
+							user: targetUser,
+						},
+						true,
+					);
 					return ctx.json({
 						session: session,
 						user: targetUser,
@@ -472,7 +479,7 @@ export const admin = (options?: AdminOptions) => {
 						input: false,
 					},
 					banExpires: {
-						type: "number",
+						type: "date",
 						required: false,
 						input: false,
 					},

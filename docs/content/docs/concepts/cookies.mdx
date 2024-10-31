@@ -3,9 +3,9 @@ title: Cookies
 description: Learn how cookies are used in BetterAuth
 ---
 
-Cookies are used to store data such as session tokens, CSRF tokens, and more. All cookies are signed using the `secret` key provided in the auth options.
+Cookies are used to store data such as session tokens, OAuth state, and more. All cookies are signed using the `secret` key provided in the auth options.
 
-Core Better Auth cookies like `session` and `csrf` will follow `betterauth.${cookie_name}` format.
+Core Better Auth cookies will follow `betterauth.${cookie_name}` format.
 
 All cookies are `httpOnly` and `secure` if the server is running in production mode.
 
@@ -34,20 +34,6 @@ export const auth = betterAuth({
 This feature is experimental and may not work as expected in all scenarios. And this is specefically to share session cookies across subdomains.
 </Callout>
 
-### Disable CSRF Cookie (⚠︎ Not Recommended)
-
-If you want to disable the CSRF cookie, you can set `disableCsrfCheck` to `true` in the `advanced` object in the auth options. If you disable the CSRF cookie, you should make sure that your framework handles CSRF protection itself.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
-export const auth = betterAuth({
-    advanced: {
-        disableCSRFCheck: true
-    }
-})
-```
-
 ### Secure Cookies
 
 By default, cookies are secure if the server is running in production mode. You can force cookies to be secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
@@ -61,23 +47,3 @@ export const auth = betterAuth({
     }
 })
 ```
-
-## CSRF Protection
-
-**Cross-Site Request Forgery (CSRF) Protection in Better Auth**
-
-Better Auth protects your app from CSRF attacks in two ways:
-
-1. **Secure Cookies**: All cookies are marked as `HttpOnly`, `Secure`, and use the `SameSite=Lax` attribute. This ensures they’re inaccessible to client-side scripts, only sent over HTTPS, and not shared across sites. 
-
-2. **CSRF Tokens**: By default, CSRF token checks are disabled for the same origin as `baseURL`, since CSRF attacks only affect browser requests. For other origins, CSRF tokens are required for `POST` requests. It uses double submit cookies to validate the token. Each session has a unique CSRF token that is sent as a cookie and a header in every request. If the two don’t match, the request is rejected.
-
-You can adjust this behavior:
-- Use `disableCSRFTokenCheck: true` on the client to skip token checks entirely. 
-- To allow untrusted origins, specify them in the `trustedOrigins` option on the server. These origins will be exempt from CSRF checks.
-
-Untrusted requests without valid tokens will result in a `403` error.
-
-<Callout type="warn">
-You can also disable CSRF token check for all clients by setting `advanced.disableCSRFCheck` option on the server. You should only do this if your framework handles CSRF protection itself.
-</Callout>

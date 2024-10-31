@@ -207,7 +207,7 @@ export const Icons = {
 			<path
 				d="M1 399.053H0.5V399.553V473V473.5H1H161.878H162.378V473V425.994C162.378 420.988 161.152 414.26 157.063 408.77C152.955 403.255 146.004 399.053 134.697 399.053H1Z"
 				stroke="currentColor"
-				stroke-opacity="0.8"
+				strokeOpacity="0.8"
 			/>
 		</svg>
 	),
@@ -257,6 +257,139 @@ export const Icons = {
 				d="M212.749 278.858L212.267 279.133C199.686 286.322 192.918 299.892 193.58 314.367C193.768 318.484 197.893 322.255 201.858 321.132L209.163 319.062C218.607 316.386 227.353 311.681 234.789 305.274L256 287L262.292 282.343C298.871 255.269 344.833 244.113 389.754 251.405C391.14 251.63 391.184 253.607 389.81 253.894L384.5 255L382.093 255.842C377.15 257.572 372.856 260.776 369.79 265.022C369.214 265.819 369.982 266.89 370.922 266.601L372.663 266.065C382.467 263.049 392.751 261.904 402.978 262.691L407 263C428.843 263.95 449.114 274.626 462.254 292.1L467.179 298.65C481.776 318.063 487.953 342.53 484.319 366.545L482.421 379.087C479.837 396.163 473.618 412.486 464.184 426.952L463.5 428L453 442L441.5 455L430.965 465.114C421.346 474.348 410.827 482.597 399.567 489.738L396 492L389.175 495.25C387.417 496.087 385.95 493.678 387.5 492.5L397 483.5L398.953 481.449C404.232 475.906 408.027 469.12 409.986 461.721L410.889 458.309C411.295 456.776 411.5 455.174 411.5 453.588C411.5 444.909 405.354 437.298 396.836 435.631C391.554 434.597 386.085 435.962 381.907 439.356L372.5 447L355.894 460.587C344.995 469.504 333.185 477.245 320.66 483.682L303.5 492.5L274.5 503.5L268.412 505.16C257.822 508.049 247.012 510.06 236.092 511.174L228 512H202L167.5 508.25L148.832 504.21C138.985 502.079 129.456 498.682 120.482 494.103C113.181 490.378 106.293 485.894 99.931 480.725L85.5 469C68.005 455.64 57.0449 435.448 55.3749 413.498L54.5 402L55.5295 385.822C57.134 360.608 66.7911 336.576 83.0792 317.263C89.6652 309.454 97.2376 302.534 105.606 296.675L108.677 294.526C121.458 285.579 135.72 278.961 150.805 274.976L160.947 272.297C174.135 268.813 187.952 268.445 201.307 271.22L211.887 273.418C214.542 273.97 215.103 277.513 212.749 278.858Z"
 				fill="#5E5E5E"
 			/>
+		</svg>
+	),
+	tanstack: (props?: SVGProps<any>) => (
+		<svg
+			className={cn(props?.className)}
+			xmlns="http://www.w3.org/2000/svg"
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 100 100"
+		>
+			<mask
+				id="a"
+				style={{ maskType: "alpha" }}
+				maskUnits="userSpaceOnUse"
+				x="0"
+				y="0"
+				width="100"
+				height="100"
+			>
+				<circle cx="50" cy="50" r="50" className="fill-foreground" />
+			</mask>
+			<g mask="url(#a)">
+				<circle
+					cx="11"
+					cy="119"
+					r="52"
+					className="fill-muted-foreground stroke-foreground"
+					strokeWidth="4"
+				/>
+				<circle
+					cx="10"
+					cy="125"
+					r="52"
+					className="fill-muted-foreground stroke-foreground"
+					strokeWidth="4"
+				/>
+				<circle
+					cx="9"
+					cy="131"
+					r="52"
+					className="fill-muted-foreground stroke-muted-foreground"
+					strokeWidth="4"
+				/>
+				<circle
+					cx="88"
+					cy="119"
+					r="52"
+					className="fill-muted-foreground stroke-foreground"
+					strokeWidth="4"
+				/>
+				<path
+					className="fill-foreground"
+					d="M89 35h2v5h-2zM83 34l2 1-1 4h-2zM77 31l2 1-3 4-2-1zM73 27l1 1-3 4-1-2zM70 23l1 1-4 3-1-2zM68 18v2l-4 1-1-2zM68 11l1 2-5 1-1-2zM69 6v2h-5V6z"
+				/>
+				<circle
+					cx="89"
+					cy="125"
+					r="52"
+					className="fill-muted-foreground stroke-foreground"
+					strokeWidth="4"
+				/>
+				<circle
+					cx="90"
+					cy="131"
+					r="52"
+					className="fill-muted-foreground stroke-muted-foreground"
+					strokeWidth="4"
+				/>
+				<ellipse
+					cx="49.5"
+					cy="119"
+					rx="41.5"
+					ry="51"
+					className="fill-muted-foreground"
+				/>
+				<path
+					d="M34 38v-9c1 1 2 4 5 6l7 30-8 2c-1-23-2-23-4-29Z"
+					className="fill-foreground stroke-muted-foreground"
+				/>
+				<path
+					fillRule="evenodd"
+					clipRule="evenodd"
+					d="M95 123c0 31-20 57-45 57S5 154 5 123c0-27 14-50 33-56l12-2c25 0 45 26 45 58Zm-45 47c22 0 39-22 39-50S72 70 50 70s-39 22-39 50 17 50 39 50Z"
+					className="fill-foreground"
+				/>
+				<path
+					d="M34 29c-4-8-11-5-14-4 2 3 5 4 9 4h5Z"
+					className="fill-foreground stroke-muted-foreground"
+				/>
+				<path
+					d="M25 38c-1 6 0 14 2 18 5-7 7-13 7-18v-9c-5 1-7 5-9 9Z"
+					className="fill-muted-foreground"
+				/>
+				<path
+					d="M34 29c-1 3-5 11-5 16m5-16c-5 1-7 5-9 9-1 6 0 14 2 18 5-7 7-13 7-18v-9Z"
+					className="stroke-muted-foreground"
+				/>
+				<path
+					d="M44 18c-10 1-11 7-10 11l4-3c5-4 6-7 6-8Z"
+					className="fill-foreground stroke-muted-foreground"
+				/>
+				<path
+					d="M34 29h7l18 4c-3-6-9-14-21-7l-4 3Z"
+					className="fill-foreground"
+				/>
+				<path
+					d="M34 29c4-2 12-5 18-1m-18 1h7l18 4c-3-6-9-14-21-7l-4 3Z"
+					className="stroke-muted-foreground"
+				/>
+				<path
+					d="M32 29a1189 1189 0 0 1-16 19c0-17 7-18 13-19h5a14 14 0 0 1-2 0Z"
+					className="fill-foreground"
+				/>
+				<path
+					d="M34 29c-5 1-7 5-9 9l-9 10c0-17 7-18 13-19h5Zm0 0c-5 2-11 3-14 10"
+					className="stroke-muted-foreground"
+				/>
+				<path
+					d="M41 29c9 2 13 10 15 14a25 25 0 0 1-22-14h7Z"
+					className="fill-foreground"
+				/>
+				<path
+					d="M34 29c3 1 11 5 15 9m-15-9h7c9 2 13 10 15 14a25 25 0 0 1-22-14Z"
+					className="stroke-muted-foreground"
+				/>
+				<circle
+					cx="91.5"
+					cy="12.5"
+					r="18.5"
+					className="fill-foreground stroke-muted-foreground"
+					strokeWidth="2"
+				/>
+			</g>
 		</svg>
 	),
 };

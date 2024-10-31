@@ -21,7 +21,7 @@ export const twoFactorClient = (
 		atomListeners: [
 			{
 				matcher: (path) => path.startsWith("/two-factor/"),
-				signal: "_sessionSignal",
+				signal: "$sessionSignal",
 			},
 		],
 		pathMethods: {

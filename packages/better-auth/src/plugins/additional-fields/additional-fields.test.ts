@@ -102,7 +102,7 @@ describe("additionalFields", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		const res = await client.user.update({
+		const res = await client.updateUser({
 			name: "test",
 			newField: "updated-field",
 			fetchOptions: {

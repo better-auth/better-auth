@@ -14,6 +14,7 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -75,8 +76,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						options?.backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
-							twoFactorEnabled: true,
+						const updatedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								twoFactorEnabled: true,
+							},
+						);
+						const newSession = await ctx.context.internalAdapter.createSession(
+							updatedUser.id,
+						);
+						/**
+						 * Update the session cookie with the new user data
+						 */
+						await setSessionCookie(ctx, {
+							session: newSession,
+							user,
 						});
 					}
 					//delete existing two factor
@@ -209,13 +223,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
-						ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-							path: "/",
-							sameSite: "lax",
-							httpOnly: true,
-							secure: false,
-							maxAge: 0,
-						});
+						deleteSessionCookie(ctx);
 						const hash = await hs256(ctx.context.secret, response.session.id);
 						const cookieName = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,

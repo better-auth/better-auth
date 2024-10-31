@@ -13,7 +13,7 @@ export const multiSessionClient = () => {
 				matcher(path) {
 					return path === "/multi-session/set-active";
 				},
-				signal: "_sessionSignal",
+				signal: "$sessionSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

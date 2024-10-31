@@ -13,16 +13,6 @@ exports[`init > should match config 1`] = `
   },
   "appName": "Better Auth",
   "authCookies": {
-    "csrfToken": {
-      "name": "better-auth.csrf_token",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 604800,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
     "dontRememberToken": {
       "name": "better-auth.dont_remember",
       "options": {
@@ -47,6 +37,16 @@ exports[`init > should match config 1`] = `
       "options": {
         "httpOnly": true,
         "maxAge": 900,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
+    "sessionData": {
+      "name": "better-auth.session_data",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 300,
         "path": "/",
         "sameSite": "lax",
         "secure": false,

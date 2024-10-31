@@ -5,7 +5,11 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import {
+	deleteSessionCookie,
+	parseCookies,
+	parseSetCookieHeader,
+} from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
@@ -143,20 +147,16 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionId);
+					ctx.setCookie(multiSessionCookieName, "", {
+						...ctx.context.authCookies.sessionToken.options,
+						maxAge: 0,
+					});
 					if (!session) {
-						ctx.setCookie(multiSessionCookieName, "", {
-							...ctx.context.authCookies.sessionToken.options,
-							maxAge: 0,
-						});
 						return ctx.json({
 							success: true,
 						});
 					}
 					await ctx.context.internalAdapter.deleteSession(sessionId);
-					ctx.setCookie(multiSessionCookieName, "", {
-						...ctx.context.authCookies.sessionToken.options,
-						maxAge: 0,
-					});
 					return ctx.json({
 						success: true,
 					});
@@ -196,9 +196,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							).length + (cookieString.includes("session_token") ? 1 : 0);
 
 						if (currentMultiSessions > opts.maximumSessions) {
-							throw new APIError("UNAUTHORIZED", {
-								message: "Maximum number of device sessions reached.",
-							});
+							return;
 						}
 
 						await ctx.setSignedCookie(

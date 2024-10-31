@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
 import { env, isProduction } from "std-env";
+import type { Session, User } from "../types";
 
 export function getCookies(options: BetterAuthOptions) {
 	const secure =
@@ -46,14 +47,18 @@ export function getCookies(options: BetterAuthOptions) {
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
-		csrfToken: {
-			name: `${secureCookiePrefix}${cookiePrefix}.csrf_token`,
+		/**
+		 * This cookie is used to store the session data in the cookie
+		 * This is useful for when you want to cache the session in the cookie
+		 */
+		sessionData: {
+			name: `${secureCookiePrefix}${cookiePrefix}.session_data`,
 			options: {
 				httpOnly: true,
 				sameSite,
 				path: "/",
 				secure: !!secureCookiePrefix,
-				maxAge: 60 * 60 * 24 * 7,
+				maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
@@ -144,7 +149,10 @@ export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
-	sessionToken: string,
+	session: {
+		session: Session;
+		user: User;
+	},
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
 ) {
@@ -156,7 +164,7 @@ export async function setSessionCookie(
 
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
-		sessionToken,
+		session.session.id,
 		ctx.context.secret,
 		{
 			...options,
@@ -171,10 +179,37 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cookieCache?.enabled;
+	shouldStoreSessionDataInCookie &&
+		(await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionData.name,
+			JSON.stringify(session),
+			ctx.context.secret,
+			ctx.context.authCookies.sessionData.options,
+		));
+	/**
+	 * If secondary storage is enabled, store the session data in the secondary storage
+	 * This is useful if the session got updated and we want to update the session data in the
+	 * secondary storage
+	 */
+	if (ctx.context.options.secondaryStorage) {
+		await ctx.context.secondaryStorage?.set(
+			session.session.id,
+			JSON.stringify({
+				user: session.user,
+				session: session.session,
+			}),
+			session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
+		);
+	}
 }
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+		maxAge: 0,
+	});
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {

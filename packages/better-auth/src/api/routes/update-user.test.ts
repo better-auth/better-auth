@@ -35,7 +35,7 @@ describe("updateUser", async () => {
 	}
 
 	it("should update the user's name", async () => {
-		const updated = await client.user.update({
+		const updated = await client.updateUser({
 			name: "newName",
 			fetchOptions: {
 				headers,
@@ -46,7 +46,7 @@ describe("updateUser", async () => {
 
 	it("should update user email", async () => {
 		const newEmail = "new-email@email.com";
-		const res = await client.user.changeEmail({
+		const res = await client.changeEmail({
 			newEmail,
 			fetchOptions: {
 				headers: headers,
@@ -68,7 +68,7 @@ describe("updateUser", async () => {
 				},
 			],
 		});
-		await client.user.changeEmail({
+		await client.changeEmail({
 			newEmail: "new-email-2@email.com",
 			fetchOptions: {
 				headers: headers,
@@ -86,7 +86,7 @@ describe("updateUser", async () => {
 
 	it("should update the user's password", async () => {
 		const newEmail = "new-email@email.com";
-		const updated = await client.user.changePassword({
+		const updated = await client.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
 			revokeOtherSessions: true,
@@ -109,7 +109,7 @@ describe("updateUser", async () => {
 
 	it("should revoke other sessions", async () => {
 		const newHeaders = new Headers();
-		await client.user.changePassword({
+		await client.changePassword({
 			newPassword: "newPassword",
 			currentPassword: testUser.password,
 			revokeOtherSessions: true,
@@ -127,5 +127,55 @@ describe("updateUser", async () => {
 			},
 		});
 		expect(sessionAttempt.data).toBeNull();
+	});
+
+	it("shouldn't pass defaults", async () => {
+		const { client, sessionSetter, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						newField: {
+							type: "string",
+							defaultValue: "default",
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const headers = new Headers();
+		await client.signUp.email({
+			email: "new-email@emial.com",
+			name: "name",
+			password: "password",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		const res = await db.update<{ newField: string }>({
+			model: "user",
+			update: {
+				newField: "new",
+			},
+			where: [
+				{
+					field: "email",
+					value: "new-email@emial.com",
+				},
+			],
+		});
+		expect(res?.newField).toBe("new");
+
+		const updated = await client.updateUser({
+			name: "newName",
+			fetchOptions: {
+				headers,
+			},
+		});
+		//@ts-expect-error
+		expect(updated.data?.user.newField).toBe("new");
 	});
 });

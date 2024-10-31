@@ -11,9 +11,9 @@ import type {
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
-import { parseAdditionalUserInput } from "../../db/schema";
+import { parseUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { redirectURLMiddleware } from "../middlewares/redirect";
+import { logger } from "../../utils";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -29,10 +29,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				name: ZodString;
 				email: ZodString;
 				password: ZodString;
-				callbackURL: ZodOptional<ZodString>;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
-			use: [redirectURLMiddleware],
 		},
 		async (ctx) => {
 			if (!ctx.context.options.emailAndPassword?.enabled) {
@@ -79,7 +77,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const additionalData = parseAdditionalUserInput(
+			const additionalData = parseUserInput(
 				ctx.context.options,
 				additionalFields as any,
 			);
@@ -98,6 +96,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				}
 			} catch (e) {
+				logger.error("Failed to create user", e);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "Failed to create user",
 					details: e,
@@ -168,23 +167,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					message: "Failed to create session",
 				});
 			}
-			await setSessionCookie(ctx, session.id);
-			return ctx.json(
-				{
-					user: createdUser as InferUser<O>,
-					session: session as InferSession<O>,
-				},
-				{
-					body: body.callbackURL
-						? {
-								url: body.callbackURL,
-								redirect: true,
-							}
-						: {
-								user: createdUser,
-								session,
-							},
-				},
-			);
+			await setSessionCookie(ctx, {
+				session,
+				user: createdUser,
+			});
+			return ctx.json({
+				user: createdUser as InferUser<O>,
+				session: session as InferSession<O>,
+			});
 		},
 	);

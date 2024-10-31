@@ -190,7 +190,7 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return res;
+			return res as Session;
 		},
 		findSession: async (sessionId: string) => {
 			if (secondaryStorage) {

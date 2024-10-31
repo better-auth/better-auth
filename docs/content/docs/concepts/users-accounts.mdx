@@ -25,7 +25,7 @@ The user table can be extended by plugins to store additional data. When a plugi
 To update user information, you can use the `updateUser` function provided by the client. The `updateUser` function takes an object with the following properties:
 
 ```ts
-await authClient.user.update({
+await authClient.updateUser({
     image: "https://example.com/image.jpg",
     name: "John Doe",
 })
@@ -66,7 +66,7 @@ export const auth = betterAuth({
 Once enabled, use the `changeEmail` function on the client to update a user’s email. The user must verify their current email before changing it.
 
 ```ts
-await authClient.user.changeEmail({
+await authClient.changeEmail({
     newEmail: "new-email@email.com",
     callbackURL: "/dashboard", //to redirect after verification
 });
@@ -83,7 +83,7 @@ After verification, the new email is updated in the user table, and a confirmati
 Password of a user isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use the `changePassword` function provided by the client. The `changePassword` function takes an object with the following properties:
 
 ```ts
-await authClient.user.changePassword({
+await authClient.changePassword({
     newPassword: "newPassword123",
     currentPassword: "oldPassword123",
     revokeOtherSessions: true, // revoke all other sessions the user is signed into
@@ -95,7 +95,7 @@ await authClient.user.changePassword({
 If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
 
 ```ts
-await authClient.user.setPassword({
+await authClient.setPassword({
     password,
 });
 ```
@@ -120,29 +120,66 @@ The account table stores the authentication data of the user. The account table 
 - `password`: The password of the account. Mainly used for email and password authentication. (optional)
 
 
-### Account linking
+### List User Accounts
 
-Account linking allows users to connect multiple authentication methods to a single account. Better Auth supports linking social sign-on or OAuth providers to an existing account if the provider returns a verified email.
+To list user accounts you can use `client.user.listAccounts` method. Which will return all accounts associated with a user.
 
-You can also specify a list of trusted providers. If a user signs in using a trusted provider, the account is linked, even if the email verification status is not provided.
+```ts
+const accounts = await authClient.listAccounts();
+```
+### Account Linking
 
-If account linking is disabled, accounts cannot be linked, regardless of the provider or email verification.
+Account linking enables users to associate multiple authentication methods with a single account. With Better Auth, users can connect additional social sign-ons or OAuth providers to their existing accounts if the provider confirms the user's email as verified.
+
+If account linking is disabled, no accounts can be linked, regardless of the provider or email verification status.
+
+```ts title="auth.ts"
+const auth = new BetterAuth({
+    account: {
+        accountLinking: {
+            enabled: true, 
+        }
+    },
+});
+```
+
+#### Forced Linking
+
+You can specify a list of "trusted providers." When a user logs in using a trusted provider, their account will be automatically linked even if the provider doesn’t confirm the email verification status. Use this with caution as it may increase the risk of account takeover.
 
 ```ts title="auth.ts"
 const auth = new BetterAuth({
     account: {
         accountLinking: {
             enabled: true,
-            trustedProviders: ["google", "github"],
+            trustedProviders: ["google", "github"]
         }
     },
 });
 ```
 
-To link a credential-based account (email and password), users can either go through the "forgot password" flow or use the `setPassword` function if they are already logged in.
+#### Manually Linking Accounts
 
-```ts
-await authClient.user.setPassword({
-    password,
-});
-```
+Users already signed in can manually link their account to additional social providers or credential-based accounts.
+
+- **Linking Social Accounts:** Use the `user.linkSocial` method on the client to link a social provider to the user's account.
+
+  ```ts
+  await client.linkSocial({
+      provider: "google", // Provider to link
+      callbackURL: "/callback" // Callback URL after linking completes
+  });
+  ```
+
+- **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server. 
+
+  ```ts
+  await auth.api.setPassword({
+      headers: /* headers containing the user's session token */,
+      password: /* new password */
+  });
+  ```
+
+<Callout>
+`setPassword` can't be called from the client for security reasons.
+</Callout>
