@@ -101,6 +101,9 @@ app.get("/session", async (c) => {
 	
 	if(!user) return c.body(null, 401);
 
-  	return c.json(session, user);
+  	return c.json({
+	  session,
+	  user
+	});
 });
 ```
