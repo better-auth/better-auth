@@ -2,14 +2,44 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import * as SecureStorage from "expo-secure-store";
-import { parseSetCookieHeader } from "../../cookies";
+
+interface CookieAttributes {
+	value: string;
+	expires?: Date;
+	"max-age"?: number;
+	domain?: string;
+	path?: string;
+	secure?: boolean;
+	httpOnly?: boolean;
+	sameSite?: "Strict" | "Lax" | "None";
+}
+
+function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
+	const cookieMap = new Map<string, CookieAttributes>();
+	const cookies = header.split(", ");
+	cookies.forEach((cookie) => {
+		const [nameValue, ...attributes] = cookie.split("; ");
+		const [name, value] = nameValue.split("=");
+
+		const cookieObj: CookieAttributes = { value };
+
+		attributes.forEach((attr) => {
+			const [attrName, attrValue] = attr.split("=");
+			cookieObj[attrName.toLowerCase() as "value"] = attrValue;
+		});
+
+		cookieMap.set(name, cookieObj);
+	});
+
+	return cookieMap;
+}
 
 interface ExpoClientOptions {
 	scheme: string;
 	storage?: {
 		getItemAsync: (key: string) => Promise<string | null> | string | null;
-		setItemAsync: (key: string, value: string) => Promise<void> | void;
-		deleteItemAsync: (key: string) => Promise<void> | void;
+		setItemAsync: (key: string, value: string) => Promise<any> | any;
+		deleteItemAsync: (key: string) => Promise<any> | any;
 	};
 	cookies?: {
 		name?: string;

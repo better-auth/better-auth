@@ -56,6 +56,7 @@ describe("account", async () => {
 			},
 		},
 	});
+
 	const { headers } = await signInWithTestUser();
 	it("should list all accounts", async () => {
 		const accounts = await client.listAccounts({
@@ -87,17 +88,14 @@ describe("account", async () => {
 		);
 		expect(linkAccountRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
-			codeVerifier: expect.any(String),
-			state: {
-				hash: expect.any(String),
-				raw: expect.any(String),
-			},
 			redirect: true,
 		});
+		const state =
+			new URL(linkAccountRes.data!.url).searchParams.get("state") || "";
 		email = "test@test.com";
 		await client.$fetch("/callback/google", {
 			query: {
-				state: linkAccountRes.data?.state.raw,
+				state,
 				code: "test",
 			},
 			method: "GET",

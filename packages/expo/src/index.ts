@@ -1,16 +1,16 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { isDevelopment } from "../../utils/env";
 
 export const expo = () => {
 	return {
 		id: "expo",
-		init: (ctx) => {
+		init: () => {
 			return {
 				options: {
 					/**
 					 * Add expo go as a trusted origin on dev
 					 */
-					trustedOrigins: isDevelopment ? ["exp://"] : [],
+					trustedOrigins:
+						process.env.NODE_ENV === "development" ? ["exp://"] : [],
 				},
 			};
 		},
@@ -43,7 +43,6 @@ export const expo = () => {
 							const url = new URL(location);
 							url.searchParams.set("cookie", cookie);
 							response.headers.set("location", url.toString());
-							console.log("Redirecting to", url.toString());
 							return {
 								response,
 							};

@@ -14,6 +14,7 @@
   "dependencies": { 
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",
+    "@better-auth/expo": "workspace:*",
     "@libsql/kysely-libsql": "^0.4.1",
     "@prisma/adapter-libsql": "^5.19.1",
     "@prisma/client": "^5.19.1",
