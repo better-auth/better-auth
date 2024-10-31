@@ -2,8 +2,93 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { Member } from "../schema";
+import { type Member, role } from "../schema";
 import { APIError } from "better-call";
+import type { User } from "../../../db/schema";
+import { generateId } from "../../../utils";
+
+export const addMember = createAuthEndpoint(
+	"/organization/add-member",
+	{
+		method: "POST",
+		body: z.object({
+			userIdOrEmail: z.string(),
+			role: role,
+			organizationId: z.string().optional(),
+		}),
+		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			SERVER_ONLY: true
+		}
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		const orgId =
+			ctx.body.organizationId || session.session.activeOrganizationId;
+		if (!orgId) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "No active organization found!",
+				},
+			});
+		}
+
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+		let user: User | null;
+		if (ctx.body.userIdOrEmail.includes("@")) {
+			user = await ctx.context.adapter.findOne<User>({
+				model: ctx.context.tables.user.tableName,
+				where: [
+					{
+						field: "email",
+						value: ctx.body.userIdOrEmail,
+					},
+				],
+			});
+		} else {
+			user = await ctx.context.adapter.findOne<User>({
+				model: ctx.context.tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: ctx.body.userIdOrEmail,
+					},
+				],
+			});
+		}
+
+		if (!user) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User not found!",
+			});
+		}
+
+		const alreadyMember = await adapter.findMemberByEmail({
+			email: user.email,
+			organizationId: orgId,
+		});
+		if (alreadyMember) {
+			throw new APIError("BAD_REQUEST", {
+				message: "User is already a member of this organization",
+			});
+		}
+
+		const createdMember = await adapter.createMember({
+			id: generateId(),
+			organizationId: orgId,
+			userId: user.id,
+			email: user.email,
+			role: ctx.body.role,
+			createdAt: new Date(),
+		});
+
+		return ctx.json({
+			member: createdMember,
+		});
+	},
+);
 
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",
