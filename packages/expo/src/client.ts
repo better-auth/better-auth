@@ -43,6 +43,7 @@ interface ExpoClientOptions {
 		getItem: (key: string) => string | null;
 	};
 	storagePrefix?: string;
+	disableCache?: boolean;
 }
 
 interface StoredCookie {
@@ -128,7 +129,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							store?.notify("$sessionSignal");
 						}
 
-						if (context.request.url.toString().includes("/get-session")) {
+						if (
+							context.request.url.toString().includes("/get-session") &&
+							!opts.disableCache
+						) {
 							const data = context.data;
 							storage.setItem(localCacheName, JSON.stringify(data));
 						}
