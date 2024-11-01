@@ -427,34 +427,29 @@ export interface BetterAuthOptions {
 			 */
 			domain?: string;
 		};
-		/**
-		 * Configure cookies
+		/*
+		 * Allows you to change default cookie names and attributes
+		 *
+		 * default cookie names:
+		 * - "session_token"
+		 * - "session_data"
+		 * - "dont_remember"
+		 *
+		 * plugins can also add additional cookies
 		 */
-		cookiesOptions?: {
-			/*
-			 * Allows you to change default cookie names and attributes
-			 *
-			 * default cookie names:
-			 * - "session_token"
-			 * - "session_data"
-			 * - "dont_remember"
-			 *
-			 * plugins can also add additional cookies
-			 */
-			customCookies?: {
-				[key: string]: {
-					name?: string;
-					attributes?: CookieOptions;
-				};
+		cookies?: {
+			[key: string]: {
+				name?: string;
+				attributes?: CookieOptions;
 			};
-			/**
-			 * Prefix for cookies. If a cookie name is provided
-			 * in cookies config, this will be overridden.
-			 *
-			 * @default "better-auth"
-			 */
-			cookiePrefix?: string;
 		};
+		/**
+		 * Prefix for cookies. If a cookie name is provided
+		 * in cookies config, this will be overridden.
+		 *
+		 * @default "better-auth"
+		 */
+		cookiePrefix?: string;
 	};
 	logger?: {
 		/**

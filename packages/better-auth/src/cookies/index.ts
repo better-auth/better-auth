@@ -32,16 +32,10 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		overrideAttributes: Partial<CookieOptions> = {},
 	) {
 		const name =
-			options.advanced?.cookiesOptions?.customCookies?.[
-				cookieName as "session_token"
-			]?.name ||
-			`${
-				options.advanced?.cookiesOptions?.cookiePrefix || "better-auth"
-			}.${cookieName}`;
+			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
+			`${options.advanced?.cookiePrefix || "better-auth"}.${cookieName}`;
 		const attributes =
-			options.advanced?.cookiesOptions?.customCookies?.[
-				cookieName as "session_token"
-			]?.attributes;
+			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
 		return {
 			name: `${secureCookiePrefix}.${name}`,

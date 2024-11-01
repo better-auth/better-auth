@@ -138,9 +138,7 @@ describe("cookie configuration", () => {
 					enabled: true,
 					domain: "example.com",
 				},
-				cookiesOptions: {
-					cookiePrefix: "test-prefix",
-				},
+				cookiePrefix: "test-prefix",
 			},
 		} satisfies BetterAuthOptions;
 
