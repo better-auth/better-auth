@@ -76,6 +76,7 @@ export async function parseState(c: GenericEndpointContext) {
 		const origin = new URL(c.context.baseURL).origin;
 		parsedData.callbackURL = `${origin}${parsedData.callbackURL}`;
 	}
+	await c.context.internalAdapter.deleteVerificationValue(data.id);
 	return parsedData as {
 		callbackURL: string;
 		codeVerifier: string;
