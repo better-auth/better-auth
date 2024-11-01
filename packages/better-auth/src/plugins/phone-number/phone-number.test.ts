@@ -195,3 +195,57 @@ describe("phone auth flow", async () => {
 		expect(res.error).toBe(null);
 	});
 });
+
+describe("verify phone-number", async (it) => {
+	const otp: string[] = [""];
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP(_, code) {
+					otp.push(code);
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+
+	const testPhoneNumber = "+251911121314";
+
+	it("should verify the last code", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		const res = await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp.pop() as string,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.error).toBe(null);
+		expect(res.data?.user.phoneNumberVerified).toBe(true);
+	});
+});
