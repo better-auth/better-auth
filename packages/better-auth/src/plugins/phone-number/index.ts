@@ -200,8 +200,14 @@ export const phoneNumber = (options?: {
 					if (!user) {
 						if (options?.signUpOnVerification) {
 							user = await ctx.context.internalAdapter.createUser({
-								email: `temp-${ctx.body.phoneNumber}`,
-								name: ctx.body.phoneNumber,
+								email: options.signUpOnVerification.getTempEmail(
+									ctx.body.phoneNumber,
+								),
+								name: options.signUpOnVerification.getTempName
+									? options.signUpOnVerification.getTempName(
+											ctx.body.phoneNumber,
+										)
+									: ctx.body.phoneNumber,
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							});
