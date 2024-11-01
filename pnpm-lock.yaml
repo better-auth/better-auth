@@ -4,18 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  react18:
-    '@types/react':
-      specifier: ^18.3.11
-      version: 18.3.12
-    react:
-      specifier: 18.3.1
-      version: 18.3.1
-    react-dom:
-      specifier: 18.3.1
-      version: 18.3.1
-
 overrides:
   remark-mdx: 3.0.0
   unified: 11.0.4
@@ -760,10 +748,10 @@ importers:
         specifier: ^8.13.1
         version: 8.13.1
       react:
-        specifier: catalog:react18
+        specifier: ^18.3.1
         version: 18.3.1
       react-dom:
-        specifier: catalog:react18
+        specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
       react-native:
         specifier: ~0.74.6
@@ -806,7 +794,7 @@ importers:
         specifier: ^29.5.12
         version: 29.5.14
       '@types/react':
-        specifier: catalog:react18
+        specifier: ^18.3.1
         version: 18.3.12
       '@types/react-test-renderer':
         specifier: ^18.0.7
