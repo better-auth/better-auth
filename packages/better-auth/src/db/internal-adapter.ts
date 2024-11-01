@@ -340,8 +340,12 @@ export const createInternalAdapter = (
 											user: parsedSession.user,
 										}),
 										parsedSession.session.expiresAt
-											? new Date(parsedSession.session.expiresAt).getTime()
-											: undefined,
+											? Math.floor(
+													(parsedSession.session.expiresAt.getTime() -
+														Date.now()) /
+														1000,
+												)
+											: sessionExpiration,
 									);
 								} else {
 									return null;
