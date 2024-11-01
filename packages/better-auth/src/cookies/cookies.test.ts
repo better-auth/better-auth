@@ -49,12 +49,10 @@ describe("cookies", async () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-					console.log(setCookie, context);
 					expect(setCookie).toContain("Secure");
 				},
 			},
 		);
-		console.log(res);
 	});
 
 	it("should use secure cookies when the base url is https", async () => {

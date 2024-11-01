@@ -35,7 +35,7 @@ export const {
 	signIn,
 	signOut,
 	useSession,
-	user,
+
 	organization,
 	useListOrganizations,
 	useActiveOrganization,

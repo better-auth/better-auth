@@ -188,8 +188,9 @@ export default function Features({ stars }: { stars: string | null }) {
 										"svelteKit",
 										"astro",
 										"solidStart",
-										"react",
-										"hono",
+										// "react",
+										// "hono",
+										"expo",
 										"tanstack",
 									]}
 								/>

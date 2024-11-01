@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/nextjs",
+  "name": "@example/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,9 +11,10 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": {
+  "dependencies": { 
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",
+    "@better-auth/expo": "workspace:*",
     "@libsql/kysely-libsql": "^0.4.1",
     "@prisma/adapter-libsql": "^5.19.1",
     "@prisma/client": "^5.19.1",

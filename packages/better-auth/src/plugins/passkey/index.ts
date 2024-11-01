@@ -20,7 +20,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
-import { env } from "std-env";
+import { env } from "../../utils/env";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;

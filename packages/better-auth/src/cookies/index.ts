@@ -3,7 +3,7 @@ import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
-import { env, isProduction } from "std-env";
+import { env, isProduction } from "../utils/env";
 import type { Session, User } from "../types";
 
 export function getCookies(options: BetterAuthOptions) {
@@ -62,28 +62,6 @@ export function getCookies(options: BetterAuthOptions) {
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} satisfies CookieOptions,
 		},
-		state: {
-			name: `${secureCookiePrefix}${cookiePrefix}.state`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
-		pkCodeVerifier: {
-			name: `${secureCookiePrefix}${cookiePrefix}.pk_code_verifier`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
 		dontRememberToken: {
 			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
 			options: {
@@ -92,17 +70,6 @@ export function getCookies(options: BetterAuthOptions) {
 				path: "/",
 				secure: !!secureCookiePrefix,
 				//no max age so it expires when the browser closes
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
-		nonce: {
-			name: `${secureCookiePrefix}${cookiePrefix}.nonce`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
 				...(crossSubdomainEnabled ? { domain } : {}),
 			} as CookieOptions,
 		},
@@ -246,6 +213,7 @@ export function parseSetCookieHeader(
 
 	return cookieMap;
 }
+
 export function parseCookies(cookieHeader: string) {
 	const cookies = cookieHeader.split("; ");
 	const cookieMap = new Map<string, string>();
