@@ -1,4 +1,4 @@
-import { jsonify, PreparedQuery, surql, type Surreal } from "surrealdb";
+import { PreparedQuery, type Surreal } from "surrealdb";
 import type { Adapter, Where } from "../../types";
 
 /**
@@ -49,7 +49,15 @@ function composeWhereClause(where: Where[], model: string): string {
 		.join(" ");
 }
 
-function checkForIdInWhereClause(where: Where[]) {
+
+/**
+ * Scans for the presence of an "id" field in the array of where clauses.
+ *
+ * @param {Where[]} where - Array of where objects.
+ * @returns {string | number | boolean | string[] | number[] | undefined} 
+ * The value of the "id" field if present, otherwise undefined.
+ */
+function checkForIdInWhereClause(where: Where[]): string | number | boolean | string[] | number[] | undefined {
 	if (where.some(({ field }) => field === "id")) {
 		return where.find(({ field }) => field === "id")?.value
 	};
@@ -159,7 +167,12 @@ export const surrealdbAdapter = (
 				update.id = undefined;
 			}
 
-			const query = surql`UPDATE type::table(${model}) MERGE { ${update} } WHERE ${wheres}`;
+			const query = new PreparedQuery(`UPDATE type::table($model) MERGE { $update } WHERE $wheres`, {
+				model: model,
+				update: update,
+				wheres: wheres
+			});
+
 			const response = await db.query<[any[]]>(query);
 			const result = response[0][0];
 
@@ -171,7 +184,10 @@ export const surrealdbAdapter = (
 			if (!wheres)
 				throw new Error("Empty conditions - possible unintended operation");
 
-			const query = `DELETE type::table('${model}') WHERE ${wheres}`;
+			const query = new PreparedQuery(`DELETE type::table($model) WHERE ${wheres}`, {
+				model: model,
+				wheres: wheres
+			});
 
 			await db.query(query);
 		},
@@ -181,7 +197,10 @@ export const surrealdbAdapter = (
 			if (!wheres)
 				throw new Error("Empty conditions - possible unintended operation");
 
-			const query = `DELETE type::table('${model}') WHERE ${wheres}`;
+			const query = new PreparedQuery(`DELETE type::table($model) WHERE ${wheres}`, {
+				model: model,
+				wheres: wheres
+			});
 
 			await db.query(query);
 		},
