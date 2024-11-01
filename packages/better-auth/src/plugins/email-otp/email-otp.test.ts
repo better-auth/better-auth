@@ -118,7 +118,6 @@ describe("email-otp-verify", async () => {
 			email: testUser.email,
 			type: "email-verification",
 		});
-		console.log({ otp });
 		const verifiedUser = await client.emailOtp.verifyEmail({
 			email: testUser.email,
 			otp: otp.pop() as string,
