@@ -214,7 +214,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 									trustDeviceCookieName.name,
 									`${newToken}!${response.session.id}`,
 									ctx.context.secret,
-									trustDeviceCookieName.options,
+									trustDeviceCookieName.attributes,
 								);
 								return;
 							}
@@ -225,7 +225,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx);
 						const hash = await hs256(ctx.context.secret, response.session.id);
-						const cookieName = ctx.context.createAuthCookie(
+						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
 								maxAge: 60 * 60 * 24, // 24 hours,
@@ -238,10 +238,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * the hash and set that as session.
 						 */
 						await ctx.setSignedCookie(
-							cookieName.name,
+							twoFactorCookie.name,
 							`${response.session.userId}!${hash}`,
 							ctx.context.secret,
-							cookieName.options,
+							twoFactorCookie.attributes,
 						);
 						const res = new Response(
 							JSON.stringify({

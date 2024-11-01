@@ -8,6 +8,7 @@ import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
+import type { CookieOptions } from "better-call";
 
 export interface BetterAuthOptions {
 	/**
@@ -425,6 +426,34 @@ export interface BetterAuthOptions {
 			 * domain from the base URL.
 			 */
 			domain?: string;
+		};
+		/**
+		 * Configure cookies
+		 */
+		cookiesOptions?: {
+			/*
+			 * Allows you to change default cookie names and attributes
+			 *
+			 * default cookie names:
+			 * - "session_token"
+			 * - "session_data"
+			 * - "dont_remember"
+			 *
+			 * plugins can also add additional cookies
+			 */
+			customCookies?: {
+				[key: string]: {
+					name?: string;
+					attributes?: CookieOptions;
+				};
+			};
+			/**
+			 * Prefix for cookies. If a cookie name is provided
+			 * in cookies config, this will be overridden.
+			 *
+			 * @default "better-auth"
+			 */
+			cookiePrefix?: string;
 		};
 	};
 	logger?: {
