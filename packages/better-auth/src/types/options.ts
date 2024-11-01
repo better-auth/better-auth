@@ -447,7 +447,10 @@ export interface BetterAuthOptions {
 		 * Prefix for cookies. If a cookie name is provided
 		 * in cookies config, this will be overridden.
 		 *
-		 * @default "better-auth"
+		 * @default
+		 * ```txt
+		 * "appName" -> which defaults to "better-auth"
+		 * ```
 		 */
 		cookiePrefix?: string;
 	};

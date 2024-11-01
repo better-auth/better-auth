@@ -31,9 +31,11 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		cookieName: string,
 		overrideAttributes: Partial<CookieOptions> = {},
 	) {
+		const prefix =
+			options.advanced?.cookiePrefix || options.appName || "better-auth";
 		const name =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
-			`${options.advanced?.cookiePrefix || "better-auth"}.${cookieName}`;
+			`${prefix}.${cookieName}`;
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
