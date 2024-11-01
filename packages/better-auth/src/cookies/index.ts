@@ -3,7 +3,7 @@ import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
-import { isProduction } from "../utils/env";
+import { env, isProduction } from "../utils/env";
 import type { Session, User } from "../types";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -76,12 +76,26 @@ export function getCookies(options: BetterAuthOptions) {
 		 * This is useful for when you want to cache the session in the cookie
 		 */
 		sessionData: {
-			name: sessionData.name,
-			options: sessionData.attributes,
+			name: `${secureCookiePrefix}${cookiePrefix}.session_data`,
+			options: {
+				httpOnly: true,
+				sameSite,
+				path: "/",
+				secure: !!secureCookiePrefix,
+				maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+				...(crossSubdomainEnabled ? { domain } : {}),
+			} satisfies CookieOptions,
 		},
 		dontRememberToken: {
-			name: dontRememberToken.name,
-			options: dontRememberToken.attributes,
+			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
+			options: {
+				httpOnly: true,
+				sameSite,
+				path: "/",
+				secure: !!secureCookiePrefix,
+				//no max age so it expires when the browser closes
+				...(crossSubdomainEnabled ? { domain } : {}),
+			} as CookieOptions,
 		},
 	};
 }
