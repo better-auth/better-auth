@@ -107,7 +107,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 									trustDeviceCookie.name,
 									`${token}!${session.id}`,
 									ctx.context.secret,
-									trustDeviceCookie.options,
+									trustDeviceCookie.attributes,
 								);
 							}
 							return ctx.json({

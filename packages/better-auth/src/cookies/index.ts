@@ -36,11 +36,12 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const name =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
 			`${prefix}.${cookieName}`;
+
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
 		return {
-			name: `${secureCookiePrefix}.${name}`,
+			name: `${secureCookiePrefix}${name}`,
 			attributes: {
 				secure: !!secureCookiePrefix,
 				sameSite: "lax",
@@ -65,9 +66,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const sessionData = createCookie("session_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
-	const dontRememberToken = createCookie("dont_remember", {
-		maxAge: 0,
-	});
+	const dontRememberToken = createCookie("dont_remember");
 	return {
 		sessionToken: {
 			name: sessionToken.name,
