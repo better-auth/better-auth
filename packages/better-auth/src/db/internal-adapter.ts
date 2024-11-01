@@ -558,7 +558,7 @@ export const createInternalAdapter = (
 			return verification;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verification = await adapter.findOne<Verification>({
+			const verification = await adapter.findMany<Verification>({
 				model: tables.verification.tableName,
 				where: [
 					{
@@ -567,8 +567,24 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
+				limit: 100,
 			});
-			return convertFromDB(tables.verification.fields, verification);
+			const lastVerification = verification.pop();
+			if (verification.length > 0) {
+				await adapter.deleteMany({
+					model: tables.verification.tableName,
+					where: [
+						{
+							operator: "in",
+							field: "id",
+							value: verification.map((v) => v.id),
+						},
+					],
+				});
+			}
+			return lastVerification
+				? convertFromDB(tables.verification.fields, lastVerification)
+				: null;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({
