@@ -30,6 +30,8 @@ export default defineConfig((env) => {
 		},
 		format: ["esm", "cjs"],
 		bundle: true,
+		splitting: true,
 		skipNodeModulesBundle: true,
+		noExternal: ["better-call", "@better-fetch/fetch"],
 	};
 });
