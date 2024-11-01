@@ -49,23 +49,6 @@ function composeWhereClause(where: Where[], model: string): string {
 		.join(" ");
 }
 
-
-	/**
-	 * Converting function from RecordId to string.
-	 *
-	 * Conversion from Surreal native RecordId to string.
-	 * This is needed to works properly with custom generated ids.
-	 * @param data - data to convert
-	 * @returns converted data with id as string
-	 */
-function convertIdToString(data: any) {
-	const { id, ...rest } = data;
-	if (!id) return data;
-
-	const RecordIdValueString = jsonify(id.id) as string;
-	return { ...rest, id: RecordIdValueString };
-}
-
 function checkForIdInWhereClause(where: Where[]) {
 	if (where.some(({ field }) => field === "id")) {
 		return where.find(({ field }) => field === "id")?.value
@@ -97,10 +80,14 @@ export const surrealdbAdapter = (
 				val.id = opts.generateId ? opts.generateId() : undefined;
 			}
 
-			const result = await db.insert(model, {
-				...val,
-			});
-			return convertIdToString(result[0]);
+			const query = new PreparedQuery(`CREATE type::table($model) CONTENT $val `, {
+				model: model,
+				val: val
+			})
+
+			const response = await db.query<[any[]]>(query);
+			const result = response[0][0];
+			return result
 		},
 		async findOne(data) {
 			const { model, where, select = [] } = data;
@@ -132,7 +119,6 @@ export const surrealdbAdapter = (
 			}
 			console.log({result})
 			return result;
-			// return convertIdToString(result);
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
@@ -177,7 +163,7 @@ export const surrealdbAdapter = (
 			const response = await db.query<[any[]]>(query);
 			const result = response[0][0];
 
-			return convertIdToString(result);
+			return result;
 		},
 		async delete(data) {
 			const { model, where } = data;
