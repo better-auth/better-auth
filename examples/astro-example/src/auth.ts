@@ -1,9 +1,6 @@
 import { betterAuth } from "better-auth";
 import { passkey, twoFactor } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { Resend } from "resend";
-
-const resend = new Resend(import.meta.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
 	database: new Database("./db.sqlite"),
@@ -18,8 +15,12 @@ export const auth = betterAuth({
 	},
 	socialProviders: {
 		google: {
-			clientId: import.meta.env.GOOGLE_CLIENT_ID || "",
-			clientSecret: import.meta.env.GOOGLE_CLIENT_SECRET || "",
+			clientId: import.meta.env.GOOGLE_CLIENT_ID!,
+			clientSecret: import.meta.env.GOOGLE_CLIENT_SECRET!,
+		},
+		github: {
+			clientId: import.meta.env.GITHUB_CLIENT_ID!,
+			clientSecret: import.meta.env.GITHUB_CLIENT_SECRET!,
 		},
 	},
 	plugins: [
