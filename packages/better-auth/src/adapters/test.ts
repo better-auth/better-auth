@@ -131,7 +131,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
-	test("should fin many with operators", async () => {
+	test("should find many with operators", async () => {
 		const res = await adapter.findMany({
 			model: "user",
 			where: [

@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  surrealdb:
+    container_name: surrealdb
+    entrypoint:
+      - /surreal
+      - start
+      - --allow-all
+      - --user
+      - root
+      - --pass
+      - root
+      - rocksdb:/surrealdb/surreal.db
+    volumes:
+      - ./_surrealdb:/surrealdb
+    image: surrealdb/surrealdb:latest
+    ports:
+      - 8000:8000
+
   mongodb:
     image: mongo:latest
     container_name: mongodb
@@ -35,6 +52,7 @@ services:
       - mysql_data:/var/lib/mysql
 
 volumes:
+  _surrealdb:
   mongodb_data:
   postgres_data:
   mysql_data:

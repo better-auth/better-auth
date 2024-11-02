@@ -12,6 +12,7 @@ export default defineConfig((env) => {
 			"adapters/prisma": "./src/adapters/prisma-adapter/index.ts",
 			"adapters/drizzle": "./src/adapters/drizzle-adapter/index.ts",
 			"adapters/mongodb": "./src/adapters/mongodb-adapter/index.ts",
+			"adapters/surrealdb": "./src/adapters/surrealdb-adapter/index.ts",
 			"adapters/kysely": "./src/adapters/kysely-adapter/index.ts",
 			db: "./src/db/index.ts",
 			oauth2: "./src/oauth2/index.ts",
