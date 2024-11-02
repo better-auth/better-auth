@@ -24,6 +24,54 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
     </Step>
     <Step>
+        ## Install Better Auth and Expo Plugin
+
+        Install both the expo plugin in your server and both the Better Auth package and the Expo plugin in your Expo app.
+
+        ```package-install
+        @better-auth/expo
+        ```
+
+        ```package-install
+        better-auth
+        ```
+    </Step>
+    
+    <Step>
+        ## Add the Expo Plugin on Your Server
+
+        Add the Expo plugin to your Better Auth server.
+
+        ```ts title="server.ts"
+        import { betterAuth } from 'better-auth';
+        import { expo } from '@better-auth/expo';
+
+        export const auth = betterAuth({
+            plugins: [
+                expo
+            ]
+        });
+        ```
+    </Step>
+
+    <Step>
+        ## Initialize Better Auth Client
+        
+        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
+
+        ```ts title="src/auth-client.ts"
+        import { createAuthClient } from 'better-auth/react';
+
+        const authClient = createAuthClient({
+            basURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+        });
+        ```
+        <Callout>
+         Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
+        </Callout>
+    </Step>
+
+     <Step>
         ## Scheme and Trusted Origins
 
         Better Auth uses deep links to redirect users back to your app after authentication. To enable this, you need to add your app's scheme to the `trustedOrigins` list in your Better Auth config. 
@@ -46,15 +94,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         })
         ```
     </Step>
-    <Step>
-        ## Install Better Auth and Expo Plugin
-
-        With your server up and running, install both Better Auth and the Expo plugin in your Expo project.
-
-        ```package-install
-        better-auth @better-auth/expo
-        ```
-    </Step>
+ 
     <Step>
         ## Initialize Better Auth Client
         
