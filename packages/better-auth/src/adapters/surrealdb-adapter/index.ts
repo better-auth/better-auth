@@ -138,7 +138,7 @@ export const surrealdbAdapter = (
 			if (!result) {
 				return null;
 			}
-			console.log({ result });
+
 			return result;
 		},
 		async findMany(data) {
