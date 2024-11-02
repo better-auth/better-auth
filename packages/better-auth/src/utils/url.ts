@@ -46,13 +46,13 @@ export function getBaseURL(url?: string, path?: string) {
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);
-		return parsedUrl.origin.replace("http://", "").replace("https://", "");
+		return parsedUrl.origin;
 	} catch (error) {
 		return null;
 	}
 }
 
 export const checkURLValidity = (url: string) => {
-	const urlPattern = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
-	return urlPattern.test(url);
+	const urlPattern = url.includes("://");
+	return urlPattern;
 };

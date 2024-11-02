@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { logger } from "../utils";
-import { checkURLValidity, getOrigin } from "../utils/url";
+import { getOrigin } from "../utils/url";
 
 export async function generateState(c: GenericEndpointContext) {
 	const callbackURL =
@@ -82,11 +82,6 @@ export async function parseState(c: GenericEndpointContext) {
 		);
 	}
 
-	const isFullURL = checkURLValidity(parsedData.callbackURL);
-	if (!isFullURL) {
-		const origin = new URL(c.context.baseURL).origin;
-		parsedData.callbackURL = `${origin}${parsedData.callbackURL}`;
-	}
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
 	return parsedData as {
 		callbackURL: string;

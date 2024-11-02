@@ -215,8 +215,14 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+		let toRedirectTo: string;
+		try {
+			const url = new URL(callbackURL);
+			toRedirectTo = url.toString();
+		} catch {
+			toRedirectTo = callbackURL;
+		}
 
-		const url = new URL(callbackURL);
-		throw c.redirect(url.toString());
+		throw c.redirect(toRedirectTo);
 	},
 );
