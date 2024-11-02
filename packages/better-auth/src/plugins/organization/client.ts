@@ -5,7 +5,7 @@ import type {
 	Organization,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
-import { defaultStatements, type AccessControl, type Role } from "./access";
+import { defaultStatements, type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import type { BetterFetchOption } from "@better-fetch/fetch";

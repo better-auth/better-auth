@@ -1,4 +1,4 @@
-import type { LiteralString } from "../../../../types/helper";
+import type { LiteralString } from "../../../types/helper";
 
 // Transforms an array into any combination of 0 or more of its members
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =

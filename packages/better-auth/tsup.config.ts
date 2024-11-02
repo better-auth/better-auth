@@ -1,8 +1,26 @@
+import * as fs from "fs/promises";
 import { defineConfig } from "tsup";
 
-export default defineConfig((env) => {
+export default defineConfig(async (env) => {
+	const pluginEntries = await fs
+		.readFile("./package.json", "utf-8")
+		.then((content) => {
+			const { exports } = JSON.parse(content);
+			let entries = {};
+			Object.keys(exports).forEach((key) => {
+				if (key.startsWith("./plugins")) {
+					entries[key.replace("./", "")] = `./src${key.replace(
+						".",
+						"",
+					)}/index.ts`;
+				}
+			});
+			return entries;
+		});
+	console.log(pluginEntries);
 	return {
 		entry: {
+			...pluginEntries,
 			index: "./src/index.ts",
 			social: "./src/social-providers/index.ts",
 			types: "./src/types/index.ts",
@@ -24,7 +42,6 @@ export default defineConfig((env) => {
 			api: "./src/api/index.ts",
 			"client/plugins": "./src/client/plugins/index.ts",
 			"svelte-kit": "./src/integrations/svelte-kit.ts",
-			access: "./src/plugins/organization/access/index.ts",
 			"solid-start": "./src/integrations/solid-start.ts",
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",

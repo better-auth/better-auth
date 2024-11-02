@@ -93,9 +93,69 @@
       "require": "./dist/plugins.cjs"
     },
     "./plugins/access": {
-      "types": "./dist/access.d.ts",
-      "import": "./dist/access.js",
-      "require": "./dist/access.cjs"
+      "types": "./dist/plugins/access.d.ts",
+      "import": "./dist/plugins/access.js",
+      "require": "./dist/plugins/access.cjs"
+    },
+    "./plugins/admin": {
+      "types": "./dist/plugins/admin.d.ts",
+      "import": "./dist/plugins/admin.js",
+      "require": "./dist/plugins/admin.cjs"
+    },
+    "./plugins/anonymous": {
+      "types": "./dist/plugins/anonymous.d.ts",
+      "import": "./dist/plugins/anonymous.js",
+      "require": "./dist/plugins/anonymous.cjs"
+    },
+    "./plugins/bearer": {
+      "types": "./dist/plugins/bearer.d.ts",
+      "import": "./dist/plugins/bearer.js",
+      "require": "./dist/plugins/bearer.cjs"
+    },
+    "./plugins/email-otp": {
+      "types": "./dist/plugins/email-otp.d.ts",
+      "import": "./dist/plugins/email-otp.js",
+      "require": "./dist/plugins/email-otp.cjs"
+    },
+    "./plugins/generic-oauth": {
+      "types": "./dist/plugins/generic-oauth.d.ts",
+      "import": "./dist/plugins/generic-oauth.js",
+      "require": "./dist/plugins/generic-oauth.cjs"
+    },
+    "./plugins/jwt": {
+      "types": "./dist/plugins/jwt.d.ts",
+      "import": "./dist/plugins/jwt.js",
+      "require": "./dist/plugins/jwt.cjs"
+    },
+    "./plugins/magic-link": {
+      "types": "./dist/plugins/magic-link.d.ts",
+      "import": "./dist/plugins/magic-link.js",
+      "require": "./dist/plugins/magic-link.cjs"
+    },
+    "./plugins/organization": {
+      "types": "./dist/plugins/organization.d.ts",
+      "import": "./dist/plugins/organization.js",
+      "require": "./dist/plugins/organization.cjs"
+    },
+    "./plugins/passkey": {
+      "types": "./dist/plugins/passkey.d.ts",
+      "import": "./dist/plugins/passkey.js",
+      "require": "./dist/plugins/passkey.cjs"
+    },
+    "./plugins/phone-number": {
+      "types": "./dist/plugins/phone-number.d.ts",
+      "import": "./dist/plugins/phone-number.js",
+      "require": "./dist/plugins/phone-number.cjs"
+    },
+    "./plugins/two-factor": {
+      "types": "./dist/plugins/two-factor.d.ts",
+      "import": "./dist/plugins/two-factor.js",
+      "require": "./dist/plugins/two-factor.cjs"
+    },
+    "./plugins/username": {
+      "types": "./dist/plugins/username.d.ts",
+      "import": "./dist/plugins/username.js",
+      "require": "./dist/plugins/username.cjs"
     },
     "./svelte-kit": {
       "types": "./dist/svelte-kit.d.ts",

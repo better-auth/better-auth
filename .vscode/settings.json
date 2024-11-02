@@ -14,7 +14,7 @@
 		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[json]": {
-		"editor.defaultFormatter": "biomejs.biome"
+		"editor.defaultFormatter": "vscode.json-language-features"
 	},
 	"typescript.tsdk": "node_modules/typescript/lib",
 	"[astro]": {

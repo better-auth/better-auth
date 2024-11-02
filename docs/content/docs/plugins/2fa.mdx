@@ -28,14 +28,13 @@ This plugin offers two main methods to do a second factor verification:
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { twoFactor } from "better-auth/plugins" // [!code highlight]
+        import { twoFactor } from "better-auth/plugins/two-factor" // [!code highlight]
 
         export const auth = betterAuth({
             // ... other config options
+            appName: "My App", // provide your app name. It'll be used as an issuer. // [!code highlight]
             plugins: [
-                twoFactor({  // [!code highlight]
-                    issuer: "my-app" // [!code highlight]
-                }) // [!code highlight]
+                twoFactor() // [!code highlight]
             ]
         })
         ```

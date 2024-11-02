@@ -17,7 +17,7 @@ import {
 	type Role,
 	defaultRoles,
 	type defaultStatements,
-} from "./access";
+} from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {

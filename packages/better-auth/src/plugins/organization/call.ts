@@ -1,8 +1,8 @@
-import { APIError, type Context, createEndpointCreator } from "better-call";
+import { type Context } from "better-call";
 import type { Session, User } from "../../db/schema";
-import { createAuthMiddleware, optionsMiddleware } from "../../api/call";
+import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import type { Role, defaultRoles } from "./access";
+import type { Role, defaultRoles } from "../access";
 import type { OrganizationOptions } from "./organization";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {

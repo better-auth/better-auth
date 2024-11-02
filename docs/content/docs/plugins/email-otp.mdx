@@ -19,7 +19,7 @@ You can't register a user using the email OTP plugin. You can only sign in or ve
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
-    import { emailOTP } from "better-auth/plugins" // [!code highlight]
+    import { emailOTP } from "better-auth/plugins/email-otp" // [!code highlight]
     
     export const auth = betterAuth({
         // ... other config options
