@@ -705,6 +705,9 @@ importers:
       babel-plugin-transform-import-meta:
         specifier: ^2.2.1
         version: 2.2.1(@babel/core@7.26.0)
+      better-auth:
+        specifier: workspace:*
+        version: link:../../packages/better-auth
       better-sqlite3:
         specifier: ^11.5.0
         version: 11.5.0
@@ -1594,8 +1597,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(encoding@0.1.13)
       better-call:
-        specifier: 0.2.13
-        version: 0.2.13
+        specifier: 0.2.14-beta.1
+        version: 0.2.14-beta.1
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -1779,6 +1782,9 @@ importers:
       expo-constants:
         specifier: ~16.0.2
         version: 16.0.2(expo@51.0.38(encoding@0.1.13))
+      expo-crypto:
+        specifier: ^13.0.2
+        version: 13.0.2(expo@51.0.38(encoding@0.1.13))
       expo-linking:
         specifier: ~6.3.1
         version: 6.3.1(expo@51.0.38(encoding@0.1.13))
@@ -8862,6 +8868,9 @@ packages:
   better-call@0.2.13:
     resolution: {integrity: sha512-Y1rOwUtTYeH4usW7XNqonoo+Dtcb2sXL6m6zcLsgTYSD2ANqyELxkeA8BkCTWonN1y+Pt9CMbcn5vILaPohdUg==}
 
+  better-call@0.2.14-beta.1:
+    resolution: {integrity: sha512-wuh/lfNnxiFgBzwqscMMITkKxLN2ztOhW1hZQ0+qmeDWPDeVax7tANTORZdHIo+CteqOO9MUjuCwU73K4zo99Q==}
+
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
 
@@ -10808,6 +10817,11 @@ packages:
 
   expo-constants@16.0.2:
     resolution: {integrity: sha512-9tNY3OVO0jfiMzl7ngb6IOyR5VFzNoN5OOazUWoeGfmMqVB5kltTemRvKraK9JRbBKIw+SOYLEmF0sEqgFZ6OQ==}
+    peerDependencies:
+      expo: '*'
+
+  expo-crypto@13.0.2:
+    resolution: {integrity: sha512-7f/IMPYJZkBM21LNEMXGrNo/0uXSVfZTwufUdpNKedJR0fm5fH4DCSN79ZddlV26nF90PuXjK2inIbI6lb0qRA==}
     peerDependencies:
       expo: '*'
 
@@ -15704,6 +15718,9 @@ packages:
 
   set-cookie-parser@2.7.0:
     resolution: {integrity: sha512-lXLOiqpkUumhRdFF3k1osNXCy9akgx/dyPZ5p8qAg9seJzXr5ZrlqZuWIMuY6ejOsVLE6flJ5/h3lsn57fQ/PQ==}
+
+  set-cookie-parser@2.7.1:
+    resolution: {integrity: sha512-IOc8uWeOZgnb3ptbCURJWNjWUPcO3ZnTTdzsurqERrP6nPyv+paC55vJM0LpOlT2ne+Ix+9+CRG1MNLlyZ4GjQ==}
 
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
@@ -25824,7 +25841,7 @@ snapshots:
       '@types/cookie': 0.6.0
       '@web3-storage/multipart-parser': 1.0.0
       cookie: 0.6.0
-      set-cookie-parser: 2.7.0
+      set-cookie-parser: 2.7.1
       source-map: 0.7.4
       turbo-stream: 2.4.0
     optionalDependencies:
@@ -25836,7 +25853,7 @@ snapshots:
       '@types/cookie': 0.6.0
       '@web3-storage/multipart-parser': 1.0.0
       cookie: 0.6.0
-      set-cookie-parser: 2.7.0
+      set-cookie-parser: 2.7.1
       source-map: 0.7.4
       turbo-stream: 2.4.0
     optionalDependencies:
@@ -29157,6 +29174,14 @@ snapshots:
       rou3: 0.5.1
       uncrypto: 0.1.3
 
+  better-call@0.2.14-beta.1:
+    dependencies:
+      '@better-fetch/fetch': 1.1.12
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+      uncrypto: 0.1.3
+      zod: 3.23.8
+
   better-call@0.2.3-beta.2:
     dependencies:
       '@better-fetch/fetch': 1.1.12
@@ -31824,6 +31849,11 @@ snapshots:
       expo: 51.0.38(encoding@0.1.13)
     transitivePeerDependencies:
       - supports-color
+
+  expo-crypto@13.0.2(expo@51.0.38(encoding@0.1.13)):
+    dependencies:
+      base64-js: 1.5.1
+      expo: 51.0.38(encoding@0.1.13)
 
   expo-file-system@17.0.1(expo@51.0.38(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(encoding@0.1.13)):
     dependencies:
@@ -38757,6 +38787,8 @@ snapshots:
   set-blocking@2.0.0: {}
 
   set-cookie-parser@2.7.0: {}
+
+  set-cookie-parser@2.7.1: {}
 
   set-function-length@1.2.2:
     dependencies:

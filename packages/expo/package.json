@@ -28,6 +28,7 @@
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.5.0",
     "expo-constants": "~16.0.2",
+    "expo-crypto": "^13.0.2",
     "expo-linking": "~6.3.1",
     "expo-secure-store": "~13.0.2",
     "expo-web-browser": "~13.0.3",
