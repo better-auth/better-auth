@@ -69,6 +69,7 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
+
 		if (!callbackURL) {
 			logger.error("No callback URL found");
 			throw c.redirect(

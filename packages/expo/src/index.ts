@@ -14,6 +14,19 @@ export const expo = () => {
 				},
 			};
 		},
+		async onRequest(request, ctx) {
+			/**
+			 * To bypass origin check from expo, we need to set the origin header to the expo-origin header
+			 */
+			const expoOrigin = request.headers.get("expo-origin");
+			if (!expoOrigin) {
+				return;
+			}
+			request.headers.set("origin", expoOrigin);
+			return {
+				request,
+			};
+		},
 		hooks: {
 			after: [
 				{
@@ -37,9 +50,11 @@ export const expo = () => {
 								return;
 							}
 							const cookie = response.headers.get("set-cookie");
+
 							if (!cookie) {
 								return;
 							}
+							console.log({ location });
 							const url = new URL(location);
 							url.searchParams.set("cookie", cookie);
 							response.headers.set("location", url.toString());

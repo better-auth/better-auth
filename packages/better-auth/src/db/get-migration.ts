@@ -21,7 +21,7 @@ const postgresMap = {
 		"double precision",
 	],
 	boolean: ["bool", "boolean"],
-	date: ["timestamp", "date"],
+	date: ["timestamp", "datetime"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],

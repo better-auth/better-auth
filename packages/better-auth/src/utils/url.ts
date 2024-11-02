@@ -44,8 +44,12 @@ export function getBaseURL(url?: string, path?: string) {
 }
 
 export function getOrigin(url: string) {
-	const parsedUrl = new URL(url);
-	return parsedUrl.origin.replace("http://", "").replace("https://", "");
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.origin.replace("http://", "").replace("https://", "");
+	} catch (error) {
+		return null;
+	}
 }
 
 export const checkURLValidity = (url: string) => {

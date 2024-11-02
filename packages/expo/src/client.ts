@@ -168,7 +168,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					options.headers = {
 						...options.headers,
 						cookie,
-						origin: getOrigin(scheme!),
+						"expo-origin": getOrigin(scheme!),
 					};
 					if (options.body?.callbackURL) {
 						if (options.body.callbackURL.startsWith("/")) {

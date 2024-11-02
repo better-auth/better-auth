@@ -3,17 +3,15 @@ import {
 	generateState as generateSateCode,
 } from "oslo/oauth2";
 import { z } from "zod";
-import { hmac } from "../crypto/hash";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { logger } from "../utils";
-import { checkURLValidity } from "../utils/url";
+import { checkURLValidity, getOrigin } from "../utils/url";
 
 export async function generateState(c: GenericEndpointContext) {
 	const callbackURL =
-		c.body?.callbackURL || c.query?.currentURL
-			? new URL(c.query?.currentURL).origin
-			: "";
+		c.body?.callbackURL ||
+		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "");
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",
@@ -25,12 +23,17 @@ export async function generateState(c: GenericEndpointContext) {
 		callbackURL,
 		codeVerifier,
 		errorURL: c.query?.currentURL,
+		/**
+		 * This is the actual expiry time of the state
+		 */
+		expiresAt: Date.now() + 10 * 60 * 1000,
 	});
-
+	const expiresAt = new Date();
+	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: data,
 		identifier: state,
-		expiresAt: new Date(Date.now() + 1000 * 60 * 10),
+		expiresAt,
 	});
 	if (!verification) {
 		logger.error(
@@ -49,17 +52,10 @@ export async function generateState(c: GenericEndpointContext) {
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
-	if (!data || data.expiresAt < new Date()) {
-		if (data) {
-			await c.context.internalAdapter.deleteVerificationValue(data.id);
-			logger.error("State expired.", {
-				state,
-			});
-		} else {
-			logger.error("State Mismatch. Verification not found", {
-				state,
-			});
-		}
+	if (!data) {
+		logger.error("State Mismatch. Verification not found", {
+			state,
+		});
 		throw c.redirect(
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);
@@ -69,11 +65,23 @@ export async function parseState(c: GenericEndpointContext) {
 			callbackURL: z.string(),
 			codeVerifier: z.string(),
 			errorURL: z.string().optional(),
+			expiresAt: z.number(),
 		})
 		.parse(JSON.parse(data.value));
+
 	if (!parsedData.errorURL) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
+	if (parsedData.expiresAt < Date.now()) {
+		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		logger.error("State expired.", {
+			state,
+		});
+		throw c.redirect(
+			`${c.context.baseURL}/error?error=please_restart_the_process`,
+		);
+	}
+
 	const isFullURL = checkURLValidity(parsedData.callbackURL);
 	if (!isFullURL) {
 		const origin = new URL(c.context.baseURL).origin;
