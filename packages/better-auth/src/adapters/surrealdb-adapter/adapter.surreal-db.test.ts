@@ -22,7 +22,7 @@ describe("adapter test", async () => {
 	};
 
 	const db = await surrealClient(
-		"http://127.0.0.1:8000",
+		"http://localhost:8001",
 		"better_auth",
 		"better_auth",
 		{ username: "root", password: "root" },
