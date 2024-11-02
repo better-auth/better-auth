@@ -280,6 +280,42 @@
       ],
       "adapters/surrealdb": [
         "./dist/adapters/surrealdb.d.ts"
+      ],
+      "plugins/admin": [
+        "./dist/plugins/admin.d.ts"
+      ],
+      "plugins/anonymous": [
+        "./dist/plugins/anonymous.d.ts"
+      ],
+      "plugins/bearer": [
+        "./dist/plugins/bearer.d.ts"
+      ],
+      "plugins/email-otp": [
+        "./dist/plugins/email-otp.d.ts"
+      ],
+      "plugins/generic-oauth": [
+        "./dist/plugins/generic-oauth.d.ts"
+      ],
+      "plugins/jwt": [
+        "./dist/plugins/jwt.d.ts"
+      ],
+      "plugins/magic-link": [
+        "./dist/plugins/magic-link.d.ts"
+      ],
+      "plugins/organization": [
+        "./dist/plugins/organization.d.ts"
+      ],
+      "plugins/passkey": [
+        "./dist/plugins/passkey.d.ts"
+      ],
+      "plugins/phone-number": [
+        "./dist/plugins/phone-number.d.ts"
+      ],
+      "plugins/two-factor": [
+        "./dist/plugins/two-factor.d.ts"
+      ],
+      "plugins/username": [
+        "./dist/plugins/username.d.ts"
       ]
     }
   },
