@@ -132,11 +132,6 @@
       "types": "./dist/adapters/mongodb.d.ts",
       "import": "./dist/adapters/mongodb.js",
       "require": "./dist/adapters/mongodb.cjs"
-    },
-    "./adapters/surrealdb": {
-      "types": "./dist/adapters/surrealdb.d.ts",
-      "import": "./dist/adapters/surrealdb.js",
-      "require": "./dist/adapters/surrealdb.cjs"
     }
   },
   "typesVersions": {
@@ -213,9 +208,6 @@
       "adapters/mongodb": [
         "./dist/adapters/mongodb.d.ts"
       ],
-      "adapters/surrealdb": [
-        "./dist/adapters/surrealdb.d.ts"
-      ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
       ],
@@ -275,7 +267,6 @@
     "react": "^18.3.1",
     "react-native": "~0.74.6",
     "solid-js": "^1.8.18",
-    "surrealdb": "^1.0.6",
     "tsup": "^8.2.4",
     "typescript": "5.6.1-rc",
     "vitest": "^1.6.0",
