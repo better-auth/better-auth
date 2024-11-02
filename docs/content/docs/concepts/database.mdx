@@ -142,33 +142,6 @@ export const auth = betterAuth({
 })
 ```
 
-### SurrealDB Adapter
-
-The SurrealDB adapter expects a SurrealDB client instance with established connection. See <Link href="https://surrealdb.com/docs/sdk/javascript/start#initialize-the-sdk" target="_blank">SurrealDB docs</Link>. 
-SurrealDB database must be configured to allow CRUD operation of the connected user. 
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Surreal } from "surrealdb";
-import { surrealdbAdapter } from "better-auth/adapters/surrealdb";
-
-const client = new Surreal();
-const instance = await client.connect(
-  "http://localhost:8000", {
-    namespace: 'namespace',
-    database: 'database',
-    auth: {
-      username: 'root', // do not use root in production
-      password: 'surrealdb',
-	  },
-  }
-)
-
-export const auth = betterAuth({
-    database: surrealdbAdapter(instance)
-})
-```
-
 ### MongoDB Adapter
 
 The MongoDB adapter expects a mongodb client instance and a database name. The adapter will create a new database with the provided name if it doesn't exist.
