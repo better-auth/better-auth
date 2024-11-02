@@ -20,7 +20,7 @@ export type AtomListener = {
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
-interface Store {
+export interface Store {
 	notify: (signal: string) => void;
 	listen: (signal: string, listener: () => void) => void;
 	atoms: Record<string, WritableAtom<any>>;

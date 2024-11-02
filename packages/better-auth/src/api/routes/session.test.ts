@@ -330,7 +330,6 @@ describe("session storage", async () => {
 			},
 			id: session.data?.session?.id || "",
 		});
-		console.log(res);
 		const revokedSession = await client.getSession({
 			fetchOptions: {
 				headers,

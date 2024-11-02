@@ -4,7 +4,7 @@ import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "std-env";
+import { env, isProduction } from "./utils/env";
 import type {
 	Adapter,
 	BetterAuthOptions,

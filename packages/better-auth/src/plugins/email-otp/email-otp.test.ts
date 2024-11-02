@@ -82,3 +82,46 @@ describe("email-otp", async () => {
 		);
 	});
 });
+
+describe("email-otp-verify", async () => {
+	const otpFn = vi.fn();
+	const otp = [""];
+	const { client, testUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ email, otp: _otp, type }) {
+						otp.push(_otp);
+						otpFn(email, _otp, type);
+					},
+					sendVerificationOnSignUp: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should verify email with last otp", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const verifiedUser = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: otp.pop() as string,
+		});
+		expect(verifiedUser.data?.user.emailVerified).toBe(true);
+	});
+});

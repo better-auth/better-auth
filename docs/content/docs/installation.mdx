@@ -248,7 +248,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack", "expo"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -367,8 +367,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     ```
     </Tab>
     <Tab value="tanstack-start">
-    ```ts
-    // app/routes/api/auth/$.ts
+    ```ts title="app/routes/api/auth/$.ts"
     import { auth } from '~/lib/server/auth'
     import { createAPIFileRoute } from '@tanstack/start/api'
 
@@ -380,6 +379,14 @@ Better Auth supports any backend framework with standard Request and Response ob
             return auth.handler(request)
         },
     });
+    ```
+    </Tab>
+    <Tab value="expo">
+    ```ts title="app/api/auth/[..all]+api.ts"
+    import { auth } from '@/lib/server/auth'; // path to your auth file
+
+    const handler = auth.handler;
+    export { handler as GET, handler as POST };
     ```
     </Tab>
 </Tabs>
@@ -402,7 +409,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
   "vanilla"]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from  "better-auth/client"
+            import { createAuthClient } from "better-auth/client"
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })

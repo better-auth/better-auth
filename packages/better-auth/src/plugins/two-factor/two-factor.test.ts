@@ -122,11 +122,11 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
-					expect(parsed.get("better-auth.two-factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					headers.append(
 						"cookie",
-						`better-auth.two-factor=${
-							parsed.get("better-auth.two-factor")?.value
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
 						}`,
 					);
 				},
@@ -142,8 +142,8 @@ describe("two factor", async () => {
 					);
 					headers.append(
 						"cookie",
-						`better-auth.otp.counter=${
-							parsed.get("better-auth.otp.counter")?.value
+						`better-auth.otp_counter=${
+							parsed.get("better-auth.otp_counter")?.value
 						}`,
 					);
 				},
@@ -224,8 +224,8 @@ describe("two factor", async () => {
 					);
 					headers.append(
 						"cookie",
-						`better-auth.two-factor=${
-							parsed.get("better-auth.two-factor")?.value
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
 						}`,
 					);
 				},
@@ -242,7 +242,7 @@ describe("two factor", async () => {
 					headers.append(
 						"cookie",
 						`better-auth.otp.counter=${
-							parsed.get("better-auth.otp.counter")?.value
+							parsed.get("better-auth.otp_counter")?.value
 						}`,
 					);
 				},
@@ -260,8 +260,8 @@ describe("two factor", async () => {
 					);
 					newHeaders.set(
 						"cookie",
-						`better-auth.trust-device=${
-							parsed.get("better-auth.trust-device")?.value
+						`better-auth.trust_device=${
+							parsed.get("better-auth.trust_device")?.value
 						}`,
 					);
 				},

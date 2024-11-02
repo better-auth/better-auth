@@ -1,4 +1,4 @@
-import { env } from "std-env";
+import { env } from "../utils/env";
 import { BetterAuthError } from "../error";
 
 function checkHasPath(url: string): boolean {
@@ -47,3 +47,8 @@ export function getOrigin(url: string) {
 	const parsedUrl = new URL(url);
 	return parsedUrl.origin.replace("http://", "").replace("https://", "");
 }
+
+export const checkURLValidity = (url: string) => {
+	const urlPattern = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
+	return urlPattern.test(url);
+};

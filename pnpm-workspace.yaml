@@ -4,3 +4,10 @@ packages:
   - docs
   - examples/**
   - demo/*
+
+catalogs:
+  react18:
+    react: 18.3.1
+    react-dom: 18.3.1
+    "@types/react": ^18.3.11
+    "@types/react-dom": ^18.3.1

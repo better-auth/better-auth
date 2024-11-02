@@ -548,6 +548,23 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Gitlab",
+				href: "/docs/authentication/gitlab",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
+						/>
+					</svg>
+				),
+			},
 		],
 	},
 	{
@@ -631,6 +648,17 @@ export const contents: Content[] = [
 				title: "Elysia",
 				icon: Icons.elysia,
 				href: "/docs/integrations/elysia",
+			},
+			{
+				group: true,
+				title: "Mobile & Desktop",
+				href: "/docs/integrations",
+				icon: LucideAArrowDown,
+			},
+			{
+				title: "Expo",
+				icon: Icons.expo,
+				href: "/docs/integrations/expo",
 			},
 		],
 	},
