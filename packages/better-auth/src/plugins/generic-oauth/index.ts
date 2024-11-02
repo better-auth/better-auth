@@ -4,7 +4,6 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { logger } from "../../utils/logger";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
@@ -15,7 +14,6 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 } from "../../oauth2";
-import { compareHash } from "../../crypto/hash";
 
 /**
  * Configuration interface for generic OAuth providers.
