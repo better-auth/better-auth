@@ -1,8 +1,12 @@
 import { betterAuth } from "better-auth";
-import { bearer, admin, multiSession } from "better-auth/plugins";
-import { organization } from "better-auth/plugins/organization";
-import { passkey } from "better-auth/plugins/passkey";
-import { twoFactor } from "better-auth/plugins/two-factor";
+import {
+	bearer,
+	admin,
+	multiSession,
+	organization,
+	passkey,
+	twoFactor,
+} from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
