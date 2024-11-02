@@ -34,9 +34,6 @@
     "expo-web-browser": "~13.0.3",
     "vitest": "^1.6.0"
   },
-  "dependencies": {
-    "nanostores": "^0.11.2"
-  },
   "peerDependencies": {
     "better-auth": "workspace:*"
   }

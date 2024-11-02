@@ -10,7 +10,10 @@ import { logger } from "../utils";
 import { checkURLValidity } from "../utils/url";
 
 export async function generateState(c: GenericEndpointContext) {
-	const callbackURL = c.body?.callbackURL;
+	const callbackURL =
+		c.body?.callbackURL || c.query?.currentURL
+			? new URL(c.query?.currentURL).origin
+			: "";
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",

@@ -1768,10 +1768,6 @@ importers:
         version: 1.6.0(@edge-runtime/vm@3.2.0)(@types/node@22.8.4)(happy-dom@15.7.4)(jsdom@25.0.1)(lightningcss@1.27.0)(terser@5.33.0)
 
   packages/expo:
-    dependencies:
-      nanostores:
-        specifier: ^0.11.2
-        version: 0.11.3
     devDependencies:
       better-auth:
         specifier: workspace:*
