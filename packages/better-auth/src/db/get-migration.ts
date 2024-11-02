@@ -1,6 +1,6 @@
-import {
-	type AlterTableColumnAlteringBuilder,
-	type CreateTableBuilder,
+import type {
+	AlterTableColumnAlteringBuilder,
+	CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
 import { logger } from "../utils/logger";
@@ -21,7 +21,7 @@ const postgresMap = {
 		"double precision",
 	],
 	boolean: ["bool", "boolean"],
-	date: ["timestamp", "datetime"],
+	date: ["timestamp", "date"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],
@@ -35,7 +35,7 @@ const mysqlMap = {
 		"double",
 	],
 	boolean: ["boolean"],
-	date: ["date", "datetime"],
+	date: ["datetime", "date"],
 };
 
 const sqliteMap = {

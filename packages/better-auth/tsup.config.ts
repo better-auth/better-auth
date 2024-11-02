@@ -1,26 +1,9 @@
-import * as fs from "fs/promises";
+import * as fs from "fs";
 import { defineConfig } from "tsup";
 
-export default defineConfig(async (env) => {
-	const pluginEntries = await fs
-		.readFile("./package.json", "utf-8")
-		.then((content) => {
-			const { exports } = JSON.parse(content);
-			let entries = {};
-			Object.keys(exports).forEach((key) => {
-				if (key.startsWith("./plugins")) {
-					entries[key.replace("./", "")] = `./src${key.replace(
-						".",
-						"",
-					)}/index.ts`;
-				}
-			});
-			return entries;
-		});
-	console.log(pluginEntries);
+export default defineConfig((env) => {
 	return {
 		entry: {
-			...pluginEntries,
 			index: "./src/index.ts",
 			social: "./src/social-providers/index.ts",
 			types: "./src/types/index.ts",
@@ -50,6 +33,5 @@ export default defineConfig(async (env) => {
 		bundle: true,
 		splitting: true,
 		skipNodeModulesBundle: true,
-		noExternal: ["better-call", "@better-fetch/fetch"],
 	};
 });
