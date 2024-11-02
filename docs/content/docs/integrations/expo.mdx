@@ -47,8 +47,9 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expo } from '@better-auth/expo';
 
         export const auth = betterAuth({
+            //...your config
             plugins: [
-                expo
+                expo()
             ]
         });
         ```
@@ -57,13 +58,17 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Initialize Better Auth Client
         
-        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
+        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend and add the Expo client. Make sure to import the client from `/react`.
 
         ```ts title="src/auth-client.ts"
         import { createAuthClient } from 'better-auth/react';
+        import { expoClient } from '@better-auth/expo/client';
 
         const authClient = createAuthClient({
             basURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            plugins: [
+                expoClient()
+            ]
         });
         ```
         <Callout>
@@ -93,23 +98,6 @@ Expo is a popular framework for building cross-platform apps with React Native. 
             trustedOrigins: ["myapp://"]
         })
         ```
-    </Step>
- 
-    <Step>
-        ## Initialize Better Auth Client
-        
-        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
-
-        ```ts title="src/auth-client.ts"
-        import { createAuthClient } from 'better-auth/react';
-
-        const authClient = createAuthClient({
-            basURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
-        });
-        ```
-        <Callout>
-         Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
-        </Callout>
     </Step>
     <Step>
         ## Configure Metro Bundler

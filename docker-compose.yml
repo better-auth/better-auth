@@ -16,7 +16,7 @@ services:
       - ./_surrealdb:/surrealdb
     image: surrealdb/surrealdb:latest
     ports:
-      - 8001:8001
+      - 8000:8000
 
   mongodb:
     image: mongo:latest
