@@ -8,7 +8,13 @@ import { APIError } from "better-call";
 import { logger } from "../utils";
 import { getOrigin } from "../utils/url";
 
-export async function generateState(c: GenericEndpointContext) {
+export async function generateState(
+	c: GenericEndpointContext,
+	link?: {
+		email: string;
+		userId: string;
+	},
+) {
 	const callbackURL =
 		c.body?.callbackURL ||
 		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "");
@@ -23,6 +29,7 @@ export async function generateState(c: GenericEndpointContext) {
 		callbackURL,
 		codeVerifier,
 		errorURL: c.query?.currentURL,
+		link,
 		/**
 		 * This is the actual expiry time of the state
 		 */
@@ -66,6 +73,12 @@ export async function parseState(c: GenericEndpointContext) {
 			codeVerifier: z.string(),
 			errorURL: z.string().optional(),
 			expiresAt: z.number(),
+			link: z
+				.object({
+					email: z.string(),
+					userId: z.string(),
+				})
+				.optional(),
 		})
 		.parse(JSON.parse(data.value));
 

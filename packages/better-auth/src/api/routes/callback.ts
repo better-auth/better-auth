@@ -76,7 +76,6 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-
 		if (link) {
 			if (link.email !== userInfo.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
@@ -89,7 +88,14 @@ export const callbackOAuth = createAuthEndpoint(
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}
-			throw c.redirect(errorURL || callbackURL || c.context.options.baseURL!);
+			let toRedirectTo: string;
+			try {
+				const url = new URL(callbackURL);
+				toRedirectTo = url.toString();
+			} catch {
+				toRedirectTo = callbackURL;
+			}
+			throw c.redirect(toRedirectTo);
 		}
 
 		function redirectOnError(error: string) {
