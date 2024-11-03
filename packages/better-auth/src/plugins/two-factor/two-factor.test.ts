@@ -177,6 +177,7 @@ describe("two factor", async () => {
 			fetchOptions: {
 				headers,
 			},
+			password: testUser.password,
 		});
 		expect(backupCodesRes.data?.backupCodes).toBeDefined();
 		backupCodes = backupCodesRes.data?.backupCodes || [];
