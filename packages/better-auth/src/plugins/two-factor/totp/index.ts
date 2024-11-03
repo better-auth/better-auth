@@ -82,7 +82,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const getTOTPURI = createAuthEndpoint(
 		"/two-factor/get-totp-uri",
 		{
-			method: "GET",
+			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
 				password: z.string(),
