@@ -247,6 +247,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.16.4",
     "@microsoft/api-extractor": "^7.47.11",
     "@prisma/client": "^5.19.1",
     "@simplewebauthn/types": "^10.0.0",
