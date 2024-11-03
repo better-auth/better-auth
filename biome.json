@@ -33,7 +33,9 @@
 			".contentlayer",
 			".turbo",
 			".nuxt",
-			".source"
+			".source",
+			".expo",
+			".cache"
 		]
 	}
 }

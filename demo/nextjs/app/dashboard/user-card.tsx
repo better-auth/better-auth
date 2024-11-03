@@ -72,19 +72,6 @@ export default function UserCard(props: {
 	}, [session?.session.userAgent]);
 
 	const [isTerminating, setIsTerminating] = useState<string>();
-
-	const { data: qr } = useQuery({
-		queryKey: ["two-factor-qr"],
-		queryFn: async () => {
-			const res = await client.twoFactor.getTotpUri();
-			if (res.error) {
-				throw res.error;
-			}
-			return res.data;
-		},
-		enabled: !!session?.user.twoFactorEnabled,
-	});
-
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
@@ -232,15 +219,51 @@ export default function UserCard(props: {
 												Scan the QR code with your TOTP app
 											</DialogDescription>
 										</DialogHeader>
-										<div className="flex items-center justify-center">
-											<QRCode value={qr?.totpURI || ""} />
-										</div>
-										<div className="flex gap-2 items-center justify-center">
-											<p className="text-sm text-muted-foreground">
-												Copy URI to clipboard
-											</p>
-											<CopyButton textToCopy={qr?.totpURI || ""} />
-										</div>
+
+										{twoFactorVerifyURI ? (
+											<>
+												<div className="flex items-center justify-center">
+													<QRCode value={twoFactorVerifyURI} />
+												</div>
+												<div className="flex gap-2 items-center justify-center">
+													<p className="text-sm text-muted-foreground">
+														Copy URI to clipboard
+													</p>
+													<CopyButton textToCopy={twoFactorVerifyURI} />
+												</div>
+											</>
+										) : (
+											<div className="flex flex-col gap-2">
+												<PasswordInput
+													value={twoFaPassword}
+													onChange={(e) => setTwoFaPassword(e.target.value)}
+													placeholder="Enter Password"
+												/>
+												<Button
+													onClick={async () => {
+														if (twoFaPassword.length < 8) {
+															toast.error(
+																"Password must be at least 8 characters",
+															);
+															return;
+														}
+														await client.twoFactor.getTotpUri(
+															{
+																password: twoFaPassword,
+															},
+															{
+																onSuccess(context) {
+																	setTwoFactorVerifyURI(context.data.totpURI);
+																},
+															},
+														);
+														setTwoFaPassword("");
+													}}
+												>
+													Show QR Code
+												</Button>
+											</div>
+										)}
 									</DialogContent>
 								</Dialog>
 							)}

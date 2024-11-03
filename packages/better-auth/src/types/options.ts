@@ -1,14 +1,14 @@
-import type { Dialect, Kysely, PostgresPool } from "kysely";
+import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
-import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
+import type { Database } from "better-sqlite3";
 
 export interface BetterAuthOptions {
 	/**
@@ -66,7 +66,7 @@ export interface BetterAuthOptions {
 	database:
 		| PostgresPool
 		| MysqlPool
-		| BetterSqlite3Database
+		| Database
 		| Dialect
 		| Adapter
 		| {
