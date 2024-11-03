@@ -9,30 +9,40 @@ export const toSvelteKitHandler = (auth: {
 };
 
 export const svelteKitHandler = async ({
-	auth,
-	event,
-	resolve,
+  auth,
+  event,
+  resolve,
 }: {
-	auth: {
-		handler: (request: Request) => any;
-		options: BetterAuthOptions;
-	};
-	event: { request: Request; url: URL };
-	resolve: (event: any) => any;
+  auth: {
+    handler: (request: Request) => any;
+    options: BetterAuthOptions;
+  };
+  event: { request: Request; url: URL; locals: { session?: any } };
+  resolve: (event: any) => any;
 }) => {
-	//@ts-expect-error
-	const { building } = await import("$app/environment")
-		.catch((e) => {})
-		.then((m) => m || {});
-	if (building) {
-		return resolve(event);
-	}
-	const { request, url } = event;
-	if (isAuthPath(url.toString(), auth.options)) {
-		return auth.handler(request);
-	}
-	return resolve(event);
+  //@ts-expect-error
+  const { building } = await import("$app/environment")
+    .catch(() => {})
+    .then((m) => m || {});
+
+  if (building) {
+    return resolve(event);
+  }
+
+  // Retrieve session and attach to event.locals
+  const session = await auth.api.getSession({
+    headers: event.request.headers,
+  });
+  event.locals.session = session;
+
+  const { request, url } = event;
+  if (isAuthPath(url.toString(), auth.options)) {
+    return auth.handler(request);
+  }
+
+  return resolve(event);
 };
+
 
 export function isAuthPath(url: string, options: BetterAuthOptions) {
 	const _url = new URL(url);
