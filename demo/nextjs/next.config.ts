@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
 		config.externals.push("@libsql/client");
 		return config;
 	},
+	transpilePackages: ["better-auth"],
 };
 
 export default nextConfig;
