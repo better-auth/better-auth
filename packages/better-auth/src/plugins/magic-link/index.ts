@@ -55,6 +55,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
+
+					if (options.disableSignUp) {
+						const user = await ctx.context.internalAdapter.findUserByEmail(email)
+
+						if (!user) {
+							throw new APIError("USER_NOT_FOUND", {
+								message: "User not found"
+							});
+						}
+					}
+					
 					const verificationToken = generateRandomString(
 						32,
 						alphabet("a-z", "A-Z"),
