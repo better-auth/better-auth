@@ -132,6 +132,11 @@
       "types": "./dist/adapters/mongodb.d.ts",
       "import": "./dist/adapters/mongodb.js",
       "require": "./dist/adapters/mongodb.cjs"
+    },
+    "./adapters/surrealdb": {
+      "types": "./dist/adapters/surrealdb.d.ts",
+      "import": "./dist/adapters/surrealdb.js",
+      "require": "./dist/adapters/surrealdb.cjs"
     }
   },
   "typesVersions": {
@@ -208,6 +213,9 @@
       "adapters/mongodb": [
         "./dist/adapters/mongodb.d.ts"
       ],
+      "adapters/surrealdb": [
+        "./dist/adapters/surrealdb.d.ts"
+      ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
       ],
@@ -259,6 +267,7 @@
     "hono": "^4.5.4",
     "listhen": "^1.7.2",
     "mongodb": "^6.9.0",
+    "surrealdb": "^1.0.6",
     "mysql2": "^3.11.0",
     "next": "^14.2.8",
     "oauth2-mock-server": "^7.1.2",
