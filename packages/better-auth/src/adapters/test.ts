@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import type { Adapter, User } from "../types";
+import { convertToDB, getAuthTables } from "../db";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
@@ -97,7 +98,10 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				email: newEmail,
 			},
 		});
-		expect(res?.email).toEqual(newEmail);
+		expect(res).toMatchObject({
+			email: newEmail,
+			name: user.name,
+		});
 	});
 
 	test("should find many", async () => {
