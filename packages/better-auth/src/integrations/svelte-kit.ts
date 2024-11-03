@@ -31,9 +31,10 @@ export const svelteKitHandler = async ({
 
   // Retrieve session and attach to event.locals
   const session = await auth.api.getSession({
-    headers: event.request.headers,
-  });
-  event.locals.session = session;
+		headers: event.request.headers
+	});
+event.locals.session = session?.session;
+event.locals.user = session?.user;
 
   const { request, url } = event;
   if (isAuthPath(url.toString(), auth.options)) {
