@@ -146,6 +146,9 @@ export const backupCode2fa = (
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
+					body: z.object({
+						password: z.string(),
+					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
@@ -155,6 +158,7 @@ export const backupCode2fa = (
 							message: "Two factor isn't enabled",
 						});
 					}
+					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						options,
@@ -181,6 +185,9 @@ export const backupCode2fa = (
 				"/view/backup-codes",
 				{
 					method: "GET",
+					body: z.object({
+						password: z.string(),
+					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
@@ -199,6 +206,8 @@ export const backupCode2fa = (
 							message: "Backup codes aren't enabled",
 						});
 					}
+					// Check password
+					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = getBackupCodes(
 						twoFactor.backupCodes,
 						ctx.context.secret,

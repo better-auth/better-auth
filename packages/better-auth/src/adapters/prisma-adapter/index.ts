@@ -149,7 +149,10 @@ export const prismaAdapter = (
 				update.id = undefined;
 			}
 			const whereClause = whereConvertor(where);
-			if (where.length === 1) {
+			if (!whereClause) {
+				throw new Error("Where clause is required for update");
+			}
+			if (where.length === 1 && where[0].field === "id") {
 				return await db[model].update({
 					where: whereClause,
 					data: update,
