@@ -11,9 +11,7 @@ services:
       - root
       - --pass
       - root
-      - rocksdb:/surrealdb/surreal.db
-    volumes:
-      - ./_surrealdb:/surrealdb
+      - memory
     image: surrealdb/surrealdb:latest
     ports:
       - 8000:8000
@@ -52,7 +50,6 @@ services:
       - mysql_data:/var/lib/mysql
 
 volumes:
-  _surrealdb:
   mongodb_data:
   postgres_data:
   mysql_data:
