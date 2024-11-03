@@ -31,6 +31,7 @@ export default defineConfig((env) => {
 		format: ["esm", "cjs"],
 		bundle: true,
 		splitting: true,
+		cjsInterop: true,
 		skipNodeModulesBundle: true,
 	};
 });

@@ -5,7 +5,7 @@
 		"target": "es2022",
 		"allowJs": true,
 		"resolveJsonModule": true,
-		"module": "ESNext",
+		"module": "Preserve",
 		"noEmit": true,
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
