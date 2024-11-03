@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../call";
 import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { sessionMiddleware } from "./session";
 
 export const listUserAccounts = createAuthEndpoint(
@@ -74,12 +73,16 @@ export const linkSocialAccount = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const state = await generateState(c);
+		const state = await generateState(c, {
+			userId: session.user.id,
+			email: session.user.email,
+		});
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
 			redirect: true,
