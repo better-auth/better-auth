@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import type { Adapter, User } from "../types";
+import { nanoid } from "nanoid";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
@@ -145,14 +146,14 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			},
-		})
+		});
 		const res = await adapter.findMany({
 			model: "user",
 			where: [
 				{
 					field: "id",
 					operator: "in",
-					value:[user.id, newUser.id]
+					value: [user.id, newUser.id],
 				},
 			],
 		});
@@ -169,16 +170,16 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				emailVerified: true,
 				createdAt: new Date(),
 				updatedAt: new Date(),
-			}
-		})
+			},
+		});
 		await adapter.create({
 			model: "session",
 			data: {
 				id: "1",
 				userId: user.id,
 				expiresAt: new Date(),
-			}
-		})
+			},
+		});
 		const res = await adapter.findOne({
 			model: "session",
 			where: [
@@ -190,8 +191,8 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		expect(res).toMatchObject({
 			userId: user.id,
-		})
-	})
+		});
+	});
 
 	test("should find many with sortBy", async () => {
 		await adapter.create({
@@ -211,7 +212,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				field: "name",
 				direction: "asc",
 			},
-		});	
+		});
 		expect(res[0].name).toBe("a");
 
 		const res2 = await adapter.findMany<User>({
@@ -237,7 +238,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const res = await adapter.findMany({
 			model: "user",
 			offset: 2,
-		})
+		});
 		expect(res.length).toBe(3);
 	});
 
@@ -341,6 +342,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("shouldn't throw on delete record not found", async () => {
+		const uuid = nanoid();
 		await adapter.delete({
 			model: "user",
 			where: [

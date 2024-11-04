@@ -1,4 +1,4 @@
-import type { Db } from "mongodb";
+import { ObjectId, type Db } from "mongodb";
 import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
@@ -10,17 +10,55 @@ function whereConvertor(where?: Where[]) {
 		return field;
 	}
 
+	function getValue(field: string, value: any) {
+		if (field === "id") {
+			if (typeof value !== "string") {
+				if (value instanceof ObjectId) {
+					return value;
+				}
+				if (Array.isArray(value)) {
+					return value.map((v) => {
+						if (typeof v === "string") {
+							try {
+								return new ObjectId(v);
+							} catch (e) {
+								return v;
+							}
+						}
+						if (v instanceof ObjectId) {
+							return v;
+						}
+						throw new Error("Invalid id value");
+					});
+				}
+				throw new Error("Invalid id value");
+			}
+			try {
+				return new ObjectId(value);
+			} catch (e) {
+				return value;
+			}
+		}
+		return value;
+	}
+
 	const conditions = where.map((w) => {
 		const { field, value, operator = "eq", connector = "AND" } = w;
 		let condition: any;
 
 		switch (operator.toLowerCase()) {
 			case "eq":
-				condition = { [getField(field)]: value };
+				condition = {
+					[getField(field)]: getValue(field, value),
+				};
 				break;
 			case "in":
 				condition = {
-					[getField(field)]: { $in: Array.isArray(value) ? value : [value] },
+					[getField(field)]: {
+						$in: Array.isArray(value)
+							? getValue(field, value)
+							: [getValue(field, value)],
+					},
 				};
 				break;
 			case "gt":
@@ -48,8 +86,6 @@ function whereConvertor(where?: Where[]) {
 			case "ends_with":
 				condition = { [getField(field)]: { $regex: `.*${value}` } };
 				break;
-
-			// Add more operators as needed
 			default:
 				throw new Error(`Unsupported operator: ${operator}`);
 		}
@@ -79,7 +115,7 @@ function removeMongoId(data: any) {
 	const { _id, ...rest } = data;
 	return {
 		...rest,
-		id: _id
+		id: _id,
 	};
 }
 
@@ -105,9 +141,8 @@ export const mongodbAdapter = (
 		id: "mongodb",
 		async create(data) {
 			let { model, data: val } = data;
-			if(val.id) {
-				const { id, ...rest } = val;
-				val = rest as any;
+			if (val.id) {
+				val.id = undefined;
 			}
 			const res = await db.collection(getModelName(model)).insertOne(val);
 			const id_ = res.insertedId;
@@ -131,7 +166,7 @@ export const mongodbAdapter = (
 				return null;
 			}
 			const toReturn = removeMongoId(result);
-			if(select?.length && !select.includes("id")) {
+			if (select?.length && !select.includes("id")) {
 				toReturn.id = undefined;
 			}
 			return toReturn;
@@ -166,7 +201,7 @@ export const mongodbAdapter = (
 				);
 				return removeMongoId(res);
 			}
-			const res = await db.collection(getModelName(model)).updateMany(wheres, {
+			await db.collection(getModelName(model)).updateMany(wheres, {
 				$set: update,
 			});
 			return {};
@@ -175,15 +210,13 @@ export const mongodbAdapter = (
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
 
-			const res = await db
-				.collection(getModelName(model))
-				.findOneAndDelete(wheres);
+			await db.collection(getModelName(model)).findOneAndDelete(wheres);
 		},
 		async deleteMany(data) {
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
 
-			const res = await db.collection(getModelName(model)).deleteMany(wheres);
+			await db.collection(getModelName(model)).deleteMany(wheres);
 		},
 	} satisfies Adapter;
 };
