@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
 import type { Adapter, User } from "../types";
-import { convertToDB, getAuthTables } from "../db";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
@@ -29,6 +28,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			name: user.name,
 			email: user.email,
 		});
+		user.id = res.id;
 	});
 
 	test("find model", async () => {
@@ -80,7 +80,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			],
 			select: ["email"],
 		});
-
 		expect(res).toEqual({ email: user.email });
 	});
 
@@ -112,7 +111,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should find many with where", async () => {
-		await adapter.create({
+		const user = await adapter.create<User>({
 			model: "user",
 			data: {
 				id: "2",
@@ -128,7 +127,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			where: [
 				{
 					field: "id",
-					value: "2",
+					value: user.id,
 				},
 			],
 		});
@@ -136,24 +135,69 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should find many with operators", async () => {
+		const newUser = await adapter.create<User>({
+			model: "user",
+			data: {
+				id: "3",
+				name: "user",
+				email: "test-email2@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		})
 		const res = await adapter.findMany({
 			model: "user",
 			where: [
 				{
 					field: "id",
 					operator: "in",
-					value: ["1", "2"],
+					value:[user.id, newUser.id]
 				},
 			],
 		});
 		expect(res.length).toBe(2);
 	});
 
+	test("should work with reference fields", async () => {
+		const user = await adapter.create<Record<string, any>>({
+			model: "user",
+			data: {
+				id: "4",
+				name: "user",
+				email: "my-email@email.com",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			}
+		})
+		await adapter.create({
+			model: "session",
+			data: {
+				id: "1",
+				userId: user.id,
+				expiresAt: new Date(),
+			}
+		})
+		const res = await adapter.findOne({
+			model: "session",
+			where: [
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+		expect(res).toMatchObject({
+			userId: user.id,
+		})
+	})
+
 	test("should find many with sortBy", async () => {
 		await adapter.create({
 			model: "user",
 			data: {
-				id: "3",
+				id: "5",
 				name: "a",
 				email: "a@email.com",
 				emailVerified: true,
@@ -167,8 +211,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				field: "name",
 				direction: "asc",
 			},
-		});
-
+		});	
 		expect(res[0].name).toBe("a");
 
 		const res2 = await adapter.findMany<User>({
@@ -194,8 +237,8 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		const res = await adapter.findMany({
 			model: "user",
 			offset: 2,
-		});
-		expect(res.length).toBe(1);
+		})
+		expect(res.length).toBe(3);
 	});
 
 	test("should update with multiple where", async () => {
@@ -329,7 +372,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				{
 					field: "name",
 					operator: "contains",
-					value: "se",
+					value: "user2",
 				},
 			],
 		});
@@ -347,7 +390,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				},
 			],
 		});
-		expect(res.length).toBe(1);
+		expect(res.length).toBe(3);
 	});
 
 	test("should search users with endsWith", async () => {
