@@ -57,7 +57,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const { email } = ctx.body;
 
 					if (options.disableSignUp) {
-						const user = await ctx.context.internalAdapter.findUserByEmail(email)
+						const user = await ctx.context.internalAdapter.findUserByEmail(email);
 
 						if (!user) {
 							throw new APIError("USER_NOT_FOUND", {
