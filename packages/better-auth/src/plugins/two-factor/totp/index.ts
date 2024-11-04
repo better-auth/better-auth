@@ -178,6 +178,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 				);
 				const newSession = await ctx.context.internalAdapter.createSession(
 					user.id,
+					ctx.request,
 				);
 				await setSessionCookie(ctx, {
 					session: newSession,

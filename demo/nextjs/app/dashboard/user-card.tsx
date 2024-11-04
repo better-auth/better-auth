@@ -42,10 +42,9 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Table,
 	TableBody,
@@ -63,14 +62,7 @@ export default function UserCard(props: {
 }) {
 	const router = useRouter();
 	const { data, isPending, error } = useSession();
-	const [ua, setUa] = useState<UAParser.UAParserInstance>();
-
 	const session = data || props.session;
-
-	useEffect(() => {
-		setUa(new UAParser(session?.session.userAgent));
-	}, [session?.session.userAgent]);
-
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
@@ -668,7 +660,6 @@ function EditUserDialog(props: { session: Session | null }) {
 function AddPasskey() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
-	const queryClient = useQueryClient();
 	const [isLoading, setIsLoading] = useState(false);
 
 	const handleAddPasskey = async () => {

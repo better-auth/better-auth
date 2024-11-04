@@ -84,6 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
+							ctx.request,
 						);
 						/**
 						 * Update the session cookie with the new user data

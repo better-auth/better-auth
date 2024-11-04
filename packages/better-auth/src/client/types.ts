@@ -91,7 +91,7 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 >
 	? UnionToIntersection<
 			Plugin extends BetterAuthClientPlugin
-				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
+				? Plugin["getActions"] extends (...args: any) => infer Actions
 					? Actions
 					: {}
 				: {}

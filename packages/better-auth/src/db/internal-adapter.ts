@@ -146,7 +146,7 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request?: Request | Headers,
+			request: Request | Headers | undefined,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 		) => {

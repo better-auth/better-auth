@@ -1,12 +1,10 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState, logger } from "../../utils";
-import { hmac } from "../../crypto/hash";
 
 export const signInOAuth = createAuthEndpoint(
 	"/sign-in/social",
