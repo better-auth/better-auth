@@ -18,8 +18,8 @@ export const user = sqliteTable("user", {
 
 export const session = sqliteTable("session", {
 	id: text("id").primaryKey(),
-	userId: text("userId").references(()=>user.id),
+	userId: text("userId").references(() => user.id),
 	expiresAt: int("expiresAt", {
 		mode: "timestamp",
-	})
+	}),
 });
