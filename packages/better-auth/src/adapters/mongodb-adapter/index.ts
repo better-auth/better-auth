@@ -1,8 +1,46 @@
-import type { Db } from "mongodb";
+import { ObjectId, type Db } from "mongodb";
 import type { Adapter, Where } from "../../types";
 
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
+	function getField(field: string) {
+		if (field === "id") {
+			return "_id";
+		}
+		return field;
+	}
+
+	function getValue(field: string, value: any) {
+		if (field === "id") {
+			if (typeof value !== "string") {
+				if (value instanceof ObjectId) {
+					return value;
+				}
+				if (Array.isArray(value)) {
+					return value.map((v) => {
+						if (typeof v === "string") {
+							try {
+								return new ObjectId(v);
+							} catch (e) {
+								return v;
+							}
+						}
+						if (v instanceof ObjectId) {
+							return v;
+						}
+						throw new Error("Invalid id value");
+					});
+				}
+				throw new Error("Invalid id value");
+			}
+			try {
+				return new ObjectId(value);
+			} catch (e) {
+				return value;
+			}
+		}
+		return value;
+	}
 
 	const conditions = where.map((w) => {
 		const { field, value, operator = "eq", connector = "AND" } = w;
@@ -10,40 +48,44 @@ function whereConvertor(where?: Where[]) {
 
 		switch (operator.toLowerCase()) {
 			case "eq":
-				condition = { [field]: value };
+				condition = {
+					[getField(field)]: getValue(field, value),
+				};
 				break;
 			case "in":
 				condition = {
-					[field]: { $in: Array.isArray(value) ? value : [value] },
+					[getField(field)]: {
+						$in: Array.isArray(value)
+							? getValue(field, value)
+							: [getValue(field, value)],
+					},
 				};
 				break;
 			case "gt":
-				condition = { [field]: { $gt: value } };
+				condition = { [getField(field)]: { $gt: value } };
 				break;
 			case "gte":
-				condition = { [field]: { $gte: value } };
+				condition = { [getField(field)]: { $gte: value } };
 				break;
 			case "lt":
-				condition = { [field]: { $lt: value } };
+				condition = { [getField(field)]: { $lt: value } };
 				break;
 			case "lte":
-				condition = { [field]: { $lte: value } };
+				condition = { [getField(field)]: { $lte: value } };
 				break;
 			case "ne":
-				condition = { [field]: { $ne: value } };
+				condition = { [getField(field)]: { $ne: value } };
 				break;
 
 			case "contains":
-				condition = { [field]: { $regex: `.*${value}.*` } };
+				condition = { [getField(field)]: { $regex: `.*${value}.*` } };
 				break;
 			case "starts_with":
-				condition = { [field]: { $regex: `${value}.*` } };
+				condition = { [getField(field)]: { $regex: `${value}.*` } };
 				break;
 			case "ends_with":
-				condition = { [field]: { $regex: `.*${value}` } };
+				condition = { [getField(field)]: { $regex: `.*${value}` } };
 				break;
-
-			// Add more operators as needed
 			default:
 				throw new Error(`Unsupported operator: ${operator}`);
 		}
@@ -71,7 +113,10 @@ function whereConvertor(where?: Where[]) {
 
 function removeMongoId(data: any) {
 	const { _id, ...rest } = data;
-	return rest;
+	return {
+		...rest,
+		id: _id,
+	};
 }
 
 function selectConvertor(selects: string[]) {
@@ -88,15 +133,6 @@ export const mongodbAdapter = (
 	mongo: Db,
 	opts?: {
 		usePlural?: boolean;
-		/**
-		 * Custom generateId function.
-		 *
-		 * If not provided, nanoid will be used.
-		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @default nanoid
-		 */
-		generateId?: ((size?: number) => string) | false;
 	},
 ) => {
 	const db = mongo;
@@ -104,15 +140,11 @@ export const mongodbAdapter = (
 	return {
 		id: "mongodb",
 		async create(data) {
-			const { model, data: val } = data;
-
-			if (opts?.generateId !== undefined) {
-				val.id = opts.generateId ? opts.generateId() : undefined;
+			let { model, data: val } = data;
+			if (val.id) {
+				val.id = undefined;
 			}
-
-			const res = await db.collection(getModelName(model)).insertOne({
-				...val,
-			});
+			const res = await db.collection(getModelName(model)).insertOne(val);
 			const id_ = res.insertedId;
 			const returned = { ...val, id: id_ };
 			return removeMongoId(returned);
@@ -133,8 +165,11 @@ export const mongodbAdapter = (
 			if (!result) {
 				return null;
 			}
-
-			return removeMongoId(result);
+			const toReturn = removeMongoId(result);
+			if (select?.length && !select.includes("id")) {
+				toReturn.id = undefined;
+			}
+			return toReturn;
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
@@ -144,7 +179,7 @@ export const mongodbAdapter = (
 				.find(wheres)
 				.skip(offset || 0)
 				.limit(limit || 100)
-				.sort(sortBy?.field || "id", sortBy?.direction === "desc" ? -1 : 1)
+				.sort(sortBy?.field || "_id", sortBy?.direction === "desc" ? -1 : 1)
 				.toArray();
 			return toReturn.map(removeMongoId);
 		},
@@ -153,7 +188,8 @@ export const mongodbAdapter = (
 			const wheres = whereConvertor(where);
 
 			if (update.id) {
-				update.id = undefined;
+				// biome-ignore lint/performance/noDelete: valid use case
+				delete update.id;
 			}
 
 			if (where.length === 1) {
@@ -166,7 +202,7 @@ export const mongodbAdapter = (
 				);
 				return removeMongoId(res);
 			}
-			const res = await db.collection(getModelName(model)).updateMany(wheres, {
+			await db.collection(getModelName(model)).updateMany(wheres, {
 				$set: update,
 			});
 			return {};
@@ -175,15 +211,13 @@ export const mongodbAdapter = (
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
 
-			const res = await db
-				.collection(getModelName(model))
-				.findOneAndDelete(wheres);
+			await db.collection(getModelName(model)).findOneAndDelete(wheres);
 		},
 		async deleteMany(data) {
 			const { model, where } = data;
 			const wheres = whereConvertor(where);
 
-			const res = await db.collection(getModelName(model)).deleteMany(wheres);
+			await db.collection(getModelName(model)).deleteMany(wheres);
 		},
 	} satisfies Adapter;
 };

@@ -12,6 +12,8 @@ import Database from "better-sqlite3";
 import { getBaseURL } from "../utils/url";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import { Pool } from "pg";
+import { MongoClient } from "mongodb";
+import { mongodbAdapter } from "../adapters";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -24,7 +26,7 @@ export async function getTestInstance<
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
 	},
-	testWith?: "sqlite" | "postgres",
+	testWith?: "sqlite" | "postgres" | "mongodb",
 ) {
 	/**
 	 * create db folder if not exists
@@ -41,6 +43,17 @@ export async function getTestInstance<
 		}),
 	});
 
+	async function mongodbClient() {
+		const dbClient = async (connectionString: string, dbName: string) => {
+			const client = new MongoClient(connectionString);
+			await client.connect();
+			const db = client.db(dbName);
+			return db;
+		};
+		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+		return db;
+	}
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -56,7 +69,9 @@ export async function getTestInstance<
 		database:
 			testWith === "postgres"
 				? { db: postgres, type: "postgres" }
-				: new Database(dbName),
+				: testWith === "mongodb"
+					? mongodbAdapter(await mongodbClient())
+					: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -94,14 +109,21 @@ export async function getTestInstance<
 		});
 	}
 
-	const { runMigrations } = await getMigrations({
-		...auth.options,
-		database: opts.database,
-	});
-	await runMigrations();
+	if (testWith !== "mongodb") {
+		const { runMigrations } = await getMigrations({
+			...auth.options,
+			database: opts.database,
+		});
+		await runMigrations();
+	}
 	await createTestUser();
 
 	afterAll(async () => {
+		if (testWith === "mongodb") {
+			const db = await mongodbClient();
+			await db.dropDatabase();
+			return;
+		}
 		if (testWith === "postgres") {
 			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 				postgres,
