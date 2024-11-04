@@ -136,7 +136,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 				fields: {
 					isAnonymous: {
 						type: "boolean",
-						defaultValue: true,
 						required: false,
 					},
 				},
