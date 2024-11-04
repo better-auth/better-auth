@@ -342,7 +342,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("shouldn't throw on delete record not found", async () => {
-		const uuid = nanoid();
 		await adapter.delete({
 			model: "user",
 			where: [
