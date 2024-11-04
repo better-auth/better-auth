@@ -188,7 +188,8 @@ export const mongodbAdapter = (
 			const wheres = whereConvertor(where);
 
 			if (update.id) {
-				update.id = undefined;
+				// biome-ignore lint/performance/noDelete: valid use case
+				delete update.id;
 			}
 
 			if (where.length === 1) {
