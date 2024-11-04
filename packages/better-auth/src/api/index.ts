@@ -172,6 +172,8 @@ export function getEndpoints<
 						headers: e.headers,
 					});
 
+					let pluginResponse: Request | undefined = undefined;
+
 					for (const hook of afterPlugins || []) {
 						const match = hook.matcher(context);
 						if (match) {
@@ -183,11 +185,14 @@ export function getEndpoints<
 							});
 							const hookRes = await hook.handler(obj);
 							if (hookRes && "response" in hookRes) {
-								response = hookRes.response as any;
+								pluginResponse = hookRes.response as any;
 							}
 						}
 					}
-					return response;
+					if (pluginResponse instanceof Response) {
+						return pluginResponse;
+					}
+					throw e;
 				}
 				throw e;
 			}
