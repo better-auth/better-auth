@@ -142,7 +142,8 @@ export const mongodbAdapter = (
 		async create(data) {
 			let { model, data: val } = data;
 			if (val.id) {
-				val.id = undefined;
+				// biome-ignore lint/performance/noDelete: setting id to undefined will cause the id to be null in the database which is not what we want
+				delete val.id;
 			}
 			const res = await db.collection(getModelName(model)).insertOne(val);
 			const id_ = res.insertedId;

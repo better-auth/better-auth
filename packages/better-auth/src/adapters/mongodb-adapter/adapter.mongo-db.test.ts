@@ -31,7 +31,7 @@ describe("adapter test", async () => {
 });
 
 describe("simple-flow", async () => {
-	const { auth, client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter, db } = await getTestInstance(
 		{},
 		{
 			disableTestUser: true,
