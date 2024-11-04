@@ -26,25 +26,8 @@ export default function AccountSwitcher({
 }: {
 	sessions: Session[];
 }) {
-	const { data: users } = useQuery({
-		queryKey: ["users"],
-		queryFn: async () => {
-			return;
-		},
-	});
 	const { data: currentUser } = useSession();
 	const [open, setOpen] = useState(false);
-
-	const handleUserSelect = (user: Session) => {
-		// setCurrentUser(user);
-		setOpen(false);
-	};
-
-	const handleAddAccount = () => {
-		// Implement add account logic here
-		console.log("Add account clicked");
-		setOpen(false);
-	};
 	const router = useRouter();
 	return (
 		<Popover open={open} onOpenChange={setOpen}>

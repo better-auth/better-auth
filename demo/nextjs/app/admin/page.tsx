@@ -76,16 +76,21 @@ export default function AdminDashboard() {
 
 	const { data: users, isLoading: isUsersLoading } = useQuery({
 		queryKey: ["users"],
-		queryFn: () =>
-			client.admin
-				.listUsers({
+		queryFn: async () => {
+			const data = await client.admin.listUsers(
+				{
 					query: {
 						limit: 10,
 						sortBy: "createdAt",
 						sortDirection: "desc",
 					},
-				})
-				.then((res) => res.data?.users ?? []),
+				},
+				{
+					throw: true,
+				},
+			);
+			return data?.users || [];
+		},
 	});
 
 	const handleCreateUser = async (e: React.FormEvent) => {
