@@ -14,9 +14,10 @@ export function toZodSchema(fields: Record<string, FieldAttribute>) {
 					[key]: z.array(field.type === "string[]" ? z.string() : z.number()),
 				};
 			}
-			let schema: ZodSchema = field.type === "object" 
-				? z.record(z.string(), z.any())
-				: z[field.type]();
+			let schema: ZodSchema =
+				field.type === "object"
+					? z.record(z.string(), z.any())
+					: z[field.type]();
 			if (field?.required === false) {
 				schema = schema.optional();
 			}

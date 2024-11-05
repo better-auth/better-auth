@@ -68,8 +68,15 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
-	if (fieldType === "string[]" || fieldType === "number[]" || fieldType === "object") {
-		return columnDataType.toLowerCase().includes("json") || columnDataType.toLowerCase() === "text";
+	if (
+		fieldType === "string[]" ||
+		fieldType === "number[]" ||
+		fieldType === "object"
+	) {
+		return (
+			columnDataType.toLowerCase().includes("json") ||
+			columnDataType.toLowerCase() === "text"
+		);
 	}
 	const types = map[dbType];
 	const type = types[fieldType].map((t) => t.toLowerCase());
@@ -176,7 +183,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (dbType === "mysql" && type === "string") {
 			return "varchar(255)";
 		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]" || type === "object")) {
+		if (
+			dbType === "sqlite" &&
+			(type === "string[]" || type === "number[]" || type === "object")
+		) {
 			return "text";
 		}
 		if (type === "string[]" || type === "number[]") {
