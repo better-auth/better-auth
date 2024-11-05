@@ -68,6 +68,33 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.session).toBeDefined();
 	});
 
+	it("should sign-up with otp", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+		const newUser = await client.signIn.emailOtp(
+			{
+				email: testUser2.email,
+				otp,
+			},
+			{
+				onSuccess: (ctx) => {
+					const header = ctx.response.headers.get("set-cookie");
+					expect(header).toContain("better-auth.session_token");
+				},
+			},
+		);
+		expect(newUser.data).toMatchObject({
+			user: {
+				email: testUser2.email,
+			},
+		});
+	});
+
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
 			email: "test@email.com",

@@ -5,9 +5,6 @@ description: Email OTP plugin for Better Auth.
 
 The Email OTP plugin allows user to sign-in and verify their email using a one-time password (OTP) sent to their email address.
 
-<Callout>
-You can't register a user using the email OTP plugin. You can only sign in or verify the email address.
-</Callout>
 
 ## Installation
 
@@ -73,6 +70,9 @@ const user = await authClient.signIn.emailOtp({
 })
 ```
 
+If the user is not registered, it'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the options.
+
+
 ### Verify Email
 
 To verify the user's email address, use the `verifyEmail()` method.
@@ -132,3 +132,5 @@ export const auth = betterAuth({
 ```
 
 - `sendVerificationOnSignUp`: A boolean value that determines whether to send the OTP when a user signs up. Defaults to false.
+
+- `disableSignUp`: A boolean value that determines whether to prevent automatic sign-up when the user is not registered. Defaults to false.
