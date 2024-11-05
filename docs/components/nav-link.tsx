@@ -5,10 +5,11 @@ import { useSelectedLayoutSegment } from "next/navigation";
 
 type Props = {
 	href: string;
+	target?: string;
 	children: React.ReactNode;
 };
 
-export const NavLink = ({ href, children }: Props) => {
+export const NavLink = ({ href, target, children }: Props) => {
 	const segment = useSelectedLayoutSegment();
 	const isActive =
 		segment === href.slice(1) || (segment === null && href === "/");
@@ -17,6 +18,7 @@ export const NavLink = ({ href, children }: Props) => {
 		<li className="relative group">
 			<Link
 				href={href}
+				target={target}
 				className={cn(
 					"w-full h-full block py-4 px-5 transition-colors",
 					"group-hover:text-foreground",

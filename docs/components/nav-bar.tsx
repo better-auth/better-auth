@@ -23,7 +23,7 @@ export const Navbar = () => {
 				<div className="md:col-span-10 flex items-center justify-end relative">
 					<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
 						{navMenu.map((menu, i) => (
-							<NavLink key={menu.name} href={menu.path}>
+							<NavLink key={menu.name} href={menu.path} target={menu.target}>
 								{menu.name}
 							</NavLink>
 						))}
@@ -46,13 +46,18 @@ export const navMenu = [
 		name: "docs",
 		path: "/docs",
 	},
-
 	{
 		name: "changelogs",
 		path: "/changelogs",
 	},
 	{
+		name: "demo",
+		target: "_blank",
+		path: "https://demo.better-auth.com/",
+	},
+	{
 		name: "community",
+		target: "_blank",
 		path: "https://discord.gg/GYC3W7tZzb",
 	},
 ];
