@@ -278,6 +278,9 @@ describe("type", () => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				throw: true,
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
 			},
 		});
 		const data = client.getSession();
