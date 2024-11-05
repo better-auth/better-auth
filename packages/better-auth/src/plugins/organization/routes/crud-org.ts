@@ -231,7 +231,7 @@ export const getFullOrganization = createAuthEndpoint(
 		const orgId = ctx.query?.orgId || session.session.activeOrganizationId;
 		if (!orgId) {
 			return ctx.json(null, {
-				status: 400,
+				status: 200,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
