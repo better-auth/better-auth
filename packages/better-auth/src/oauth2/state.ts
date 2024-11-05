@@ -17,7 +17,8 @@ export async function generateState(
 ) {
 	const callbackURL =
 		c.body?.callbackURL ||
-		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "");
+		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "") ||
+		c.context.options.baseURL;
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",
