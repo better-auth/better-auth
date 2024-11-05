@@ -22,6 +22,7 @@ const postgresMap = {
 	],
 	boolean: ["bool", "boolean"],
 	date: ["timestamp", "date"],
+	object: ["json", "jsonb"],
 };
 const mysqlMap = {
 	string: ["varchar", "text"],
@@ -36,6 +37,7 @@ const mysqlMap = {
 	],
 	boolean: ["boolean"],
 	date: ["datetime", "date"],
+	object: ["json"],
 };
 
 const sqliteMap = {
@@ -43,6 +45,7 @@ const sqliteMap = {
 	number: ["INTEGER", "REAL"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
+	object: ["TEXT"],
 };
 
 const mssqlMap = {
@@ -50,6 +53,7 @@ const mssqlMap = {
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "boolean"],
 	date: ["datetime", "date"],
+	object: ["nvarchar(max)", "json"],
 };
 
 const map = {
@@ -64,8 +68,8 @@ export function matchType(
 	fieldType: FieldType,
 	dbType: KyselyDatabaseType,
 ) {
-	if (fieldType === "string[]" || fieldType === "number[]") {
-		return columnDataType.toLowerCase().includes("json");
+	if (fieldType === "string[]" || fieldType === "number[]" || fieldType === "object") {
+		return columnDataType.toLowerCase().includes("json") || columnDataType.toLowerCase() === "text";
 	}
 	const types = map[dbType];
 	const type = types[fieldType].map((t) => t.toLowerCase());
@@ -167,11 +171,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 			boolean: "boolean",
 			number: "integer",
 			date: "date",
+			object: "jsonb",
 		} as const;
 		if (dbType === "mysql" && type === "string") {
 			return "varchar(255)";
 		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
+		if (dbType === "sqlite" && (type === "string[]" || type === "number[]" || type === "object")) {
 			return "text";
 		}
 		if (type === "string[]" || type === "number[]") {

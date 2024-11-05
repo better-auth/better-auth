@@ -6,6 +6,7 @@ export type FieldType =
 	| "number"
 	| "boolean"
 	| "date"
+	| "object"
 	| `${"string" | "number"}[]`;
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
@@ -102,11 +103,13 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends `${infer T}[]`
-				? T extends "string"
-					? string[]
-					: number[]
-				: never;
+			: T extends "object"
+				? Record<string, any>
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
