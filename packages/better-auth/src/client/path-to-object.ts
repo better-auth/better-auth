@@ -140,7 +140,11 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 									BetterFetchResponse<
 										InferReturn<Awaited<R>, COpts>,
 										unknown,
-										FetchOptions["throw"] extends true ? true : false
+										FetchOptions["throw"] extends true
+											? true
+											: COpts["fetchOptions"] extends { throw: true }
+												? true
+												: false
 									>
 								>
 							: never
