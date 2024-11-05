@@ -443,6 +443,7 @@ export interface BetterAuthOptions {
 				attributes?: CookieOptions;
 			};
 		};
+		defaultCookieAttributes?: CookieOptions;
 		/**
 		 * Prefix for cookies. If a cookie name is provided
 		 * in cookies config, this will be overridden.

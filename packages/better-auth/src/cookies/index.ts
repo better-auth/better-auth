@@ -48,6 +48,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				path: "/",
 				httpOnly: true,
 				...(crossSubdomainEnabled ? { domain } : {}),
+				...options.advanced?.defaultCookieAttributes,
 				...overrideAttributes,
 				...attributes,
 			} as CookieOptions,
