@@ -206,7 +206,7 @@ If you prefer adding tables manually, you can do that as well. The core schema r
 
 ## Secondary Storage
 
-Secondary storage in BetterAuth allows you to use key-value stores for managing session data, rate limiting counters, etc.
+Secondary storage in BetterAuth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
@@ -369,7 +369,7 @@ Table Name: `account`
     {
       name: "accountId",
       type: "string",
-      description: "The id of the account",
+      description: "The id of the account as provided by the SSO or equal to userId for credential accounts",
     },
     {
       name: "providerId",

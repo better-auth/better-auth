@@ -17,7 +17,7 @@ To enable email verification, you need to pass a function that sends a verificat
 - **sendVerificationEmail**: This function is triggered when email verification starts. It accepts three arguments:
   - `user`: The user object containing the email address.
   - `url`: The verification URL the user must click to verify their email.
-  - `token`: A verification token used to complete the email verification.
+  - `token`: The verification token used to complete the email verification to be used when implementing a custom verification URL.
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
@@ -54,8 +54,11 @@ export const auth = betterAuth({
 })
 ```
 
-This sends a verification email when a user signs up. For social logins, email verification is skipped, and the email is marked as verified unless the provider isn't listed in the `trustedProviders` option.
+This sends a verification email when a user signs up. For social logins, email verification status is read from the SSO.
 
+<Callout>
+    With `sendOnSignUp` enabled, when the user logs in with an SSO that does not claim the email as verified, Better Auth will dispatch a verification email, but the verification is not required to login even when `requireEmailVerification` is enabled.
+</Callout>
 
 #### 2. Require Email Verification
 
