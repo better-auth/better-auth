@@ -89,12 +89,12 @@ function getOrigin(scheme: string) {
 	return schemeURI;
 }
 
-export const expoClient = (opts: ExpoClientOptions) => {
+export const expoClient = (opts?: ExpoClientOptions) => {
 	let store: Store | null = null;
-	const cookieName = `${opts.storagePrefix || "better-auth"}_cookie`;
-	const localCacheName = `${opts.storagePrefix || "better-auth"}_session_data`;
-	const storage = opts.storage || SecureStore;
-	const scheme = opts.scheme || Constants.platform?.scheme;
+	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
+	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
+	const storage = opts?.storage || SecureStore;
+	const scheme = opts?.scheme || Constants.platform?.scheme;
 	const isWeb = Platform.OS === "web";
 	if (!scheme && !isWeb) {
 		throw new Error(
@@ -131,7 +131,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 						if (
 							context.request.url.toString().includes("/get-session") &&
-							!opts.disableCache
+							!opts?.disableCache
 						) {
 							const data = context.data;
 							storage.setItem(localCacheName, JSON.stringify(data));
@@ -158,7 +158,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options,
+							options: {
+								...options,
+								signal: new AbortController().signal,
+							},
 						};
 					}
 					options = options || {};
@@ -189,7 +192,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options,
+						options: {
+							...options,
+							signal: new AbortController().signal,
+						},
 					};
 				},
 			},
