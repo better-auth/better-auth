@@ -60,7 +60,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						const user = await ctx.context.internalAdapter.findUserByEmail(email);
 
 						if (!user) {
-							throw new APIError("USER_NOT_FOUND", {
+							throw new APIError("BAD_REQUEST", {
 								message: "User not found"
 							});
 						}
