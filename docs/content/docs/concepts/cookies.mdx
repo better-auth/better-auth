@@ -7,7 +7,7 @@ Cookies are used to store data such as session tokens, OAuth state, and more. Al
 
 ### Cookie Prefix
 
-Better Auth cookies will follow `${prefix}.${cookie_name}` format by default. The prefix is "appName" provided in the auth options by default. If not provided, the prefix will be "better-auth". You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
+Better Auth cookies will follow `${prefix}.${cookie_name}` format by default. The prefix equals to the `appName` provided in the auth options by default. If not provided, the prefix will be "better-auth". You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -54,7 +54,7 @@ export const auth = betterAuth({
 
 Sometimes you may need to share cookies across subdomains. For example, if you have `app.example.com` and `example.com`, and if you authenticate on `example.com`, you may want to access the same session on `app.example.com`.
 
-By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To do this, set `crossSubDomainCookies` to `true` in the `advanced` object of the auth options.
+By default, cookies are not shared between subdomains. However, if you need to access the same session across different subdomains, you can enable cross-subdomain cookies. To enable them, configure `crossSubDomainCookies` in the `advanced` object of the auth options.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -71,7 +71,7 @@ export const auth = betterAuth({
 
 ### Secure Cookies
 
-By default, cookies are secure if the server is running in production mode. You can force cookies to be secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
+By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
