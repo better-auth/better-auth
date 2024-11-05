@@ -15,7 +15,7 @@ import {
 	sendVerificationEmail,
 	changeEmail,
 	signInEmail,
-	signInOAuth,
+	signInSocial,
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
@@ -84,7 +84,7 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInOAuth,
+		signInSocial,
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,

@@ -6,11 +6,10 @@ import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState, logger } from "../../utils";
 
-export const signInOAuth = createAuthEndpoint(
+export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		requireHeaders: true,
 		query: z
 			.object({
 				/**
