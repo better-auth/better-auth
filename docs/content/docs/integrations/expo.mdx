@@ -63,7 +63,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { createAuthClient } from 'better-auth/react';
 
         const authClient = createAuthClient({
-            basURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            baseURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
         });
         ```
         <Callout>
@@ -104,7 +104,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { createAuthClient } from 'better-auth/react';
 
         const authClient = createAuthClient({
-            basURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            baseURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
         });
         ```
         <Callout>
@@ -259,7 +259,7 @@ import { createAuthClient } from 'better-auth/react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const authClient = createAuthClient({
-    basURL: 'http://localhost:8081',
+    baseURL: 'http://localhost:8081',
     storage: AsyncStorage
 });
 ```
@@ -270,7 +270,7 @@ const authClient = createAuthClient({
 import { createAuthClient } from 'better-auth/react';
 
 const authClient = createAuthClient({
-    basURL: 'http://localhost:8081',
+    baseURL: 'http://localhost:8081',
     scheme: 'myapp'
 });
 ```
@@ -281,7 +281,7 @@ const authClient = createAuthClient({
 import { createAuthClient } from 'better-auth/react';
 
 const authClient = createAuthClient({
-    basURL: 'http://localhost:8081',
+    baseURL: 'http://localhost:8081',
     disableCache: true
 });
 ```
