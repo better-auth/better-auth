@@ -4,7 +4,10 @@ export function GithubStat({ stars }: { stars: string | null }) {
   let result = 0;
   if (stars) {
     result = parseInt(stars?.replace(/,/g, ""), 10);
+  } else {
+    return <></>;
   }
+
   return (
     <a
       href="https://github.com/better-auth/better-auth"
