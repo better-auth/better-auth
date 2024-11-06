@@ -54,7 +54,6 @@ export const expo = () => {
 							if (!cookie) {
 								return;
 							}
-							console.log({ location });
 							const url = new URL(location);
 							url.searchParams.set("cookie", cookie);
 							response.headers.set("location", url.toString());

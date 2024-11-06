@@ -37,7 +37,7 @@ export function getBaseURL(url?: string, path?: string) {
 		return withPath(fromEnv, path);
 	}
 
-	if (typeof window !== "undefined") {
+	if (typeof window !== "undefined" && window.location) {
 		return withPath(window.location.origin, path);
 	}
 	return undefined;
