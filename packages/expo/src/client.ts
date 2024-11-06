@@ -4,6 +4,7 @@ import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -161,7 +162,7 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 							options: {
 								...options,
 								signal: new AbortController().signal,
-							},
+							} as BetterFetchOption,
 						};
 					}
 					options = options || {};
@@ -195,7 +196,7 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 						options: {
 							...options,
 							signal: new AbortController().signal,
-						},
+						} as BetterFetchOption,
 					};
 				},
 			},
