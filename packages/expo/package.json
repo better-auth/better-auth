@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "0.7.3",
+  "version": "0.7.4-beta.1",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

@@ -7,6 +7,7 @@ import {
 	passkey,
 	twoFactor,
 	oneTap,
+	oAuthProxy,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -122,5 +123,6 @@ export const auth = betterAuth({
 		admin(),
 		multiSession(),
 		oneTap(),
+		oAuthProxy(),
 	],
 });
