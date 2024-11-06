@@ -368,7 +368,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image: string | undefined;
 							};
 						}
 					>[];
