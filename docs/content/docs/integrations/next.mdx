@@ -59,13 +59,15 @@ const someAuthenticatedAction = async () => {
 
 **Example: Getting Session on a RSC**
 
+{/* NextJs 15 integration */}
+
 ```tsx
 import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 
 export async function ServerComponent() {
     const session = await auth.api.getSession({
-        headers: headers()
+        headers: await headers()
     })
     if(!session) {
         return <div>Not authenticated</div>
