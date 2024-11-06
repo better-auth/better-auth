@@ -2,6 +2,18 @@ import { z } from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
+import { env } from "../../utils/env";
+
+function getVenderBaseURL() {
+	const vercel = env.VERCEL_URL;
+	const netlify = env.NETLIFY_URL;
+	const render = env.RENDER_URL;
+	const aws = env.AWS_LAMBDA_FUNCTION_NAME;
+	const google = env.GOOGLE_CLOUD_FUNCTION_NAME;
+	const azure = env.AZURE_FUNCTION_NAME;
+
+	return vercel || netlify || render || aws || google || azure;
+}
 
 interface OAuthProxyOptions {
 	/**
@@ -100,7 +112,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					async handler(ctx) {
 						const url = new URL(
-							opts?.currentURL || ctx.request?.url || ctx.context.baseURL,
+							opts?.currentURL ||
+								ctx.request?.url ||
+								getVenderBaseURL() ||
+								ctx.context.baseURL,
 						);
 						ctx.body.callbackURL = `${url.origin}${
 							ctx.context.options.basePath || "/api/auth"
