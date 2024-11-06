@@ -95,7 +95,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image: string | undefined;
 							};
 						})[];
 						invitations: Invitation[];
