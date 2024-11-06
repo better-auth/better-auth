@@ -101,7 +101,7 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		authCookies: cookies,
 		logger: createLogger({
-			disabled: options.logger?.disabled || false,
+			enabled: options.logger?.enabled || false,
 		}),
 		db,
 		uuid: generateId,

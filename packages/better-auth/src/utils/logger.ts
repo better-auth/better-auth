@@ -1,45 +1,31 @@
-import { createConsola } from "consola";
+import pino, { type LoggerOptions as PinoLoggerOptions } from "pino";
+import pretty from "pino-pretty";
 
-const consola = createConsola({
-	formatOptions: {
-		date: false,
-		colors: true,
-		compact: true,
-	},
-	defaults: {
-		tag: "Better Auth",
-	},
-});
+export interface LoggerOptions {
+	enabled?: boolean;
+	level?: PinoLoggerOptions["level"];
+	// base?: Record<string, any>
+}
 
-export const createLogger = (options?: {
-	disabled?: boolean;
-}) => {
-	return {
-		log: (...args: any[]) => {
-			!options?.disabled && consola.log("", ...args);
+export const createLogger = (options?: LoggerOptions) => {
+	const logger = pino(
+		{
+			enabled: options?.enabled,
+			level: options?.level || "info",
+			base: undefined,
 		},
-		error: (...args: any[]) => {
-			!options?.disabled && consola.error("", ...args);
-		},
-		warn: (...args: any[]) => {
-			!options?.disabled && consola.warn("", ...args);
-		},
-		info: (...args: any[]) => {
-			!options?.disabled && consola.info("", ...args);
-		},
-		debug: (...args: any[]) => {
-			!options?.disabled && consola.debug("", ...args);
-		},
-		box: (...args: any[]) => {
-			!options?.disabled && consola.box("", ...args);
-		},
-		success: (...args: any[]) => {
-			!options?.disabled && consola.success("", ...args);
-		},
-		break: (...args: any[]) => {
-			!options?.disabled && console.log("\n");
-		},
-	};
+		pretty({
+			colorize: true,
+			translateTime: "yyyy-mm-dd HH:MM:ss",
+			messageFormat: (log, messageKey) => {
+				const tag = log.tag ? `[${log.tag}] ` : "";
+				const message = log[messageKey] || "";
+				return `${tag}${message}`;
+			},
+		}),
+	);
+
+	return logger;
 };
 
 export const logger = createLogger();
