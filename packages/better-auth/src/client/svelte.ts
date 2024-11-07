@@ -45,7 +45,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
+		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = () => value;
 	}
 	const routes = {
 		...pluginsActions,
