@@ -5,6 +5,7 @@ import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
+import type { UserWithTwoFactor } from "./types";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
@@ -30,7 +31,9 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					message: "invalid two factor cookie",
 				});
 			}
-			const user = await ctx.context.internalAdapter.findUserById(userId);
+			const user = (await ctx.context.internalAdapter.findUserById(
+				userId,
+			)) as UserWithTwoFactor;
 			if (!user) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "invalid two factor cookie",
