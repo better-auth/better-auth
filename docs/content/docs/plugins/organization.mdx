@@ -361,6 +361,8 @@ client.organization.getInvitation({
 })
 ```
 
+## Members
+
 ### Remove Member 
 
 To remove you can use `organization.removeMember`
@@ -385,11 +387,12 @@ await client.organization.updateMemberRole({
 
 ### Get Active Member
 
-To get the current member of the organization you can use the `organization.getCurrentMember` function. This function will return the current member of the organization.
+To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current member of the organization.
 
 ```ts title="client.ts"
 const member = await client.organization.getActiveMember()
 ```
+
 
 ## Access Control
 
