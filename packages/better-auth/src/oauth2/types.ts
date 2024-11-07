@@ -54,4 +54,10 @@ export type ProviderOptions = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string;
+
+	/**
+	 * The client key of your application
+	 * Tiktok Social Provider uses this field instead of clientId
+	 */
+	clientKey?: string;
 };
