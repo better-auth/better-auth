@@ -35,6 +35,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import {
+	client,
 	organization,
 	useActiveOrganization,
 	useListOrganizations,
