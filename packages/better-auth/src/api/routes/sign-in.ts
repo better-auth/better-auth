@@ -90,12 +90,6 @@ export const signInEmail = createAuthEndpoint(
 				message: "Invalid email",
 			});
 		}
-		const checkEmail = z.string().email().safeParse(email);
-		if (!checkEmail.success) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
-			});
-		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
 		});
