@@ -59,11 +59,25 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         
         To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
 
+        You need to also import client plugin from `@better-auth/expo/client` and pass it to the `plugins` array when initializing the auth client.
+
+        This is important because:
+
+        - **Social Authentication Support:** enables social auth flows by handling authorization URLs and callbacks within the Expo web browser.
+        - **Secure Cookie Management:** stores cookies securely and automatically adds them to the headers of your auth requests.
+
         ```ts title="src/auth-client.ts"
         import { createAuthClient } from 'better-auth/react';
+        import { expoClient } from '@better-auth/expo/client';
 
         const authClient = createAuthClient({
             baseURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            plugins: [
+                expoClient({
+                    scheme: 'myapp',
+                    storagePrefix: "myapp"
+                })
+            ]
         });
         ```
         <Callout>
