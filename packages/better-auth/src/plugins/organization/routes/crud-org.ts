@@ -86,6 +86,7 @@ export const updateOrganization = createAuthEndpoint(
 				.object({
 					name: z.string().optional(),
 					slug: z.string().optional(),
+					logo: z.string().optional(),
 				})
 				.partial(),
 			orgId: z.string().optional(),
