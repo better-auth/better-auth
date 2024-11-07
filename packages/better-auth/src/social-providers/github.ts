@@ -67,7 +67,6 @@ export const github = (options: GithubOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
-				codeVerifier,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

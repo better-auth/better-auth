@@ -210,9 +210,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 						authorizationEndpoint: finalAuthUrl,
 						state,
-						codeVerifier,
+						codeVerifier: pkce ? codeVerifier : undefined,
 						scopes: scopes || [],
-						disablePkce: !pkce,
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
