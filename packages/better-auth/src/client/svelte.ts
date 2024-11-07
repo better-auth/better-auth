@@ -67,7 +67,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: Atom<{
+			useSession: () => Atom<{
 				data: Session | null;
 				error: BetterFetchError | null;
 				isPending: boolean;
