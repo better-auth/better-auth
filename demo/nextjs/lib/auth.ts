@@ -23,6 +23,7 @@ const libsql = new LibsqlDialect({
 });
 
 export const auth = betterAuth({
+	appName: "Better Auth Demo",
 	database: {
 		dialect: libsql,
 		type: "sqlite",
