@@ -7,6 +7,7 @@ export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
+		requireHeaders: true,
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(
