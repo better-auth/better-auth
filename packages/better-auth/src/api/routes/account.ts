@@ -16,7 +16,14 @@ export const listUserAccounts = createAuthEndpoint(
 		const accounts = await c.context.internalAdapter.findAccounts(
 			session.user.id,
 		);
-		return c.json(accounts);
+		return c.json(
+			accounts.map((a) => {
+				return {
+					id: a.id,
+					provider: a.providerId,
+				};
+			}),
+		);
 	},
 );
 
