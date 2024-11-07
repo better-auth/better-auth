@@ -366,7 +366,7 @@
     "happy-dom": "^15.7.4",
     "hono": "^4.5.4",
     "listhen": "^1.7.2",
-    "mongodb": "^6.9.0",
+    "mongodb": "^6.10.0",
     "mysql2": "^3.11.0",
     "next": "^14.2.8",
     "oauth2-mock-server": "^7.1.2",

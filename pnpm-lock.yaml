@@ -1661,7 +1661,7 @@ importers:
         specifier: ^1.7.2
         version: 1.9.0
       mongodb:
-        specifier: ^6.9.0
+        specifier: ^6.10.0
         version: 6.10.0
       mysql2:
         specifier: ^3.11.0
