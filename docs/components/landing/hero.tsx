@@ -7,7 +7,7 @@ import clsx from "clsx";
 
 import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
-import { Github, Icon } from "lucide-react";
+import { Check, Copy, Github, Icon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import {
@@ -132,8 +132,16 @@ function CodePreview() {
 	const theme = useTheme();
 
 	const code = tabs.find((tab) => tab.name === currentTab)?.code ?? "";
-
+	const [copyState, setCopyState] = useState(false);
 	const [ref, { height }] = useMeasure();
+	const copyToClipboard = (text: string) => {
+		navigator.clipboard.writeText(text).then(() => {
+			setCopyState(true);
+			setTimeout(() => {
+				setCopyState(false);
+			}, 2000);
+		});
+	};
 
 	return (
 		<AnimatePresence initial={false}>
@@ -172,12 +180,27 @@ function CodePreview() {
 							</div>
 
 							<div className="mt-6 flex flex-col items-start px-1 text-sm">
+								<div className="absolute top-2 right-4">
+									<Button
+										variant="outline"
+										size="icon"
+										className="absolute w-5 border-none bg-transparent h-5 top-2 right-0"
+										onClick={() => copyToClipboard(code)}
+									>
+										{copyState ? (
+											<Check className="h-3 w-3" />
+										) : (
+											<Copy className="h-3 w-3" />
+										)}
+										<span className="sr-only">Copy code</span>
+									</Button>
+								</div>
 								<motion.div
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									transition={{ duration: 0.5 }}
 									key={currentTab}
-									className="flex items-start px-1 text-sm"
+									className="relative flex items-start px-1 text-sm"
 								>
 									<div
 										aria-hidden="true"
