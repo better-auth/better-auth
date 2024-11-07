@@ -7,7 +7,7 @@ Cookies are used to store data such as session tokens, OAuth state, and more. Al
 
 ### Cookie Prefix
 
-Better Auth cookies will follow `${prefix}.${cookie_name}` format by default. The prefix equals to the `appName` provided in the auth options by default. If not provided, the prefix will be "better-auth". You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
+Better Auth cookies will follow `${prefix}.${cookie_name}` format by default. The prefix will be "better-auth" by default. You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
