@@ -249,7 +249,7 @@ export const getFullOrganization = createAuthEndpoint(
 );
 
 export const setActiveOrganization = createAuthEndpoint(
-	"/organization/activate",
+	"/organization/set-active",
 	{
 		method: "POST",
 		body: z.object({
