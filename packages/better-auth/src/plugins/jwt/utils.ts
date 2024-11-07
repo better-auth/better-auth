@@ -3,7 +3,7 @@ import {
 	createDecipheriv,
 	createHash,
 	randomBytes,
-} from "crypto";
+} from "node:crypto";
 
 // Helper function to handle different key formats and lengths
 function deriveKey(secretKey: string) {
