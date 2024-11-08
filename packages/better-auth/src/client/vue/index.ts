@@ -1,7 +1,7 @@
 import { useStore } from "@nanostores/vue";
 import type { DeepReadonly, Ref } from "vue";
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
+import { getClientConfig } from "../config";
+import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -10,9 +10,9 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 	IsSignal,
-} from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import type { UnionToIntersection } from "../types/helper";
+} from "../types";
+import { createDynamicPathProxy } from "../proxy";
+import type { UnionToIntersection } from "../../types/helper";
 import type { BetterFetchError } from "@better-fetch/fetch";
 
 function getAtomKey(str: string) {
