@@ -25,8 +25,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "better-auth": "workspace:*",
     "@better-fetch/fetch": "1.1.12",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^11.5.0",
     "expo-constants": "~16.0.2",
     "expo-crypto": "^13.0.2",
@@ -37,5 +37,8 @@
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
   }
 }
