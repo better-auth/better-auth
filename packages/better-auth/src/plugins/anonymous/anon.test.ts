@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { anonymous } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { anonymousClient } from "./client";
 
 describe("anonymous", async () => {
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [anonymous()],
+	const linkAccountFn = vi.fn();
+	const { customFetchImpl, sessionSetter, testUser } = await getTestInstance({
+		plugins: [
+			anonymous({
+				async onLinkAccount(data) {
+					linkAccountFn(data);
+				},
+			}),
+		],
 	});
 	const headers = new Headers();
 	const client = createAuthClient({
@@ -35,20 +42,9 @@ describe("anonymous", async () => {
 	});
 
 	it("link anonymous user account", async () => {
-		const linkedAccount = await client.anonymous.linkAccount({
-			email: "valid-email@email.com",
-			password: "valid-password",
+		await client.signIn.email(testUser, {
+			headers,
 		});
-		expect(linkedAccount.data?.user).toBeDefined();
-		expect(linkedAccount.data?.session).toBeDefined();
-		expect(linkedAccount.data?.user.isAnonymous).toBeFalsy();
-	});
-
-	it("should sign in after link", async () => {
-		const anonUser = await client.signIn.email({
-			email: "valid-email@email.com",
-			password: "valid-password",
-		});
-		expect(anonUser.data?.user.id).toBeDefined();
+		expect(linkAccountFn).toHaveBeenCalled();
 	});
 });
