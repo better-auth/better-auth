@@ -86,6 +86,7 @@ export const updateOrganization = createAuthEndpoint(
 				.object({
 					name: z.string().optional(),
 					slug: z.string().optional(),
+					logo: z.string().optional(),
 				})
 				.partial(),
 			orgId: z.string().optional(),
@@ -218,18 +219,20 @@ export const getFullOrganization = createAuthEndpoint(
 	"/organization/get-full",
 	{
 		method: "GET",
-		query: z.object({
-			orgId: z.string().optional(),
-		}),
+		query: z.optional(
+			z.object({
+				orgId: z.string().optional(),
+			}),
+		),
 		requireHeaders: true,
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId = ctx.query.orgId || session.session.activeOrganizationId;
+		const orgId = ctx.query?.orgId || session.session.activeOrganizationId;
 		if (!orgId) {
 			return ctx.json(null, {
-				status: 400,
+				status: 200,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -247,7 +250,7 @@ export const getFullOrganization = createAuthEndpoint(
 );
 
 export const setActiveOrganization = createAuthEndpoint(
-	"/organization/activate",
+	"/organization/set-active",
 	{
 		method: "POST",
 		body: z.object({

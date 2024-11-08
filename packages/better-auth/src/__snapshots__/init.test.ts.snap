@@ -22,26 +22,6 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
-    "nonce": {
-      "name": "better-auth.nonce",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "pkCodeVerifier": {
-      "name": "better-auth.pk_code_verifier",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
     "sessionData": {
       "name": "better-auth.session_data",
       "options": {
@@ -57,16 +37,6 @@ exports[`init > should match config 1`] = `
       "options": {
         "httpOnly": true,
         "maxAge": 604800,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "state": {
-      "name": "better-auth.state",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
         "path": "/",
         "sameSite": "lax",
         "secure": false,
@@ -130,6 +100,7 @@ exports[`init > should match config 1`] = `
     "secret": "better-auth-secret-123456789",
   },
   "password": {
+    "checkPassword": [Function],
     "config": {
       "maxPasswordLength": 128,
       "minPasswordLength": 8,

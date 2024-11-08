@@ -32,10 +32,9 @@ This plugin offers two main methods to do a second factor verification:
 
         export const auth = betterAuth({
             // ... other config options
+            appName: "My App", // provide your app name. It'll be used as an issuer. // [!code highlight]
             plugins: [
-                twoFactor({  // [!code highlight]
-                    issuer: "my-app" // [!code highlight]
-                }) // [!code highlight]
+                twoFactor() // [!code highlight]
             ]
         })
         ```
@@ -156,7 +155,9 @@ TOTP is a time-based one-time password algorithm that generates a code based on 
 After enabling 2FA, you can get the TOTP URI to display to the user.
 
 ```ts
-const { data, error } = await client.twoFactor.getTotpUri()
+const { data, error } = await client.twoFactor.getTotpUri({
+    password: "password" // user password required
+})
 if (data) {
     // Use data.totpURI to generate a QR code or display to the user
 }
@@ -252,7 +253,9 @@ Backup codes are generated and stored in the database. This can be used to recov
 Generate backup codes for account recovery:
 
 ```ts
-const { data, error } = await authClient.twoFactor.generateBackupCodes()
+const { data, error } = await authClient.twoFactor.generateBackupCodes({
+    password: "password" // user password required
+})
 if (data) {
     // Show the backup codes to the user
 }

@@ -7,9 +7,8 @@ import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
 import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
-import { compareHash } from "../../crypto/hash";
 import { createEmailVerificationToken } from "./email-verification";
-import { isDevelopment } from "std-env";
+import { isDevelopment } from "../../utils/env";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
@@ -23,20 +22,14 @@ export const callbackOAuth = createAuthEndpoint(
 		metadata: HIDE_METADATA,
 	},
 	async (c) => {
-		if (c.query.error || !c.query.code) {
-			const parsedState = parseState(c.query.state);
-			const callbackURL =
-				parsedState.data?.callbackURL || `${c.context.baseURL}/error`;
-			c.context.logger.error(c.query.error, c.params.id);
+		if (!c.query.code) {
 			throw c.redirect(
-				`${callbackURL}?error=${c.query.error || "oAuth_code_missing"}`,
+				`${c.context.baseURL}/error?error=${c.query.error || "no_code"}`,
 			);
 		}
-
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
 		);
-
 		if (!provider) {
 			c.context.logger.error(
 				"Oauth provider with id",
@@ -47,42 +40,7 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-
-		const parsedState = parseState(c.query.state);
-		if (!parsedState.success) {
-			c.context.logger.error("Unable to parse state");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-
-		const {
-			data: { callbackURL, currentURL, link },
-		} = parsedState;
-
-		const storedState = await c.getSignedCookie(
-			c.context.authCookies.state.name,
-			c.context.secret,
-		);
-
-		if (!storedState) {
-			logger.error("No stored state found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-
-		const isValidState = await compareHash(c.query.state, storedState);
-		if (!isValidState) {
-			logger.error("OAuth state mismatch");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
-		}
-		const codeVerifier = await c.getSignedCookie(
-			c.context.authCookies.pkCodeVerifier.name,
-			c.context.secret,
-		);
+		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
@@ -111,13 +69,13 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
+
 		if (!callbackURL) {
 			logger.error("No callback URL found");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
-
 		if (link) {
 			if (link.email !== userInfo.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
@@ -130,13 +88,20 @@ export const callbackOAuth = createAuthEndpoint(
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}
-			throw c.redirect(callbackURL || currentURL || c.context.options.baseURL!);
+			let toRedirectTo: string;
+			try {
+				const url = new URL(callbackURL);
+				toRedirectTo = url.toString();
+			} catch {
+				toRedirectTo = callbackURL;
+			}
+			throw c.redirect(toRedirectTo);
 		}
 
 		function redirectOnError(error: string) {
 			throw c.redirect(
 				`${
-					currentURL || callbackURL || `${c.context.baseURL}/error`
+					errorURL || callbackURL || `${c.context.baseURL}/error`
 				}?error=${error}`,
 			);
 		}
@@ -156,6 +121,7 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 
 		let user = dbUser?.user;
+
 		if (dbUser) {
 			const hasBeenLinked = dbUser.accounts.find(
 				(a) => a.providerId === provider.id,
@@ -168,7 +134,7 @@ export const callbackOAuth = createAuthEndpoint(
 				);
 				if (
 					(!isTrustedProvider && !userInfo.emailVerified) ||
-					!c.context.options.account?.accountLinking?.enabled
+					c.context.options.account?.accountLinking?.enabled === false
 				) {
 					if (isDevelopment) {
 						logger.warn(
@@ -240,7 +206,6 @@ export const callbackOAuth = createAuthEndpoint(
 				redirectOnError("unable_to_create_user");
 			}
 		}
-
 		if (!user) {
 			return redirectOnError("unable_to_create_user");
 		}
@@ -256,6 +221,14 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
-		throw c.redirect(callbackURL);
+		let toRedirectTo: string;
+		try {
+			const url = new URL(callbackURL);
+			toRedirectTo = url.toString();
+		} catch {
+			toRedirectTo = callbackURL;
+		}
+
+		throw c.redirect(toRedirectTo);
 	},
 );

@@ -1,18 +1,15 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
-import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { logger } from "../../utils";
+import { generateState, logger } from "../../utils";
 
-export const signInOAuth = createAuthEndpoint(
+export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		requireHeaders: true,
 		query: z
 			.object({
 				/**
@@ -48,40 +45,15 @@ export const signInOAuth = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const cookie = c.context.authCookies;
-		const currentURL = c.query?.currentURL
-			? new URL(c.query?.currentURL)
-			: null;
-
-		const callbackURL = c.body.callbackURL?.startsWith("http")
-			? c.body.callbackURL
-			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
-
-		const state = await generateState(
-			callbackURL || currentURL?.origin || c.context.options.baseURL,
-		);
-		await c.setSignedCookie(
-			cookie.state.name,
-			state.hash,
-			c.context.secret,
-			cookie.state.options,
-		);
-		const codeVerifier = generateCodeVerifier();
-		await c.setSignedCookie(
-			cookie.pkCodeVerifier.name,
-			codeVerifier,
-			c.context.secret,
-			cookie.pkCodeVerifier.options,
-		);
+		const { codeVerifier, state } = await generateState(c);
 		const url = await provider.createAuthorizationURL({
-			state: state.raw,
+			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
-			state: state,
-			codeVerifier,
 			redirect: true,
 		});
 	},
@@ -114,12 +86,6 @@ export const signInEmail = createAuthEndpoint(
 		const { email, password } = ctx.body;
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
-			});
-		}
-		const checkEmail = z.string().email().safeParse(email);
-		if (!checkEmail.success) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid email",
 			});

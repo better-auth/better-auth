@@ -1,13 +1,14 @@
-import type { Dialect, Kysely, PostgresPool } from "kysely";
+import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
-import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
+import type { CookieOptions } from "better-call";
+import type { Database } from "better-sqlite3";
 
 export interface BetterAuthOptions {
 	/**
@@ -65,7 +66,7 @@ export interface BetterAuthOptions {
 	database:
 		| PostgresPool
 		| MysqlPool
-		| BetterSqlite3Database
+		| Database
 		| Dialect
 		| Adapter
 		| {
@@ -426,6 +427,33 @@ export interface BetterAuthOptions {
 			 */
 			domain?: string;
 		};
+		/*
+		 * Allows you to change default cookie names and attributes
+		 *
+		 * default cookie names:
+		 * - "session_token"
+		 * - "session_data"
+		 * - "dont_remember"
+		 *
+		 * plugins can also add additional cookies
+		 */
+		cookies?: {
+			[key: string]: {
+				name?: string;
+				attributes?: CookieOptions;
+			};
+		};
+		defaultCookieAttributes?: CookieOptions;
+		/**
+		 * Prefix for cookies. If a cookie name is provided
+		 * in cookies config, this will be overridden.
+		 *
+		 * @default
+		 * ```txt
+		 * "appName" -> which defaults to "better-auth"
+		 * ```
+		 */
+		cookiePrefix?: string;
 	};
 	logger?: {
 		/**

@@ -14,3 +14,5 @@ export * from "./generic-oauth";
 export * from "./jwt";
 export * from "./multi-session";
 export * from "./email-otp";
+export * from "./one-tap";
+export * from "./oauth-proxy";

@@ -1,0 +1,41 @@
+{
+  "name": "@better-auth/expo",
+  "version": "0.7.6-beta.1",
+  "description": "",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "scripts": {
+    "test": "vitest",
+    "build": "tsup --dts --minify --clean",
+    "dev": "tsup --watch --sourcemap --dts"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.mjs",
+      "require": "./dist/client.js"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "better-auth": "workspace:*",
+    "@better-fetch/fetch": "1.1.12",
+    "better-sqlite3": "^11.5.0",
+    "expo-constants": "~16.0.2",
+    "expo-crypto": "^13.0.2",
+    "expo-linking": "~6.3.1",
+    "expo-secure-store": "~13.0.2",
+    "expo-web-browser": "~13.0.3",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "better-auth": "workspace:*"
+  }
+}

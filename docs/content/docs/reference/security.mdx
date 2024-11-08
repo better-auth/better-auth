@@ -5,6 +5,51 @@ description: Better Auth Security
 
 This page contains information about security features of Better Auth.
 
+
+## Password Hashing
+
+Better Auth uses the `scrypt` algorithm to hash passwords by default. This algorithm is designed to be memory-hard and CPU-intensive, making it resistant to brute-force attacks. You can customize the password hashing function by setting the `password` option in the configuration. This option should include a `hash` function to hash passwords and a `verify` function to verify them.
+
+## Session Management
+
+### Session Expiration
+
+Better Auth uses secure session management to protect user data. Sessions are stored in the database or a secondary storage, if configured, to prevent unauthorized access. By default, sessions expire after 7 days, but you can customize this value in the configuration. Additionally, each time a session is used, if it reaches the `updateAge` threshold, the expiration date is extended, which by default is set to 1 day.
+
+### Session Revocation
+
+Better Auth allows you to revoke sessions to enhance security. When a session is revoked, the user is logged out and can no longer access the application. A logged in user can also revoke their own sessions to log out from different devices or browsers.
+
+See the [session management](/docs/concepts/session-management) for more details.
+
+## CSRF Protection
+
+Better Auth ensures CSRF protection by validating the Origin header in requests. This check confirms that requests originate from the application or a trusted source. If a request comes from an untrusted origin, it is blocked to prevent potential CSRF attacks. By default, the origin matching the base URL is trusted, but you can set a list of trusted origins in the trustedOrigins configuration option.
+
+## OAuth State and PKCE
+
+To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+
+## Cookies
+
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `SameSite` attribute to `LAX` by default to prevent cross-site request forgery attacks. And the `HttpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+
+For Cross Sub Domain cookies, you can set the `crossSubDomain` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
+
+### Customizing Cookies
+
+You can customize cookie names to minimize the risk of fingerprinting attacks and set specific cookie options as needed for additional control. For more information, refer to the [cookie options](/docs/concepts/cookies).
+
+Plugins can also set custom cookie options to align with specific security needs. If you're using Better Auth in non-browser environments, plugins offer ways to manage cookies securely in those contexts as well.
+
+## Rate Limiting
+
+Better Auth includes built-in rate limiting to safeguard against brute-force attacks. Rate limits are applied across all routes by default, with specific routes subject to stricter limits based on potential risk.
+
+## Trusted Origins
+
+Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trustedOrigins` configuration option. Requests from origins not on this list are automatically blocked.
+
 ## Reporting Vulnerabilities
 
-If you have found a security vulnerability in Better Auth, please report it to us at [security@better-auth.com](mailto:security@betterstack.com). All reports will be promptly addressed, and you'll be credited accordingly.
+If you discover a security vulnerability in Better Auth, please report it to us at [security@better-auth.com](mailto:security@better-auth.com). We address all reports promptly, and credits will be given for validated discoveries.

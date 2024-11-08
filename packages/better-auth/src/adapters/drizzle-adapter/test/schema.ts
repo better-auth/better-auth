@@ -1,7 +1,7 @@
 import { int, text } from "drizzle-orm/sqlite-core";
 import { sqliteTable } from "drizzle-orm/sqlite-core";
 
-export var user = sqliteTable("user", {
+export const user = sqliteTable("user", {
 	id: text("id").primaryKey().default(new Date().toISOString()),
 	name: text("name"),
 	email: text("email").unique(),
@@ -12,6 +12,14 @@ export var user = sqliteTable("user", {
 		mode: "timestamp",
 	}),
 	updatedAt: int("updatedAt", {
+		mode: "timestamp",
+	}),
+});
+
+export const session = sqliteTable("session", {
+	id: text("id").primaryKey(),
+	userId: text("userId").references(() => user.id),
+	expiresAt: int("expiresAt", {
 		mode: "timestamp",
 	}),
 });

@@ -15,7 +15,7 @@ import {
 	sendVerificationEmail,
 	changeEmail,
 	signInEmail,
-	signInOAuth,
+	signInSocial,
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
@@ -84,7 +84,7 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInOAuth,
+		signInSocial,
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
@@ -172,6 +172,8 @@ export function getEndpoints<
 						headers: e.headers,
 					});
 
+					let pluginResponse: Request | undefined = undefined;
+
 					for (const hook of afterPlugins || []) {
 						const match = hook.matcher(context);
 						if (match) {
@@ -183,11 +185,14 @@ export function getEndpoints<
 							});
 							const hookRes = await hook.handler(obj);
 							if (hookRes && "response" in hookRes) {
-								response = hookRes.response as any;
+								pluginResponse = hookRes.response as any;
 							}
 						}
 					}
-					return response;
+					if (pluginResponse instanceof Response) {
+						return pluginResponse;
+					}
+					throw e;
 				}
 				throw e;
 			}
@@ -245,8 +250,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
-					if (response) {
-						return response;
+					if (response && "response" in response) {
+						return response.response;
 					}
 				}
 			}

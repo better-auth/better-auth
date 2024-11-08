@@ -29,6 +29,13 @@ interface EmailOTPOptions {
 	 * @Default false
 	 */
 	sendVerificationOnSignUp?: boolean;
+	/**
+	 * A boolean value that determines whether to prevent
+	 * automatic sign-up when the user is not registered.
+	 *
+	 * @Default false
+	 */
+	disableSignUp?: boolean;
 }
 
 export const emailOTP = (options: EmailOTPOptions) => {
@@ -161,8 +168,27 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+						if (opts.disableSignUp) {
+							throw new APIError("BAD_REQUEST", {
+								message: "User not found",
+							});
+						}
+						const newUser = await ctx.context.internalAdapter.createUser({
+							email,
+							emailVerified: true,
+							name: email,
+						});
+						const session = await ctx.context.internalAdapter.createSession(
+							newUser.id,
+							ctx.request,
+						);
+						await setSessionCookie(ctx, {
+							session,
+							user: newUser,
+						});
+						return ctx.json({
+							user: newUser,
+							session,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(

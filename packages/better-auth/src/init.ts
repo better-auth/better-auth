@@ -4,7 +4,7 @@ import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "std-env";
+import { env, isProduction } from "./utils/env";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -23,6 +23,7 @@ import { createLogger, logger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { checkPassword } from "./utils/password";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -112,6 +113,7 @@ export const init = async (options: BetterAuthOptions) => {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
 			},
+			checkPassword,
 		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
@@ -156,6 +158,7 @@ export type AuthContext = {
 			minPasswordLength: number;
 			maxPasswordLength: number;
 		};
+		checkPassword: typeof checkPassword;
 	};
 	tables: ReturnType<typeof getAuthTables>;
 };

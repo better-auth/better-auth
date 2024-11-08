@@ -4,7 +4,6 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { logger } from "../../utils/logger";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
@@ -15,7 +14,6 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 } from "../../oauth2";
-import { compareHash } from "../../crypto/hash";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -201,23 +199,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const callbackURL = ctx.body.callbackURL?.startsWith("http")
 						? ctx.body.callbackURL
 						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
-					const state = await generateState(
-						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
-					);
-					const cookie = ctx.context.authCookies;
-					await ctx.setSignedCookie(
-						cookie.state.name,
-						state.hash,
-						ctx.context.secret,
-						cookie.state.options,
-					);
-					const codeVerifier = generateCodeVerifier();
-					await ctx.setSignedCookie(
-						cookie.pkCodeVerifier.name,
-						codeVerifier,
-						ctx.context.secret,
-						cookie.pkCodeVerifier.options,
-					);
+					const { state, codeVerifier } = await generateState(ctx);
+
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -226,10 +209,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
-						state: state.raw,
-						codeVerifier: codeVerifier,
+						state,
+						codeVerifier: pkce ? codeVerifier : undefined,
 						scopes: scopes || [],
-						disablePkce: !pkce,
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -247,8 +229,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return ctx.json({
 						url: authUrl.toString(),
-						state: state,
-						codeVerifier,
 						redirect: true,
 					});
 				},
@@ -265,12 +245,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
-						const parsedState = parseState(ctx.query.state);
-						const callbackURL =
-							parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
-						ctx.context.logger.error(ctx.query.error, ctx.params.providerId);
 						throw ctx.redirect(
-							`${callbackURL}?error=${ctx.query.error || "oAuth_code_missing"}`,
+							`${ctx.context.baseURL}?error=${
+								ctx.query.error || "oAuth_code_missing"
+							}`,
 						);
 					}
 					const provider = options.config.find(
@@ -282,39 +260,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: `No config found for provider ${ctx.params.providerId}`,
 						});
 					}
-
-					const codeVerifier = await ctx.getSignedCookie(
-						ctx.context.authCookies.pkCodeVerifier.name,
-						ctx.context.secret,
-					);
-
 					let tokens: OAuth2Tokens | undefined = undefined;
-					const parsedState = parseState(ctx.query.state);
-					if (!parsedState.success) {
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=invalid_state`,
-						);
-					}
-					const state = ctx.query.state;
-					const {
-						data: { callbackURL, currentURL },
-					} = parsedState;
+					const parsedState = await parseState(ctx);
+
+					const { callbackURL, codeVerifier, errorURL } = parsedState;
 					const code = ctx.query.code;
-					const errorURL =
-						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
-					const storedState = await ctx.getSignedCookie(
-						ctx.context.authCookies.state.name,
-						ctx.context.secret,
-					);
-					if (!storedState) {
-						logger.error("No stored state found");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
-					const isValidState = await compareHash(state, storedState);
-					if (!isValidState) {
-						logger.error("OAuth code mismatch");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
+
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
 					if (provider.discoveryUrl) {
@@ -406,7 +357,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						) {
 							let url: URL;
 							try {
-								url = new URL(errorURL);
+								url = new URL(errorURL!);
 								url.searchParams.set("error", "account_not_linked");
 							} catch (e) {
 								throw ctx.redirect(`${errorURL}?error=account_not_linked`);
@@ -452,7 +403,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								expiresAt: tokens.accessTokenExpiresAt,
 							});
 						} catch (e) {
-							const url = new URL(errorURL);
+							const url = new URL(errorURL!);
 							url.searchParams.set("error", "unable_to_create_user");
 							ctx.setHeader("Location", url.toString());
 							throw ctx.redirect(url.toString());
@@ -474,7 +425,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					} catch {
 						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
 					}
-					throw ctx.redirect(callbackURL || currentURL || "");
+					throw ctx.redirect(callbackURL);
 				},
 			),
 		},

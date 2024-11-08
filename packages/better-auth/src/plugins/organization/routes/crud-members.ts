@@ -261,3 +261,37 @@ export const updateMemberRole = createAuthEndpoint(
 		return ctx.json(updatedMember);
 	},
 );
+
+export const getActiveMember = createAuthEndpoint(
+	"/organization/get-active-member",
+	{
+		method: "GET",
+		use: [orgMiddleware, orgSessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		const orgId = session.session.activeOrganizationId;
+		if (!orgId) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "No active organization found!",
+				},
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const member = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId: orgId,
+		});
+		if (!member) {
+			return ctx.json(null, {
+				status: 400,
+				body: {
+					message: "Member not found!",
+				},
+			});
+		}
+		return ctx.json(member);
+	},
+);

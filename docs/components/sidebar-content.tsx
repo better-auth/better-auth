@@ -548,6 +548,23 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Gitlab",
+				href: "/docs/authentication/gitlab",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
+						/>
+					</svg>
+				),
+			},
 		],
 	},
 	{
@@ -631,6 +648,17 @@ export const contents: Content[] = [
 				title: "Elysia",
 				icon: Icons.elysia,
 				href: "/docs/integrations/elysia",
+			},
+			{
+				group: true,
+				title: "Mobile & Desktop",
+				href: "/docs/integrations",
+				icon: LucideAArrowDown,
+			},
+			{
+				title: "Expo",
+				icon: Icons.expo,
+				href: "/docs/integrations/expo",
 			},
 		],
 	},
@@ -732,6 +760,26 @@ export const contents: Content[] = [
 			},
 
 			{
+				title: "One Tap",
+				href: "/docs/plugins/one-tap",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 14 14"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M3.254 4.361a2.861 2.861 0 1 1 5.647.651a.75.75 0 0 0 1.461.34a4.361 4.361 0 1 0-8.495 0a.75.75 0 0 0 1.461-.34a3 3 0 0 1-.074-.651m1.63 5.335V4.26a1.26 1.26 0 0 1 2.518 0v4.077h2.464a2.573 2.573 0 0 1 2.573 2.573V13a1 1 0 0 1-1 1H4.83a1 1 0 0 1-.823-.433l-.764-1.11a1.715 1.715 0 0 1 1.097-2.66l.543-.102Z"
+							clipRule="evenodd"
+						></path>
+					</svg>
+				),
+			},
+
+			{
 				title: "Authorization",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
@@ -791,6 +839,24 @@ export const contents: Content[] = [
 					</svg>
 				),
 				href: "/docs/plugins/multi-session",
+			},
+			{
+				title: "OAuth Proxy",
+				href: "/docs/plugins/oauth-proxy",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="M16 2a8 8 0 1 0 8 8a8.01 8.01 0 0 0-8-8m5.91 7h-2.438a15.3 15.3 0 0 0-.791-4.36A6.01 6.01 0 0 1 21.91 9m-5.888 6.999h-.008c-.38-.12-1.309-1.821-1.479-4.999h2.93c-.17 3.176-1.094 4.877-1.443 4.999M14.535 9c.17-3.176 1.094-4.877 1.443-4.999h.008c.38.12 1.309 1.821 1.479 4.999zM13.32 4.64A15.3 15.3 0 0 0 12.528 9H10.09a6.01 6.01 0 0 1 3.23-4.36M10.09 11h2.437a15.3 15.3 0 0 0 .792 4.36A6.01 6.01 0 0 1 10.09 11m8.59 4.36a15.3 15.3 0 0 0 .792-4.36h2.438a6.01 6.01 0 0 1-3.23 4.36M28 30H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M4 22v6h24v-6z"
+						></path>
+						<circle cx="7" cy="25" r="1" fill="currentColor"></circle>
+					</svg>
+				),
 			},
 			{
 				title: "JWT",

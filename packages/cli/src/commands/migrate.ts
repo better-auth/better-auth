@@ -34,7 +34,7 @@ export async function migrateAction(opts: any) {
 		return;
 	}
 
-	const db = await getAdapter(config, true);
+	const db = await getAdapter(config);
 
 	if (!db) {
 		logger.error(

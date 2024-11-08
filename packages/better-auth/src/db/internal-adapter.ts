@@ -2,7 +2,14 @@ import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
-import type { Account, Session, User, Verification } from "./schema";
+import {
+	parseSessionOutput,
+	parseUserOutput,
+	type Account,
+	type Session,
+	type User,
+	type Verification,
+} from "./schema";
 import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
@@ -146,7 +153,7 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request?: Request | Headers,
+			request: Request | Headers | undefined,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 		) => {
@@ -197,16 +204,18 @@ export const createInternalAdapter = (
 				const sessionStringified = await secondaryStorage.get(sessionId);
 				if (sessionStringified) {
 					const s = JSON.parse(sessionStringified);
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
 					return {
-						session: {
-							...s.session,
-							expiresAt: new Date(s.session.expiresAt),
-						},
-						user: {
-							...s.user,
-							createdAt: new Date(s.user.createdAt),
-							updatedAt: new Date(s.user.updatedAt),
-						},
+						session: parsedSession,
+						user: parsedUser,
 					} as {
 						session: Session;
 						user: User;
@@ -242,9 +251,13 @@ export const createInternalAdapter = (
 			if (!user) {
 				return null;
 			}
+			const parsedUser = parseUserOutput(
+				ctx.options,
+				convertFromDB(tables.user.fields, user)!,
+			);
 			return {
-				session,
-				user: convertFromDB(tables.user.fields, user)!,
+				session: parseSessionOutput(ctx.options, session),
+				user: parsedUser,
 			};
 		},
 		findSessions: async (sessionIds: string[]) => {
@@ -340,8 +353,12 @@ export const createInternalAdapter = (
 											user: parsedSession.user,
 										}),
 										parsedSession.session.expiresAt
-											? new Date(parsedSession.session.expiresAt).getTime()
-											: undefined,
+											? Math.floor(
+													(parsedSession.session.expiresAt.getTime() -
+														Date.now()) /
+														1000,
+												)
+											: sessionExpiration,
 									);
 								} else {
 									return null;
@@ -555,10 +572,10 @@ export const createInternalAdapter = (
 				},
 				"verification",
 			);
-			return verification;
+			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verification = await adapter.findOne<Verification>({
+			const verification = await adapter.findMany<Verification>({
 				model: tables.verification.tableName,
 				where: [
 					{
@@ -567,8 +584,24 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
+				limit: 100,
 			});
-			return convertFromDB(tables.verification.fields, verification);
+			const lastVerification = verification.pop();
+			if (verification.length > 0) {
+				await adapter.deleteMany({
+					model: tables.verification.tableName,
+					where: [
+						{
+							operator: "in",
+							field: "id",
+							value: verification.map((v) => v.id),
+						},
+					],
+				});
+			}
+			return lastVerification
+				? convertFromDB(tables.verification.fields, lastVerification)
+				: null;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({

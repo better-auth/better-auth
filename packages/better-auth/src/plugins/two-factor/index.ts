@@ -84,6 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
+							ctx.request,
 						);
 						/**
 						 * Update the session cookie with the new user data
@@ -214,7 +215,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 									trustDeviceCookieName.name,
 									`${newToken}!${response.session.id}`,
 									ctx.context.secret,
-									trustDeviceCookieName.options,
+									trustDeviceCookieName.attributes,
 								);
 								return;
 							}
@@ -224,11 +225,13 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * remove the session cookie. It's set by the sign in credential
 						 */
 						deleteSessionCookie(ctx);
-						const hash = await hs256(ctx.context.secret, response.session.id);
-						const cookieName = ctx.context.createAuthCookie(
+						await ctx.context.internalAdapter.deleteSession(
+							response.session.id,
+						);
+						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 60 * 24, // 24 hours,
+								maxAge: 60 * 10, // 10 minutes
 							},
 						);
 						/**
@@ -238,10 +241,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * the hash and set that as session.
 						 */
 						await ctx.setSignedCookie(
-							cookieName.name,
-							`${response.session.userId}!${hash}`,
+							twoFactorCookie.name,
+							response.user.id,
 							ctx.context.secret,
-							cookieName.options,
+							twoFactorCookie.attributes,
 						);
 						const res = new Response(
 							JSON.stringify({

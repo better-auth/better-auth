@@ -41,12 +41,17 @@ export function convertToDB<T extends Record<string, any>>(
 	fields: Record<string, FieldAttribute>,
 	values: T,
 ) {
-	let result: Record<string, any> = {
-		id: values.id,
-	};
+	let result: Record<string, any> = values.id
+		? {
+				id: values.id,
+			}
+		: {};
 	for (const key in fields) {
 		const field = fields[key];
 		const value = values[key];
+		if (value === undefined) {
+			continue;
+		}
 		result[field.fieldName || key] = value;
 	}
 	return result as T;

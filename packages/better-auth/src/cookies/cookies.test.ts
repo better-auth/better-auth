@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import { getCookies, type BetterAuthOptions } from "../index";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -49,12 +50,10 @@ describe("cookies", async () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-					console.log(setCookie, context);
 					expect(setCookie).toContain("Secure");
 				},
 			},
 		);
-		console.log(res);
 	});
 
 	it("should use secure cookies when the base url is https", async () => {
@@ -97,7 +96,7 @@ describe("crossSubdomainCookies", () => {
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
 					expect(setCookie).toContain("Domain=example.com");
-					expect(setCookie).toContain("SameSite=None");
+					expect(setCookie).toContain("SameSite=Lax");
 				},
 			},
 		);
@@ -125,5 +124,29 @@ describe("crossSubdomainCookies", () => {
 				},
 			},
 		);
+	});
+});
+
+describe("cookie configuration", () => {
+	it("should return correct cookie options based on configuration", async () => {
+		const options = {
+			baseURL: "https://example.com",
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				useSecureCookies: true,
+				crossSubDomainCookies: {
+					enabled: true,
+					domain: "example.com",
+				},
+				cookiePrefix: "test-prefix",
+			},
+		} satisfies BetterAuthOptions;
+
+		const cookies = getCookies(options);
+
+		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
+		expect(cookies.sessionData.options.sameSite).toBe("lax");
+		expect(cookies.sessionData.options.domain).toBe("example.com");
 	});
 });

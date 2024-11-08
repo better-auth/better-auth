@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../call";
 import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { sessionMiddleware } from "./session";
 
 export const listUserAccounts = createAuthEndpoint(
@@ -17,7 +16,14 @@ export const listUserAccounts = createAuthEndpoint(
 		const accounts = await c.context.internalAdapter.findAccounts(
 			session.user.id,
 		);
-		return c.json(accounts);
+		return c.json(
+			accounts.map((a) => {
+				return {
+					id: a.id,
+					provider: a.providerId,
+				};
+			}),
+		);
 	},
 );
 
@@ -74,44 +80,18 @@ export const linkSocialAccount = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const cookie = c.context.authCookies;
-		const currentURL = c.query?.currentURL
-			? new URL(c.query?.currentURL)
-			: null;
-
-		const callbackURL = c.body.callbackURL?.startsWith("http")
-			? c.body.callbackURL
-			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
-
-		const state = await generateState(
-			callbackURL || currentURL?.origin || c.context.options.baseURL,
-			{
-				email: session.user.email,
-				userId: session.user.id,
-			},
-		);
-		await c.setSignedCookie(
-			cookie.state.name,
-			state.hash,
-			c.context.secret,
-			cookie.state.options,
-		);
-		const codeVerifier = generateCodeVerifier();
-		await c.setSignedCookie(
-			cookie.pkCodeVerifier.name,
-			codeVerifier,
-			c.context.secret,
-			cookie.pkCodeVerifier.options,
-		);
+		const state = await generateState(c, {
+			userId: session.user.id,
+			email: session.user.email,
+		});
 		const url = await provider.createAuthorizationURL({
-			state: state.raw,
-			codeVerifier,
+			state: state.state,
+			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
-			state: state,
-			codeVerifier,
 			redirect: true,
 		});
 	},

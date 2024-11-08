@@ -24,7 +24,6 @@ export function TwoFactorComponent() {
 		if (otp().length === 6) {
 			twoFactorActions.verifyTotp({
 				code: otp(),
-				callbackURL: "/dashboard",
 				fetchOptions: {
 					onError(context) {
 						if (context.error.status === 429) {

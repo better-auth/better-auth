@@ -82,8 +82,11 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const getTOTPURI = createAuthEndpoint(
 		"/two-factor/get-totp-uri",
 		{
-			method: "GET",
+			method: "POST",
 			use: [sessionMiddleware],
+			body: z.object({
+				password: z.string(),
+			}),
 		},
 		async (ctx) => {
 			if (!options) {
@@ -109,6 +112,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 					message: "totp isn't enabled",
 				});
 			}
+			await ctx.context.password.checkPassword(user.id, ctx);
 			return {
 				totpURI: createTOTPKeyURI(
 					options?.issuer || "BetterAuth",
@@ -174,6 +178,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 				);
 				const newSession = await ctx.context.internalAdapter.createSession(
 					user.id,
+					ctx.request,
 				);
 				await setSessionCookie(ctx, {
 					session: newSession,

@@ -17,7 +17,7 @@ import {
 	type Role,
 	defaultRoles,
 	type defaultStatements,
-} from "./access";
+} from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -29,6 +29,7 @@ import {
 } from "./routes/crud-invites";
 import {
 	addMember,
+	getActiveMember,
 	removeMember,
 	updateMemberRole,
 } from "./routes/crud-members";
@@ -181,6 +182,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		addMember,
 		removeMember,
 		updateMemberRole,
+		getActiveMember,
 	};
 
 	const roles = {
@@ -373,7 +375,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image: string | undefined;
 							};
 						}
 					>[];

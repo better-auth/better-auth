@@ -3,8 +3,6 @@ title: Hono Integration
 description: Hono Integration Guide
 ---
 
-This integration guide is assuming you are using Hono with node server.
-
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Mount the handler
@@ -106,4 +104,46 @@ app.get("/session", async (c) => {
 	  user
 	});
 });
+```
+
+### Cross-Domain Cookies
+
+By default, all Better Auth cookies are set with `SameSite=Lax`. If you need to use cookies across different domains, you’ll need to set `SameSite=None` and `Secure=true`. However, we recommend using subdomains whenever possible, as this allows you to keep `SameSite=Lax`. To enable cross-subdomain cookies, simply turn on `crossSubDomainCookies` in your auth config.
+
+```ts title="auth.ts"
+export const auth = createAuth({
+  advanced: {
+    crossSubDomainCookies: {
+      enabled: true
+    }
+  }
+})
+```
+
+If you still need to set `SameSite=None` and `Secure=true`, you can adjust these attributes globally through `cookieOptions` in the `createAuth` configuration.
+
+```ts title="auth.ts"
+export const auth = createAuth({
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: "none",
+      secure: true
+    }
+  }
+})
+```
+
+You can also customize cookie attributes individually by setting them within `cookies` in your auth config.
+
+```ts title="auth.ts"
+export const auth = createAuth({
+  advanced: {
+    cookies: {
+      sessionToken: {
+        sameSite: "none",
+        secure: true
+      }
+    }
+  }
+})
 ```

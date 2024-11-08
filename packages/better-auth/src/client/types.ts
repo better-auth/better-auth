@@ -20,7 +20,7 @@ export type AtomListener = {
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
-interface Store {
+export interface Store {
 	notify: (signal: string) => void;
 	listen: (signal: string, listener: () => void) => void;
 	atoms: Record<string, WritableAtom<any>>;
@@ -91,7 +91,7 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 >
 	? UnionToIntersection<
 			Plugin extends BetterAuthClientPlugin
-				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
+				? Plugin["getActions"] extends (...args: any) => infer Actions
 					? Actions
 					: {}
 				: {}

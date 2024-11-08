@@ -19,4 +19,5 @@ describe("adapter test", async () => {
 
 async function clearDb() {
 	await db.user.deleteMany();
+	await db.session.deleteMany();
 }

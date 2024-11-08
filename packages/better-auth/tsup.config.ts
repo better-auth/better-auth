@@ -1,4 +1,6 @@
+import * as fs from "fs";
 import { defineConfig } from "tsup";
+
 export default defineConfig((env) => {
 	return {
 		entry: {
@@ -19,18 +21,18 @@ export default defineConfig((env) => {
 			svelte: "./src/client/svelte.ts",
 			solid: "./src/client/solid.ts",
 			plugins: "./src/plugins/index.ts",
+			"plugins/access": "./src/plugins/access/index.ts",
 			api: "./src/api/index.ts",
 			"client/plugins": "./src/client/plugins/index.ts",
 			"svelte-kit": "./src/integrations/svelte-kit.ts",
-			access: "./src/plugins/organization/access/index.ts",
 			"solid-start": "./src/integrations/solid-start.ts",
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 		},
 		format: ["esm", "cjs"],
-		minify: true,
-		splitting: true,
 		bundle: true,
+		splitting: false,
+		cjsInterop: true,
 		skipNodeModulesBundle: true,
 	};
 });

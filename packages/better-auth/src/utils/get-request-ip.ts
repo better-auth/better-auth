@@ -1,4 +1,4 @@
-import { isTest } from "std-env";
+import { isTest } from "../utils/env";
 
 export function getIp(req: Request | Headers): string | null {
 	const testIP = "127.0.0.1";

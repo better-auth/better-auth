@@ -1,11 +1,13 @@
 import { betterAuth } from "better-auth";
 import {
 	bearer,
+	admin,
+	multiSession,
 	organization,
 	passkey,
 	twoFactor,
-	admin,
-	multiSession,
+	oneTap,
+	oAuthProxy,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -21,6 +23,7 @@ const libsql = new LibsqlDialect({
 });
 
 export const auth = betterAuth({
+	appName: "Better Auth Demo",
 	database: {
 		dialect: libsql,
 		type: "sqlite",
@@ -63,7 +66,7 @@ export const auth = betterAuth({
 			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
 		},
 		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
+			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
 		},
 		discord: {
@@ -120,5 +123,7 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 		multiSession(),
+		oneTap(),
+		oAuthProxy(),
 	],
 });

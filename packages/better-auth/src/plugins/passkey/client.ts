@@ -18,9 +18,9 @@ import { atom } from "nanostores";
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
 	{
-		_listPasskeys,
+		$listPasskeys,
 	}: {
-		_listPasskeys: ReturnType<typeof atom<any>>;
+		$listPasskeys: ReturnType<typeof atom<any>>;
 	},
 ) => {
 	const signInPasskey = async (
@@ -63,7 +63,14 @@ export const getPasskeyActions = (
 				return verified;
 			}
 		} catch (e) {
-			console.log(e);
+			return {
+				data: null,
+				error: {
+					message: "auth cancelled",
+					status: 400,
+					statusText: "BAD_REQUEST",
+				},
+			};
 		}
 	};
 
@@ -103,7 +110,7 @@ export const getPasskeyActions = (
 			if (!verified.data) {
 				return verified;
 			}
-			_listPasskeys.set(Math.random());
+			$listPasskeys.set(Math.random());
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -169,17 +176,17 @@ export const getPasskeyActions = (
 };
 
 export const passkeyClient = () => {
-	const _listPasskeys = atom<any>();
+	const $listPasskeys = atom<any>();
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
 		getActions: ($fetch) =>
 			getPasskeyActions($fetch, {
-				_listPasskeys,
+				$listPasskeys,
 			}),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
-				_listPasskeys,
+				$listPasskeys,
 				"/passkey/list-user-passkeys",
 				$fetch,
 				{
@@ -188,7 +195,7 @@ export const passkeyClient = () => {
 			);
 			return {
 				listPasskeys,
-				_listPasskeys,
+				$listPasskeys,
 			};
 		},
 		pathMethods: {

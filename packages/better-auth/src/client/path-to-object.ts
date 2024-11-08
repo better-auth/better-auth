@@ -30,41 +30,49 @@ export type PathToObject<
 		? { [K in CamelCase<Segment>]: Fn }
 		: never;
 
-type InferSignUpEmailCtx<ClientOpts extends ClientOptions> = {
+type InferSignUpEmailCtx<
+	ClientOpts extends ClientOptions,
+	FetchOptions extends BetterFetchOption,
+> = {
 	email: string;
 	name: string;
 	password: string;
 	image?: string;
 	callbackURL?: string;
-	fetchOptions?: BetterFetchOption<any, any, any>;
+	fetchOptions?: FetchOptions;
 } & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
-type InferUserUpdateCtx<ClientOpts extends ClientOptions> = {
+type InferUserUpdateCtx<
+	ClientOpts extends ClientOptions,
+	FetchOptions extends BetterFetchOption,
+> = {
 	image?: string;
 	name?: string;
-	fetchOptions?: BetterFetchOption<any, any, any>;
+	fetchOptions?: FetchOptions;
 } & Partial<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
-type InferCtx<C extends Context<any, any>> = C["body"] extends Record<
-	string,
-	any
->
+type InferCtx<
+	C extends Context<any, any>,
+	FetchOptions extends BetterFetchOption,
+> = C["body"] extends Record<string, any>
 	? C["body"] & {
 			fetchOptions?: BetterFetchOption<undefined, C["query"], C["params"]>;
 		}
 	: C["query"] extends Record<string, any>
 		? {
 				query: C["query"];
-				fetchOptions?: Omit<
-					BetterFetchOption<C["body"], C["query"], C["params"]>,
-					"query"
-				>;
+				fetchOptions?: FetchOptions;
 			}
-		: {
-				fetchOptions?: BetterFetchOption<C["body"], C["query"], C["params"]>;
-			};
+		: C["query"] extends Record<string, any> | undefined
+			? {
+					query?: C["query"];
+					fetchOptions?: FetchOptions;
+				}
+			: {
+					fetchOptions?: FetchOptions;
+				};
 
 type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -102,26 +110,42 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 					T["path"],
 					T extends (ctx: infer C) => infer R
 						? C extends Context<any, any>
-							? (
-									...data: HasRequiredKeys<InferCtx<C>> extends true
+							? <
+									FetchOptions extends BetterFetchOption<
+										C["body"],
+										C["query"],
+										C["params"]
+									>,
+								>(
+									...data: HasRequiredKeys<
+										InferCtx<C, FetchOptions>
+									> extends true
 										? [
 												Prettify<
 													T["path"] extends `/sign-up/email`
-														? InferSignUpEmailCtx<COpts>
-														: InferCtx<C>
+														? InferSignUpEmailCtx<COpts, FetchOptions>
+														: InferCtx<C, FetchOptions>
 												>,
-												BetterFetchOption<C["body"], C["query"], C["params"]>?,
+												FetchOptions?,
 											]
 										: [
 												Prettify<
 													T["path"] extends `/update-user`
-														? InferUserUpdateCtx<COpts>
-														: InferCtx<C>
+														? InferUserUpdateCtx<COpts, FetchOptions>
+														: InferCtx<C, FetchOptions>
 												>?,
-												BetterFetchOption<C["body"], C["query"], C["params"]>?,
+												FetchOptions?,
 											]
 								) => Promise<
-									BetterFetchResponse<InferReturn<Awaited<R>, COpts>>
+									BetterFetchResponse<
+										InferReturn<Awaited<R>, COpts>,
+										unknown,
+										FetchOptions["throw"] extends true
+											? true
+											: COpts["fetchOptions"] extends { throw: true }
+												? true
+												: false
+									>
 								>
 							: never
 						: never

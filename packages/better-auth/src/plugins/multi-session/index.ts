@@ -5,11 +5,7 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import {
-	deleteSessionCookie,
-	parseCookies,
-	parseSetCookieHeader,
-} from "../../cookies";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
