@@ -132,7 +132,7 @@ export const backupCode2fa = (
 						ctx.context.secret,
 					);
 					if (!validate.status) {
-						throw new APIError("BAD_REQUEST", {
+						throw new APIError("UNAUTHORIZED", {
 							message: "Invalid backup code",
 						});
 					}
