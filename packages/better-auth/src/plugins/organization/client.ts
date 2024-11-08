@@ -56,9 +56,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				// setActive(orgId: string | null) {
-				// 	activeOrgId.set(orgId);
-				// },
 				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
@@ -101,9 +98,14 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						invitations: Invitation[];
 					}
 				>
-			>([$activeOrgSignal], "/organization/get-full", $fetch, () => ({
-				method: "GET",
-			}));
+			>(
+				[$activeOrgSignal],
+				"/organization/get-full-organization",
+				$fetch,
+				() => ({
+					method: "GET",
+				}),
+			);
 
 			const activeMember = useAuthQuery<Member>(
 				[$activeMemberSignal],
