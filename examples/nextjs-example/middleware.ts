@@ -1,19 +1,25 @@
-import { authMiddleware } from "better-auth/next-js";
-import { NextResponse } from "next/server";
+import { betterFetch } from "@better-fetch/fetch";
+import { NextRequest, NextResponse } from "next/server";
+import type { Session } from "./lib/auth-types";
 
-export default authMiddleware({
-	customRedirect: async (session, request) => {
-		const baseURL = request.nextUrl.origin;
-		if (request.nextUrl.pathname === "/sign-in" && session) {
-			return NextResponse.redirect(new URL("/dashboard", baseURL));
-		}
-		if (request.nextUrl.pathname === "/dashboard" && !session) {
-			return NextResponse.redirect(new URL("/sign-in", baseURL));
-		}
-		return NextResponse.next();
-	},
-});
+export async function middleware(request: NextRequest) {
+	const { data: session } = await betterFetch<Session>(
+		"/api/auth/get-session",
+		{
+			baseURL: request.nextUrl.origin,
+			headers: {
+				//get the cookie from the request
+				cookie: request.headers.get("cookie") || "",
+			},
+		},
+	);
+
+	if (!session) {
+		return NextResponse.redirect(new URL("/", request.url));
+	}
+	return NextResponse.next();
+}
 
 export const config = {
-	matcher: ["/dashboard", "/sign-in"],
+	matcher: ["/dashboard"],
 };

@@ -179,7 +179,7 @@ function getDefaultSpecialRules() {
 				return path.startsWith("/sign-in") || path.startsWith("/sign-up");
 			},
 			window: 10,
-			max: 7,
+			max: 3,
 		},
 	];
 	return specialRules;

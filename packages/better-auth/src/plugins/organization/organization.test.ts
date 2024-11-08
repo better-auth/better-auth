@@ -70,7 +70,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow activating organization and set session", async () => {
-		const organization = await client.organization.activate({
+		const organization = await client.organization.setActive({
 			orgId,
 			fetchOptions: {
 				headers,
@@ -78,7 +78,7 @@ describe("organization", async (it) => {
 		});
 
 		expect(organization.data?.id).toBe(orgId);
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -137,7 +137,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invitation.data?.invitation.status).toBe("accepted");
-		const invitedUserSession = await client.session({
+		const invitedUserSession = await client.getSession({
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -145,6 +145,24 @@ describe("organization", async (it) => {
 		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
 			orgId,
 		);
+	});
+
+	it("should allow getting a member", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.organization.setActive({
+			orgId,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const member = await client.organization.getActiveMember({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(member.data).toMatchObject({
+			role: "owner",
+		});
 	});
 
 	it("should allow updating member", async () => {
@@ -225,7 +243,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should validate permissions", async () => {
-		await client.organization.activate({
+		await client.organization.setActive({
 			orgId,
 			fetchOptions: {
 				headers,

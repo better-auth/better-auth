@@ -5,6 +5,7 @@ exports[`init > should match config 1`] = `
   "adapter": {
     "create": [Function],
     "delete": [Function],
+    "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
@@ -12,16 +13,6 @@ exports[`init > should match config 1`] = `
   },
   "appName": "Better Auth",
   "authCookies": {
-    "csrfToken": {
-      "name": "better-auth.csrf_token",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 604800,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
     "dontRememberToken": {
       "name": "better-auth.dont_remember",
       "options": {
@@ -31,21 +22,11 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
-    "nonce": {
-      "name": "better-auth.nonce",
+    "sessionData": {
+      "name": "better-auth.session_data",
       "options": {
         "httpOnly": true,
-        "maxAge": 900,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "pkCodeVerifier": {
-      "name": "better-auth.pk_code_verifier",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
+        "maxAge": 300,
         "path": "/",
         "sameSite": "lax",
         "secure": false,
@@ -56,16 +37,6 @@ exports[`init > should match config 1`] = `
       "options": {
         "httpOnly": true,
         "maxAge": 604800,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "state": {
-      "name": "better-auth.state",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
         "path": "/",
         "sameSite": "lax",
         "secure": false,
@@ -87,6 +58,7 @@ exports[`init > should match config 1`] = `
     "deleteVerificationValue": [Function],
     "findAccounts": [Function],
     "findSession": [Function],
+    "findSessions": [Function],
     "findUserByEmail": [Function],
     "findUserById": [Function],
     "findVerificationValue": [Function],
@@ -128,6 +100,7 @@ exports[`init > should match config 1`] = `
     "secret": "better-auth-secret-123456789",
   },
   "password": {
+    "checkPassword": [Function],
     "config": {
       "maxPasswordLength": 128,
       "minPasswordLength": 8,
@@ -136,10 +109,10 @@ exports[`init > should match config 1`] = `
     "verify": [Function],
   },
   "rateLimit": {
-    "enabled": true,
+    "enabled": false,
     "max": 100,
     "storage": "memory",
-    "window": 60,
+    "window": 10,
   },
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",

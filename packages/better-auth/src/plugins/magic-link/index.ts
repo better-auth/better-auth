@@ -3,7 +3,6 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
-import { redirectURLMiddleware } from "../../api/middlewares/redirect";
 import { alphabet, generateRandomString } from "../../crypto";
 
 interface MagicLinkOptions {
@@ -59,13 +58,24 @@ export const magicLink = (options: MagicLinkOptions) => {
 						email: z.string().email(),
 						callbackURL: z.string().optional(),
 					}),
-					use: [redirectURLMiddleware],
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
+
 					const verificationToken = options?.generateToken 
   					? await options.generateToken(email)
   					: generateRandomString(32, alphabet("a-z", "A-Z"));
+          
+					if (options.disableSignUp) {
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+
+						if (!user) {
+							throw new APIError("BAD_REQUEST", {
+								message: "User not found",
+							});
+						}
+					}
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
 						value: email,
@@ -152,7 +162,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!session) {
 						throw ctx.redirect(`${toRedirectTo}?error=SESSION_NOT_CREATED`);
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: user?.user!,
+					});
 					if (!callbackURL) {
 						return ctx.json({
 							status: true,

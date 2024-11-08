@@ -20,11 +20,8 @@ export const twoFactorClient = (
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
 		atomListeners: [
 			{
-				matcher: (path) =>
-					path === "/two-factor/enable" ||
-					path === "/two-factor/send-otp" ||
-					path === "/two-factor/disable",
-				signal: "_sessionSignal",
+				matcher: (path) => path.startsWith("/two-factor/"),
+				signal: "$sessionSignal",
 			},
 		],
 		pathMethods: {

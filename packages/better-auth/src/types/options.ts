@@ -1,13 +1,14 @@
-import type { Dialect, Kysely, PostgresPool } from "kysely";
+import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { Adapter, SecondaryStorage } from "./adapter";
-import type { BetterSqlite3Database, MysqlPool } from "./database";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
+import type { CookieOptions } from "better-call";
+import type { Database } from "better-sqlite3";
 
 export interface BetterAuthOptions {
 	/**
@@ -65,8 +66,9 @@ export interface BetterAuthOptions {
 	database:
 		| PostgresPool
 		| MysqlPool
-		| BetterSqlite3Database
+		| Database
 		| Dialect
+		| Adapter
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -80,7 +82,6 @@ export interface BetterAuthOptions {
 				 */
 				generateId?: ((size?: number) => string) | false;
 		  }
-		| Adapter
 		| {
 				/**
 				 * Kysely instance
@@ -209,9 +210,42 @@ export interface BetterAuthOptions {
 		additionalFields?: {
 			[key: string]: FieldAttribute;
 		};
+		/**
+		 * Changing email configuration
+		 */
+		changeEmail?: {
+			/**
+			 * Enable changing email
+			 * @default false
+			 */
+			enabled: boolean;
+			/**
+			 * Send a verification email when the user changes their email.
+			 */
+			sendChangeEmailVerification?: (
+				user: User,
+				newEmail: string,
+				url: string,
+				token: string,
+			) => Promise<void>;
+		};
 	};
 	session?: {
+		/**
+		 * The model name for the session.
+		 *
+		 * @default "session"
+		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  userId: "user_id"
+		 * }
+		 */
 		fields?: Partial<Record<keyof Session, string>>;
 		/**
 		 * Expiration time for the session token. The value
@@ -244,6 +278,21 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		storeSessionInDatabase?: boolean;
+		/**
+		 * Enable caching session in cookie
+		 */
+		cookieCache?: {
+			/**
+			 * max age of the cookie
+			 * @default 5 minutes (5 * 60)
+			 */
+			maxAge?: number;
+			/**
+			 * Enable caching session in cookie
+			 * @default false
+			 */
+			enabled?: boolean;
+		};
 	};
 	account?: {
 		modelName?: string;
@@ -285,9 +334,15 @@ export interface BetterAuthOptions {
 		 * Default window to use for rate limiting. The value
 		 * should be in seconds.
 		 *
-		 * @default 60 sec
+		 * @default 10 seconds
 		 */
 		window?: number;
+		/**
+		 * The default maximum number of requests allowed within the window.
+		 *
+		 * @default 100 requests
+		 */
+		max?: number;
 		/**
 		 * Custom rate limit rules to apply to
 		 * specific paths.
@@ -304,12 +359,6 @@ export interface BetterAuthOptions {
 				max: number;
 			};
 		};
-		/**
-		 * The default maximum number of requests allowed within the window.
-		 *
-		 * @default 100
-		 */
-		max?: number;
 		/**
 		 * Storage configuration
 		 *
@@ -353,7 +402,9 @@ export interface BetterAuthOptions {
 		 */
 		useSecureCookies?: boolean;
 		/**
-		 * Disable CSRF check
+		 * Disable trusted origins check
+		 *
+		 * ⚠︎ This is a security risk and it may expose your application to CSRF attacks
 		 */
 		disableCSRFCheck?: boolean;
 		/**
@@ -376,6 +427,33 @@ export interface BetterAuthOptions {
 			 */
 			domain?: string;
 		};
+		/*
+		 * Allows you to change default cookie names and attributes
+		 *
+		 * default cookie names:
+		 * - "session_token"
+		 * - "session_data"
+		 * - "dont_remember"
+		 *
+		 * plugins can also add additional cookies
+		 */
+		cookies?: {
+			[key: string]: {
+				name?: string;
+				attributes?: CookieOptions;
+			};
+		};
+		defaultCookieAttributes?: CookieOptions;
+		/**
+		 * Prefix for cookies. If a cookie name is provided
+		 * in cookies config, this will be overridden.
+		 *
+		 * @default
+		 * ```txt
+		 * "appName" -> which defaults to "better-auth"
+		 * ```
+		 */
+		cookiePrefix?: string;
 	};
 	logger?: {
 		/**

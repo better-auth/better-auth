@@ -84,7 +84,7 @@ await client.signIn.email({
 
 ### Hooks
 
-on top of normal methods, the client provides hooks to easily access differnt reactive data. Every hook is avaliable in the root object of the client and they all start with `use`.
+On top of normal methods, the client provides hooks to easily access different reactive data. Every hook is avaliable in the root object of the client and they all start with `use`.
 
 
 **Example: useSession**
@@ -199,7 +199,7 @@ The client uses a libray called [better fetch](https://better-fetch.vercel.app) 
 
 Better fetch is a wrapper around the native fetch API that provides a more convenient way to make requests. It's created by the same team behind Better Auth and is designed to work seamlessly with it.
 
-You can pass any defualt fetch options to the client by passing `fetchOptions` object to the `createAuthClient`.
+You can pass any default fetch options to the client by passing `fetchOptions` object to the `createAuthClient`.
 
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/client"

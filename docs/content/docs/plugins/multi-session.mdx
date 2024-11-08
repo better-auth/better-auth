@@ -1,0 +1,106 @@
+---
+title: Multi Session
+description: Learn how to use multi-session plugin in Better Auth.
+---
+
+The multi-session plugin allows users to maintain multiple active sessions across different accounts in the same browser. This plugin is useful for applications that require users to switch between multiple accounts without logging out.
+
+## Installation
+
+<Steps>
+<Step>
+### Add the plugin to your **auth** config
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { multiSession } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [ // [!code highlight]
+        multiSession(), // [!code highlight]
+    ] // [!code highlight]
+})
+```
+</Step>
+<Step>
+        ### Add the client Plugin
+
+        Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
+
+        ```ts title="client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { multiSessionClient } from "better-auth/client/plugins"
+
+        const client = createAuthClient({
+            plugins: [
+                multiSessionClient()
+            ]
+        })
+        ```
+        </Step>
+</Steps>    
+
+
+## Usage
+
+Whenever a user logs in, the plugin will add additional cookie to the browser. This cookie will be used to maintain multiple sessions across different accounts. 
+
+
+### List all device sessions
+
+To list all active sessions for the current user, you can call the `listDeviceSessions` method.
+
+```ts
+await authClient.multiSession.listDeviceSessions()
+```
+
+on the server you can call `listDeviceSessions` method.
+
+```ts
+await auth.api.listDeviceSessions()
+```
+
+### Set active session
+
+To set the active session, you can call the `setActive` method.
+
+```ts
+await authClient.multiSession.setActive({
+    sessionId: "session-id"
+})
+```
+
+### Revoke a session
+
+To revoke a session, you can call the `revoke` method.
+
+```ts
+await authClient.multiSession.revoke({
+    sessionId: "session-id"
+})
+```
+
+### Revoke all sessions
+
+To revoke all sessions, you can call the existing `signOut` method.
+
+```ts
+await authClient.signOut()
+```
+
+## Options
+
+### Max Sessions
+
+You can specify the maximum number of sessions a user can have by passing the `maximumSessions` option to the plugin. By default, the plugin allows 5 sessions per device.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        multiSession({
+            maximumSessions: 3
+        })
+    ]
+})
+```

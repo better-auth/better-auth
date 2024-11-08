@@ -3,156 +3,109 @@ import { TimeSpan } from "oslo";
 import type { BetterAuthOptions } from "../types/options";
 import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
-
-export function getCookies(options: BetterAuthOptions) {
-	const secure =
-		options.advanced?.useSecureCookies !== undefined
-			? options.advanced?.useSecureCookies
-			: (options.baseURL ? options.baseURL.startsWith("https://") : false) ||
-				process.env.NODE_ENV === "production";
-	const secureCookiePrefix = secure ? "__Secure-" : "";
-	const cookiePrefix = "better-auth";
-	const sessionMaxAge =
-		options.session?.expiresIn || new TimeSpan(7, "d").seconds();
-	const crossSubdomainEnabled =
-		!!options.advanced?.crossSubDomainCookies?.enabled;
-
-	const domain = crossSubdomainEnabled
-		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
-		: undefined;
-
-	if (crossSubdomainEnabled && !domain) {
-		throw new BetterAuthError(
-			"baseURL is required when crossSubdomainCookies are enabled",
-		);
-	}
-
-	const sameSite = crossSubdomainEnabled ? "none" : "lax";
-	return {
-		sessionToken: {
-			name: `${secureCookiePrefix}${cookiePrefix}.session_token`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: sessionMaxAge,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
-		csrfToken: {
-			name: `${secureCookiePrefix}${cookiePrefix}.csrf_token`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 60 * 24 * 7,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
-		state: {
-			name: `${secureCookiePrefix}${cookiePrefix}.state`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} satisfies CookieOptions,
-		},
-		pkCodeVerifier: {
-			name: `${secureCookiePrefix}${cookiePrefix}.pk_code_verifier`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
-		dontRememberToken: {
-			name: `${secureCookiePrefix}${cookiePrefix}.dont_remember`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				//no max age so it expires when the browser closes
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
-		nonce: {
-			name: `${secureCookiePrefix}${cookiePrefix}.nonce`,
-			options: {
-				httpOnly: true,
-				sameSite,
-				path: "/",
-				secure: !!secureCookiePrefix,
-				maxAge: 60 * 15,
-				...(crossSubdomainEnabled ? { domain } : {}),
-			} as CookieOptions,
-		},
-	};
-}
+import { isProduction } from "../utils/env";
+import type { Session, User } from "../types";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL?.startsWith("https://") ||
-				process.env.NODE_ENV === "production";
+			: options.baseURL !== undefined
+				? options.baseURL.startsWith("https://")
+					? true
+					: false
+				: isProduction;
 	const secureCookiePrefix = secure ? "__Secure-" : "";
-	const cookiePrefix = "better-auth";
+	const crossSubdomainEnabled =
+		!!options.advanced?.crossSubDomainCookies?.enabled;
+	const domain = crossSubdomainEnabled
+		? options.advanced?.crossSubDomainCookies?.domain ||
+			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+		: undefined;
+	if (crossSubdomainEnabled && !domain) {
+		throw new BetterAuthError(
+			"baseURL is required when crossSubdomainCookies are enabled",
+		);
+	}
+	function createCookie(
+		cookieName: string,
+		overrideAttributes: Partial<CookieOptions> = {},
+	) {
+		const prefix = options.advanced?.cookiePrefix || "better-auth";
+		const name =
+			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
+			`${prefix}.${cookieName}`;
 
-	const domain =
-		options.advanced?.crossSubDomainCookies?.domain ||
-		(options.baseURL ? new URL(options.baseURL).hostname : undefined);
+		const attributes =
+			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
-	function getCookie(cookieName: string, opts?: CookieOptions) {
-		const crossSubdomainEnabled = options.advanced?.crossSubDomainCookies
-			?.enabled
-			? options.advanced.crossSubDomainCookies.additionalCookies?.includes(
-					cookieName,
-				)
-			: undefined;
 		return {
-			name:
-				process.env.NODE_ENV === "production"
-					? `${secureCookiePrefix}${cookiePrefix}.${cookieName}`
-					: `${cookiePrefix}.${cookieName}`,
-			options: {
+			name: `${secureCookiePrefix}${name}`,
+			attributes: {
 				secure: !!secureCookiePrefix,
 				sameSite: "lax",
 				path: "/",
-				maxAge: 60 * 15, // 15 minutes in seconds
-				...opts,
+				httpOnly: true,
 				...(crossSubdomainEnabled ? { domain } : {}),
+				...options.advanced?.defaultCookieAttributes,
+				...overrideAttributes,
+				...attributes,
 			} as CookieOptions,
 		};
 	}
-	return getCookie;
+	return createCookie;
 }
+
+export function getCookies(options: BetterAuthOptions) {
+	const createCookie = createCookieGetter(options);
+	const sessionMaxAge =
+		options.session?.expiresIn || new TimeSpan(7, "d").seconds();
+	const sessionToken = createCookie("session_token", {
+		maxAge: sessionMaxAge,
+	});
+	const sessionData = createCookie("session_data", {
+		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+	});
+	const dontRememberToken = createCookie("dont_remember");
+	return {
+		sessionToken: {
+			name: sessionToken.name,
+			options: sessionToken.attributes,
+		},
+		/**
+		 * This cookie is used to store the session data in the cookie
+		 * This is useful for when you want to cache the session in the cookie
+		 */
+		sessionData: {
+			name: sessionData.name,
+			options: sessionData.attributes,
+		},
+		dontRememberToken: {
+			name: dontRememberToken.name,
+			options: dontRememberToken.attributes,
+		},
+	};
+}
+
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
-	sessionToken: string,
+	session: {
+		session: Session;
+		user: User;
+	},
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
 ) {
 	const options = ctx.context.authCookies.sessionToken.options;
-	//@ts-expect-error
 	options.maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
 
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
-		sessionToken,
+		session.session.id,
 		ctx.context.secret,
 		{
 			...options,
@@ -167,10 +120,37 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cookieCache?.enabled;
+	shouldStoreSessionDataInCookie &&
+		(await ctx.setSignedCookie(
+			ctx.context.authCookies.sessionData.name,
+			JSON.stringify(session),
+			ctx.context.secret,
+			ctx.context.authCookies.sessionData.options,
+		));
+	/**
+	 * If secondary storage is enabled, store the session data in the secondary storage
+	 * This is useful if the session got updated and we want to update the session data in the
+	 * secondary storage
+	 */
+	if (ctx.context.options.secondaryStorage) {
+		await ctx.context.secondaryStorage?.set(
+			session.session.id,
+			JSON.stringify({
+				user: session.user,
+				session: session.session,
+			}),
+			session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
+		);
+	}
 }
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+		maxAge: 0,
+	});
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
@@ -205,6 +185,17 @@ export function parseSetCookieHeader(
 		cookieMap.set(name, cookieObj);
 	});
 
+	return cookieMap;
+}
+
+export function parseCookies(cookieHeader: string) {
+	const cookies = cookieHeader.split("; ");
+	const cookieMap = new Map<string, string>();
+
+	cookies.forEach((cookie) => {
+		const [name, value] = cookie.split("=");
+		cookieMap.set(name, value);
+	});
 	return cookieMap;
 }
 

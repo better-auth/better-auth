@@ -31,7 +31,8 @@ export const twitch = (options: TwitchOptions) => {
 		id: "twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.scope || scopes || ["user:read:email", "openid"];
+			const _scopes = scopes || ["user:read:email", "openid"];
+			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "twitch",
 				redirectURI,

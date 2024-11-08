@@ -20,6 +20,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
+import { env } from "../../utils/env";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -73,7 +74,7 @@ export type Passkey = {
 };
 
 export const passkey = (options?: PasskeyOptions) => {
-	const baseURL = process.env.BETTER_AUTH_URL;
+	const baseURL = env.BETTER_AUTH_URL;
 	const rpID =
 		options?.rpID ||
 		baseURL?.replace("http://", "").replace("https://", "").split(":")[0] ||
@@ -428,7 +429,18 @@ export const passkey = (options?: PasskeyOptions) => {
 								message: "Unable to create session",
 							});
 						}
-						await setSessionCookie(ctx, s.id);
+						const user = await ctx.context.internalAdapter.findUserById(
+							passkey.userId,
+						);
+						if (!user) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								message: "User not found",
+							});
+						}
+						await setSessionCookie(ctx, {
+							session: s,
+							user,
+						});
 						return ctx.json(
 							{
 								session: s,

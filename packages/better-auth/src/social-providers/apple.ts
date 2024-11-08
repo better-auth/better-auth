@@ -52,7 +52,8 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scope = options.scope || scopes || ["email", "name", "openid"];
+			const _scope = scopes || ["email", "name", "openid"];
+			options.scope && _scope.push(...options.scope);
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId

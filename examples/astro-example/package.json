@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "pnpm migrate:auth && astro dev --port 3000",
-    "migrate:auth": "pnpm better-auth migrate",
+    "migrate:auth": "pnpx @better-auth/cli migrate",
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",

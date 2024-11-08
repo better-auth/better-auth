@@ -12,6 +12,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
+import { setSessionCookie } from "../../../cookies";
 
 export type TOTPOptions = {
 	/**
@@ -81,8 +82,11 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const getTOTPURI = createAuthEndpoint(
 		"/two-factor/get-totp-uri",
 		{
-			method: "GET",
+			method: "POST",
 			use: [sessionMiddleware],
+			body: z.object({
+				password: z.string(),
+			}),
 		},
 		async (ctx) => {
 			if (!options) {
@@ -108,6 +112,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 					message: "totp isn't enabled",
 				});
 			}
+			await ctx.context.password.checkPassword(user.id, ctx);
 			return {
 				totpURI: createTOTPKeyURI(
 					options?.issuer || "BetterAuth",
@@ -147,7 +152,8 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 					},
 				],
 			});
-			if (!twoFactor || !twoFactor.enabled) {
+
+			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
 					message: "totp isn't enabled",
 				});
@@ -162,6 +168,24 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			if (!status) {
 				return ctx.context.invalid();
 			}
+
+			if (!user.twoFactorEnabled) {
+				const updatedUser = await ctx.context.internalAdapter.updateUser(
+					user.id,
+					{
+						twoFactorEnabled: true,
+					},
+				);
+				const newSession = await ctx.context.internalAdapter.createSession(
+					user.id,
+					ctx.request,
+				);
+				await setSessionCookie(ctx, {
+					session: newSession,
+					user: updatedUser,
+				});
+			}
+
 			return ctx.context.valid();
 		},
 	);

@@ -3,16 +3,11 @@ import {
 	signOut,
 	twoFactorActions,
 	useListPasskeys,
-	userActions,
 	useSession,
+	revokeSession,
+	updateUser,
 } from "@/libs/auth-client";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { UAParser } from "ua-parser-js";
 import { Image, ImageFallback, ImageRoot } from "./ui/image";
 import type { Session, User } from "better-auth/types";
@@ -109,7 +104,7 @@ export function UserCard(props: {
 									<button
 										class="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 										onClick={async () => {
-											const res = await userActions.revokeSession({
+											const res = await revokeSession({
 												id: activeSession.id,
 											});
 
@@ -216,7 +211,7 @@ function EditUserDialog(props: { user?: User }) {
 					<Button
 						onClick={async () => {
 							setIsLoading(true);
-							await userActions.update({
+							await updateUser({
 								image: image()
 									? await convertImageToBase64(image()!)
 									: undefined,

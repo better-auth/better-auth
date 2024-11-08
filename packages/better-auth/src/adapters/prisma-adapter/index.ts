@@ -1,5 +1,16 @@
 import type { Adapter, Where } from "../../types";
 
+function operatorToPrismaOperator(operator: string) {
+	switch (operator) {
+		case "starts_with":
+			return "startsWith";
+		case "ends_with":
+			return "endsWith";
+		default:
+			return operator;
+	}
+}
+
 function whereConvertor(where?: Where[]) {
 	if (!where) return {};
 	if (where.length === 1) {
@@ -7,8 +18,14 @@ function whereConvertor(where?: Where[]) {
 		if (!w) {
 			return;
 		}
+
 		return {
-			[w.field]: w.value,
+			[w.field]:
+				w.operator === "eq" || !w.operator
+					? w.value
+					: {
+							[operatorToPrismaOperator(w.operator)]: w.value,
+						},
 		};
 	}
 	const and = where.filter((w) => w.connector === "AND" || !w.connector);
@@ -19,7 +36,7 @@ function whereConvertor(where?: Where[]) {
 				w.operator === "eq" || !w.operator
 					? w.value
 					: {
-							[w.operator]: w.value,
+							[operatorToPrismaOperator(w.operator)]: w.value,
 						},
 		};
 	});
@@ -50,10 +67,7 @@ interface PrismaClient {
 
 export const prismaAdapter = (
 	prisma: any,
-	{
-		provider,
-		generateId,
-	}: {
+	options: {
 		provider:
 			| "sqlite"
 			| "cockroachdb"
@@ -73,6 +87,7 @@ export const prismaAdapter = (
 	},
 ): Adapter => {
 	const db: PrismaClient = prisma;
+	const generateId = options.generateId;
 	return {
 		id: "prisma",
 		async create(data) {
@@ -114,6 +129,7 @@ export const prismaAdapter = (
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
+
 			const whereClause = whereConvertor(where);
 
 			return await db[model].findMany({
@@ -129,8 +145,14 @@ export const prismaAdapter = (
 		},
 		async update(data) {
 			const { model, where, update } = data;
+			if (update.id) {
+				update.id = undefined;
+			}
 			const whereClause = whereConvertor(where);
-			if (where.length === 1) {
+			if (!whereClause) {
+				throw new Error("Where clause is required for update");
+			}
+			if (where.length === 1 && where[0].field === "id") {
 				return await db[model].update({
 					where: whereClause,
 					data: update,
@@ -145,7 +167,16 @@ export const prismaAdapter = (
 			const { model, where } = data;
 			const whereClause = whereConvertor(where);
 
-			return await db[model].delete({ where: whereClause });
+			return await db[model].delete({ where: whereClause }).catch((e) => {
+				//handle delete gracefully (if not found)
+			});
 		},
+		async deleteMany(data) {
+			const { model, where } = data;
+			const whereClause = whereConvertor(where);
+
+			return await db[model].deleteMany({ where: whereClause });
+		},
+		options,
 	};
 };

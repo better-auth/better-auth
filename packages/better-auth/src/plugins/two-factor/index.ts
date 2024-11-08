@@ -12,6 +12,9 @@ import type { Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
+import { createTOTPKeyURI } from "oslo/otp";
+import { TimeSpan } from "oslo";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -72,8 +75,34 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						ctx.context.secret,
 						options?.backupCodeOptions,
 					);
-					await ctx.context.internalAdapter.updateUser(user.id, {
-						twoFactorEnabled: true,
+					if (options?.skipVerificationOnEnable) {
+						const updatedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								twoFactorEnabled: true,
+							},
+						);
+						const newSession = await ctx.context.internalAdapter.createSession(
+							updatedUser.id,
+							ctx.request,
+						);
+						/**
+						 * Update the session cookie with the new user data
+						 */
+						await setSessionCookie(ctx, {
+							session: newSession,
+							user,
+						});
+					}
+					//delete existing two factor
+					await ctx.context.adapter.deleteMany({
+						model: opts.twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
 					});
 
 					await ctx.context.adapter.create({
@@ -85,7 +114,16 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							userId: user.id,
 						},
 					});
-					return ctx.json({ status: true });
+					const totpURI = createTOTPKeyURI(
+						options?.issuer || "BetterAuth",
+						user.email,
+						Buffer.from(secret),
+						{
+							digits: options?.totpOptions?.digits || 6,
+							period: new TimeSpan(options?.totpOptions?.period || 30, "s"),
+						},
+					);
+					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
 			disableTwoFactor: createAuthEndpoint(
@@ -177,7 +215,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 									trustDeviceCookieName.name,
 									`${newToken}!${response.session.id}`,
 									ctx.context.secret,
-									trustDeviceCookieName.options,
+									trustDeviceCookieName.attributes,
 								);
 								return;
 							}
@@ -186,18 +224,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
-						ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-							path: "/",
-							sameSite: "lax",
-							httpOnly: true,
-							secure: false,
-							maxAge: 0,
-						});
-						const hash = await hs256(ctx.context.secret, response.session.id);
-						const cookieName = ctx.context.createAuthCookie(
+						deleteSessionCookie(ctx);
+						await ctx.context.internalAdapter.deleteSession(
+							response.session.id,
+						);
+						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 60 * 24, // 24 hours,
+								maxAge: 60 * 10, // 10 minutes
 							},
 						);
 						/**
@@ -207,10 +241,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * the hash and set that as session.
 						 */
 						await ctx.setSignedCookie(
-							cookieName.name,
-							`${response.session.userId}!${hash}`,
+							twoFactorCookie.name,
+							response.user.id,
 							ctx.context.secret,
-							cookieName.options,
+							twoFactorCookie.attributes,
 						);
 						const res = new Response(
 							JSON.stringify({
@@ -234,6 +268,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						type: "boolean",
 						required: false,
 						defaultValue: false,
+						input: false,
 					},
 				},
 			},

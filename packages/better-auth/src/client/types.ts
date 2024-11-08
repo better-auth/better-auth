@@ -4,7 +4,7 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "../types/plugins";
-import type { Atom } from "nanostores";
+import type { Atom, WritableAtom } from "nanostores";
 import type {
 	LiteralString,
 	StripEmptyObjects,
@@ -17,8 +17,14 @@ import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
 
 export type AtomListener = {
 	matcher: (path: string) => boolean;
-	signal: "_sessionSignal" | Omit<string, "_sessionSignal">;
+	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
+
+export interface Store {
+	notify: (signal: string) => void;
+	listen: (signal: string, listener: () => void) => void;
+	atoms: Record<string, WritableAtom<any>>;
+}
 
 export interface BetterAuthClientPlugin {
 	id: LiteralString;
@@ -30,7 +36,7 @@ export interface BetterAuthClientPlugin {
 	/**
 	 * Custom actions
 	 */
-	getActions?: ($fetch: BetterFetch) => Record<string, any>;
+	getActions?: ($fetch: BetterFetch, $store: Store) => Record<string, any>;
 	/**
 	 * State atoms that'll be resolved by each framework
 	 * auth store.
@@ -57,7 +63,7 @@ export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
-	disableCSRFTokenCheck?: boolean;
+	disableDefaultFetchPlugins?: boolean;
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<
@@ -85,7 +91,7 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 >
 	? UnionToIntersection<
 			Plugin extends BetterAuthClientPlugin
-				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
+				? Plugin["getActions"] extends (...args: any) => infer Actions
 					? Actions
 					: {}
 				: {}
@@ -93,9 +99,9 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 	: {};
 /**
  * signals are just used to recall a computed value.
- * as a convention they start with "_"
+ * as a convention they start with "$"
  */
-export type IsSignal<T> = T extends `_${infer _}` ? true : false;
+export type IsSignal<T> = T extends `$${infer _}` ? true : false;
 
 export type InferPluginsFromClient<O extends ClientOptions> =
 	O["plugins"] extends Array<BetterAuthClientPlugin>

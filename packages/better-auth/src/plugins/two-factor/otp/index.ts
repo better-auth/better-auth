@@ -70,7 +70,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: "OTP isn't enabled",
 				});
 			}
 			const code = await totp.generate(Buffer.from(twoFactor.secret));
@@ -106,7 +106,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: "OTP isn't enabled",
 				});
 			}
 			const toCheckOtp = await totp.generate(Buffer.from(twoFactor.secret));

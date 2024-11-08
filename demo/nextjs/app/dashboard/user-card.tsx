@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { client, signOut, user, useSession } from "@/lib/auth-client";
+import { client, signOut, useSession } from "@/lib/auth-client";
 import { Session } from "@/lib/auth-types";
 import { MobileIcon } from "@radix-ui/react-icons";
 import {
@@ -42,10 +42,9 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Table,
 	TableBody,
@@ -63,31 +62,12 @@ export default function UserCard(props: {
 }) {
 	const router = useRouter();
 	const { data, isPending, error } = useSession();
-	const [ua, setUa] = useState<UAParser.UAParserInstance>();
-
 	const session = data || props.session;
-
-	useEffect(() => {
-		setUa(new UAParser(session?.session.userAgent));
-	}, [session?.session.userAgent]);
-
 	const [isTerminating, setIsTerminating] = useState<string>();
-
-	const { data: qr } = useQuery({
-		queryKey: ["two-factor-qr"],
-		queryFn: async () => {
-			const res = await client.twoFactor.getTotpUri();
-			if (res.error) {
-				throw res.error;
-			}
-			return res.data;
-		},
-		enabled: !!session?.user.twoFactorEnabled,
-	});
-
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
+	const [twoFactorVerifyURI, setTwoFactorVerifyURI] = useState<string>("");
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
@@ -179,7 +159,7 @@ export default function UserCard(props: {
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(session.id);
-												const res = await client.user.revokeSession({
+												const res = await client.revokeSession({
 													id: session.id,
 												});
 
@@ -231,15 +211,51 @@ export default function UserCard(props: {
 												Scan the QR code with your TOTP app
 											</DialogDescription>
 										</DialogHeader>
-										<div className="flex items-center justify-center">
-											<QRCode value={qr?.totpURI || ""} />
-										</div>
-										<div className="flex gap-2 items-center justify-center">
-											<p className="text-sm text-muted-foreground">
-												Copy URI to clipboard
-											</p>
-											<CopyButton textToCopy={qr?.totpURI || ""} />
-										</div>
+
+										{twoFactorVerifyURI ? (
+											<>
+												<div className="flex items-center justify-center">
+													<QRCode value={twoFactorVerifyURI} />
+												</div>
+												<div className="flex gap-2 items-center justify-center">
+													<p className="text-sm text-muted-foreground">
+														Copy URI to clipboard
+													</p>
+													<CopyButton textToCopy={twoFactorVerifyURI} />
+												</div>
+											</>
+										) : (
+											<div className="flex flex-col gap-2">
+												<PasswordInput
+													value={twoFaPassword}
+													onChange={(e) => setTwoFaPassword(e.target.value)}
+													placeholder="Enter Password"
+												/>
+												<Button
+													onClick={async () => {
+														if (twoFaPassword.length < 8) {
+															toast.error(
+																"Password must be at least 8 characters",
+															);
+															return;
+														}
+														await client.twoFactor.getTotpUri(
+															{
+																password: twoFaPassword,
+															},
+															{
+																onSuccess(context) {
+																	setTwoFactorVerifyURI(context.data.totpURI);
+																},
+															},
+														);
+														setTwoFaPassword("");
+													}}
+												>
+													Show QR Code
+												</Button>
+											</div>
+										)}
 									</DialogContent>
 								</Dialog>
 							)}
@@ -276,20 +292,37 @@ export default function UserCard(props: {
 												: "Enable 2FA to secure your account"}
 										</DialogDescription>
 									</DialogHeader>
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="password">Password</Label>
-										<PasswordInput
-											id="password"
-											placeholder="Password"
-											value={twoFaPassword}
-											onChange={(e) => setTwoFaPassword(e.target.value)}
-										/>
-									</div>
+
+									{twoFactorVerifyURI ? (
+										<div className="flex flex-col gap-2">
+											<div className="flex items-center justify-center">
+												<QRCode value={twoFactorVerifyURI} />
+											</div>
+											<Label htmlFor="password">
+												Scan the QR code with your TOTP app
+											</Label>
+											<Input
+												value={twoFaPassword}
+												onChange={(e) => setTwoFaPassword(e.target.value)}
+												placeholder="Enter OTP"
+											/>
+										</div>
+									) : (
+										<div className="flex flex-col gap-2">
+											<Label htmlFor="password">Password</Label>
+											<PasswordInput
+												id="password"
+												placeholder="Password"
+												value={twoFaPassword}
+												onChange={(e) => setTwoFaPassword(e.target.value)}
+											/>
+										</div>
+									)}
 									<DialogFooter>
 										<Button
 											disabled={isPendingTwoFa}
 											onClick={async () => {
-												if (twoFaPassword.length < 8) {
+												if (twoFaPassword.length < 8 && !twoFactorVerifyURI) {
 													toast.error("Password must be at least 8 characters");
 													return;
 												}
@@ -309,15 +342,36 @@ export default function UserCard(props: {
 														},
 													});
 												} else {
+													if (twoFactorVerifyURI) {
+														await client.twoFactor.verifyTotp({
+															code: twoFaPassword,
+															fetchOptions: {
+																onError(context) {
+																	setIsPendingTwoFa(false);
+																	setTwoFaPassword("");
+																	toast.error(context.error.message);
+																},
+																onSuccess() {
+																	toast("2FA enabled successfully");
+																	setTwoFactorVerifyURI("");
+																	setIsPendingTwoFa(false);
+																	setTwoFaPassword("");
+																	setTwoFactorDialog(false);
+																},
+															},
+														});
+														return;
+													}
 													const res = await client.twoFactor.enable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
 																toast.error(context.error.message);
 															},
-															onSuccess() {
-																toast.success("2FA enabled successfully");
-																setTwoFactorDialog(false);
+															onSuccess(ctx) {
+																setTwoFactorVerifyURI(ctx.data.totpURI);
+																// toast.success("2FA enabled successfully");
+																// setTwoFactorDialog(false);
 															},
 														},
 													});
@@ -458,7 +512,7 @@ function ChangePassword() {
 								return;
 							}
 							setLoading(true);
-							const res = await user.changePassword({
+							const res = await client.changePassword({
 								newPassword: newPassword,
 								currentPassword: currentPassword,
 								revokeOtherSessions: signOutDevices,
@@ -571,7 +625,7 @@ function EditUserDialog(props: { session: Session | null }) {
 						disabled={isLoading}
 						onClick={async () => {
 							setIsLoading(true);
-							await user.update({
+							await client.updateUser({
 								image: image ? await convertImageToBase64(image) : undefined,
 								name: name ? name : undefined,
 								fetchOptions: {
@@ -606,7 +660,6 @@ function EditUserDialog(props: { session: Session | null }) {
 function AddPasskey() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
-	const queryClient = useQueryClient();
 	const [isLoading, setIsLoading] = useState(false);
 
 	const handleAddPasskey = async () => {

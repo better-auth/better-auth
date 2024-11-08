@@ -29,11 +29,14 @@ describe("session", async () => {
 		);
 		const expiresAt = new Date(res.data?.session?.expiresAt || "");
 		const now = new Date();
-		expect(expiresAt.getDate()).toBeGreaterThan(now.getDate() + 6);
+
+		expect(expiresAt.getTime()).toBeGreaterThan(
+			now.getTime() + 6 * 24 * 60 * 60 * 1000,
+		);
 	});
 
 	it("should return null when not authenticated", async () => {
-		const response = await client.session();
+		const response = await client.getSession();
 		expect(response.data).toBeNull();
 	});
 
@@ -66,7 +69,7 @@ describe("session", async () => {
 		const nearExpiryDate = new Date();
 		nearExpiryDate.setDate(nearExpiryDate.getDate() + 6);
 		vi.setSystemTime(nearExpiryDate);
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -110,7 +113,7 @@ describe("session", async () => {
 		expect(new Date(expiresAt).valueOf()).toBeLessThanOrEqual(
 			getDate(1000 * 60 * 60 * 24).valueOf(),
 		);
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -147,7 +150,10 @@ describe("session", async () => {
 		);
 		const expiresAt = new Date(res.data?.session?.expiresAt || "");
 		const now = new Date();
-		expect(expiresAt.getDate()).toBeGreaterThan(now.getDate() + 6);
+
+		expect(expiresAt.getTime()).toBeGreaterThan(
+			now.getTime() + 6 * 24 * 60 * 60 * 1000,
+		);
 	});
 
 	it("should clear session on sign out", async () => {
@@ -175,7 +181,7 @@ describe("session", async () => {
 				headers,
 			},
 		});
-		const response = await client.session({
+		const response = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -195,7 +201,7 @@ describe("session", async () => {
 			},
 		);
 
-		const response = await client.user.listSessions({
+		const response = await client.listSessions({
 			fetchOptions: {
 				headers,
 			},
@@ -221,19 +227,19 @@ describe("session", async () => {
 				onSuccess: sessionSetter(headers2),
 			},
 		});
-		await client.user.revokeSession({
+		await client.revokeSession({
 			fetchOptions: {
 				headers,
 			},
 			id: res.data?.session?.id || "",
 		});
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(session.data).toBeNull();
-		const revokeRes = await client.user.revokeSessions({
+		const revokeRes = await client.revokeSessions({
 			fetchOptions: {
 				headers: headers2,
 			},
@@ -266,7 +272,7 @@ describe("session storage", async () => {
 		expect(store.size).toBe(1);
 		const { headers } = await signInWithTestUser();
 		expect(store.size).toBe(2);
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
@@ -312,19 +318,19 @@ describe("session storage", async () => {
 
 	it("should revoke session", async () => {
 		const { headers } = await signInWithTestUser();
-		const session = await client.session({
+		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(session.data).not.toBeNull();
-		await client.user.revokeSession({
+		const res = await client.revokeSession({
 			fetchOptions: {
 				headers,
 			},
 			id: session.data?.session?.id || "",
 		});
-		const revokedSession = await client.session({
+		const revokedSession = await client.getSession({
 			fetchOptions: {
 				headers,
 			},

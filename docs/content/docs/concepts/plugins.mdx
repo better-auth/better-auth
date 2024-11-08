@@ -37,23 +37,25 @@ const client = createAuthClient({
 
 ## Creating a Plugin
 
-To create a plugin you need to pass an object that satsfies the `BetterAuthPlugin` interface.
+To create a plugin you need to pass an object that satisfies the `BetterAuthPlugin` interface.
 
 The only required property is `id`, which is a unique identifier for the plugin.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
 const myPlugin = {
     id: "my-plugin",
-}
+} satisfies BetterAuthPlugin
 ```
 
 ### Endpoints
 
-To add endpoints to the server, you can pass `endpoints` that requires an object with the key being any `string` and teh value being `AuthEndpoint`.
+To add endpoints to the server, you can pass `endpoints` which requires an object with the key being any `string` and the value being an `AuthEndpoint`.
 
 To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
 
-Better Auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple web framework made by the same author of Better Auth.
+Better Auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
 
 ```ts title="plugin.ts"
 import { createAuthEndpoint } from "better-auth/api";
@@ -63,14 +65,14 @@ const myPlugin = {
     endpoints: {
         getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
             method: "GET",
-        }, async(req)=>{
+        }, async(ctx) => {
 
         })
     }
 }
 ```
 
-Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the `req` object, it'll provide you with an object called `context` that give you access better-auth specefic contexts including `options`, `db`, `baseURL` and more.
+Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the `ctx` object, it'll provide you with an object called `context` that give you access better-auth specefic contexts including `options`, `db`, `baseURL` and more.
 
 **Context Object**
 
@@ -83,7 +85,7 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `authCookie`: The defualt cookie configuration for core auth cookies.
 - `logger`: The logger instance used by Better Auth.
 - `db`: The kysely instance used by Better Auth to interact with the database.
-- `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for peroframnce reasons)
+- `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for performance reasons)
 - `intenralAdapter`: this are intenral db calls that are used by Better Auth. You can use this calls for example to create session instead of using `adapter` directly. `intenralAdapter.createSession(userId)`
 - `createAuthCookie`: This is a helper function that let's you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__secure` prefix and `__host` prefix for cookies based on
 
@@ -92,12 +94,12 @@ For other properties, you can check the <Link href="https://github.com/bekacru/b
 
 **Rules for Endpoints**
 
-- Makes sure you use kebab-case for the endpoint path.
+- Makes sure you use kebab-case for the endpoint path
 - Make sure to only use `POST` or `GET` methods for the endpoints.
 - Any function that modifies a data should be a `POST` method.
 - Any function that fetches data should be a `GET` method.
-- Make sure to use the `createAuthEndpoint` function to create the endpoint.
-- Make sure your paths are unique to avoid conflicts with other plugins.
+- Make sure to use the `createAuthEndpoint` function to create API endpoints.
+- Make sure your paths are unique to avoid conflicts with other plugins. If you're using a common path, add the plugin name as a prefix to the path. (`/my-plugin/hello-world` instead of `/hello-world`.)
 
 ### Schema
 
@@ -133,8 +135,6 @@ The key is the column name and the value is the column definition. The column de
 
 `required`:  if the field should be required on a new record. (default: `false`)
 
-`returned`: if the field should be returned when fetching records. (default: `true`)
-
 `unique`: if the field should be unique. (default: `false`)
 
 `reference`: if the field is a reference to another table. (default: `null`) It takes an object with the following properties:
@@ -166,15 +166,71 @@ const myPlugin = (opts: PluginOptions)=>{
 
 if you add additional fields to a `user` or `session` table, the types will be inferred automatically. 
 
+```ts title="plugin.ts"
+
+const myPlugin = {
+    id: "my-plugin",
+    schema: {
+        user: {
+            fields: {
+                age: {
+                    type: "number",
+                },
+            },
+        },
+    },
+} satisfies BetterAuthPlugin
+```
+
+This will add an `age` field to the `user` table and all `user` returning endpoints will include the `age` field and it'll be infered properly by typescript.
+
+### Hooks
+ 
+Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
+
+```ts title="plugin.ts"
+import {  createAuthMiddleware } from "better-auth/plugins";
+
+const myPlugin = {
+    id: "my-plugin",
+    hooks: {
+        before: {
+            [{
+                matcher: (context)=>{
+                    return context.headers.get("x-my-header") === "my-value"
+                },
+                handler: createAuthMiddleware(async(ctx)=>{
+                    //do something before the request
+                    return  {
+                        context: ctx // if you want to modify the context
+                    }
+                })
+            }]
+        },
+        after: [{
+            matcher: (context)=>{
+                return context.req.method === "POST
+            },
+            handler: async(ctx)=>{
+                return {
+                    // you can modify the response here
+                    response: new Response(JSON.stringify({message: "Hello World"}))
+                }
+            }
+        }]
+    }
+} satisfies BetterAuthPlugin
+```
+
 <Callout type="warn">
 Don't store sensitive information in `user` or `session` table. Crate a new table if you need to store sensitive information.
 </Callout>
 
 ### Middleware
 
-You can add middleware to the server by passing a `middleware` array. The middleware array should contain an array of middleware objects with a `path` and `middleware` property.
+You can add middleware to the server by passing a `middleware` array. This array should contain middleware objects, each with a `path` and a `middleware` property. Unlike hooks, middleware only runs on `api` requests from a client. If the endpoint is invoked directly, the middleware will not run.
 
-The path can be a string or a path matcher. It uses the same path matcher as `better-call`.
+The `path` can be either a string or a path matcher, using the same path-matching system as `better-call`.
 
 ```ts title="plugin.ts"
 const myPlugin = {
@@ -191,7 +247,6 @@ const myPlugin = {
 ```
 
 If you throw an `APIError` from the middleware or returned a `Response` object, the request will be stopped and the response will be sent to the client.
-
 
 ### On Request & On Response
 
@@ -234,45 +289,11 @@ const myPlugin = {
 }
 ```
 
-### Hooks
-
-Hooks are similar to middlewares. But they run even when the endpoint is called directly on the server.
-
-```ts title="plugin.ts"
-import {  createAuthMiddleware } from "better-auth/plugins";
-
-const myPlugin = {
-    id: "my-plugin",
-    hooks: {
-        before: {
-            [{
-                matcher: (context)=>{
-                    return context.headers.get("x-my-header") === "my-value"
-                },
-                handler: createAuthMiddleware(async(ctx)=>{
-                    //do something before the request
-                })
-            }]
-        },
-        after: [{
-            matcher: (context)=>{
-                return context.req.method === "POST
-            },
-            handler: async(ctx)=>{
-                return {
-                    context: ctx // if you want to modify the context
-                }
-            }
-        }]
-    }
-} satisfies BetterAuthPlugin
-```
-
 
 #### When to use Middelware, Hooks, On Request, On Response
 
-- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes. And you want to run the middleware only when the routes are called through a request.
 - **Hooks**: You should use hooks when you want to target a specific route or request. And you want to run the hook even if the endpoint is called directly.
+- **Middlewares**: You should use middlewares when you want to use a route matcher to target a group of routes. And you want to run the middleware only when the routes are called through a request.
 - **On Request & On Response**: You should use on request and on response when you want to do something that affects all requests or responses.
 
 ### Rate Limit

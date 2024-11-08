@@ -2,7 +2,10 @@ import {
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
+	Mail,
 	Mailbox,
+	MailboxIcon,
+	Mails,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -420,7 +423,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Github",
+				title: "GitHub",
 				href: "/docs/authentication/github",
 				icon: () => (
 					<svg
@@ -509,6 +512,59 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Dropbox",
+				href: "/docs/authentication/dropbox",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 528 512"
+					>
+						<path
+							className="fill-current"
+							fillRule="evenodd"
+							d="M264.4 116.3l-132 84.3 132 84.3-132 84.3L0 284.1l132.3-84.3L0 116.3 132.3 32l132.1 84.3zM131.6 395.7l132-84.3 132 84.3-132 84.3-132-84.3zm132.8-111.6l132-84.3-132-83.6L395.7 32 528 116.3l-132.3 84.3L528 284.8l-132.3 84.3-131.3-85z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "LinkedIn",
+				href: "/docs/authentication/linkedin",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 448 512"
+						fill="currentColor"
+					>
+						<path
+							d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3zM135.4 416H69V202.2h66.5V416zm-33.2-243c-21.3 0-38.5-17.3-38.5-38.5S80.9 96 102.2 96c21.2 0 38.5 17.3 38.5 38.5 0 21.3-17.2 38.5-38.5 38.5zm282.1 243h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9V416z"
+							fill="currentColor"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Gitlab",
+				href: "/docs/authentication/gitlab",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
+						/>
+					</svg>
+				),
+			},
 		],
 	},
 	{
@@ -523,8 +579,8 @@ export const contents: Content[] = [
 				<path
 					fill="currentColor"
 					stroke="currentColor"
-					stroke-linejoin="round"
-					stroke-width="4"
+					strokeLinejoin="round"
+					strokeWidth="4"
 					d="M18 6H8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm0 22H8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V30a2 2 0 0 0-2-2ZM40 6H30a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm0 22H30a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V30a2 2 0 0 0-2-2Z"
 				></path>
 			</svg>
@@ -562,11 +618,15 @@ export const contents: Content[] = [
 				icon: Icons.svelteKit,
 				href: "/docs/integrations/svelte-kit",
 			},
-
 			{
 				title: "Solid Start",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
+			},
+			{
+				title: "TanStack Start",
+				icon: Icons.tanstack,
+				href: "/docs/integrations/tanstack",
 			},
 			{
 				group: true,
@@ -588,6 +648,17 @@ export const contents: Content[] = [
 				title: "Elysia",
 				icon: Icons.elysia,
 				href: "/docs/integrations/elysia",
+			},
+			{
+				group: true,
+				title: "Mobile & Desktop",
+				href: "/docs/integrations",
+				icon: LucideAArrowDown,
+			},
+			{
+				title: "Expo",
+				icon: Icons.expo,
+				href: "/docs/integrations/expo",
 			},
 		],
 	},
@@ -643,6 +714,11 @@ export const contents: Content[] = [
 				icon: () => <Mailbox className="w-4 h-4" />,
 			},
 			{
+				title: "Email OTP",
+				href: "/docs/plugins/email-otp",
+				icon: () => <Mail className="w-4 h-4" />,
+			},
+			{
 				title: "Passkey",
 				href: "/docs/plugins/passkey",
 				icon: () => (
@@ -672,13 +748,33 @@ export const contents: Content[] = [
 						<g
 							fill="none"
 							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2"
 						>
 							<path d="M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0"></path>
 							<path d="M12.556 6c.65 0 1.235.373 1.508.947l2.839 7.848a1.646 1.646 0 0 1-1.01 2.108a1.673 1.673 0 0 1-2.068-.851L13.365 15h-2.73l-.398.905A1.67 1.67 0 0 1 8.26 16.95l-.153-.047a1.647 1.647 0 0 1-1.056-1.956l2.824-7.852a1.66 1.66 0 0 1 1.409-1.087z"></path>
 						</g>
+					</svg>
+				),
+			},
+
+			{
+				title: "One Tap",
+				href: "/docs/plugins/one-tap",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 14 14"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M3.254 4.361a2.861 2.861 0 1 1 5.647.651a.75.75 0 0 0 1.461.34a4.361 4.361 0 1 0-8.495 0a.75.75 0 0 0 1.461-.34a3 3 0 0 1-.074-.651m1.63 5.335V4.26a1.26 1.26 0 0 1 2.518 0v4.077h2.464a2.573 2.573 0 0 1 2.573 2.573V13a1 1 0 0 1-1 1H4.83a1 1 0 0 1-.823-.433l-.764-1.11a1.715 1.715 0 0 1 1.097-2.66l.543-.102Z"
+							clipRule="evenodd"
+						></path>
 					</svg>
 				),
 			},
@@ -726,6 +822,41 @@ export const contents: Content[] = [
 				title: "Bearer",
 				icon: () => <Key className="w-4 h-4" />,
 				href: "/docs/plugins/bearer",
+			},
+			{
+				title: "Multi Session",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M16.885 13.616q-.82 0-1.41-.591t-.59-1.41t.59-1.41t1.41-.59q.819 0 1.41.59q.59.591.59 1.41q0 .82-.59 1.41q-.591.59-1.41.59m-4.5 5v-.9q0-.465.232-.843q.232-.379.66-.545q.845-.356 1.748-.534q.904-.177 1.86-.177q.916 0 1.821.177q.905.178 1.786.534q.428.166.66.545q.232.378.232.844v.9zm-2.77-7.23q-1.237 0-2.118-.882t-.881-2.118t.88-2.12t2.12-.88t2.118.88t.882 2.12t-.882 2.118t-2.118.882m-7 7.23V16.97q0-.648.357-1.192q.358-.544.973-.804q1.327-.673 2.756-1.015t2.914-.342q.605 0 1.211.063t1.212.167l-.427.446l-.427.447q-.393-.077-.785-.1t-.784-.023q-1.354 0-2.675.292t-2.518.942q-.327.183-.567.456t-.24.663v.646h6v1zm7-8.23q.825 0 1.412-.588t.588-1.412t-.588-1.413t-1.412-.587t-1.413.587t-.587 1.413t.587 1.412t1.413.588"
+						></path>
+					</svg>
+				),
+				href: "/docs/plugins/multi-session",
+			},
+			{
+				title: "OAuth Proxy",
+				href: "/docs/plugins/oauth-proxy",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="M16 2a8 8 0 1 0 8 8a8.01 8.01 0 0 0-8-8m5.91 7h-2.438a15.3 15.3 0 0 0-.791-4.36A6.01 6.01 0 0 1 21.91 9m-5.888 6.999h-.008c-.38-.12-1.309-1.821-1.479-4.999h2.93c-.17 3.176-1.094 4.877-1.443 4.999M14.535 9c.17-3.176 1.094-4.877 1.443-4.999h.008c.38.12 1.309 1.821 1.479 4.999zM13.32 4.64A15.3 15.3 0 0 0 12.528 9H10.09a6.01 6.01 0 0 1 3.23-4.36M10.09 11h2.437a15.3 15.3 0 0 0 .792 4.36A6.01 6.01 0 0 1 10.09 11m8.59 4.36a15.3 15.3 0 0 0 .792-4.36h2.438a6.01 6.01 0 0 1-3.23 4.36M28 30H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M4 22v6h24v-6z"
+						></path>
+						<circle cx="7" cy="25" r="1" fill="currentColor"></circle>
+					</svg>
+				),
 			},
 			{
 				title: "JWT",

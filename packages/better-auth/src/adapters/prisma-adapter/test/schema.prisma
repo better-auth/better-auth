@@ -17,6 +17,7 @@ model User {
 }
 
 model session {
-    id     String @id @default(cuid())
-    userId String
+    id        String   @id @default(cuid())
+    userId    String
+    expiresAt DateTime
 }

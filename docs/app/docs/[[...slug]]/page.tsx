@@ -1,24 +1,35 @@
-import { getPage, getPages } from "@/app/source";
-import type { Metadata } from "next";
+import { source } from "@/app/source";
 import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { cn } from "@/lib/utils";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { GenerateSecret } from "@/components/generate-secret";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import { Features } from "@/components/blocks/features";
+import { ForkButton } from "@/components/fork-button";
+import Link from "next/link";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 
 export default async function Page({
 	params,
 }: {
-	params: { slug?: string[] };
+	params: Promise<{ slug?: string[] }>;
 }) {
-	const page = getPage(params.slug);
+	const { slug } = await params;
+	const page = source.getPage(slug);
 
 	if (page == null) {
 		notFound();
 	}
-	const MDX = page.data.exports.default;
+	const MDX = page.data.body;
 
 	return (
 		<DocsPage
-			toc={page.data.exports.toc}
+			toc={page.data.toc}
 			full={page.data.full}
 			editOnGithub={{
 				owner: "better-auth",
@@ -35,20 +46,53 @@ export default async function Page({
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
 			<DocsBody>
-				<MDX />
+				<MDX
+					components={{
+						...defaultMdxComponents,
+						Link: ({
+							className,
+							...props
+						}: React.ComponentProps<typeof Link>) => (
+							<Link
+								className={cn(
+									"font-medium underline underline-offset-4",
+									className,
+								)}
+								{...props}
+							/>
+						),
+						Step,
+						Steps,
+						Tab,
+						Tabs,
+						GenerateSecret,
+						AnimatePresence,
+						TypeTable,
+						Features,
+						ForkButton,
+						DatabaseTable,
+						iframe: (props) => (
+							<iframe {...props} className="w-full h-[500px]" />
+						),
+					}}
+				/>
 			</DocsBody>
 		</DocsPage>
 	);
 }
 
 export async function generateStaticParams() {
-	return getPages().map((page) => ({
+	const res = source.getPages().map((page) => ({
 		slug: page.slugs,
 	}));
+	return res;
 }
 
-export function generateMetadata({ params }: { params: { slug?: string[] } }) {
-	const page = getPage(params.slug);
+export async function generateMetadata({
+	params,
+}: { params: Promise<{ slug?: string[] }> }) {
+	const { slug } = await params;
+	const page = source.getPage(slug);
 	if (page == null) notFound();
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);

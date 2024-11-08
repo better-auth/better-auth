@@ -1,10 +1,13 @@
 import { betterAuth } from "better-auth";
 import {
 	bearer,
+	admin,
+	multiSession,
 	organization,
 	passkey,
 	twoFactor,
-	admin,
+	oneTap,
+	oAuthProxy,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -20,6 +23,7 @@ const libsql = new LibsqlDialect({
 });
 
 export const auth = betterAuth({
+	appName: "Better Auth Demo",
 	database: {
 		dialect: libsql,
 		type: "sqlite",
@@ -35,7 +39,12 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendEmailVerificationOnSignUp: true,
+		sendOnSignUp: true,
+	},
+	account: {
+		accountLinking: {
+			trustedProviders: ["google", "github"],
+		},
 	},
 	emailAndPassword: {
 		enabled: true,
@@ -49,6 +58,28 @@ export const auth = betterAuth({
 					resetLink: url,
 				}),
 			});
+		},
+	},
+	socialProviders: {
+		github: {
+			clientId: process.env.GITHUB_CLIENT_ID || "",
+			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+		},
+		google: {
+			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+		},
+		discord: {
+			clientId: process.env.DISCORD_CLIENT_ID || "",
+			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+		},
+		microsoft: {
+			clientId: process.env.MICROSOFT_CLIENT_ID || "",
+			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+		},
+		twitch: {
+			clientId: process.env.TWITCH_CLIENT_ID || "",
+			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
 	},
 	plugins: [
@@ -66,10 +97,10 @@ export const auth = betterAuth({
 						inviteLink:
 							process.env.NODE_ENV === "development"
 								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `https://${
+								: `${
+										process.env.BETTER_AUTH_URL ||
 										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL ||
-										process.env.BETTER_AUTH_URL
+										process.env.VERCEL_URL
 									}/accept-invitation/${data.id}`,
 					}),
 				});
@@ -91,27 +122,8 @@ export const auth = betterAuth({
 		passkey(),
 		bearer(),
 		admin(),
+		multiSession(),
+		oneTap(),
+		oAuthProxy(),
 	],
-	socialProviders: {
-		github: {
-			clientId: process.env.GITHUB_CLIENT_ID || "",
-			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-		},
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-		},
-		discord: {
-			clientId: process.env.DISCORD_CLIENT_ID || "",
-			clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-		},
-		microsoft: {
-			clientId: process.env.MICROSOFT_CLIENT_ID || "",
-			clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-		},
-		twitch: {
-			clientId: process.env.TWITCH_CLIENT_ID || "",
-			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
-		},
-	},
 });

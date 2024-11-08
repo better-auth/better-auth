@@ -4,6 +4,7 @@ import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
+import { env, isProduction } from "./utils/env";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -11,7 +12,7 @@ import type {
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
-import { getBaseURL } from "./utils/base-url";
+import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
@@ -20,9 +21,9 @@ import {
 } from "./cookies";
 import { createLogger, logger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
-import { BetterAuthError } from "./error";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { checkPassword } from "./utils/password";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -32,22 +33,16 @@ export const init = async (options: BetterAuthOptions) => {
 	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	if (!baseURL) {
-		throw new BetterAuthError(
-			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it your auth config.",
-		);
-	}
-
 	const secret =
 		options.secret ||
-		process.env.BETTER_AUTH_SECRET ||
-		process.env.AUTH_SECRET ||
+		env.BETTER_AUTH_SECRET ||
+		env.AUTH_SECRET ||
 		DEFAULT_SECRET;
 
 	if (secret === DEFAULT_SECRET) {
-		if (process.env.NODE_ENV === "production") {
-			throw new BetterAuthError(
-				"You are using the default secret. Please set `BETTER_AUTH_SECRET` or `AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+		if (isProduction) {
+			logger.error(
+				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
 			);
 		}
 	}
@@ -61,7 +56,7 @@ export const init = async (options: BetterAuthOptions) => {
 		emailAndPassword: {
 			...options.emailAndPassword,
 			enabled: options.emailAndPassword?.enabled ?? false,
-			autoSignIn: true,
+			autoSignIn: options.emailAndPassword?.autoSignIn ?? true,
 		},
 	};
 	const cookies = getCookies(options);
@@ -88,7 +83,7 @@ export const init = async (options: BetterAuthOptions) => {
 		options,
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
-		baseURL: baseURL,
+		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
@@ -96,9 +91,8 @@ export const init = async (options: BetterAuthOptions) => {
 		secret,
 		rateLimit: {
 			...options.rateLimit,
-			enabled:
-				options.rateLimit?.enabled ?? process.env.NODE_ENV !== "development",
-			window: options.rateLimit?.window || 60,
+			enabled: options.rateLimit?.enabled ?? isProduction,
+			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
 				options.rateLimit?.storage || options.secondaryStorage
@@ -119,6 +113,7 @@ export const init = async (options: BetterAuthOptions) => {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
 			},
+			checkPassword,
 		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
@@ -163,6 +158,7 @@ export type AuthContext = {
 			minPasswordLength: number;
 			maxPasswordLength: number;
 		};
+		checkPassword: typeof checkPassword;
 	};
 	tables: ReturnType<typeof getAuthTables>;
 };
@@ -212,15 +208,13 @@ function getInternalPlugins(options: BetterAuthOptions) {
 function getTrustedOrigins(options: BetterAuthOptions) {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	if (!baseURL) {
-		throw new BetterAuthError(
-			"Base URL can not be empty. Please add `BETTER_AUTH_URL` in your environment variables or pass it in your auth config.",
-		);
+		return [];
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
 	if (options.trustedOrigins) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
-	const envTrustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}

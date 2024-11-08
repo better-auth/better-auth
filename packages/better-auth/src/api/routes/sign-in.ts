@@ -1,19 +1,15 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
-import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 import { socialProviderList } from "../../social-providers";
-import { createEmailVerificationToken } from "./verify-email";
-import { logger } from "../../utils";
+import { createEmailVerificationToken } from "./email-verification";
+import { generateState, logger } from "../../utils";
 
-export const signInOAuth = createAuthEndpoint(
+export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		requireHeaders: true,
 		query: z
 			.object({
 				/**
@@ -33,7 +29,6 @@ export const signInOAuth = createAuthEndpoint(
 			 */
 			provider: z.enum(socialProviderList),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -50,40 +45,15 @@ export const signInOAuth = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
-		const cookie = c.context.authCookies;
-		const currentURL = c.query?.currentURL
-			? new URL(c.query?.currentURL)
-			: null;
-
-		const callbackURL = c.body.callbackURL?.startsWith("http")
-			? c.body.callbackURL
-			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
-
-		const state = await generateState(
-			callbackURL || currentURL?.origin || c.context.options.baseURL,
-		);
-		await c.setSignedCookie(
-			cookie.state.name,
-			state.hash,
-			c.context.secret,
-			cookie.state.options,
-		);
-		const codeVerifier = generateCodeVerifier();
-		await c.setSignedCookie(
-			cookie.pkCodeVerifier.name,
-			codeVerifier,
-			c.context.secret,
-			cookie.pkCodeVerifier.options,
-		);
+		const { codeVerifier, state } = await generateState(c);
 		const url = await provider.createAuthorizationURL({
-			state: state.raw,
+			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
-			state: state,
-			codeVerifier,
 			redirect: true,
 		});
 	},
@@ -94,7 +64,7 @@ export const signInEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z.string().email(),
+			email: z.string(),
 			password: z.string(),
 			callbackURL: z.string().optional(),
 			/**
@@ -103,7 +73,6 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			dontRememberMe: z.boolean().default(false).optional(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
@@ -115,8 +84,8 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		const { email, password } = ctx.body;
-		const checkEmail = z.string().email().safeParse(email);
-		if (!checkEmail.success) {
+		const isValidEmail = z.string().email().safeParse(email);
+		if (!isValidEmail.success) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid email",
 			});
@@ -128,6 +97,33 @@ export const signInEmail = createAuthEndpoint(
 		if (!user) {
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
+			});
+		}
+
+		const credentialAccount = user.accounts.find(
+			(a) => a.providerId === "credential",
+		);
+		if (!credentialAccount) {
+			ctx.context.logger.error("Credential account not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Invalid email or password",
+			});
+		}
+		const currentPassword = credentialAccount?.password;
+		if (!currentPassword) {
+			ctx.context.logger.error("Password not found", { email });
+			throw new APIError("UNAUTHORIZED", {
+				message: "Unexpected error",
+			});
+		}
+		const validPassword = await ctx.context.password.verify(
+			currentPassword,
+			password,
+		);
+		if (!validPassword) {
+			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
 				message: "Invalid email or password",
 			});
@@ -162,33 +158,6 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
-		const credentialAccount = user.accounts.find(
-			(a) => a.providerId === "credential",
-		);
-		if (!credentialAccount) {
-			ctx.context.logger.error("Credential account not found", { email });
-			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
-			});
-		}
-		const currentPassword = credentialAccount?.password;
-		if (!currentPassword) {
-			ctx.context.logger.error("Password not found", { email });
-			throw new APIError("UNAUTHORIZED", {
-				message: "Unexpected error",
-			});
-		}
-		const validPassword = await ctx.context.password.verify(
-			currentPassword,
-			password,
-		);
-		if (!validPassword) {
-			ctx.context.logger.error("Invalid password");
-			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
-			});
-		}
-
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.headers,
@@ -202,7 +171,14 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
-		await setSessionCookie(ctx, session.id, ctx.body.dontRememberMe);
+		await setSessionCookie(
+			ctx,
+			{
+				session,
+				user: user.user,
+			},
+			ctx.body.dontRememberMe,
+		);
 		return ctx.json({
 			user: user.user,
 			session,

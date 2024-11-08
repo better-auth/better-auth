@@ -1,0 +1,29 @@
+---
+title: TanStack Start Integration
+description: Tanstack Start Integration Guide
+---
+
+This integration guide is assuming you are using TanStack Start.
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+### Mount the handler
+
+We need to mount the handler to a TanStack API endpoint.
+Create a new file: `/app/routes/api/auth/$.ts`
+
+```ts
+import { auth } from '@/lib/auth'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/auth/$')({
+  GET: ({ request }) => {
+    return auth.handler(request)
+  },
+  POST: ({ request }) => {
+    return auth.handler(request)
+  },
+})
+```
+
+This will allow you to access use the `getSession` method in all of your routes.

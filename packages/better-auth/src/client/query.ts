@@ -27,7 +27,7 @@ export const useAuthQuery = <T>(
 	}>({
 		data: null,
 		error: null,
-		isPending: false,
+		isPending: true,
 		isRefetching: false,
 	});
 
@@ -40,6 +40,7 @@ export const useAuthQuery = <T>(
 						isPending: value.get().isPending,
 					})
 				: options;
+
 		return $fetch<T>(path, {
 			...opts,
 			onSuccess: async (context) => {

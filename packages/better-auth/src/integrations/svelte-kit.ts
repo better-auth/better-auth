@@ -1,7 +1,10 @@
 import type { Auth } from "../auth";
 import type { BetterAuthOptions } from "../types";
 
-export const toSvelteKitHandler = (auth: Auth) => {
+export const toSvelteKitHandler = (auth: {
+	handler: (request: Request) => any;
+	options: BetterAuthOptions;
+}) => {
 	return (event: { request: Request }) => auth.handler(event.request);
 };
 
@@ -10,7 +13,10 @@ export const svelteKitHandler = async ({
 	event,
 	resolve,
 }: {
-	auth: Auth;
+	auth: {
+		handler: (request: Request) => any;
+		options: BetterAuthOptions;
+	};
 	event: { request: Request; url: URL };
 	resolve: (event: any) => any;
 }) => {
@@ -30,7 +36,9 @@ export const svelteKitHandler = async ({
 
 export function isAuthPath(url: string, options: BetterAuthOptions) {
 	const _url = new URL(url);
-	const baseURL = new URL(options.baseURL || `${_url.origin}/api/auth`);
+	const baseURL = new URL(
+		`${options.baseURL || _url.origin}${options.basePath || "/api/auth"}`,
+	);
 	if (_url.origin !== baseURL.origin) return false;
 	if (
 		!_url.pathname.startsWith(

@@ -113,8 +113,10 @@ export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
 		fields: Record<string, FieldAttribute>;
+		action?: "create" | "update";
 	},
 ) {
+	const action = schema.action || "create";
 	const fields = schema.fields;
 	const parsedData: Record<string, any> = {};
 	for (const key in fields) {
@@ -129,7 +131,7 @@ export function parseInputData<T extends Record<string, any>>(
 			parsedData[key] = data[key];
 			continue;
 		}
-		if (fields[key].defaultValue) {
+		if (fields[key].defaultValue && action === "create") {
 			parsedData[key] = fields[key].defaultValue;
 			continue;
 		}
@@ -140,18 +142,17 @@ export function parseInputData<T extends Record<string, any>>(
 export function parseUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any>,
+	action?: "create" | "update",
 ) {
 	const schema = getAllFields(options, "user");
-	return parseInputData(user || {}, { fields: schema });
+	return parseInputData(user || {}, { fields: schema, action });
 }
 
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any>,
 ) {
-	const schema = {
-		...options.user?.additionalFields,
-	};
+	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
 }
 

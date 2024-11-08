@@ -1,7 +1,31 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
-import { redirectURLMiddleware } from "../middlewares/redirect";
+import type { AuthContext } from "../../init";
+
+function redirectError(
+	ctx: AuthContext,
+	callbackURL: string | undefined,
+	query?: Record<string, string>,
+): string {
+	const url = callbackURL
+		? new URL(callbackURL, ctx.baseURL)
+		: new URL(`${ctx.baseURL}/error`);
+	if (query)
+		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+	return url.href;
+}
+
+function redirectCallback(
+	ctx: AuthContext,
+	callbackURL: string,
+	query?: Record<string, string>,
+): string {
+	const url = new URL(callbackURL, ctx.baseURL);
+	if (query)
+		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+	return url.href;
+}
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -20,7 +44,6 @@ export const forgetPassword = createAuthEndpoint(
 			 */
 			redirectTo: z.string(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -82,43 +105,48 @@ export const forgetPasswordCallback = createAuthEndpoint(
 		query: z.object({
 			callbackURL: z.string(),
 		}),
-		use: [redirectURLMiddleware],
 	},
 	async (ctx) => {
 		const { token } = ctx.params;
-		const callbackURL = ctx.query.callbackURL;
-		const redirectTo = callbackURL.startsWith("http")
-			? callbackURL
-			: `${ctx.context.options.baseURL}${callbackURL}`;
+		const { callbackURL } = ctx.query;
 		if (!token || !callbackURL) {
-			throw ctx.redirect(`${ctx.context.baseURL}/error?error=INVALID_TOKEN`);
+			throw ctx.redirect(
+				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+			);
 		}
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
 			);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw ctx.redirect(`${redirectTo}?error=INVALID_TOKEN`);
+			throw ctx.redirect(
+				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+			);
 		}
-		throw ctx.redirect(`${redirectTo}?token=${token}`);
+		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
 	},
 );
 
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		query: z
-			.object({
-				token: z.string(),
-			})
-			.optional(),
+		query: z.optional(
+			z.object({
+				token: z.string().optional(),
+				currentURL: z.string().optional(),
+			}),
+		),
 		method: "POST",
 		body: z.object({
 			newPassword: z.string(),
 		}),
 	},
 	async (ctx) => {
-		const token = ctx.query?.token;
+		const token =
+			ctx.query?.token ||
+			(ctx.query?.currentURL
+				? new URL(ctx.query.currentURL).searchParams.get("token")
+				: "");
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Token not found",

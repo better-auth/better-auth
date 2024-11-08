@@ -15,18 +15,17 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     rateLimit: {
-        window: 60, // time window in seconds
+        window: 10, // time window in seconds
         max: 100, // max requests in the window
     },
 })
 ```
 
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
+- `/sign-in/email`: Is limited to 3 requests within 10 seconds.
 
-"/sign-in/email": Limited to 7 requests within 10 seconds.
-
-In addition to that, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has the following custom rules:
-- "/two-factor/verify": Limited to 3 requests within 10 seconds.
+In addition, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has custom rules:
+- `/two-factor/verify`: Is limited to 3 requests within 10 seconds.
 
 These custom rules ensure that sensitive operations are protected with stricter limits.
 
@@ -54,7 +53,7 @@ export const auth = betterAuth({
 
 ### Storage
 
-By default, rate limit data is stored in memory. However, you can either use your database or custom storage to store rate limit data.
+By default, rate limit data is stored in memory. However, you can use your database, secondary storage or custom storage to store rate limit data.
 
 **Using Database**
 
@@ -70,13 +69,30 @@ export const auth = betterAuth({
 })
 ```
 
-make sure to run `migrate` to create the rate limit table in your database.
+Make sure to run `migrate` to create the rate limit table in your database.
 
 ```bash
 npx @better-auth/cli migrate
 ```
 
+**Using Secondary Storage**
+
+If a [Secondary Storage](/docs/concepts/database#secondary-storage) has been configured you can use that to store rate limit data.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+		storage: "secondary-storage"
+    },
+})
+```
+
 **Custom Storage**
+
+If none of the above solutions suits your use case you can implement a `customStorage`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -102,7 +118,7 @@ When a request exceeds the rate limit, Better Auth returns the following header:
 
 - `X-Retry-After`: The number of seconds until the user can make another request.
 
-To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass fetchOptions to handle rate limit errors
+To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass `fetchOptions` to handle rate limit errors
 
 **Global Handling**
 

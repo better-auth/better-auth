@@ -1,18 +1,20 @@
 {
-  "name": "@example/nextjs-example",
+  "name": "@example/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "pnpm migrate && next dev",
     "dev:secure": "next dev --experimental-https",
+    "migrate": "pnpx @better-auth/cli@latest migrate",
     "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": {
+  "dependencies": { 
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",
+    "@better-auth/expo": "workspace:*",
     "@libsql/kysely-libsql": "^0.4.1",
     "@prisma/adapter-libsql": "^5.19.1",
     "@prisma/client": "^5.19.1",

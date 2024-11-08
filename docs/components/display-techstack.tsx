@@ -23,14 +23,14 @@ export const TechStackDisplay = ({
 		>
 			{skills.map((icon) => {
 				return (
-					<TooltipProvider key={icon}>
+					<TooltipProvider delayDuration={50} key={icon}>
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<span className="transform duration-300 hover:rotate-12 transition-transform">
 									{techStackIcons[icon].icon}
 								</span>
 							</TooltipTrigger>
-							<TooltipContent className="text-white/80 bg-gradient-to-tr from-black/80 via-black  to-black/90 z-1">
+							<TooltipContent className="text-white/80 bg-gradient-to-tr from-stone-950/90 via-stone-900 to-stone-950/90 z-1">
 								{techStackIcons[icon].name}
 							</TooltipContent>
 						</Tooltip>

@@ -1,12 +1,12 @@
 ---
-title: Github
-description: Github Provider
+title: GitHub
+description: GitHub Provider
 ---
 
 <Steps>
     <Step> 
-        ### Get your Github credentials
-        To use Github sign in, you need a client ID and client secret. You can get them from the [Github Developer Portal](https://github.com/settings/developers).
+        ### Get your GitHub credentials
+        To use GitHub sign in, you need a client ID and client secret. You can get them from the [GitHub Developer Portal](https://github.com/settings/developers).
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/github` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
     </Step>
@@ -29,8 +29,8 @@ description: Github Provider
         ```
     </Step>
        <Step>
-        ### Signin with Github
-        To signin with Github, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        ### Signin with GitHub
+        To signin with GitHub, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `github`.
 
         ```ts title="client.ts"  

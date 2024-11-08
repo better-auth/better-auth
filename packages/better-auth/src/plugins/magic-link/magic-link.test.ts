@@ -4,8 +4,14 @@ import { magicLink } from ".";
 import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 
+type VerificationEmail = {
+	email: string;
+	token: string;
+	url: string;
+};
+
 describe("magic link", async () => {
-	let verificationEmail = {
+	let verificationEmail: VerificationEmail = {
 		email: "",
 		token: "",
 		url: "",
@@ -125,5 +131,59 @@ describe("magic link", async () => {
 
 		expect(customGenerateToken).toHaveBeenCalled();
 		expect(verificationEmail.token).toBe("custom_token");
+	});
+});
+
+describe("magic link verify", async () => {
+	const verificationEmail: VerificationEmail[] = [
+		{
+			email: "",
+			token: "",
+			url: "",
+		},
+	];
+	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail.push(data);
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000/api/auth",
+	});
+
+	it("should verify last magic link", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const headers = new Headers();
+		const lastEmail = verificationEmail.pop() as VerificationEmail;
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(lastEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data).toMatchObject({
+			status: true,
+		});
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
 	});
 });

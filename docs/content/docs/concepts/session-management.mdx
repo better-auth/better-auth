@@ -27,7 +27,7 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     //... other config options
     session: {
-        expiresIn: 60 * 60 * 24 * 7 // 7 days,
+        expiresIn: 60 * 60 * 24 * 7, // 7 days
         updateAge: 60 * 60 * 24 // 1 day (every 1 day the session expiration is updated)
     }
 })
@@ -37,6 +37,26 @@ export const auth = betterAuth({
 
 Better Auth provides a set of functions to manage sessions.
 
+### Get Session
+
+The `getSession` function retrieves the current active session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.getSession()
+```
+
+### Use Session
+
+The `useSession` action provides a reactive way to access the current session.
+
+```ts client="client.ts"
+import { authClient } from "@/lib/client"
+
+const session = await authClient.useSession()
+```
+
 ### List Sessions
 
 The `listSessions` function returns a list of sessions that are active for the user.
@@ -44,7 +64,7 @@ The `listSessions` function returns a list of sessions that are active for the u
 ```ts title="client.ts"
 import { authClient } from "@/lib/client"
 
-const sessions = await authClient.user.listSessions()
+const sessions = await authClient.listSessions()
 ```
 
 ### Revoke Session
@@ -54,7 +74,7 @@ When a user signs out of a device, the session is automatically ended. However, 
 To end a session, use the `revokeSession` function. Just pass the session ID as a parameter.
 
 ```ts title="client.ts"
-await authClient.user.revokeSession({
+await authClient.revokeSession({
     id: session.id,
 })
 ```
@@ -64,7 +84,7 @@ await authClient.user.revokeSession({
 To revoke all sessions, you can use the `revokeSessions` function.
 
 ```ts title="client.ts"
-await authClient.user.revokeSessions()
+await authClient.revokeSessions()
 ```
 
 ### Revoking Sessions on Password Change
@@ -72,10 +92,49 @@ await authClient.user.revokeSessions()
 You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePAssword` function.
 
 ```ts title="auth.ts"
-await authClient.user.changePassword({
+await authClient.changePassword({
     newPassword: newPassword,
     currentPassword: currentPassword,
     revokeOtherSessions: signOutDevices,
 })
 ```
 
+## Session Caching
+
+### Cookie Cache
+
+Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
+
+When cookie caching is enabled, the server can check session validity from the cookie itself instead of hitting the database each time. The cookie is signed to prevent tampering, and a short `maxAge` ensures that the session data gets refreshed regularly. If a session is revoked or expires, the cookie will be invalidated automatically.
+
+To turn on cookie caching, just set `session.cookieCache` in your auth config:
+
+```ts title="auth.ts"
+const auth = new BetterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60 // Cache duration in seconds
+        }
+    }
+});
+```
+
+If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
+
+```ts title="client.ts"
+const session = await authClient.getSession({ query: {
+    disableCookieCache: true
+}})
+```
+
+or on the server
+
+```ts title="server.ts"
+auth.api.getSession({
+    query: {
+        disableCookieCache: true,
+    }, 
+    headers: req.headers, // pass the headers
+});
+```

@@ -5,7 +5,7 @@ import type {
 	Organization,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
-import { defaultStatements, type AccessControl, type Role } from "./access";
+import { defaultStatements, type AccessControl, type Role } from "../access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import type { BetterFetchOption } from "@better-fetch/fetch";
@@ -21,9 +21,9 @@ interface OrganizationClientOptions {
 export const organizationClient = <O extends OrganizationClientOptions>(
 	options?: O,
 ) => {
-	const activeOrgId = atom<string | null | undefined>(undefined);
-	const _listOrg = atom<boolean>(false);
-	const _activeOrgSignal = atom<boolean>(false);
+	const $listOrg = atom<boolean>(false);
+	const $activeOrgSignal = atom<boolean>(false);
+	const $activeMemberSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -44,7 +44,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 									id: string;
 									name: string;
 									email: string;
-									image: string;
+									image?: string;
 								};
 							}
 						>[];
@@ -56,9 +56,9 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				setActive(orgId: string | null) {
-					activeOrgId.set(orgId);
-				},
+				// setActive(orgId: string | null) {
+				// 	activeOrgId.set(orgId);
+				// },
 				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
@@ -80,7 +80,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		}),
 		getAtoms: ($fetch) => {
 			const listOrganizations = useAuthQuery<Organization[]>(
-				_listOrg,
+				$listOrg,
 				"/organization/list",
 				$fetch,
 				{
@@ -95,30 +95,37 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image: string | undefined;
 							};
 						})[];
 						invitations: Invitation[];
 					}
 				>
 			>(
-				[activeOrgId, _activeOrgSignal],
-				"/organization/activate",
+				[$activeOrgSignal],
+				"/organization/get-full-organization",
 				$fetch,
 				() => ({
-					method: "POST",
-					credentials: "include",
-					body: {
-						orgId: activeOrgId.get(),
-					},
+					method: "GET",
 				}),
 			);
 
+			const activeMember = useAuthQuery<Member>(
+				[$activeMemberSignal],
+				"/organization/get-active-member",
+				$fetch,
+				{
+					method: "GET",
+				},
+			);
+
 			return {
-				_listOrg,
-				_activeOrgSignal,
+				$listOrg,
+				$activeOrgSignal,
+				$activeMemberSignal,
 				activeOrganization,
 				listOrganizations,
+				activeMember,
 			};
 		},
 		atomListeners: [
@@ -128,13 +135,19 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						path === "/organization/create" || path === "/organization/delete"
 					);
 				},
-				signal: "_listOrg",
+				signal: "$listOrg",
 			},
 			{
 				matcher(path) {
 					return path.startsWith("/organization");
 				},
-				signal: "_activeOrgSignal",
+				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

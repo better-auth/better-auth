@@ -17,7 +17,7 @@ import {
 	type Role,
 	defaultRoles,
 	type defaultStatements,
-} from "./access";
+} from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -27,7 +27,11 @@ import {
 	getInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
-import { removeMember, updateMemberRole } from "./routes/crud-members";
+import {
+	getActiveMember,
+	removeMember,
+	updateMemberRole,
+} from "./routes/crud-members";
 import {
 	createOrganization,
 	deleteOrganization,
@@ -176,6 +180,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		rejectInvitation,
 		removeMember,
 		updateMemberRole,
+		getActiveMember,
 	};
 
 	const roles = {
@@ -225,7 +230,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							message: "No active organization",
 						});
 					}
-					const adapter = getOrgAdapter(ctx.context.adapter);
+					const adapter = getOrgAdapter(ctx.context);
 					const member = await adapter.findMemberByOrgId({
 						userId: ctx.context.session.user.id,
 						organizationId:
@@ -368,7 +373,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image: string | undefined;
 							};
 						}
 					>[];

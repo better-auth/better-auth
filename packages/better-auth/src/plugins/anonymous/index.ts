@@ -3,7 +3,7 @@ import type { BetterAuthPlugin } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/base-url";
+import { getOrigin } from "../../utils/url";
 
 export interface AnonymousOptions {
 	/**
@@ -58,12 +58,15 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
 					return ctx.json({ user: newUser, session });
 				},
 			),
-			linkAnonymous: createAuthEndpoint(
-				"/user/link-anonymous",
+			linkAccount: createAuthEndpoint(
+				"/anonymous/link-account",
 				{
 					method: "POST",
 					body: z.object({
@@ -76,10 +79,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 					const userId = ctx.context.session.user.id;
 					const { email, password } = ctx.body;
 					let updatedUser = null;
-					// handling both the email - password and updating the user
 					if (email && password) {
 						updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
 							email: email,
+							isAnonymous: false,
 						});
 					}
 					if (!updatedUser) {
@@ -120,7 +123,10 @@ export const anonymous = (options?: AnonymousOptions) => {
 							},
 						});
 					}
-					await setSessionCookie(ctx, session.id);
+					await setSessionCookie(ctx, {
+						session,
+						user: updatedUser,
+					});
 					return ctx.json({ session, user: updatedUser });
 				},
 			),
@@ -130,7 +136,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 				fields: {
 					isAnonymous: {
 						type: "boolean",
-						defaultValue: true,
 						required: false,
 					},
 				},

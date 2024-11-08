@@ -117,7 +117,7 @@ export const admin = (options?: AdminOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path === "/user/list-sessions";
+						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
@@ -221,13 +221,46 @@ export const admin = (options?: AdminOptions) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
+						search: z
+							.object({
+								field: z.enum(["email", "name"]),
+								operator: z
+									.enum(["contains", "starts_with", "ends_with"])
+									.default("contains"),
+								value: z.string(),
+							})
+							.optional(),
 						limit: z.string().or(z.number()).optional(),
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
+						filter: z
+							.array(
+								z.object({
+									field: z.string(),
+									value: z.string().or(z.number()).or(z.boolean()),
+									operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
+									connector: z.enum(["AND", "OR"]).optional(),
+								}),
+							)
+							.optional(),
 					}),
 				},
 				async (ctx) => {
+					const where = [];
+
+					if (ctx.query?.search) {
+						where.push({
+							field: ctx.query.search.field,
+							operator: ctx.query.search.operator,
+							value: ctx.query.search.value,
+						});
+					}
+
+					if (ctx.query?.filter) {
+						where.push(...(ctx.query.filter || []));
+					}
+
 					const users = await ctx.context.internalAdapter.listUsers(
 						Number(ctx.query?.limit) || undefined,
 						Number(ctx.query?.offset) || undefined,
@@ -237,6 +270,8 @@ export const admin = (options?: AdminOptions) => {
 									direction: ctx.query.sortDirection || "asc",
 								}
 							: undefined,
+
+						where.length ? where : undefined,
 					);
 					return ctx.json({
 						users: users as UserWithRole[],
@@ -312,9 +347,9 @@ export const admin = (options?: AdminOptions) => {
 							banReason:
 								ctx.body.banReason || options?.defaultBanReason || "No reason",
 							banExpires: ctx.body.banExpiresIn
-								? Date.now() + ctx.body.banExpiresIn * 1000
+								? getDate(ctx.body.banExpiresIn, "sec")
 								: options?.defaultBanExpiresIn
-									? Date.now() + options.defaultBanExpiresIn * 1000
+									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
 					);
@@ -361,7 +396,14 @@ export const admin = (options?: AdminOptions) => {
 							message: "Failed to create session",
 						});
 					}
-					await setSessionCookie(ctx, session.id, true);
+					await setSessionCookie(
+						ctx,
+						{
+							session: session,
+							user: targetUser,
+						},
+						true,
+					);
 					return ctx.json({
 						session: session,
 						user: targetUser,
@@ -423,19 +465,23 @@ export const admin = (options?: AdminOptions) => {
 					role: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banned: {
 						type: "boolean",
 						defaultValue: false,
 						required: false,
+						input: false,
 					},
 					banReason: {
 						type: "string",
 						required: false,
+						input: false,
 					},
 					banExpires: {
-						type: "number",
+						type: "date",
 						required: false,
+						input: false,
 					},
 				},
 			},
@@ -444,10 +490,6 @@ export const admin = (options?: AdminOptions) => {
 					impersonatedBy: {
 						type: "string",
 						required: false,
-						references: {
-							model: "user",
-							field: "id",
-						},
 					},
 				},
 			},

@@ -12,9 +12,18 @@ import type {
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/session",
+		"/get-session",
 		{
 			method: "GET",
+			query: z.optional(
+				z.object({
+					/**
+					 * If cookie cache is enabled, it will disable the cache
+					 * and fetch the session from the database
+					 */
+					disableCookieCache: z.boolean().optional(),
+				}),
+			),
 			requireHeaders: true,
 		},
 		async (ctx) => {
@@ -27,6 +36,33 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return ctx.json(null, {
 						status: 401,
 					});
+				}
+
+				const sessionData = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionData.name,
+					ctx.context.secret,
+				);
+				const dontRememberMe = await ctx.getSignedCookie(
+					ctx.context.authCookies.dontRememberToken.name,
+					ctx.context.secret,
+				);
+				/**
+				 * If session data is present in the cookie, return it
+				 */
+				if (
+					sessionData &&
+					ctx.context.options.session?.cookieCache?.enabled &&
+					!ctx.query?.disableCookieCache
+				) {
+					const session = JSON.parse(sessionData)?.session;
+					if (session?.expiresAt > new Date()) {
+						return ctx.json(
+							session as {
+								session: InferSession<Option>;
+								user: InferUser<Option>;
+							},
+						);
+					}
 				}
 
 				const session =
@@ -44,10 +80,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						status: 401,
 					});
 				}
-				const dontRememberMe = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
-					ctx.context.secret,
-				);
+
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 */
@@ -92,9 +125,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					const maxAge =
 						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
-					await setSessionCookie(ctx, updatedSession.id, false, {
-						maxAge,
-					});
+					await setSessionCookie(
+						ctx,
+						{
+							session: updatedSession,
+							user: session.user,
+						},
+						false,
+						{
+							maxAge,
+						},
+					);
 					return ctx.json({
 						session: updatedSession,
 						user: session.user,
@@ -143,7 +184,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
  */
 export const listSessions = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
-		"/user/list-sessions",
+		"/list-sessions",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
@@ -166,7 +207,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
  * revoke a single session
  */
 export const revokeSession = createAuthEndpoint(
-	"/user/revoke-session",
+	"/revoke-session",
 	{
 		method: "POST",
 		body: z.object({
@@ -201,7 +242,7 @@ export const revokeSession = createAuthEndpoint(
  * revoke all user sessions
  */
 export const revokeSessions = createAuthEndpoint(
-	"/user/revoke-sessions",
+	"/revoke-sessions",
 	{
 		method: "POST",
 		use: [sessionMiddleware],

@@ -1,7 +1,7 @@
 import { sha256 } from "oslo/crypto";
-import { getBaseURL } from "../utils/base-url";
 import { base64url } from "oslo/encoding";
 import type { OAuth2Tokens } from "./types";
+import { getDate } from "../utils/date";
 
 export async function generateCodeChallenge(codeVerifier: string) {
 	const codeChallengeBytes = await sha256(
@@ -17,8 +17,8 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		tokenType: data.token_type,
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
-		accessTokenExpiresAt: data.expires_at
-			? new Date((Date.now() + data.expires_in) * 1000)
+		accessTokenExpiresAt: data.expires_in
+			? getDate(data.expires_in, "sec")
 			: undefined,
 		scopes: data?.scope
 			? typeof data.scope === "string"

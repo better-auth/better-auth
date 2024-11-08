@@ -10,8 +10,9 @@ import type {
 	IsSignal,
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
-import { getSessionAtom } from "./session-atom";
 import type { UnionToIntersection } from "../types/helper";
+import type { Atom } from "nanostores";
+import type { BetterFetchError } from "@better-fetch/fetch";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -40,34 +41,38 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		$fetch,
 		atomListeners,
+		$store,
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}
-
-	const { $session, _sessionSignal } = getSessionAtom<Option>($fetch);
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
 		$fetch,
-		useSession: $session,
+		$store,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,
 		$fetch,
 		pluginPathMethods,
-		{
-			...pluginsAtoms,
-			_sessionSignal,
-		},
+		pluginsAtoms,
 		atomListeners,
 	);
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: typeof $session;
+			useSession: Atom<{
+				data: {
+					session: InferSessionFromClient<Option>;
+					user: InferUserFromClient<Option>;
+				};
+				error: BetterFetchError | null;
+				isPending: boolean;
+			}>;
 			$fetch: typeof $fetch;
+			$store: typeof $store;
 			$Infer: {
 				Session: {
 					session: InferSessionFromClient<Option>;

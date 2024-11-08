@@ -9,7 +9,11 @@ import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
-import { getBaseURL } from "../utils/base-url";
+import { getBaseURL } from "../utils/url";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import { Pool } from "pg";
+import { MongoClient } from "mongodb";
+import { mongodbAdapter } from "../adapters";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -22,6 +26,7 @@ export async function getTestInstance<
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
 	},
+	testWith?: "sqlite" | "postgres" | "mongodb",
 ) {
 	/**
 	 * create db folder if not exists
@@ -29,6 +34,26 @@ export async function getTestInstance<
 	await fs.mkdir(".db", { recursive: true });
 	const randomStr = generateRandomString(4, alphabet("a-z"));
 	const dbName = `./.db/test-${randomStr}.db`;
+
+	const postgres = new Kysely({
+		dialect: new PostgresDialect({
+			pool: new Pool({
+				connectionString: "postgres://user:password@localhost:5432/better_auth",
+			}),
+		}),
+	});
+
+	async function mongodbClient() {
+		const dbClient = async (connectionString: string, dbName: string) => {
+			const client = new MongoClient(connectionString);
+			await client.connect();
+			const db = client.db(dbName);
+			return db;
+		};
+		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+		return db;
+	}
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -41,9 +66,20 @@ export async function getTestInstance<
 			},
 		},
 		secret: "better-auth.secret",
-		database: new Database(dbName),
+		database:
+			testWith === "postgres"
+				? { db: postgres, type: "postgres" }
+				: testWith === "mongodb"
+					? mongodbAdapter(await mongodbClient())
+					: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
+		},
+		rateLimit: {
+			enabled: false,
+		},
+		advanced: {
+			cookies: {},
 		},
 	} satisfies BetterAuthOptions;
 
@@ -51,6 +87,10 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		advanced: {
+			disableCSRFCheck: true,
+			...options?.advanced,
+		},
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
@@ -69,15 +109,29 @@ export async function getTestInstance<
 		});
 	}
 
-	const { runMigrations } = await getMigrations({
-		...auth.options,
-		database: opts.database,
-	});
-	await runMigrations();
+	if (testWith !== "mongodb") {
+		const { runMigrations } = await getMigrations({
+			...auth.options,
+			database: opts.database,
+		});
+		await runMigrations();
+	}
 	await createTestUser();
 
 	afterAll(async () => {
-		await fs.unlink(dbName);
+		if (testWith === "mongodb") {
+			const db = await mongodbClient();
+			await db.dropDatabase();
+			return;
+		}
+		if (testWith === "postgres") {
+			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+				postgres,
+			);
+			await postgres.destroy();
+		} else {
+			await fs.unlink(dbName);
+		}
 	});
 
 	async function signInWithTestUser() {

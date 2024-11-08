@@ -1,9 +1,11 @@
-export function getIp(req: Request): string | null {
+import { isTest } from "../utils/env";
+
+export function getIp(req: Request | Headers): string | null {
 	const testIP = "127.0.0.1";
-	if (process.env.NODE_ENV === "test") {
+	if (isTest) {
 		return testIP;
 	}
-	const headers = [
+	const keys = [
 		"x-client-ip",
 		"x-forwarded-for",
 		"cf-connecting-ip",
@@ -14,9 +16,9 @@ export function getIp(req: Request): string | null {
 		"forwarded-for",
 		"forwarded",
 	];
-
-	for (const header of headers) {
-		const value = req.headers.get(header);
+	const headers = req instanceof Request ? req.headers : req;
+	for (const key of keys) {
+		const value = headers.get(key);
 		if (typeof value === "string") {
 			const ip = value.split(",")[0].trim();
 			if (ip) return ip;

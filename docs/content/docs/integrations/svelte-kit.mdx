@@ -69,10 +69,11 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
 
 ### Example: Getting Session on a loader
 
-```ts title="+page.ts"
+```ts title="+page.server.ts"
 import { auth } from "$lib/auth";
+import type { PageServerLoad } from "./$types";
 
-export async function load(request: Request) {
+export const load: PageServerLoad = async ({request}) => {
 	const session = await auth.api.getSession({
 		headers: request.headers,
 	});

@@ -1,6 +1,7 @@
 import { decodeHex, encodeHex } from "oslo/encoding";
 import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
+import { getRandomValues } from "uncrypto";
 
 const config = {
 	N: 16384,
@@ -20,7 +21,7 @@ async function generateKey(password: string, salt: string) {
 }
 
 export const hashPassword = async (password: string) => {
-	const salt = encodeHex(crypto.getRandomValues(new Uint8Array(16)));
+	const salt = encodeHex(getRandomValues(new Uint8Array(16)));
 	const key = await generateKey(password, salt);
 	return `${salt}:${encodeHex(key)}`;
 };

@@ -74,16 +74,7 @@ To create an organization, you need to provide:
 - `logo`: The logo of the organization. (Optional)
 
 ```ts title="client.ts"
-import { createAuthClient } from "better-auth/client"
-import { organizationClient } from "better-auth/client/plugins"
-
-const client = createAuthClient({
-    plugins: [ // [!code highlight]
-        organizationClient() // [!code highlight]
-    ] // [!code highlight]
-})
-// ---cut---
-const data = await client.organization.create({
+await client.organization.create({
     name: "My Organization",
     slug: "my-org",
     logo: "https://example.com/logo.png"
@@ -115,7 +106,7 @@ const auth = betterAuth({
 
 ### List User's Organizations
 
-To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implments a reactive way to get the organizations that the user is a member of.
+To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implements a reactive way to get the organizations that the user is a member of.
 
 <Tabs items={["React", "Vue", "Svelte"]} defaultValue="React">
 <Tab value="React">
@@ -186,14 +177,16 @@ export default {
 
 ### Active Organization
 
-Active organization is the workspace the user is currently working on. By defualt when the user is signed in the active organization is set to `null`. 
+Active organization is the workspace the user is currently working on. By default when the user is signed in the active organization is set to `null`. 
 
 #### Set Active Organization
 
-You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user both on the client state and the session on the server.
+You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
    
 ```ts title="client.ts"
-client.organization.setActive("organization-id")
+client.organization.setActive({
+  orgId: "organization-id"
+})
 ```
 
 #### Use Active Organization
@@ -257,6 +250,27 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
     ``` 
     </Tab>
 </Tabs>
+
+### Get Full Organization
+
+To get the full details of an organization, you can use the `getFull` function provided by the client. The `getFull` function takes an object with the following properties:
+
+```ts title="client.ts"
+const organization = await client.organization.getFull({
+    orgId: "organization-id" // optional, by default it will use the active organization
+})
+```
+
+To get the full organization on the server
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+import { headers } from "next/headers";
+
+auth.api.getFullOrganization({
+    headers: await headers()
+})
+```
 
 ## Invitations
 
@@ -347,6 +361,8 @@ client.organization.getInvitation({
 })
 ```
 
+## Members
+
 ### Remove Member 
 
 To remove you can use `organization.removeMember`
@@ -360,7 +376,7 @@ await client.organization.removeMember({
 
 ### Update Member Role
 
-To updadate the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
+To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
 
 ```ts title="client.ts"
 await client.organization.updateMemberRole({
@@ -369,13 +385,22 @@ await client.organization.updateMemberRole({
 })
 ```
 
+### Get Active Member
+
+To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
+
+```ts title="client.ts"
+const member = await client.organization.getActiveMember()
+```
+
+
 ## Access Control
 
 The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
 
 ### Roles
 
-currently only three roles are supported:
+Currently only three roles are supported:
 
 `owner`: The user who created the organization by default. The owner has full control over the organization and can perform any action.
 
@@ -387,9 +412,9 @@ currently only three roles are supported:
     Currently, you can't create custom roles
 </Callout>
 
-### Permissons
+### Permissions
 
-By defualt there are 3 resources and they have 2 to 3 actions.
+By default, there are three resources, and these have two to three actions.
 
 **organization**: 
 

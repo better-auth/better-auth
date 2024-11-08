@@ -2,12 +2,12 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";
-import { redirectURLMiddleware } from "../middlewares/redirect";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
+		requireHeaders: true,
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(

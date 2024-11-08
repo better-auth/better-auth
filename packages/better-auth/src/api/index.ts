@@ -1,8 +1,8 @@
-import { APIError, type Endpoint, createRouter } from "better-call";
+import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
-import { csrfMiddleware } from "./middlewares/csrf";
+import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
 	callbackOAuth,
 	forgetPassword,
@@ -13,22 +13,22 @@ import {
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
+	changeEmail,
 	signInEmail,
-	signInOAuth,
+	signInSocial,
 	signOut,
 	verifyEmail,
-} from "./routes";
-import { getCSRFToken } from "./routes/csrf";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
-import { logger } from "../utils/logger";
-import {
+	linkSocialAccount,
+	listUserAccounts,
 	changePassword,
 	deleteUser,
 	setPassword,
 	updateUser,
-} from "./routes/update-user";
+} from "./routes";
+import { ok } from "./routes/ok";
+import { signUpEmail } from "./routes/sign-up";
+import { error } from "./routes/error";
+import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
 
@@ -84,9 +84,8 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInOAuth,
+		signInSocial,
 		callbackOAuth,
-		getCSRFToken,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
@@ -95,14 +94,17 @@ export function getEndpoints<
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
+		changeEmail,
 		changePassword,
 		setPassword,
-		updateUser,
+		updateUser: updateUser<Option>(),
 		deleteUser,
 		forgetPasswordCallback,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		linkSocialAccount,
+		listUserAccounts,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -140,15 +142,60 @@ export function getEndpoints<
 					}
 				}
 			}
+			let endpointRes: any;
+			try {
+				//@ts-ignore
+				endpointRes = await value({
+					...context,
+					context: {
+						...c,
+						...context.context,
+					},
+				});
+			} catch (e) {
+				if (e instanceof APIError) {
+					const afterPlugins = options.plugins
+						?.map((plugin) => {
+							if (plugin.hooks?.after) {
+								return plugin.hooks.after;
+							}
+						})
+						.filter((plugin) => plugin !== undefined)
+						.flat();
 
-			//@ts-ignore
-			const endpointRes = await value({
-				...context,
-				context: {
-					...c,
-					...context.context,
-				},
-			});
+					if (!afterPlugins?.length) {
+						throw e;
+					}
+
+					let response = new Response(JSON.stringify(e.body), {
+						status: statusCode[e.status],
+						headers: e.headers,
+					});
+
+					let pluginResponse: Request | undefined = undefined;
+
+					for (const hook of afterPlugins || []) {
+						const match = hook.matcher(context);
+						if (match) {
+							const obj = Object.assign(context, {
+								context: {
+									...ctx,
+									returned: response,
+								},
+							});
+							const hookRes = await hook.handler(obj);
+							if (hookRes && "response" in hookRes) {
+								pluginResponse = hookRes.response as any;
+							}
+						}
+					}
+					if (pluginResponse instanceof Response) {
+						return pluginResponse;
+					}
+					throw e;
+				}
+				throw e;
+			}
 			let response = endpointRes;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
@@ -195,7 +242,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 		routerMiddleware: [
 			{
 				path: "/**",
-				middleware: csrfMiddleware,
+				middleware: originCheckMiddleware,
 			},
 			...middlewares,
 		],
@@ -203,8 +250,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
-					if (response) {
-						return response;
+					if (response && "response" in response) {
+						return response.response;
 					}
 				}
 			}

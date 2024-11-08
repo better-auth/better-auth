@@ -271,4 +271,41 @@ describe("type", () => {
 			twoFactorEnabled: boolean | undefined;
 		}>();
 	});
+
+	it("should infer `throw:true` in fetch options", async () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				throw: true,
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const data = client.getSession();
+		expectTypeOf(data).toMatchTypeOf<
+			Promise<{
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined;
+					testField4: string;
+					testField?: string | undefined;
+					testField2?: number | undefined;
+				};
+				session: {
+					id: string;
+					userId: string;
+					expiresAt: Date;
+					ipAddress?: string | undefined;
+					userAgent?: string | undefined;
+				};
+			} | null>
+		>();
+	});
 });

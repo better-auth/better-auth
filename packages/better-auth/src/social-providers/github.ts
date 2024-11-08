@@ -56,9 +56,10 @@ export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
-		name: "Github",
+		name: "GitHub",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = options.scope || scopes || ["user:email"];
+			const _scopes = scopes || ["user:email"];
+			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "github",
 				options,
@@ -66,7 +67,6 @@ export const github = (options: GithubOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
-				codeVerifier,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -81,9 +81,9 @@ export const github = (options: GithubOptions) => {
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{
-					auth: {
-						type: "Bearer",
-						token: token.accessToken,
+					headers: {
+						"User-Agent": "better-auth",
+						authorization: `Bearer ${token.accessToken}`,
 					},
 				},
 			);
@@ -100,9 +100,9 @@ export const github = (options: GithubOptions) => {
 						visibility: "public" | "private";
 					}[]
 				>("https://api.github.com/user/emails", {
-					auth: {
-						type: "Bearer",
-						token: token.accessToken,
+					headers: {
+						authorization: `Bearer ${token.accessToken}`,
+						"User-Agent": "better-auth",
 					},
 				});
 				if (!error) {

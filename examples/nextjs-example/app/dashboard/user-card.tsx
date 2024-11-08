@@ -88,6 +88,7 @@ export default function UserCard(props: {
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
+	const [twoFactorVerifyURI, setTwoFactorVerifyURI] = useState<string>("");
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
@@ -109,7 +110,7 @@ export default function UserCard(props: {
 						</Avatar>
 						<div className="grid gap-1">
 							<p className="text-sm font-medium leading-none">
-								{session?.user.name}
+								{session?.user.name} ({session?.user.username})
 							</p>
 							<p className="text-sm">{session?.user.email}</p>
 						</div>
@@ -179,7 +180,7 @@ export default function UserCard(props: {
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(session.id);
-												const res = await client.user.revokeSession({
+												const res = await client.revokeSession({
 													id: session.id,
 												});
 
@@ -276,20 +277,37 @@ export default function UserCard(props: {
 												: "Enable 2FA to secure your account"}
 										</DialogDescription>
 									</DialogHeader>
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="password">Password</Label>
-										<PasswordInput
-											id="password"
-											placeholder="Password"
-											value={twoFaPassword}
-											onChange={(e) => setTwoFaPassword(e.target.value)}
-										/>
-									</div>
+
+									{twoFactorVerifyURI ? (
+										<div className="flex flex-col gap-2">
+											<div className="flex items-center justify-center">
+												<QRCode value={twoFactorVerifyURI} />
+											</div>
+											<Label htmlFor="password">
+												Scan the QR code with your TOTP app
+											</Label>
+											<Input
+												value={twoFaPassword}
+												onChange={(e) => setTwoFaPassword(e.target.value)}
+												placeholder="Enter OTP"
+											/>
+										</div>
+									) : (
+										<div className="flex flex-col gap-2">
+											<Label htmlFor="password">Password</Label>
+											<PasswordInput
+												id="password"
+												placeholder="Password"
+												value={twoFaPassword}
+												onChange={(e) => setTwoFaPassword(e.target.value)}
+											/>
+										</div>
+									)}
 									<DialogFooter>
 										<Button
 											disabled={isPendingTwoFa}
 											onClick={async () => {
-												if (twoFaPassword.length < 8) {
+												if (twoFaPassword.length < 8 && !twoFactorVerifyURI) {
 													toast.error("Password must be at least 8 characters");
 													return;
 												}
@@ -309,15 +327,36 @@ export default function UserCard(props: {
 														},
 													});
 												} else {
+													if (twoFactorVerifyURI) {
+														await client.twoFactor.verifyTotp({
+															code: twoFaPassword,
+															fetchOptions: {
+																onError(context) {
+																	setIsPendingTwoFa(false);
+																	setTwoFaPassword("");
+																	toast.error(context.error.message);
+																},
+																onSuccess() {
+																	toast("2FA enabled successfully");
+																	setTwoFactorVerifyURI("");
+																	setIsPendingTwoFa(false);
+																	setTwoFaPassword("");
+																	setTwoFactorDialog(false);
+																},
+															},
+														});
+														return;
+													}
 													const res = await client.twoFactor.enable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
 																toast.error(context.error.message);
 															},
-															onSuccess() {
-																toast.success("2FA enabled successfully");
-																setTwoFactorDialog(false);
+															onSuccess(ctx) {
+																setTwoFactorVerifyURI(ctx.data.totpURI);
+																// toast.success("2FA enabled successfully");
+																// setTwoFactorDialog(false);
 															},
 														},
 													});
@@ -458,7 +497,7 @@ function ChangePassword() {
 								return;
 							}
 							setLoading(true);
-							const res = await user.changePassword({
+							const res = await client.changePassword({
 								newPassword: newPassword,
 								currentPassword: currentPassword,
 								revokeOtherSessions: signOutDevices,
@@ -571,7 +610,7 @@ function EditUserDialog(props: { session: Session | null }) {
 						disabled={isLoading}
 						onClick={async () => {
 							setIsLoading(true);
-							await user.update({
+							await client.updateUser({
 								image: image ? await convertImageToBase64(image) : undefined,
 								name: name ? name : undefined,
 								fetchOptions: {

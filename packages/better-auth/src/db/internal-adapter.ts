@@ -1,10 +1,19 @@
 import type { BetterAuthOptions } from "../types";
-import type { Adapter } from "../types/adapter";
+import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import { getAuthTables } from "./get-tables";
-import type { Account, Session, User, Verification } from "./schema";
+import {
+	parseSessionOutput,
+	parseUserOutput,
+	type Account,
+	type Session,
+	type User,
+	type Verification,
+} from "./schema";
 import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
+import { getIp } from "../utils/get-request-ip";
+import { convertFromDB } from "./utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -19,16 +28,31 @@ export const createInternalAdapter = (
 	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
-		createOAuthUser: async (user: User, account: Omit<Account, "userId">) => {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
+			account: Omit<Account, "userId" | "id"> & Partial<Account>,
+		) => {
 			try {
-				const createdUser = await createWithHooks(user, "user");
-				const createdAccount = await createWithHooks(account, "account");
+				const createdUser = await createWithHooks(
+					{
+						id: generateId(),
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+					},
+					"user",
+				);
+				const createdAccount = await createWithHooks(
+					{
+						id: generateId(),
+						...account,
+						userId: createdUser.id || user.id,
+					},
+					"account",
+				);
 				return {
 					user: createdUser,
-					account: {
-						...createdAccount,
-						userId: createdUser.id,
-					},
+					account: createdAccount,
 				};
 			} catch (e) {
 				console.log(e);
@@ -87,14 +111,16 @@ export const createInternalAdapter = (
 				field: string;
 				direction: "asc" | "desc";
 			},
+			where?: Where[],
 		) => {
 			const users = await adapter.findMany<User>({
 				model: tables.user.tableName,
 				limit,
 				offset,
 				sortBy,
+				where,
 			});
-			return users;
+			return users.map((user) => convertFromDB(tables.user.fields, user));
 		},
 		deleteUser: async (userId: string) => {
 			await adapter.delete({
@@ -106,7 +132,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -115,7 +141,7 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			await adapter.delete<User>({
+			await adapter.deleteMany({
 				model: tables.user.tableName,
 				where: [
 					{
@@ -127,13 +153,13 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request?: Request | Headers,
+			request: Request | Headers | undefined,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateId(),
+				id: generateId(32),
 				userId,
 				/**
 				 * If the user doesn't want to be remembered
@@ -143,7 +169,7 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
-				ipAddress: headers?.get("x-forwarded-for") || "",
+				ipAddress: request ? getIp(request) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...override,
 			};
@@ -171,23 +197,25 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return res;
+			return res as Session;
 		},
 		findSession: async (sessionId: string) => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(sessionId);
 				if (sessionStringified) {
 					const s = JSON.parse(sessionStringified);
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
 					return {
-						session: {
-							...s.session,
-							expiresAt: new Date(s.session.expiresAt),
-						},
-						user: {
-							...s.user,
-							createdAt: new Date(s.user.createdAt),
-							updatedAt: new Date(s.user.updatedAt),
-						},
+						session: parsedSession,
+						user: parsedUser,
 					} as {
 						session: Session;
 						user: User;
@@ -195,7 +223,7 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const session = await adapter.findOne<Session>({
+			const _session = await adapter.findOne<Session>({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -205,9 +233,11 @@ export const createInternalAdapter = (
 				],
 			});
 
-			if (!session) {
+			if (!_session) {
 				return null;
 			}
+
+			const session = convertFromDB(tables.session.fields, _session)!;
 
 			const user = await adapter.findOne<User>({
 				model: tables.user.tableName,
@@ -221,10 +251,81 @@ export const createInternalAdapter = (
 			if (!user) {
 				return null;
 			}
+			const parsedUser = parseUserOutput(
+				ctx.options,
+				convertFromDB(tables.user.fields, user)!,
+			);
 			return {
-				session,
-				user,
+				session: parseSessionOutput(ctx.options, session),
+				user: parsedUser,
 			};
+		},
+		findSessions: async (sessionIds: string[]) => {
+			if (secondaryStorage) {
+				const sessions: {
+					session: Session;
+					user: User;
+				}[] = [];
+				for (const sessionId of sessionIds) {
+					const sessionStringified = await secondaryStorage.get(sessionId);
+					if (sessionStringified) {
+						const s = JSON.parse(sessionStringified);
+						const session = {
+							session: {
+								...s.session,
+								expiresAt: new Date(s.session.expiresAt),
+							},
+							user: {
+								...s.user,
+								createdAt: new Date(s.user.createdAt),
+								updatedAt: new Date(s.user.updatedAt),
+							},
+						} as {
+							session: Session;
+							user: User;
+						};
+						sessions.push(session);
+					}
+				}
+				return sessions;
+			}
+
+			const sessions = await adapter.findMany<Session>({
+				model: tables.session.tableName,
+				where: [
+					{
+						field: "id",
+						value: sessionIds,
+						operator: "in",
+					},
+				],
+			});
+			const userIds = sessions.map((session) => {
+				const s = convertFromDB(tables.session.fields, session)!;
+				return s.userId;
+			});
+			if (!userIds.length) return [];
+			const users = await adapter.findMany<User>({
+				model: tables.user.tableName,
+				where: [
+					{
+						field: "id",
+						value: userIds,
+						operator: "in",
+					},
+				],
+			});
+			return sessions.map((session) => {
+				const user = users.find((u) => u.id === session.userId);
+				if (!user) return null;
+				return {
+					session: convertFromDB(tables.session.fields, session)!,
+					user: convertFromDB(tables.user.fields, user)!,
+				};
+			}) as {
+				session: Session;
+				user: User;
+			}[];
 		},
 		updateSession: async (sessionId: string, session: Partial<Session>) => {
 			const updatedSession = await updateWithHooks<Session>(
@@ -252,8 +353,12 @@ export const createInternalAdapter = (
 											user: parsedSession.user,
 										}),
 										parsedSession.session.expiresAt
-											? new Date(parsedSession.session.expiresAt).getTime()
-											: undefined,
+											? Math.floor(
+													(parsedSession.session.expiresAt.getTime() -
+														Date.now()) /
+														1000,
+												)
+											: sessionExpiration,
 									);
 								} else {
 									return null;
@@ -318,7 +423,7 @@ export const createInternalAdapter = (
 				}
 				return;
 			}
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: tables.session.tableName,
 				where: [
 					{
@@ -353,12 +458,14 @@ export const createInternalAdapter = (
 					],
 				});
 				return {
-					user,
-					accounts,
+					user: convertFromDB(tables.user.fields, user)!,
+					accounts: accounts.map(
+						(account) => convertFromDB(tables.account.fields, account)!,
+					),
 				};
 			}
 			return {
-				user,
+				user: convertFromDB(tables.user.fields, user)!,
 				accounts: [],
 			};
 		},
@@ -406,7 +513,12 @@ export const createInternalAdapter = (
 		) => {
 			const user = await updateWithHooks<User>(
 				data,
-				[{ field: "email", value: email }],
+				[
+					{
+						field: tables.user.fields.email.fieldName || "email",
+						value: email,
+					},
+				],
 				"user",
 			);
 			return user;
@@ -440,7 +552,9 @@ export const createInternalAdapter = (
 					},
 				],
 			});
-			return accounts;
+			return accounts.map(
+				(account) => convertFromDB(tables.account.fields, account) as Account,
+			);
 		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
 			const account = await updateWithHooks<Account>(
@@ -458,10 +572,10 @@ export const createInternalAdapter = (
 				},
 				"verification",
 			);
-			return verification;
+			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verification = await adapter.findOne<Verification>({
+			const verification = await adapter.findMany<Verification>({
 				model: tables.verification.tableName,
 				where: [
 					{
@@ -470,8 +584,24 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
+				limit: 100,
 			});
-			return verification;
+			const lastVerification = verification.pop();
+			if (verification.length > 0) {
+				await adapter.deleteMany({
+					model: tables.verification.tableName,
+					where: [
+						{
+							operator: "in",
+							field: "id",
+							value: verification.map((v) => v.id),
+						},
+					],
+				});
+			}
+			return lastVerification
+				? convertFromDB(tables.verification.fields, lastVerification)
+				: null;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({

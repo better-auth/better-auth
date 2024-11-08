@@ -1,5 +1,4 @@
 import {
-	APIError,
 	type Endpoint,
 	type EndpointResponse,
 	createEndpointCreator,

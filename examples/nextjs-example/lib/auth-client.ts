@@ -4,6 +4,8 @@ import {
 	passkeyClient,
 	twoFactorClient,
 	adminClient,
+	multiSessionClient,
+	usernameClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
 
@@ -16,6 +18,8 @@ export const client = createAuthClient({
 		}),
 		passkeyClient(),
 		adminClient(),
+		multiSessionClient(),
+		usernameClient(),
 	],
 	fetchOptions: {
 		onError(e) {
@@ -31,7 +35,7 @@ export const {
 	signIn,
 	signOut,
 	useSession,
-	user,
+
 	organization,
 	useListOrganizations,
 	useActiveOrganization,
