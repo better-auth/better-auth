@@ -8,6 +8,8 @@ import type {
 	InferSession,
 	InferUser,
 	Prettify,
+	Session,
+	User,
 } from "../../types";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
@@ -158,7 +160,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		},
 	);
 
-export const getSessionFromCtx = async (ctx: Context<any, any>) => {
+export const getSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: Context<any, any>,
+) => {
 	//@ts-ignore
 	const session = await getSession()({
 		...ctx,
@@ -166,7 +173,10 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 		headers: ctx.headers!,
 	});
 
-	return session;
+	return session as {
+		session: S & Session;
+		user: U & User;
+	};
 };
 
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {

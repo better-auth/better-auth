@@ -62,10 +62,10 @@ export type BetterAuthPlugin = {
 			matcher: (context: HookEndpointContext) => boolean;
 			handler: (
 				context: HookEndpointContext<{
-					returned: EndpointResponse;
+					returned: EndpointResponse | Response;
 				}>,
 			) => Promise<void | {
-				response: EndpointResponse;
+				response: EndpointResponse | Response;
 			}>;
 		}[];
 	};
