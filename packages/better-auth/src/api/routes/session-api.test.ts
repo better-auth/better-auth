@@ -4,7 +4,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 import type { Session } from "../../types";
 import Database from "better-sqlite3";
-import { memoryAdapter, type MemoryDB } from "../../adapters/memory";
+import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter } = await getTestInstance();
