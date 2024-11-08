@@ -37,6 +37,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
+		"/revoke-other-sessions": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{

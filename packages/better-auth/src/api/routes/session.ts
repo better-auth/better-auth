@@ -305,3 +305,35 @@ export const revokeSessions = createAuthEndpoint(
 		});
 	},
 );
+
+export const revokeOtherSessions = createAuthEndpoint(
+	"/revoke-other-sessions",
+	{
+		method: "POST",
+		requireHeaders: true,
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		if (!session.user) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const sessions = await ctx.context.internalAdapter.listSessions(
+			session.user.id,
+		);
+		const activeSessions = sessions.filter((session) => {
+			return session.expiresAt > new Date();
+		});
+		const otherSessions = activeSessions.filter(
+			(session) => session.id !== ctx.context.session.session.id,
+		);
+		await Promise.all(
+			otherSessions.map((session) =>
+				ctx.context.internalAdapter.deleteSession(session.id),
+			),
+		);
+		return ctx.json({
+			status: true,
+		});
+	},
+);
