@@ -176,7 +176,12 @@ function getDefaultSpecialRules() {
 	const specialRules = [
 		{
 			pathMatcher(path: string) {
-				return path.startsWith("/sign-in") || path.startsWith("/sign-up");
+				return (
+					path.startsWith("/sign-in") ||
+					path.startsWith("/sign-up") ||
+					path.startsWith("/change-password") ||
+					path.startsWith("/change-email")
+				);
 			},
 			window: 10,
 			max: 3,
