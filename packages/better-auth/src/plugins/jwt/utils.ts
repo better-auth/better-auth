@@ -1,3 +1,5 @@
+import { subtle, getRandomValues } from "uncrypto";
+
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
 	const keyMaterial = await crypto.subtle.importKey(
@@ -8,7 +10,7 @@ async function deriveKey(secretKey: string): Promise<CryptoKey> {
 		["deriveKey"],
 	);
 
-	return crypto.subtle.deriveKey(
+	return subtle.deriveKey(
 		{
 			name: "PBKDF2",
 			salt: enc.encode("encryption_salt"),
@@ -27,10 +29,10 @@ export async function encryptPrivateKey(
 	secretKey: string,
 ): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
 	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
-	const iv = crypto.getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
+	const iv = getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
 
 	const enc = new TextEncoder();
-	const ciphertext = await crypto.subtle.encrypt(
+	const ciphertext = await subtle.encrypt(
 		{
 			name: "AES-GCM",
 			iv: iv,
@@ -67,7 +69,7 @@ export async function decryptPrivateKey(
 		Buffer.from(encryptedPrivateKey, "base64"),
 	);
 
-	const decrypted = await crypto.subtle.decrypt(
+	const decrypted = await subtle.decrypt(
 		{
 			name: "AES-GCM",
 			iv: ivBuffer,
