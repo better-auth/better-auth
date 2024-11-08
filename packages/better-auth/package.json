@@ -240,6 +240,12 @@
         "types": "./dist/adapters/mongodb.d.cts",
         "default": "./dist/adapters/mongodb.cjs"
       }
+    },
+    "./plugins/access": {
+      "import": {
+        "types": "./dist/plugins/access.d.ts",
+        "default": "./dist/plugins/access.js"
+      }
     }
   },
   "typesVersions": {
