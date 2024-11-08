@@ -19,6 +19,7 @@ import {
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
+	revokeOtherSessions,
 	listUserAccounts,
 	changePassword,
 	deleteUser,
@@ -103,6 +104,7 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		revokeOtherSessions,
 		linkSocialAccount,
 		listUserAccounts,
 	};
