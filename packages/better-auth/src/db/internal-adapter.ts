@@ -556,6 +556,18 @@ export const createInternalAdapter = (
 				(account) => convertFromDB(tables.account.fields, account) as Account,
 			);
 		},
+		findAccount: async (accountId: string) => {
+			const account = await adapter.findOne<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: tables.account.fields.accountId.fieldName || "accountId",
+						value: accountId,
+					},
+				],
+			});
+			return account;
+		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
 			const account = await updateWithHooks<Account>(
 				data,

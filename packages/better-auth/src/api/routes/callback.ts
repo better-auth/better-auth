@@ -58,16 +58,30 @@ export const callbackOAuth = createAuthEndpoint(
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
 		const id = generateId();
-		const data = userSchema.safeParse({
-			...userInfo,
+		const data = {
 			id,
-		});
+			...userInfo,
+		};
 
-		if (!userInfo || data.success === false) {
-			logger.error("Unable to get user info", data.error);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
+		function redirectOnError(error: string) {
+			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			if (url.includes("?")) {
+				url = `${url}&error=${error}`;
+			} else {
+				url = `${url}?error=${error}`;
+			}
+			throw c.redirect(url);
+		}
+		if (!userInfo) {
+			logger.error("Unable to get user info");
+			return redirectOnError("unable_to_get_user_info");
+		}
+
+		if (!data.email) {
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
+			return redirectOnError("email_not_found");
 		}
 
 		if (!callbackURL) {
@@ -77,7 +91,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== userInfo.email.toLowerCase()) {
+			if (link.email !== data.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
@@ -98,16 +112,8 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(toRedirectTo);
 		}
 
-		function redirectOnError(error: string) {
-			throw c.redirect(
-				`${
-					errorURL || callbackURL || `${c.context.baseURL}/error`
-				}?error=${error}`,
-			);
-		}
-
 		const dbUser = await c.context.internalAdapter
-			.findUserByEmail(userInfo.email, {
+			.findUserByEmail(data.email, {
 				includeAccounts: true,
 			})
 			.catch((e) => {
@@ -167,43 +173,59 @@ export const callbackOAuth = createAuthEndpoint(
 				});
 			}
 		} else {
-			try {
-				const emailVerified = userInfo.emailVerified || false;
-				user = await c.context.internalAdapter
-					.createOAuthUser(
-						{
-							...data.data,
-							emailVerified,
-						},
-						{
-							accessToken: tokens.accessToken,
-							idToken: tokens.idToken,
-							refreshToken: tokens.refreshToken,
-							expiresAt: tokens.accessTokenExpiresAt,
-							providerId: provider.id,
-							accountId: userInfo.id.toString(),
-						},
-					)
-					.then((res) => res?.user);
-				if (
-					!emailVerified &&
-					user &&
-					c.context.options.emailVerification?.sendOnSignUp
-				) {
-					const token = await createEmailVerificationToken(
-						c.context.secret,
-						user.email,
-					);
-					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-					await c.context.options.emailVerification?.sendVerificationEmail?.(
-						user,
-						url,
-						token,
-					);
+			const findAccount = await c.context.internalAdapter.findAccount(data.id);
+			if (findAccount) {
+				const accountUser = await c.context.internalAdapter.findUserById(
+					findAccount.userId,
+				);
+				if (!accountUser) {
+					return redirectOnError("account_linked_to_unknown_user");
 				}
-			} catch (e) {
-				logger.error("Unable to create user", e);
-				redirectOnError("unable_to_create_user");
+				if (accountUser.email && accountUser.email !== data.email) {
+					return redirectOnError("account_linked_to_different_email");
+				}
+				user = accountUser;
+			} else {
+				try {
+					const emailVerified = userInfo.emailVerified || false;
+					user = await c.context.internalAdapter
+						.createOAuthUser(
+							{
+								...data,
+								email: data.email as string,
+								name: data.name || "",
+								emailVerified,
+							},
+							{
+								accessToken: tokens.accessToken,
+								idToken: tokens.idToken,
+								refreshToken: tokens.refreshToken,
+								expiresAt: tokens.accessTokenExpiresAt,
+								providerId: provider.id,
+								accountId: userInfo.id.toString(),
+							},
+						)
+						.then((res) => res?.user);
+					if (
+						!emailVerified &&
+						user &&
+						c.context.options.emailVerification?.sendOnSignUp
+					) {
+						const token = await createEmailVerificationToken(
+							c.context.secret,
+							user.email,
+						);
+						const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+						await c.context.options.emailVerification?.sendVerificationEmail?.(
+							user,
+							url,
+							token,
+						);
+					}
+				} catch (e) {
+					logger.error("Unable to create user", e);
+					redirectOnError("unable_to_create_user");
+				}
 			}
 		}
 		if (!user) {
