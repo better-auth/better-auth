@@ -92,10 +92,10 @@ await authClient.changePassword({
 
 ### Set Password
 
-If a user was registered using oAuth or other providers, they won't have a password. In this case, you can use the `setPassword` function to set a password for the user. This will create a new credential account with the password.
+If a user was registered using OAuth or other providers, they won't have a password or a credential account. In this case, you can use the `setPassword` action to set a password for the user. For security reasons, this function can only be called from the server. We recommend having users go through a 'forgot password' flow to set a password for their account.
 
 ```ts
-await authClient.setPassword({
+await auth.api.setPassword({
     password,
 });
 ```
