@@ -5,9 +5,10 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import type { BetterAuthPlugin, Session, User } from "../../types";
+import type { BetterAuthPlugin, Session, User, Where } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
+import { logger } from "../../utils";
 
 export interface UserWithRole extends User {
 	role?: string;
@@ -221,61 +222,62 @@ export const admin = (options?: AdminOptions) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						search: z
-							.object({
-								field: z.enum(["email", "name"]),
-								operator: z
-									.enum(["contains", "starts_with", "ends_with"])
-									.default("contains"),
-								value: z.string(),
-							})
+						searchValue: z.string().optional(),
+						searchField: z.enum(["email", "name"]).optional(),
+						searchOperator: z
+							.enum(["contains", "starts_with", "ends_with"])
 							.optional(),
 						limit: z.string().or(z.number()).optional(),
 						offset: z.string().or(z.number()).optional(),
 						sortBy: z.string().optional(),
 						sortDirection: z.enum(["asc", "desc"]).optional(),
-						filter: z
-							.array(
-								z.object({
-									field: z.string(),
-									value: z.string().or(z.number()).or(z.boolean()),
-									operator: z.enum(["eq", "ne", "lt", "lte", "gt", "gte"]),
-									connector: z.enum(["AND", "OR"]).optional(),
-								}),
-							)
+						filterField: z.string().optional(),
+						filterValue: z.string().or(z.number()).or(z.boolean()).optional(),
+						filterOperator: z
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte"])
 							.optional(),
 					}),
 				},
 				async (ctx) => {
-					const where = [];
+					const where: Where[] = [];
 
-					if (ctx.query?.search) {
+					if (ctx.query?.searchValue) {
 						where.push({
-							field: ctx.query.search.field,
-							operator: ctx.query.search.operator,
-							value: ctx.query.search.value,
+							field: ctx.query.searchField || "email",
+							operator: ctx.query.searchOperator || "contains",
+							value: ctx.query.searchValue,
 						});
 					}
 
-					if (ctx.query?.filter) {
-						where.push(...(ctx.query.filter || []));
+					if (ctx.query?.filterValue) {
+						where.push({
+							field: ctx.query.filterField || "email",
+							operator: ctx.query.filterOperator || "eq",
+							value: ctx.query.filterValue,
+						});
 					}
 
-					const users = await ctx.context.internalAdapter.listUsers(
-						Number(ctx.query?.limit) || undefined,
-						Number(ctx.query?.offset) || undefined,
-						ctx.query?.sortBy
-							? {
-									field: ctx.query.sortBy,
-									direction: ctx.query.sortDirection || "asc",
-								}
-							: undefined,
-
-						where.length ? where : undefined,
-					);
-					return ctx.json({
-						users: users as UserWithRole[],
-					});
+					try {
+						const users = await ctx.context.internalAdapter.listUsers(
+							Number(ctx.query?.limit) || undefined,
+							Number(ctx.query?.offset) || undefined,
+							ctx.query?.sortBy
+								? {
+										field: ctx.query.sortBy,
+										direction: ctx.query.sortDirection || "asc",
+									}
+								: undefined,
+							where.length ? where : undefined,
+						);
+						return ctx.json({
+							users: users as UserWithRole[],
+						});
+					} catch (e) {
+						console.log(e);
+						return ctx.json({
+							users: [],
+						});
+					}
 				},
 			),
 			listUserSessions: createAuthEndpoint(
