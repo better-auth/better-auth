@@ -14,6 +14,7 @@ import {
 	validateAuthorizationCode,
 	type OAuth2Tokens,
 } from "../../oauth2";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -308,124 +309,60 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-					const userInfo = provider.getUserInfo
-						? await provider.getUserInfo(tokens)
-						: await getUserInfo(
-								tokens,
-								provider.type || "oauth2",
-								finalUserInfoUrl,
-							);
+					const userInfo = (
+						provider.getUserInfo
+							? await provider.getUserInfo(tokens)
+							: await getUserInfo(
+									tokens,
+									provider.type || "oauth2",
+									finalUserInfoUrl,
+								)
+					) as {
+						id: string;
+					};
 					const id = generateId();
-					const user = userInfo
-						? userSchema.safeParse({
-								...userInfo,
-								id,
-							})
-						: null;
-					if (!user?.success) {
-						throw ctx.redirect(`${errorURL}?error=oauth_user_info_invalid`);
-					}
-					const dbUser = await ctx.context.internalAdapter
-						.findUserByEmail(user.data.email, {
-							includeAccounts: true,
-						})
-						.catch((e) => {
-							logger.error(
-								"Better auth was unable to query your database.\nError: ",
-								e,
-							);
-							throw ctx.redirect(`${errorURL}?error=internal_server_error`);
-						});
+					const data = userSchema.safeParse({
+						...userInfo,
+						id,
+					});
 
-					const userId = dbUser?.user.id || id;
-
-					if (dbUser) {
-						//check if user has already linked this provider
-						const hasBeenLinked = dbUser.accounts.find(
-							(a) => a.providerId === provider.providerId,
+					if (!userInfo || data.success === false) {
+						logger.error("Unable to get user info", data.error);
+						throw ctx.redirect(
+							`${ctx.context.baseURL}/error?error=please_restart_the_process`,
 						);
-
-						const trustedProviders =
-							ctx.context.options.account?.accountLinking?.trustedProviders;
-						const isTrustedProvider = trustedProviders
-							? trustedProviders.includes(provider.providerId as "apple")
-							: true;
-
-						if (
-							!hasBeenLinked &&
-							(!user?.data.emailVerified || !isTrustedProvider)
-						) {
-							let url: URL;
-							try {
-								url = new URL(errorURL!);
-								url.searchParams.set("error", "account_not_linked");
-							} catch (e) {
-								throw ctx.redirect(`${errorURL}?error=account_not_linked`);
-							}
-							throw ctx.redirect(url.toString());
-						}
-						if (!hasBeenLinked) {
-							try {
-								await ctx.context.internalAdapter.linkAccount({
-									providerId: provider.providerId,
-									accountId: user.data.id,
-									id: `${provider.providerId}:${user.data.id}`,
-									userId: dbUser.user.id,
-									accessToken: tokens.accessToken,
-									idToken: tokens.idToken,
-									refreshToken: tokens.refreshToken,
-									expiresAt: tokens.accessTokenExpiresAt,
-								});
-							} catch (e) {
-								console.log(e);
-								throw ctx.redirect(`${errorURL}?error=failed_linking_account`);
-							}
-						} else {
-							await ctx.context.internalAdapter.updateAccount(
-								hasBeenLinked.id,
-								{
-									accessToken: tokens.accessToken,
-									idToken: tokens.idToken,
-									refreshToken: tokens.refreshToken,
-									expiresAt: tokens.accessTokenExpiresAt,
-								},
-							);
-						}
-					} else {
-						try {
-							await ctx.context.internalAdapter.createOAuthUser(user.data, {
-								id: `${provider.providerId}:${user.data.id}`,
-								providerId: provider.providerId,
-								accountId: user.data.id,
-								accessToken: tokens.accessToken,
-								idToken: tokens.idToken,
-								refreshToken: tokens.refreshToken,
-								expiresAt: tokens.accessTokenExpiresAt,
-							});
-						} catch (e) {
-							const url = new URL(errorURL!);
-							url.searchParams.set("error", "unable_to_create_user");
-							ctx.setHeader("Location", url.toString());
-							throw ctx.redirect(url.toString());
-						}
 					}
-
+					const result = await handleOAuthUserInfo(ctx, {
+						userInfo: data.data,
+						account: {
+							providerId: provider.providerId,
+							accountId: userInfo.id,
+							accessToken: tokens.accessToken,
+						},
+					});
+					function redirectOnError(error: string) {
+						throw ctx.redirect(
+							`${
+								errorURL || callbackURL || `${ctx.context.baseURL}/error`
+							}?error=${error}`,
+						);
+					}
+					if (result.error) {
+						return redirectOnError(result.error.split(" ").join("_"));
+					}
+					const { session, user } = result.data!;
+					await setSessionCookie(ctx, {
+						session,
+						user,
+					});
+					let toRedirectTo: string;
 					try {
-						const session = await ctx.context.internalAdapter.createSession(
-							userId || id,
-							ctx.request,
-						);
-						if (!session) {
-							throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
-						}
-						await setSessionCookie(ctx, {
-							session,
-							user: user.data,
-						});
+						const url = new URL(callbackURL);
+						toRedirectTo = url.toString();
 					} catch {
-						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
+						toRedirectTo = callbackURL;
 					}
-					throw ctx.redirect(callbackURL);
+					throw ctx.redirect(toRedirectTo);
 				},
 			),
 		},

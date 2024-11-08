@@ -3,6 +3,7 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { BetterAuthError } from "../error";
 import { logger } from "../utils/logger";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { betterFetch } from "@better-fetch/fetch";
 
 export interface GoogleProfile {
 	aud: string;
@@ -75,6 +76,31 @@ export const google = (options: GoogleOptions) => {
 				options,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
+		},
+		async verifyIdToken(token, nonce) {
+			if (options.disableIdTokenSignIn) {
+				return false;
+			}
+			if (options.verifyIdToken) {
+				return options.verifyIdToken(token, nonce);
+			}
+			const googlePublicKeyUrl = `https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${token}`;
+			const { data: tokenInfo } = await betterFetch<{
+				aud: string;
+				iss: string;
+				email: string;
+				email_verified: boolean;
+				name: string;
+				picture: string;
+				sub: string;
+			}>(googlePublicKeyUrl);
+			if (!tokenInfo) {
+				return false;
+			}
+			const isValid =
+				tokenInfo.aud === options.clientId &&
+				tokenInfo.iss === "https://accounts.google.com";
+			return isValid;
 		},
 		async getUserInfo(token) {
 			if (!token.idToken) {

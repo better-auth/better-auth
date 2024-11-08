@@ -1756,6 +1756,10 @@ importers:
         version: 1.6.0(@types/node@22.8.6)(happy-dom@15.8.0)(lightningcss@1.27.0)(terser@5.36.0)
 
   packages/expo:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.23.8
     devDependencies:
       '@better-fetch/fetch':
         specifier: 1.1.12

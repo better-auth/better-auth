@@ -1,4 +1,7 @@
+import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
+import { z } from "zod";
 
 export const expo = () => {
 	return {
