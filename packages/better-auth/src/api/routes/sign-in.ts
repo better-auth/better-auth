@@ -117,8 +117,22 @@ export const signInSocial = createAuthEndpoint(
 					message: "Failed to get user info",
 				});
 			}
+			if (!userInfo.user.email) {
+				c.context.logger.error("User email not found", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: "User email not found",
+				});
+			}
 			const data = await handleOAuthUserInfo(c, {
-				userInfo: userInfo.user,
+				userInfo: {
+					email: userInfo.user.email,
+					id: userInfo.user.id,
+					name: userInfo.user.name || "",
+					image: userInfo.user.image,
+					emailVerified: userInfo.user.emailVerified || false,
+				},
 				account: {
 					providerId: provider.id,
 					accountId: userInfo.user.id,

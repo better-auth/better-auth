@@ -110,17 +110,15 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			throw c.redirect(toRedirectTo);
 		}
-    
-		function redirectOnError(error: string) {
-			throw c.redirect(
-				`${
-					errorURL || callbackURL || `${c.context.baseURL}/error`
-				}?error=${error}`,
-			);
-		}
 
 		const result = await handleOAuthUserInfo(c, {
-			userInfo: data.data,
+			userInfo: {
+				email: data.email,
+				id: data.id,
+				name: data.name || "",
+				image: data.image,
+				emailVerified: data.emailVerified || false,
+			},
 			account: {
 				providerId: provider.id,
 				accountId: userInfo.id,
