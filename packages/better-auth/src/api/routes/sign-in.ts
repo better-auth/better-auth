@@ -5,6 +5,7 @@ import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState, logger } from "../../utils";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -28,6 +29,41 @@ export const signInSocial = createAuthEndpoint(
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(socialProviderList),
+			/**
+			 * ID token from the provider
+			 *
+			 * This is used to sign in the user
+			 * if the user is already signed in with the
+			 * provider in the frontend.
+			 *
+			 * Only applicable if the provider supports
+			 * it. Currently only `apple` and `google` is
+			 * supported out of the box.
+			 */
+			idToken: z.optional(
+				z.object({
+					/**
+					 * ID token from the provider
+					 */
+					token: z.string(),
+					/**
+					 * The nonce used to generate the token
+					 */
+					nonce: z.string().optional(),
+					/**
+					 * Access token from the provider
+					 */
+					accessToken: z.string().optional(),
+					/**
+					 * Refresh token from the provider
+					 */
+					refreshToken: z.string().optional(),
+					/**
+					 * Expiry date of the token
+					 */
+					expiresAt: z.number().optional(),
+				}),
+			),
 		}),
 	},
 	async (c) => {
@@ -45,6 +81,62 @@ export const signInSocial = createAuthEndpoint(
 				message: "Provider not found",
 			});
 		}
+
+		if (c.body.idToken) {
+			if (!provider.verifyIdToken) {
+				c.context.logger.error(
+					"Provider does not support id token verification",
+					{
+						provider: c.body.provider,
+					},
+				);
+				throw new APIError("NOT_FOUND", {
+					message: "Provider does not support id token verification",
+				});
+			}
+			const { token, nonce } = c.body.idToken;
+			const valid = await provider.verifyIdToken(token, nonce);
+			if (!valid) {
+				c.context.logger.error("Invalid id token", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: "Invalid id token",
+				});
+			}
+			const userInfo = await provider.getUserInfo({
+				idToken: token,
+				accessToken: c.body.idToken.accessToken,
+				refreshToken: c.body.idToken.refreshToken,
+			});
+			if (!userInfo || !userInfo?.user) {
+				c.context.logger.error("Failed to get user info", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: "Failed to get user info",
+				});
+			}
+			const data = await handleOAuthUserInfo(c, {
+				userInfo: userInfo.user,
+				account: {
+					providerId: provider.id,
+					accountId: userInfo.user.id,
+					accessToken: c.body.idToken.accessToken,
+				},
+			});
+			if (data.error) {
+				throw new APIError("UNAUTHORIZED", {
+					message: data.error,
+				});
+			}
+			await setSessionCookie(c, data.data!);
+			return c.json({
+				session: data.data!.session,
+				user: data.data!.user,
+			});
+		}
+
 		const { codeVerifier, state } = await generateState(c);
 		const url = await provider.createAuthorizationURL({
 			state,
