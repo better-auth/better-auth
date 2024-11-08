@@ -8,7 +8,11 @@ import type {
 	InferSession,
 	InferUser,
 	Prettify,
+	Session,
+	User,
 } from "../../types";
+import { hmac } from "../../crypto/hash";
+import { safeJSONParse } from "../../utils/json";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -38,10 +42,33 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 				}
 
-				const sessionData = await ctx.getSignedCookie(
+				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
-					ctx.context.secret,
 				);
+				const sessionDataPayload = sessionDataCookie
+					? safeJSONParse<{
+							session: {
+								session: Session;
+								user: User;
+							};
+							signature: string;
+							expiresAt: number;
+						}>(Buffer.from(sessionDataCookie, "base64").toString())
+					: null;
+				if (sessionDataPayload) {
+					const isValid = await hmac.verify({
+						value: JSON.stringify(sessionDataPayload.session),
+						signature: sessionDataPayload?.signature,
+						secret: ctx.context.secret,
+					});
+					if (!isValid) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null, {
+							status: 401,
+						});
+					}
+				}
+
 				const dontRememberMe = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -50,18 +77,26 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * If session data is present in the cookie, return it
 				 */
 				if (
-					sessionData &&
+					sessionDataPayload?.session &&
 					ctx.context.options.session?.cookieCache?.enabled &&
 					!ctx.query?.disableCookieCache
 				) {
-					const session = JSON.parse(sessionData)?.session;
-					if (session?.expiresAt > new Date()) {
+					const session = sessionDataPayload.session;
+					const hasExpired =
+						sessionDataPayload.expiresAt < Date.now() ||
+						session.session.expiresAt < new Date();
+					if (!hasExpired) {
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
 								user: InferUser<Option>;
 							},
 						);
+					} else {
+						const dataCookie = ctx.context.authCookies.sessionData.name;
+						ctx.setCookie(dataCookie, "", {
+							maxAge: 0,
+						});
 					}
 				}
 
