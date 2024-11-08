@@ -28,7 +28,13 @@ export interface OAuthProvider<
 		codeVerifier?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
-		user: Omit<User, "createdAt" | "updatedAt">;
+		user: {
+			id: string;
+			name?: string;
+			email?: string | null;
+			image?: string;
+			emailVerified: boolean;
+		};
 		data: T;
 	} | null>;
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
