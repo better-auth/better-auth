@@ -20,9 +20,9 @@ export const removeMember = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId =
+		const organizationId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
-		if (!orgId) {
+		if (!organizationId) {
 			return ctx.json(null, {
 				status: 400,
 				body: {
@@ -33,7 +33,7 @@ export const removeMember = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
@@ -72,12 +72,12 @@ export const removeMember = createAuthEndpoint(
 		if (ctx.body.memberIdOrEmail.includes("@")) {
 			existing = await adapter.findMemberByEmail({
 				email: ctx.body.memberIdOrEmail,
-				organizationId: orgId,
+				organizationId: organizationId,
 			});
 		} else {
 			existing = await adapter.findMemberById(ctx.body.memberIdOrEmail);
 		}
-		if (existing?.organizationId !== orgId) {
+		if (existing?.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Member not found!",
 			});
@@ -111,9 +111,9 @@ export const updateMemberRole = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId =
+		const organizationId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
-		if (!orgId) {
+		if (!organizationId) {
 			return ctx.json(null, {
 				status: 400,
 				body: {
@@ -124,7 +124,7 @@ export const updateMemberRole = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (!member) {
 			return ctx.json(null, {
@@ -185,8 +185,8 @@ export const getActiveMember = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const orgId = session.session.activeOrganizationId;
-		if (!orgId) {
+		const organizationId = session.session.activeOrganizationId;
+		if (!organizationId) {
 			return ctx.json(null, {
 				status: 400,
 				body: {
@@ -197,7 +197,7 @@ export const getActiveMember = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (!member) {
 			return ctx.json(null, {
