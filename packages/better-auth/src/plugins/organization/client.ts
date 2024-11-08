@@ -103,7 +103,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				>
 			>(
 				[$activeOrgSignal],
-				"/organization/get-full-organization",
+				"/organization/get-full",
 				$fetch,
 				() => ({
 					method: "GET",
