@@ -169,7 +169,7 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
-				ipAddress: request ? getIp(request) || "" : "",
+				ipAddress: request ? getIp(request, ctx.options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...override,
 			};
@@ -555,6 +555,18 @@ export const createInternalAdapter = (
 			return accounts.map(
 				(account) => convertFromDB(tables.account.fields, account) as Account,
 			);
+		},
+		findAccount: async (accountId: string) => {
+			const account = await adapter.findOne<Account>({
+				model: tables.account.tableName,
+				where: [
+					{
+						field: tables.account.fields.accountId.fieldName || "accountId",
+						value: accountId,
+					},
+				],
+			});
+			return account;
 		},
 		updateAccount: async (accountId: string, data: Partial<Account>) => {
 			const account = await updateWithHooks<Account>(

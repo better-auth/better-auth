@@ -57,16 +57,30 @@ export const callbackOAuth = createAuthEndpoint(
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
 		const id = generateId();
-		const data = userSchema.safeParse({
-			...userInfo,
+		const data = {
 			id,
-		});
+			...userInfo,
+		};
 
-		if (!userInfo || data.success === false) {
-			logger.error("Unable to get user info", data.error);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
+		function redirectOnError(error: string) {
+			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			if (url.includes("?")) {
+				url = `${url}&error=${error}`;
+			} else {
+				url = `${url}?error=${error}`;
+			}
+			throw c.redirect(url);
+		}
+		if (!userInfo) {
+			logger.error("Unable to get user info");
+			return redirectOnError("unable_to_get_user_info");
+		}
+
+		if (!data.email) {
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
+			return redirectOnError("email_not_found");
 		}
 
 		if (!callbackURL) {
@@ -76,7 +90,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== userInfo.email.toLowerCase()) {
+			if (link.email !== data.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
@@ -96,7 +110,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			throw c.redirect(toRedirectTo);
 		}
-
+    
 		function redirectOnError(error: string) {
 			throw c.redirect(
 				`${

@@ -14,6 +14,7 @@ export default defineConfig((env) => {
 			"adapters/drizzle": "./src/adapters/drizzle-adapter/index.ts",
 			"adapters/mongodb": "./src/adapters/mongodb-adapter/index.ts",
 			"adapters/kysely": "./src/adapters/kysely-adapter/index.ts",
+			"adapters/memory": "./src/adapters/memory/index.ts",
 			db: "./src/db/index.ts",
 			oauth2: "./src/oauth2/index.ts",
 			react: "./src/client/react.ts",

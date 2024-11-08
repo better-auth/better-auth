@@ -396,6 +396,28 @@ export interface BetterAuthOptions {
 	 */
 	advanced?: {
 		/**
+		 * Ip address configuration
+		 */
+		ipAddress?: {
+			/**
+			 * List of headers to use for ip address
+			 *
+			 * Ip address is used for rate limiting and session tracking
+			 *
+			 * @example ["x-client-ip", "x-forwarded-for"]
+			 *
+			 * @default
+			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+			 */
+			ipAddressHeaders?: string[];
+			/**
+			 * Disable ip tracking
+			 *
+			 * ⚠︎ This is a security risk and it may expose your application to abuse
+			 */
+			disableIpTracking?: boolean;
+		};
+		/**
 		 * Use secure cookies
 		 *
 		 * @default false

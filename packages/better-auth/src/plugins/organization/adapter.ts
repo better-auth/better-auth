@@ -219,26 +219,29 @@ export const getOrgAdapter = (
 			});
 			return member;
 		},
-		updateOrganization: async (orgId: string, data: Partial<Organization>) => {
+		updateOrganization: async (
+			organizationId: string,
+			data: Partial<Organization>,
+		) => {
 			const organization = await adapter.update<Organization>({
 				model: "organization",
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 				update: data,
 			});
 			return organization;
 		},
-		deleteOrganization: async (orgId: string) => {
+		deleteOrganization: async (organizationId: string) => {
 			await adapter.delete({
 				model: "member",
 				where: [
 					{
 						field: "organizationId",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -247,7 +250,7 @@ export const getOrgAdapter = (
 				where: [
 					{
 						field: "organizationId",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -256,13 +259,16 @@ export const getOrgAdapter = (
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
-			return orgId;
+			return organizationId;
 		},
-		setActiveOrganization: async (sessionId: string, orgId: string | null) => {
+		setActiveOrganization: async (
+			sessionId: string,
+			organizationId: string | null,
+		) => {
 			const session = await adapter.update<Session>({
 				model: context.tables.session.tableName,
 				where: [
@@ -272,18 +278,18 @@ export const getOrgAdapter = (
 					},
 				],
 				update: {
-					activeOrganizationId: orgId,
+					activeOrganizationId: organizationId,
 				},
 			});
 			return session;
 		},
-		findOrganizationById: async (orgId: string) => {
+		findOrganizationById: async (organizationId: string) => {
 			const organization = await adapter.findOne<Organization>({
 				model: "organization",
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -292,19 +298,19 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (orgId: string, db?: Kysely<any>) => {
+		findFullOrganization: async (organizationId: string, db?: Kysely<any>) => {
 			const [org, invitations, members] = await Promise.all([
 				adapter.findOne<Organization>({
 					model: "organization",
-					where: [{ field: "id", value: orgId }],
+					where: [{ field: "id", value: organizationId }],
 				}),
 				adapter.findMany<Invitation>({
 					model: "invitation",
-					where: [{ field: "organizationId", value: orgId }],
+					where: [{ field: "organizationId", value: organizationId }],
 				}),
 				adapter.findMany<Member>({
 					model: "member",
-					where: [{ field: "organizationId", value: orgId }],
+					where: [{ field: "organizationId", value: organizationId }],
 				}),
 			]);
 
