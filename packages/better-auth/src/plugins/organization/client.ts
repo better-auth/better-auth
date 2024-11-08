@@ -101,14 +101,9 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						invitations: Invitation[];
 					}
 				>
-			>(
-				[$activeOrgSignal],
-				"/organization/get-full-organization",
-				$fetch,
-				() => ({
-					method: "GET",
-				}),
-			);
+			>([$activeOrgSignal], "/organization/get-full", $fetch, () => ({
+				method: "GET",
+			}));
 
 			const activeMember = useAuthQuery<Member>(
 				[$activeMemberSignal],

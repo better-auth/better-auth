@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "0.7.6-beta.1",
+  "version": "0.7.6-beta.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -241,6 +241,16 @@
         "default": "./dist/adapters/mongodb.cjs"
       }
     },
+    "./adapters/memory": {
+      "import": {
+        "types": "./dist/adapters/memory.d.ts",
+        "default": "./dist/adapters/memory.js"
+      },
+      "require": {
+        "types": "./dist/adapters/memory.d.cts",
+        "default": "./dist/adapters/memory.cjs"
+      }
+    },
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access.d.ts",
@@ -321,6 +331,9 @@
       ],
       "adapters/mongodb": [
         "./dist/adapters/mongodb.d.ts"
+      ],
+      "adapters/memory": [
+        "./dist/adapters/memory.d.ts"
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"

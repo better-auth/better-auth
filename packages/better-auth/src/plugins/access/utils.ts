@@ -1,4 +1,4 @@
-import { Role } from "./src/access";
+import { Role } from "./access";
 
 export const permissionFromString = (permission?: string) => {
 	return Role.fromString(permission ?? "");
