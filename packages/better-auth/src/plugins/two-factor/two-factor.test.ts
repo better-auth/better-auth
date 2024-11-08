@@ -211,6 +211,13 @@ describe("two factor", async () => {
 				},
 			},
 		});
+		const currentBackupCodes = await auth.api.viewBackupCodes({
+			body: {
+				userId: session.data?.user.id!,
+			},
+		});
+		expect(currentBackupCodes.backupCodes).toBeDefined();
+		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
 	});
 
 	it("should trust device", async () => {
