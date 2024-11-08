@@ -169,7 +169,7 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
-				ipAddress: request ? getIp(request) || "" : "",
+				ipAddress: request ? getIp(request, ctx.options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...override,
 			};
