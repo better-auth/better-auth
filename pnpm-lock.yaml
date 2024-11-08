@@ -1572,18 +1572,6 @@ importers:
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
-      '@nanostores/query':
-        specifier: ^0.3.4
-        version: 0.3.4(nanostores@0.11.3)
-      '@nanostores/react':
-        specifier: ^0.8.0
-        version: 0.8.0(nanostores@0.11.3)(react@18.3.1)
-      '@nanostores/solid':
-        specifier: ^0.4.2
-        version: 0.4.2(nanostores@0.11.3)(solid-js@1.9.3)
-      '@nanostores/vue':
-        specifier: ^0.10.0
-        version: 0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.1-rc))
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -20099,13 +20087,6 @@ snapshots:
     dependencies:
       nanostores: 0.11.3
       solid-js: 1.9.3
-
-  '@nanostores/vue@0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.1-rc))':
-    dependencies:
-      nanostores: 0.11.3
-      vue: 3.5.12(typescript@5.6.1-rc)
-    optionalDependencies:
-      '@vue/devtools-api': 7.6.2
 
   '@nanostores/vue@0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.3))':
     dependencies:
