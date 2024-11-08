@@ -79,6 +79,14 @@ await authClient.revokeSession({
 })
 ```
 
+### Revoke Other Sessions
+
+To revoke all other sessions except the current session, you can use the `revokeOtherSessions` function.
+
+```ts title="client.ts"
+await authClient.revokeOtherSessions()
+```
+
 ### Revoke All Sessions
 
 To revoke all sessions, you can use the `revokeSessions` function.
