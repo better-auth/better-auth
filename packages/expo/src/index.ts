@@ -1,7 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthEndpoint } from "better-auth/api";
-import { z } from "zod";
 
 export const expo = () => {
 	return {
@@ -18,6 +15,9 @@ export const expo = () => {
 			};
 		},
 		async onRequest(request, ctx) {
+			if (request.headers.get("origin")) {
+				return;
+			}
 			/**
 			 * To bypass origin check from expo, we need to set the origin header to the expo-origin header
 			 */

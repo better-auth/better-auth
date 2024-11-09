@@ -6,9 +6,11 @@ export const redirectPlugin = {
 	hooks: {
 		onSuccess(context) {
 			if (context.data?.url && context.data?.redirect) {
-				if (typeof window !== "undefined") {
+				if (typeof window !== "undefined" && window.location) {
 					if (window.location) {
-						window.location.href = context.data.url;
+						try {
+							window.location.href = context.data.url;
+						} catch {}
 					}
 				}
 			}
@@ -21,11 +23,13 @@ export const addCurrentURL = {
 	name: "Add current URL",
 	hooks: {
 		onRequest(context) {
-			if (typeof window !== "undefined") {
+			if (typeof window !== "undefined" && window.location) {
 				if (window.location) {
-					const url = new URL(context.url);
-					url.searchParams.set("currentURL", window.location.href);
-					context.url = url;
+					try {
+						const url = new URL(context.url);
+						url.searchParams.set("currentURL", window.location.href);
+						context.url = url;
+					} catch {}
 				}
 			}
 			return context;

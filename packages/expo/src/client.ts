@@ -104,7 +104,7 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 	}
 	return {
 		id: "expo",
-		getActions($fetch, $store) {
+		getActions(_, $store) {
 			if (Platform.OS === "web") return {};
 			store = $store;
 			const localSession = storage.getItem(cookieName);
@@ -114,15 +114,7 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 					error: null,
 					isPending: false,
 				});
-			return {
-				signInWithIdToken: async (idToken: string) => {
-					const { data, error } = await $fetch("/sign-in/id-token", {
-						method: "POST",
-						body: JSON.stringify({ idToken }),
-					});
-					return { data, error };
-				},
-			};
+			return {};
 		},
 		fetchPlugins: [
 			{

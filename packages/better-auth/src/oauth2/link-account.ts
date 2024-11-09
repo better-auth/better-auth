@@ -17,7 +17,7 @@ export async function handleOAuthUserInfo(
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
-		.findUserByEmail(userInfo.email, {
+		.findUserByEmail(userInfo.email.toLowerCase(), {
 			includeAccounts: true,
 		})
 		.catch((e) => {
@@ -29,6 +29,7 @@ export async function handleOAuthUserInfo(
 				`${c.context.baseURL}/error?error=internal_server_error`,
 			);
 		});
+	console.log({ dbUser, userInfo });
 
 	let user = dbUser?.user;
 
@@ -89,7 +90,9 @@ export async function handleOAuthUserInfo(
 				.createOAuthUser(
 					{
 						...userInfo,
+						id: c.context.uuid(),
 						emailVerified,
+						email: userInfo.email.toLowerCase(),
 					},
 					{
 						accessToken: account.accessToken,
