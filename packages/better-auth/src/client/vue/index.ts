@@ -1,4 +1,4 @@
-import { useStore } from "@nanostores/vue";
+import { useStore } from "./vue-store";
 import type { DeepReadonly, Ref } from "vue";
 import { getClientConfig } from "../config";
 import { capitalizeFirstLetter } from "../../utils/misc";
