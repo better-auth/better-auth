@@ -1,6 +1,5 @@
 import type { AuthContext, RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
-import { logger } from "../../utils/logger";
 
 function shouldRateLimit(
 	max: number,
@@ -67,7 +66,7 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 					});
 				}
 			} catch (e) {
-				logger.error("Error setting rate limit", e);
+				ctx.logger.error("Error setting rate limit", e);
 			}
 		},
 	};

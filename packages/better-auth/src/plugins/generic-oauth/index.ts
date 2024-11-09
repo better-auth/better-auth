@@ -4,7 +4,6 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
-import { logger } from "../../utils/logger";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
@@ -177,7 +176,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							token_endpoint: string;
 						}>(discoveryUrl, {
 							onError(context) {
-								logger.error(context.error, {
+								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
 								});
 							},
@@ -298,7 +297,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					} catch (e) {
-						ctx.context.logger.error(e);
+						ctx.context.logger.error(
+							e && typeof e === "object" && "name" in e
+								? (e.name as string)
+								: "",
+							e,
+						);
 						throw ctx.redirect(
 							`${errorURL}?error=oauth_code_verification_failed`,
 						);
@@ -331,7 +335,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							includeAccounts: true,
 						})
 						.catch((e) => {
-							logger.error(
+							ctx.context.logger.error(
 								"Better auth was unable to query your database.\nError: ",
 								e,
 							);

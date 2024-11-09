@@ -287,11 +287,14 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			if (options.logger?.enabled) {
 				if (e instanceof APIError) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
-						logger.error(e);
+						ctx.logger.error(APIError.name, e);
 					}
 					log?.error(e.message);
 				} else {
-					logger?.error(e);
+					ctx.logger?.error(
+						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
+						e,
+					);
 				}
 			}
 		},

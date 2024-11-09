@@ -19,7 +19,7 @@ import {
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger, logger } from "./utils/logger";
+import { createLogger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
@@ -29,6 +29,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
+	const logger = createLogger(options.logger);
 
 	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
@@ -60,7 +61,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	const cookies = getCookies(options);
-
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
@@ -100,9 +100,7 @@ export const init = async (options: BetterAuthOptions) => {
 					: ("memory" as const),
 		},
 		authCookies: cookies,
-		logger: createLogger({
-			enabled: options.logger?.enabled || false,
-		}),
+		logger: logger,
 		db,
 		uuid: generateId,
 		secondaryStorage: options.secondaryStorage,

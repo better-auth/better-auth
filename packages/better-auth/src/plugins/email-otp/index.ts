@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
+import { APIError, createAuthEndpoint } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import { alphabet, generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 import { setSessionCookie } from "../../cookies";
 
 interface EmailOTPOptions {
@@ -58,7 +57,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					if (!options?.sendVerificationOTP) {
-						logger.error("send email verification is not implemented");
+						ctx.context.logger.error(
+							"send email verification is not implemented",
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: "send email verification is not implemented",
 						});

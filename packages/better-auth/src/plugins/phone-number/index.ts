@@ -6,7 +6,6 @@ import type { User } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils/logger";
 import { setSessionCookie } from "../../cookies";
 
 export interface UserWithPhoneNumber extends User {
@@ -97,7 +96,7 @@ export const phoneNumber = (options?: {
 				},
 				async (ctx) => {
 					if (!options?.sendOTP) {
-						logger.warn("sendOTP not implemented");
+						ctx.context.logger.warn("sendOTP not implemented");
 						throw new APIError("NOT_IMPLEMENTED", {
 							message: "sendOTP not implemented",
 						});

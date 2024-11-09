@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { userSchema, type User } from "../../db/schema";
+import { userSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
 import { parseState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
-import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { createEmailVerificationToken } from "./email-verification";
 import { isDevelopment } from "../../utils/env";
@@ -49,7 +48,7 @@ export const callbackOAuth = createAuthEndpoint(
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
 		} catch (e) {
-			c.context.logger.error(e);
+			c.context.logger.error("", e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -64,14 +63,14 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 
 		if (!userInfo || data.success === false) {
-			logger.error("Unable to get user info", data.error);
+			c.context.logger.error("Unable to get user info", data.error);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
 		}
 
 		if (!callbackURL) {
-			logger.error("No callback URL found");
+			c.context.logger.error("No callback URL found");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -111,7 +110,7 @@ export const callbackOAuth = createAuthEndpoint(
 				includeAccounts: true,
 			})
 			.catch((e) => {
-				logger.error(
+				c.context.logger.error(
 					"Better auth was unable to query your database.\nError: ",
 					e,
 				);
@@ -137,7 +136,7 @@ export const callbackOAuth = createAuthEndpoint(
 					c.context.options.account?.accountLinking?.enabled === false
 				) {
 					if (isDevelopment) {
-						logger.warn(
+						c.context.logger.warn(
 							`User already exist but account isn't linked to ${provider.id}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 						);
 					}
@@ -155,7 +154,7 @@ export const callbackOAuth = createAuthEndpoint(
 						expiresAt: tokens.accessTokenExpiresAt,
 					});
 				} catch (e) {
-					logger.error("Unable to link account", e);
+					c.context.logger.error("Unable to link account", e);
 					redirectOnError("unable_to_link_account");
 				}
 			} else {
@@ -202,7 +201,7 @@ export const callbackOAuth = createAuthEndpoint(
 					);
 				}
 			} catch (e) {
-				logger.error("Unable to create user", e);
+				c.context.logger.error("Unable to create user", e);
 				redirectOnError("unable_to_create_user");
 			}
 		}

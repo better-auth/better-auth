@@ -5,7 +5,6 @@ import {
 import { z } from "zod";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
-import { logger } from "../utils";
 import { getOrigin } from "../utils/url";
 
 export async function generateState(
@@ -44,7 +43,7 @@ export async function generateState(
 		expiresAt,
 	});
 	if (!verification) {
-		logger.error(
+		c.context.logger.error(
 			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",
 		);
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -61,7 +60,7 @@ export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
 	if (!data) {
-		logger.error("State Mismatch. Verification not found", {
+		c.context.logger.error("State Mismatch. Verification not found", {
 			state,
 		});
 		throw c.redirect(
@@ -88,7 +87,7 @@ export async function parseState(c: GenericEndpointContext) {
 	}
 	if (parsedData.expiresAt < Date.now()) {
 		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		logger.error("State expired.", {
+		c.context.logger.error("State expired.", {
 			state,
 		});
 		throw c.redirect(
