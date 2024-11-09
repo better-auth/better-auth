@@ -421,6 +421,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.1.2
         version: 1.1.3(@types/react-dom@18.3.1)(@types/react@18.3.12)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@scalar/nextjs-api-reference':
+        specifier: ^0.4.100
+        version: 0.4.100(next@15.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       '@tabler/icons-react':
         specifier: ^3.12.0
         version: 3.21.0(react@18.3.1)
@@ -6182,6 +6185,21 @@ packages:
 
   '@rushstack/ts-command-line@4.23.0':
     resolution: {integrity: sha512-jYREBtsxduPV6ptNq8jOKp9+yx0ld1Tb/Tkdnlj8gTjazl1sF3DwX2VbluyYrNd0meWIL0bNeer7WDf5tKFjaQ==}
+
+  '@scalar/nextjs-api-reference@0.4.100':
+    resolution: {integrity: sha512-Gc7bAvxnL2fgnO16J1zqdAl9vyG2rrRN+9rQRalEt56ImSf0f0buhCHLZ0kUUb/eXp20bXfKTTCR+0t+XnYeWA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      next: ^14.0.0
+      react: ^18.0.0
+
+  '@scalar/openapi-types@0.1.5':
+    resolution: {integrity: sha512-6geH9ehvQ/sG/xUyy3e0lyOw3BaY5s6nn22wHjEJhcobdmWyFER0O6m7AU0ZN4QTjle/gYvFJOjj552l/rsNSw==}
+    engines: {node: '>=18'}
+
+  '@scalar/types@0.0.19':
+    resolution: {integrity: sha512-wOxtXd35BS0DaVhBopQUB8c8hfLQ+/PKEr99GbOZW+4DWCrEB8JfWJgvpJyxHU6by7LHNVY4fvpFQR7Ezh1IIw==}
+    engines: {node: '>=18'}
 
   '@segment/loosely-validate-event@2.0.0':
     resolution: {integrity: sha512-ZMCSfztDBqwotkl848ODgVcAmN4OItEWDCkshcKz0/W6gGSQayuuCtWV/MlodFivAZD793d6UgANd6wCXUfrIw==}
@@ -22387,6 +22405,19 @@ snapshots:
       - '@types/node'
     optional: true
 
+  '@scalar/nextjs-api-reference@0.4.100(next@15.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@scalar/types': 0.0.19
+      next: 15.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
+
+  '@scalar/openapi-types@0.1.5': {}
+
+  '@scalar/types@0.0.19':
+    dependencies:
+      '@scalar/openapi-types': 0.1.5
+      '@unhead/schema': 1.11.11
+
   '@segment/loosely-validate-event@2.0.0':
     dependencies:
       component-type: 1.2.2
@@ -23969,7 +24000,7 @@ snapshots:
       '@vue/shared': 3.5.12
       estree-walker: 2.0.2
       magic-string: 0.30.12
-      postcss: 8.4.47
+      postcss: 8.4.49
       source-map-js: 1.2.1
 
   '@vue/compiler-sfc@3.5.13':
