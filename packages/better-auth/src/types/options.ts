@@ -9,7 +9,7 @@ import type { RateLimit } from "./models";
 import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
-import type { LoggerOptions } from "../utils";
+import type { Logger } from "../utils";
 
 export interface BetterAuthOptions {
 	/**
@@ -456,7 +456,7 @@ export interface BetterAuthOptions {
 		 */
 		cookiePrefix?: string;
 	};
-	logger?: LoggerOptions;
+	logger?: Logger;
 	/**
 	 * allows you to define custom hooks that can be
 	 * executed during lifecycle of core database
