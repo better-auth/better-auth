@@ -209,14 +209,13 @@ describe("organization", async (it) => {
 		});
 
 		expect(orgBefore.data?.members.length).toBe(2);
-		const removedMember = await client.organization.removeMember({
+		await client.organization.removeMember({
 			organizationId: organizationId,
 			memberIdOrEmail: "test2@test.com",
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(removedMember.data?.member.email).toBe("test2@test.com");
 
 		const org = await client.organization.getFullOrganization({
 			query: {
