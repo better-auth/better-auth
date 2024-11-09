@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "0.7.3-beta.9",
+  "version": "0.8.0",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -9,9 +9,9 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts-resolve --minify",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts --minify",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
-    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts-resolve",
+    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
     "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
     "test:adapters": "pnpm prisma:push && vitest adapters",
@@ -240,6 +240,22 @@
         "types": "./dist/adapters/mongodb.d.cts",
         "default": "./dist/adapters/mongodb.cjs"
       }
+    },
+    "./adapters/memory": {
+      "import": {
+        "types": "./dist/adapters/memory.d.ts",
+        "default": "./dist/adapters/memory.js"
+      },
+      "require": {
+        "types": "./dist/adapters/memory.d.cts",
+        "default": "./dist/adapters/memory.cjs"
+      }
+    },
+    "./plugins/access": {
+      "import": {
+        "types": "./dist/plugins/access.d.ts",
+        "default": "./dist/plugins/access.js"
+      }
     }
   },
   "typesVersions": {
@@ -316,6 +332,9 @@
       "adapters/mongodb": [
         "./dist/adapters/mongodb.d.ts"
       ],
+      "adapters/memory": [
+        "./dist/adapters/memory.d.ts"
+      ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
       ],
@@ -366,7 +385,7 @@
     "happy-dom": "^15.7.4",
     "hono": "^4.5.4",
     "listhen": "^1.7.2",
-    "mongodb": "^6.9.0",
+    "mongodb": "^6.10.0",
     "mysql2": "^3.11.0",
     "next": "^14.2.8",
     "oauth2-mock-server": "^7.1.2",
@@ -382,10 +401,6 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "1.1.12",
-    "@nanostores/query": "^0.3.4",
-    "@nanostores/react": "^0.8.0",
-    "@nanostores/solid": "^0.4.2",
-    "@nanostores/vue": "^0.10.0",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.5.0",
     "@simplewebauthn/browser": "^10.0.0",

@@ -4,7 +4,11 @@ import { createAuthClient } from "../../client";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
-		trustedOrigins: ["http://localhost:5000", "https://trusted.com"],
+		trustedOrigins: [
+			"http://localhost:5000",
+			"https://trusted.com",
+			"*.my-site.com",
+		],
 		emailAndPassword: {
 			enabled: true,
 			async sendResetPassword(url, user) {},
@@ -165,5 +169,22 @@ describe("Origin Check", async (it) => {
 			},
 		});
 		expect(res2.data?.session).toBeDefined();
+	});
+
+	it("should work with wildcard trusted origins", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "https://sub-domain.my-site.com",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://sub-domain.my-site.com",
+				},
+			},
+		});
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "https://sub-domain.my-site.com/reset-password",
+		});
+		expect(res.data?.status).toBeTruthy();
 	});
 });

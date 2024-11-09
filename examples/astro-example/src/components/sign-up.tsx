@@ -106,6 +106,9 @@ export function SignUpCard() {
 										onError(context) {
 											alert(context.error.message);
 										},
+										onSuccess(context) {
+											window.location.href = "/";
+										},
 									},
 								});
 							}}

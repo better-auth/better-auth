@@ -19,6 +19,7 @@ import {
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
+	revokeOtherSessions,
 	listUserAccounts,
 	changePassword,
 	deleteUser,
@@ -103,6 +104,7 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		revokeOtherSessions,
 		linkSocialAccount,
 		listUserAccounts,
 	};
@@ -250,8 +252,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
-					if (response) {
-						return response;
+					if (response && "response" in response) {
+						return response.response;
 					}
 				}
 			}

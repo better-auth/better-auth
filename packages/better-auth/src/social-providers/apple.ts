@@ -1,6 +1,10 @@
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { parseJWT } from "oslo/jwt";
 import { validateAuthorizationCode } from "../oauth2";
+import { decodeJwt, importJWK, jwtVerify } from "jose";
+import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
+import { z } from "zod";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -42,6 +46,10 @@ export interface AppleProfile {
 	 * process.
 	 */
 	name: string;
+	/**
+	 * The URL to the user's profile picture.
+	 */
+	picture: string;
 }
 
 export interface AppleOptions extends ProviderOptions {}
@@ -71,6 +79,35 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
+		async verifyIdToken(token, nonce) {
+			if (options.disableIdTokenSignIn) {
+				return false;
+			}
+			if (options.verifyIdToken) {
+				return options.verifyIdToken(token, nonce);
+			}
+			const decodedHeader = decodeJwt(token);
+			const { kid, alg: jwtAlg } = decodedHeader.header as {
+				kid: string;
+				alg: string;
+			};
+			const publicKey = await getApplePublicKey(kid);
+			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+				algorithms: [jwtAlg],
+				issuer: "https://appleid.apple.com",
+				audience: options.clientId,
+				maxTokenAge: "1h",
+			});
+			["email_verified", "is_private_email"].forEach((field) => {
+				if (jwtClaims[field] !== undefined) {
+					jwtClaims[field] = Boolean(jwtClaims[field]);
+				}
+			});
+			if (nonce && jwtClaims.nonce !== nonce) {
+				return false;
+			}
+			return !!jwtClaims;
+		},
 		async getUserInfo(token) {
 			if (!token.idToken) {
 				return null;
@@ -85,9 +122,35 @@ export const apple = (options: AppleOptions) => {
 					name: data.name,
 					email: data.email,
 					emailVerified: data.email_verified === "true",
+					image: data.picture,
 				},
 				data,
 			};
 		},
 	} satisfies OAuthProvider<AppleProfile>;
+};
+
+export const getApplePublicKey = async (kid: string) => {
+	const APPLE_BASE_URL = "https://appleid.apple.com";
+	const JWKS_APPLE_URI = "/auth/keys";
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+		}>;
+	}>(`${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+	return await importJWK(jwk, jwk.alg);
 };

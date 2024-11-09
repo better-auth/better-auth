@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
 import type { Session } from "../../types";
+import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter } = await getTestInstance();
@@ -336,5 +337,55 @@ describe("session storage", async () => {
 			},
 		});
 		expect(revokedSession.data).toBeNull();
+	});
+});
+
+describe("cookie cache", async () => {
+	const database: MemoryDB = {
+		user: [],
+		account: [],
+		session: [],
+		verification: [],
+	};
+	const adapter = memoryAdapter(database);
+	const fn = vi.spyOn(adapter, "findOne");
+	const { client, testUser } = await getTestInstance({
+		database: adapter,
+		session: {
+			cookieCache: {
+				enabled: true,
+			},
+		},
+	});
+	it("should cache cookies", async () => {
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					headers.set(
+						"cookie",
+						`better-auth.session_token=${
+							cookies.get("better-auth.session_token")?.value
+						};better-auth.session_data=${
+							cookies.get("better-auth.session_data")?.value
+						}`,
+					);
+				},
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(2);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(2);
 	});
 });

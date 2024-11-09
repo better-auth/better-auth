@@ -129,10 +129,12 @@ export function SignInCard() {
 							variant="outline"
 							onClick={async () => {
 								await signIn.passkey({
-									callbackURL: "/dashboard",
 									fetchOptions: {
 										onError(context) {
 											alert(context.error.message);
+										},
+										onSuccess(context) {
+											window.location.href = "/";
 										},
 									},
 								});

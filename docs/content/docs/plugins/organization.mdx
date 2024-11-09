@@ -181,10 +181,12 @@ Active organization is the workspace the user is currently working on. By defaul
 
 #### Set Active Organization
 
-You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user both on the client state and the session on the server.
+You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
    
 ```ts title="client.ts"
-client.organization.setActive("organization-id")
+client.organization.setActive({
+  organizationId: "organization-id"
+})
 ```
 
 #### Use Active Organization
@@ -248,6 +250,27 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
     ``` 
     </Tab>
 </Tabs>
+
+### Get Full Organization
+
+To get the full details of an organization, you can use the `getFull` function provided by the client. The `getFull` function takes an object with the following properties:
+
+```ts title="client.ts"
+const organization = await client.organization.getFullOrganization({
+    organizationId: "organization-id" // optional, by default it will use the active organization
+})
+```
+
+To get the full organization on the server
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+import { headers } from "next/headers";
+
+auth.api.getFullOrganization({
+    headers: await headers()
+})
+```
 
 ## Invitations
 
@@ -338,6 +361,8 @@ client.organization.getInvitation({
 })
 ```
 
+## Members
+
 ### Remove Member 
 
 To remove you can use `organization.removeMember`
@@ -359,6 +384,15 @@ await client.organization.updateMemberRole({
     role: "admin"
 })
 ```
+
+### Get Active Member
+
+To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
+
+```ts title="client.ts"
+const member = await client.organization.getActiveMember()
+```
+
 
 ## Access Control
 

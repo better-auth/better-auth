@@ -33,6 +33,30 @@ function convertWhere(w?: Where[]) {
 				return eb(field, "like", `%${value}`);
 			}
 
+			if (operator === "eq") {
+				return eb(field, "=", value);
+			}
+
+			if (operator === "ne") {
+				return eb(field, "<>", value);
+			}
+
+			if (operator === "gt") {
+				return eb(field, ">", value);
+			}
+
+			if (operator === "gte") {
+				return eb(field, ">=", value);
+			}
+
+			if (operator === "lt") {
+				return eb(field, "<", value);
+			}
+
+			if (operator === "lte") {
+				return eb(field, "<=", value);
+			}
+
 			return eb(field, operator, value);
 		};
 

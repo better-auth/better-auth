@@ -109,7 +109,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	const path = req.url.replace(baseURL, "");
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
-	const key = getIp(req) + path;
+	const key = getIp(req, ctx.options) + path;
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
@@ -176,7 +176,12 @@ function getDefaultSpecialRules() {
 	const specialRules = [
 		{
 			pathMatcher(path: string) {
-				return path.startsWith("/sign-in") || path.startsWith("/sign-up");
+				return (
+					path.startsWith("/sign-in") ||
+					path.startsWith("/sign-up") ||
+					path.startsWith("/change-password") ||
+					path.startsWith("/change-email")
+				);
 			},
 			window: 10,
 			max: 3,

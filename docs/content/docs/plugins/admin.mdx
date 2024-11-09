@@ -78,9 +78,14 @@ const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
-  role: "user"
+  role: "user",
+  data: {
+    // any additional on the user table including plugin fields and custom fields
+    customField: "customValue"
+  }
 });
 ```
+
 
 ### List Users
 
@@ -107,22 +112,16 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
     query: {
-        search: {
-            field: "email",
-            operator: "contains",
-            value: "@example.com"
-        },
+        searchField: "email",
+        searchOperator: "contains",
+        searchValue: "@example.com",
         limit: 10,
         offset: 0,
         sortBy: "createdAt",
         sortDirection: "desc"
-        filter: [
-          {
-            field: "name",
-            operator: "eq",
-            value: "John",
-          }
-        ]
+        filterField: "role",
+        filterOperator: "eq",
+        filterValue: "admin"
     }
 });
 ```

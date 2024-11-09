@@ -27,7 +27,7 @@ describe("organization", async (it) => {
 		},
 	});
 
-	let orgId: string;
+	let organizationId: string;
 	it("create organization", async () => {
 		const organization = await client.organization.create({
 			name: "test",
@@ -39,7 +39,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		orgId = organization.data?.id as string;
+		organizationId = organization.data?.id as string;
 		expect(organization.data?.name).toBeDefined();
 		expect(organization.data?.metadata).toBeDefined();
 		expect(organization.data?.members.length).toBe(1);
@@ -58,7 +58,7 @@ describe("organization", async (it) => {
 	it("should allow updating organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.update({
-			orgId,
+			organizationId,
 			data: {
 				name: "test2",
 			},
@@ -70,20 +70,29 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow activating organization and set session", async () => {
-		const organization = await client.organization.activate({
-			orgId,
+		const organization = await client.organization.setActive({
+			organizationId,
 			fetchOptions: {
 				headers,
 			},
 		});
 
-		expect(organization.data?.id).toBe(orgId);
+		expect(organization.data?.id).toBe(organizationId);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(orgId);
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+	});
+
+	it("should allow getting full org on server", async () => {
+		const org = await auth.api.getFullOrganization({
+			headers,
+		});
+		expect(org?.members.length).toBe(1);
 	});
 
 	it("invites user to organization", async () => {
@@ -94,7 +103,7 @@ describe("organization", async (it) => {
 		};
 		const { headers } = await signInWithTestUser();
 		const invite = await client.organization.inviteMember({
-			organizationId: orgId,
+			organizationId: organizationId,
 			email: newUser.email,
 			role: "member",
 			fetchOptions: {
@@ -143,15 +152,33 @@ describe("organization", async (it) => {
 			},
 		});
 		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
-			orgId,
+			organizationId,
 		);
+	});
+
+	it("should allow getting a member", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const member = await client.organization.getActiveMember({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(member.data).toMatchObject({
+			role: "owner",
+		});
 	});
 
 	it("should allow updating member", async () => {
 		const { headers } = await signInWithTestUser();
-		const org = await client.organization.getFull({
+		const org = await client.organization.getFullOrganization({
 			query: {
-				orgId,
+				organizationId,
 			},
 			fetchOptions: {
 				headers,
@@ -172,9 +199,9 @@ describe("organization", async (it) => {
 
 	it("should allow removing member from organization", async () => {
 		const { headers } = await signInWithTestUser();
-		const orgBefore = await client.organization.getFull({
+		const orgBefore = await client.organization.getFullOrganization({
 			query: {
-				orgId,
+				organizationId,
 			},
 			fetchOptions: {
 				headers,
@@ -183,7 +210,7 @@ describe("organization", async (it) => {
 
 		expect(orgBefore.data?.members.length).toBe(2);
 		const removedMember = await client.organization.removeMember({
-			organizationId: orgId,
+			organizationId: organizationId,
 			memberIdOrEmail: "test2@test.com",
 			fetchOptions: {
 				headers,
@@ -191,9 +218,9 @@ describe("organization", async (it) => {
 		});
 		expect(removedMember.data?.member.email).toBe("test2@test.com");
 
-		const org = await client.organization.getFull({
+		const org = await client.organization.getFullOrganization({
 			query: {
-				orgId,
+				organizationId,
 			},
 			fetchOptions: {
 				headers,
@@ -204,9 +231,9 @@ describe("organization", async (it) => {
 
 	it("shouldn't allow removing owner from organization", async () => {
 		const { headers } = await signInWithTestUser();
-		const org = await client.organization.getFull({
+		const org = await client.organization.getFullOrganization({
 			query: {
-				orgId,
+				organizationId,
 			},
 			fetchOptions: {
 				headers,
@@ -225,8 +252,8 @@ describe("organization", async (it) => {
 	});
 
 	it("should validate permissions", async () => {
-		await client.organization.activate({
-			orgId,
+		await client.organization.setActive({
+			organizationId,
 			fetchOptions: {
 				headers,
 			},
@@ -244,12 +271,12 @@ describe("organization", async (it) => {
 
 	it("should allow deleting organization", async () => {
 		const res = await client.organization.delete({
-			orgId,
+			organizationId,
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(res.data).toBe(orgId);
+		expect(res.data).toBe(organizationId);
 	});
 
 	it("should have server side methods", async () => {

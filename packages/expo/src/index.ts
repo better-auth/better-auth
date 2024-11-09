@@ -1,4 +1,7 @@
+import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
+import { z } from "zod";
 
 export const expo = () => {
 	return {
@@ -54,7 +57,6 @@ export const expo = () => {
 							if (!cookie) {
 								return;
 							}
-							console.log({ location });
 							const url = new URL(location);
 							url.searchParams.set("cookie", cookie);
 							response.headers.set("location", url.toString());

@@ -31,9 +31,9 @@ export const createInvitation = createAuthEndpoint(
 		}
 
 		const session = ctx.context.session;
-		const orgId =
+		const organizationId =
 			ctx.body.organizationId || session.session.activeOrganizationId;
-		if (!orgId) {
+		if (!organizationId) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Organization not found",
 			});
@@ -41,7 +41,7 @@ export const createInvitation = createAuthEndpoint(
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const member = await adapter.findMemberByOrgId({
 			userId: session.user.id,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
@@ -64,7 +64,7 @@ export const createInvitation = createAuthEndpoint(
 		}
 		const alreadyMember = await adapter.findMemberByEmail({
 			email: ctx.body.email,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (alreadyMember) {
 			throw new APIError("BAD_REQUEST", {
@@ -73,7 +73,7 @@ export const createInvitation = createAuthEndpoint(
 		}
 		const alreadyInvited = await adapter.findPendingInvitation({
 			email: ctx.body.email,
-			organizationId: orgId,
+			organizationId: organizationId,
 		});
 		if (alreadyInvited.length && !ctx.body.resend) {
 			throw new APIError("BAD_REQUEST", {
@@ -84,12 +84,12 @@ export const createInvitation = createAuthEndpoint(
 			invitation: {
 				role: ctx.body.role,
 				email: ctx.body.email,
-				organizationId: orgId,
+				organizationId: organizationId,
 			},
 			user: session.user,
 		});
 
-		const organization = await adapter.findOrganizationById(orgId);
+		const organization = await adapter.findOrganizationById(organizationId);
 
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {

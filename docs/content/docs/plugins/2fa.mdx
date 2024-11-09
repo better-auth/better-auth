@@ -276,6 +276,20 @@ await authClient.twoFactor.verifyBackupCode({code: ""}, {
 })
 ```
 
+once a backup code is used, it will be removed from the database and can't be used again.
+
+#### Viewing Backup Codes
+
+You can view the backup codes at any time by calling `viewBackupCodes`. This action can only be performed on the server using `auth.api`.
+
+```ts
+await auth.api.viewBackupCodes({
+    body: {
+        userId: "user-id"
+    }
+})
+```
+
 ### Trusted Devices
 
 You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `verifyOtp`.

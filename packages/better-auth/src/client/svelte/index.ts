@@ -1,5 +1,5 @@
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
+import { getClientConfig } from "../config";
+import { capitalizeFirstLetter } from "../../utils/misc";
 import type {
 	BetterAuthClientPlugin,
 	ClientOptions,
@@ -8,9 +8,9 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 	IsSignal,
-} from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import type { UnionToIntersection } from "../types/helper";
+} from "../types";
+import { createDynamicPathProxy } from "../proxy";
+import type { UnionToIntersection } from "../../types/helper";
 import type { Atom } from "nanostores";
 import type { BetterFetchError } from "@better-fetch/fetch";
 
@@ -45,7 +45,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
+		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = () => value;
 	}
 	const routes = {
 		...pluginsActions,
@@ -67,7 +67,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			useSession: Atom<{
+			useSession: () => Atom<{
 				data: Session | null;
 				error: BetterFetchError | null;
 				isPending: boolean;

@@ -105,6 +105,34 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users[0].name).toBe("Test User");
 	});
 
+	it("should allow to search users by name", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				searchValue: "Admin",
+				searchField: "name",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.users.length).toBe(1);
+	});
+
+	it("should allow to filter users by role", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.users.length).toBe(1);
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{

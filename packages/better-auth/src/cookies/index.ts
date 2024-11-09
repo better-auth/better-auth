@@ -5,6 +5,9 @@ import type { GenericEndpointContext } from "../types/context";
 import { BetterAuthError } from "../error";
 import { isProduction } from "../utils/env";
 import type { Session, User } from "../types";
+import { hmac } from "../crypto/hash";
+import { base64, base64url } from "oslo/encoding";
+import { getDate } from "../utils/date";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -31,8 +34,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		cookieName: string,
 		overrideAttributes: Partial<CookieOptions> = {},
 	) {
-		const prefix =
-			options.advanced?.cookiePrefix || options.appName || "better-auth";
+		const prefix = options.advanced?.cookiePrefix || "better-auth";
 		const name =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
 			`${prefix}.${cookieName}`;
@@ -124,12 +126,27 @@ export async function setSessionCookie(
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
 	shouldStoreSessionDataInCookie &&
-		(await ctx.setSignedCookie(
+		ctx.setCookie(
 			ctx.context.authCookies.sessionData.name,
-			JSON.stringify(session),
-			ctx.context.secret,
+			JSON.stringify(
+				base64url.encode(
+					new TextEncoder().encode(
+						JSON.stringify({
+							session: session,
+							expiresAt: getDate(
+								ctx.context.authCookies.sessionData.options.maxAge || 60,
+								"sec",
+							).getTime(),
+							signature: await hmac.sign({
+								value: JSON.stringify(session),
+								secret: ctx.context.secret,
+							}),
+						}),
+					),
+				),
+			),
 			ctx.context.authCookies.sessionData.options,
-		));
+		);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
 	 * This is useful if the session got updated and we want to update the session data in the

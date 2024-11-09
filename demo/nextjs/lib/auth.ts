@@ -7,6 +7,7 @@ import {
 	passkey,
 	twoFactor,
 	oneTap,
+	oAuthProxy,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -22,6 +23,7 @@ const libsql = new LibsqlDialect({
 });
 
 export const auth = betterAuth({
+	appName: "Better Auth Demo",
 	database: {
 		dialect: libsql,
 		type: "sqlite",
@@ -79,6 +81,10 @@ export const auth = betterAuth({
 			clientId: process.env.TWITCH_CLIENT_ID || "",
 			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
+		twitter: {
+			clientId: process.env.TWITTER_CLIENT_ID || "",
+			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
@@ -122,5 +128,6 @@ export const auth = betterAuth({
 		admin(),
 		multiSession(),
 		oneTap(),
+		oAuthProxy(),
 	],
 });

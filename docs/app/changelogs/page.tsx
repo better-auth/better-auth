@@ -69,9 +69,9 @@ const ChangelogPage = () => {
 				</div>
 			</div>
 			<div className="px-4 relative md:px-8 pb-12 md:py-12">
-				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_3px] bg-repeat-y"></div>
+				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_5px] bg-repeat-y"></div>
 
-				<div className="max-w-2xl">
+				<div className="max-w-2xl relative">
 					<MDX
 						components={{
 							h2: (props) => (
@@ -79,10 +79,15 @@ const ChangelogPage = () => {
 									className="text-2xl relative mt-16 font-bold flex-col flex justify-center tracking-tighter"
 									{...props}
 								>
-									<time className="text-gray-500 dark:text-white/80 text-sm block md:absolute md:left-[-140px] font-normal tracking-normal">
-										{props.children?.toString().includes("date=") &&
-											props.children?.toString().split("date=")[1]}
-									</time>
+									<div className="sticky top-0 left-[-9.9rem]">
+										<time className="flex gap-2 items-center text-gray-500 dark:text-white/80 text-sm md:absolute md:left-[-9.8rem] font-normal tracking-normal">
+											{props.children?.toString().includes("date=") &&
+												props.children?.toString().split("date=")[1]}
+
+											<div className="w-4 h-[1px] dark:bg-white/60 bg-black" />
+										</time>
+									</div>
+
 									{props.children?.toString().split("date=")[0].trim()}
 								</h2>
 							),

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "0.7.3-beta.9",
+  "version": "0.8.0",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -25,6 +25,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@better-fetch/fetch": "1.1.12",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.5.0",
     "expo-constants": "~16.0.2",
@@ -36,5 +37,8 @@
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
   }
 }
