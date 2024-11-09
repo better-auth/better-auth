@@ -90,7 +90,7 @@ describe("session", async () => {
 			{
 				email: testUser.email,
 				password: testUser.password,
-				dontRememberMe: true,
+				rememberMe: false,
 			},
 			{
 				onSuccess(context) {
