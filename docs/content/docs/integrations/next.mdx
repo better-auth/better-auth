@@ -52,14 +52,13 @@ import { headers } from "next/headers"
 const someAuthenticatedAction = async () => {
     "use server";
     const session = await auth.api.getSession({
-        headers: headers()
+        headers: await headers()
     })
 };
 ```
 
 **Example: Getting Session on a RSC**
 
-{/* NextJs 15 integration */}
 
 ```tsx
 import { auth } from "@/lib/auth"
