@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "0.8.1-beta.3",
+  "version": "0.8.1-beta.4",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
