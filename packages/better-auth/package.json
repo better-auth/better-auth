@@ -401,6 +401,7 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "1.1.12",
+    "@nanostores/vue": "^0.10.0",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.5.0",
     "@simplewebauthn/browser": "^10.0.0",
