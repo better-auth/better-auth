@@ -29,8 +29,6 @@ export async function handleOAuthUserInfo(
 				`${c.context.baseURL}/error?error=internal_server_error`,
 			);
 		});
-	console.log({ dbUser, userInfo });
-
 	let user = dbUser?.user;
 
 	if (dbUser) {
