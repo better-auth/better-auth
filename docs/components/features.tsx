@@ -43,7 +43,7 @@ export default function Features({ stars }: { stars: string | null }) {
 						<p className="mt-2 text-sm text-left text-muted-foreground">
 							Supports your favorite frontend, backend and meta frameworks,
 							including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Hono,
-							and more{" "}
+							and more.{" "}
 							<a className="text-gray-50" href="/docs" target="_blank">
 								Learn more
 							</a>
@@ -66,8 +66,8 @@ export default function Features({ stars }: { stars: string | null }) {
 							</div>
 						</div>
 						<p className="mt-2 text-sm text-left text-muted-foreground">
-							Builtin support for email and password authentication, with secure
-							password hashing and account management features{" "}
+							Built-in support for email and password authentication, with secure
+							password hashing and account management features.{" "}
 							<a className="text-gray-50" href="/docs" target="_blank">
 								Learn more
 							</a>
