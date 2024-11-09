@@ -14,6 +14,7 @@ import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { convertFromDB } from "./utils";
+import { safeJSONParse } from "../utils/json";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -93,6 +94,33 @@ export const createInternalAdapter = (
 			return createdAccount as T & Account;
 		},
 		listSessions: async (userId: string) => {
+			if (secondaryStorage) {
+				const currentList = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+				if (!currentList) return [];
+
+				const list: { id: string; expiresAt: number }[] =
+					safeJSONParse(currentList) || [];
+				const now = Date.now();
+
+				const validSessions = list.filter((s) => s.expiresAt > now);
+				const sessions = [];
+
+				for (const session of validSessions) {
+					const sessionStringified = await secondaryStorage.get(session.id);
+					if (sessionStringified) {
+						const s = JSON.parse(sessionStringified);
+						const parsedSession = parseSessionOutput(ctx.options, {
+							...s.session,
+							expiresAt: new Date(s.session.expiresAt),
+						});
+						sessions.push(parsedSession);
+					}
+				}
+				return sessions;
+			}
+
 			const sessions = await adapter.findMany<Session>({
 				model: tables.session.tableName,
 				where: [
@@ -191,6 +219,32 @@ export const createInternalAdapter = (
 									}),
 									sessionExpiration,
 								);
+								/**
+								 * store the session id for the user
+								 * so we can retrieve it later for listing sessions
+								 */
+								const currentList = await secondaryStorage.get(
+									`active-sessions-${userId}`,
+								);
+
+								let list: { id: string; expiresAt: number }[] = [];
+								const now = Date.now();
+
+								if (currentList) {
+									list = safeJSONParse(currentList) || [];
+									// Remove expired sessions
+									list = list.filter((session) => session.expiresAt > now);
+								}
+
+								// Add new session with expiration time
+								list.push({ id: data.id, expiresAt: now + sessionExpiration });
+
+								await secondaryStorage.set(
+									`active-sessions-${userId}`,
+									JSON.stringify(list),
+									sessionExpiration,
+								);
+
 								return data;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,

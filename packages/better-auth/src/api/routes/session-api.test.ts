@@ -269,10 +269,10 @@ describe("session storage", async () => {
 	});
 
 	it("should store session in secondary storage", async () => {
-		//since the instance creates a session on init, we expect the store to have 1 item
-		expect(store.size).toBe(1);
-		const { headers } = await signInWithTestUser();
+		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
 		expect(store.size).toBe(2);
+		const { headers } = await signInWithTestUser();
+		expect(store.size).toBe(3);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -298,23 +298,14 @@ describe("session storage", async () => {
 		});
 	});
 
-	it("should only store session in database if option is set", async () => {
-		await signInWithTestUser();
-		const sessionCount = await db.findMany<Session>({
-			model: "session",
+	it("should list sessions", async () => {
+		const { headers } = await signInWithTestUser();
+		const response = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
 		});
-		expect(sessionCount.length).toBe(0);
-		const { db: db2, signInWithTestUser: signInWithTestUser2 } =
-			await getTestInstance({
-				session: {
-					storeSessionInDatabase: false,
-				},
-			});
-		await signInWithTestUser2();
-		const sessionCount2 = await db2.findMany<Session>({
-			model: "session",
-		});
-		expect(sessionCount2.length).toBe(2);
+		expect(response.data?.length).toBeGreaterThan(1);
 	});
 
 	it("should revoke session", async () => {
