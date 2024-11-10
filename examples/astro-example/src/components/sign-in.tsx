@@ -75,7 +75,7 @@ export function SignInCard() {
 								signIn.email({
 									email: email(),
 									password: password(),
-									dontRememberMe: !rememberMe(),
+									rememberMe: rememberMe(),
 									fetchOptions: {
 										onError(context) {
 											alert(context.error.message);
