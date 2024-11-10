@@ -1,7 +1,7 @@
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { parseJWT } from "oslo/jwt";
 import { validateAuthorizationCode } from "../oauth2";
-import { decodeJwt, importJWK, jwtVerify } from "jose";
+import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { z } from "zod";
@@ -86,11 +86,9 @@ export const apple = (options: AppleOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
-			const decodedHeader = decodeJwt(token);
-			const { kid, alg: jwtAlg } = decodedHeader.header as {
-				kid: string;
-				alg: string;
-			};
+			const decodedHeader = decodeProtectedHeader(token);
+			const { kid, alg: jwtAlg } = decodedHeader;
+			if (!kid || !jwtAlg) return false;
 			const publicKey = await getApplePublicKey(kid);
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
