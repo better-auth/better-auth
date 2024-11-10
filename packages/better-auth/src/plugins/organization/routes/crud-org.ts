@@ -4,7 +4,13 @@ import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
+import type { User } from "../../../types";
+import { getSessionFromCtx } from "../../../api";
 
+/**
+ * Serve as both a way to create org using a user id or a way to create an org
+ * from a client using a request session
+ */
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
 	{
@@ -16,10 +22,35 @@ export const createOrganization = createAuthEndpoint(
 			logo: z.string().optional(),
 			metadata: z.record(z.string()).optional(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware],
 	},
 	async (ctx) => {
-		const user = ctx.context.session.user;
+		let user: User | null = null;
+		if (ctx.request || ctx.headers) {
+			const session = await getSessionFromCtx(ctx);
+			user = session.user;
+		} else {
+			if (!ctx.body.userId) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "User id not found!",
+					},
+				});
+			}
+			const fUser = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!fUser) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "User not found!",
+					},
+				});
+			}
+			user = fUser;
+		}
 		if (!user) {
 			return ctx.json(null, {
 				status: 401,
