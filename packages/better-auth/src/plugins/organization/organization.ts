@@ -207,59 +207,59 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		id: "organization",
 		endpoints: {
 			...api,
-			hasPermission: createAuthEndpoint(
-				"/organization/has-permission",
-				{
-					method: "POST",
-					requireHeaders: true,
-					body: z.object({
-						permission: z.record(z.string(), z.array(z.string())),
-					}) as unknown as ZodObject<{
-						permission: ZodObject<{
-							[key in keyof Statements]: ZodOptional<
-								//@ts-expect-error TODO: fix this
-								ZodArray<ZodLiteral<Statements[key][number]>>
-							>;
-						}>;
-					}>,
-					use: [orgSessionMiddleware],
-				},
-				async (ctx) => {
-					if (!ctx.context.session.session.activeOrganizationId) {
-						throw new APIError("BAD_REQUEST", {
-							message: "No active organization",
-						});
-					}
-					const adapter = getOrgAdapter(ctx.context);
-					const member = await adapter.findMemberByOrgId({
-						userId: ctx.context.session.user.id,
-						organizationId:
-							ctx.context.session.session.activeOrganizationId || "",
-					});
-					if (!member) {
-						throw new APIError("UNAUTHORIZED", {
-							message: "You are not a member of this organization",
-						});
-					}
-					const role = roles[member.role];
-					const result = role.authorize(ctx.body.permission as any);
-					if (result.error) {
-						return ctx.json(
-							{
-								error: result.error,
-								success: false,
-							},
-							{
-								status: 403,
-							},
-						);
-					}
-					return ctx.json({
-						error: null,
-						success: true,
-					});
-				},
-			),
+			// hasPermission: createAuthEndpoint(
+			// 	"/organization/has-permission",
+			// 	{
+			// 		method: "POST",
+			// 		requireHeaders: true,
+			// 		body: z.object({
+			// 			permission: z.record(z.string(), z.array(z.string())),
+			// 		}) as unknown as ZodObject<{
+			// 			permission: ZodObject<{
+			// 				[key in keyof Statements]: ZodOptional<
+			// 					//@ts-expect-error TODO: fix this
+			// 					ZodArray<ZodLiteral<Statements[key][number]>>
+			// 				>;
+			// 			}>;
+			// 		}>,
+			// 		use: [orgSessionMiddleware],
+			// 	},
+			// 	async (ctx) => {
+			// 		if (!ctx.context.session.session.activeOrganizationId) {
+			// 			throw new APIError("BAD_REQUEST", {
+			// 				message: "No active organization",
+			// 			});
+			// 		}
+			// 		const adapter = getOrgAdapter(ctx.context);
+			// 		const member = await adapter.findMemberByOrgId({
+			// 			userId: ctx.context.session.user.id,
+			// 			organizationId:
+			// 				ctx.context.session.session.activeOrganizationId || "",
+			// 		});
+			// 		if (!member) {
+			// 			throw new APIError("UNAUTHORIZED", {
+			// 				message: "You are not a member of this organization",
+			// 			});
+			// 		}
+			// 		const role = roles[member.role];
+			// 		const result = role.authorize(ctx.body.permission as any);
+			// 		if (result.error) {
+			// 			return ctx.json(
+			// 				{
+			// 					error: result.error,
+			// 					success: false,
+			// 				},
+			// 				{
+			// 					status: 403,
+			// 				},
+			// 			);
+			// 		}
+			// 		return ctx.json({
+			// 			error: null,
+			// 			success: true,
+			// 		});
+			// 	},
+			// ),
 		},
 		schema: {
 			session: {

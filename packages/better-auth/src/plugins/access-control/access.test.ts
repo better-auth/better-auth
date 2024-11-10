@@ -44,7 +44,6 @@ describe("base", async (it) => {
 	}) => {
 		const userRole = await auth.api.assignRole({
 			body: {
-				scope: "global",
 				roleId: role.id,
 				userId: user.id,
 			},
@@ -90,7 +89,6 @@ describe("base", async (it) => {
 		});
 		await auth.api.assignRole({
 			body: {
-				scope: "global",
 				roleId: newRole.id,
 				userId: user.id,
 			},
@@ -140,24 +138,23 @@ describe("with organization plugin", async (it) => {
 			userId: user.id,
 		},
 	});
-	console.log(org);
+	if (!org) throw new Error("Organization not created");
 
 	const role = await auth.api.createRole({
 		body: {
-			name: "admin",
+			name: org.members[0].role,
 			permissions: ["test", "test2"],
-			scope: "global",
+			scope: org.id,
 		},
 	});
 
-	expect(role.name).toBe("admin");
+	expect(role.name).toBe("owner");
 
 	it("should be able to assign a role in a server without check permission", async ({
 		expect,
 	}) => {
 		const userRole = await auth.api.assignRole({
 			body: {
-				scope: "global",
 				roleId: role.id,
 				userId: user.id,
 			},
@@ -166,16 +163,27 @@ describe("with organization plugin", async (it) => {
 	});
 
 	it("should be able to return true on has permission", async ({ expect }) => {
-		// const { headers } = await signInWithTestUser();
-		// const res = await client.ac.hasPermission(
-		// 	{
-		// 		permission: "test",
-		// 		scope: "global",
-		// 	},
-		// 	{
-		// 		headers,
-		// 	},
-		// );
+		const { headers } = await signInWithTestUser();
+		const res = await client.ac.hasPermission(
+			{
+				permission: "test",
+				scope: "global",
+			},
+			{
+				headers,
+			},
+		);
+		console.log(res);
+		const res2 = await client.ac.hasPermission(
+			{
+				permission: "test",
+				scope: org.id,
+			},
+			{
+				headers,
+			},
+		);
+		console.log(res2);
 		// expect(res.data?.hasPermission).toBe(true);
 	});
 

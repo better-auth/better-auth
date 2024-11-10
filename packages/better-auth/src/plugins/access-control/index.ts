@@ -34,7 +34,6 @@ interface Role {
 interface UserRole {
 	id: string;
 	userId: string;
-	scope: string;
 	roleId: string;
 }
 
@@ -107,10 +106,6 @@ export const accessControl = (options: AccessControlOptions) => {
 								field: "userId",
 								value: user.id,
 							},
-							{
-								field: "scope",
-								value: scope || opts.globalScope,
-							},
 						],
 					});
 					if (!userRoles.length) {
@@ -125,6 +120,10 @@ export const accessControl = (options: AccessControlOptions) => {
 								{
 									field: "id",
 									value: userRole.roleId,
+								},
+								{
+									field: "scope",
+									value: scope || opts.globalScope,
 								},
 							],
 						});
@@ -183,11 +182,10 @@ export const accessControl = (options: AccessControlOptions) => {
 					body: z.object({
 						userId: z.string(),
 						roleId: z.string(),
-						scope: z.string(),
 					}),
 				},
 				async (ctx) => {
-					const { userId, roleId, scope } = ctx.body;
+					const { userId, roleId } = ctx.body;
 					if (ctx.request) {
 						await checkPermission(ctx, "role:assign");
 					}
@@ -197,7 +195,6 @@ export const accessControl = (options: AccessControlOptions) => {
 							id: ctx.context.uuid(),
 							userId,
 							roleId,
-							scope,
 						},
 					});
 					return newRole;
@@ -243,13 +240,6 @@ export const accessControl = (options: AccessControlOptions) => {
 							model: "user",
 							field: "id",
 						},
-					},
-					/**
-					 * The scope that this role is valid for.
-					 */
-					scope: {
-						type: "string",
-						required: true,
 					},
 					/**
 					 * The role that this user has.
