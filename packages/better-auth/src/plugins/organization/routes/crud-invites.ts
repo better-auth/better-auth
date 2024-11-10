@@ -149,7 +149,6 @@ export const acceptInvitation = createAuthEndpoint(
 			id: generateId(),
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
-			email: invitation.email,
 			role: invitation.role,
 			createdAt: new Date(),
 		});
@@ -302,11 +301,12 @@ export const getInvitation = createAuthEndpoint(
 				message: "Inviter is no longer a member of the organization",
 			});
 		}
+
 		return ctx.json({
 			...invitation,
 			organizationName: organization.name,
 			organizationSlug: organization.slug,
-			inviterEmail: member.email,
+			inviterEmail: member.user.email,
 		});
 	},
 );

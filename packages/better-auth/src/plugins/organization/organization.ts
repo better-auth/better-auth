@@ -308,10 +308,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 					},
-					email: {
-						type: "string",
-						required: true,
-					},
 					role: {
 						type: "string",
 						required: true,

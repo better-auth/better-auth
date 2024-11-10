@@ -45,7 +45,6 @@ export const getOrgAdapter = (
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
-					email: data.user.email,
 					role: options?.creatorRole || "owner",
 				},
 			});
@@ -71,32 +70,32 @@ export const getOrgAdapter = (
 			email: string;
 			organizationId: string;
 		}) => {
-			const member = await adapter.findOne<Member>({
-				model: "member",
+			const user = await adapter.findOne<User>({
+				model: context.tables.user.tableName,
 				where: [
 					{
 						field: "email",
 						value: data.email,
 					},
+				],
+			});
+			if (!user) {
+				return null;
+			}
+			const member = await adapter.findOne<Member>({
+				model: "member",
+				where: [
 					{
 						field: "organizationId",
 						value: data.organizationId,
 					},
-				],
-			});
-			if (!member) {
-				return null;
-			}
-			const user = await adapter.findOne<User>({
-				model: context.tables.user.tableName,
-				where: [
 					{
-						field: "id",
-						value: member.userId,
+						field: "userId",
+						value: user.id,
 					},
 				],
 			});
-			if (!user) {
+			if (!member) {
 				return null;
 			}
 			return {

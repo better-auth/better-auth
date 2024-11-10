@@ -18,7 +18,6 @@ export const organizationSchema = z.object({
 
 export const memberSchema = z.object({
 	id: z.string(),
-	email: z.string(),
 	organizationId: z.string(),
 	userId: z.string(),
 	role,
