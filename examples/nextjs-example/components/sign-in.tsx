@@ -86,7 +86,7 @@ export default function SignIn() {
 									{
 										email: email,
 										password: password,
-										dontRememberMe: !rememberMe,
+										rememberMe,
 									},
 									{
 										onRequest: () => {
@@ -108,7 +108,7 @@ export default function SignIn() {
 									{
 										username: email,
 										password: password,
-										dontRememberMe: !rememberMe,
+										rememberMe,
 									},
 									{
 										onRequest: () => {

@@ -178,10 +178,10 @@ export const signInEmail = createAuthEndpoint(
 			password: z.string(),
 			callbackURL: z.string().optional(),
 			/**
-			 * If this is true the session will only be valid for the current browser session
-			 * @default false
+			 * If this is false, the session will not be remembered
+			 * @default true
 			 */
-			dontRememberMe: z.boolean().default(false).optional(),
+			rememberMe: z.boolean().default(false).optional(),
 		}),
 	},
 	async (ctx) => {
@@ -271,7 +271,7 @@ export const signInEmail = createAuthEndpoint(
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.headers,
-			ctx.body.dontRememberMe,
+			ctx.body.rememberMe === false,
 		);
 
 		if (!session) {
@@ -287,7 +287,7 @@ export const signInEmail = createAuthEndpoint(
 				session,
 				user: user.user,
 			},
-			ctx.body.dontRememberMe,
+			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
 			user: user.user,

@@ -93,7 +93,7 @@ export function OrganizationCard(props: {
 								className=" py-1"
 								onClick={async () => {
 									organization.setActive({
-										orgId: null,
+										organizationId: null,
 									});
 									setOptimisticOrg(null);
 								}}
@@ -114,7 +114,7 @@ export function OrganizationCard(props: {
 											...org,
 										});
 										const { data } = await organization.setActive({
-											orgId: org.id,
+											organizationId: org.id,
 										});
 										setOptimisticOrg(data);
 									}}
