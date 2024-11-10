@@ -77,6 +77,7 @@ export const username = () => {
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx.request,
+						ctx.body.rememberMe === false,
 					);
 					if (!session) {
 						return ctx.json(null, {
