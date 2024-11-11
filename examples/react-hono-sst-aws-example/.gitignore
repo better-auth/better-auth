@@ -1,0 +1,16 @@
+
+# sst
+.sst
+
+# env
+.env
+/packages/server/.env
+/packages/server/node_modules
+/packages/server/dist
+/packages/client/node_modules
+/packages/client/dist
+node_modules
+
+# Zone.Identifier files
+*:Zone.Identifier
+*Zone.Identifier

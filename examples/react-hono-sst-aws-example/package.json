@@ -1,0 +1,29 @@
+{
+  "name": "demotest",
+  "version": "1.0.0",
+  "description": "A demo project for testing SST,Hono,MongoDB with BetterAuth",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "pnpm install && pnpm run install:client && pnpm run install:server",
+    "install:client": "cd packages/client && pnpm install",
+    "install:server": "cd packages/server && pnpm install",
+    "build:client": "cd packages/client && pnpm run build",
+    "dev:client": "cd packages/client && pnpm run dev",
+    "dev:server": "npx sst dev",
+    "dev": "concurrently \"pnpm run dev:client\" \"pnpm run dev:server\" --kill-others --names \"CLIENT,SERVER\" --prefix-colors \"bgBlue.bold,bgGreen.bold\"",
+    "deploy": "cd packages/client && pnpm run build && cd ../.. && npx sst deploy",
+    "clean": "rm -rf node_modules packages/client/node_modules packages/server/node_modules packages/client/dist .sst/dist",
+    "clean:install": "pnpm run clean && pnpm run install:all"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "sst": "3.3.13"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.145",
+    "concurrently": "^9.1.0"
+  }
+}
