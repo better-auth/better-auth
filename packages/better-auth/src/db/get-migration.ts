@@ -34,7 +34,7 @@ const mysqlMap = {
 		"float",
 		"double",
 	],
-	boolean: ["boolean"],
+	boolean: ["boolean", "tinyint"],
 	date: ["datetime", "date"],
 };
 

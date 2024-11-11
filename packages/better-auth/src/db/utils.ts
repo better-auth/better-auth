@@ -29,6 +29,7 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 			schema,
 			date: true,
 			boolean: databaseType === "sqlite",
+			databaseType,
 		},
 		generateId:
 			"generateId" in options.database

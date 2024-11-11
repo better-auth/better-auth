@@ -43,6 +43,7 @@ describe("session", async () => {
 
 	it("should update session when close to expiry", async () => {
 		let headers = new Headers();
+
 		const res = await client.signIn.email(
 			{
 				email: testUser.email,
