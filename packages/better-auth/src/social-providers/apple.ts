@@ -50,6 +50,20 @@ export interface AppleProfile {
 	 * The URL to the user's profile picture.
 	 */
 	picture: string;
+	user?: AppleNonConformUser;
+}
+
+/**
+ * This is the shape of the `user` query parameter that Apple sends the first
+ * time the user consents to the app.
+ * @see https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server#4066168
+ */
+export interface AppleNonConformUser {
+	name: {
+		firstName: string;
+		lastName: string;
+	};
+	email: string;
 }
 
 export interface AppleOptions extends ProviderOptions {}
@@ -60,12 +74,12 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scope = scopes || ["email", "name", "openid"];
+			const _scope = scopes || ["email", "name"];
 			options.scope && _scope.push(...options.scope);
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
-				}&response_type=code&redirect_uri=${
+				}&response_type=form_post&redirect_uri=${
 					redirectURI || options.redirectURI
 				}&scope=${_scope.join(" ")}&state=${state}`,
 			);
@@ -77,6 +91,7 @@ export const apple = (options: AppleOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
+				authentication: "basic",
 			});
 		},
 		async verifyIdToken(token, nonce) {
@@ -110,19 +125,21 @@ export const apple = (options: AppleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const data = parseJWT(token.idToken)?.payload as AppleProfile | null;
-			if (!data) {
+			const profile = parseJWT(token.idToken)?.payload as AppleProfile | null;
+			if (!profile) {
 				return null;
 			}
+			const name = profile.user
+				? `${profile.user.name.firstName} ${profile.user.name.lastName}`
+				: profile.email;
 			return {
 				user: {
-					id: data.sub,
-					name: data.name,
-					email: data.email,
-					emailVerified: data.email_verified === "true",
-					image: data.picture,
+					id: profile.sub,
+					name: name,
+					emailVerified: false,
+					email: profile.email,
 				},
-				data,
+				data: profile,
 			};
 		},
 	} satisfies OAuthProvider<AppleProfile>;
