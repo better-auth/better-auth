@@ -35,16 +35,11 @@ export function parseSetCookieHeader(
 			const attrValue = attrValueParts.join("=");
 
 			// Normalize the attribute name to camelCase
-			const normalizedAttrName = attrName
-				.trim()
-				.toLowerCase()
-				.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+			const normalizedAttrName = attrName.trim().toLowerCase();
 
 			switch (normalizedAttrName) {
-				case "maxAge":
-					attrObj.maxAge = attrValue
-						? parseInt(attrValue.trim(), 10)
-						: undefined;
+				case "max-age":
+					attrObj["max-age"] = attrValue;
 					break;
 				case "expires":
 					attrObj.expires = attrValue ? new Date(attrValue.trim()) : undefined;
@@ -59,10 +54,10 @@ export function parseSetCookieHeader(
 					attrObj.secure = true;
 					break;
 				case "httponly":
-					attrObj.httpOnly = true;
+					attrObj.httponly = true;
 					break;
 				case "samesite":
-					attrObj.sameSite = attrValue
+					attrObj.samesite = attrValue
 						? (attrValue.trim().toLowerCase() as "strict" | "lax" | "none")
 						: undefined;
 					break;

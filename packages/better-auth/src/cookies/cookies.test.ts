@@ -16,7 +16,7 @@ describe("cookies", async () => {
 					expect(setCookie).toBeDefined();
 					expect(setCookie).toContain("Path=/");
 					expect(setCookie).toContain("HttpOnly");
-					expect(setCookie).toContain("SameSite=Lax");
+					expect(setCookie).toContain("SameSite=lax");
 					expect(setCookie).toContain("better-auth");
 				},
 			},
@@ -96,7 +96,7 @@ describe("crossSubdomainCookies", () => {
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
 					expect(setCookie).toContain("Domain=example.com");
-					expect(setCookie).toContain("SameSite=Lax");
+					expect(setCookie).toContain("SameSite=lax");
 				},
 			},
 		);

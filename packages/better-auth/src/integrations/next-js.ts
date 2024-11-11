@@ -37,10 +37,10 @@ export const next = () => {
 							const cookieHelper = await cookies();
 							parsed.forEach((value, key) => {
 								const opts = {
-									sameSite: value.sameSite,
+									samesite: value.sameSite,
 									secure: value.secure,
-									maxAge: value.maxAge,
-									httpOnly: value.httpOnly,
+									"max-age": value.maxAge,
+									httponly: value.httpOnly,
 									domain: value.domain,
 									path: value.path,
 								};
