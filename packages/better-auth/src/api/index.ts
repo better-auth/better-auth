@@ -204,13 +204,14 @@ export function getEndpoints<
 					for (const hook of plugin.hooks.after) {
 						const match = hook.matcher(context);
 						if (match) {
-							const obj = Object.assign(context, {
+							const hookRes = await hook.handler({
+								...context,
 								context: {
-									...ctx,
+									...c,
+									...context.context,
 									returned: response,
 								},
 							});
-							const hookRes = await hook.handler(obj);
 							if (hookRes && "response" in hookRes) {
 								response = hookRes.response as any;
 							}
