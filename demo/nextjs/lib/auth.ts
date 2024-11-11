@@ -22,6 +22,12 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
+const s = {
+	extra: {
+		type: "string",
+	},
+} as const;
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
