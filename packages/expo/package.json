@@ -6,8 +6,8 @@
   "module": "dist/index.mjs",
   "scripts": {
     "test": "vitest",
-    "build": "tsup --dts --minify --clean",
-    "dev": "tsup --watch --sourcemap --dts"
+    "build": "tsup --dts-resolve --minify --clean",
+    "dev": "tsup --watch --sourcemap --dts-resolve"
   },
   "exports": {
     ".": {
