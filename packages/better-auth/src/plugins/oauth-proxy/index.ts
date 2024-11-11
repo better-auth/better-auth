@@ -69,7 +69,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = ctx.context.returned;
-						if (!response) {
+						if (!response || !(response instanceof Response)) {
 							return;
 						}
 						const location = response.headers.get("location");
