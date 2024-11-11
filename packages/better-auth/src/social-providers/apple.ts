@@ -67,7 +67,7 @@ export const apple = (options: AppleOptions) => {
 					options.clientId
 				}&response_type=code&redirect_uri=${
 					redirectURI || options.redirectURI
-				}&scope=${_scope.join(" ")}&state=${state}`,
+				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

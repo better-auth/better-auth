@@ -12,7 +12,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
-		method: "GET",
+		method: ["GET", "POST"],
 		query: z.object({
 			state: z.string(),
 			code: z.string().optional(),
