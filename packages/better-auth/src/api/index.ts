@@ -200,6 +200,8 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
+						// @ts-expect-error - returned is not in the context type
+						c.returned = response;
 						const ctx = {
 							...value,
 							...context,

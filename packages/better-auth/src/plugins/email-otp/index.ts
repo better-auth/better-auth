@@ -217,6 +217,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 					async handler(ctx) {
 						const returned = ctx.context.returned as Response;
+
 						if (returned?.status !== 200) {
 							return;
 						}
