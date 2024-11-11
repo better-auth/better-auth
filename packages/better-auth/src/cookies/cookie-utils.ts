@@ -1,6 +1,6 @@
 interface CookieAttributes {
 	value: string;
-	"max-age"?: number;
+	"max-age"?: string;
 	expires?: Date;
 	domain?: string;
 	path?: string;
