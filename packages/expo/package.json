@@ -6,8 +6,8 @@
   "module": "dist/index.mjs",
   "scripts": {
     "test": "vitest",
-    "build": "tsup --dts-resolve --minify --clean",
-    "dev": "tsup --watch --sourcemap --dts-resolve"
+    "build": "tsup --dts --minify --clean",
+    "dev": "tsup --watch --sourcemap --dts"
   },
   "exports": {
     ".": {
@@ -39,6 +39,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
+    "better-call": "^0.2.14",
     "zod": "^3.23.8"
   }
 }
