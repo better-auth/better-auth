@@ -171,7 +171,7 @@ export const kyselyAdapter = (
 			let res: any;
 
 			if (config?.transform?.databaseType !== "mysql") {
-				res = await builder.returningAll().execute();
+				res = await builder.returningAll().executeTakeFirst();
 			} else {
 				await builder.execute();
 				const primaryKey = "id";
