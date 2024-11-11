@@ -1,6 +1,7 @@
 import type { Kysely } from "kysely";
 import type { FieldAttribute } from "../../db";
 import type { Adapter, Where } from "../../types";
+import type { KyselyDatabaseType } from "./types";
 
 function convertWhere(w?: Where[]) {
 	if (!w)
@@ -96,13 +97,33 @@ function transformTo(
 	return val;
 }
 
+function formatDateForMySQL(date: Date): string {
+	const pad = (n: number) => (n < 10 ? "0" + n : n);
+	return (
+		date.getFullYear() +
+		"-" +
+		pad(date.getMonth() + 1) +
+		"-" +
+		pad(date.getDate()) +
+		" " +
+		pad(date.getHours()) +
+		":" +
+		pad(date.getMinutes()) +
+		":" +
+		pad(date.getSeconds())
+	);
+}
+
 function transformFrom(val: any, transform: KyselyAdapterConfig["transform"]) {
 	for (const key in val) {
 		if (typeof val[key] === "boolean" && transform?.boolean) {
 			val[key] = val[key] ? 1 : 0;
 		}
 		if (val[key] instanceof Date) {
-			val[key] = val[key].toISOString();
+			val[key] =
+				transform?.databaseType === "mysql"
+					? formatDateForMySQL(val[key])
+					: val[key];
 		}
 	}
 	return val;
@@ -118,6 +139,7 @@ export interface KyselyAdapterConfig {
 		};
 		boolean: boolean;
 		date: boolean;
+		databaseType?: KyselyDatabaseType | null;
 	};
 	/**
 	 * Custom generateId function.
@@ -144,10 +166,18 @@ export const kyselyAdapter = (
 			if (config?.generateId !== undefined) {
 				val.id = config.generateId ? config.generateId() : undefined;
 			}
-			let res = await db
+
+			await db
 				.insertInto(model)
 				.values(val as any)
-				.returningAll()
+				.execute();
+
+			const primaryKey = "id";
+			const insertedId = val[primaryKey];
+			let res = await db
+				.selectFrom(model)
+				.selectAll()
+				.where(primaryKey, "=", insertedId)
 				.executeTakeFirst();
 
 			if (config?.transform) {
@@ -251,7 +281,14 @@ export const kyselyAdapter = (
 			if (or) {
 				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
-			const res = (await query.returningAll().executeTakeFirst()) || null;
+			const insert = (await query.execute()) as any;
+			const primaryKey = "id";
+			const insertedId = insert[primaryKey];
+			let res = await db
+				.selectFrom(model)
+				.selectAll()
+				.where(primaryKey, "=", insertedId)
+				.executeTakeFirst();
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				return schema ? transformTo(res, schema, config.transform) : res;
