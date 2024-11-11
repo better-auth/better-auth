@@ -2,7 +2,7 @@ import type { Endpoint, EndpointOptions, EndpointResponse } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
-import type { GenericEndpointContext } from "./context";
+import type { HookEndpointContext } from "./context";
 import type { DeepPartial, LiteralString } from "./helper";
 import type { Adapter, AuthContext, BetterAuthOptions } from ".";
 
@@ -53,22 +53,22 @@ export type BetterAuthPlugin = {
 	} | void>;
 	hooks?: {
 		before?: {
-			matcher: (context: GenericEndpointContext) => boolean;
-			handler: (context: GenericEndpointContext) => Promise<void | {
-				context: Partial<GenericEndpointContext>;
+			matcher: (context: HookEndpointContext) => boolean;
+			handler: (context: HookEndpointContext) => Promise<void | {
+				context: Partial<HookEndpointContext>;
 			}>;
 		}[];
 		after?: {
 			matcher: (
-				context: GenericEndpointContext<{
-					returned?: EndpointResponse;
-					endpoint?: Endpoint;
+				context: HookEndpointContext<{
+					returned: unknown;
+					endpoint: Endpoint;
 				}>,
 			) => boolean;
 			handler: (
-				context: GenericEndpointContext<{
-					returned?: EndpointResponse;
-					endpoint?: Endpoint;
+				context: HookEndpointContext<{
+					returned: unknown;
+					endpoint: Endpoint;
 				}>,
 			) => Promise<void | {
 				response: unknown;
