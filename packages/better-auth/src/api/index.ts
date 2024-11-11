@@ -121,23 +121,21 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
-						const match = hook.matcher({
+						const ctx = {
 							...value,
 							...context,
-							context: c,
-						});
+							context: {
+								...c,
+								...context?.context,
+							},
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const hookRes = await hook.handler({
-								...context,
-								context: {
-									...c,
-									...context?.context,
-								},
-							});
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "context" in hookRes) {
-								c = {
-									...c,
-									...hookRes.context,
+								context = {
+									...hookRes,
+									...context,
 								};
 							}
 						}
@@ -202,16 +200,14 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
-						const match = hook.matcher(context);
+						const ctx = {
+							...value,
+							...context,
+							context: c,
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const hookRes = await hook.handler({
-								...context,
-								context: {
-									...c,
-									...context.context,
-									returned: response,
-								},
-							});
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								response = hookRes.response as any;
 							}
