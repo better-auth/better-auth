@@ -177,13 +177,14 @@ export function getEndpoints<
 					for (const hook of afterPlugins || []) {
 						const match = hook.matcher(context);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
+							// @ts-expect-error - returned is not in the context type
+							c.returned = response;
+							const ctx = {
+								...value,
+								...context,
+								context: c,
+							};
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								pluginResponse = hookRes.response as any;
 							}
@@ -202,8 +203,9 @@ export function getEndpoints<
 					for (const hook of plugin.hooks.after) {
 						// @ts-expect-error - returned is not in the context type
 						c.returned = response;
+						// @ts-expect-error - endpoint is not in the context type
+						c.endpoint = value;
 						const ctx = {
-							...value,
 							...context,
 							context: c,
 						};

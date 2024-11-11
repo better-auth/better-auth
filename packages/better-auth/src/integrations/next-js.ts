@@ -19,19 +19,19 @@ export function toNextJsHandler(
 	};
 }
 
-export const next = () => {
+export const nextCookies = () => {
 	return {
-		id: "next",
+		id: "next-cookies",
 		hooks: {
 			after: [
 				{
 					matcher() {
 						return true;
 					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (returned instanceof Response) {
-							const setCookies = returned?.headers.get("set-cookie");
+					handler: async (ctx) => {
+						const returned = ctx.context.endpoint?.headers;
+						if (returned instanceof Headers) {
+							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							const cookieHelper = await cookies();
@@ -39,7 +39,6 @@ export const next = () => {
 								if (!value) return;
 								if (!key) return;
 								const opts = {
-									...value,
 									samesite: value.samesite,
 									secure: value.secure,
 									"max-age": value["max-age"],
@@ -51,7 +50,7 @@ export const next = () => {
 							});
 							return;
 						}
-					}),
+					},
 				},
 			],
 		},

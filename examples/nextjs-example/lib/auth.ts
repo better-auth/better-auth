@@ -13,7 +13,7 @@ import { reactInvitationEmail } from "./email/invitation";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 import { expo } from "@better-auth/expo";
-import { next } from "better-auth/next-js";
+import { nextCookies } from "better-auth/next-js";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -126,7 +126,7 @@ export const auth = betterAuth({
 		multiSession(),
 		username(),
 		expo(),
-		next(),
+		nextCookies(),
 	],
 	trustedOrigins: ["better-auth://", "exp://"],
 });
