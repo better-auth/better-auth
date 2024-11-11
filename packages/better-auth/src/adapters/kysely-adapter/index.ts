@@ -123,7 +123,7 @@ function transformFrom(val: any, transform: KyselyAdapterConfig["transform"]) {
 			val[key] =
 				transform?.databaseType === "mysql"
 					? formatDateForMySQL(val[key])
-					: val[key];
+					: val[key].toISOString();
 		}
 	}
 	return val;
@@ -167,18 +167,21 @@ export const kyselyAdapter = (
 				val.id = config.generateId ? config.generateId() : undefined;
 			}
 
-			await db
-				.insertInto(model)
-				.values(val as any)
-				.execute();
+			const builder = db.insertInto(model).values(val as any);
+			let res: any;
 
-			const primaryKey = "id";
-			const insertedId = val[primaryKey];
-			let res = await db
-				.selectFrom(model)
-				.selectAll()
-				.where(primaryKey, "=", insertedId)
-				.executeTakeFirst();
+			if (config?.transform?.databaseType !== "mysql") {
+				res = await builder.returningAll().execute();
+			} else {
+				await builder.execute();
+				const primaryKey = "id";
+				const insertedId = val[primaryKey];
+				res = await db
+					.selectFrom(model)
+					.selectAll()
+					.where(primaryKey, "=", insertedId)
+					.executeTakeFirst();
+			}
 
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
@@ -231,7 +234,6 @@ export const kyselyAdapter = (
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				res = res && schema ? transformTo(res, schema, config.transform) : res;
-
 				return res || null;
 			}
 			return (res || null) as any;
@@ -281,14 +283,19 @@ export const kyselyAdapter = (
 			if (or) {
 				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
-			const insert = (await query.execute()) as any;
-			const primaryKey = "id";
-			const insertedId = insert[primaryKey];
-			let res = await db
-				.selectFrom(model)
-				.selectAll()
-				.where(primaryKey, "=", insertedId)
-				.executeTakeFirst();
+			let res: any;
+			if (config?.transform?.databaseType !== "mysql") {
+				res = (await query.returningAll().executeTakeFirst()) || null;
+			} else {
+				await query.execute();
+				const primaryKey = "id";
+				const insertedId = val[primaryKey];
+				res = await db
+					.selectFrom(model)
+					.selectAll()
+					.where(primaryKey, "=", insertedId)
+					.executeTakeFirst();
+			}
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				return schema ? transformTo(res, schema, config.transform) : res;

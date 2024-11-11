@@ -129,6 +129,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;
+
 				/**
 				 * Calculate last updated date to throttle write updates to database
 				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
@@ -141,6 +142,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					session.session.expiresAt.valueOf() -
 					expiresIn * 1000 +
 					updateAge * 1000;
+
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
 				if (shouldBeUpdated) {

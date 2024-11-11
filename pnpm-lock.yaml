@@ -967,6 +967,9 @@ importers:
       mini-svg-data-uri:
         specifier: ^1.4.4
         version: 1.4.4
+      mysql2:
+        specifier: ^3.11.0
+        version: 3.11.3
       next:
         specifier: 15.0.0-canary.185
         version: 15.0.0-canary.185(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
