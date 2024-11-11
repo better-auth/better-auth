@@ -23,7 +23,7 @@ describe("session", async () => {
 						"max-age": (60 * 60 * 24 * 7).toString(),
 						path: "/",
 						httponly: true,
-						samesite: "Lax",
+						samesite: "lax",
 					});
 				},
 			},
@@ -145,7 +145,7 @@ describe("session", async () => {
 						"max-age": (60 * 60 * 24 * 7).toString(),
 						path: "/",
 						httponly: true,
-						samesite: "Lax",
+						samesite: "lax",
 					});
 				},
 			},

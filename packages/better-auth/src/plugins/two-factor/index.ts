@@ -175,17 +175,23 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
-						if (returned?.status !== 200) {
+						if (
+							(returned instanceof Response && returned?.status !== 200) ||
+							returned instanceof APIError
+						) {
 							return;
 						}
-						const response = (await returned.clone().json()) as {
+						const response = (
+							returned instanceof Response
+								? await returned.clone().json()
+								: returned
+						) as {
 							user: UserWithTwoFactor;
 							session: Session;
 						};
 						if (!response.user.twoFactorEnabled) {
 							return;
 						}
-
 						// Check for trust device cookie
 						const trustDeviceCookieName = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,

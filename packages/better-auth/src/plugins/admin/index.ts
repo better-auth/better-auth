@@ -122,7 +122,7 @@ export const admin = (options?: AdminOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
-						if (returned) {
+						if (returned instanceof Response) {
 							const json =
 								(await returned.json()) as SessionWithImpersonatedBy[];
 							const newJson = json.filter((session) => {

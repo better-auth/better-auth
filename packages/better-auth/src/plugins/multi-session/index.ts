@@ -213,6 +213,8 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: (context) => context.path === "/sign-out",
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!(ctx.context.returned instanceof Response)) return;
+
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
 
@@ -229,7 +231,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						);
 
 						const response = ctx.context.returned;
-						response?.headers.append(
+						response.headers.append(
 							"Set-Cookie",
 							ctx.responseHeader.get("set-cookie")!,
 						);
