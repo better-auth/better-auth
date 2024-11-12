@@ -6,14 +6,14 @@ describe("updateUser", async () => {
 	let emailVerificationToken = "";
 	const { client, testUser, sessionSetter, db } = await getTestInstance({
 		emailVerification: {
-			async sendVerificationEmail(user, url, token) {
+			async sendVerificationEmail({ user, url, token }) {
 				emailVerificationToken = token;
 			},
 		},
 		user: {
 			changeEmail: {
 				enabled: true,
-				sendChangeEmailVerification: async (user, newEmail, url, token) => {
+				sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
 					sendChangeEmail(user, newEmail, url, token);
 				},
 			},

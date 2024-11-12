@@ -10,11 +10,14 @@ interface EmailOTPOptions {
 	/**
 	 * Function to send email verification
 	 */
-	sendVerificationOTP: (data: {
-		email: string;
-		otp: string;
-		type: "sign-in" | "email-verification";
-	}) => Promise<void>;
+	sendVerificationOTP: (
+		data: {
+			email: string;
+			otp: string;
+			type: "sign-in" | "email-verification";
+		},
+		request?: Request,
+	) => Promise<void>;
 	/**
 	 * Length of the OTP
 	 */
@@ -70,11 +73,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						identifier: `${ctx.body.type}-otp-${email}`,
 						expiresAt: getDate(opts.expireIn, "sec"),
 					});
-					await options.sendVerificationOTP({
-						email,
-						otp,
-						type: ctx.body.type,
-					});
+					await options.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: ctx.body.type,
+						},
+						ctx.request,
+					);
 					return ctx.json({
 						success: true,
 					});
@@ -230,11 +236,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								identifier: `email-verification-otp-${response.user.email}`,
 								expiresAt: getDate(opts.expireIn, "sec"),
 							});
-							await options.sendVerificationOTP({
-								email: response.user.email,
-								otp,
-								type: "email-verification",
-							});
+							await options.sendVerificationOTP(
+								{
+									email: response.user.email,
+									otp,
+									type: "email-verification",
+								},
+								ctx.request,
+							);
 						}
 					},
 				},

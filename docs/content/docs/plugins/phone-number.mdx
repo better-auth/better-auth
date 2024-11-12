@@ -18,7 +18,7 @@ The phone number plugin extends the authentication system by allowing users to s
         const auth = betterAuth({
             plugins: [ 
                 phoneNumber({  // [!code highlight]
-                    sendOTP: (phoneNumber, code) => { // [!code highlight]
+                    sendOTP: ({ phoneNumber, code }, request) => { // [!code highlight]
                         // Implement sending OTP code via SMS // [!code highlight]
                     } // [!code highlight]
                 }) // [!code highlight]
@@ -92,7 +92,7 @@ to allow users to sign up using their phone number, you can pass `signUpOnVerifi
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            sendOTP: (phoneNumber, code) => {
+            sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
             signUpOnVerification: {

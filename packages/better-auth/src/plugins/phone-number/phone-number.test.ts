@@ -11,7 +11,7 @@ describe("phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -109,7 +109,7 @@ describe("phone auth flow", async () => {
 	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -202,7 +202,7 @@ describe("verify phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp.push(code);
 				},
 				signUpOnVerification: {

@@ -324,10 +324,13 @@ export const changeEmail = createAuthEndpoint(
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
-			ctx.context.session.user,
-			ctx.body.newEmail,
-			url,
-			token,
+			{
+				user: ctx.context.session.user,
+				newEmail: ctx.body.newEmail,
+				url,
+				token,
+			},
+			ctx.request,
 		);
 		return ctx.json({
 			user: null,

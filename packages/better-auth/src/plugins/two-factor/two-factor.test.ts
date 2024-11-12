@@ -17,7 +17,7 @@ describe("two factor", async () => {
 			plugins: [
 				twoFactor({
 					otpOptions: {
-						sendOTP(_, otp) {
+						sendOTP({ otp }) {
 							OTP = otp;
 						},
 					},
