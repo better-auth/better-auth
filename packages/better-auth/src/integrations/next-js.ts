@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "../types";
 import { cookies } from "next/headers";
 import { parseSetCookieHeader } from "../cookies";
-import { createAuthMiddleware } from "../plugins";
 
 export function toNextJsHandler(
 	auth:
