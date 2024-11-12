@@ -10,7 +10,7 @@ describe("Email Verification", async () => {
 			requireEmailVerification: true,
 		},
 		emailVerification: {
-			async sendVerificationEmail(user, url, _token) {
+			async sendVerificationEmail({ user, url, token: _token }) {
 				token = _token;
 				mockSendEmail(user.email, url);
 			},

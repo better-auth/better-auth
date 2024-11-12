@@ -113,9 +113,12 @@ export async function handleOAuthUserInfo(
 				);
 				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					user,
-					url,
-					token,
+					{
+						user,
+						url,
+						token,
+					},
+					c.request,
 				);
 			}
 		} catch (e) {
