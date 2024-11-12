@@ -383,7 +383,7 @@ export const getOrgAdapter = (
 		}: {
 			invitation: {
 				email: string;
-				role: "admin" | "member" | "owner";
+				role: string;
 				organizationId: string;
 			};
 			user: User;

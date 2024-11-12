@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { orgMiddleware, orgSessionMiddleware } from "../context";
 import { APIError } from "better-call";
 import type { User } from "../../../types";
 import { getSessionFromCtx } from "../../../api";

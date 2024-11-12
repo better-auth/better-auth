@@ -1,25 +1,9 @@
-import { APIError } from "better-call";
-import {
-	type ZodArray,
-	type ZodLiteral,
-	type ZodObject,
-	type ZodOptional,
-	z,
-} from "zod";
 import type { User } from "../../db/schema";
-import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import {
-	type AccessControl,
-	type Role,
-	defaultRoles,
-	type defaultStatements,
-} from "../access";
-import { getOrgAdapter } from "./adapter";
-import { orgSessionMiddleware } from "./call";
+import { type Role, defaultRoles } from "../access";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -40,8 +24,22 @@ import {
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
-import type { Invitation, Member, Organization } from "./schema";
+import type {
+	Invitation,
+	Member,
+	MemberWithUser,
+	Organization,
+} from "./schema";
 import type { Prettify } from "../../types/helper";
+
+export interface AC {
+	/**
+	 * Can the user invite members to the organization?
+	 *
+	 * @default (member) => (member.role === "admin" || member.role === "owner")
+	 */
+	canInvite?: (member: MemberWithUser) => boolean | Promise<boolean>;
+}
 
 export interface OrganizationOptions {
 	/**
@@ -82,7 +80,7 @@ export interface OrganizationOptions {
 	 * Configure the roles and permissions for the organization plugin.
 	 *
 	 */
-	ac?: AccessControl;
+	accessControl?: AC;
 	/**
 	 * Custom permissions for roles.
 	 */
@@ -197,70 +195,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 	});
 
-	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S extends Record<string, any>
-			? S & DefaultStatements
-			: DefaultStatements
-		: DefaultStatements;
 	return {
 		id: "organization",
-		endpoints: {
-			...api,
-			// hasPermission: createAuthEndpoint(
-			// 	"/organization/has-permission",
-			// 	{
-			// 		method: "POST",
-			// 		requireHeaders: true,
-			// 		body: z.object({
-			// 			permission: z.record(z.string(), z.array(z.string())),
-			// 		}) as unknown as ZodObject<{
-			// 			permission: ZodObject<{
-			// 				[key in keyof Statements]: ZodOptional<
-			// 					//@ts-expect-error TODO: fix this
-			// 					ZodArray<ZodLiteral<Statements[key][number]>>
-			// 				>;
-			// 			}>;
-			// 		}>,
-			// 		use: [orgSessionMiddleware],
-			// 	},
-			// 	async (ctx) => {
-			// 		if (!ctx.context.session.session.activeOrganizationId) {
-			// 			throw new APIError("BAD_REQUEST", {
-			// 				message: "No active organization",
-			// 			});
-			// 		}
-			// 		const adapter = getOrgAdapter(ctx.context);
-			// 		const member = await adapter.findMemberByOrgId({
-			// 			userId: ctx.context.session.user.id,
-			// 			organizationId:
-			// 				ctx.context.session.session.activeOrganizationId || "",
-			// 		});
-			// 		if (!member) {
-			// 			throw new APIError("UNAUTHORIZED", {
-			// 				message: "You are not a member of this organization",
-			// 			});
-			// 		}
-			// 		const role = roles[member.role];
-			// 		const result = role.authorize(ctx.body.permission as any);
-			// 		if (result.error) {
-			// 			return ctx.json(
-			// 				{
-			// 					error: result.error,
-			// 					success: false,
-			// 				},
-			// 				{
-			// 					status: 403,
-			// 				},
-			// 			);
-			// 		}
-			// 		return ctx.json({
-			// 			error: null,
-			// 			success: true,
-			// 		});
-			// 	},
-			// ),
-		},
+		endpoints: api,
 		schema: {
 			session: {
 				fields: {

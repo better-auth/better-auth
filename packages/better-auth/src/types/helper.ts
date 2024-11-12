@@ -38,3 +38,13 @@ export type DeepPartial<T> = T extends Function
 	: T extends object
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
+
+export type DeepRequired<T> = {
+	[K in keyof T]-?: T[K] extends Function
+		? T[K]
+		: T[K] extends Array<infer U>
+			? Array<DeepRequired<U>>
+			: T[K] extends object
+				? DeepRequired<T[K]>
+				: T[K];
+};
