@@ -186,4 +186,19 @@ describe("with organization plugin", async (it) => {
 		);
 		expect(res2.data?.hasPermission).toBe(true);
 	});
+
+	it("should return permissions", async () => {
+		const { headers } = await signInWithTestUser();
+		const res = await client.ac.getPermissions(
+			{
+				query: {
+					scope: org.id,
+				},
+			},
+			{
+				headers,
+			},
+		);
+		console.log(res.data);
+	});
 });

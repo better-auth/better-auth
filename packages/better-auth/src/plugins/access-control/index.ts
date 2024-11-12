@@ -6,6 +6,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import type { User } from "@prisma/client";
 
 interface AccessControlOptions {
 	/**
@@ -76,6 +77,10 @@ async function checkPermission(
 			message: "You do not have permission required to perform this action.",
 		});
 	}
+	return {
+		userRole,
+		user,
+	};
 }
 
 export const accessControl = (options: AccessControlOptions) => {
@@ -86,6 +91,76 @@ export const accessControl = (options: AccessControlOptions) => {
 	return {
 		id: "access-control",
 		endpoints: {
+			getPermissions: createAuthEndpoint(
+				"/ac/get-permissions",
+				{
+					method: "GET",
+					query: z.object({
+						scope: z.string(),
+						userId: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					let user: User | null = null;
+					if (ctx.request) {
+						const session = await getSessionFromCtx(ctx);
+						user = session.user;
+					} else {
+						if (!ctx.query.userId) {
+							throw new APIError("BAD_REQUEST", {
+								message: "userId is required",
+							});
+						}
+						user = await ctx.context.internalAdapter.findUserById(
+							ctx.query.userId,
+						);
+					}
+					if (!user) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								"You do not have permission required to perform this action.",
+						});
+					}
+					const userRoles = await ctx.context.adapter.findMany<UserRole>({
+						model: "userRole",
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+					if (!userRoles.length) {
+						return {
+							permissions: [],
+						};
+					}
+					const rolePromises = userRoles.map(async (userRole) => {
+						const role = await ctx.context.adapter.findOne<StoredRole>({
+							model: "role",
+							where: [
+								{
+									field: "id",
+									value: userRole.roleId,
+								},
+								{
+									field: "scope",
+									value: opts.globalScope,
+								},
+							],
+						});
+						return role;
+					});
+					const rolePermissions = (await Promise.all(rolePromises))
+						.map((role) =>
+							role ? (JSON.parse(role?.permissions) as Array<string>) : [],
+						)
+						.flat();
+					return {
+						permissions: rolePermissions,
+					};
+				},
+			),
 			hasPermission: createAuthEndpoint(
 				"/ac/has-permission",
 				{
