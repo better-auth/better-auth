@@ -630,10 +630,13 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (data: Omit<Verification, "id">) => {
+		createVerificationValue: async (
+			data: Omit<Verification, "createdAt" | "id"> & Partial<Verification>,
+		) => {
 			const verification = await createWithHooks(
 				{
 					id: generateId(),
+					createdAt: new Date(),
 					...data,
 				},
 				"verification",
@@ -676,6 +679,18 @@ export const createInternalAdapter = (
 					{
 						field: "id",
 						value: id,
+					},
+				],
+			});
+		},
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await adapter.delete<Verification>({
+				model: tables.verification.tableName,
+				where: [
+					{
+						field:
+							tables.verification.fields.identifier.fieldName || "identifier",
+						value: identifier,
 					},
 				],
 			});
