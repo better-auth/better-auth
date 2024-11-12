@@ -42,7 +42,7 @@ describe("base", async (it) => {
 	it("should be able to assign a role in a server without check permission", async ({
 		expect,
 	}) => {
-		const userRole = await auth.api.assignRole({
+		const userRole = await auth.api.assignRoleById({
 			body: {
 				roleId: role.id,
 				userId: user.id,
@@ -82,12 +82,12 @@ describe("base", async (it) => {
 	it("should handle super permission", async ({ expect }) => {
 		const newRole = await auth.api.createRole({
 			body: {
-				name: "admin",
+				name: "super-admin",
 				permissions: ["*"],
 				scope: "global",
 			},
 		});
-		await auth.api.assignRole({
+		await auth.api.assignRoleById({
 			body: {
 				roleId: newRole.id,
 				userId: user.id,
@@ -153,10 +153,11 @@ describe("with organization plugin", async (it) => {
 	it("should be able to assign a role in a server without check permission", async ({
 		expect,
 	}) => {
-		const userRole = await auth.api.assignRole({
+		const userRole = await auth.api.assignRoleByName({
 			body: {
-				roleId: role.id,
 				userId: user.id,
+				roleName: role.name,
+				scope: org.id,
 			},
 		});
 		expect(userRole.roleId).toBe(role.id);
@@ -173,7 +174,7 @@ describe("with organization plugin", async (it) => {
 				headers,
 			},
 		);
-		console.log(res);
+		expect(res.data?.hasPermission).toBe(false);
 		const res2 = await client.ac.hasPermission(
 			{
 				permission: "test",
@@ -183,49 +184,6 @@ describe("with organization plugin", async (it) => {
 				headers,
 			},
 		);
-		console.log(res2);
-		// expect(res.data?.hasPermission).toBe(true);
+		expect(res2.data?.hasPermission).toBe(true);
 	});
-
-	// it("should be able to return false on has permission", async ({ expect }) => {
-	// 	const { headers } = await signInWithTestUser();
-	// 	const res = await client.ac.hasPermission(
-	// 		{
-	// 			permission: "wrong",
-	// 			scope: "global",
-	// 		},
-	// 		{
-	// 			headers,
-	// 		},
-	// 	);
-	// 	expect(res.data?.hasPermission).toBe(false);
-	// });
-
-	// it("should handle super permission", async ({ expect }) => {
-	// 	const newRole = await auth.api.createRole({
-	// 		body: {
-	// 			name: "admin",
-	// 			permissions: ["*"],
-	// 			scope: "global",
-	// 		},
-	// 	});
-	// 	await auth.api.assignRole({
-	// 		body: {
-	// 			scope: "global",
-	// 			roleId: newRole.id,
-	// 			userId: user.id,
-	// 		},
-	// 	});
-	// 	const { headers } = await signInWithTestUser();
-	// 	const { data } = await client.ac.hasPermission(
-	// 		{
-	// 			permission: "dont-matter",
-	// 			scope: "global",
-	// 		},
-	// 		{
-	// 			headers,
-	// 		},
-	// 	);
-	// 	expect(data?.hasPermission).toBe(true);
-	// });
 });

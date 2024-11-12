@@ -154,7 +154,7 @@ export const accessControl = (options: AccessControlOptions) => {
 					method: "POST",
 					body: z.object({
 						permissions: z.array(z.string()),
-						name: z.string().optional(),
+						name: z.string(),
 						scope: z.string(),
 					}),
 				},
@@ -162,6 +162,24 @@ export const accessControl = (options: AccessControlOptions) => {
 					const { permissions, name, scope } = ctx.body;
 					if (ctx.request) {
 						await checkPermission(ctx, "role:create");
+					}
+					const existingRole = await ctx.context.adapter.findMany<Role>({
+						model: "role",
+						where: [
+							{
+								field: "name",
+								value: name,
+							},
+							{
+								field: "scope",
+								value: scope,
+							},
+						],
+					});
+					if (existingRole.length) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Role with this name already exists.",
+						});
 					}
 					const newRole = await ctx.context.adapter.create({
 						model: "role",
@@ -175,7 +193,51 @@ export const accessControl = (options: AccessControlOptions) => {
 					return newRole;
 				},
 			),
-			assignRole: createAuthEndpoint(
+			assignRoleByName: createAuthEndpoint(
+				"/ac/assign-role-by-name",
+				{
+					method: "POST",
+					body: z.object({
+						roleName: z.string(),
+						scope: z.string(),
+						userId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const { roleName, scope, userId } = ctx.body;
+					if (ctx.request) {
+						await checkPermission(ctx, "role:assign");
+					}
+					const role = await ctx.context.adapter.findOne<Role>({
+						model: "role",
+						where: [
+							{
+								field: "name",
+								value: roleName,
+							},
+							{
+								field: "scope",
+								value: scope,
+							},
+						],
+					});
+					if (!role) {
+						throw new APIError("NOT_FOUND", {
+							message: "Role not found.",
+						});
+					}
+					const newRole = await ctx.context.adapter.create({
+						model: "userRole",
+						data: {
+							id: ctx.context.uuid(),
+							userId,
+							roleId: role.id,
+						},
+					});
+					return newRole;
+				},
+			),
+			assignRoleById: createAuthEndpoint(
 				"/ac/assign-role",
 				{
 					method: "POST",
