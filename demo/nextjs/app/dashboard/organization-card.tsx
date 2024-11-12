@@ -35,6 +35,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import {
+	client,
 	organization,
 	useActiveOrganization,
 	useListOrganizations,
@@ -49,17 +50,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import CopyButton from "@/components/ui/copy-button";
 import Image from "next/image";
 
-export function OrganizationCard(props: { session: Session | null }) {
+export function OrganizationCard(props: {
+	session: Session | null;
+	activeOrganization: ActiveOrganization | null;
+}) {
 	const organizations = useListOrganizations();
-	const activeOrg = useActiveOrganization();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
-		null,
+		props.activeOrganization,
 	);
 	const [isRevoking, setIsRevoking] = useState<string[]>([]);
-	useEffect(() => {
-		setOptimisticOrg(activeOrg.data);
-	}, [activeOrg.data]);
-
 	const inviteVariants = {
 		hidden: { opacity: 0, height: 0 },
 		visible: { opacity: 1, height: "auto" },
@@ -92,8 +91,10 @@ export function OrganizationCard(props: { session: Session | null }) {
 						<DropdownMenuContent align="start">
 							<DropdownMenuItem
 								className=" py-1"
-								onClick={() => {
-									organization.setActive(null);
+								onClick={async () => {
+									organization.setActive({
+										organizationId: null,
+									});
 									setOptimisticOrg(null);
 								}}
 							>
@@ -103,16 +104,19 @@ export function OrganizationCard(props: { session: Session | null }) {
 								<DropdownMenuItem
 									className=" py-1"
 									key={org.id}
-									onClick={() => {
+									onClick={async () => {
 										if (org.id === optimisticOrg?.id) {
 											return;
 										}
-										organization.setActive(org.id);
 										setOptimisticOrg({
 											members: [],
 											invitations: [],
 											...org,
 										});
+										const { data } = await organization.setActive({
+											organizationId: org.id,
+										});
+										setOptimisticOrg(data);
 									}}
 								>
 									<p className="text-sm sm">{org.name}</p>

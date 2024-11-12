@@ -6,13 +6,12 @@ import { createAuthEndpoint } from "../call";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
 import type { OAuth2Tokens } from "../../oauth2";
-import { createEmailVerificationToken } from "./email-verification";
-import { isDevelopment } from "../../utils/env";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
-		method: "GET",
+		method: ["GET", "POST"],
 		query: z.object({
 			state: z.string(),
 			code: z.string().optional(),
@@ -57,16 +56,30 @@ export const callbackOAuth = createAuthEndpoint(
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
 		const id = generateId();
-		const data = userSchema.safeParse({
-			...userInfo,
+		const data = {
 			id,
-		});
+			...userInfo,
+		};
 
-		if (!userInfo || data.success === false) {
-			c.context.logger.error("Unable to get user info", data.error);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
+		function redirectOnError(error: string) {
+			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			if (url.includes("?")) {
+				url = `${url}&error=${error}`;
+			} else {
+				url = `${url}?error=${error}`;
+			}
+			throw c.redirect(url);
+		}
+		if (!userInfo) {
+			c.context.logger.error("Unable to get user info");
+			return redirectOnError("unable_to_get_user_info");
+		}
+
+		if (!data.email) {
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
+			return redirectOnError("email_not_found");
 		}
 
 		if (!callbackURL) {
@@ -76,7 +89,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== userInfo.email.toLowerCase()) {
+			if (link.email !== data.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
@@ -97,125 +110,28 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(toRedirectTo);
 		}
 
-		function redirectOnError(error: string) {
-			throw c.redirect(
-				`${
-					errorURL || callbackURL || `${c.context.baseURL}/error`
-				}?error=${error}`,
-			);
+		const result = await handleOAuthUserInfo(c, {
+			userInfo: {
+				email: data.email,
+				id: data.id,
+				name: data.name || "",
+				image: data.image,
+				emailVerified: data.emailVerified || false,
+			},
+			account: {
+				providerId: provider.id,
+				accountId: userInfo.id,
+				accessToken: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+				expiresAt: tokens.accessTokenExpiresAt,
+			},
+			callbackURL,
+		});
+		if (result.error) {
+      c.context.logger.error(result.error.split(" ").join("_"));
+			return redirectOnError(result.error.split(" ").join("_"));
 		}
-
-		const dbUser = await c.context.internalAdapter
-			.findUserByEmail(userInfo.email, {
-				includeAccounts: true,
-			})
-			.catch((e) => {
-				c.context.logger.error(
-					"Better auth was unable to query your database.\nError: ",
-					e,
-				);
-				throw c.redirect(
-					`${c.context.baseURL}/error?error=internal_server_error`,
-				);
-			});
-
-		let user = dbUser?.user;
-
-		if (dbUser) {
-			const hasBeenLinked = dbUser.accounts.find(
-				(a) => a.providerId === provider.id,
-			);
-			if (!hasBeenLinked) {
-				const trustedProviders =
-					c.context.options.account?.accountLinking?.trustedProviders;
-				const isTrustedProvider = trustedProviders?.includes(
-					provider.id as "apple",
-				);
-				if (
-					(!isTrustedProvider && !userInfo.emailVerified) ||
-					c.context.options.account?.accountLinking?.enabled === false
-				) {
-					if (isDevelopment) {
-						c.context.logger.warn(
-							`User already exist but account isn't linked to ${provider.id}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
-						);
-					}
-					redirectOnError("account_not_linked");
-				}
-				try {
-					await c.context.internalAdapter.linkAccount({
-						providerId: provider.id,
-						accountId: userInfo.id.toString(),
-						id: `${provider.id}:${userInfo.id}`,
-						userId: dbUser.user.id,
-						accessToken: tokens.accessToken,
-						idToken: tokens.idToken,
-						refreshToken: tokens.refreshToken,
-						expiresAt: tokens.accessTokenExpiresAt,
-					});
-				} catch (e) {
-					c.context.logger.error("Unable to link account", e);
-					redirectOnError("unable_to_link_account");
-				}
-			} else {
-				await c.context.internalAdapter.updateAccount(hasBeenLinked.id, {
-					accessToken: tokens.accessToken,
-					idToken: tokens.idToken,
-					refreshToken: tokens.refreshToken,
-					expiresAt: tokens.accessTokenExpiresAt,
-				});
-			}
-		} else {
-			try {
-				const emailVerified = userInfo.emailVerified || false;
-				user = await c.context.internalAdapter
-					.createOAuthUser(
-						{
-							...data.data,
-							emailVerified,
-						},
-						{
-							accessToken: tokens.accessToken,
-							idToken: tokens.idToken,
-							refreshToken: tokens.refreshToken,
-							expiresAt: tokens.accessTokenExpiresAt,
-							providerId: provider.id,
-							accountId: userInfo.id.toString(),
-						},
-					)
-					.then((res) => res?.user);
-				if (
-					!emailVerified &&
-					user &&
-					c.context.options.emailVerification?.sendOnSignUp
-				) {
-					const token = await createEmailVerificationToken(
-						c.context.secret,
-						user.email,
-					);
-					const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-					await c.context.options.emailVerification?.sendVerificationEmail?.(
-						user,
-						url,
-						token,
-					);
-				}
-			} catch (e) {
-				c.context.logger.error("Unable to create user", e);
-				redirectOnError("unable_to_create_user");
-			}
-		}
-		if (!user) {
-			return redirectOnError("unable_to_create_user");
-		}
-
-		const session = await c.context.internalAdapter.createSession(
-			user.id,
-			c.request,
-		);
-		if (!session) {
-			redirectOnError("unable_to_create_session");
-		}
+		const { session, user } = result.data!;
 		await setSessionCookie(c, {
 			session,
 			user,
@@ -227,7 +143,6 @@ export const callbackOAuth = createAuthEndpoint(
 		} catch {
 			toRedirectTo = callbackURL;
 		}
-
 		throw c.redirect(toRedirectTo);
 	},
 );

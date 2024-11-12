@@ -21,9 +21,9 @@ interface OrganizationClientOptions {
 export const organizationClient = <O extends OrganizationClientOptions>(
 	options?: O,
 ) => {
-	const activeOrgId = atom<string | null | undefined>(undefined);
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
+	const $activeMemberSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -44,7 +44,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 									id: string;
 									name: string;
 									email: string;
-									image: string;
+									image?: string;
 								};
 							}
 						>[];
@@ -56,9 +56,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				setActive(orgId: string | null) {
-					activeOrgId.set(orgId);
-				},
 				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
@@ -102,22 +99,30 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					}
 				>
 			>(
-				[activeOrgId, $activeOrgSignal],
-				"/organization/activate",
+				[$activeOrgSignal],
+				"/organization/get-full-organization",
 				$fetch,
 				() => ({
-					method: "POST",
-					body: {
-						orgId: activeOrgId.get(),
-					},
+					method: "GET",
 				}),
+			);
+
+			const activeMember = useAuthQuery<Member>(
+				[$activeMemberSignal],
+				"/organization/get-active-member",
+				$fetch,
+				{
+					method: "GET",
+				},
 			);
 
 			return {
 				$listOrg,
 				$activeOrgSignal,
+				$activeMemberSignal,
 				activeOrganization,
 				listOrganizations,
+				activeMember,
 			};
 		},
 		atomListeners: [
@@ -134,6 +139,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					return path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
+			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberSignal",
 			},
 		],
 	} satisfies BetterAuthClientPlugin;

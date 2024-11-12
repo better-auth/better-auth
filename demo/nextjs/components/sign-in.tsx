@@ -14,7 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import {
+	DiscordLogoIcon,
+	GitHubLogoIcon,
+	TwitterLogoIcon,
+} from "@radix-ui/react-icons";
 import { Key, Loader2, TwitchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -87,7 +91,7 @@ export default function SignIn() {
 									email: email,
 									password: password,
 									callbackURL: "/dashboard",
-									dontRememberMe: !rememberMe,
+									rememberMe,
 								},
 								{
 									onRequest: () => {
@@ -149,6 +153,37 @@ export default function SignIn() {
 									fill="currentColor"
 									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
 								></path>
+							</svg>
+						</Button>
+						<Button
+							variant="outline"
+							className="w-full gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitter",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 14 14"
+							>
+								<g fill="none">
+									<g clipPath="url(#primeTwitter0)">
+										<path
+											fill="currentColor"
+											d="M11.025.656h2.147L8.482 6.03L14 13.344H9.68L6.294 8.909l-3.87 4.435H.275l5.016-5.75L0 .657h4.43L7.486 4.71zm-.755 11.4h1.19L3.78 1.877H2.504z"
+										></path>
+									</g>
+									<defs>
+										<clipPath id="primeTwitter0">
+											<path fill="#fff" d="M0 0h14v14H0z"></path>
+										</clipPath>
+									</defs>
+								</g>
 							</svg>
 						</Button>
 						<Button

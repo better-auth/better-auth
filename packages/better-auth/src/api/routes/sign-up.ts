@@ -128,9 +128,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					body.callbackURL || ctx.query?.currentURL || "/"
 				}`;
 				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-					createdUser,
-					url,
-					token,
+					{
+						user: createdUser,
+						url,
+						token,
+					},
+					ctx.request,
 				);
 			}
 

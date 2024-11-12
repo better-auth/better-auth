@@ -175,17 +175,23 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
-						if (returned?.status !== 200) {
+						if (
+							(returned instanceof Response && returned?.status !== 200) ||
+							returned instanceof APIError
+						) {
 							return;
 						}
-						const response = (await returned.clone().json()) as {
+						const response = (
+							returned instanceof Response
+								? await returned.clone().json()
+								: returned
+						) as {
 							user: UserWithTwoFactor;
 							session: Session;
 						};
 						if (!response.user.twoFactorEnabled) {
 							return;
 						}
-
 						// Check for trust device cookie
 						const trustDeviceCookieName = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
@@ -225,11 +231,13 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * remove the session cookie. It's set by the sign in credential
 						 */
 						deleteSessionCookie(ctx);
-						const hash = await hs256(ctx.context.secret, response.session.id);
+						await ctx.context.internalAdapter.deleteSession(
+							response.session.id,
+						);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
-								maxAge: 60 * 60 * 24, // 24 hours,
+								maxAge: 60 * 10, // 10 minutes
 							},
 						);
 						/**
@@ -240,7 +248,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							`${response.session.userId}!${hash}`,
+							response.user.id,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);

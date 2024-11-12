@@ -8,7 +8,11 @@ import type {
 	InferSession,
 	InferUser,
 	Prettify,
+	Session,
+	User,
 } from "../../types";
+import { hmac } from "../../crypto/hash";
+import { safeJSONParse } from "../../utils/json";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -38,10 +42,33 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 				}
 
-				const sessionData = await ctx.getSignedCookie(
+				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
-					ctx.context.secret,
 				);
+				const sessionDataPayload = sessionDataCookie
+					? safeJSONParse<{
+							session: {
+								session: Session;
+								user: User;
+							};
+							signature: string;
+							expiresAt: number;
+						}>(Buffer.from(sessionDataCookie, "base64").toString())
+					: null;
+				if (sessionDataPayload) {
+					const isValid = await hmac.verify({
+						value: JSON.stringify(sessionDataPayload.session),
+						signature: sessionDataPayload?.signature,
+						secret: ctx.context.secret,
+					});
+					if (!isValid) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null, {
+							status: 401,
+						});
+					}
+				}
+
 				const dontRememberMe = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -50,18 +77,26 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * If session data is present in the cookie, return it
 				 */
 				if (
-					sessionData &&
+					sessionDataPayload?.session &&
 					ctx.context.options.session?.cookieCache?.enabled &&
 					!ctx.query?.disableCookieCache
 				) {
-					const session = JSON.parse(sessionData)?.session;
-					if (session?.expiresAt > new Date()) {
+					const session = sessionDataPayload.session;
+					const hasExpired =
+						sessionDataPayload.expiresAt < Date.now() ||
+						session.session.expiresAt < new Date();
+					if (!hasExpired) {
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
 								user: InferUser<Option>;
 							},
 						);
+					} else {
+						const dataCookie = ctx.context.authCookies.sessionData.name;
+						ctx.setCookie(dataCookie, "", {
+							maxAge: 0,
+						});
 					}
 				}
 
@@ -94,6 +129,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;
+
 				/**
 				 * Calculate last updated date to throttle write updates to database
 				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
@@ -106,6 +142,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					session.session.expiresAt.valueOf() -
 					expiresIn * 1000 +
 					updateAge * 1000;
+
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
 				if (shouldBeUpdated) {
@@ -158,7 +195,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		},
 	);
 
-export const getSessionFromCtx = async (ctx: Context<any, any>) => {
+export const getSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: Context<any, any>,
+) => {
 	//@ts-ignore
 	const session = await getSession()({
 		...ctx,
@@ -166,7 +208,10 @@ export const getSessionFromCtx = async (ctx: Context<any, any>) => {
 		headers: ctx.headers!,
 	});
 
-	return session;
+	return session as {
+		session: S & Session;
+		user: U & User;
+	};
 };
 
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
@@ -255,6 +300,38 @@ export const revokeSessions = createAuthEndpoint(
 		} catch (error) {
 			ctx.context.logger.error( error && typeof error === "object" && "name" in error ? error.name as string : "", error);			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const revokeOtherSessions = createAuthEndpoint(
+	"/revoke-other-sessions",
+	{
+		method: "POST",
+		requireHeaders: true,
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		if (!session.user) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const sessions = await ctx.context.internalAdapter.listSessions(
+			session.user.id,
+		);
+		const activeSessions = sessions.filter((session) => {
+			return session.expiresAt > new Date();
+		});
+		const otherSessions = activeSessions.filter(
+			(session) => session.id !== ctx.context.session.session.id,
+		);
+		await Promise.all(
+			otherSessions.map((session) =>
+				ctx.context.internalAdapter.deleteSession(session.id),
+			),
+		);
 		return ctx.json({
 			status: true,
 		});

@@ -30,11 +30,10 @@ export const phoneNumber = (options?: {
 	 * @param code
 	 * @returns
 	 */
-	sendOTP: (phoneNumber: string, code: string) => Promise<void> | void;
-	/**
-	 * custom function to verify the OTP code
-	 */
-	verifyOTP?: (phoneNumber: string, code: string) => Promise<boolean> | boolean;
+	sendOTP: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
 	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
@@ -107,7 +106,13 @@ export const phoneNumber = (options?: {
 						identifier: ctx.body.phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					await options.sendOTP(ctx.body.phoneNumber, code);
+					await options.sendOTP(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
 					return ctx.json(
 						{ code },
 						{

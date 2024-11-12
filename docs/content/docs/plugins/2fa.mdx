@@ -208,7 +208,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }, request) {
                     // send otp to user
 				},
 			},
@@ -272,6 +272,20 @@ await authClient.twoFactor.verifyBackupCode({code: ""}, {
     },
     onError(ctx){
         alert(ctx.error.message)
+    }
+})
+```
+
+once a backup code is used, it will be removed from the database and can't be used again.
+
+#### Viewing Backup Codes
+
+You can view the backup codes at any time by calling `viewBackupCodes`. This action can only be performed on the server using `auth.api`.
+
+```ts
+await auth.api.viewBackupCodes({
+    body: {
+        userId: "user-id"
     }
 })
 ```

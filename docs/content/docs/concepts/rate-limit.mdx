@@ -53,7 +53,7 @@ export const auth = betterAuth({
 
 ### Storage
 
-By default, rate limit data is stored in memory. However, you can use your database, secondary storage or custom storage to store rate limit data.
+By default, rate limit data is stored in memory, which may not be suitable for many use cases, particularly in serverless environments. To address this, you can use a database, secondary storage, or custom storage for storing rate limit data.
 
 **Using Database**
 

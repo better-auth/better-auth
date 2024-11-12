@@ -1,6 +1,7 @@
 import type { Kysely } from "kysely";
 import type { FieldAttribute } from "../../db";
 import type { Adapter, Where } from "../../types";
+import type { KyselyDatabaseType } from "./types";
 
 function convertWhere(w?: Where[]) {
 	if (!w)
@@ -31,6 +32,30 @@ function convertWhere(w?: Where[]) {
 
 			if (operator === "ends_with") {
 				return eb(field, "like", `%${value}`);
+			}
+
+			if (operator === "eq") {
+				return eb(field, "=", value);
+			}
+
+			if (operator === "ne") {
+				return eb(field, "<>", value);
+			}
+
+			if (operator === "gt") {
+				return eb(field, ">", value);
+			}
+
+			if (operator === "gte") {
+				return eb(field, ">=", value);
+			}
+
+			if (operator === "lt") {
+				return eb(field, "<", value);
+			}
+
+			if (operator === "lte") {
+				return eb(field, "<=", value);
 			}
 
 			return eb(field, operator, value);
@@ -72,13 +97,33 @@ function transformTo(
 	return val;
 }
 
+function formatDateForMySQL(date: Date): string {
+	const pad = (n: number) => (n < 10 ? "0" + n : n);
+	return (
+		date.getFullYear() +
+		"-" +
+		pad(date.getMonth() + 1) +
+		"-" +
+		pad(date.getDate()) +
+		" " +
+		pad(date.getHours()) +
+		":" +
+		pad(date.getMinutes()) +
+		":" +
+		pad(date.getSeconds())
+	);
+}
+
 function transformFrom(val: any, transform: KyselyAdapterConfig["transform"]) {
 	for (const key in val) {
 		if (typeof val[key] === "boolean" && transform?.boolean) {
 			val[key] = val[key] ? 1 : 0;
 		}
 		if (val[key] instanceof Date) {
-			val[key] = val[key].toISOString();
+			val[key] =
+				transform?.databaseType === "mysql"
+					? formatDateForMySQL(val[key])
+					: val[key].toISOString();
 		}
 	}
 	return val;
@@ -94,6 +139,7 @@ export interface KyselyAdapterConfig {
 		};
 		boolean: boolean;
 		date: boolean;
+		databaseType?: KyselyDatabaseType | null;
 	};
 	/**
 	 * Custom generateId function.
@@ -120,11 +166,22 @@ export const kyselyAdapter = (
 			if (config?.generateId !== undefined) {
 				val.id = config.generateId ? config.generateId() : undefined;
 			}
-			let res = await db
-				.insertInto(model)
-				.values(val as any)
-				.returningAll()
-				.executeTakeFirst();
+
+			const builder = db.insertInto(model).values(val as any);
+			let res: any;
+
+			if (config?.transform?.databaseType !== "mysql") {
+				res = await builder.returningAll().executeTakeFirst();
+			} else {
+				await builder.execute();
+				const primaryKey = "id";
+				const insertedId = val[primaryKey];
+				res = await db
+					.selectFrom(model)
+					.selectAll()
+					.where(primaryKey, "=", insertedId)
+					.executeTakeFirst();
+			}
 
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
@@ -177,7 +234,6 @@ export const kyselyAdapter = (
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				res = res && schema ? transformTo(res, schema, config.transform) : res;
-
 				return res || null;
 			}
 			return (res || null) as any;
@@ -227,7 +283,19 @@ export const kyselyAdapter = (
 			if (or) {
 				query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 			}
-			const res = (await query.returningAll().executeTakeFirst()) || null;
+			let res: any;
+			if (config?.transform?.databaseType !== "mysql") {
+				res = (await query.returningAll().executeTakeFirst()) || null;
+			} else {
+				await query.execute();
+				const primaryKey = "id";
+				const insertedId = val[primaryKey];
+				res = await db
+					.selectFrom(model)
+					.selectAll()
+					.where(primaryKey, "=", insertedId)
+					.executeTakeFirst();
+			}
 			if (config?.transform) {
 				const schema = config.transform.schema[model];
 				return schema ? transformTo(res, schema, config.transform) : res;

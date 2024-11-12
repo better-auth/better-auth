@@ -28,11 +28,18 @@ export interface OAuthProvider<
 		codeVerifier?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
-		user: Omit<User, "createdAt" | "updatedAt">;
+		user: {
+			id: string;
+			name?: string;
+			email?: string | null;
+			image?: string;
+			emailVerified: boolean;
+		};
 		data: T;
 	} | null>;
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
+	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
 }
 
 export type ProviderOptions = {
@@ -54,4 +61,18 @@ export type ProviderOptions = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string;
+	/**
+	 * Disable provider from allowing users to sign in
+	 * with this provider with an id token sent from the
+	 * client.
+	 */
+	disableIdTokenSignIn?: boolean;
+	/**
+	 * verifyIdToken function to verify the id token
+	 */
+	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
+	/**
+	 * Custom function to get user info from the provider
+	 */
+	getUserInfo?: (token: OAuth2Tokens) => Promise<any>;
 };

@@ -967,6 +967,9 @@ importers:
       mini-svg-data-uri:
         specifier: ^1.4.4
         version: 1.4.4
+      mysql2:
+        specifier: ^3.11.0
+        version: 3.11.3
       next:
         specifier: 15.0.0-canary.185
         version: 15.0.0-canary.185(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
@@ -1572,18 +1575,6 @@ importers:
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
-      '@nanostores/query':
-        specifier: ^0.3.4
-        version: 0.3.4(nanostores@0.11.3)
-      '@nanostores/react':
-        specifier: ^0.8.0
-        version: 0.8.0(nanostores@0.11.3)(react@18.3.1)
-      '@nanostores/solid':
-        specifier: ^0.4.2
-        version: 0.4.2(nanostores@0.11.3)(solid-js@1.9.3)
-      '@nanostores/vue':
-        specifier: ^0.10.0
-        version: 0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.1-rc))
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -1661,7 +1652,7 @@ importers:
         specifier: ^1.7.2
         version: 1.9.0
       mongodb:
-        specifier: ^6.9.0
+        specifier: ^6.10.0
         version: 6.10.0
       mysql2:
         specifier: ^3.11.0
@@ -1771,6 +1762,13 @@ importers:
         version: 1.6.0(@types/node@22.8.6)(happy-dom@15.8.0)(lightningcss@1.27.0)(terser@5.36.0)
 
   packages/expo:
+    dependencies:
+      better-call:
+        specifier: ^0.2.14
+        version: 0.2.14
+      zod:
+        specifier: ^3.23.8
+        version: 3.23.8
     devDependencies:
       '@better-fetch/fetch':
         specifier: 1.1.12
@@ -8278,6 +8276,9 @@ packages:
 
   better-call@0.2.13:
     resolution: {integrity: sha512-Y1rOwUtTYeH4usW7XNqonoo+Dtcb2sXL6m6zcLsgTYSD2ANqyELxkeA8BkCTWonN1y+Pt9CMbcn5vILaPohdUg==}
+
+  better-call@0.2.14:
+    resolution: {integrity: sha512-5WWmwEgi89nk9r8WK5dJZmOFpvD+PBxUMf7w8ox+WYQwCcE7H//nTEF8SdeHBjmTUf0YhKrlnZaI7yv7ud/zrw==}
 
   better-call@0.2.14-beta.3:
     resolution: {integrity: sha512-lA54ETanzM0xUZnQt6lm3BdTr4gVDyAe1DNpCQSTYUnwnGGOmQG8ob0FYivVd0XHsHQK68r01GB5c6cUuu4llQ==}
@@ -20140,13 +20141,6 @@ snapshots:
       nanostores: 0.11.3
       solid-js: 1.9.3
 
-  '@nanostores/vue@0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.1-rc))':
-    dependencies:
-      nanostores: 0.11.3
-      vue: 3.5.12(typescript@5.6.1-rc)
-    optionalDependencies:
-      '@vue/devtools-api': 7.6.2
-
   '@nanostores/vue@0.10.0(@vue/devtools-api@7.6.2)(nanostores@0.11.3)(vue@3.5.12(typescript@5.6.3))':
     dependencies:
       nanostores: 0.11.3
@@ -26552,6 +26546,14 @@ snapshots:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
       uncrypto: 0.1.3
+
+  better-call@0.2.14:
+    dependencies:
+      '@better-fetch/fetch': 1.1.12
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+      uncrypto: 0.1.3
+      zod: 3.23.8
 
   better-call@0.2.14-beta.3:
     dependencies:

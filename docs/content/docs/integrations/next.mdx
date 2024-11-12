@@ -39,6 +39,7 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
 
 The client also uses [better-fetch](https://github.com/bekacru/better-fetch) to make the requests. You can pass the fetch configuration to the client.
 
+
 ## RSC and Server actions
 
 The `api` object exported from the auth instance contains all the actions that you can perform on the server. Every endpoint made inside Better Auth is a invokable as a function. Including plugins endpoints.
@@ -52,14 +53,13 @@ import { headers } from "next/headers"
 const someAuthenticatedAction = async () => {
     "use server";
     const session = await auth.api.getSession({
-        headers: headers()
+        headers: await headers()
     })
 };
 ```
 
 **Example: Getting Session on a RSC**
 
-{/* NextJs 15 integration */}
 
 ```tsx
 import { auth } from "@/lib/auth"
@@ -77,6 +77,36 @@ export async function ServerComponent() {
             <h1>Welcome {session.user.name}</h1>
         </div>
     )
+}
+```
+
+### Server Action Cookies
+
+When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
+
+To simplify this, you can use the `nextCookies` plugin, which will automatically set cookies for you whenever a `Set-Cookie` header is present in the response.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
+
+export const auth = betterAuth({
+    //...your config
+    plugins: [nextCookies()] // make sure this is the last plugin in the array // ![code highlight]
+})
+```
+
+Now, when you call functions that set cookies, they will be automatically set.
+
+```ts
+"use server";
+import { auth } from "@/lib/auth"
+
+const signIn = async () => {
+    await auth.api.signInEmail({
+        email: "user@email.com",
+        password: "password",
+    })
 }
 ```
 
