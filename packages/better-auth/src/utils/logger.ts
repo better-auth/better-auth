@@ -1,10 +1,10 @@
 import { createConsola } from "consola";
 
-export type LogLevel = "info" | "warn" | "error" | "debug";
+export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
 /**
  * Index of log levels are crucial for determining if a log should be published based on the current log level.
  */
-export const levels = ["info", "warn", "error", "debug"] as const;
+export const levels = ["info", "success", "warn", "error", "debug"] as const;
 
 export function shouldPublishLog(
 	currentLogLevel: LogLevel,
@@ -21,8 +21,12 @@ export interface Logger {
 	/**
 	 * default "error"
 	 */
-	level?: LogLevel;
-	log?: (level: LogLevel, message: string, ...args: any[]) => void;
+	level?: Exclude<LogLevel, "success">;
+	log?: (
+		level: Exclude<LogLevel, "success">,
+		message: string,
+		...args: any[]
+	) => void;
 }
 
 export type LogHandlerParams = Parameters<NonNullable<Logger["log"]>> extends [
@@ -52,16 +56,20 @@ export const createLogger = (
 	const enabled = options?.enabled ?? true;
 	const logLevel = options?.level ?? "error";
 
-	const LogFunc: Logger["log"] = (level, message, args = []) => {
+	const LogFunc = (
+		level: LogLevel,
+		message: string,
+		args: any[] = [],
+	): void => {
 		if (!enabled || !shouldPublishLog(logLevel, level)) {
 			return;
 		}
 
 		if (!options || typeof options.log !== "function") {
-			consola[level](message, ...args);
+			consola[level]("", message, ...args);
 			return;
 		}
-		options.log(level, message, args);
+		options.log(level === "success" ? "info" : level, message, args);
 	};
 
 	return Object.fromEntries(

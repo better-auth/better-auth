@@ -128,7 +128,7 @@ export const callbackOAuth = createAuthEndpoint(
 			callbackURL,
 		});
 		if (result.error) {
-      c.context.logger.error(result.error.split(" ").join("_"));
+			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
 		const { session, user } = result.data!;

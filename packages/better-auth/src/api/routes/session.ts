@@ -189,7 +189,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					},
 				);
 			} catch (error) {
-				ctx.context.logger.error( error && typeof error === "object" && "name" in error ? error.name as string : "", error);
+				ctx.context.logger.error(
+					error && typeof error === "object" && "name" in error
+						? (error.name as string)
+						: "",
+					error,
+				);
 				return ctx.json(null, { status: 500 });
 			}
 		},
@@ -275,7 +280,13 @@ export const revokeSession = createAuthEndpoint(
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {
-			ctx.context.logger.error( error && typeof error === "object" && "name" in error ? error.name as string : "", error);			throw new APIError("INTERNAL_SERVER_ERROR");
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
 			status: true,
@@ -298,7 +309,13 @@ export const revokeSessions = createAuthEndpoint(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {
-			ctx.context.logger.error( error && typeof error === "object" && "name" in error ? error.name as string : "", error);			throw new APIError("INTERNAL_SERVER_ERROR");
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
 			status: true,

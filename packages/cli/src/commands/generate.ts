@@ -97,7 +97,7 @@ export async function generateAction(opts: any) {
 			} else {
 				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
 			}
-			logger.info(
+			logger.success(
 				`🚀 Schema was ${
 					schema.overwrite ? "overwritten" : "appended"
 				} successfully!`,
@@ -124,7 +124,7 @@ export async function generateAction(opts: any) {
 			options.output || path.join(cwd, schema.fileName),
 			schema.code,
 		);
-		logger.info(`🚀 Schema was generated successfully!`);
+		logger.success(`🚀 Schema was generated successfully!`);
 		process.exit(0);
 	}
 
@@ -152,7 +152,7 @@ export async function generateAction(opts: any) {
 		options.output || path.join(cwd, schema.fileName),
 		schema.code,
 	);
-	logger.info(`🚀 Schema was generated successfully!`);
+	logger.success(`🚀 Schema was generated successfully!`);
 	process.exit(0);
 }
 
