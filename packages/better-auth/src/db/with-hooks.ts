@@ -1,7 +1,5 @@
 import type { Adapter, Where } from "./../types/adapter";
 import type { BetterAuthOptions } from "../types";
-import { getAuthTables } from "./get-tables";
-import { generateId } from "../utils/id";
 
 export function getWithHooks(
 	adapter: Adapter,
@@ -11,8 +9,6 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	// const tables = getAuthTables(ctx.options);
-
 	type Models = "user" | "account" | "session" | "verification";
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,

@@ -19,11 +19,6 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!kysely) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
-	const tables = getAuthTables(options);
-	let schema: Record<string, Record<string, FieldAttribute>> = {};
-	for (const table of Object.values(tables)) {
-		schema[table.tableName] = table.fields;
-	}
 	return kyselyAdapter(kysely, {
 		generateId:
 			"generateId" in options.database
