@@ -139,7 +139,7 @@ export async function getConfig({
 						configFile =
 							config.auth?.options || config.default?.options || null;
 						if (!configFile) {
-							logger.info("[#better-auth]: Couldn't read your auth config.");
+							logger.error("[#better-auth]: Couldn't read your auth config.");
 							console.log("");
 							logger.info(
 								"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
