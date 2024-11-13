@@ -1,10 +1,9 @@
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { parseJWT } from "oslo/jwt";
-import { validateAuthorizationCode } from "../oauth2";
-import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { z } from "zod";
+import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { parseJWT } from "oslo/jwt";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
