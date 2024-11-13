@@ -14,12 +14,13 @@ import { TechStackDisplay } from "./display-techstack";
 import { Ripple } from "./ripple";
 import { GithubStat } from "./github-stat";
 import Testimonial from "./testimonial";
+import { cn } from "@/lib/utils";
 
 const features = [
 	{
 		id: 1,
 		label: "Framework Agnostic",
-		title: "Supports popular frameworks",
+		title: "Supports popular <strong>frameworks</strong>",
 		description:
 			"Supports popular frameworks, including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Hono, and more.",
 		icon: PlugZap2Icon,
@@ -27,7 +28,7 @@ const features = [
 	{
 		id: 2,
 		label: "Authentication",
-		title: "Email & Password Authentication",
+		title: "Email & Password <strong>Authentication</strong>",
 		description:
 			"Built-in support for email and password authentication, with secure password hashing and account management features.",
 		icon: LockClosedIcon,
@@ -35,7 +36,7 @@ const features = [
 	{
 		id: 3,
 		label: "Social Sign-on",
-		title: "Support multiple OAuth providers.",
+		title: "Support multiple <strong>OAuth providers</strong>",
 		description:
 			"Allow users to sign in with their accounts, including GitHub, Google, Discord, Twitter, and more.",
 		icon: Webhook,
@@ -43,7 +44,7 @@ const features = [
 	{
 		id: 4,
 		label: "Two Factor",
-		title: "Two Factor Authentication",
+		title: "Two Factor <strong>Authentication</strong>",
 		description:
 			"With our built-in two factor authentication plugin, you can add an extra layer of security to your account.",
 		icon: ShieldCheckIcon,
@@ -51,7 +52,7 @@ const features = [
 	{
 		id: 5,
 		label: "Organization & Access Control",
-		title: "Gain and manage access.",
+		title: "Gain and manage <strong>access</strong>.",
 		description:
 			"Manage users and their access to resources within your application.",
 		icon: ShieldCheckIcon,
@@ -71,10 +72,13 @@ export default function Features({ stars }: { stars: string | null }) {
 		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-[1.2px] rounded-none -pr-2">
 			<div className="w-full md:mx-0">
 				<div className="grid grid-cols-1 md:grid-cols-3 border-b-[1.2px]">
-					{features.map((feature) => (
+					{features.map((feature, index) => (
 						<div
 							key={feature.id}
-							className="relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0 transform-gpu  flex flex-col p-10 overflow-clip"
+							className={cn(
+								"relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0 transform-gpu flex flex-col p-10",
+								index >= 3 && "md:border-t-[1.2px]",
+							)}
 						>
 							<div className="flex items-center gap-2 my-1">
 								<feature.icon className="w-4 h-4" />
@@ -85,14 +89,17 @@ export default function Features({ stars }: { stars: string | null }) {
 							<div className="mt-2">
 								<div className="max-w-full">
 									<div className="flex gap-3 ">
-										<p className="max-w-lg text-xl font-normal tracking-tighter md:text-2xl">
-											{feature.title}
-										</p>
+										<p
+											className="max-w-lg text-xl font-normal tracking-tighter md:text-2xl"
+											dangerouslySetInnerHTML={{
+												__html: feature.title,
+											}}
+										/>
 									</div>
 								</div>
 								<p className="mt-2 text-sm text-left text-muted-foreground">
 									{feature.description}
-									<a className="text-gray-50" href="/docs" target="_blank">
+									<a className="ml-2 underline" href="/docs" target="_blank">
 										Learn more
 									</a>
 								</p>
