@@ -89,8 +89,11 @@ export const forgetPassword = createAuthEndpoint(
 		});
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
-			user.user,
-			url,
+			{
+				user: user.user,
+				url,
+			},
+			ctx.request,
 		);
 		return ctx.json({
 			status: true,

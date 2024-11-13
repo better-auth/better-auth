@@ -6,13 +6,23 @@ import path from "path";
 import Database from "better-sqlite3";
 import { kyselyAdapter } from "..";
 import { Kysely, SqliteDialect } from "kysely";
+import type { BetterAuthOptions } from "../../../types";
 
 describe("adapter test", async () => {
 	const database = new Database(path.join(__dirname, "test.db"));
+	const opts = {
+		database,
+		user: {
+			fields: {
+				email: "email_address",
+			},
+		},
+		session: {
+			modelName: "sessions",
+		},
+	} satisfies BetterAuthOptions;
 	beforeEach(async () => {
-		const { runMigrations } = await getMigrations({
-			database,
-		});
+		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	});
 
@@ -25,15 +35,7 @@ describe("adapter test", async () => {
 			database: sqlite,
 		}),
 	});
-
-	const adapter = kyselyAdapter(db, {
-		transform: {
-			schema: {},
-			boolean: true,
-			date: true,
-		},
-	});
-
+	const adapter = kyselyAdapter(db)(opts);
 	await runAdapterTest({
 		adapter,
 	});

@@ -48,13 +48,14 @@ describe("adapter test", async () => {
 				expiresAt: new Date(),
 			},
 		);
+
 		expect(user).toMatchObject({
 			user: {
 				id: "1",
 				name: "name",
 				email: "email@email.com",
 				emailVerified: false,
-				image: undefined,
+				image: null,
 				createdAt: expect.any(Date),
 				updatedAt: expect.any(Date),
 			},
@@ -63,8 +64,8 @@ describe("adapter test", async () => {
 				userId: expect.any(String),
 				providerId: "provider",
 				accountId: "account",
-				accessToken: undefined,
-				refreshToken: undefined,
+				accessToken: null,
+				refreshToken: null,
 				expiresAt: expect.any(Date),
 			},
 		});
