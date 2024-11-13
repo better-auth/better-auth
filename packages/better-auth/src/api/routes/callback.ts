@@ -1,29 +1,49 @@
 import { z } from "zod";
-import { userSchema, type User } from "../../db/schema";
-import { generateId } from "../../utils/id";
-import { parseState } from "../../oauth2/state";
-import { createAuthEndpoint } from "../call";
-import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { setSessionCookie } from "../../cookies";
-import { logger } from "../../utils/logger";
 import type { OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { parseState } from "../../oauth2/state";
+import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { generateId } from "../../utils/id";
+import { logger } from "../../utils/logger";
+import { createAuthEndpoint } from "../call";
+
+const schema = z.object({
+	code: z.string().optional(),
+	error: z.string().optional(),
+	state: z.string(),
+});
 
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
-		query: z.object({
-			state: z.string(),
-			code: z.string().optional(),
-			error: z.string().optional(),
-		}),
+		body: schema.optional(),
+		query: schema.optional(),
 		metadata: HIDE_METADATA,
 	},
 	async (c) => {
-		if (!c.query.code) {
+		let queryOrBody: z.infer<typeof schema>;
+		try {
+			if (c.method === "GET") {
+				queryOrBody = schema.parse(c.query);
+			} else if (c.method === "POST") {
+				queryOrBody = schema.parse(c.body);
+			} else {
+				throw new Error("Unsupported method");
+			}
+		} catch (e) {
+			c.context.logger.error(e);
 			throw c.redirect(
-				`${c.context.baseURL}/error?error=${c.query.error || "no_code"}`,
+				`${c.context.baseURL}/error?error=invalid_callback_request`,
+			);
+		}
+
+		const { code, error } = queryOrBody;
+
+		if (!code) {
+			throw c.redirect(
+				`${c.context.baseURL}/error?error=${error || "no_code"}`,
 			);
 		}
 		const provider = c.context.socialProviders.find(
@@ -43,7 +63,7 @@ export const callbackOAuth = createAuthEndpoint(
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
-				code: c.query.code,
+				code: code,
 				codeVerifier,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
