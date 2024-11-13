@@ -47,6 +47,16 @@ export const phoneNumber = (options?: {
 	 */
 	phoneNumberValidator?: (phoneNumber: string) => boolean;
 	/**
+	 * Callback when phone number is verified
+	 */
+	callbackOnVerification?: (
+		data: {
+			phoneNumber: string;
+			user: UserWithPhoneNumber | null;
+		},
+		request?: Request,
+	) => void | Promise<void>;
+	/**
 	 * Sign up user after phone number verification
 	 *
 	 * the user will be signed up with the temporary email
@@ -171,6 +181,7 @@ export const phoneNumber = (options?: {
 							message: "Invalid OTP",
 						});
 					}
+
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 
 					if (ctx.body.updatePhoneNumber) {
@@ -193,7 +204,7 @@ export const phoneNumber = (options?: {
 						});
 					}
 
-					let user = await ctx.context.adapter.findOne<User>({
+					let user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 						model: ctx.context.tables.user.tableName,
 						where: [
 							{
@@ -202,6 +213,13 @@ export const phoneNumber = (options?: {
 							},
 						],
 					});
+					await options?.callbackOnVerification?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							user,
+						},
+						ctx.request,
+					);
 					if (!user) {
 						if (options?.signUpOnVerification) {
 							user = await ctx.context.internalAdapter.createUser({
@@ -222,9 +240,7 @@ export const phoneNumber = (options?: {
 								});
 							}
 						} else {
-							throw new APIError("BAD_REQUEST", {
-								message: "Phone number not found",
-							});
+							return ctx.json(null);
 						}
 					} else {
 						user = await ctx.context.internalAdapter.updateUser(user.id, {
