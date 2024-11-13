@@ -3,8 +3,10 @@ import React from "react";
 
 import {
 	Globe2Icon,
+	PlugIcon,
 	PlugZap2Icon,
 	Plus,
+	RabbitIcon,
 	ShieldCheckIcon,
 	Webhook,
 } from "lucide-react";
@@ -55,7 +57,7 @@ const features = [
 		title: "Gain and manage <strong>access</strong>.",
 		description:
 			"Manage users and their access to resources within your application.",
-		icon: ShieldCheckIcon,
+		icon: RabbitIcon,
 	},
 	{
 		id: 6,
@@ -63,7 +65,7 @@ const features = [
 		title: "Extend your application with plugins.",
 		description:
 			"Enhance your application with our official plugins and those created by the community.",
-		icon: ShieldCheckIcon,
+		icon: PlugIcon,
 	},
 ];
 
@@ -71,12 +73,16 @@ export default function Features({ stars }: { stars: string | null }) {
 	return (
 		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-[1.2px] rounded-none -pr-2">
 			<div className="w-full md:mx-0">
-				<div className="grid grid-cols-1 md:grid-cols-3 border-b-[1.2px]">
+				<div className="grid grid-cols-1 relative md:grid-rows-2 md:grid-cols-3 border-b-[1.2px]">
+					<div className="hidden md:grid top-1/2 left-0 -translate-y-1/2 w-full grid-cols-3 z-10 pointer-events-none select-none absolute">
+						<Plus className="w-8 h-8 text-neutral-300 translate-x-[16.5px] translate-y-[.5px] ml-auto dark:text-neutral-600" />
+						<Plus className="w-8 h-8 text-neutral-300 ml-auto translate-x-[16.5px] translate-y-[.5px] dark:text-neutral-600" />
+					</div>
 					{features.map((feature, index) => (
 						<div
 							key={feature.id}
 							className={cn(
-								"relative items-start justify-start border-l-[1.2px] border-t-[1.2px] md:border-t-0 transform-gpu flex flex-col p-10",
+								"justify-center border-l-[1.2px] md:min-h-[240px] border-t-[1.2px] md:border-t-0 transform-gpu flex flex-col p-10",
 								index >= 3 && "md:border-t-[1.2px]",
 							)}
 						>
