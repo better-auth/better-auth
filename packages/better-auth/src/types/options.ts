@@ -2,7 +2,7 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Adapter, SecondaryStorage } from "./adapter";
+import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
@@ -68,7 +68,7 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| Database
 		| Dialect
-		| Adapter
+		| AdapterInstance
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;

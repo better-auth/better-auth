@@ -8,13 +8,12 @@ import {
 import type { BetterAuthPlugin, Session, User, Where } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 
 export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean;
-	banReason?: string;
-	banExpires?: number;
+	role?: string | null;
+	banned?: boolean | null;
+	banReason?: string | null;
+	banExpires?: number | null;
 }
 
 interface SessionWithImpersonatedBy extends Session {

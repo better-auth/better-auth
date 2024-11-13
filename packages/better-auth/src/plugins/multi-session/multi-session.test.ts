@@ -17,8 +17,8 @@ describe("multi-session", async () => {
 			clientOptions: {
 				plugins: [multiSessionClient()],
 			},
+			testWith: "postgres",
 		},
-		"postgres",
 	);
 
 	let headers = new Headers();

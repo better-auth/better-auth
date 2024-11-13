@@ -10,6 +10,7 @@ exports[`init > should match config 1`] = `
     "findOne": [Function],
     "id": "kysely",
     "update": [Function],
+    "updateMany": [Function],
   },
   "appName": "Better Auth",
   "authCookies": {

@@ -7,13 +7,23 @@ import { getMigrations } from "../../../db/get-migration";
 import path from "path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
+import type { BetterAuthOptions } from "../../../types";
 
 describe("adapter test", async () => {
 	const database = new Database(path.join(__dirname, "test.db"));
+	const opts = {
+		database,
+		user: {
+			fields: {
+				email: "email_address",
+			},
+		},
+		session: {
+			modelName: "sessions",
+		},
+	} satisfies BetterAuthOptions;
 	beforeEach(async () => {
-		const { runMigrations } = await getMigrations({
-			database,
-		});
+		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	});
 
@@ -22,13 +32,12 @@ describe("adapter test", async () => {
 	});
 
 	const db = drizzle(database);
-
 	const adapter = drizzleAdapter(db, {
 		provider: "pg",
 		schema,
 	});
 
 	await runAdapterTest({
-		adapter,
+		adapter: adapter(opts),
 	});
 });

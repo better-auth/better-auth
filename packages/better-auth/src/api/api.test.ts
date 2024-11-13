@@ -57,7 +57,7 @@ describe("auth api", async (it) => {
 				name: testUser.name,
 				email: testUser.email,
 				emailVerified: false,
-				image: undefined,
+				image: null,
 				createdAt: expect.any(Date),
 				updatedAt: expect.any(Date),
 			},
