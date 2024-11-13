@@ -54,8 +54,13 @@ export interface Adapter {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<T | null>;
+	updateMany: (data: {
+		model: string;
+		where: Where[];
+		update: Record<string, any>;
+	}) => Promise<number>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
-	deleteMany: (data: { model: string; where: Where[] }) => Promise<void>;
+	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 *
 	 * @param options
@@ -72,6 +77,10 @@ export interface Adapter {
 		overwrite?: boolean;
 	}>;
 	options?: Record<string, any>;
+}
+
+export interface AdapterInstance {
+	(options: BetterAuthOptions): Adapter;
 }
 
 export interface SecondaryStorage {

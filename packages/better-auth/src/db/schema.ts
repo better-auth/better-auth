@@ -7,17 +7,17 @@ export const accountSchema = z.object({
 	providerId: z.string(),
 	accountId: z.string(),
 	userId: z.string(),
-	accessToken: z.string().nullable().optional(),
-	refreshToken: z.string().nullable().optional(),
-	idToken: z.string().nullable().optional(),
+	accessToken: z.string().nullish(),
+	refreshToken: z.string().nullish(),
+	idToken: z.string().nullish(),
 	/**
 	 * Access token expires at
 	 */
-	expiresAt: z.date().nullable().optional(),
+	expiresAt: z.date().nullish(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
-	password: z.string().optional().nullable(),
+	password: z.string().nullish(),
 });
 
 export const userSchema = z.object({
@@ -25,7 +25,7 @@ export const userSchema = z.object({
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
-	image: z.string().optional(),
+	image: z.string().nullish(),
 	createdAt: z.date().default(new Date()),
 	updatedAt: z.date().default(new Date()),
 });
@@ -34,8 +34,8 @@ export const sessionSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
 	expiresAt: z.date(),
-	ipAddress: z.string().optional(),
-	userAgent: z.string().optional(),
+	ipAddress: z.string().nullish(),
+	userAgent: z.string().nullish(),
 });
 
 export const verificationSchema = z.object({

@@ -273,6 +273,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+
 		expect(res.data?.success).toBe(true);
 	});
 });

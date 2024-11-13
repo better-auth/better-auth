@@ -25,9 +25,10 @@ export async function getTestInstance<
 		port?: number;
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
+		testWith?: "sqlite" | "postgres" | "mongodb";
 	},
-	testWith?: "sqlite" | "postgres" | "mongodb",
 ) {
+	const testWith = config?.testWith || "sqlite";
 	/**
 	 * create db folder if not exists
 	 */

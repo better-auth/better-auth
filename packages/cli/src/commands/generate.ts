@@ -41,6 +41,9 @@ export async function generateAction(opts: any) {
 		logger.error(e.message);
 		process.exit(1);
 	});
+	console.log({
+		adapter,
+	});
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
