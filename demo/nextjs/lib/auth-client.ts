@@ -41,5 +41,3 @@ export const {
 	useListOrganizations,
 	useActiveOrganization,
 } = client;
-
-const c = await client.getSession();
