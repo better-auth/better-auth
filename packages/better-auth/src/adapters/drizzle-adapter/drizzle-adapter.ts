@@ -282,5 +282,6 @@ export const drizzleAdapter =
 				const res = await builder;
 				return res ? res.length : 0;
 			},
+			options: config,
 		} satisfies Adapter;
 	};

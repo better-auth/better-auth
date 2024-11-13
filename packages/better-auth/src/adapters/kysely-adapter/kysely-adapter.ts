@@ -326,5 +326,6 @@ export const kyselyAdapter =
 				}
 				return (await query.execute()).length;
 			},
+			options: config,
 		} satisfies Adapter;
 	};

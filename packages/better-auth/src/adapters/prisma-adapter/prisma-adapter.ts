@@ -2,6 +2,9 @@ import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 
 interface PrismaConfig {
+	/**
+	 * Database provider.
+	 */
 	provider:
 		| "sqlite"
 		| "cockroachdb"
@@ -235,5 +238,6 @@ export const prismaAdapter =
 				});
 				return result ? (result.count as number) : 0;
 			},
+			options: config,
 		} satisfies Adapter;
 	};
