@@ -9,6 +9,11 @@ describe("organization", async (it) => {
 		plugins: [
 			organization({
 				async sendInvitationEmail(data, request) {},
+				schema: {
+					organization: {
+						modelName: "team",
+					},
+				},
 			}),
 		],
 		logger: {
@@ -238,7 +243,6 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		console.log(org);
 		if (!org.data) throw new Error("Organization not found");
 		expect(org.data.members[0].role).toBe("owner");
 		const removedMember = await client.organization.removeMember({
