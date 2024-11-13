@@ -121,7 +121,7 @@ export type InferFieldsOutput<Field> = Field extends Record<
 		} & {
 			[key in Key as Field[key]["returned"] extends false
 				? never
-				: key]?: InferFieldOutput<Field[key]>;
+				: key]?: InferFieldOutput<Field[key]> | null;
 		}
 	: {};
 
@@ -140,7 +140,8 @@ export type InferFieldsInput<Field> = Field extends Record<
 		} & {
 			[key in Key as Field[key]["input"] extends false ? never : key]:
 				| InferFieldInput<Field[key]>
-				| undefined;
+				| undefined
+				| null;
 		}
 	: {};
 
@@ -158,14 +159,14 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 					? never
 					: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]?: InferFieldInput<Field[key]> | undefined;
+			[key in Key]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 
 type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined
+		? InferValueType<T["type"]> | undefined | null
 		: InferValueType<T["type"]>;
 
 type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;

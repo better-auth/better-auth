@@ -66,9 +66,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
-			user.user,
-			url,
-			token,
+			{
+				user: user.user,
+				url,
+				token,
+			},
+			ctx.request,
 		);
 		return ctx.json({
 			status: true,
@@ -137,9 +140,12 @@ export const verifyEmail = createAuthEndpoint(
 
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				updatedUser,
-				`${ctx.context.baseURL}/verify-email?token=${token}`,
-				token,
+				{
+					user: updatedUser,
+					url: `${ctx.context.baseURL}/verify-email?token=${token}`,
+					token,
+				},
+				ctx.request,
 			);
 
 			if (ctx.query.callbackURL) {

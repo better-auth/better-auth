@@ -9,14 +9,14 @@ datasource db {
 
 model User {
     id            String   @id @default(cuid())
-    email         String   @unique
+    email_address String   @unique
     emailVerified Boolean  @default(false)
     name          String
     createdAt     DateTime @default(now())
     updatedAt     DateTime @default(now()) @updatedAt
 }
 
-model session {
+model Sessions {
     id        String   @id @default(cuid())
     userId    String
     expiresAt DateTime

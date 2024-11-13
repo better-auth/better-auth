@@ -9,7 +9,12 @@ exports[`init > should match config 1`] = `
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
+    "options": {
+      "generateId": undefined,
+      "type": "sqlite",
+    },
     "update": [Function],
+    "updateMany": [Function],
   },
   "appName": "Better Auth",
   "authCookies": {

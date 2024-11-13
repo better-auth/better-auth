@@ -23,9 +23,24 @@ export interface OTPOptions {
 	 *
 	 * @param user - The user to send the otp to
 	 * @param otp - The otp to send
+	 * @param request - The request object
 	 * @returns void | Promise<void>
 	 */
-	sendOTP?: (user: UserWithTwoFactor, otp: string) => Promise<void> | void;
+	sendOTP?: (
+		/**
+		 * The user to send the otp to
+		 * @type UserWithTwoFactor
+		 * @default UserWithTwoFactors
+		 */
+		data: {
+			user: UserWithTwoFactor;
+			otp: string;
+		},
+		/**
+		 * The request object
+		 */
+		request?: Request,
+	) => Promise<void> | void;
 }
 
 /**
@@ -74,7 +89,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 				});
 			}
 			const code = await totp.generate(Buffer.from(twoFactor.secret));
-			await options.sendOTP(user, code);
+			await options.sendOTP({ user, otp: code }, ctx.request);
 			return ctx.json({ status: true });
 		},
 	);

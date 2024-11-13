@@ -8,13 +8,12 @@ import {
 import type { BetterAuthPlugin, Session, User, Where } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 
 export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean;
-	banReason?: string;
-	banExpires?: number;
+	role?: string | null;
+	banned?: boolean | null;
+	banReason?: string | null;
+	banExpires?: number | null;
 }
 
 interface SessionWithImpersonatedBy extends Session {
@@ -123,8 +122,9 @@ export const admin = (options?: AdminOptions) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
 						if (returned instanceof Response) {
-							const json =
-								(await returned.json()) as SessionWithImpersonatedBy[];
+							const json = (await returned
+								.clone()
+								.json()) as SessionWithImpersonatedBy[];
 							const newJson = json.filter((session) => {
 								return !session.impersonatedBy;
 							});

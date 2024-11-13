@@ -24,21 +24,9 @@ List of all the available options for configuring Better Auth.
 
 ### `database`
 
-`DatabaseOptions` - Database configuration options. You can either pass an object with `provider` and `url` or a [Kysely](https://kysely.dev) dialect.
+`DatabaseOptions` - Database configuration options. By defualt it supports, `betterSqlite3` instance, `Mysql2` pool, and `pg` pool. You can also pass a kysely dialect, a kysely instance, or an orm adapter.
 
-<TypeTable
-  type={{
-    provider: {
-      description:
-        'databse provider to use. Currently supported providers are `sqlite`, `mysql`, and `postgresql`.',
-      type: "'sqlite' | 'mysql' | 'postgresql'",
-    },
-    url: {
-        description: 'Path to your database or connection string. For SQLite, it should be a path to the database file.',
-        type: 'string',
-    }
-  }}
-/>
+Refer to the [Database](/docs/concept/database) section for more information.
 
 ### `emailAndPassword`
 
