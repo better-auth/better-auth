@@ -156,7 +156,7 @@ export async function getConfig({
 		}
 		return configFile;
 	} catch (e) {
-		logger.error("Couldn't read your auth config.");
+		logger.error("Couldn't read your auth config.", e);
 		process.exit(1);
 	}
 }
