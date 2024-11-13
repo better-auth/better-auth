@@ -39,9 +39,17 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 
-		const { code, error } = queryOrBody;
+		const { code, error, state } = queryOrBody;
+
+		if (!state) {
+			c.context.logger.error("State not found");
+			throw c.redirect(
+				`${c.context.baseURL}/error?error=state_not_found`,
+			);
+		}
 
 		if (!code) {
+			c.context.logger.error("Code not found");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=${error || "no_code"}`,
 			);
