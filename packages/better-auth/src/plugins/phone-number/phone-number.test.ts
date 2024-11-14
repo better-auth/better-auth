@@ -186,6 +186,14 @@ describe("phone auth flow", async () => {
 		expect(changedEmailRes.data?.user.email).toBe(newEmail);
 	});
 
+	it("should sign in with phone number and password", async () => {
+		const res = await client.signIn.phoneNumber({
+			phoneNumber: "+251911121314",
+			password: "password",
+		});
+		expect(res.data?.session).toBeDefined();
+	});
+
 	it("should sign in with new email", async () => {
 		const res = await client.signIn.email({
 			email: newEmail,
