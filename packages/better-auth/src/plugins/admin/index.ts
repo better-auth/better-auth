@@ -8,37 +8,17 @@ import {
 import type { BetterAuthPlugin, Session, User, Where } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 
 export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean;
-	banReason?: string;
-	banExpires?: number;
+	role?: string | null;
+	banned?: boolean | null;
+	banReason?: string | null;
+	banExpires?: number | null;
 }
 
 interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
 }
-
-export const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
-	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
-	}
-	const user = session.user as UserWithRole;
-	if (user.role !== "admin") {
-		throw new APIError("FORBIDDEN", {
-			message: "Only admins can access this endpoint",
-		});
-	}
-	return {
-		session: {
-			user: user,
-			session: session.session,
-		},
-	};
-});
 
 interface AdminOptions {
 	/**
@@ -47,6 +27,14 @@ interface AdminOptions {
 	 * @default "user"
 	 */
 	defaultRole?: string | false;
+	/**
+	 * The role required to access admin endpoints
+	 *
+	 * Can be an array of roles
+	 *
+	 * @default "admin"
+	 */
+	adminRole?: string | string[];
 	/**
 	 * A default ban reason
 	 *
@@ -68,6 +56,34 @@ interface AdminOptions {
 }
 
 export const admin = (options?: AdminOptions) => {
+	const opts = {
+		defaultRole: "user",
+		adminRole: "admin",
+		...options,
+	};
+	const adminMiddleware = createAuthMiddleware(async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session?.session) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const user = session.user as UserWithRole;
+		if (
+			!user.role ||
+			(Array.isArray(opts.adminRole)
+				? !opts.adminRole.includes(user.role)
+				: user.role !== opts.adminRole)
+		) {
+			throw new APIError("FORBIDDEN", {
+				message: "Only admins can access this endpoint",
+			});
+		}
+		return {
+			session: {
+				user: user,
+				session: session.session,
+			},
+		};
+	});
 	return {
 		id: "admin",
 		init(ctx) {
@@ -122,9 +138,10 @@ export const admin = (options?: AdminOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const returned = ctx.context.returned;
-						if (returned) {
-							const json =
-								(await returned.json()) as SessionWithImpersonatedBy[];
+						if (returned instanceof Response) {
+							const json = (await returned
+								.clone()
+								.json()) as SessionWithImpersonatedBy[];
 							const newJson = json.filter((session) => {
 								return !session.impersonatedBy;
 							});

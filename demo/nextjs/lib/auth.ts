@@ -29,7 +29,7 @@ export const auth = betterAuth({
 		type: "sqlite",
 	},
 	emailVerification: {
-		async sendVerificationEmail(user, url) {
+		async sendVerificationEmail({ user, url }) {
 			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
@@ -48,7 +48,7 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(user, url) {
+		async sendResetPassword({ user, url }) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -113,7 +113,7 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }) {
 					await resend.emails.send({
 						from,
 						to: user.email,

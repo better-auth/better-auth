@@ -161,7 +161,7 @@ export function OrganizationCard(props: {
 									<div className="flex items-center gap-2">
 										<Avatar className="sm:flex w-9 h-9">
 											<AvatarImage
-												src={member.user.image}
+												src={member.user.image || ""}
 												className="object-cover"
 											/>
 											<AvatarFallback>
@@ -196,7 +196,7 @@ export function OrganizationCard(props: {
 								<div>
 									<div className="flex items-center gap-2">
 										<Avatar>
-											<AvatarImage src={session?.user.image} />
+											<AvatarImage src={session?.user.image || ""} />
 											<AvatarFallback>
 												{session?.user.name?.charAt(0)}
 											</AvatarFallback>

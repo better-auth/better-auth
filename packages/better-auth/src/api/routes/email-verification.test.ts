@@ -4,12 +4,13 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
 	let token: string;
-	const { auth, testUser, client, signInWithTestUser } = await getTestInstance({
+	const { auth, testUser, client, signInWithUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
+			requireEmailVerification: true,
 		},
 		emailVerification: {
-			async sendVerificationEmail(user, url, _token) {
+			async sendVerificationEmail({ user, url, token: _token }) {
 				token = _token;
 				mockSendEmail(user.email, url);
 			},
@@ -22,6 +23,15 @@ describe("Email Verification", async () => {
 				email: testUser.email,
 			},
 		});
+		expect(mockSendEmail).toHaveBeenCalledWith(
+			testUser.email,
+			expect.any(String),
+		);
+	});
+
+	it("should send a verification email if verification is required and user is not verified", async () => {
+		await signInWithUser(testUser.email, testUser.password);
+
 		expect(mockSendEmail).toHaveBeenCalledWith(
 			testUser.email,
 			expect.any(String),

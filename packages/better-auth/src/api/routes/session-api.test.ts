@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import { getDate } from "../../utils/date";
-import type { Session } from "../../types";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
-	const { client, testUser, sessionSetter } = await getTestInstance();
+	const { client, testUser, sessionSetter } = await getTestInstance({});
 
 	it("should set cookies correctly on sign in", async () => {
 		const res = await client.signIn.email(
@@ -23,7 +22,7 @@ describe("session", async () => {
 						"max-age": (60 * 60 * 24 * 7).toString(),
 						path: "/",
 						httponly: true,
-						samesite: "Lax",
+						samesite: "lax",
 					});
 				},
 			},
@@ -43,6 +42,7 @@ describe("session", async () => {
 
 	it("should update session when close to expiry", async () => {
 		let headers = new Headers();
+
 		const res = await client.signIn.email(
 			{
 				email: testUser.email,
@@ -144,7 +144,7 @@ describe("session", async () => {
 						"max-age": (60 * 60 * 24 * 7).toString(),
 						path: "/",
 						httponly: true,
-						samesite: "Lax",
+						samesite: "lax",
 					});
 				},
 			},
@@ -339,8 +339,8 @@ describe("cookie cache", async () => {
 		verification: [],
 	};
 	const adapter = memoryAdapter(database);
-	const fn = vi.spyOn(adapter, "findOne");
-	const { client, testUser } = await getTestInstance({
+
+	const { client, testUser, auth } = await getTestInstance({
 		database: adapter,
 		session: {
 			cookieCache: {
@@ -348,6 +348,10 @@ describe("cookie cache", async () => {
 			},
 		},
 	});
+	const ctx = await auth.$context;
+
+	it("should cache cookies", async () => {});
+	const fn = vi.spyOn(ctx.adapter, "findOne");
 	it("should cache cookies", async () => {
 		const headers = new Headers();
 		await client.signIn.email(
@@ -370,13 +374,13 @@ describe("cookie cache", async () => {
 				},
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(fn).toHaveBeenCalledTimes(1);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(fn).toHaveBeenCalledTimes(1);
 	});
 });

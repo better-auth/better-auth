@@ -243,7 +243,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should update with multiple where", async () => {
-		await adapter.update({
+		await adapter.updateMany({
 			model: "user",
 			where: [
 				{

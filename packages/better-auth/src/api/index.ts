@@ -121,23 +121,21 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
-						const match = hook.matcher({
+						const ctx = {
 							...value,
 							...context,
-							context: c,
-						});
+							context: {
+								...c,
+								...context?.context,
+							},
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const hookRes = await hook.handler({
-								...context,
-								context: {
-									...c,
-									...context?.context,
-								},
-							});
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "context" in hookRes) {
-								c = {
-									...c,
-									...hookRes.context,
+								context = {
+									...hookRes,
+									...context,
 								};
 							}
 						}
@@ -179,13 +177,14 @@ export function getEndpoints<
 					for (const hook of afterPlugins || []) {
 						const match = hook.matcher(context);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
+							// @ts-expect-error - returned is not in the context type
+							c.returned = response;
+							const ctx = {
+								...value,
+								...context,
+								context: c,
+							};
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								pluginResponse = hookRes.response as any;
 							}
@@ -202,15 +201,18 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
-						const match = hook.matcher(context);
+						const ctx = {
+							...context,
+							context: {
+								...c,
+								...context.context,
+								endpoint: value,
+								returned: response,
+							},
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								response = hookRes.response as any;
 							}

@@ -7,11 +7,11 @@ export const organizationSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	slug: z.string(),
-	logo: z.string().optional(),
+	logo: z.string().nullish(),
 	metadata: z
 		.record(z.string())
 		.or(z.string().transform((v) => JSON.parse(v)))
-		.optional(),
+		.nullish(),
 	createdAt: z.date(),
 });
 

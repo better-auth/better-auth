@@ -255,11 +255,14 @@ export const signInEmail = createAuthEndpoint(
 				ctx.context.secret,
 				user.user.email,
 			);
-			const url = `${ctx.context.options.baseURL}/verify-email?token=${token}`;
+			const url = `${ctx.context.baseURL}/verify-email?token=${token}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
-				user.user,
-				url,
-				token,
+				{
+					user: user.user,
+					url,
+					token,
+				},
+				ctx.request,
 			);
 			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {

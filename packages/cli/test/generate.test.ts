@@ -6,6 +6,7 @@ import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import Database from "better-sqlite3";
+import type { BetterAuthOptions } from "better-auth";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -16,7 +17,7 @@ describe("generate", async () => {
 				{
 					provider: "postgresql",
 				},
-			),
+			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
@@ -38,7 +39,7 @@ describe("generate", async () => {
 				{
 					provider: "mongodb",
 				},
-			),
+			)({} as BetterAuthOptions),
 			options: {
 				database: prismaAdapter(
 					{},
@@ -63,7 +64,7 @@ describe("generate", async () => {
 					provider: "pg",
 					schema: {},
 				},
-			),
+			)({} as BetterAuthOptions),
 			options: {
 				database: drizzleAdapter(
 					{},

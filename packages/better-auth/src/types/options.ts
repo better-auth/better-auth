@@ -2,7 +2,7 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Adapter, SecondaryStorage } from "./adapter";
+import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
@@ -68,7 +68,7 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| Database
 		| Dialect
-		| Adapter
+		| AdapterInstance
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -112,16 +112,27 @@ export interface BetterAuthOptions {
 	 */
 	emailVerification?: {
 		/**
-		 * @param user the user to send the
-		 * verification email to
-		 * @param url the url to send the verification email to
-		 * it contains the token as well
-		 * @param token the token to send the verification email to
+		 * Send a verification email
+		 * @param data the data object
+		 * @param request the request object
 		 */
 		sendVerificationEmail?: (
-			user: User,
-			url: string,
-			token: string,
+			/**
+			 * @param user the user to send the
+			 * verification email to
+			 * @param url the url to send the verification email to
+			 * it contains the token as well
+			 * @param token the token to send the verification email to
+			 */
+			data: {
+				user: User;
+				url: string;
+				token: string;
+			},
+			/**
+			 * The request object
+			 */
+			request?: Request,
 		) => Promise<void>;
 		/**
 		 * Send a verification email automatically
@@ -164,7 +175,18 @@ export interface BetterAuthOptions {
 		/**
 		 * send reset password
 		 */
-		sendResetPassword?: (user: User, url: string) => Promise<void>;
+		sendResetPassword?: (
+			/**
+			 * @param user the user to send the
+			 * reset password email to
+			 * @param url the url to send the reset password email to
+			 */
+			data: { user: User; url: string },
+			/**
+			 * The request object
+			 */
+			request?: Request,
+		) => Promise<void>;
 		/**
 		 * Number of seconds the reset password token is valid for.
 		 * @default 1 hour
@@ -221,12 +243,17 @@ export interface BetterAuthOptions {
 			enabled: boolean;
 			/**
 			 * Send a verification email when the user changes their email.
+			 * @param data the data object
+			 * @param request the request object
 			 */
 			sendChangeEmailVerification?: (
-				user: User,
-				newEmail: string,
-				url: string,
-				token: string,
+				data: {
+					user: User;
+					newEmail: string;
+					url: string;
+					token: string;
+				},
+				request?: Request,
 			) => Promise<void>;
 		};
 	};

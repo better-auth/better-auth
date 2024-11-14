@@ -1,4 +1,4 @@
-import type { ContextTools } from "better-call";
+import type { ContextTools, EndpointOptions } from "better-call";
 import type { AuthContext } from "../init";
 
 export type HookEndpointContext<C extends Record<string, any> = {}> =
@@ -10,6 +10,9 @@ export type HookEndpointContext<C extends Record<string, any> = {}> =
 		headers?: Headers;
 		params?: Record<string, string> | undefined;
 		query?: any;
+		returned: unknown;
+		returnedHeaders: Headers;
+		endpointOptions: EndpointOptions;
 		method?: any;
 	};
 

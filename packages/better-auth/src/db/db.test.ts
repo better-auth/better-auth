@@ -20,13 +20,13 @@ describe("db", async () => {
 			name: "Test User",
 		});
 		const users = await db.findMany({
-			model: "users",
+			model: "user",
 		});
 		const session = await db.findMany({
-			model: "sessions",
+			model: "session",
 		});
 		const accounts = await db.findMany({
-			model: "accounts",
+			model: "account",
 		});
 		expect(res.data).toBeDefined();
 		//including the user that was created in the test instance
