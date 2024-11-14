@@ -23,6 +23,11 @@ describe("adapter test", async () => {
 				emailVerified: "email_verified",
 			},
 		},
+		advanced: {
+			generateId() {
+				return (id++).toString();
+			},
+		},
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
 		(await getMigrations(opts)).runMigrations();
@@ -32,7 +37,7 @@ describe("adapter test", async () => {
 		options: opts,
 		hooks: [],
 		generateId() {
-			return (id++).toString();
+			return opts.advanced.generateId();
 		},
 	});
 	it("should create oauth user with custom generate id", async () => {

@@ -46,7 +46,6 @@ const createTransform = (
 				? `${model}s`
 				: model;
 	};
-
 	return {
 		getSchema,
 		transformInput(data: Record<string, any>, model: string) {
