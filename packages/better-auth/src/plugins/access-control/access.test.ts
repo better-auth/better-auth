@@ -105,6 +105,48 @@ describe("base", async (it) => {
 		);
 		expect(data?.hasPermission).toBe(true);
 	});
+
+	const newRole = await auth.api.createRole({
+		body: {
+			name: "admin-role",
+			permissions: ["test1", "test2"],
+			scope: "global",
+		},
+	});
+
+	it("should add permission", async ({ expect }) => {
+		const updatedRole = await auth.api.updateRolePermissions({
+			body: {
+				permissions: ["test3", "test4"],
+				action: "append",
+				roleId: newRole.id,
+			},
+		});
+		expect(updatedRole.permissions).toContain("test3");
+		expect(updatedRole.permissions).toContain("test4");
+	});
+	it("should remove permissions", async ({ expect }) => {
+		const updatedRole = await auth.api.updateRolePermissions({
+			body: {
+				permissions: ["test3", "test4"],
+				action: "remove",
+				roleId: newRole.id,
+			},
+		});
+		expect(updatedRole.permissions).not.toContain("test3");
+		expect(updatedRole.permissions).not.toContain("test4");
+	});
+	it("should replace permissions", async ({ expect }) => {
+		const updatedRole = await auth.api.updateRolePermissions({
+			body: {
+				permissions: ["test3", "test4"],
+				action: "replace",
+				roleId: newRole.id,
+			},
+		});
+		expect(updatedRole.permissions).not.toContain("test1");
+		expect(updatedRole.permissions).not.toContain("test2");
+	});
 });
 
 describe("with organization plugin", async (it) => {
@@ -199,6 +241,5 @@ describe("with organization plugin", async (it) => {
 				headers,
 			},
 		);
-		console.log(res.data);
 	});
 });

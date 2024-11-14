@@ -275,7 +275,9 @@ export const kyselyAdapter =
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
 				const transformedData = transformInput(values, model);
-				let query = db.updateTable(getModelName(model)).set(transformedData);
+				const m = getModelName(model);
+				console.log("m", m, transformedData);
+				let query = db.updateTable(m).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 				}

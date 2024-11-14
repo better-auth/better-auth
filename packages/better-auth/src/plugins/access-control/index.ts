@@ -346,22 +346,12 @@ export const accessControl = (options: AccessControlOptions) => {
 					method: "POST",
 					body: z.object({
 						roleId: z.string(),
-						permission: z.array(z.string()),
-					}),
-				},
-				async (ctx) => {},
-			),
-			removeRolePermissions: createAuthEndpoint(
-				"/ac/update-role",
-				{
-					method: "POST",
-					body: z.object({
-						roleId: z.string(),
-						permission: z.array(z.string()),
+						permissions: z.array(z.string()),
+						action: z.enum(["append", "replace", "remove"]),
 					}),
 				},
 				async (ctx) => {
-					const role = await ctx.context.adapter.findOne({
+					const role = await ctx.context.adapter.findOne<StoredRole>({
 						model: "role",
 						where: [
 							{
@@ -372,9 +362,73 @@ export const accessControl = (options: AccessControlOptions) => {
 					});
 					if (!role) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Role not found",
+							message: "role not found",
 						});
 					}
+
+					if (ctx.request) {
+						const userRole = await ctx.context.adapter.findMany<UserRole>({
+							model: "userRole",
+							where: [
+								{
+									field: "scope",
+									value: role.scope,
+								},
+							],
+						});
+						const roleIds = userRole.map((ur) => ur.roleId);
+						const roles = await ctx.context.adapter.findMany<Role>({
+							model: "role",
+							where: [
+								{
+									field: "id",
+									value: roleIds,
+									operator: "in",
+								},
+							],
+						});
+						const rolePermissions = roles.map((r) => r.permissions).flat();
+						const hasPermission = rolePermissions.some((p) => {
+							return p === superPermission || p === "role:edit";
+						});
+						if (!hasPermission) {
+							throw new APIError("FORBIDDEN", {
+								message:
+									"You do not have permission required to perform this action.",
+							});
+						}
+					}
+
+					const updated = await ctx.context.adapter.update<any>({
+						model: "role",
+						where: [
+							{
+								field: "id",
+								value: role.id,
+							},
+						],
+						update: {
+							permissions: JSON.stringify(
+								ctx.body.action === "append"
+									? [...JSON.parse(role.permissions), ...ctx.body.permissions]
+									: ctx.body.action === "replace"
+										? ctx.body.permissions
+										: JSON.parse(role.permissions).filter(
+												(p: string) => !ctx.body.permissions.includes(p),
+											),
+							),
+						},
+					});
+					if (!updated) {
+						throw new APIError("BAD_REQUEST", {
+							message: "role not found",
+						});
+					}
+					const newRole = {
+						...updated,
+						permission: JSON.parse(updated.permissions),
+					} as Role;
+					return ctx.json(newRole);
 				},
 			),
 		},
