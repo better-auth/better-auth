@@ -36,7 +36,7 @@ interface PrismaClientInternal {
 	};
 }
 
-const createTransform = (options: BetterAuthOptions) => {
+const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	const schema = getAuthTables(options);
 
 	function getField(model: string, field: string) {
@@ -61,14 +61,15 @@ const createTransform = (options: BetterAuthOptions) => {
 	function getModelName(model: string) {
 		return schema[model].tableName;
 	}
-
+	const shouldGenerateId = config?.generateId !== false;
 	return {
 		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = data.id
-				? {
-						id: data.id,
-					}
-				: {};
+			const transformedData: Record<string, any> =
+				data.id && shouldGenerateId
+					? {
+							id: config?.generateId ? config.generateId() : data.id,
+						}
+					: {};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
@@ -167,7 +168,7 @@ export const prismaAdapter =
 			convertWhereClause,
 			convertSelect,
 			getModelName,
-		} = createTransform(options);
+		} = createTransform(config, options);
 		return {
 			id: "prisma",
 			async create(data) {

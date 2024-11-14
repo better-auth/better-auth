@@ -46,15 +46,16 @@ const createTransform = (
 				? `${model}s`
 				: model;
 	};
-
+	const shouldGenerateId = config?.generateId !== false;
 	return {
 		getSchema,
 		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = data.id
-				? {
-						id: data.id,
-					}
-				: {};
+			const transformedData: Record<string, any> =
+				data.id && shouldGenerateId
+					? {
+							id: config?.generateId ? config.generateId() : data.id,
+						}
+					: {};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
