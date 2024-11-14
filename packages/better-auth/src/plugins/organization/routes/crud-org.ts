@@ -241,10 +241,7 @@ export const getFullOrganization = createAuthEndpoint(
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const organization = await adapter.findFullOrganization(
-			organizationId,
-			ctx.context.db || undefined,
-		);
+		const organization = await adapter.findFullOrganization(organizationId);
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Organization not found",
@@ -293,10 +290,7 @@ export const setActiveOrganization = createAuthEndpoint(
 			});
 		}
 		await adapter.setActiveOrganization(session.session.id, organizationId);
-		const organization = await adapter.findFullOrganization(
-			organizationId,
-			ctx.context.db || undefined,
-		);
+		const organization = await adapter.findFullOrganization(organizationId);
 		return ctx.json(organization);
 	},
 );
