@@ -37,9 +37,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.secret,
 				);
 				if (!sessionCookieToken) {
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
 				const sessionDataCookie = ctx.getCookie(
@@ -63,9 +61,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 					if (!isValid) {
 						deleteSessionCookie(ctx);
-						return ctx.json(null, {
-							status: 401,
-						});
+						return ctx.json(null);
 					}
 				}
 
@@ -111,9 +107,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						 */
 						await ctx.context.internalAdapter.deleteSession(session.session.id);
 					}
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
 				/**
@@ -129,7 +123,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;
-
 				/**
 				 * Calculate last updated date to throttle write updates to database
 				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
@@ -142,7 +135,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					session.session.expiresAt.valueOf() -
 					expiresIn * 1000 +
 					updateAge * 1000;
-
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
 				if (shouldBeUpdated) {
@@ -190,7 +182,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 			} catch (error) {
 				ctx.context.logger.error(error);
-				return ctx.json(null, { status: 500 });
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "internal server error",
+				});
 			}
 		},
 	);
