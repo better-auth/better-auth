@@ -437,7 +437,7 @@ importers:
         specifier: ^0.6.3
         version: 0.6.3
       better-auth:
-        specifier: workspace:*
+        specifier: ^0.8.3
         version: link:../packages/better-auth
       better-sqlite3:
         specifier: ^11.3.0
