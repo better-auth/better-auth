@@ -18,7 +18,7 @@ export type TOTPOptions = {
 	/**
 	 * Issuer
 	 */
-	issuer: string;
+	issuer?: string;
 	/**
 	 * How many digits the otp to be
 	 *
@@ -115,7 +115,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			await ctx.context.password.checkPassword(user.id, ctx);
 			return {
 				totpURI: createTOTPKeyURI(
-					options?.issuer || "BetterAuth",
+					options.issuer || ctx.context.appName,
 					user.email,
 					Buffer.from(twoFactor.secret),
 					opts,
