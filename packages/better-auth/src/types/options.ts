@@ -21,7 +21,8 @@ export interface BetterAuthOptions {
 	appName?: string;
 	/**
 	 * Base URL for the better auth. This is typically the
-	 * root URL where your application server is hosted. If not explicitly set,
+	 * root URL where your application server is hosted.
+	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
@@ -30,7 +31,8 @@ export interface BetterAuthOptions {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically the path where the
+	 * Base path for the better auth. This is typically
+	 * the path where the
 	 * better auth routes are mounted.
 	 *
 	 * @default "/api/auth"
@@ -141,6 +143,10 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		sendOnSignUp?: boolean;
+		/**
+		 * Auto signin the user after they verify their email
+		 */
+		autoSignInAfterVerification?: boolean;
 	};
 	/**
 	 * Email and password authentication
@@ -180,16 +186,19 @@ export interface BetterAuthOptions {
 			 * @param user the user to send the
 			 * reset password email to
 			 * @param url the url to send the reset password email to
+			 * @param token the token to send to the user (could be used instead of sending the url
+			 * if you need to redirect the user to custom route)
 			 */
-			data: { user: User; url: string },
+			data: { user: User; url: string; token: string },
 			/**
 			 * The request object
 			 */
 			request?: Request,
 		) => Promise<void>;
 		/**
-		 * Number of seconds the reset password token is valid for.
-		 * @default 1 hour
+		 * Number of seconds the reset password token is
+		 * valid for.
+		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
 		/**
