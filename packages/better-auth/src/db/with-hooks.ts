@@ -1,5 +1,5 @@
 import type { Adapter, Where } from "./../types/adapter";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, Models } from "../types";
 
 export function getWithHooks(
 	adapter: Adapter,
@@ -9,10 +9,15 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	type Models = "user" | "account" | "session" | "verification";
-	async function createWithHooks<T extends Record<string, any>>(
+	type BaseModels = Extract<
+		Models,
+		"user" | "account" | "session" | "verification"
+	>;
+	async function createWithHooks<
+		T extends { id: string } & Record<string, any>,
+	>(
 		data: T,
-		model: Models,
+		model: BaseModels,
 		customCreateFn?: {
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
@@ -57,7 +62,7 @@ export function getWithHooks(
 	async function updateWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: Models,
+		model: BaseModels,
 		customUpdateFn?: {
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;

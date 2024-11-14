@@ -181,7 +181,7 @@ export const resetPassword = createAuthEndpoint(
 				userId,
 				providerId: "credential",
 				password: hashedPassword,
-				accountId: ctx.context.uuid(),
+				accountId: userId,
 			});
 			return ctx.json({
 				status: true,

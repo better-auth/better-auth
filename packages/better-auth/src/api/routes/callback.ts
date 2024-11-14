@@ -4,7 +4,6 @@ import type { OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { generateId } from "../../utils/id";
 import { logger } from "../../utils/logger";
 import { createAuthEndpoint } from "../call";
 
@@ -82,7 +81,7 @@ export const callbackOAuth = createAuthEndpoint(
 		const userInfo = await provider
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
-		const id = generateId();
+		const id = c.context.generateId({ type: "user" });
 		const data = {
 			id,
 			...userInfo,

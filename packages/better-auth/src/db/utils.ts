@@ -20,10 +20,6 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
 	return kyselyAdapter(kysely, {
-		generateId:
-			"generateId" in options.database
-				? options.database.generateId
-				: undefined,
 		type: databaseType || "sqlite",
 	})(options);
 }

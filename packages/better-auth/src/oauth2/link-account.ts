@@ -59,7 +59,7 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
-					id: c.context.uuid(),
+					id: c.context.generateId({ type: "account" }),
 					userId: dbUser.user.id,
 					accessToken: account.accessToken,
 					idToken: account.idToken,
@@ -88,7 +88,7 @@ export async function handleOAuthUserInfo(
 				.createOAuthUser(
 					{
 						...userInfo,
-						id: c.context.uuid(),
+						id: c.context.generateId({ type: "user" }),
 						emailVerified,
 						email: userInfo.email.toLowerCase(),
 					},

@@ -7,6 +7,7 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	IdTypes,
 	SecondaryStorage,
 } from "./types";
 import { defu } from "defu";
@@ -74,6 +75,13 @@ export const init = async (options: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
+	const generateIdFunc: AuthContext["generateId"] = ({ type, size }) => {
+		if (options?.advanced?.generateId !== undefined) {
+			return options.advanced.generateId({ type, size });
+		}
+		return generateId(size);
+	};
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -101,6 +109,7 @@ export const init = async (options: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		uuid: generateId,
+		generateId: generateIdFunc,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -115,6 +124,7 @@ export const init = async (options: BetterAuthOptions) => {
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
 	};
@@ -145,6 +155,7 @@ export type AuthContext = {
 		expiresIn: number;
 	};
 	uuid: (size?: number) => string;
+	generateId: (options: { type: IdTypes; size?: number }) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
@@ -187,6 +198,7 @@ function runPluginInit(ctx: AuthContext) {
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),
+		generateId: ctx.generateId,
 	});
 	context.options = options;
 	return { context };

@@ -5,6 +5,19 @@ import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 import type { BetterAuthPlugin } from "./plugins";
 
+export type Models =
+	| "user"
+	| "account"
+	| "session"
+	| "verification"
+	| "rate-limit"
+	| "organization"
+	| "member"
+	| "invitation"
+	| "jwks"
+	| "passkey"
+	| "two-factor";
+
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
 		InferFieldsFromOptions<Options, "user", "input">;

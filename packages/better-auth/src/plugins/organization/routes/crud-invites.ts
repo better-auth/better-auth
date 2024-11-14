@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { role } from "../schema";
@@ -146,7 +145,7 @@ export const acceptInvitation = createAuthEndpoint(
 			status: "accepted",
 		});
 		const member = await adapter.createMember({
-			id: generateId(),
+			id: ctx.context.generateId({ type: "member" }),
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
 			role: invitation.role,

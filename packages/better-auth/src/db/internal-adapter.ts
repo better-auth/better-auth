@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { AuthContext, BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import {
@@ -9,7 +9,6 @@ import {
 	type User,
 	type Verification,
 } from "./schema";
-import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
@@ -19,6 +18,7 @@ export const createInternalAdapter = (
 	ctx: {
 		options: BetterAuthOptions;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		generateId: AuthContext["generateId"];
 	},
 ) => {
 	const options = ctx.options;
@@ -33,7 +33,7 @@ export const createInternalAdapter = (
 			try {
 				const createdUser = await createWithHooks(
 					{
-						id: generateId(),
+						id: ctx.generateId({ type: "user" }),
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
@@ -42,7 +42,7 @@ export const createInternalAdapter = (
 				);
 				const createdAccount = await createWithHooks(
 					{
-						id: generateId(),
+						id: ctx.generateId({ type: "account" }),
 						...account,
 						userId: createdUser.id || user.id,
 					},
@@ -64,7 +64,7 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
-					id: generateId(),
+					id: ctx.generateId({ type: "user" }),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					emailVerified: false,
@@ -81,7 +81,7 @@ export const createInternalAdapter = (
 		) => {
 			const createdAccount = await createWithHooks(
 				{
-					id: generateId(),
+					id: ctx.generateId({ type: "account" }),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
@@ -184,7 +184,7 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateId(32),
+				id: ctx.generateId({ type: "session", size: 32 }),
 				userId,
 				/**
 				 * If the user doesn't want to be remembered
@@ -531,7 +531,7 @@ export const createInternalAdapter = (
 		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
 			const _account = await createWithHooks(
 				{
-					id: generateId(),
+					id: ctx.generateId({ type: "account" }),
 					...account,
 				},
 				"account",
@@ -626,7 +626,7 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
-					id: generateId(),
+					id: ctx.generateId({ type: "verification" }),
 					createdAt: new Date(),
 					...data,
 				},

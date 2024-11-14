@@ -7,7 +7,6 @@ import {
 import type { BetterAuthPlugin, Session, User } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { z } from "zod";
-import { generateId } from "../../utils/id";
 import { getOrigin } from "../../utils/url";
 
 export interface UserWithAnonymous extends User {
@@ -52,7 +51,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 				async (ctx) => {
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
-					const id = generateId();
+					const id = ctx.context.generateId({ type: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
 					const newUser = await ctx.context.internalAdapter.createUser({
 						id,

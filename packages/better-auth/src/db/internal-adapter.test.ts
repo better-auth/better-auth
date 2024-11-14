@@ -16,9 +16,6 @@ describe("adapter test", async () => {
 		database: {
 			dialect: sqliteDialect,
 			type: "sqlite",
-			generateId() {
-				return (id++).toString();
-			},
 		},
 		user: {
 			fields: {
@@ -34,6 +31,9 @@ describe("adapter test", async () => {
 	const internalAdapter = createInternalAdapter(adapter, {
 		options: opts,
 		hooks: [],
+		generateId() {
+			return (id++).toString();
+		},
 	});
 	it("should create oauth user with custom generate id", async () => {
 		const user = await internalAdapter.createOAuthUser(

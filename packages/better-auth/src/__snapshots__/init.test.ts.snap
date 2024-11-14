@@ -10,7 +10,6 @@ exports[`init > should match config 1`] = `
     "findOne": [Function],
     "id": "kysely",
     "options": {
-      "generateId": undefined,
       "type": "sqlite",
     },
     "update": [Function],
@@ -50,6 +49,7 @@ exports[`init > should match config 1`] = `
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
+  "generateId": [Function],
   "internalAdapter": {
     "createAccount": [Function],
     "createOAuthUser": [Function],

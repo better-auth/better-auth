@@ -1,7 +1,6 @@
 import type { Kysely } from "kysely";
 import type { Session, User } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
 import type { Invitation, Member, Organization } from "./schema";
 import { BetterAuthError } from "../../error";
@@ -41,7 +40,7 @@ export const getOrgAdapter = (
 			const member = await adapter.create<Member>({
 				model: "member",
 				data: {
-					id: generateId(),
+					id: context.generateId({ type: "member" }),
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
@@ -394,7 +393,7 @@ export const getOrgAdapter = (
 			const invite = await adapter.create<Invitation>({
 				model: "invitation",
 				data: {
-					id: generateId(),
+					id: context.generateId({ type: "invitation" }),
 					email: invitation.email,
 					role: invitation.role,
 					organizationId: invitation.organizationId,

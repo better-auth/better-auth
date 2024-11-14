@@ -7,7 +7,6 @@ import { generateState, parseState } from "../../oauth2/state";
 import { logger } from "../../utils/logger";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
-import { generateId } from "../../utils/id";
 import { setSessionCookie } from "../../cookies";
 import {
 	createAuthorizationURL,
@@ -313,7 +312,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					) as {
 						id: string;
 					};
-					const id = generateId();
+					const id = ctx.context.generateId({ type: "user" });
 					const data = userSchema.safeParse({
 						...userInfo,
 						id,
