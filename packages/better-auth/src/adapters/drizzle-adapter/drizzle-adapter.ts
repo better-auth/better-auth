@@ -165,7 +165,8 @@ const createTransform = (
 			await builder;
 			const schemaModel = getSchema(getModelName(model));
 			const res = await db
-				.select()(schemaModel)
+				.select()
+				.from(schemaModel)
 				.where(eq(schemaModel.id, data.id));
 			return res[0];
 		},
