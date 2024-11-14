@@ -5,8 +5,11 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
-import type { User } from "@prisma/client";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	User,
+} from "../../types";
 
 interface AccessControlOptions {
 	/**
@@ -335,6 +338,43 @@ export const accessControl = (options: AccessControlOptions) => {
 						},
 					});
 					return newRole;
+				},
+			),
+			updateRolePermissions: createAuthEndpoint(
+				"/ac/update-role",
+				{
+					method: "POST",
+					body: z.object({
+						roleId: z.string(),
+						permission: z.array(z.string()),
+					}),
+				},
+				async (ctx) => {},
+			),
+			removeRolePermissions: createAuthEndpoint(
+				"/ac/update-role",
+				{
+					method: "POST",
+					body: z.object({
+						roleId: z.string(),
+						permission: z.array(z.string()),
+					}),
+				},
+				async (ctx) => {
+					const role = await ctx.context.adapter.findOne({
+						model: "role",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.roleId,
+							},
+						],
+					});
+					if (!role) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Role not found",
+						});
+					}
 				},
 			),
 		},
