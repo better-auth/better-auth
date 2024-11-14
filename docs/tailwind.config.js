@@ -14,8 +14,7 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
-		"./mdx-components.{ts,tsx}",
-		"./node_modules/fumadocs-ui/dist/**/*.js",
+		"../node_modules/fumadocs-ui/dist/**/*.js",
 	],
 	presets: [
 		createPreset({
@@ -130,11 +129,18 @@ export default {
 						height: "0",
 					},
 				},
+				scroll: {
+					to: {
+						transform: "translate(calc(-50% - 0.5rem))",
+					},
+				},
 			},
 			animation: {
 				"accordion-down": "accordion-down 0.2s ease-out",
 				"accordion-up": "accordion-up 0.2s ease-out",
 				ripple: "ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite",
+				scroll:
+					"scroll var(--animation-duration, 40s) var(--animation-direction, forwards) linear infinite",
 			},
 		},
 	},

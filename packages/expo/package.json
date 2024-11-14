@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "0.8.2-beta.2",
+  "version": "0.8.3",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -39,6 +39,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
+    "better-call": "^0.2.14",
     "zod": "^3.23.8"
   }
 }

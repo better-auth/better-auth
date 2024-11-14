@@ -3,7 +3,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
-import { changeEmail } from "../../api";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -11,7 +10,7 @@ describe("phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -109,7 +108,7 @@ describe("phone auth flow", async () => {
 	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -202,7 +201,7 @@ describe("verify phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp.push(code);
 				},
 				signUpOnVerification: {

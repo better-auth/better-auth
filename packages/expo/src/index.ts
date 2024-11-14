@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "better-auth";
 
-export const expo = () => {
+export const expo: () => BetterAuthPlugin = () => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -68,5 +68,5 @@ export const expo = () => {
 				},
 			],
 		},
-	} satisfies BetterAuthPlugin;
+	};
 };

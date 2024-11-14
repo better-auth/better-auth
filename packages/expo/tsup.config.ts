@@ -9,5 +9,6 @@ export default defineConfig((env) => {
 		format: ["esm", "cjs"],
 		bundle: true,
 		skipNodeModulesBundle: true,
+		external: ["better-call", "better-auth"],
 	};
 });

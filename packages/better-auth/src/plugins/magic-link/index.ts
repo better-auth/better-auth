@@ -14,11 +14,14 @@ interface MagicLinkOptions {
 	/**
 	 * Send magic link implementation.
 	 */
-	sendMagicLink: (data: {
-		email: string;
-		url: string;
-		token: string;
-	}) => Promise<void> | void;
+	sendMagicLink: (
+		data: {
+			email: string;
+			url: string;
+			token: string;
+		},
+		request?: Request,
+	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -84,11 +87,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.body.callbackURL || "/"
 					}`;
 					try {
-						await options.sendMagicLink({
-							email,
-							url,
-							token: verificationToken,
-						});
+						await options.sendMagicLink(
+							{
+								email,
+								url,
+								token: verificationToken,
+							},
+							ctx.request,
+						);
 					} catch (e) {
 						ctx.context.logger.error("Failed to send magic link", e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {

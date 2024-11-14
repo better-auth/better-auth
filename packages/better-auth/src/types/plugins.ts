@@ -1,4 +1,4 @@
-import type { Endpoint, EndpointResponse } from "better-call";
+import type { Endpoint, EndpointOptions, EndpointResponse } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
@@ -59,13 +59,19 @@ export type BetterAuthPlugin = {
 			}>;
 		}[];
 		after?: {
-			matcher: (context: HookEndpointContext) => boolean;
+			matcher: (
+				context: HookEndpointContext<{
+					returned: unknown;
+					endpoint: Endpoint;
+				}>,
+			) => boolean;
 			handler: (
 				context: HookEndpointContext<{
-					returned: EndpointResponse | Response;
+					returned: unknown;
+					endpoint: Endpoint;
 				}>,
 			) => Promise<void | {
-				response: EndpointResponse | Response;
+				response: unknown;
 			}>;
 		}[];
 	};

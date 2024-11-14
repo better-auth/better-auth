@@ -134,10 +134,10 @@ describe("type", () => {
 					name: string;
 					createdAt: Date;
 					updatedAt: Date;
-					image?: string | undefined;
+					image?: string | undefined | null;
 					testField4: string;
-					testField?: string | undefined;
-					testField2?: number | undefined;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
 				};
 				session: Session;
 			} | null;
@@ -230,8 +230,8 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
-				ipAddress?: string | undefined;
-				userAgent?: string | undefined;
+				ipAddress?: string | undefined | null;
+				userAgent?: string | undefined | null;
 			};
 			user: {
 				id: string;
@@ -240,11 +240,11 @@ describe("type", () => {
 				name: string;
 				createdAt: Date;
 				updatedAt: Date;
-				image?: string | undefined;
+				image?: string | undefined | null;
 				testField4: string;
-				testField?: string | undefined;
-				testField2?: number | undefined;
-				twoFactorEnabled: boolean | undefined;
+				testField?: string | undefined | null;
+				testField2?: number | undefined | null;
+				twoFactorEnabled: boolean | undefined | null;
 			};
 		}>();
 	});
@@ -267,8 +267,8 @@ describe("type", () => {
 			emailVerified: boolean;
 			createdAt: Date;
 			updatedAt: Date;
-			image?: string | undefined;
-			twoFactorEnabled: boolean | undefined;
+			image?: string | undefined | null;
+			twoFactorEnabled: boolean | undefined | null;
 		}>();
 	});
 
@@ -293,17 +293,17 @@ describe("type", () => {
 					name: string;
 					createdAt: Date;
 					updatedAt: Date;
-					image?: string | undefined;
+					image?: string | undefined | null;
 					testField4: string;
-					testField?: string | undefined;
-					testField2?: number | undefined;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
 				};
 				session: {
 					id: string;
 					userId: string;
 					expiresAt: Date;
-					ipAddress?: string | undefined;
-					userAgent?: string | undefined;
+					ipAddress?: string | undefined | null;
+					userAgent?: string | undefined | null;
 				};
 			} | null>
 		>();

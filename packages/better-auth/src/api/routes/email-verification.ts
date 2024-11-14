@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
+import { setSessionCookie } from "../../cookies";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -66,9 +67,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.body.callbackURL || ctx.query?.currentURL || "/"
 		}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
-			user.user,
-			url,
-			token,
+			{
+				user: user.user,
+				url,
+				token,
+			},
+			ctx.request,
 		);
 		return ctx.json({
 			status: true,
@@ -137,9 +141,12 @@ export const verifyEmail = createAuthEndpoint(
 
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				updatedUser,
-				`${ctx.context.baseURL}/verify-email?token=${token}`,
-				token,
+				{
+					user: updatedUser,
+					url: `${ctx.context.baseURL}/verify-email?token=${token}`,
+					token,
+				},
+				ctx.request,
 			);
 
 			if (ctx.query.callbackURL) {
@@ -153,6 +160,23 @@ export const verifyEmail = createAuthEndpoint(
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
 		});
+
+		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
+			const currentSession = await getSessionFromCtx(ctx);
+			if (!currentSession) {
+				const session = await ctx.context.internalAdapter.createSession(
+					user.user.id,
+					ctx.request,
+				);
+				if (!session) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create session",
+					});
+				}
+				await setSessionCookie(ctx, { session, user: user.user });
+			}
+		}
+
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
