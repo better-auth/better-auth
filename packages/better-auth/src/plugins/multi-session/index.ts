@@ -63,17 +63,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								index === self.findIndex((s) => s.user.id === session.user.id),
 						);
 
-					Object.entries(cookies)
-						.filter(([key]) => isMultiSessionCookie(key))
-						.forEach(([key, value]) => {
-							if (!validSessions.some((s) => s.session.id === value)) {
-								ctx.setCookie(key, "", {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: 0,
-								});
-							}
-						});
-
 					return ctx.json(validSessions);
 				},
 			),
