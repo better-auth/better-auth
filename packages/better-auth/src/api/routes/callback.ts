@@ -25,7 +25,6 @@ export const callbackOAuth = createAuthEndpoint(
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 		try {
-			console.log('c.method', c.method);
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
 			} else if (c.method === "POST") {
@@ -34,7 +33,6 @@ export const callbackOAuth = createAuthEndpoint(
 				throw new Error("Unsupported method");
 			}
 		} catch (e) {
-			console.log('error', e);
 			c.context.logger.error(e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=invalid_callback_request`,
@@ -45,9 +43,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!state) {
 			c.context.logger.error("State not found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=state_not_found`,
-			);
+			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
 		}
 
 		if (!code) {
