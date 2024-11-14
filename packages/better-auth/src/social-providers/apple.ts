@@ -90,7 +90,6 @@ export const apple = (options: AppleOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				tokenEndpoint,
-				authentication: "basic",
 			});
 		},
 		async verifyIdToken(token, nonce) {
