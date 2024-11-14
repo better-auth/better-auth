@@ -14,7 +14,7 @@ export const createOrganization = createAuthEndpoint(
 			slug: z.string(),
 			userId: z.string().optional(),
 			logo: z.string().optional(),
-			metadata: z.record(z.string()).optional(),
+			metadata: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
