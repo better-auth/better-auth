@@ -78,7 +78,7 @@ export const apple = (options: AppleOptions) => {
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
-				}&response_type=form_post&redirect_uri=${
+				}&response_type=code&redirect_uri=${
 					redirectURI || options.redirectURI
 				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
