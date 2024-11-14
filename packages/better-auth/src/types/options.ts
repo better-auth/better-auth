@@ -511,8 +511,8 @@ export interface BetterAuthOptions {
 		 *
 		 * @default nanoid
 		 */
-		generateId?: (options?: {
-			type?: IdTypes;
+		generateId?: (options: {
+			type: IdTypes;
 			size?: number;
 		}) => string;
 	};
