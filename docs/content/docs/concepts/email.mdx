@@ -121,7 +121,18 @@ authClient.verifyEmail({
 })
 ```
 
+### Auto SignIn After Verification
 
+To sign in the user automatically after they successfully verify their email, set the `autoSignInAfterVerification` option to `true`:
+
+```ts
+const auth = betterAuth({
+    //...your other options
+    emailVerification: {
+        autoSignInAfterVerification: true
+    }
+})
+```
 
 ## Password Reset Email
 
