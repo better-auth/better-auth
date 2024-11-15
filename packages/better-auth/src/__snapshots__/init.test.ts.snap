@@ -82,6 +82,7 @@ exports[`init > should match config 1`] = `
     "debug": [Function],
     "error": [Function],
     "info": [Function],
+    "success": [Function],
     "warn": [Function],
   },
   "options": {
