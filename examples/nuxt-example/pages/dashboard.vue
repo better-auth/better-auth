@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useSession, signOut } from "~/lib/auth-client";
-const { data: session, isPending, error } = await useSession(useFetch);
+const { data: session } = await useSession(useFetch);
 </script>
 
 

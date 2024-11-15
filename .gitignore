@@ -188,3 +188,7 @@ dist
 
 android/
 .expo/
+
+
+.vercel
+.vinxi
