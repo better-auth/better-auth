@@ -649,19 +649,7 @@ export const createInternalAdapter = (
 				},
 				limit: 10,
 			});
-			const lastVerification = verification.pop();
-			if (verification.length > 0) {
-				await adapter.deleteMany({
-					model: "verification",
-					where: [
-						{
-							operator: "in",
-							field: "id",
-							value: verification.map((v) => v.id),
-						},
-					],
-				});
-			}
+			const lastVerification = verification[0];
 			return lastVerification;
 		},
 		deleteVerificationValue: async (id: string) => {
