@@ -219,7 +219,7 @@ export const getAuthTables = (
 				createdAt: {
 					type: "date",
 					required: true,
-					fieldName: options.verification?.fields?.createdAt || "created_at",
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
 				},
 			},
 			order: 4,
