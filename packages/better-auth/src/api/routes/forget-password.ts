@@ -159,10 +159,13 @@ export const resetPassword = createAuthEndpoint(
 				message: "Token not found",
 			});
 		}
+
 		const { newPassword } = ctx.body;
 		const id = `reset-password:${token}`;
+
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
+
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid token",

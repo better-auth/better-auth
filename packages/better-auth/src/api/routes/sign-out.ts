@@ -15,6 +15,7 @@ export const signOut = createAuthEndpoint(
 			ctx.context.secret,
 		);
 		if (!sessionCookieToken) {
+			deleteSessionCookie(ctx);
 			throw new APIError("BAD_REQUEST", {
 				message: "Session not found",
 			});

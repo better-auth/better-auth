@@ -55,6 +55,7 @@ model Verification {
   identifier String
   value      String
   expiresAt  DateTime
+  createdAt  DateTime
 
   @@map("verification")
 }
