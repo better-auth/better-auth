@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -94,7 +93,7 @@ export default function UserCard(props: {
 							<p className="text-sm">{session?.user.email}</p>
 						</div>
 					</div>
-					<EditUserDialog session={session} />
+					<EditUserDialog />
 				</div>
 
 				{session?.user.emailVerified ? null : (
@@ -147,14 +146,14 @@ export default function UserCard(props: {
 							return (
 								<div key={session.id}>
 									<div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white">
-										{new UAParser(session.userAgent).getDevice().type ===
+										{new UAParser(session.userAgent || "").getDevice().type ===
 										"mobile" ? (
 											<MobileIcon />
 										) : (
 											<Laptop size={16} />
 										)}
-										{new UAParser(session.userAgent).getOS().name},{" "}
-										{new UAParser(session.userAgent).getBrowser().name}
+										{new UAParser(session.userAgent || "").getOS().name},{" "}
+										{new UAParser(session.userAgent || "").getBrowser().name}
 										<button
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
@@ -439,6 +438,7 @@ async function convertImageToBase64(file: File): Promise<string> {
 }
 
 function ChangePassword() {
+	const { data, isPending, error } = useSession();
 	const [currentPassword, setCurrentPassword] = useState<string>("");
 	const [newPassword, setNewPassword] = useState<string>("");
 	const [confirmPassword, setConfirmPassword] = useState<string>("");
@@ -460,7 +460,9 @@ function ChangePassword() {
 							d="M2.5 18.5v-1h19v1zm.535-5.973l-.762-.442l.965-1.693h-1.93v-.884h1.93l-.965-1.642l.762-.443L4 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L4 10.835zm8 0l-.762-.442l.966-1.693H9.308v-.884h1.93l-.965-1.642l.762-.443L12 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L12 10.835zm8 0l-.762-.442l.966-1.693h-1.931v-.884h1.93l-.965-1.642l.762-.443L20 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L20 10.835z"
 						></path>
 					</svg>
-					<span className="text-sm text-muted-foreground">Change Password</span>
+					<span className="text-sm text-muted-foreground">
+						Change Password {data?.user.name}
+					</span>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="sm:max-w-[425px] w-11/12">
@@ -544,7 +546,8 @@ function ChangePassword() {
 	);
 }
 
-function EditUserDialog(props: { session: Session | null }) {
+function EditUserDialog() {
+	const { data, isPending, error } = useSession();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);
@@ -580,7 +583,7 @@ function EditUserDialog(props: { session: Session | null }) {
 					<Input
 						id="name"
 						type="name"
-						placeholder={props.session?.user.name}
+						placeholder={data?.user.name}
 						required
 						onChange={(e) => {
 							setName(e.target.value);

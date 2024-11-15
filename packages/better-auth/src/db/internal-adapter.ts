@@ -640,6 +640,10 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
+				sortBy: {
+					direction: "desc",
+					field: "createdAt",
+				},
 				limit: 100,
 			});
 			const lastVerification = verification.pop();
