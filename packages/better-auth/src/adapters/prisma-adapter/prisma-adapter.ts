@@ -15,10 +15,10 @@ interface PrismaConfig {
 	/**
 	 * Custom generateId function.
 	 *
-	 * If not provided, nanoid will be used.
+	 * If not provided, @paralleldrive/cuid2 will be used.
 	 * If set to false, the database's auto generated id will be used.
 	 *
-	 * @default nanoid
+	 * @default @paralleldrive/cuid2
 	 */
 	generateId?: ((size?: number) => string) | false;
 }
