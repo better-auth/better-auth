@@ -51,13 +51,10 @@ const createTransform = (
 	return {
 		getSchema,
 		transformInput(data: Record<string, any>, model: string) {
+			const { id, ...rest } = data;
 			const transformedData: Record<string, any> =
-				data.id && !useDatabaseGeneratedId
-					? {
-							id: data.id,
-						}
-					: {};
-			for (const key in data) {
+				id && !useDatabaseGeneratedId ? { id } : {};
+			for (const key in rest) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = data[key];

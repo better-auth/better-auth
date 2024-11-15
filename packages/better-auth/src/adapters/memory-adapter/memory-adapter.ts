@@ -17,12 +17,9 @@ const createTransform = (options: BetterAuthOptions) => {
 	}
 	return {
 		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = data.id
-				? {
-						id: data.id,
-					}
-				: {};
-			for (const key in data) {
+			const { id, ...rest } = data;
+			const transformedData: Record<string, any> = id ? { id } : {};
+			for (const key in rest) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = data[key];
