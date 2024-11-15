@@ -2,6 +2,8 @@ import type { Primitive } from "zod";
 
 export type LiteralString = "" | (string & Record<never, never>);
 
+export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
+
 export type Prettify<T> = Omit<T, never>;
 export type LiteralUnion<LiteralType, BaseType extends Primitive> =
 	| LiteralType
