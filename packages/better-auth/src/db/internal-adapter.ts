@@ -234,7 +234,10 @@ export const createInternalAdapter = (
 								}
 
 								// Add new session with expiration time
-								list.push({ id: data.id, expiresAt: now + sessionExpiration });
+								list.push({
+									id: data.id,
+									expiresAt: now + sessionExpiration * 1000,
+								});
 
 								await secondaryStorage.set(
 									`active-sessions-${userId}`,
