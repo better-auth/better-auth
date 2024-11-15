@@ -273,7 +273,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "NOT_FOUND") {
+			if (e instanceof APIError && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
@@ -282,6 +282,27 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			if (options.onAPIError?.onError) {
 				options.onAPIError.onError(e, ctx);
 				return;
+			}
+
+			if (
+				e &&
+				typeof e === "object" &&
+				"message" in e &&
+				typeof e.message === "string"
+			) {
+				if (
+					e.message.includes("no column") ||
+					e.message.includes("column") ||
+					e.message.includes("relation") ||
+					e.message.includes("table") ||
+					e.message.includes("does not exist")
+				) {
+					logger.error(e.message);
+					logger.error(
+						"If you are seeing this error, it is likely that you need to run the migrations for the database or you need to update your database schema. If you recently updated the package, make sure to run the migrations.",
+					);
+					return;
+				}
 			}
 
 			const log = options.logger?.verboseLogging ? logger : undefined;
