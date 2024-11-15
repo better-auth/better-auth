@@ -79,11 +79,12 @@ const createTransform = (options: BetterAuthOptions) => {
 				});
 			});
 		},
+		getField,
 	};
 };
 
 export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
-	const { transformInput, transformOutput, convertWhereClause } =
+	const { transformInput, transformOutput, convertWhereClause, getField } =
 		createTransform(options);
 
 	return {
@@ -106,10 +107,11 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 			}
 			if (sortBy) {
 				table = table.sort((a, b) => {
+					const field = getField(model, sortBy.field);
 					if (sortBy.direction === "asc") {
-						return a[sortBy.field] > b[sortBy.field] ? 1 : -1;
+						return a[field] > b[field] ? 1 : -1;
 					} else {
-						return a[sortBy.field] < b[sortBy.field] ? 1 : -1;
+						return a[field] < b[field] ? 1 : -1;
 					}
 				});
 			}

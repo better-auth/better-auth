@@ -78,7 +78,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: () => {
-				data: Session;
+				data: Session | null;
 				isPending: boolean;
 				error: BetterFetchError | null;
 			};
