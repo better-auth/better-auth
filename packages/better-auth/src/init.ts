@@ -76,7 +76,7 @@ export const init = async (options: BetterAuthOptions) => {
 		.filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ type, size }) => {
-		if (options?.advanced?.generateId !== undefined) {
+		if (typeof options?.advanced?.generateId === "function") {
 			return options.advanced.generateId({ type, size });
 		}
 		return generateId(size);
