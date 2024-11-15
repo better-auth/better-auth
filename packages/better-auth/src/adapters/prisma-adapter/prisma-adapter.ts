@@ -155,6 +155,7 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			}, {});
 		},
 		getModelName,
+		getField,
 	};
 };
 
@@ -168,6 +169,7 @@ export const prismaAdapter =
 			convertWhereClause,
 			convertSelect,
 			getModelName,
+			getField,
 		} = createTransform(config, options);
 		return {
 			id: "prisma",
@@ -198,7 +200,8 @@ export const prismaAdapter =
 					skip: offset || 0,
 					orderBy: sortBy?.field
 						? {
-								[sortBy.field]: sortBy.direction === "desc" ? "desc" : "asc",
+								[getField(model, sortBy.field)]:
+									sortBy.direction === "desc" ? "desc" : "asc",
 							}
 						: undefined,
 				})) as any[];

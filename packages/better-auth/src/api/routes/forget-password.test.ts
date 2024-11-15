@@ -102,7 +102,6 @@ describe("forget password", async (it) => {
 				expect(location).toContain("token");
 			},
 		});
-		console.log({ callbackRes });
 		const res = await client.resetPassword({
 			newPassword: "new-password",
 			token,
