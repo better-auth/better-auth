@@ -273,7 +273,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "NOT_FOUND") {
+			if (e instanceof APIError && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
