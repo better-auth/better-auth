@@ -72,8 +72,8 @@ describe("sign-up with custom fields", async (it) => {
 			email: string;
 			emailVerified: boolean;
 			name: string;
-			image?: string;
-			newField?: string;
+			image?: string | null;
+			newField?: string | null;
 			createdAt: Date;
 			updatedAt: Date;
 		}>();

@@ -3,7 +3,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
-import { changeEmail } from "../../api";
 
 describe("phone-number", async (it) => {
 	let otp = "";

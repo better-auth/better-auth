@@ -1,15 +1,9 @@
-import { beforeAll, describe } from "vitest";
-import { memoryAdapter } from ".";
-
-import PrismaClient from "@prisma/client";
+import { describe } from "vitest";
+import { memoryAdapter } from "./memory-adapter";
 import { runAdapterTest } from "../test";
-
-const db = new PrismaClient.PrismaClient();
+import type { BetterAuthOptions } from "../../types";
 
 describe("adapter test", async () => {
-	beforeAll(async () => {
-		await clearDb();
-	});
 	const db = {
 		user: [],
 		session: [],
@@ -17,11 +11,12 @@ describe("adapter test", async () => {
 	};
 	const adapter = memoryAdapter(db);
 	await runAdapterTest({
-		adapter,
+		adapter: adapter({
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+		} as BetterAuthOptions),
 	});
 });
-
-async function clearDb() {
-	await db.user.deleteMany();
-	await db.session.deleteMany();
-}

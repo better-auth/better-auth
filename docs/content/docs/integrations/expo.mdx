@@ -263,8 +263,100 @@ export default function App() {
 
 On native, the session data will be cached in SecureStore. This will allow you to remove the need for a loading spinner when the app is reloaded. You can disable this behavior by passing the `disableCache` option to the client.
 
-## Options
 
+### Making Authenticated Requests to Your Server
+
+To make authenticated requests to your server that require the user's session, you have two options:
+
+1. Use the fetch client provided by Better Auth.
+2. Retrieve the session cookie from `SecureStore` and manually add it to your request headers.
+
+---
+
+#### Option 1: Using the Fetch Client
+
+Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
+
+For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
+
+```tsx
+// src/App.tsx
+import { authClient } from '@/lib/auth-client';
+
+const $fetch = authClient.$fetch;
+
+// Example usage
+$fetch('/api/secure-endpoint', {
+  method: 'GET',
+});
+```
+
+---
+
+#### Option 2: Adding the Cookie to Request Headers
+
+If you prefer using your own fetch client, you can retrieve the session cookie stored in `SecureStore` and add it to your request headers manually.
+
+By default, the cookie is stored in `SecureStore` with the key `better-auth_cookies`. You can change this key by setting a custom `storagePrefix` in the client configuration. If you do, ensure you retrieve the cookie using the new prefix (e.g., `myapp_cookies`).
+
+```tsx
+import * as SecureStore from 'expo-secure-store';
+
+const getCookies = async () => {
+  const cookieName = 'better-auth_cookies'; // Update if using a custom prefix
+  return await SecureStore.getItemAsync(cookieName);
+};
+
+const makeAuthenticatedRequest = async () => {
+  const cookies = await getCookies();
+  const headers = {
+    'Cookie': cookies,
+  };
+
+  const response = await fetch('http://localhost:8081/api/secure-endpoint', { headers });
+  const data = await response.json();
+  return data;
+};
+```
+
+**Exampe: Usage With TRPC**
+    
+```tsx title="lib/trpc-provider.tsx"
+import { createTRPCReact } from "@trpc/react-query";
+export const api = createTRPCReact<AppRouter>();
+
+export function TRPCProvider(props: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  const [trpcClient] = useState(() =>
+    api.createClient({
+      links: [
+        httpBatchLink({
+          //...your other options
+          headers() {
+            const headers = new Map<string, string>(); // [!code highlight]
+            const cookies = SecureStore.getItemAsync ("better-auth_cookies"); // [!code highlight]
+            if (cookies) { // [!code highlight]
+              headers.set("Cookie", cookies); // [!code highlight]
+            } // [!code highlight]
+            return Object.fromEntries(headers); // [!code highlight]
+          },
+        }),
+      ],
+    }),
+  );
+
+  return (
+    <api.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        {props.children}
+      </QueryClientProvider>
+    </api.Provider>
+  );
+}
+```
+
+
+## Options
 
 **storage**: on native you can pass a storage option to the client to change the storage mechanism. By default, the client will use SecureStore.
 

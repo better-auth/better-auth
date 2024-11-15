@@ -60,7 +60,7 @@
     "fumadocs-docgen": "^1.1.0",
     "fumadocs-mdx": "11.1.0",
     "fumadocs-twoslash": "^1.1.2",
-    "fumadocs-typescript": "^2.1.0",
+    "fumadocs-typescript": "^3.0.2",
     "fumadocs-ui": "14.0.2",
     "geist": "^1.3.1",
     "input-otp": "^1.2.4",
