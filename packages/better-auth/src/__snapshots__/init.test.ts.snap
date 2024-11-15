@@ -253,8 +253,9 @@ exports[`init > should match config 1`] = `
     "verification": {
       "fields": {
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
-          "required": true,
+          "required": false,
           "type": "date",
         },
         "expiresAt": {
