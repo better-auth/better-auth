@@ -29,7 +29,7 @@ export async function generateState(
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
-		errorURL: c.query?.currentURL,
+		errorURL: c.body?.errorCallbackURL || c.query?.currentURL,
 		link,
 		/**
 		 * This is the actual expiry time of the state
