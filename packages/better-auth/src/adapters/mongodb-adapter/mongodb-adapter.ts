@@ -226,7 +226,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			if (offset) cursor.skip(offset);
 			if (sortBy)
 				cursor.sort(
-					transform.getField(model, sortBy.field),
+					transform.getField(sortBy.field, model),
 					sortBy.direction === "desc" ? -1 : 1,
 				);
 			const res = await cursor.toArray();
