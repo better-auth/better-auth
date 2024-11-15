@@ -643,7 +643,11 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
-				limit: 100,
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
+				},
+				limit: 10,
 			});
 			const lastVerification = verification.pop();
 			if (verification.length > 0) {
@@ -673,11 +677,10 @@ export const createInternalAdapter = (
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			await adapter.delete<Verification>({
-				model: tables.verification.tableName,
+				model: "verification",
 				where: [
 					{
-						field:
-							tables.verification.fields.identifier.fieldName || "identifier",
+						field: "identifier",
 						value: identifier,
 					},
 				],

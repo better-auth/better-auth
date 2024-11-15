@@ -213,6 +213,7 @@ const createTransform = (
 		getModelName(model: string) {
 			return schema[model].tableName;
 		},
+		getField,
 	};
 };
 
@@ -225,6 +226,7 @@ export const kyselyAdapter =
 			transformOutput,
 			convertWhereClause,
 			getModelName,
+			getField,
 		} = createTransform(db, opts, config);
 		return {
 			id: "kysely",
@@ -265,7 +267,10 @@ export const kyselyAdapter =
 				query = query.limit(limit || 100);
 				if (offset) query = query.offset(offset);
 				if (sortBy) {
-					query = query.orderBy(sortBy.field, sortBy.direction);
+					query = query.orderBy(
+						getField(model, sortBy.field),
+						sortBy.direction,
+					);
 				}
 				const res = await query.selectAll().execute();
 				if (!res) return [];
