@@ -621,10 +621,13 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
-		createVerificationValue: async (data: Omit<Verification, "id">) => {
+		createVerificationValue: async (
+			data: Omit<Verification, "createdAt" | "id"> & Partial<Verification>,
+		) => {
 			const verification = await createWithHooks(
 				{
 					id: generateId(),
+					createdAt: new Date(),
 					...data,
 				},
 				"verification",
@@ -640,21 +643,13 @@ export const createInternalAdapter = (
 						value: identifier,
 					},
 				],
-				limit: 100,
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
+				},
+				limit: 10,
 			});
-			const lastVerification = verification.pop();
-			if (verification.length > 0) {
-				await adapter.deleteMany({
-					model: "verification",
-					where: [
-						{
-							operator: "in",
-							field: "id",
-							value: verification.map((v) => v.id),
-						},
-					],
-				});
-			}
+			const lastVerification = verification[0];
 			return lastVerification;
 		},
 		deleteVerificationValue: async (id: string) => {
@@ -664,6 +659,17 @@ export const createInternalAdapter = (
 					{
 						field: "id",
 						value: id,
+					},
+				],
+			});
+		},
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await adapter.delete<Verification>({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: identifier,
 					},
 				],
 			});

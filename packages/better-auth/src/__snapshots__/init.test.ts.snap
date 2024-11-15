@@ -59,6 +59,7 @@ exports[`init > should match config 1`] = `
     "deleteSession": [Function],
     "deleteSessions": [Function],
     "deleteUser": [Function],
+    "deleteVerificationByIdentifier": [Function],
     "deleteVerificationValue": [Function],
     "findAccount": [Function],
     "findAccounts": [Function],
@@ -251,6 +252,11 @@ exports[`init > should match config 1`] = `
     },
     "verification": {
       "fields": {
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,
