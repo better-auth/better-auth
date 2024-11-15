@@ -144,6 +144,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					body: z.object({
 						providerId: z.string(),
 						callbackURL: z.string().optional(),
+						errorCallbackURL: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -192,15 +193,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-
-					const currentURL = ctx.query?.currentURL
-						? new URL(ctx.query?.currentURL)
-						: null;
-					const callbackURL = ctx.body.callbackURL?.startsWith("http")
-						? ctx.body.callbackURL
-						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
 					const { state, codeVerifier } = await generateState(ctx);
-
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {

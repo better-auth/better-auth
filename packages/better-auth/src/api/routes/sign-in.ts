@@ -26,6 +26,13 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			callbackURL: z.string().optional(),
 			/**
+			 * Callback url to redirect to if an error happens
+			 *
+			 * If it's initiated from the client sdk this defaults to
+			 * the current url.
+			 */
+			errorCallbackURL: z.string().optional(),
+			/**
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(socialProviderList),

@@ -71,7 +71,7 @@ function getSetCookie(header: string) {
 	return JSON.stringify(toSetCookie);
 }
 
-function getCookie(cookie: string) {
+export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
@@ -105,16 +105,37 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 	return {
 		id: "expo",
 		getActions(_, $store) {
-			if (Platform.OS === "web") return {};
-			store = $store;
-			const localSession = storage.getItem(cookieName);
-			localSession &&
-				$store.atoms.session.set({
-					data: JSON.parse(localSession),
-					error: null,
-					isPending: false,
-				});
-			return {};
+			if (Platform.OS !== "web") {
+				store = $store;
+				const localSession = storage.getItem(cookieName);
+				localSession &&
+					$store.atoms.session.set({
+						data: JSON.parse(localSession),
+						error: null,
+						isPending: false,
+					});
+			}
+			return {
+				/**
+				 * Get the stored cookie.
+				 *
+				 * You can use this to get the cookie stored in the device and use it in your fetch
+				 * requests.
+				 *
+				 * @example
+				 * ```ts
+				 * const cookie = client.getCookie();
+				 * fetch("https://api.example.com", {
+				 * 	headers: {
+				 * 		cookie,
+				 * 	},
+				 * });
+				 */
+				getCookie: () => {
+					const cookie = storage.getItem(cookieName);
+					return getCookie(cookie || "{}");
+				},
+			};
 		},
 		fetchPlugins: [
 			{

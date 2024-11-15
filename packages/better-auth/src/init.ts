@@ -1,6 +1,4 @@
-import type { Kysely } from "kysely";
 import { getAuthTables } from "./db/get-tables";
-import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
@@ -31,7 +29,6 @@ export const init = async (options: BetterAuthOptions) => {
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 
-	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -101,7 +98,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		authCookies: cookies,
 		logger: logger,
-		db,
 		uuid: generateId,
 		secondaryStorage: options.secondaryStorage,
 		password: {
@@ -132,7 +128,6 @@ export type AuthContext = {
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: Kysely<any> | null;
 	rateLimit: {
 		enabled: boolean;
 		window: number;
