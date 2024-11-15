@@ -218,7 +218,8 @@ export const getAuthTables = (
 				},
 				createdAt: {
 					type: "date",
-					required: true,
+					required: false,
+					defaultValue: () => new Date(),
 					fieldName: options.verification?.fields?.createdAt || "createdAt",
 				},
 			},

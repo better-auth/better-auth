@@ -230,9 +230,13 @@ export const prismaAdapter =
 			async delete(data) {
 				const { model, where } = data;
 				const whereClause = convertWhereClause(model, where);
-				await db[getModelName(model)].delete({
-					where: whereClause,
-				});
+				try {
+					await db[getModelName(model)].delete({
+						where: whereClause,
+					});
+				} catch (e) {
+					// If the record doesn't exist, we don't want to throw an error
+				}
 			},
 			async deleteMany(data) {
 				const { model, where } = data;

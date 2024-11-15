@@ -54,25 +54,24 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionIds);
 
-					const validSessions = sessions
-						.filter(
-							(session) => session && session.session.expiresAt > new Date(),
-						)
-						.filter(
-							(session, index, self) =>
-								index === self.findIndex((s) => s.user.id === session.user.id),
-						);
+					const validSessions = sessions.filter(
+						(session) => session && session.session.expiresAt > new Date(),
+					);
 
-					Object.entries(cookies)
-						.filter(([key]) => isMultiSessionCookie(key))
-						.forEach(([key, value]) => {
-							if (!validSessions.some((s) => s.session.id === value)) {
-								ctx.setCookie(key, "", {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: 0,
-								});
-							}
-						});
+					for (const [key] of Object.entries(cookies).filter(([key]) =>
+						isMultiSessionCookie(key),
+					)) {
+						const sessionId = await ctx.getSignedCookie(
+							key,
+							ctx.context.secret,
+						);
+						if (!validSessions.some((s) => s.session.id === sessionId)) {
+							ctx.setCookie(key, "", {
+								...ctx.context.authCookies.sessionToken.options,
+								maxAge: 0,
+							});
+						}
+					}
 
 					return ctx.json(validSessions);
 				},
