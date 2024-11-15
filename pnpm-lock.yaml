@@ -476,8 +476,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.3(fumadocs-ui@14.0.2(@types/react-dom@18.3.1)(@types/react@18.3.12)(next@15.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(shiki@1.22.2)(typescript@5.6.3)
       fumadocs-typescript:
-        specifier: ^2.1.0
-        version: 2.1.0(typescript@5.6.3)
+        specifier: ^3.0.2
+        version: 3.0.2(typescript@5.6.3)
       fumadocs-ui:
         specifier: 14.0.2
         version: 14.0.2(@types/react-dom@18.3.1)(@types/react@18.3.12)(next@15.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -10308,11 +10308,6 @@ packages:
     peerDependencies:
       fumadocs-ui: 13.x.x
       shiki: 1.x.x
-
-  fumadocs-typescript@2.1.0:
-    resolution: {integrity: sha512-fxxC8F+bQQxlVQA03vWaoztJFeKkevW3WgT7ECPCmdOB2UFsRB61cgzlRvwKqtFWJuJYASX55+2wEMxXAjzBjQ==}
-    peerDependencies:
-      typescript: '*'
 
   fumadocs-typescript@3.0.2:
     resolution: {integrity: sha512-SqYJy+NxjjuQQeom7wLpODYiWtIKWfndguHL3XKXaMUvhlsjmsWWTaXJWKaqIfOStiYJQlGWrXxFA2Rrpbx63Q==}
@@ -28195,17 +28190,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
-
-  fumadocs-typescript@2.1.0(typescript@5.6.3):
-    dependencies:
-      fast-glob: 3.3.2
-      hast-util-to-jsx-runtime: 2.3.2
-      mdast-util-from-markdown: 2.0.2
-      mdast-util-gfm: 3.0.0
-      mdast-util-to-hast: 13.2.0
-      typescript: 5.6.3
-    transitivePeerDependencies:
-      - supports-color
 
   fumadocs-typescript@3.0.2(typescript@5.6.3):
     dependencies:

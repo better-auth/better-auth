@@ -50,7 +50,6 @@ exports[`init > should match config 1`] = `
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
-  "db": Kysely {},
   "internalAdapter": {
     "createAccount": [Function],
     "createOAuthUser": [Function],

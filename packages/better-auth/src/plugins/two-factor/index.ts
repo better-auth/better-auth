@@ -22,7 +22,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 	};
 	const totp = totp2fa(
 		{
-			issuer: options?.issuer || "better-auth",
+			issuer: options?.issuer,
 			...options?.totpOptions,
 		},
 		opts.twoFactorTable,

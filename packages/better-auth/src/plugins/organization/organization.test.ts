@@ -9,6 +9,11 @@ describe("organization", async (it) => {
 		plugins: [
 			organization({
 				async sendInvitationEmail(data, request) {},
+				schema: {
+					organization: {
+						modelName: "team",
+					},
+				},
 			}),
 		],
 		logger: {

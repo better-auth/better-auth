@@ -20,25 +20,6 @@ interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
 }
 
-export const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
-	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
-	}
-	const user = session.user as UserWithRole;
-	if (user.role !== "admin") {
-		throw new APIError("FORBIDDEN", {
-			message: "Only admins can access this endpoint",
-		});
-	}
-	return {
-		session: {
-			user: user,
-			session: session.session,
-		},
-	};
-});
-
 interface AdminOptions {
 	/**
 	 * The default role for a user created by the admin
@@ -46,6 +27,14 @@ interface AdminOptions {
 	 * @default "user"
 	 */
 	defaultRole?: string | false;
+	/**
+	 * The role required to access admin endpoints
+	 *
+	 * Can be an array of roles
+	 *
+	 * @default "admin"
+	 */
+	adminRole?: string | string[];
 	/**
 	 * A default ban reason
 	 *
@@ -67,6 +56,34 @@ interface AdminOptions {
 }
 
 export const admin = (options?: AdminOptions) => {
+	const opts = {
+		defaultRole: "user",
+		adminRole: "admin",
+		...options,
+	};
+	const adminMiddleware = createAuthMiddleware(async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session?.session) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const user = session.user as UserWithRole;
+		if (
+			!user.role ||
+			(Array.isArray(opts.adminRole)
+				? !opts.adminRole.includes(user.role)
+				: user.role !== opts.adminRole)
+		) {
+			throw new APIError("FORBIDDEN", {
+				message: "Only admins can access this endpoint",
+			});
+		}
+		return {
+			session: {
+				user: user,
+				session: session.session,
+			},
+		};
+	});
 	return {
 		id: "admin",
 		init(ctx) {

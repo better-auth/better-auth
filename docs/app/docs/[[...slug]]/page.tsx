@@ -13,6 +13,7 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import { AutoTypeTable } from "fumadocs-typescript/ui";
 
 export default async function Page({
 	params,
@@ -65,6 +66,7 @@ export default async function Page({
 						Steps,
 						Tab,
 						Tabs,
+						AutoTypeTable,
 						GenerateSecret,
 						AnimatePresence,
 						TypeTable,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
+import { getDate } from "../../utils/date";
 
 function redirectError(
 	ctx: AuthContext,
@@ -75,11 +76,10 @@ export const forgetPassword = createAuthEndpoint(
 			);
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
-		const expiresAt = new Date(
-			Date.now() +
-				1000 *
-					(ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
-						defaultExpiresIn),
+		const expiresAt = getDate(
+			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+				defaultExpiresIn,
+			"sec",
 		);
 		const verificationToken = ctx.context.uuid();
 		await ctx.context.internalAdapter.createVerificationValue({
@@ -92,6 +92,7 @@ export const forgetPassword = createAuthEndpoint(
 			{
 				user: user.user,
 				url,
+				token: verificationToken,
 			},
 			ctx.request,
 		);
@@ -126,6 +127,7 @@ export const forgetPasswordCallback = createAuthEndpoint(
 				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
 			);
 		}
+
 		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
 	},
 );
@@ -142,10 +144,12 @@ export const resetPassword = createAuthEndpoint(
 		method: "POST",
 		body: z.object({
 			newPassword: z.string(),
+			token: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
 		const token =
+			ctx.body.token ||
 			ctx.query?.token ||
 			(ctx.query?.currentURL
 				? new URL(ctx.query.currentURL).searchParams.get("token")
@@ -159,7 +163,6 @@ export const resetPassword = createAuthEndpoint(
 		const id = `reset-password:${token}`;
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
-
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid token",

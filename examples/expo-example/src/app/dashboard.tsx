@@ -22,7 +22,7 @@ export default function Dashboard() {
 					<Avatar alt="user-image">
 						<AvatarImage
 							source={{
-								uri: session?.user?.image,
+								uri: session?.user?.image || "",
 							}}
 						/>
 						<AvatarFallback>
