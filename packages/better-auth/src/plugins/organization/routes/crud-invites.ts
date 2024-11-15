@@ -3,8 +3,7 @@ import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
 import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { role } from "../schema";
+import { orgMiddleware, orgSessionMiddleware } from "../context";
 import { logger } from "../../../utils/logger";
 import { APIError } from "better-call";
 
@@ -14,9 +13,30 @@ export const createInvitation = createAuthEndpoint(
 		method: "POST",
 		use: [orgMiddleware, orgSessionMiddleware],
 		body: z.object({
+			/**
+			 * Email of the user being invited
+			 */
 			email: z.string(),
-			role: role,
+			/**
+			 * Role of the user being invited
+			 *
+			 * possible default roles are:
+			 * - member
+			 * - admin
+			 * - owner
+			 *
+			 * By default, the inviter must be admin to
+			 * invite a member or admin and owner to
+			 * invite an owner.
+			 */
+			role: z.string(),
+			/**
+			 * The organization id to invite the user to
+			 */
 			organizationId: z.string().optional(),
+			/**
+			 * Resend the invitation email
+			 */
 			resend: z.boolean().optional(),
 		}),
 	},
@@ -54,10 +74,8 @@ export const createInvitation = createAuthEndpoint(
 				message: "Role not found!",
 			});
 		}
-		const canInvite = role.authorize({
-			invitation: ["create"],
-		});
-		if (canInvite.error) {
+		const canInvite = await ctx.context.accessControl.canInvite(member);
+		if (!canInvite) {
 			throw new APIError("FORBIDDEN", {
 				message: "You are not allowed to invite members",
 			});

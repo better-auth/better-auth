@@ -3,7 +3,7 @@ import { alphabet, generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, User } from "../types";
+import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -145,7 +145,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const res = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 
@@ -160,7 +160,10 @@ export async function getTestInstance<
 			},
 		});
 		return {
-			res,
+			res: data as {
+				user: User;
+				session: Session;
+			},
 			headers,
 			setCookie,
 		};

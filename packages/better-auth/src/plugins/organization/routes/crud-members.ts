@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { orgMiddleware, orgSessionMiddleware } from "../context";
 import type { Member } from "../schema";
 import { APIError } from "better-call";
 

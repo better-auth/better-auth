@@ -3,7 +3,8 @@ import type { Session, User } from "../../db/schema";
 import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import type { Role, defaultRoles } from "../access";
-import type { OrganizationOptions } from "./organization";
+import type { AC, OrganizationOptions } from "./organization";
+import type { DeepRequired } from "../../types";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 	return {} as {
@@ -11,6 +12,7 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 		roles: typeof defaultRoles & {
 			[key: string]: Role<{}>;
 		};
+		accessControl: DeepRequired<AC>;
 		getSession: (context: Context<any, any>) => Promise<{
 			session: Session & {
 				activeOrganizationId?: string;
