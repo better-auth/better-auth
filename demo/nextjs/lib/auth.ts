@@ -28,6 +28,12 @@ export const auth = betterAuth({
 		dialect: libsql,
 		type: "sqlite",
 	},
+	session: {
+		cookieCache: {
+			enabled: true,
+			maxAge: 60,
+		},
+	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			console.log("Sending verification email to", user.email);

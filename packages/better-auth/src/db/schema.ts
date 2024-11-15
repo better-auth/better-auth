@@ -41,6 +41,7 @@ export const sessionSchema = z.object({
 export const verificationSchema = z.object({
 	id: z.string(),
 	value: z.string(),
+	createdAt: z.date(),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });

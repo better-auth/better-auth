@@ -46,15 +46,16 @@ const createTransform = (
 				? `${model}s`
 				: model;
 	};
-
+	const shouldGenerateId = config?.generateId !== false;
 	return {
 		getSchema,
 		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = data.id
-				? {
-						id: data.id,
-					}
-				: {};
+			const transformedData: Record<string, any> =
+				data.id && shouldGenerateId
+					? {
+							id: config?.generateId ? config.generateId() : data.id,
+						}
+					: {};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
@@ -165,10 +166,12 @@ const createTransform = (
 			await builder;
 			const schemaModel = getSchema(getModelName(model));
 			const res = await db
-				.select()(schemaModel)
+				.select()
+				.from(schemaModel)
 				.where(eq(schemaModel.id, data.id));
 			return res[0];
 		},
+		getField,
 	};
 };
 
@@ -206,6 +209,7 @@ export const drizzleAdapter =
 			convertWhereClause,
 			getSchema,
 			withReturning,
+			getField,
 		} = createTransform(db, config, options);
 		return {
 			id: "drizzle",
@@ -239,7 +243,13 @@ export const drizzleAdapter =
 					.from(schemaModel)
 					.limit(limit || 100)
 					.offset(offset || 0)
-					.orderBy(sortFn(schemaModel[sortBy?.field || "id"]));
+					.orderBy(
+						sortFn(
+							schemaModel[
+								sortBy?.field ? getField(model, sortBy?.field) : "id"
+							],
+						),
+					);
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
 			},

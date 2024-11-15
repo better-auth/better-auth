@@ -185,6 +185,7 @@ const createTransform = (options: BetterAuthOptions) => {
 		getModelName: (model: string) => {
 			return schema[model].tableName;
 		},
+		getField,
 	};
 };
 
@@ -224,7 +225,10 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 			if (limit) cursor.limit(limit);
 			if (offset) cursor.skip(offset);
 			if (sortBy)
-				cursor.sort(sortBy.field, sortBy.direction === "desc" ? -1 : 1);
+				cursor.sort(
+					transform.getField(sortBy.field, model),
+					sortBy.direction === "desc" ? -1 : 1,
+				);
 			const res = await cursor.toArray();
 			return res.map((r) => transform.transformOutput(r, model));
 		},

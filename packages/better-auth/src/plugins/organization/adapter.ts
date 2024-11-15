@@ -297,7 +297,7 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (organizationId: string, db?: Kysely<any>) => {
+		findFullOrganization: async (organizationId: string) => {
 			const [org, invitations, members] = await Promise.all([
 				adapter.findOne<Organization>({
 					model: "organization",

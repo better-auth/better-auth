@@ -1,10 +1,10 @@
+import { APIError } from "better-call";
 import {
 	generateCodeVerifier,
 	generateState as generateSateCode,
 } from "oslo/oauth2";
 import { z } from "zod";
 import type { GenericEndpointContext } from "../types";
-import { APIError } from "better-call";
 import { logger } from "../utils";
 import { getOrigin } from "../utils/url";
 
@@ -58,7 +58,7 @@ export async function generateState(
 }
 
 export async function parseState(c: GenericEndpointContext) {
-	const state = c.query.state;
+	const state = c.query.state || c.body.state;
 	const data = await c.context.internalAdapter.findVerificationValue(state);
 	if (!data) {
 		logger.error("State Mismatch. Verification not found", {

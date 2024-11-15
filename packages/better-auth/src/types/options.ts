@@ -186,16 +186,19 @@ export interface BetterAuthOptions {
 			 * @param user the user to send the
 			 * reset password email to
 			 * @param url the url to send the reset password email to
+			 * @param token the token to send to the user (could be used instead of sending the url
+			 * if you need to redirect the user to custom route)
 			 */
-			data: { user: User; url: string },
+			data: { user: User; url: string; token: string },
 			/**
 			 * The request object
 			 */
 			request?: Request,
 		) => Promise<void>;
 		/**
-		 * Number of seconds the reset password token is valid for.
-		 * @default 1 hour
+		 * Number of seconds the reset password token is
+		 * valid for.
+		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
 		/**
