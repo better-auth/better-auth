@@ -65,7 +65,9 @@ If you're not using a frontend framework, you can still import the vanilla clien
     </Tab>
 </Tabs>
 
-## Astro Locals types
+## Auth Middleware
+
+### Astro Locals types
 
 To have types for your Astro locals, you need to set it inside the `env.d.ts` file.
 
@@ -82,8 +84,7 @@ declare namespace App {
 }
 ```
 
-
-## Auth Middleware
+### Middleware
 
 To protect your routes, you can check if the user is authenticated using the `getSession` method in middleware and set the user and session data using the Astro locals with the types we set before. Start by creating a `middleware.ts` file in the root of your project and follow the example below:
 
@@ -109,7 +110,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 ```
 
-## Getting session on the server inside `.astro` file
+### Getting session on the server inside `.astro` file
 
 You can use `Astro.locals` to check if the user has session and get the user data from the server side. Here is an example of how you can get the session inside an `.astro` file:
 
