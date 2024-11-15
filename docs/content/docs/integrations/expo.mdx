@@ -295,24 +295,16 @@ $fetch('/api/secure-endpoint', {
 
 #### Option 2: Adding the Cookie to Request Headers
 
-If you prefer using your own fetch client, you can retrieve the session cookie stored in `SecureStore` and add it to your request headers manually.
-
-By default, the cookie is stored in `SecureStore` with the key `better-auth_cookie`. You can change this key by setting a custom `storagePrefix` in the client configuration. If you do, ensure you retrieve the cookie using the new prefix (e.g., `myapp_cookie`).
+If you prefer using your own fetch client, you can retrieve the session cookie stored in the device using `authClient.getCookie` and manually add it to your request headers.
 
 ```tsx
-import * as SecureStore from 'expo-secure-store';
-
-const getCookies = async () => {
-  const cookieName = 'better-auth_cookie'; // Update if using a custom prefix
-  return await SecureStore.getItemAsync(cookieName);
-};
+import { authClient } from '@/lib/auth-client';
 
 const makeAuthenticatedRequest = async () => {
-  const cookies = await getCookies();
+  const cookies = authClient.getCookie(); // [!code highlight]
   const headers = {
-    'Cookie': cookies,
+    'Cookie': cookies, // [!code highlight]
   };
-
   const response = await fetch('http://localhost:8081/api/secure-endpoint', { headers });
   const data = await response.json();
   return data;
@@ -322,7 +314,9 @@ const makeAuthenticatedRequest = async () => {
 **Exampe: Usage With TRPC**
     
 ```tsx title="lib/trpc-provider.tsx"
-import { createTRPCReact } from "@trpc/react-query";
+//...other imports
+import { authClient } from "@/lib/auth-client"; // [!code highlight]
+
 export const api = createTRPCReact<AppRouter>();
 
 export function TRPCProvider(props: { children: React.ReactNode }) {
@@ -334,7 +328,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
           //...your other options
           headers() {
             const headers = new Map<string, string>(); // [!code highlight]
-            const cookies = SecureStore.getItemAsync ("better-auth_cookie"); // [!code highlight]
+            const cookies = authClient.getCookie(); // [!code highlight]
             if (cookies) { // [!code highlight]
               headers.set("Cookie", cookies); // [!code highlight]
             } // [!code highlight]
