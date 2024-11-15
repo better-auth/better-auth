@@ -105,7 +105,7 @@ const testimonials: Testimonial[] = [
 	},
 	{
 		id: 4,
-		from: "Dagamwi Babi",
+		from: "Dagmawi Babi",
 		avatar:
 			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
 		message:
