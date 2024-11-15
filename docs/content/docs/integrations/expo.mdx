@@ -277,10 +277,7 @@ To make authenticated requests to your server that require the user's session, y
 
 Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
 
-For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
-
 ```tsx
-// src/App.tsx
 import { authClient } from '@/lib/auth-client';
 
 const $fetch = authClient.$fetch;
@@ -290,6 +287,8 @@ $fetch('/api/secure-endpoint', {
   method: 'GET',
 });
 ```
+
+For more details, see the [Better Fetch documentation](http://better-fetch.vercel.app/docs).
 
 #### Option 2: Adding the Cookie to Request Headers
 
