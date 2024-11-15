@@ -164,7 +164,7 @@ export async function setSessionCookie(
 	}
 }
 
-export function deleteSessionCookie(ctx: GenericEndpointContext) {		
+export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
