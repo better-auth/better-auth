@@ -4016,12 +4016,6 @@ packages:
     engines: {node: ^18.0.0 || >=20.0.0}
     dev: false
 
-  /nanoid@3.3.7:
-    resolution: {integrity: sha512-eSRppjcPIatRIMC1U6UngP8XFcz8MQWGQdt1MTBQ7NaAmvXDfvNxbvWV3x2y6CdEUciCSsDHDQZbhYaB8QEo2g==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-    dev: false
-
   /nanoquery@1.3.0:
     resolution: {integrity: sha512-eZv8Ct2PZn/CdOmD2BgLNwjhhPmxg4tXhygp0roaRer5RqBFB0gm0wHIb5VZcL0CS0r+yWQ1kBVYG7S1jUyG0A==}
     dependencies:

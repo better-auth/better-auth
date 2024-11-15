@@ -1,5 +1,6 @@
-import { nanoid } from "nanoid";
+import { init } from '@paralleldrive/cuid2';
 
 export const generateId = (size?: number) => {
-	return nanoid(size);
+	const createId = init({ length: size });
+	return createId();
 };

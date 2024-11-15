@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
 import type { Adapter, User } from "../types";
-import { nanoid } from "nanoid";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
