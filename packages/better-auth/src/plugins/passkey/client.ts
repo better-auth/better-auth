@@ -171,13 +171,13 @@ export const getPasskeyActions = (
 				name: opts.name,
 			},
 			method: "POST",
-		})
+		});
 		if (!updated.data) {
 			return updated;
 		}
 		$listPasskeys.set(Math.random());
 		return updated;
-	}
+	};
 
 	return {
 		signIn: {
@@ -237,7 +237,8 @@ export const passkeyClient = () => {
 				matcher(path) {
 					return (
 						path === "/passkey/verify-registration" ||
-						path === "/passkey/delete-passkey"
+						path === "/passkey/delete-passkey" ||
+						path === "/passkey/update-passkey"
 					);
 				},
 				signal: "_listPasskeys",
