@@ -181,14 +181,23 @@ export const signInEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
+			/**
+			 * Email of the user
+			 */
 			email: z.string(),
+			/**
+			 * Password of the user
+			 */
 			password: z.string(),
+			/**
+			 * Callback URL to redirect to after the user has signed in.
+			 */
 			callbackURL: z.string().optional(),
 			/**
 			 * If this is false, the session will not be remembered
 			 * @default true
 			 */
-			rememberMe: z.boolean().default(false).optional(),
+			rememberMe: z.boolean().default(true).optional(),
 		}),
 	},
 	async (ctx) => {
