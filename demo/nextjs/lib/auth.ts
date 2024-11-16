@@ -25,11 +25,15 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
-const mysql = new MysqlDialect(
-	createPool(process.env.MYSQL_DATABASE_URL || ""),
-);
+const mysql = process.env.USE_MYSQL
+	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
+	: null;
 
 const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
