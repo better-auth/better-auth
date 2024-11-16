@@ -335,6 +335,8 @@ Table: `twoFactor`
 
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
+**userTable**: If you update the name of your user model be sure to provide this option to avoid migration error `"user" table does not exist`. Default: `user`.
+
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
 **Issuer**: The issuer is the name of your application. It's used to generate totp codes. It'll be displayed in the authenticator apps.
