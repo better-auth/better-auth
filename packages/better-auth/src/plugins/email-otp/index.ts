@@ -68,11 +68,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 					const email = ctx.body.email;
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
-						identifier: `${ctx.body.type}-otp-${email}`,
-						expiresAt: getDate(opts.expireIn, "sec"),
-					});
+					await ctx.context.internalAdapter
+						.createVerificationValue({
+							value: otp,
+							identifier: `${ctx.body.type}-otp-${email}`,
+							expiresAt: getDate(opts.expireIn, "sec"),
+						})
+						.catch(async (error) => {
+							// might be duplicate key error
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${ctx.body.type}-otp-${email}`,
+							);
+							//try again
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: otp,
+								identifier: `${ctx.body.type}-otp-${email}`,
+								expiresAt: getDate(opts.expireIn, "sec"),
+							});
+						});
 					await options.sendVerificationOTP(
 						{
 							email,
@@ -83,6 +96,57 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					return ctx.json({
 						success: true,
+					});
+				},
+			),
+			createVerificationOTP: createAuthEndpoint(
+				"/email-otp/create-verification-otp",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string(),
+						type: z.enum(["email-verification", "sign-in"]),
+					}),
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: otp,
+						identifier: `${ctx.body.type}-otp-${email}`,
+						expiresAt: getDate(opts.expireIn, "sec"),
+					});
+					return otp;
+				},
+			),
+			getVerificationOTP: createAuthEndpoint(
+				"/email-otp/get-verification-otp",
+				{
+					method: "GET",
+					query: z.object({
+						email: z.string(),
+						type: z.enum(["email-verification", "sign-in"]),
+					}),
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					const email = ctx.query.email;
+					const verificationValue =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`${ctx.query.type}-otp-${email}`,
+						);
+					if (!verificationValue || verificationValue.expiresAt < new Date()) {
+						return ctx.json({
+							otp: null,
+						});
+					}
+					return ctx.json({
+						otp: verificationValue.value,
 					});
 				},
 			),
