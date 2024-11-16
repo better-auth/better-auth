@@ -51,11 +51,11 @@ model Account {
 }
 
 model Verification {
-  id         String   @id
+  id         String    @id
   identifier String
   value      String
   expiresAt  DateTime
-  createdAt  DateTime
+  createdAt  DateTime?
 
   @@map("verification")
 }

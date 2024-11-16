@@ -5,6 +5,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InferSession,
 	InferUser,
 	Prettify,
@@ -193,15 +194,20 @@ export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,
 	S extends Record<string, any> = Record<string, any>,
 >(
-	ctx: Context<any, any>,
+	ctx: GenericEndpointContext,
 ) => {
-	//@ts-ignore
+	if (ctx.context.session) {
+		return ctx.context.session as {
+			session: S & Session;
+			user: U & User;
+		};
+	}
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",
 		headers: ctx.headers!,
 	});
-
+	ctx.context.session = session;
 	return session as {
 		session: S & Session;
 		user: U & User;
@@ -213,6 +219,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
+
 	return {
 		session,
 	};

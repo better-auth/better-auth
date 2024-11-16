@@ -13,6 +13,9 @@ import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { MysqlDialect } from "kysely";
+import { createPool } from "mysql2/promise";
+import { nextCookies } from "better-auth/next-js";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -22,11 +25,17 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
+const mysql = new MysqlDialect(
+	createPool(process.env.MYSQL_DATABASE_URL || ""),
+);
+
+const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect: libsql,
-		type: "sqlite",
+		dialect,
+		type: "mysql",
 	},
 	session: {
 		cookieCache: {
@@ -135,5 +144,6 @@ export const auth = betterAuth({
 		multiSession(),
 		oneTap(),
 		oAuthProxy(),
+		nextCookies(),
 	],
 });

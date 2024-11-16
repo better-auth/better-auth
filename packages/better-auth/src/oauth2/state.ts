@@ -29,7 +29,7 @@ export async function generateState(
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
-		errorURL: c.query?.currentURL,
+		errorURL: c.body?.errorCallbackURL || c.query?.currentURL,
 		link,
 		/**
 		 * This is the actual expiry time of the state
@@ -59,7 +59,9 @@ export async function generateState(
 
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
+	console.log("finding verification value", state);
 	const data = await c.context.internalAdapter.findVerificationValue(state);
+	console.log("data", data);
 	if (!data) {
 		logger.error("State Mismatch. Verification not found", {
 			state,

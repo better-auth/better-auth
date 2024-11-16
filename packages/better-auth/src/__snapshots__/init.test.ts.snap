@@ -122,6 +122,7 @@ exports[`init > should match config 1`] = `
   },
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",
+  "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
     "updateAge": 86400,
@@ -253,8 +254,9 @@ exports[`init > should match config 1`] = `
     "verification": {
       "fields": {
         "createdAt": {
+          "defaultValue": [Function],
           "fieldName": "createdAt",
-          "required": true,
+          "required": false,
           "type": "date",
         },
         "expiresAt": {
