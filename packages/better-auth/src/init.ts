@@ -8,6 +8,8 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	SecondaryStorage,
+	Session,
+	User,
 } from "./types";
 import { defu } from "defu";
 import { getBaseURL } from "./utils/url";
@@ -22,6 +24,7 @@ import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { checkPassword } from "./utils/password";
+import { signCookieValue } from "better-call";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -101,6 +104,7 @@ export const init = async (options: BetterAuthOptions) => {
 			disabled: options.logger?.disabled || false,
 		}),
 		uuid: generateId,
+		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -127,6 +131,10 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	session: {
+		session: Session;
+		user: User;
+	} | null;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
