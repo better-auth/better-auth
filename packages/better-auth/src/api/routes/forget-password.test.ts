@@ -7,7 +7,7 @@ describe("forget password", async (it) => {
 	const { client, testUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
-			async sendResetPassword(user, url) {
+			async sendResetPassword({ url }) {
 				token = url.split("?")[0].split("/").pop() || "";
 				await mockSendEmail();
 			},
@@ -66,5 +66,60 @@ describe("forget password", async (it) => {
 		);
 
 		expect(res.error?.status).toBe(400);
+	});
+
+	it("should expire", async () => {
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword({ token: _token }) {
+					token = _token;
+					await mockSendEmail();
+				},
+				resetPasswordTokenExpiresIn: 10,
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "/sign-in",
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 9);
+		const callbackRes = await client.$fetch("/reset-password/:token", {
+			params: {
+				token,
+			},
+			query: {
+				callbackURL: "/cb",
+			},
+			onError(context) {
+				const location = context.response.headers.get("location");
+				expect(location).not.toContain("error");
+				expect(location).toContain("token");
+			},
+		});
+		const res = await client.resetPassword({
+			newPassword: "new-password",
+			token,
+		});
+		expect(res.data?.status).toBe(true);
+		await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "/sign-in",
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 11);
+		const res2 = await client.resetPassword({
+			newPassword: "new-password",
+			token,
+		});
+		expect(res2.error?.status).toBe(400);
 	});
 });

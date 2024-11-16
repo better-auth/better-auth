@@ -149,6 +149,34 @@ export interface OrganizationOptions {
 		 */
 		request?: Request,
 	) => Promise<void>;
+	/**
+	 * The schema for the organization plugin.
+	 */
+	schema?: {
+		session?: {
+			fields?: {
+				activeOrganizationId?: string;
+			};
+		};
+		organization?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Organization, "id">]?: string;
+			};
+		};
+		member?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Member, "id">]?: string;
+			};
+		};
+		invitation?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Invitation, "id">]?: string;
+			};
+		};
+	};
 }
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
@@ -267,6 +295,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
 				},
 			},
@@ -275,22 +304,27 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					name: {
 						type: "string",
 						required: true,
+						fieldName: options?.schema?.organization?.fields?.name,
 					},
 					slug: {
 						type: "string",
 						unique: true,
+						fieldName: options?.schema?.organization?.fields?.slug,
 					},
 					logo: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.organization?.fields?.logo,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.organization?.fields?.createdAt,
 					},
 					metadata: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.organization?.fields?.metadata,
 					},
 				},
 			},
@@ -303,19 +337,23 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						fieldName: options?.schema?.member?.fields?.organizationId,
 					},
 					userId: {
 						type: "string",
 						required: true,
+						fieldName: options?.schema?.member?.fields?.userId,
 					},
 					role: {
 						type: "string",
 						required: true,
 						defaultValue: "member",
+						fieldName: options?.schema?.member?.fields?.role,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.member?.fields?.createdAt,
 					},
 				},
 			},
@@ -328,23 +366,28 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						fieldName: options?.schema?.invitation?.fields?.organizationId,
 					},
 					email: {
 						type: "string",
 						required: true,
+						fieldName: options?.schema?.invitation?.fields?.email,
 					},
 					role: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.invitation?.fields?.role,
 					},
 					status: {
 						type: "string",
 						required: true,
 						defaultValue: "pending",
+						fieldName: options?.schema?.invitation?.fields?.status,
 					},
 					expiresAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.invitation?.fields?.expiresAt,
 					},
 					inviterId: {
 						type: "string",
@@ -352,6 +395,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
 				},
@@ -369,7 +413,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								id: string;
 								name: string;
 								email: string;
-								image: string | undefined;
+								image?: string | null;
 							};
 						}
 					>[];

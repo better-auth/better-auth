@@ -297,7 +297,7 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (organizationId: string, db?: Kysely<any>) => {
+		findFullOrganization: async (organizationId: string) => {
 			const [org, invitations, members] = await Promise.all([
 				adapter.findOne<Organization>({
 					model: "organization",
@@ -322,7 +322,6 @@ export const getOrgAdapter = (
 			});
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
-
 			const membersWithUsers = members.map((member) => {
 				const user = userMap.get(member.userId);
 				if (!user) {

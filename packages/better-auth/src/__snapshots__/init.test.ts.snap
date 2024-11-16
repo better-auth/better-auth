@@ -9,7 +9,12 @@ exports[`init > should match config 1`] = `
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
+    "options": {
+      "generateId": undefined,
+      "type": "sqlite",
+    },
     "update": [Function],
+    "updateMany": [Function],
   },
   "appName": "Better Auth",
   "authCookies": {
@@ -45,7 +50,6 @@ exports[`init > should match config 1`] = `
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
-  "db": Kysely {},
   "internalAdapter": {
     "createAccount": [Function],
     "createOAuthUser": [Function],
@@ -55,6 +59,7 @@ exports[`init > should match config 1`] = `
     "deleteSession": [Function],
     "deleteSessions": [Function],
     "deleteUser": [Function],
+    "deleteVerificationByIdentifier": [Function],
     "deleteVerificationValue": [Function],
     "findAccount": [Function],
     "findAccounts": [Function],
@@ -117,6 +122,7 @@ exports[`init > should match config 1`] = `
   },
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",
+  "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
     "updateAge": 86400,
@@ -247,6 +253,12 @@ exports[`init > should match config 1`] = `
     },
     "verification": {
       "fields": {
+        "createdAt": {
+          "defaultValue": [Function],
+          "fieldName": "createdAt",
+          "required": false,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,

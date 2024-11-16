@@ -1,13 +1,13 @@
 import type { CookieOptions } from "better-call";
 import { TimeSpan } from "oslo";
-import type { BetterAuthOptions } from "../types/options";
-import type { GenericEndpointContext } from "../types/context";
-import { BetterAuthError } from "../error";
-import { isProduction } from "../utils/env";
-import type { Session, User } from "../types";
+import { base64url } from "oslo/encoding";
 import { hmac } from "../crypto/hash";
-import { base64, base64url } from "oslo/encoding";
+import { BetterAuthError } from "../error";
+import type { Session, User } from "../types";
+import type { GenericEndpointContext } from "../types/context";
+import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
+import { isProduction } from "../utils/env";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -166,12 +166,15 @@ export async function setSessionCookie(
 
 export function deleteSessionCookie(ctx: GenericEndpointContext) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
+		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		...ctx.context.authCookies.sessionData.options,
 		maxAge: 0,
 	});
 	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+		...ctx.context.authCookies.dontRememberToken.options,
 		maxAge: 0,
 	});
 }

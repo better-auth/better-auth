@@ -3,7 +3,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { phoneNumber } from ".";
 import { createAuthClient } from "../../client";
 import { phoneNumberClient } from "./client";
-import { changeEmail } from "../../api";
 
 describe("phone-number", async (it) => {
 	let otp = "";
@@ -11,7 +10,7 @@ describe("phone-number", async (it) => {
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -109,7 +108,7 @@ describe("phone auth flow", async () => {
 	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
+				async sendOTP({ code }) {
 					otp = code;
 				},
 				signUpOnVerification: {
@@ -197,13 +196,13 @@ describe("phone auth flow", async () => {
 });
 
 describe("verify phone-number", async (it) => {
-	const otp: string[] = [""];
+	let otp = "";
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
 			phoneNumber({
-				async sendOTP(_, code) {
-					otp.push(code);
+				async sendOTP({ code }) {
+					otp = code;
 				},
 				signUpOnVerification: {
 					getTempEmail(phoneNumber) {
@@ -230,16 +229,19 @@ describe("verify phone-number", async (it) => {
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
 		});
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(1000);
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
 		});
+		vi.advanceTimersByTime(1000);
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
 		});
 		const res = await client.phoneNumber.verify(
 			{
 				phoneNumber: testPhoneNumber,
-				code: otp.pop() as string,
+				code: otp,
 			},
 			{
 				onSuccess: sessionSetter(headers),

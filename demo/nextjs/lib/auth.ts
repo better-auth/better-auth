@@ -13,6 +13,9 @@ import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { MysqlDialect } from "kysely";
+import { createPool } from "mysql2/promise";
+import { nextCookies } from "better-auth/next-js";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -22,20 +25,26 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
-const s = {
-	extra: {
-		type: "string",
-	},
-} as const;
+const mysql = new MysqlDialect(
+	createPool(process.env.MYSQL_DATABASE_URL || ""),
+);
+
+const dialect = process.env.USE_MYSQL ? mysql : libsql;
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect: libsql,
-		type: "sqlite",
+		dialect,
+		type: "mysql",
+	},
+	session: {
+		cookieCache: {
+			enabled: true,
+			maxAge: 60,
+		},
 	},
 	emailVerification: {
-		async sendVerificationEmail(user, url) {
+		async sendVerificationEmail({ user, url }) {
 			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
@@ -54,7 +63,7 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(user, url) {
+		async sendResetPassword({ user, url }) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -119,7 +128,7 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }) {
 					await resend.emails.send({
 						from,
 						to: user.email,
@@ -135,5 +144,6 @@ export const auth = betterAuth({
 		multiSession(),
 		oneTap(),
 		oAuthProxy(),
+		nextCookies(),
 	],
 });

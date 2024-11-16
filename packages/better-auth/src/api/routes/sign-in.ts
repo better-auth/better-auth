@@ -26,6 +26,13 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			callbackURL: z.string().optional(),
 			/**
+			 * Callback url to redirect to if an error happens
+			 *
+			 * If it's initiated from the client sdk this defaults to
+			 * the current url.
+			 */
+			errorCallbackURL: z.string().optional(),
+			/**
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(socialProviderList),
@@ -257,9 +264,12 @@ export const signInEmail = createAuthEndpoint(
 			);
 			const url = `${ctx.context.baseURL}/verify-email?token=${token}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
-				user.user,
-				url,
-				token,
+				{
+					user: user.user,
+					url,
+					token,
+				},
+				ctx.request,
 			);
 			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {

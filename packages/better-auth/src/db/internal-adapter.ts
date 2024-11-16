@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
-import { getAuthTables } from "./get-tables";
 import {
 	parseSessionOutput,
 	parseUserOutput,
@@ -13,7 +12,6 @@ import {
 import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
-import { convertFromDB } from "./utils";
 import { safeJSONParse } from "../utils/json";
 
 export const createInternalAdapter = (
@@ -26,7 +24,6 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const tables = getAuthTables(options);
 	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
 	return {
 		createOAuthUser: async (
@@ -122,10 +119,10 @@ export const createInternalAdapter = (
 			}
 
 			const sessions = await adapter.findMany<Session>({
-				model: tables.session.tableName,
+				model: "session",
 				where: [
 					{
-						field: tables.session.fields.userId.fieldName || "userId",
+						field: "userId",
 						value: userId,
 					},
 				],
@@ -142,35 +139,35 @@ export const createInternalAdapter = (
 			where?: Where[],
 		) => {
 			const users = await adapter.findMany<User>({
-				model: tables.user.tableName,
+				model: "user",
 				limit,
 				offset,
 				sortBy,
 				where,
 			});
-			return users.map((user) => convertFromDB(tables.user.fields, user));
+			return users;
 		},
 		deleteUser: async (userId: string) => {
+			await adapter.deleteMany({
+				model: "session",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+			await adapter.deleteMany({
+				model: "account",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
 			await adapter.delete({
-				model: tables.account.tableName,
-				where: [
-					{
-						field: tables.account.fields.userId.fieldName || "userId",
-						value: userId,
-					},
-				],
-			});
-			await adapter.deleteMany({
-				model: tables.session.tableName,
-				where: [
-					{
-						field: tables.session.fields.userId.fieldName || "userId",
-						value: userId,
-					},
-				],
-			});
-			await adapter.deleteMany({
-				model: tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						field: "id",
@@ -208,7 +205,7 @@ export const createInternalAdapter = (
 					? {
 							fn: async (data) => {
 								const user = await adapter.findOne<User>({
-									model: tables.user.tableName,
+									model: "user",
 									where: [{ field: "id", value: userId }],
 								});
 								secondaryStorage.set(
@@ -237,7 +234,10 @@ export const createInternalAdapter = (
 								}
 
 								// Add new session with expiration time
-								list.push({ id: data.id, expiresAt: now + sessionExpiration });
+								list.push({
+									id: data.id,
+									expiresAt: now + sessionExpiration * 1000,
+								});
 
 								await secondaryStorage.set(
 									`active-sessions-${userId}`,
@@ -277,8 +277,8 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const _session = await adapter.findOne<Session>({
-				model: tables.session.tableName,
+			const session = await adapter.findOne<Session>({
+				model: "session",
 				where: [
 					{
 						value: sessionId,
@@ -287,14 +287,12 @@ export const createInternalAdapter = (
 				],
 			});
 
-			if (!_session) {
+			if (!session) {
 				return null;
 			}
 
-			const session = convertFromDB(tables.session.fields, _session)!;
-
 			const user = await adapter.findOne<User>({
-				model: tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						value: session.userId,
@@ -305,10 +303,7 @@ export const createInternalAdapter = (
 			if (!user) {
 				return null;
 			}
-			const parsedUser = parseUserOutput(
-				ctx.options,
-				convertFromDB(tables.user.fields, user)!,
-			);
+			const parsedUser = parseUserOutput(ctx.options, user);
 			return {
 				session: parseSessionOutput(ctx.options, session),
 				user: parsedUser,
@@ -345,7 +340,7 @@ export const createInternalAdapter = (
 			}
 
 			const sessions = await adapter.findMany<Session>({
-				model: tables.session.tableName,
+				model: "session",
 				where: [
 					{
 						field: "id",
@@ -355,12 +350,12 @@ export const createInternalAdapter = (
 				],
 			});
 			const userIds = sessions.map((session) => {
-				const s = convertFromDB(tables.session.fields, session)!;
+				const s = session;
 				return s.userId;
 			});
 			if (!userIds.length) return [];
 			const users = await adapter.findMany<User>({
-				model: tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						field: "id",
@@ -373,8 +368,8 @@ export const createInternalAdapter = (
 				const user = users.find((u) => u.id === session.userId);
 				if (!user) return null;
 				return {
-					session: convertFromDB(tables.session.fields, session)!,
-					user: convertFromDB(tables.user.fields, user)!,
+					session,
+					user,
 				};
 			}) as {
 				session: Session;
@@ -429,7 +424,7 @@ export const createInternalAdapter = (
 				await secondaryStorage.delete(id);
 				if (options.session?.storeSessionInDatabase) {
 					await adapter.delete<Session>({
-						model: tables.session.tableName,
+						model: "session",
 						where: [
 							{
 								field: "id",
@@ -441,7 +436,7 @@ export const createInternalAdapter = (
 				return;
 			}
 			await adapter.delete<Session>({
-				model: tables.session.tableName,
+				model: "session",
 				where: [
 					{
 						field: "id",
@@ -450,27 +445,35 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteSessions: async (userId: string) => {
+		deleteSessions: async (userIdOrSessions: string | string[]) => {
 			if (secondaryStorage) {
-				const sessions = await adapter.findMany<Session>({
-					model: tables.session.tableName,
-					where: [
-						{
-							field: tables.session.fields.userId.fieldName || "userId",
-							value: userId,
-						},
-					],
-				});
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.id);
+				if (typeof userIdOrSessions === "string") {
+					const activeSession = await secondaryStorage.get(
+						`active-sessions-${userIdOrSessions}`,
+					);
+					const sessions = activeSession
+						? safeJSONParse<{ id: string }[]>(activeSession)
+						: [];
+					if (!sessions) return;
+					for (const session of sessions) {
+						await secondaryStorage.delete(session.id);
+					}
+				} else {
+					for (const sessionId of userIdOrSessions) {
+						const session = await secondaryStorage.get(sessionId);
+						if (session) {
+							await secondaryStorage.delete(sessionId);
+						}
+					}
 				}
 				if (options.session?.storeSessionInDatabase) {
-					await adapter.delete({
-						model: tables.session.tableName,
+					await adapter.deleteMany({
+						model: "session",
 						where: [
 							{
-								field: tables.session.fields.userId.fieldName || "userId",
-								value: userId,
+								field: Array.isArray(userIdOrSessions) ? "id" : "userId",
+								value: userIdOrSessions,
+								operator: Array.isArray(userIdOrSessions) ? "in" : undefined,
 							},
 						],
 					});
@@ -478,11 +481,12 @@ export const createInternalAdapter = (
 				return;
 			}
 			await adapter.deleteMany({
-				model: tables.session.tableName,
+				model: "session",
 				where: [
 					{
-						field: tables.session.fields.userId.fieldName || "userId",
-						value: userId,
+						field: Array.isArray(userIdOrSessions) ? "id" : "userId",
+						value: userIdOrSessions,
+						operator: Array.isArray(userIdOrSessions) ? "in" : undefined,
 					},
 				],
 			});
@@ -492,40 +496,38 @@ export const createInternalAdapter = (
 			options?: { includeAccounts: boolean },
 		) => {
 			const user = await adapter.findOne<User>({
-				model: tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						value: email.toLowerCase(),
-						field: tables.user.fields.email.fieldName || "email",
+						field: "email",
 					},
 				],
 			});
 			if (!user) return null;
 			if (options?.includeAccounts) {
 				const accounts = await adapter.findMany<Account>({
-					model: tables.account.tableName,
+					model: "account",
 					where: [
 						{
 							value: user.id,
-							field: tables.account.fields.userId.fieldName || "userId",
+							field: "userId",
 						},
 					],
 				});
 				return {
-					user: convertFromDB(tables.user.fields, user)!,
-					accounts: accounts.map(
-						(account) => convertFromDB(tables.account.fields, account)!,
-					),
+					user,
+					accounts,
 				};
 			}
 			return {
-				user: convertFromDB(tables.user.fields, user)!,
+				user,
 				accounts: [],
 			};
 		},
 		findUserById: async (userId: string) => {
 			const user = await adapter.findOne<User>({
-				model: tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						field: "id",
@@ -569,7 +571,7 @@ export const createInternalAdapter = (
 				data,
 				[
 					{
-						field: tables.user.fields.email.fieldName || "email",
+						field: "email",
 						value: email,
 					},
 				],
@@ -584,11 +586,11 @@ export const createInternalAdapter = (
 				},
 				[
 					{
-						field: tables.account.fields.userId.fieldName || "userId",
+						field: "userId",
 						value: userId,
 					},
 					{
-						field: tables.account.fields.providerId.fieldName || "providerId",
+						field: "providerId",
 						value: "credential",
 					},
 				],
@@ -598,24 +600,22 @@ export const createInternalAdapter = (
 		},
 		findAccounts: async (userId: string) => {
 			const accounts = await adapter.findMany<Account>({
-				model: tables.account.tableName,
+				model: "account",
 				where: [
 					{
-						field: tables.account.fields.userId.fieldName || "userId",
+						field: "userId",
 						value: userId,
 					},
 				],
 			});
-			return accounts.map(
-				(account) => convertFromDB(tables.account.fields, account) as Account,
-			);
+			return accounts;
 		},
 		findAccount: async (accountId: string) => {
 			const account = await adapter.findOne<Account>({
-				model: tables.account.tableName,
+				model: "account",
 				where: [
 					{
-						field: tables.account.fields.accountId.fieldName || "accountId",
+						field: "accountId",
 						value: accountId,
 					},
 				],
@@ -645,36 +645,25 @@ export const createInternalAdapter = (
 		},
 		findVerificationValue: async (identifier: string) => {
 			const verification = await adapter.findMany<Verification>({
-				model: tables.verification.tableName,
+				model: "verification",
 				where: [
 					{
-						field:
-							tables.verification.fields.identifier.fieldName || "identifier",
+						field: "identifier",
 						value: identifier,
 					},
 				],
-				limit: 100,
+				sortBy: {
+					field: "createdAt",
+					direction: "desc",
+				},
+				limit: 10,
 			});
-			const lastVerification = verification.pop();
-			if (verification.length > 0) {
-				await adapter.deleteMany({
-					model: tables.verification.tableName,
-					where: [
-						{
-							operator: "in",
-							field: "id",
-							value: verification.map((v) => v.id),
-						},
-					],
-				});
-			}
-			return lastVerification
-				? convertFromDB(tables.verification.fields, lastVerification)
-				: null;
+			const lastVerification = verification[0];
+			return lastVerification;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({
-				model: tables.verification.tableName,
+				model: "verification",
 				where: [
 					{
 						field: "id",
@@ -685,11 +674,10 @@ export const createInternalAdapter = (
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			await adapter.delete<Verification>({
-				model: tables.verification.tableName,
+				model: "verification",
 				where: [
 					{
-						field:
-							tables.verification.fields.identifier.fieldName || "identifier",
+						field: "identifier",
 						value: identifier,
 					},
 				],

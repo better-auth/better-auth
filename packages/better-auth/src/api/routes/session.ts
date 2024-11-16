@@ -5,6 +5,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InferSession,
 	InferUser,
 	Prettify,
@@ -37,9 +38,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.secret,
 				);
 				if (!sessionCookieToken) {
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
 				const sessionDataCookie = ctx.getCookie(
@@ -63,9 +62,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 					if (!isValid) {
 						deleteSessionCookie(ctx);
-						return ctx.json(null, {
-							status: 401,
-						});
+						return ctx.json(null);
 					}
 				}
 
@@ -111,9 +108,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						 */
 						await ctx.context.internalAdapter.deleteSession(session.session.id);
 					}
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
 				/**
@@ -129,7 +124,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
 				const updateAge = ctx.context.sessionConfig.updateAge;
-
 				/**
 				 * Calculate last updated date to throttle write updates to database
 				 * Formula: ({expiry date} - sessionMaxAge) + sessionUpdateAge
@@ -142,7 +136,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					session.session.expiresAt.valueOf() -
 					expiresIn * 1000 +
 					updateAge * 1000;
-
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
 				if (shouldBeUpdated) {
@@ -190,7 +183,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 			} catch (error) {
 				ctx.context.logger.error(error);
-				return ctx.json(null, { status: 500 });
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "internal server error",
+				});
 			}
 		},
 	);
@@ -199,15 +194,20 @@ export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,
 	S extends Record<string, any> = Record<string, any>,
 >(
-	ctx: Context<any, any>,
+	ctx: GenericEndpointContext,
 ) => {
-	//@ts-ignore
+	if (ctx.context.session) {
+		return ctx.context.session as {
+			session: S & Session;
+			user: U & User;
+		};
+	}
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",
 		headers: ctx.headers!,
 	});
-
+	ctx.context.session = session;
 	return session as {
 		session: S & Session;
 		user: U & User;
@@ -219,6 +219,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
+
 	return {
 		session,
 	};

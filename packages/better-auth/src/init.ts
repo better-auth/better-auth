@@ -1,6 +1,4 @@
-import type { Kysely } from "kysely";
 import { getAuthTables } from "./db/get-tables";
-import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
 import { getAdapter } from "./db/utils";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
@@ -10,6 +8,8 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	SecondaryStorage,
+	Session,
+	User,
 } from "./types";
 import { defu } from "defu";
 import { getBaseURL } from "./utils/url";
@@ -24,13 +24,13 @@ import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { checkPassword } from "./utils/password";
+import { signCookieValue } from "better-call";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 
-	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -103,8 +103,8 @@ export const init = async (options: BetterAuthOptions) => {
 		logger: createLogger({
 			disabled: options.logger?.disabled || false,
 		}),
-		db,
 		uuid: generateId,
+		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -131,10 +131,13 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	session: {
+		session: Session;
+		user: User;
+	} | null;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: Kysely<any> | null;
 	rateLimit: {
 		enabled: boolean;
 		window: number;
