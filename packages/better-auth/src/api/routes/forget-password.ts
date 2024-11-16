@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
+import { z } from "zod";
 import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
+import { createAuthEndpoint } from "../call";
 
 function redirectError(
 	ctx: AuthContext,
@@ -15,6 +15,10 @@ function redirectError(
 	if (query)
 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
 	return url.href;
+}
+
+function dateToUtc(date: Date): number {
+	return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDay(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds())
 }
 
 function redirectCallback(
@@ -122,7 +126,7 @@ export const forgetPasswordCallback = createAuthEndpoint(
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
 			);
-		if (!verification || verification.expiresAt < new Date()) {
+		if (!verification || dateToUtc(verification.expiresAt) > dateToUtc(new Date())) {
 			throw ctx.redirect(
 				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
 			);
@@ -166,7 +170,7 @@ export const resetPassword = createAuthEndpoint(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
 
-		if (!verification || verification.expiresAt < new Date()) {
+		if (!verification || dateToUtc(verification.expiresAt) > dateToUtc(new Date())) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid token",
 			});
