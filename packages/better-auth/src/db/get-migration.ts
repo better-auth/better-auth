@@ -3,10 +3,10 @@ import type {
 	CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
-import { logger } from "../utils/logger";
-import type { BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
+import type { BetterAuthOptions } from "../types";
+import { logger } from "../utils/logger";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
@@ -176,6 +176,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		if (type === "string[]" || type === "number[]") {
 			return "jsonb";
+		}
+		if (type === "date") {
+			return "timestamp"
 		}
 		return typeMap[type];
 	}
