@@ -17,7 +17,7 @@ export interface Logger {
 	/**
 	 * @default true
 	 */
-	enabled?: boolean;
+	disabled?: boolean;
 	/**
 	 * default "error"
 	 */
@@ -53,7 +53,7 @@ const consola = createConsola({
 export const createLogger = (
 	options?: Logger,
 ): Record<LogLevel, (...params: LogHandlerParams) => void> => {
-	const enabled = options?.enabled ?? true;
+	const enabled = options?.disabled !== true;
 	const logLevel = options?.level ?? "error";
 
 	const LogFunc = (
@@ -76,7 +76,7 @@ export const createLogger = (
 		levels.map((level) => [
 			level,
 			(...[message, ...args]: LogHandlerParams) =>
-				LogFunc(level, message, ...(args || [])),
+				LogFunc(level, message, args),
 		]),
 	) as Record<LogLevel, (...params: LogHandlerParams) => void>;
 };

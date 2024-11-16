@@ -291,7 +291,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 				optLogLevel === "debug"
 					? logger
 					: undefined;
-			if (options.logger?.enabled) {
+			if (options.logger?.disabled !== true) {
 				if (
 					e &&
 					typeof e === "object" &&
