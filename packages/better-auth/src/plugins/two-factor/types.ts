@@ -1,5 +1,5 @@
-import type { User } from "../../db/schema";
 import type { AuthEndpoint } from "../../api/call";
+import type { User } from "../../db/schema";
 import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
@@ -27,6 +27,11 @@ export interface TwoFactorOptions {
 	 * @default "userTwoFactor"
 	 */
 	twoFactorTable?: string;
+	/**
+	 * Table name for the user.
+	 * @default "user"
+	 */
+	userTable?: string;
 	/**
 	 * Skip verification on enabling two factor authentication.
 	 * @default false

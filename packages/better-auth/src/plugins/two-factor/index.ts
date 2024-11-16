@@ -1,20 +1,22 @@
-import { alphabet, generateRandomString } from "../../crypto/random";
+import { APIError } from "better-call";
+import { TimeSpan } from "oslo";
+import { createTOTPKeyURI } from "oslo/otp";
 import { z } from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { hs256, symmetricEncrypt } from "../../crypto";
+import { alphabet, generateRandomString } from "../../crypto/random";
+import type { Session } from "../../db/schema";
 import type { BetterAuthPlugin } from "../../types/plugins";
+import { validatePassword } from "../../utils/password";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import type { Session } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import { validatePassword } from "../../utils/password";
-import { APIError } from "better-call";
-import { createTOTPKeyURI } from "oslo/otp";
-import { TimeSpan } from "oslo";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+
+const DEFAULT_USER_TABLE = "user"
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -269,6 +271,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 		},
 		schema: {
 			user: {
+				tableName: options?.userTable ?? DEFAULT_USER_TABLE,
 				fields: {
 					twoFactorEnabled: {
 						type: "boolean",
