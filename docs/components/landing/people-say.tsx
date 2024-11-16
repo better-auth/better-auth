@@ -2,10 +2,11 @@ import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import { Icons } from "../icons";
 import Link from "next/link";
+import Image from "next/image";
 const testimonials = [
 	{
 		name: "Dev Ed",
-		profession: "Developer",
+		profession: "Content Creator",
 		link: "https://x.com/edgarasben/status/1856336936505590160",
 		description:
 			"This has been the best auth experience by a mileee, auto generated my drizzle schemas for users, sessions etc, full type safe and dead simple api, well done @better_auth 👏👏",
@@ -16,7 +17,7 @@ const testimonials = [
 	},
 	{
 		name: "Sébastien Chopin",
-		profession: "NuxtLabs",
+		profession: "Creator of Nuxt & NuxtLabs",
 		link: "https://x.com/Atinux/status/1853751424561336322",
 		description:
 			"When @better_auth meets @nuxt_hub to build full-stack Nuxt apps on Cloudflare (using D1 & KV).",
@@ -38,7 +39,7 @@ const testimonials = [
 	},
 	{
 		name: "Jonathan Wilke",
-		profession: "Developer",
+		profession: "Creator of Supastarter",
 		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
 		description: "fuck, @better_auth is just so good",
 		avatar:
@@ -70,7 +71,7 @@ const testimonials = [
 	},
 	{
 		name: "Paul Jasper",
-		profession: "Developer",
+		profession: "Indie hacker",
 		link: "https://x.com/pauljasperdev/status/1854938664645558279",
 		description:
 			"Solved auth for my next project and I’m pretty happy with it: @better_auth with @prisma serverless database. What a great team!",
@@ -141,7 +142,7 @@ const PeopleSay = ({
 							<div
 								key={indx}
 								className={cn(
-									"flex flex-col justify-between h-[250px] rounded-none border-[1.2px] border-black/20 shrink-0 grow-0 w-[450px] dark:border-white/10",
+									"flex flex-col justify-between h-[220px] rounded-none border-[1.2px] border-black/20 shrink-0 grow-0 w-[450px] dark:border-white/10",
 								)}
 							>
 								<p className="py-5 px-5 text-md font-extralight tracking-tight sm:text-xl md:text-lg text-pretty text-text-primary dark:text-dark-text-primary">
@@ -151,7 +152,7 @@ const PeopleSay = ({
 									<div className="flex gap-3 items-center py-3 px-4 w-3/4">
 										<img
 											src={testimonial.avatar}
-											className="w-12 rounded-full h-12"
+											className="w-10 rounded-full h-10"
 											alt="avatar"
 										/>
 										<div className="flex flex-col flex-1 gap-0 justify-start items-start">
@@ -164,8 +165,10 @@ const PeopleSay = ({
 										</div>
 									</div>
 									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
-									<div className="flex justify-center items-center mx-auto pl-2 max-w-full">
-										<Link href={testimonial.link}>{testimonial.social}</Link>
+									<div className="flex justify-center items-center mx-auto max-w-full">
+										<Link href={testimonial.link} target="_blank">
+											{testimonial.social}
+										</Link>
 									</div>
 								</div>
 							</div>
