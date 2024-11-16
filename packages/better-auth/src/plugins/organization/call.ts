@@ -25,7 +25,6 @@ export const orgSessionMiddleware = createAuthMiddleware(
 		use: [sessionMiddleware],
 	},
 	async (ctx) => {
-		//@ts-expect-error: fix this later on better-call repo. Session middleware will return session in the context.
 		const session = ctx.context.session as {
 			session: Session & {
 				activeOrganizationId?: string;

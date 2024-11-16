@@ -169,18 +169,6 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     });
     ```
     </Tab>
-
-    <Tab value="surrealDB">
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth";
-    import { surrealdbAdapter } from "better-auth/adapters/surrealdb";
-    import { surrealClient } from "@/db"; // your SurrealDB client
-
-    export const auth = betterAuth({
-        database: surrealdbAdapter(client)
-    });
-    ```
-    </Tab>
 </Tabs>
    <Callout>
      For optimal performance, use the built-in Kysely adapter if possible.
