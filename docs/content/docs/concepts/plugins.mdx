@@ -82,7 +82,7 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `baseURL`: the baseURL of the auth server. This includes the path. For example, if the server is running on `http://localhost:3000`, the baseURL will be `http://localhost:3000/api/auth` by default unless changed by the user.
 - `session`: The session configuration. Includes `updateAge` and `expiresIn` values.
 - `secret`: The secret key used for various purposes. This is defined by the user.
-- `authCookie`: The defualt cookie configuration for core auth cookies.
+- `authCookie`: The default cookie configuration for core auth cookies.
 - `logger`: The logger instance used by Better Auth.
 - `db`: The kysely instance used by Better Auth to interact with the database.
 - `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for performance reasons)
