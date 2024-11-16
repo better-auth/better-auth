@@ -1,8 +1,15 @@
-import { getAuthTables } from "./db/get-tables";
-import { getAdapter } from "./db/utils";
+import { defu } from "defu";
+import {
+	type BetterAuthCookies,
+	createCookieGetter,
+	getCookies,
+} from "./cookies";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "./utils/env";
+import { getAuthTables } from "./db/get-tables";
+import { getAdapter } from "./db/utils";
+import type { OAuthProvider } from "./oauth2";
+import { socialProviderList, socialProviders } from "./social-providers";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -11,20 +18,12 @@ import type {
 	Session,
 	User,
 } from "./types";
-import { defu } from "defu";
-import { getBaseURL } from "./utils/url";
-import { DEFAULT_SECRET } from "./utils/constants";
-import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
-import { createLogger, logger } from "./utils/logger";
-import { socialProviderList, socialProviders } from "./social-providers";
-import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { DEFAULT_SECRET } from "./utils/constants";
+import { env, isProduction } from "./utils/env";
+import { createLogger, logger } from "./utils/logger";
 import { checkPassword } from "./utils/password";
-import { signCookieValue } from "better-call";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -156,7 +155,7 @@ export type AuthContext = {
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (hash: string, password: string) => Promise<boolean>;
+		verify: (password: string,hash: string) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
