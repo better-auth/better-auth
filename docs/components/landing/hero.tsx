@@ -75,7 +75,7 @@ export default function Hero() {
 							</div>
 
 							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight md:text-2xl">
-								The most comprehensive authentication library for TypeScript.
+								The authentication and authorization framework for TypeScript.
 							</p>
 							{
 								<>
