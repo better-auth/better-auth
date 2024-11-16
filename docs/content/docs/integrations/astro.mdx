@@ -67,36 +67,66 @@ If you're not using a frontend framework, you can still import the vanilla clien
 
 ## Auth Middleware
 
-To protect your routes, you can check if the user is authenticated using the `getSession` method in middleware. Start by creating a `middleware.ts` file in the root of your project and follow the example below:
+### Astro Locals types
+
+To have types for your Astro locals, you need to set it inside the `env.d.ts` file.
+
+```ts title="env.d.ts"
+
+/// <reference path="../.astro/types.d.ts" />
+
+declare namespace App {
+    // Note: 'import {} from ""' syntax does not work in .d.ts files.
+    interface Locals {
+        user: import("better-auth").User | null;
+        session: import("better-auth").Session | null;
+    }
+}
+```
+
+### Middleware
+
+To protect your routes, you can check if the user is authenticated using the `getSession` method in middleware and set the user and session data using the Astro locals with the types we set before. Start by creating a `middleware.ts` file in the root of your project and follow the example below:
 
 ```ts title="middleware.ts"
 import { auth } from "@/auth";
 import { defineMiddleware } from "astro:middleware";
 
 export const onRequest = defineMiddleware(async (context, next) => {
-	const isAuthed = await auth.api
-		.getSession({
-			headers: context.request.headers,
-		})
-	if (context.url.pathname === "/dashboard" && !isAuthed) {
-		return context.redirect("/");
-	}
-	return next();
+    const isAuthed = await auth.api
+        .getSession({
+            headers: context.request.headers,
+        })
+
+    if (isAuthed) {
+        context.locals.user = isAuthed.user;
+        context.locals.session = isAuthed.session;
+    } else {
+        context.locals.user = null;
+        context.locals.session = null;
+    }
+
+    return next();
 });
 ```
 
-## Getting session on the server inside `.astro` file
+### Getting session on the server inside `.astro` file
 
-You can use `auth.api` to call the API from the server side. Here is an example of how you can get the session inside an `.astro` file:
+You can use `Astro.locals` to check if the user has session and get the user data from the server side. Here is an example of how you can get the session inside an `.astro` file:
 
 ```astro
 ---
 import { UserCard } from "@/components/user-card";
-import { auth } from "@/auth";
 
-const session = await auth.api.getSession({
-	headers: Astro.request.headers,
-});
+const session = () => {
+    if (Astro.locals.session) {
+        return Astro.locals.session;
+    } else {
+        // Redirect to login page if the user is not authenticated
+        return Astro.redirect("/login");
+    }
+}
+
 ---
 
 <UserCard initalSession={session} />

@@ -216,6 +216,12 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
 				},
+				createdAt: {
+					type: "date",
+					required: false,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
+				},
 			},
 			order: 4,
 		},

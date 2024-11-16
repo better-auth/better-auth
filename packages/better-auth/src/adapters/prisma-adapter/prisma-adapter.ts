@@ -36,7 +36,7 @@ interface PrismaClientInternal {
 	};
 }
 
-const createTransform = (options: BetterAuthOptions) => {
+const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	const schema = getAuthTables(options);
 
 	function getField(model: string, field: string) {
@@ -61,14 +61,15 @@ const createTransform = (options: BetterAuthOptions) => {
 	function getModelName(model: string) {
 		return schema[model].tableName;
 	}
-
+	const shouldGenerateId = config?.generateId !== false;
 	return {
 		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = data.id
-				? {
-						id: data.id,
-					}
-				: {};
+			const transformedData: Record<string, any> =
+				data.id && shouldGenerateId
+					? {
+							id: config?.generateId ? config.generateId() : data.id,
+						}
+					: {};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
@@ -154,6 +155,7 @@ const createTransform = (options: BetterAuthOptions) => {
 			}, {});
 		},
 		getModelName,
+		getField,
 	};
 };
 
@@ -167,7 +169,8 @@ export const prismaAdapter =
 			convertWhereClause,
 			convertSelect,
 			getModelName,
-		} = createTransform(options);
+			getField,
+		} = createTransform(config, options);
 		return {
 			id: "prisma",
 			async create(data) {
@@ -197,7 +200,8 @@ export const prismaAdapter =
 					skip: offset || 0,
 					orderBy: sortBy?.field
 						? {
-								[sortBy.field]: sortBy.direction === "desc" ? "desc" : "asc",
+								[getField(model, sortBy.field)]:
+									sortBy.direction === "desc" ? "desc" : "asc",
 							}
 						: undefined,
 				})) as any[];
@@ -226,9 +230,13 @@ export const prismaAdapter =
 			async delete(data) {
 				const { model, where } = data;
 				const whereClause = convertWhereClause(model, where);
-				await db[getModelName(model)].delete({
-					where: whereClause,
-				});
+				try {
+					await db[getModelName(model)].delete({
+						where: whereClause,
+					});
+				} catch (e) {
+					// If the record doesn't exist, we don't want to throw an error
+				}
 			},
 			async deleteMany(data) {
 				const { model, where } = data;

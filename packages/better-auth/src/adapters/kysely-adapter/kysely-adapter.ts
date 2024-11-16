@@ -19,6 +19,23 @@ interface KyselyAdapterConfig {
 	generateId?: ((size?: number) => string) | false;
 }
 
+function formatDateForMySQL(date: Date): string {
+	const pad = (n: number) => (n < 10 ? "0" + n : n);
+	return (
+		date.getFullYear() +
+		"-" +
+		pad(date.getMonth() + 1) +
+		"-" +
+		pad(date.getDate()) +
+		" " +
+		pad(date.getHours()) +
+		":" +
+		pad(date.getMinutes()) +
+		":" +
+		pad(date.getSeconds())
+	);
+}
+
 const createTransform = (
 	db: Kysely<any>,
 	options: BetterAuthOptions,
@@ -43,7 +60,10 @@ const createTransform = (
 		if (f.type === "boolean" && type === "sqlite") {
 			return value ? 1 : 0;
 		}
-		if (f.type === "date" && value) {
+		if (f.type === "date" && value && value instanceof Date) {
+			if (type === "mysql") {
+				return formatDateForMySQL(value);
+			}
 			return value.toISOString();
 		}
 		return value;
@@ -60,6 +80,10 @@ const createTransform = (
 			return new Date(value);
 		}
 		return value;
+	}
+
+	function getModelName(model: string) {
+		return schema[model].tableName;
 	}
 
 	const shouldGenerateId = config?.generateId !== false;
@@ -194,25 +218,26 @@ const createTransform = (
 				| InsertQueryBuilder<any, any, any>
 				| UpdateQueryBuilder<any, string, string, any>,
 			model: string,
+			where: Where[],
 		) {
 			let res: any;
 			if (config?.type !== "mysql") {
 				res = await builder.returningAll().executeTakeFirst();
 			} else {
+				//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
 				await builder.execute();
-				const primaryKey = "id";
-				const insertedId = values[primaryKey];
+				const field = values.id ? "id" : where[0].field ? where[0].field : "id";
+				const value = values[field] || where[0].value;
 				res = await db
-					.selectFrom(this.getModelName(model))
+					.selectFrom(getModelName(model))
 					.selectAll()
-					.where(primaryKey, "=", insertedId)
+					.where(getField(model, field), "=", value)
 					.executeTakeFirst();
 			}
 			return res;
 		},
-		getModelName(model: string) {
-			return schema[model].tableName;
-		},
+		getModelName,
+		getField,
 	};
 };
 
@@ -225,6 +250,7 @@ export const kyselyAdapter =
 			transformOutput,
 			convertWhereClause,
 			getModelName,
+			getField,
 		} = createTransform(db, opts, config);
 		return {
 			id: "kysely",
@@ -233,7 +259,7 @@ export const kyselyAdapter =
 				const transformed = transformInput(values, model);
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
-					await withReturning(transformed, builder, model),
+					await withReturning(transformed, builder, model, []),
 					model,
 					select,
 				);
@@ -255,7 +281,7 @@ export const kyselyAdapter =
 			async findMany(data) {
 				const { model, where, limit, offset, sortBy } = data;
 				const { and, or } = convertWhereClause(model, where);
-				let query = db.selectFrom(getModelName(model)).selectAll();
+				let query = db.selectFrom(getModelName(model));
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 				}
@@ -263,9 +289,14 @@ export const kyselyAdapter =
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
 				query = query.limit(limit || 100);
-				if (offset) query = query.offset(offset);
+				if (offset) {
+					query = query.offset(offset);
+				}
 				if (sortBy) {
-					query = query.orderBy(sortBy.field, sortBy.direction);
+					query = query.orderBy(
+						getField(model, sortBy.field),
+						sortBy.direction,
+					);
 				}
 				const res = await query.selectAll().execute();
 				if (!res) return [];
@@ -283,7 +314,7 @@ export const kyselyAdapter =
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
 				return transformOutput(
-					await withReturning(transformedData, query, model),
+					await withReturning(transformedData, query, model, where),
 					model,
 				);
 			},
