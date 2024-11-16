@@ -6,7 +6,7 @@ import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
-import type { AuthContext } from ".";
+import type { AuthContext, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 
@@ -218,7 +218,7 @@ export interface BetterAuthOptions {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
-		fields?: Partial<Record<keyof User, string>>;
+		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
 		 * Additional fields for the session
 		 */
@@ -266,7 +266,7 @@ export interface BetterAuthOptions {
 		 *  userId: "user_id"
 		 * }
 		 */
-		fields?: Partial<Record<keyof Session, string>>;
+		fields?: Partial<Record<keyof OmitId<Session>, string>>;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -316,7 +316,7 @@ export interface BetterAuthOptions {
 	};
 	account?: {
 		modelName?: string;
-		fields?: Partial<Record<keyof Account, string>>;
+		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -335,7 +335,7 @@ export interface BetterAuthOptions {
 	 */
 	verification?: {
 		modelName?: string;
-		fields?: Partial<Record<keyof Verification, string>>;
+		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 	};
 	/**
 	 * List of trusted origins.

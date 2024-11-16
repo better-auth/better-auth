@@ -15,7 +15,7 @@ better-auth
 ```
 
 <Callout type="info">
-If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project. (currently, Better Auth only supports web platforms, but more clients will be added soon)
+If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project.
 </Callout>
 </Step>
 
@@ -166,18 +166,6 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
 
     export const auth = betterAuth({
         database: mongodbAdapter(client)
-    });
-    ```
-    </Tab>
-
-    <Tab value="surrealDB">
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth";
-    import { surrealdbAdapter } from "better-auth/adapters/surrealdb";
-    import { surrealClient } from "@/db"; // your SurrealDB client
-
-    export const auth = betterAuth({
-        database: surrealdbAdapter(client)
     });
     ```
     </Tab>

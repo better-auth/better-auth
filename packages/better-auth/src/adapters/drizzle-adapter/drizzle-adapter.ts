@@ -97,6 +97,11 @@ const createTransform = (
 					return [];
 				}
 				const field = getField(model, w.field);
+				if (!schemaModel[field]) {
+					throw new BetterAuthError(
+						`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+					);
+				}
 				if (w.operator === "in") {
 					if (!Array.isArray(w.value)) {
 						throw new BetterAuthError(
@@ -170,6 +175,7 @@ const createTransform = (
 			return res[0];
 		},
 		getField,
+		getModelName,
 	};
 };
 
@@ -190,6 +196,25 @@ interface DrizzleAdapterConfig {
 	usePlural?: boolean;
 }
 
+function checkMissingFields(
+	schema: Record<string, any>,
+	model: string,
+	values: Record<string, any>,
+) {
+	if (!schema) {
+		throw new BetterAuthError(
+			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+		);
+	}
+	for (const key in values) {
+		if (!schema[key]) {
+			throw new BetterAuthError(
+				`The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
+			);
+		}
+	}
+}
+
 export const drizzleAdapter =
 	(db: DB, config: DrizzleAdapterConfig) => (options: BetterAuthOptions) => {
 		const {
@@ -199,6 +224,7 @@ export const drizzleAdapter =
 			getSchema,
 			withReturning,
 			getField,
+			getModelName,
 		} = createTransform(db, config, options);
 		return {
 			id: "drizzle",
@@ -206,6 +232,7 @@ export const drizzleAdapter =
 				const { model, data: values } = data;
 				const transformed = transformInput(values, model);
 				const schemaModel = getSchema(model);
+				checkMissingFields(schemaModel, getModelName(model), transformed);
 				const builder = db.insert(schemaModel).values(transformed);
 				const returned = await withReturning(model, builder, transformed);
 				return transformOutput(returned, model);

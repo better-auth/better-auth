@@ -445,27 +445,35 @@ export const createInternalAdapter = (
 				],
 			});
 		},
-		deleteSessions: async (userId: string) => {
+		deleteSessions: async (userIdOrSessions: string | string[]) => {
 			if (secondaryStorage) {
-				const sessions = await adapter.findMany<Session>({
-					model: "session",
-					where: [
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-				});
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.id);
+				if (typeof userIdOrSessions === "string") {
+					const activeSession = await secondaryStorage.get(
+						`active-sessions-${userIdOrSessions}`,
+					);
+					const sessions = activeSession
+						? safeJSONParse<{ id: string }[]>(activeSession)
+						: [];
+					if (!sessions) return;
+					for (const session of sessions) {
+						await secondaryStorage.delete(session.id);
+					}
+				} else {
+					for (const sessionId of userIdOrSessions) {
+						const session = await secondaryStorage.get(sessionId);
+						if (session) {
+							await secondaryStorage.delete(sessionId);
+						}
+					}
 				}
 				if (options.session?.storeSessionInDatabase) {
-					await adapter.delete({
+					await adapter.deleteMany({
 						model: "session",
 						where: [
 							{
-								field: "userId",
-								value: userId,
+								field: Array.isArray(userIdOrSessions) ? "id" : "userId",
+								value: userIdOrSessions,
+								operator: Array.isArray(userIdOrSessions) ? "in" : undefined,
 							},
 						],
 					});
@@ -476,8 +484,9 @@ export const createInternalAdapter = (
 				model: "session",
 				where: [
 					{
-						field: "userId",
-						value: userId,
+						field: Array.isArray(userIdOrSessions) ? "id" : "userId",
+						value: userIdOrSessions,
+						operator: Array.isArray(userIdOrSessions) ? "in" : undefined,
 					},
 				],
 			});

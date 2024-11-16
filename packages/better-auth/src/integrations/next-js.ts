@@ -45,7 +45,16 @@ export const nextCookies = () => {
 									domain: value.domain,
 									path: value.path,
 								};
-								cookieHelper.set(key, decodeURIComponent(value.value), opts);
+								try {
+									cookieHelper.set(key, decodeURIComponent(value.value), opts);
+								} catch {
+									if (process.env.NODE_ENV !== "development") {
+										return;
+									}
+									ctx.context.logger.warn(
+										`Unable to set cookie "${key}". This likely occurred while calling "auth.api" action that is supposed to set cookies in an unsupported context, such as a Server Component. Make sure this function is called within a Server Action, a proper server-side context, or use the client SDK. Ignore this message if intentional. (Development mode only).`,
+									);
+								}
 							});
 							return;
 						}
