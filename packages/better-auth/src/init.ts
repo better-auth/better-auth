@@ -155,7 +155,7 @@ export type AuthContext = {
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (password: string,hash: string) => Promise<boolean>;
+		verify: (password: string, hash: string) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
