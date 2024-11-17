@@ -1,4 +1,3 @@
-import type { Kysely } from "kysely";
 import type { Session, User } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils/id";
@@ -382,7 +381,7 @@ export const getOrgAdapter = (
 		}: {
 			invitation: {
 				email: string;
-				role: "admin" | "member" | "owner";
+				role: string;
 				organizationId: string;
 			};
 			user: User;

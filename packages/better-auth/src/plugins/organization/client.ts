@@ -5,16 +5,22 @@ import type {
 	Organization,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
-import { defaultStatements, type AccessControl, type Role } from "../access";
+import {
+	adminAc,
+	defaultStatements,
+	memberAc,
+	ownerAc,
+	type AccessControl,
+	type Role,
+} from "./access";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
-import type { BetterFetchOption } from "@better-fetch/fetch";
 import { useAuthQuery } from "../../client";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
-	roles?: {
-		[key in "admin" | "member" | "owner"]?: Role<any>;
+	roles: {
+		[key in string]: Role;
 	};
 }
 
@@ -31,9 +37,28 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			? S & DefaultStatements
 			: DefaultStatements
 		: DefaultStatements;
+	const roles = {
+		...options?.roles,
+		admin: adminAc,
+		member: memberAc,
+		owner: ownerAc,
+	};
 	return {
 		id: "organization",
-		$InferServerPlugin: {} as ReturnType<typeof organization>,
+		$InferServerPlugin: {} as ReturnType<
+			typeof organization<{
+				ac: O["ac"] extends AccessControl
+					? O["ac"]
+					: AccessControl<DefaultStatements>;
+				roles: O["roles"] extends Record<string, Role<any>>
+					? O["roles"]
+					: {
+							admin: Role<any>;
+							member: Role<any>;
+							owner: Role<any>;
+						};
+			}>
+		>,
 		getActions: ($fetch) => ({
 			$Infer: {
 				ActiveOrganization: {} as Prettify<
@@ -56,22 +81,23 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				hasPermission: async (data: {
+				checkRolePermission: <
+					R extends O extends { roles: any }
+						? keyof O["roles"]
+						: "admin" | "member" | "owner",
+				>(data: {
+					role: R;
 					permission: Partial<{
 						//@ts-expect-error fix this later
 						[key in keyof Statements]: Statements[key][number][];
 					}>;
-					fetchOptions?: BetterFetchOption;
 				}) => {
-					return await $fetch<{
-						success: boolean;
-					}>("/organization/has-permission", {
-						method: "POST",
-						body: {
-							permission: data.permission,
-						},
-						...data.fetchOptions,
-					});
+					const role = roles[data.role as unknown as "admin"];
+					if (!role) {
+						return false;
+					}
+					const isAuthorized = role?.authorize(data.permission as any);
+					return isAuthorized.success;
 				},
 			},
 		}),

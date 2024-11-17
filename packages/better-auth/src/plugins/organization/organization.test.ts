@@ -110,7 +110,7 @@ describe("organization", async (it) => {
 		const invite = await client.organization.inviteMember({
 			organizationId: organizationId,
 			email: newUser.email,
-			role: "member",
+			role: "admin",
 			fetchOptions: {
 				headers,
 			},

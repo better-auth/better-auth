@@ -6,7 +6,7 @@ export const multiSessionClient = () => {
 		id: "multi-session",
 		$InferServerPlugin: {} as ReturnType<typeof multiSession>,
 		pathMethods: {
-			"/multi-session/sign-out-device-sessions": "POST",
+			"/multi-session/revoke-all": "POST",
 		},
 		atomListeners: [
 			{
