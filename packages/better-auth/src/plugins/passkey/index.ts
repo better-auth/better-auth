@@ -16,11 +16,16 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import { getSessionFromCtx } from "../../api/routes";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	PluginSchema,
+} from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { generateId } from "../../utils/id";
 import { env } from "../../utils/env";
+import { mergeSchema } from "../../db/schema";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -58,6 +63,10 @@ export interface PasskeyOptions {
 	advanced?: {
 		webAuthnChallengeCookie?: string;
 	};
+	/**
+	 * Schema for the passkey model
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export type Passkey = {
@@ -498,54 +507,56 @@ export const passkey = (options?: PasskeyOptions) => {
 				},
 			),
 		},
-		schema: {
-			passkey: {
-				fields: {
-					name: {
-						type: "string",
-						required: false,
-					},
-					publicKey: {
-						type: "string",
-						required: true,
-					},
-					userId: {
-						type: "string",
-						references: {
-							model: "user",
-							field: "id",
-						},
-						required: true,
-					},
-					webauthnUserID: {
-						type: "string",
-						required: true,
-					},
-					counter: {
-						type: "number",
-						required: true,
-					},
-					deviceType: {
-						type: "string",
-						required: true,
-					},
-					backedUp: {
-						type: "boolean",
-						required: true,
-					},
-					transports: {
-						type: "string",
-						required: false,
-					},
-					createdAt: {
-						type: "date",
-						defaultValue: new Date(),
-						required: false,
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+const schema = {
+	passkey: {
+		fields: {
+			name: {
+				type: "string",
+				required: false,
+			},
+			publicKey: {
+				type: "string",
+				required: true,
+			},
+			userId: {
+				type: "string",
+				references: {
+					model: "user",
+					field: "id",
+				},
+				required: true,
+			},
+			webauthnUserID: {
+				type: "string",
+				required: true,
+			},
+			counter: {
+				type: "number",
+				required: true,
+			},
+			deviceType: {
+				type: "string",
+				required: true,
+			},
+			backedUp: {
+				type: "boolean",
+				required: true,
+			},
+			transports: {
+				type: "string",
+				required: false,
+			},
+			createdAt: {
+				type: "date",
+				defaultValue: new Date(),
+				required: false,
+			},
+		},
+	},
+} satisfies PluginSchema;
 
 export * from "./client";

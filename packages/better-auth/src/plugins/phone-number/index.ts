@@ -1,8 +1,12 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	PluginSchema,
+} from "../../types/plugins";
 import { APIError } from "better-call";
-import type { User } from "../../db/schema";
+import { mergeSchema, type User } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
@@ -84,6 +88,10 @@ export const phoneNumber = (options?: {
 		 */
 		getTempName?: (phoneNumber: string) => string;
 	};
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }) => {
 	const opts = {
 		phoneNumber: "phoneNumber",
@@ -205,7 +213,7 @@ export const phoneNumber = (options?: {
 					}
 
 					let user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
-						model: ctx.context.tables.user.tableName,
+						model: ctx.context.tables.user.modelName,
 						where: [
 							{
 								value: ctx.body.phoneNumber,
@@ -281,23 +289,25 @@ export const phoneNumber = (options?: {
 				},
 			),
 		},
-		schema: {
-			user: {
-				fields: {
-					phoneNumber: {
-						type: "string",
-						required: false,
-						unique: true,
-						returned: true,
-					},
-					phoneNumberVerified: {
-						type: "boolean",
-						required: false,
-						returned: true,
-						input: false,
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+const schema = {
+	user: {
+		fields: {
+			phoneNumber: {
+				type: "string",
+				required: false,
+				unique: true,
+				returned: true,
+			},
+			phoneNumberVerified: {
+				type: "boolean",
+				required: false,
+				returned: true,
+				input: false,
+			},
+		},
+	},
+} satisfies PluginSchema;

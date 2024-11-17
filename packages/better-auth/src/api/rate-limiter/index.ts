@@ -34,8 +34,8 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
-function createDBStorage(ctx: AuthContext, tableName?: string) {
-	const model = tableName ?? "rateLimit";
+function createDBStorage(ctx: AuthContext, modelName?: string) {
+	const model = "rateLimit";
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
@@ -49,7 +49,7 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 			try {
 				if (_update) {
 					await db.update({
-						model: tableName ?? "rateLimit",
+						model: modelName ?? "rateLimit",
 						where: [{ field: "key", value: key }],
 						update: {
 							count: value.count,
@@ -58,7 +58,7 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 					});
 				} else {
 					await db.create({
-						model: tableName ?? "rateLimit",
+						model: modelName ?? "rateLimit",
 						data: {
 							key,
 							count: value.count,
@@ -97,7 +97,7 @@ export function getRateLimitStorage(ctx: AuthContext) {
 			},
 		};
 	}
-	return createDBStorage(ctx, ctx.rateLimit.tableName);
+	return createDBStorage(ctx, ctx.rateLimit.modelName);
 }
 
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {

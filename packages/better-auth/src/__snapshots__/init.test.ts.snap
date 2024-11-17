@@ -178,7 +178,7 @@ exports[`init > should match config 1`] = `
         },
       },
       "order": 3,
-      "tableName": "account",
+      "modelName": "account",
     },
     "session": {
       "fields": {
@@ -209,7 +209,7 @@ exports[`init > should match config 1`] = `
         },
       },
       "order": 2,
-      "tableName": "session",
+      "modelName": "session",
     },
     "user": {
       "fields": {
@@ -249,7 +249,7 @@ exports[`init > should match config 1`] = `
         },
       },
       "order": 1,
-      "tableName": "user",
+      "modelName": "user",
     },
     "verification": {
       "fields": {
@@ -276,7 +276,7 @@ exports[`init > should match config 1`] = `
         },
       },
       "order": 4,
-      "tableName": "verification",
+      "modelName": "verification",
     },
   },
   "trustedOrigins": [

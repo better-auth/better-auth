@@ -83,7 +83,7 @@ const createTransform = (
 	}
 
 	function getModelName(model: string) {
-		return schema[model].tableName;
+		return schema[model].modelName;
 	}
 
 	const shouldGenerateId = config?.generateId !== false;
