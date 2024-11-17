@@ -72,6 +72,7 @@ export type BetterAuthPlugin = {
 				}>,
 			) => Promise<void | {
 				response: unknown;
+				responseHeader?: Headers;
 			}>;
 		}[];
 	};

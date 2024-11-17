@@ -4,38 +4,39 @@ import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
 
 describe("Admin plugin", async () => {
-	const { client, signInWithTestUser } = await getTestInstance(
-		{
-			plugins: [admin()],
-			logger: {
-				verboseLogging: true,
-			},
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
+	const { client, auth, signInWithTestUser, signInWithUser } =
+		await getTestInstance(
+			{
+				plugins: [admin()],
+				logger: {
+					verboseLogging: true,
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{
-			testUser: {
-				name: "Admin",
+			{
+				testUser: {
+					name: "Admin",
+				},
+				clientOptions: {
+					plugins: [adminClient()],
+				},
 			},
-			clientOptions: {
-				plugins: [adminClient()],
-			},
-		},
-	);
+		);
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 
@@ -216,39 +217,59 @@ describe("Admin plugin", async () => {
 		expect(res.data?.sessions.length).toBe(1);
 	});
 
+	const data = {
+		email: "impersonate@mail.com",
+		password: "password",
+		name: "Impersonate User",
+	};
+
 	it("should allow admins to impersonate user", async () => {
+		const userToImpersonate = await client.signUp.email(data);
 		const res = await client.admin.impersonateUser(
 			{
-				userId: newUser?.id || "",
+				userId: userToImpersonate.data?.user.id || "",
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
 		expect(res.data?.session).toBeDefined();
-		expect(res.data?.user?.id).toBe(newUser?.id);
+		expect(res.data?.user?.id).toBe(userToImpersonate.data?.user.id);
+	});
+
+	it("should filter impersonated sessions", async () => {
+		const { headers } = await signInWithUser(data.email, data.password);
+		const res = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.length).toBe(2);
 	});
 
 	it("should allow admin to revoke user session", async () => {
+		const {
+			res: { user },
+		} = await signInWithUser(data.email, data.password);
 		const sessions = await client.admin.listUserSessions(
 			{
-				userId: newUser?.id || "",
+				userId: user.id,
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
-		expect(sessions.data?.sessions.length).toBe(2);
+		expect(sessions.data?.sessions.length).toBe(4);
 		const res = await client.admin.revokeUserSession(
 			{ sessionId: sessions.data?.sessions[0].id || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);
 		const sessions2 = await client.admin.listUserSessions(
-			{ userId: newUser?.id || "" },
+			{ userId: user?.id || "" },
 			{ headers: adminHeaders },
 		);
-		expect(sessions2.data?.sessions.length).toBe(1);
+		expect(sessions2.data?.sessions.length).toBe(3);
 	});
 
 	it("should allow admin to revoke user sessions", async () => {
