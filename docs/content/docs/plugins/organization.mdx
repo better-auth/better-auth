@@ -671,6 +671,12 @@ Table Name: `invitation`
       isForeignKey: true
     },
     { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the user who invited the user.",
+      isForeignKey: true
+    },
+    { 
       name: "role", 
       type: "string", 
       description: "The role of the user in the organization" 
@@ -678,7 +684,7 @@ Table Name: `invitation`
     { 
       name: "status", 
       type: "string", 
-      description: "The status of the invitation" 
+      description: "The status of the invitation. Enum with 4 possible options: 'pending', 'accepted', 'rejected', 'canceled'" 
     },
     { 
       name: "expiresAt", 
