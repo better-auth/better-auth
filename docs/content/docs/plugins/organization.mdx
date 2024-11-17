@@ -526,6 +526,47 @@ the plugin providers easy way to define your own set of permission for each role
 </Steps>
 
 
+
+
+## Custom Tables
+
+Like with the core schema, the Organization plugin allows you to customize the table names and column names.
+
+### Custom Table Names
+
+You can configure this using the `schema` option when initializing the plugin:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            schema: {
+                organization: {
+                    modelName: "tenants", // Changes table name to "tenants"
+                },
+                member: {
+                    modelName: "tenant_members",
+                    fields: {
+                        userId: "user_id",
+                        organizationId: "tenant_id",
+                    }
+                },
+                session: {
+                    fields: {
+                        activeOrganizationId: "active_tenant_id"
+                    }
+                }
+            }
+        })
+    ]
+})
+```
+
+All organization plugin tables and columns listed in the [Schema](#schema) section can be customized. The column `activeOrganizationId` in the `session` table can also be customized like in the example above.
+
 ## Schema
 
 The organization plugin adds the following tables to the database:
