@@ -60,7 +60,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						signature: sessionDataPayload?.signature,
 						secret: ctx.context.secret,
 					});
-					console.log({ isValid });
 					if (!isValid) {
 						deleteSessionCookie(ctx);
 						return ctx.json(null);
@@ -83,7 +82,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					const hasExpired =
 						sessionDataPayload.expiresAt < Date.now() ||
 						session.session.expiresAt < new Date();
-
 					if (!hasExpired) {
 						return ctx.json(
 							session as {
