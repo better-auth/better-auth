@@ -105,7 +105,6 @@ export async function setSessionCookie(
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
-	console.log({ maxAge });
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.id,
