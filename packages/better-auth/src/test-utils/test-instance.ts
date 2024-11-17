@@ -10,10 +10,11 @@ import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
 import { getBaseURL } from "../utils/url";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
 import { Pool } from "pg";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters";
+import { createPool } from "mysql2/promise";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -25,7 +26,7 @@ export async function getTestInstance<
 		port?: number;
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb";
+		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 	},
 ) {
 	const testWith = config?.testWith || "sqlite";
@@ -42,6 +43,12 @@ export async function getTestInstance<
 				connectionString: "postgres://user:password@localhost:5432/better_auth",
 			}),
 		}),
+	});
+
+	const mysql = new Kysely({
+		dialect: new MysqlDialect(
+			createPool("mysql://user:password@localhost:3306/better_auth"),
+		),
 	});
 
 	async function mongodbClient() {
@@ -72,7 +79,9 @@ export async function getTestInstance<
 				? { db: postgres, type: "postgres" }
 				: testWith === "mongodb"
 					? mongodbAdapter(await mongodbClient())
-					: new Database(dbName),
+					: testWith === "mysql"
+						? { db: mysql, type: "mysql" }
+						: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -117,6 +126,7 @@ export async function getTestInstance<
 		});
 		await runMigrations();
 	}
+
 	await createTestUser();
 
 	afterAll(async () => {
@@ -130,9 +140,21 @@ export async function getTestInstance<
 				postgres,
 			);
 			await postgres.destroy();
-		} else {
-			await fs.unlink(dbName);
+			return;
 		}
+
+		if (testWith === "mysql") {
+			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
+			const tables = await mysql.introspection.getTables();
+			for (const table of tables) {
+				// @ts-expect-error
+				await mysql.deleteFrom(table.name).execute();
+			}
+			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
+			return;
+		}
+
+		await fs.unlink(dbName);
 	});
 
 	async function signInWithTestUser() {

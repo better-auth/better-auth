@@ -659,7 +659,7 @@ export const createInternalAdapter = (
 				limit: 10,
 			});
 			const lastVerification = verification[0];
-			return lastVerification;
+			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({
