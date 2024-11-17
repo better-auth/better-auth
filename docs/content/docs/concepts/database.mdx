@@ -470,7 +470,7 @@ export const auth = betterAuth({
   Type inference in your code will still use the original field names (e.g., `user.name`, not `user.full_name`).
 </Callout>
 
-For plugin schema you can pass `schema` object to most of the plugins to customize the table names and column names.
+To customize table names and column name for plugins, you can use the `schema` property in the plugin config:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
