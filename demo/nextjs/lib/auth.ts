@@ -122,8 +122,7 @@ export const auth = betterAuth({
 								? `http://localhost:3000/accept-invitation/${data.id}`
 								: `${
 										process.env.BETTER_AUTH_URL ||
-										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL
+										"https://demo.better-auth.com"
 									}/accept-invitation/${data.id}`,
 					}),
 				});
