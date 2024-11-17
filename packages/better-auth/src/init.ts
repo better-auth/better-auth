@@ -1,15 +1,8 @@
 import { defu } from "defu";
-import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import { getAuthTables } from "./db/get-tables";
 import { getAdapter } from "./db/utils";
-import type { OAuthProvider } from "./oauth2";
-import { socialProviderList, socialProviders } from "./social-providers";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -18,7 +11,6 @@ import type {
 	Session,
 	User,
 } from "./types";
-import { generateId } from "./utils";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
