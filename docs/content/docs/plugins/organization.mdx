@@ -699,9 +699,26 @@ Table Name: `invitation`
   ]}
   />
 
+### Session
+
+The Organization plugin tracks the `activeOrganizationId` in the `Session` table. Make sure to add this column to the table.
+
+Table Name: `session`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "activeOrganizationId", 
+      type: "string", 
+      description: "The active organization id for the session",
+      isForeignKey: true
+    },
+  ]}
+  />
+
 ### Customizing the Schema
 
-To change the schema table name or fields, you can pass `schema` option to the organization plugin. 
+To customize table and column names in the Organization plugin, you can use the schema option during the plugin's initialization. This feature allows you to map the default schema to your preferred table and column names:
 
 ```ts title="auth.ts"
 const auth = betterAuth({
@@ -717,6 +734,9 @@ const auth = betterAuth({
   })]
 })
 ```
+
+
+
 
 ## Options
 
