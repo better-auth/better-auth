@@ -83,7 +83,7 @@ export const oneTap = (options?: OneTapOptions) =>
 						user.user.id,
 						c.request,
 					);
-					console.log({ session });
+
 					await setSessionCookie(c, {
 						user: user.user,
 						session,
