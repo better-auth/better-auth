@@ -1,16 +1,24 @@
-import { getAuthTables } from "./db/get-tables";
-import { getAdapter } from "./db/utils";
+import { defu } from "defu";
+import {
+	type BetterAuthCookies,
+	createCookieGetter,
+	getCookies,
+} from "./cookies";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "./utils/env";
+import { getAuthTables } from "./db/get-tables";
+import { getAdapter } from "./db/utils";
+import type { OAuthProvider } from "./oauth2";
+import { socialProviderList, socialProviders } from "./social-providers";
 import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	SecondaryStorage,
+	Session,
+	User,
 } from "./types";
-import { defu } from "defu";
-import { getBaseURL } from "./utils/url";
+import { generateId } from "./utils";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
@@ -21,7 +29,9 @@ import { createLogger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { env, isProduction } from "./utils/env";
 import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -99,6 +109,7 @@ export const init = async (options: BetterAuthOptions) => {
 		authCookies: cookies,
 		logger: logger,
 		uuid: generateId,
+		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -125,6 +136,10 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	session: {
+		session: Session;
+		user: User;
+	} | null;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
@@ -146,7 +161,7 @@ export type AuthContext = {
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (hash: string, password: string) => Promise<boolean>;
+		verify: (password: string, hash: string) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;

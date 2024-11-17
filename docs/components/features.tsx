@@ -15,30 +15,29 @@ import { LockClosedIcon } from "@radix-ui/react-icons";
 import { TechStackDisplay } from "./display-techstack";
 import { Ripple } from "./ripple";
 import { GithubStat } from "./github-stat";
-import Testimonial from "./testimonial";
 import { cn } from "@/lib/utils";
-
+import { Testimonial } from "./landing/people-say";
 const features = [
 	{
 		id: 1,
 		label: "Framework Agnostic",
-		title: "Supports popular <strong>frameworks</strong>",
+		title: "Supports for popular <strong>frameworks</strong>.",
 		description:
-			"Supports popular frameworks, including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Hono, and more.",
+			"Supports popular frameworks, including React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, Tanstack Start, Hono, and more.",
 		icon: PlugZap2Icon,
 	},
 	{
 		id: 2,
 		label: "Authentication",
-		title: "Email & Password <strong>Authentication</strong>",
+		title: "Email & Password <strong>Authentication</strong>.",
 		description:
-			"Built-in support for email and password authentication, with secure password hashing and account management features.",
+			"Built-in support for email and password authentication, with session and account management features.",
 		icon: LockClosedIcon,
 	},
 	{
 		id: 3,
 		label: "Social Sign-on",
-		title: "Support multiple <strong>OAuth providers</strong>",
+		title: "Support multiple <strong>OAuth providers</strong>.",
 		description:
 			"Allow users to sign in with their accounts, including GitHub, Google, Discord, Twitter, and more.",
 		icon: Webhook,
@@ -46,25 +45,27 @@ const features = [
 	{
 		id: 4,
 		label: "Two Factor",
-		title: "Two Factor <strong>Authentication</strong>",
+		title: "Multi Factor <strong>Authentication</strong>.",
 		description:
-			"With our built-in two factor authentication plugin, you can add an extra layer of security to your account.",
+			"Secure your users accounts with two factor authentication with a few lines of code.",
 		icon: ShieldCheckIcon,
 	},
 	{
 		id: 5,
-		label: "Organization & Access Control",
-		title: "Gain and manage <strong>access</strong>.",
+		label: "Multi Tenant",
+		title: "<strong>Organization</strong> Members and Invitation.",
 		description:
-			"Manage users and their access to resources within your application.",
+			"Multi tenant support with members, organization, teams and invitation with access control.",
+
 		icon: RabbitIcon,
 	},
+
 	{
 		id: 6,
 		label: "Plugin Ecosystem",
-		title: "Extend your application with plugins.",
+		title: "A lot more features with <strong>plugins</strong>.",
 		description:
-			"Enhance your application with our official plugins and those created by the community.",
+			"Improve your application experience with our official plugins and those created by the community.",
 		icon: PlugIcon,
 	},
 ];
@@ -113,9 +114,9 @@ export default function Features({ stars }: { stars: string | null }) {
 						</div>
 					))}
 				</div>
-
-				<Testimonial />
-
+				<div className="w-full border-l-2">
+					<Testimonial />
+				</div>
 				<div className="relative col-span-3 border-t-[1.2px] border-l-[1.2px] md:border-b-[1.2px] dark:border-b-0  h-full py-20">
 					<div className="w-full h-full p-16 pt-10 md:px-10">
 						<div className="flex flex-col items-center justify-center w-full h-full gap-3">

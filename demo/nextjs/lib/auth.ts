@@ -15,6 +15,7 @@ import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
+import { nextCookies } from "better-auth/next-js";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -24,14 +25,20 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
-const mysql = new MysqlDialect(
-	createPool("mysql://user:password@localhost:3306/better_auth"),
-);
+const mysql = process.env.USE_MYSQL
+	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
+	: null;
+
+const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect: mysql,
+		dialect,
 		type: "mysql",
 	},
 	session: {
@@ -141,5 +148,6 @@ export const auth = betterAuth({
 		multiSession(),
 		oneTap(),
 		oAuthProxy(),
+		nextCookies(),
 	],
 });

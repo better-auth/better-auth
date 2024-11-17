@@ -141,23 +141,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				!ctx.context.options.emailAndPassword.autoSignIn ||
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
-				return ctx.json(
-					{
-						user: createdUser as InferUser<O>,
-						session: null,
-					},
-					{
-						body: body.callbackURL
-							? {
-									url: body.callbackURL,
-									redirect: true,
-								}
-							: {
-									user: createdUser,
-									session: null,
-								},
-					},
-				);
+				return ctx.json({
+					user: createdUser as InferUser<O>,
+					session: null,
+				});
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(

@@ -118,6 +118,8 @@ export function getEndpoints<
 	for (const [key, value] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
 			let c = await ctx;
+			// clear session so it doesn't persist between requests
+			c.session = null;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
