@@ -55,9 +55,7 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data).toMatchObject({
-			status: true,
-		});
+		expect(response.data?.session).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
