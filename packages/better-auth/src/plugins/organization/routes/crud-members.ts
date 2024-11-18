@@ -6,6 +6,8 @@ import type { InferRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
 import type { User } from "../../../db/schema";
 import { generateId } from "../../../utils";
+import type { OrganizationOptions } from "../organization";
+import { getSessionFromCtx } from "../../../api";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -13,19 +15,25 @@ export const addMember = <O extends OrganizationOptions>() =>
 		{
 			method: "POST",
 			body: z.object({
-				userIdOrEmail: z.string(),
+				userId: z.string(),
 				role: z.string() as unknown as InferRolesFromOption<O>,
 				organizationId: z.string().optional(),
 			}),
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
 			},
 		},
 		async (ctx) => {
-			const session = ctx.context.session;
+			const session = ctx.body.userId
+				? await getSessionFromCtx<{
+						session: {
+							activeOrganizationId?: string;
+						};
+					}>(ctx).catch((e) => null)
+				: null;
 			const orgId =
-				ctx.body.organizationId || session.session.activeOrganizationId;
+				ctx.body.organizationId || session?.session.activeOrganizationId;
 			if (!orgId) {
 				return ctx.json(null, {
 					status: 400,
@@ -37,16 +45,9 @@ export const addMember = <O extends OrganizationOptions>() =>
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-			let user: User | null;
-			if (ctx.body.userIdOrEmail.includes("@")) {
-				user = await ctx.context.internalAdapter
-					.findUserByEmail(ctx.body.userIdOrEmail)
-					.then((res) => res?.user || null);
-			} else {
-				user = await ctx.context.internalAdapter.findUserById(
-					ctx.body.userIdOrEmail,
-				);
-			}
+			const user = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
 
 			if (!user) {
 				throw new APIError("BAD_REQUEST", {
@@ -72,13 +73,9 @@ export const addMember = <O extends OrganizationOptions>() =>
 				createdAt: new Date(),
 			});
 
-			return ctx.json({
-				member: createdMember,
-			});
+			return ctx.json(createdMember);
 		},
 	);
-import type { OrganizationOptions } from "../organization";
-import type { BetterAuthOptions } from "../../../types";
 
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",

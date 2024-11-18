@@ -211,7 +211,7 @@ export const getSessionFromCtx = async <
 	return session as {
 		session: S & Session;
 		user: U & User;
-	};
+	} | null;
 };
 
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
