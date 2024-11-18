@@ -438,7 +438,7 @@ async function convertImageToBase64(file: File): Promise<string> {
 }
 
 function ChangePassword() {
-	const { data, isPending, error } = useSession();
+	const { data } = useSession();
 	const [currentPassword, setCurrentPassword] = useState<string>("");
 	const [newPassword, setNewPassword] = useState<string>("");
 	const [confirmPassword, setConfirmPassword] = useState<string>("");
@@ -460,9 +460,7 @@ function ChangePassword() {
 							d="M2.5 18.5v-1h19v1zm.535-5.973l-.762-.442l.965-1.693h-1.93v-.884h1.93l-.965-1.642l.762-.443L4 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L4 10.835zm8 0l-.762-.442l.966-1.693H9.308v-.884h1.93l-.965-1.642l.762-.443L12 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L12 10.835zm8 0l-.762-.442l.966-1.693h-1.931v-.884h1.93l-.965-1.642l.762-.443L20 9.066l.966-1.643l.761.443l-.965 1.642h1.93v.884h-1.93l.965 1.693l-.762.442L20 10.835z"
 						></path>
 					</svg>
-					<span className="text-sm text-muted-foreground">
-						Change Password {data?.user.name}
-					</span>
+					<span className="text-sm text-muted-foreground">Change Password</span>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="sm:max-w-[425px] w-11/12">
