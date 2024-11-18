@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, like, or, SQL } from "drizzle-orm";
 import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
 
 interface DB {
 	[key: string]: any;
@@ -50,11 +51,24 @@ const createTransform = (
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		getSchema,
-		transformInput(data: Record<string, any>, model: string) {
-			const { id, ...rest } = data;
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				id && !useDatabaseGeneratedId ? { id } : {};
-			for (const key in rest) {
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id:
+								data.id ||
+								(options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId()),
+						};
+			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = data[key];
@@ -230,7 +244,7 @@ export const drizzleAdapter =
 			id: "drizzle",
 			async create(data) {
 				const { model, data: values } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const schemaModel = getSchema(model);
 				checkMissingFields(schemaModel, getModelName(model), transformed);
 				const builder = db.insert(schemaModel).values(transformed);
@@ -274,7 +288,7 @@ export const drizzleAdapter =
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
 					.set(transformed)
@@ -286,7 +300,7 @@ export const drizzleAdapter =
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
 					.set(transformed)

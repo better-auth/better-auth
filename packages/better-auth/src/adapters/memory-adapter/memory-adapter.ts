@@ -1,5 +1,6 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -16,10 +17,24 @@ const createTransform = (options: BetterAuthOptions) => {
 		return f.fieldName || field;
 	}
 	return {
-		transformInput(data: Record<string, any>, model: string) {
-			const { id, ...rest } = data;
-			const transformedData: Record<string, any> = id ? { id } : {};
-			for (const key in rest) {
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "update" | "create",
+		) {
+			const transformedData: Record<string, any> =
+				action === "update"
+					? {}
+					: {
+							id:
+								data.id ||
+								(options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId()),
+						};
+			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = data[key];
@@ -87,7 +102,7 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 	return {
 		id: "memory",
 		create: async ({ model, data }) => {
-			const transformed = transformInput(data, model);
+			const transformed = transformInput(data, model, "create");
 			db[model].push(transformed);
 			return transformOutput(transformed, model);
 		},
@@ -124,7 +139,7 @@ export const memoryAdapter = (db: MemoryDB) => (options: BetterAuthOptions) => {
 			const table = db[model];
 			const res = convertWhereClause(where, table, model);
 			res.forEach((record) => {
-				Object.assign(record, transformInput(update, model));
+				Object.assign(record, transformInput(update, model, "update"));
 			});
 			return transformOutput(res[0], model);
 		},

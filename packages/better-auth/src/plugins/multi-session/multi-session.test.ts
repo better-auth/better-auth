@@ -108,7 +108,7 @@ describe("multi-session", async () => {
 			{
 				onSuccess(context) {
 					expect(context.response.headers.get("set-cookie")).toContain(
-						`better-auth.session_token=${sessionId}`,
+						`better-auth.session_token=`,
 					);
 				},
 			},

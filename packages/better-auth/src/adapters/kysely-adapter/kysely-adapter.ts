@@ -60,18 +60,23 @@ const createTransform = (
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = useDatabaseGeneratedId
-				? {}
-				: {
-						id:
-							data.id ||
-							(options.advanced?.generateId
-								? options.advanced.generateId({
-										model,
-									})
-								: generateId()),
-					};
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
+			const transformedData: Record<string, any> =
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id:
+								data.id ||
+								(options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId()),
+						};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
@@ -233,7 +238,7 @@ export const kyselyAdapter =
 			id: "kysely",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),
@@ -282,7 +287,7 @@ export const kyselyAdapter =
 			async update(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model);
+				const transformedData = transformInput(values, model, "update");
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
@@ -298,7 +303,7 @@ export const kyselyAdapter =
 			async updateMany(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model);
+				const transformedData = transformInput(values, model, "update");
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));

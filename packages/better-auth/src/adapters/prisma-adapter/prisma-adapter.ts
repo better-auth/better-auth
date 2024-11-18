@@ -1,5 +1,6 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
 
 interface PrismaConfig {
 	/**
@@ -55,11 +56,24 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(data: Record<string, any>, model: string) {
-			const { id, ...rest } = data;
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				id && !useDatabaseGeneratedId ? { id } : {};
-			for (const key in rest) {
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id:
+								data.id ||
+								(options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId()),
+						};
+			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = data[key];
@@ -164,7 +178,7 @@ export const prismaAdapter =
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -199,7 +213,7 @@ export const prismaAdapter =
 			async update(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
 					where: whereClause,
 					data: transformed,
@@ -209,7 +223,7 @@ export const prismaAdapter =
 			async updateMany(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
 					where: whereClause,
 					data: transformed,
