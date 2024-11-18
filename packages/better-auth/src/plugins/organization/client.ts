@@ -38,10 +38,10 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			: DefaultStatements
 		: DefaultStatements;
 	const roles = {
-		...options?.roles,
 		admin: adminAc,
 		member: memberAc,
 		owner: ownerAc,
+		...options?.roles,
 	};
 	return {
 		id: "organization",
@@ -50,12 +50,12 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				ac: O["ac"] extends AccessControl
 					? O["ac"]
 					: AccessControl<DefaultStatements>;
-				roles: O["roles"] extends Record<string, Role<any>>
+				roles: O["roles"] extends Record<string, Role>
 					? O["roles"]
 					: {
-							admin: Role<any>;
-							member: Role<any>;
-							owner: Role<any>;
+							admin: Role;
+							member: Role;
+							owner: Role;
 						};
 			}>
 		>,

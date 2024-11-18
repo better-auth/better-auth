@@ -67,7 +67,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
-export type Role<TStatements extends Statements = any> = {
+export type Role<TStatements extends Statements = Record<string, any>> = {
 	authorize: (request: any, connector?: Connector) => AuthorizeResponse;
 	statements: TStatements;
 };

@@ -554,20 +554,7 @@ the plugin providers easy way to define your own set of permission for each role
 
 ### Access Control Usage
 
-**On the client**:
-
-Once you have defined the roles and permissions you can use them in your application. The plugin will automatically check the permissions based on the role of the user on the client. (No need to call the server)
-
-```ts title="client.ts"
-const canCreateProject = client.organization.checkRolePermission({
-	permission: {
-		organization: ["delete"],
-	},
-	role: "admin",
-});
-```
-
-**On the server**:
+**Has Permisson**:
 
 You can use the `hasPermission` action provided by the `api` to check the permission of the user.
 
@@ -591,6 +578,19 @@ const canCreateProject = await client.organization.hasPermission({
         project: ["create"]
     }
 })
+```
+
+**Check Role Permission**:
+
+Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+
+```ts title="client.ts"
+const canCreateProject = client.organization.checkRolePermission({
+	permission: {
+		organization: ["delete"],
+	},
+	role: "admin",
+});
 ```
 
 ## Schema
