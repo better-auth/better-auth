@@ -438,7 +438,6 @@ async function convertImageToBase64(file: File): Promise<string> {
 }
 
 function ChangePassword() {
-	const { data } = useSession();
 	const [currentPassword, setCurrentPassword] = useState<string>("");
 	const [newPassword, setNewPassword] = useState<string>("");
 	const [confirmPassword, setConfirmPassword] = useState<string>("");
