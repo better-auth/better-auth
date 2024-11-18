@@ -38,6 +38,13 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			provider: z.enum(socialProviderList),
 			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z.boolean().optional(),
+			/**
 			 * ID token from the provider
 			 *
 			 * This is used to sign in the user
@@ -172,7 +179,7 @@ export const signInSocial = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
