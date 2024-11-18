@@ -8,9 +8,6 @@ describe("Admin plugin", async () => {
 		await getTestInstance(
 			{
 				plugins: [admin()],
-				logger: {
-					verboseLogging: true,
-				},
 				databaseHooks: {
 					user: {
 						create: {
