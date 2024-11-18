@@ -8,7 +8,7 @@ describe("Admin plugin", async () => {
 		{
 			plugins: [admin()],
 			logger: {
-				verboseLogging: true,
+				level: "error",
 			},
 			databaseHooks: {
 				user: {

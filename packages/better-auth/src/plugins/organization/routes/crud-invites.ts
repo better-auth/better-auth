@@ -5,7 +5,6 @@ import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferRolesFromOption } from "../schema";
-import { logger } from "../../../utils/logger";
 import { APIError } from "better-call";
 import type { OrganizationOptions } from "../organization";
 
@@ -26,7 +25,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 		},
 		async (ctx) => {
 			if (!ctx.context.orgOptions.sendInvitationEmail) {
-				logger.warn(
+				ctx.context.logger.warn(
 					"Invitation email is not enabled. Pass `sendInvitationEmail` to the plugin options to enable it.",
 				);
 				throw new APIError("BAD_REQUEST", {
