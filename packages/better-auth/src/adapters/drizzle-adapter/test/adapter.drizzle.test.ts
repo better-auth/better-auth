@@ -1,18 +1,19 @@
-import fs from "fs/promises";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe } from "vitest";
 import * as schema from "./schema";
 import { runAdapterTest } from "../../test";
 import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../db/get-migration";
-import path from "path";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
 import type { BetterAuthOptions } from "../../../types";
+import { Pool } from "pg";
+import { Kysely, PostgresDialect, sql } from "kysely";
 
 describe("adapter test", async () => {
-	const database = new Database(path.join(__dirname, "test.db"));
+	const pg = new Pool({
+		connectionString: "postgres://user:password@localhost:5432/better_auth",
+	});
 	const opts = {
-		database,
+		database: pg,
 		user: {
 			fields: {
 				email: "email_address",
@@ -22,16 +23,27 @@ describe("adapter test", async () => {
 			modelName: "sessions",
 		},
 	} satisfies BetterAuthOptions;
-	beforeEach(async () => {
+
+	beforeAll(async () => {
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	});
 
-	afterAll(async () => {
-		await fs.unlink(path.join(__dirname, "test.db"));
+	const db = drizzle(pg);
+
+	const postgres = new Kysely({
+		dialect: new PostgresDialect({
+			pool: pg,
+		}),
 	});
 
-	const db = drizzle(database);
+	afterAll(async () => {
+		await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+			postgres,
+		);
+		await postgres.destroy();
+	});
+
 	const adapter = drizzleAdapter(db, {
 		provider: "pg",
 		schema,
