@@ -1,0 +1,288 @@
+---
+title: Migrating from NextAuth to BetterAuth
+description: A step-by-step guide to getting started with BetterAuth.
+---
+
+In this section, we'll explore how to seamlessly transition a project from NextAuth to BetterAuth while ensuring no data or functionality is lost. 
+For this demonstration, we'll use an existing project built with the `T3 Stack` with `Prisma` with `Postgresql` as the database, complete with pre-existing data. 
+## Before we get started
+
+For this demonstration, we'll use Discord as our authentication provider. While this process works seamlessly with any other provider, we'll specifically focus on transitioning the Discord integration from NextAuth to BetterAuth—because why not do it in a better way? 😉
+
+**Ensure** you have your `Discord Client ID` and `Discord Client Secret` handy. You can retrieve these from the [Discord Developer Portal](https://discord.com/developers/applications). Once obtained, add them to your `.env` file if you haven't already:  
+
+```env  
+DISCORD_CLIENT_ID=your-client-id  
+DISCORD_CLIENT_SECRET=your-client-secret  
+```  
+<Steps>
+    <Step>
+        ## Install the package
+
+        Let's start by adding Better Auth to your project:
+        ```package-install
+        better-auth
+        ```
+    </Step>
+
+    <Step>
+        ## Create an auth.ts entry point
+
+        Let’s start by clearing out everything in the existing `server/auth` file or where your `auth` and `authConfig` variables are defined. Afterward, create a new file named auth.ts.
+
+        To integrate BetterAuth into your project, you'll need an entry point to handle authentication. You can create this file in either:
+
+        `src/libs/auth.ts`
+        `src/utils/auth.ts`
+        Choose the location that aligns with your project’s organization.
+
+        Once the file is created, copy and paste the following code into it:
+
+        ```typescript
+            import { betterAuth } from "better-auth";
+            import { nextCookies } from "better-auth/next-js";
+            import { prismaAdapter } from "better-auth/adapters/prisma";
+            import { PrismaClient } from "@prisma/client";
+            import { headers } from "next/headers";
+
+            const prisma = new PrismaClient();
+            export const auth = betterAuth({
+            database: prismaAdapter(prisma, {
+                provider: "postgresql",
+            }),
+            plugins: [
+                nextCookies()
+            ],
+            socialProviders: {
+                discord: {
+                clientId: process.env.AUTH_DISCORD_ID!,
+                clientSecret: process.env.AUTH_DISCORD_SECRET!,
+                },
+            },
+            });
+
+            export const getSession = async () => {
+            return await auth.api.getSession({
+                headers: await headers()
+            })
+            }
+        ```
+    </Step>
+
+    <Step>
+        ## Generate a BetterAuth database schema
+
+        Inorder not to overwrite our old prisma schema we'll specify a new place to generate a schema. I named it `better-auth.prisma` but you can name it to anything you want. Generate a database schema with the better-auth cli using:
+
+        ```bash
+            npx @better-auth/cli generate --output prisma/better-auth.prisma
+        ```
+        if your auth.ts file is not in at `src/libs` or `src/utils` make sure to use this command to point to your file path.
+
+        ```bash
+            npx @better-auth/cli generate --config <path-to-your-auth.ts> --output prisma/better-auth.prisma
+        ```
+        BetterAuth relies on the following key attributes to function properly, such as in the users table. Here’s an example of the required fields:
+        <DatabaseTable
+            fields={[
+                {
+                name: "id",
+                type: "string",
+                description: "Unique identifier for each user",
+                isPrimaryKey: true
+                },
+                {
+                name: "name",
+                type: "string",
+                description: "User's chosen display name"
+                },
+                {
+                name: "email",
+                type: "string",
+                description: "User's email address for communication and login"
+                },
+                {
+                name: "emailVerified",
+                type: "boolean",
+                description: "Whether the user's email is verified", 
+                },
+                {
+                name: "createdAt",
+                type: "Date",
+                description: "Timestamp of when the user account was created"
+                },
+                {
+                name: "updatedAt",
+                type: "Date",
+                description: "Timestamp of the last update to the user's information"
+                },
+            ]}
+        /> 
+
+        Make sure to include the fields name, email, emailVerified, createdAt, and updatedAt in your existing schema. These are essential for BetterAuth to function properly and to ensure seamless integration with its authentication system. Adjust or map them accordingly if your database uses different field names.
+
+        For more details on other tables and attributes, check out the [Core Schema](https://www.better-auth.com/docs/concepts/database#core-schema) section in the documentation.
+
+        ### Mapping Existing Columns
+        
+        Rather than replacing existing column names in your Prisma schema, you can map them to match BetterAuth's requirements. For example, if your database uses expires for sessions but BetterAuth expects expiresAt, you can map it in your auth.ts file as shown below:
+        
+        ```typescript
+        export const auth = betterAuth({
+        // Other configs
+            session: {
+                fields: {
+                    expiresAt: "expires"
+                }
+            },
+        });
+        ```
+        **NOTE:** If you are using Drizzle, you can map your schema directly in your `schema.ts` file to align with BetterAuth’s expected structure.
+    </Step>
+
+    <Step>
+        ## Implement Route Listners
+
+        Navigate to `src/app/api/auth` and rename the `[...nextauth]` file to `[...all]` in order to listen to all routes. Inside the route.ts, add the following code:
+
+        ```typescript        
+            import { toNextJsHandler } from "better-auth/next-js";
+            import { auth } from "~/server/auth";
+
+            export const { POST, GET } = toNextJsHandler(auth);
+        ```
+    </Step>
+
+    <Step>
+        ## Connecting all the dots
+
+        Now, let’s bring everything together by ensuring your application logic properly integrates sessions and authentication clients.All we need to do is make our application logic use session and authClients.
+
+        ### Add the proper session headers for TRPC
+        To start, update the session handler in your `src/server/api/trpc.ts` file. Replace the existing session logic with the following:
+        
+        ```typescript
+        export const createTRPCContext = async (opts: { headers: Headers }) => {
+            // REPLACE THIS
+            // const session = await auth();
+
+            // WITH THIS
+            const session = await auth.api.getSession({
+               headers: opts.headers,
+            });
+            return {
+                db,
+                session,
+                ...opts,
+            };
+        };
+        ```
+
+        ### Add Your Auth Client
+
+        Next, create a file named `auth-client.ts` in either `src/libs/` or `src/utils/` (depending on your project’s structure) and paste the following code:
+
+        ```typescript
+        import { createAuthClient } from "better-auth/react";
+
+        export const authClient = createAuthClient({
+            baseURL: process.env.BASE_URL!
+        })
+
+        export const { signIn, signOut, useSession } = authClient;
+        ```
+
+        ### Add your social login functions
+
+        To avoid hydration errors, create a dedicated `sign-in` button component. Use the following code for the SignInButton component:
+
+        ```typescript
+            import { authClient } from "./auth-client"
+
+            export const signInDiscord = async () => {
+                const data = await authClient.signIn.social({
+                    provider: "discord"
+                })
+                return data
+            }
+        ```
+
+        ### Create your Sign in Button
+
+        To avoid hydration errors, create a dedicated `sign-in` button component. Use the following code for the SignInButton component:
+
+        ```typescript
+            "use client";
+
+                import { signOut } from "~/libs/auth-client";
+                import { signInDiscord } from "~/libs/social-login";
+
+                export default function SignInButton({ session }: { session: any }) {
+                    const handleAuth = () => {
+                        session ? signOut() : signInDiscord();
+                    };
+
+                    return (
+                        <button
+                            onClick={handleAuth}
+                            className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
+                        >
+                            {session ? "Sign out" : "Sign in"}
+                        </button>
+                    );
+                }
+
+        ```
+
+        ### Attach it to your frontend
+
+        Add the newly created `SignInButton` to your application's home page or a relevant frontend component.
+
+        ```typescript
+            import Link from "next/link";
+            import { LatestPost } from "~/app/_components/post";
+            import { getSession } from "~/server/auth";
+            import { api, HydrateClient } from "~/trpc/server";
+            import SignInButton from "./_components/sign-in-button";
+
+            export default async function Home() {
+                const hello = await api.post.hello({ text: "from tRPC" });
+                const session = await getSession();
+
+                if (session?.user) {
+                    void api.post.getLatest.prefetch();
+                }
+
+                return (
+                    <HydrateClient>
+                        <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+                            <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
+                                {/* Previous content */}
+                                <div className="flex flex-col items-center gap-2">
+                                    <p className="text-2xl text-white">
+                                        {hello ? hello.greeting : "Loading tRPC query..."}
+                                    </p>
+
+                                    <div className="flex flex-col items-center justify-center gap-4">
+                                        <p className="text-center text-2xl text-white">
+                                            {session && <span>Logged in as {session.user?.name}</span>}
+                                        </p>
+                                        <SignInButton session={session} />
+                                    </div>
+                                </div>
+
+                                {session?.user && <LatestPost />}
+                            </div>
+                        </main>
+                    </HydrateClient>
+                );
+            }
+        ```
+    </Step>
+</Steps>
+
+## Wrapping up
+
+Congratulations! You’ve successfully migrated from NextAuth to BetterAuth, ensuring your authentication logic is modernized and optimized.
+
+**If** you'd like to see the complete code or a live demo, check out the full implementation with multiple auth added [here](https://github.com/Bekacru/t3-app-better-auth).
