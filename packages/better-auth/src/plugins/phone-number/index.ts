@@ -48,7 +48,7 @@ export const phoneNumber = (options?: {
 	 *
 	 * by default any string is accepted
 	 */
-	phoneNumberValidator?: (phoneNumber: string) => boolean;
+	phoneNumberValidator?: (phoneNumber: string) => boolean | Promise<boolean>;
 	/**
 	 * Callback when phone number is verified
 	 */
@@ -93,16 +93,111 @@ export const phoneNumber = (options?: {
 	schema?: InferOptionSchema<typeof schema>;
 }) => {
 	const opts = {
+		expiresIn: options?.expiresIn || 300,
+		otpLength: options?.otpLength || 6,
+		...options,
 		phoneNumber: "phoneNumber",
 		phoneNumberVerified: "phoneNumberVerified",
 		code: "code",
 		createdAt: "createdAt",
-		expiresIn: options?.expiresIn || 300,
-		otpLength: options?.otpLength || 6,
 	};
 	return {
 		id: "phone-number",
 		endpoints: {
+			signInPhoneNumber: createAuthEndpoint(
+				"/sign-in/phone-number",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+						password: z.string(),
+						rememberMe: z.boolean().optional(),
+					}),
+				},
+				async (ctx) => {
+					const { password, phoneNumber } = ctx.body;
+
+					if (opts.phoneNumberValidator) {
+						const isValidNumber = await opts.phoneNumberValidator(
+							ctx.body.phoneNumber,
+						);
+						if (!isValidNumber) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid phone number!",
+							});
+						}
+					}
+
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								field: "phoneNumber",
+								value: phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Invalid phone number or password",
+						});
+					}
+					const accounts =
+						await ctx.context.internalAdapter.findAccountByUserId(user.id);
+					const credentialAccount = accounts.find(
+						(a) => a.providerId === "credential",
+					);
+					if (!credentialAccount) {
+						ctx.context.logger.error("Credential account not found", {
+							phoneNumber,
+						});
+						throw new APIError("UNAUTHORIZED", {
+							message: "Invalid password or password",
+						});
+					}
+					const currentPassword = credentialAccount?.password;
+					if (!currentPassword) {
+						ctx.context.logger.error("Password not found", { phoneNumber });
+						throw new APIError("UNAUTHORIZED", {
+							message: "Unexpected error",
+						});
+					}
+					const validPassword = await ctx.context.password.verify(
+						currentPassword,
+						password,
+					);
+					if (!validPassword) {
+						ctx.context.logger.error("Invalid password");
+						throw new APIError("UNAUTHORIZED", {
+							message: "Invalid email or password",
+						});
+					}
+					const session = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.headers,
+						ctx.body.rememberMe === false,
+					);
+					if (!session) {
+						ctx.context.logger.error("Failed to create session");
+						throw new APIError("UNAUTHORIZED", {
+							message: "Failed to create session",
+						});
+					}
+
+					await setSessionCookie(
+						ctx,
+						{
+							session,
+							user: user,
+						},
+						ctx.body.rememberMe === false,
+					);
+					return ctx.json({
+						user: user,
+						session,
+					});
+				},
+			),
 			sendPhoneNumberOTP: createAuthEndpoint(
 				"/phone-number/send-otp",
 				{
@@ -118,6 +213,18 @@ export const phoneNumber = (options?: {
 							message: "sendOTP not implemented",
 						});
 					}
+
+					if (opts.phoneNumberValidator) {
+						const isValidNumber = await opts.phoneNumberValidator(
+							ctx.body.phoneNumber,
+						);
+						if (!isValidNumber) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid phone number!",
+							});
+						}
+					}
+
 					const code = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: code,

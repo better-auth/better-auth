@@ -43,7 +43,7 @@ export const useAuthQuery = <T>(
 
 		return $fetch<T>(path, {
 			...opts,
-			onSuccess: async (context) => {
+			async onSuccess(context) {
 				value.set({
 					data: context.data,
 					error: null,
@@ -61,7 +61,6 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onError?.(context);
 			},
-
 			async onRequest(context) {
 				const currentValue = value.get();
 				value.set({

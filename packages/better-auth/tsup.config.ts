@@ -22,7 +22,7 @@ export default defineConfig((env) => {
 			svelte: "./src/client/svelte/index.ts",
 			solid: "./src/client/solid/index.ts",
 			plugins: "./src/plugins/index.ts",
-			"plugins/access": "./src/plugins/access/index.ts",
+			"plugins/access": "./src/plugins/organization/access/index.ts",
 			api: "./src/api/index.ts",
 			"client/plugins": "./src/client/plugins/index.ts",
 			"svelte-kit": "./src/integrations/svelte-kit.ts",

@@ -4,6 +4,7 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { alphabet, generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 
 interface EmailOTPOptions {
 	/**
@@ -287,13 +288,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					},
 					async handler(ctx) {
-						const returned = ctx.context.returned as Response;
-						if (returned?.status !== 200) {
+						const response = await getEndpointResponse<{
+							user: User;
+						}>(ctx);
+						if (!response) {
 							return;
 						}
-						const response = (await returned.clone().json()) as {
-							user: User;
-						};
 						if (response.user.email && response.user.emailVerified === false) {
 							const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 							await ctx.context.internalAdapter.createVerificationValue({

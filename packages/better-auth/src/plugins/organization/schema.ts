@@ -1,9 +1,11 @@
-import { z } from "zod";
+import { z, ZodLiteral } from "zod";
+import type { OrganizationOptions } from "./organization";
 
-export const role = z.enum(["admin", "member", "owner"]);
+export const role = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "revoked"])
 	.default("pending");
+
 export const organizationSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -40,3 +42,8 @@ export const invitationSchema = z.object({
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
+
+export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
+	ZodLiteral<
+		O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner"
+	>;

@@ -102,16 +102,16 @@ export async function setSessionCookie(
 	overrides?: Partial<CookieOptions>,
 ) {
 	const options = ctx.context.authCookies.sessionToken.options;
-	options.maxAge = dontRememberMe
+	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
-
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.id,
 		ctx.context.secret,
 		{
 			...options,
+			maxAge,
 			...overrides,
 		},
 	);

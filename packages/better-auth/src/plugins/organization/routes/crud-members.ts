@@ -2,8 +2,9 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import type { Member } from "../schema";
+import type { InferRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
+import type { OrganizationOptions } from "../organization";
 
 export const removeMember = createAuthEndpoint(
 	"/organization/remove-member",
@@ -95,87 +96,88 @@ export const removeMember = createAuthEndpoint(
 	},
 );
 
-export const updateMemberRole = createAuthEndpoint(
-	"/organization/update-member-role",
-	{
-		method: "POST",
-		body: z.object({
-			role: z.enum(["admin", "member", "owner"]),
-			memberId: z.string(),
+export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
+	createAuthEndpoint(
+		"/organization/update-member-role",
+		{
+			method: "POST",
+			body: z.object({
+				role: z.string() as unknown as InferRolesFromOption<O>,
+				memberId: z.string(),
+				/**
+				 * If not provided, the active organization will be used
+				 */
+				organizationId: z.string().optional(),
+			}),
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "No active organization found!",
+					},
+				});
+			}
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: organizationId,
+			});
+			if (!member) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "Member not found!",
+					},
+				});
+			}
+			const role = ctx.context.roles[member.role];
+			if (!role) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "Role not found!",
+					},
+				});
+			}
 			/**
-			 * If not provided, the active organization will be used
+			 * If the member is not an owner, they cannot update the role of another member
+			 * as an owner.
 			 */
-			organizationId: z.string().optional(),
-		}),
-		use: [orgMiddleware, orgSessionMiddleware],
-	},
-	async (ctx) => {
-		const session = ctx.context.session;
-		const organizationId =
-			ctx.body.organizationId || session.session.activeOrganizationId;
-		if (!organizationId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "No active organization found!",
-				},
-			});
-		}
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const member = await adapter.findMemberByOrgId({
-			userId: session.user.id,
-			organizationId: organizationId,
-		});
-		if (!member) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Member not found!",
-				},
-			});
-		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
-			});
-		}
-		/**
-		 * If the member is not an owner, they cannot update the role of another member
-		 * as an owner.
-		 */
-		const canUpdateMember =
-			role.authorize({
-				member: ["update"],
-			}).error ||
-			(ctx.body.role === "owner" && member.role !== "owner");
-		if (canUpdateMember) {
-			return ctx.json(null, {
-				body: {
-					message: "You are not allowed to update this member",
-				},
-				status: 403,
-			});
-		}
+			const canUpdateMember =
+				role.authorize({
+					member: ["update"],
+				}).error ||
+				(ctx.body.role === "owner" && member.role !== "owner");
+			if (canUpdateMember) {
+				return ctx.json(null, {
+					body: {
+						message: "You are not allowed to update this member",
+					},
+					status: 403,
+				});
+			}
 
-		const updatedMember = await adapter.updateMember(
-			ctx.body.memberId,
-			ctx.body.role,
-		);
-		if (!updatedMember) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Member not found!",
-				},
-			});
-		}
-		return ctx.json(updatedMember);
-	},
-);
+			const updatedMember = await adapter.updateMember(
+				ctx.body.memberId,
+				ctx.body.role as string,
+			);
+			if (!updatedMember) {
+				return ctx.json(null, {
+					status: 400,
+					body: {
+						message: "Member not found!",
+					},
+				});
+			}
+			return ctx.json(updatedMember);
+		},
+	);
 
 export const getActiveMember = createAuthEndpoint(
 	"/organization/get-active-member",
