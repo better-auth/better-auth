@@ -727,7 +727,7 @@ function AddPasskey() {
 }
 
 function ListPasskeys() {
-	const { data, error } = client.useListPasskeys();
+	const { data } = client.useListPasskeys();
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
 
