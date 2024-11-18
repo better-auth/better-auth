@@ -6,7 +6,7 @@ import { emailOTPClient } from "./client";
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
 	let otp = "";
-	const { client, testUser } = await getTestInstance(
+	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
@@ -107,6 +107,30 @@ describe("email-otp", async () => {
 			otp,
 			"email-verification",
 		);
+	});
+	it("should create verification otp on server", async () => {
+		otp = await auth.api.createVerificationOTP({
+			body: {
+				type: "sign-in",
+				email: "test@email.com",
+			},
+		});
+		otp = await auth.api.createVerificationOTP({
+			body: {
+				type: "sign-in",
+				email: "test@email.com",
+			},
+		});
+		expect(otp.length).toBe(6);
+	});
+
+	it("should get verification otp on server", async () => {
+		const res = await auth.api.getVerificationOTP({
+			query: {
+				email: "test@email.com",
+				type: "sign-in",
+			},
+		});
 	});
 });
 

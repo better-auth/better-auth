@@ -40,8 +40,8 @@ const createTransform = (
 	}
 
 	const getModelName = (model: string) => {
-		return schema[model].tableName !== model
-			? schema[model].tableName
+		return schema[model].modelName !== model
+			? schema[model].modelName
 			: config.usePlural
 				? `${model}s`
 				: model;
@@ -252,6 +252,7 @@ export const drizzleAdapter =
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
+
 				const res = await db
 					.select()
 					.from(schemaModel)

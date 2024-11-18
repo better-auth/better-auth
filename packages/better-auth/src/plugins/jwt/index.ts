@@ -1,9 +1,10 @@
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, InferOptionSchema, User } from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { mergeSchema } from "../../db/schema";
 
 type JWKOptions =
 	| {
@@ -83,6 +84,10 @@ export interface JwtOptions {
 			user: User,
 		) => Promise<Record<string, any>> | Record<string, any>;
 	};
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export const jwt = (options?: JwtOptions) => {
@@ -189,6 +194,6 @@ export const jwt = (options?: JwtOptions) => {
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };

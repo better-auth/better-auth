@@ -52,7 +52,7 @@ export async function generateAction(opts: any) {
 
 	spinner.stop();
 	if (!schema.code) {
-		logger.success("Your schema is already up to date.");
+		logger.info("Your schema is already up to date.");
 		process.exit(0);
 	}
 	if (schema.append || schema.overwrite) {
@@ -68,7 +68,7 @@ export async function generateAction(opts: any) {
 			} else {
 				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
 			}
-			logger.success(
+			logger.info(
 				`🚀 Schema was ${
 					schema.overwrite ? "overwritten" : "appended"
 				} successfully!`,

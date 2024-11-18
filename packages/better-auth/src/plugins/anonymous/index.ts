@@ -1,14 +1,16 @@
-import {
-	APIError,
-	createAuthEndpoint,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, Session, User } from "../../types";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	PluginSchema,
+	Session,
+	User,
+} from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
 import { getOrigin } from "../../utils/url";
+import { mergeSchema } from "../../db/schema";
 
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
@@ -38,7 +40,22 @@ export interface AnonymousOptions {
 	 * Disable deleting the anonymous user after linking
 	 */
 	disableDeleteAnonymousUser?: boolean;
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
+
+const schema = {
+	user: {
+		fields: {
+			isAnonymous: {
+				type: "boolean",
+				required: false,
+			},
+		},
+	},
+} satisfies PluginSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	return {
@@ -154,15 +171,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 				},
 			],
 		},
-		schema: {
-			user: {
-				fields: {
-					isAnonymous: {
-						type: "boolean",
-						required: false,
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };

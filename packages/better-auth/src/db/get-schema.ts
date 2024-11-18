@@ -17,14 +17,14 @@ export function getSchema(config: BetterAuthOptions) {
 		Object.entries(fields).forEach(([key, field]) => {
 			actualFields[field.fieldName || key] = field;
 		});
-		if (schema[table.tableName]) {
-			schema[table.tableName].fields = {
-				...schema[table.tableName].fields,
+		if (schema[table.modelName]) {
+			schema[table.modelName].fields = {
+				...schema[table.modelName].fields,
 				...actualFields,
 			};
 			continue;
 		}
-		schema[table.tableName] = {
+		schema[table.modelName] = {
 			fields: actualFields,
 			order: table.order || Infinity,
 		};

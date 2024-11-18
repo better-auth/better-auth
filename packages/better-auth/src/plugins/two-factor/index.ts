@@ -8,17 +8,19 @@ import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import type { Session } from "../../db/schema";
+import { mergeSchema, type Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { getEndpointResponse } from "../../utils/plugin-helper";
+import { schema } from "./schema";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
-		twoFactorTable: options?.twoFactorTable || ("twoFactor" as const),
+		twoFactorTable: "twoFactor",
 	};
 	const totp = totp2fa(
 		{
@@ -174,30 +176,19 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (
-							(returned instanceof Response && returned?.status !== 200) ||
-							returned instanceof APIError
-						) {
-							return;
-						}
-						const response = (
-							returned instanceof Response
-								? await returned.clone().json()
-								: returned
-						) as {
+						const response = await getEndpointResponse<{
 							user: UserWithTwoFactor;
 							session: Session;
-						};
+						}>(ctx);
+						if (!response) {
+							return;
+						}
 						if (!response.user.twoFactorEnabled) {
 							return;
 						}
 						// Check for trust device cookie
 						const trustDeviceCookieName = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
-							{
-								maxAge: 30 * 24 * 60 * 60, // 30 days
-							},
 						);
 						const trustDeviceCookie = await ctx.getSignedCookie(
 							trustDeviceCookieName.name,
@@ -252,57 +243,19 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-						const res = new Response(
-							JSON.stringify({
-								twoFactorRedirect: true,
-							}),
-							{
-								headers: ctx.responseHeader,
-							},
-						);
+						const res = {
+							twoFactorRedirect: true,
+						};
+
 						return {
 							response: res,
+							responseHeader: ctx.responseHeader,
 						};
 					}),
 				},
 			],
 		},
-		schema: {
-			user: {
-				fields: {
-					twoFactorEnabled: {
-						type: "boolean",
-						required: false,
-						defaultValue: false,
-						input: false,
-					},
-				},
-			},
-			twoFactor: {
-				tableName: opts.twoFactorTable,
-				fields: {
-					secret: {
-						type: "string",
-						required: true,
-						returned: false,
-					},
-					backupCodes: {
-						type: "string",
-						required: true,
-						returned: false,
-					},
-					userId: {
-						type: "string",
-						required: true,
-						returned: false,
-						references: {
-							model: "user",
-							field: "id",
-						},
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {

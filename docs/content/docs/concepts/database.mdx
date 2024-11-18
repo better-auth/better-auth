@@ -1,11 +1,11 @@
 ---
 title: Database
-description: Learn how to use a database with BetterAuth
+description: Learn how to use a database with Better Auth.
 ---
 
 Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysley </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a kysely instance in the database options.
+You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a Kysely instance in the database options.
 
 **Example: Sqlite**
 ```ts title="auth.ts"
@@ -29,7 +29,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Mysql**
+**Example: MySQL**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { createPool } from "mysql2/promise"
@@ -44,7 +44,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Custom Dialect using libsql**
+**Example: Custom Dialect using libSQL**
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -62,7 +62,7 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialects </Link> for more dialects supported by kysley.
+See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysely Dialects </Link> for more dialects supported by Kysely.
 </Callout>
 
 **Example: Custom Kysely Instance**
@@ -206,7 +206,7 @@ If you prefer adding tables manually, you can do that as well. The core schema r
 
 ## Secondary Storage
 
-Secondary storage in BetterAuth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
+Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
@@ -258,7 +258,7 @@ export const auth = betterAuth({
 });
 ```
 
-This implementation allows BetterAuth to use Redis for storing session data and rate limiting counters.
+This implementation allows Better Auth to use Redis for storing session data and rate limiting counters.
 
 ## Core Schema
 
@@ -434,7 +434,7 @@ Table Name: `verification`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the user account was created"
+      description: "Timestamp of when the verification request was created"
     }
   ]}
 />
@@ -469,6 +469,27 @@ export const auth = betterAuth({
 <Callout>
   Type inference in your code will still use the original field names (e.g., `user.name`, not `user.full_name`).
 </Callout>
+
+To customize table names and column name for plugins, you can use the `schema` property in the plugin config:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   plugins: {
+      twoFactor: {
+         schema: {
+            user: {
+               fields: {
+                  twoFactorEnabled: "two_factor_enabled",
+                  twoFactorSecret: "two_factor_secret"
+               }
+            }
+         }
+      }
+   }
+})
+```
 
 
 ### Extending Core Schema
@@ -569,7 +590,7 @@ You can also disable ID generation by setting the `generateId` option to `false`
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in BetterAuth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
 
 There are two types of hooks you can define:
 

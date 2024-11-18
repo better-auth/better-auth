@@ -1,18 +1,24 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, vi, beforeAll } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
 	let token = "";
-	const { client, testUser } = await getTestInstance({
-		emailAndPassword: {
-			enabled: true,
-			async sendResetPassword({ url }) {
-				token = url.split("?")[0].split("/").pop() || "";
-				await mockSendEmail();
+
+	const { client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword({ url }) {
+					token = url.split("?")[0].split("/").pop() || "";
+					await mockSendEmail();
+				},
 			},
 		},
-	});
+		{
+			testWith: "sqlite",
+		},
+	);
 	it("should send a reset password email when enabled", async () => {
 		await client.forgetPassword({
 			email: testUser.email,
@@ -33,7 +39,6 @@ describe("forget password", async (it) => {
 				},
 			},
 		);
-
 		expect(res.data).toMatchObject({
 			status: true,
 		});

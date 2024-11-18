@@ -12,7 +12,7 @@ export type PluginSchema = {
 			[field in string]: FieldAttribute;
 		};
 		disableMigration?: boolean;
-		tableName?: string;
+		modelName?: string;
 	};
 };
 
@@ -71,7 +71,8 @@ export type BetterAuthPlugin = {
 					endpoint: Endpoint;
 				}>,
 			) => Promise<void | {
-				response: unknown;
+				response?: unknown;
+				responseHeader?: Headers;
 			}>;
 		}[];
 	};
@@ -125,3 +126,17 @@ export type BetterAuthPlugin = {
 		pathMatcher: (path: string) => boolean;
 	}[];
 };
+
+export type InferOptionSchema<S extends PluginSchema> = S extends Record<
+	string,
+	{ fields: infer Fields }
+>
+	? {
+			[K in keyof S]?: {
+				modelName?: string;
+				fields: {
+					[P in keyof Fields]?: string;
+				};
+			};
+		}
+	: never;

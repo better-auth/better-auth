@@ -5,12 +5,12 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { generateId } from "../../utils/id";
-import { logger } from "../../utils/logger";
 import { createAuthEndpoint } from "../call";
 
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	errorMessage: z.string().optional(),
 	state: z.string().optional(),
 });
 
@@ -33,7 +33,7 @@ export const callbackOAuth = createAuthEndpoint(
 				throw new Error("Unsupported method");
 			}
 		} catch (e) {
-			c.context.logger.error(e);
+			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=invalid_callback_request`,
 			);
@@ -74,7 +74,7 @@ export const callbackOAuth = createAuthEndpoint(
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
 		} catch (e) {
-			c.context.logger.error(e);
+			c.context.logger.error("", e);
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -98,7 +98,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(url);
 		}
 		if (!userInfo) {
-			logger.error("Unable to get user info");
+			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
 		}
 
@@ -110,7 +110,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!callbackURL) {
-			logger.error("No callback URL found");
+			c.context.logger.error("No callback URL found");
 			throw c.redirect(
 				`${c.context.baseURL}/error?error=please_restart_the_process`,
 			);
@@ -155,6 +155,7 @@ export const callbackOAuth = createAuthEndpoint(
 			callbackURL,
 		});
 		if (result.error) {
+			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
 		const { session, user } = result.data!;
