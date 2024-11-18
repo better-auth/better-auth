@@ -70,7 +70,7 @@ export const getOrgAdapter = (
 			organizationId: string;
 		}) => {
 			const user = await adapter.findOne<User>({
-				model: context.tables.user.tableName,
+				model: context.tables.user.modelName,
 				where: [
 					{
 						field: "email",
@@ -126,7 +126,7 @@ export const getOrgAdapter = (
 					],
 				}),
 				await adapter.findOne<User>({
-					model: context.tables.user.tableName,
+					model: context.tables.user.modelName,
 					where: [
 						{
 							field: "id",
@@ -162,7 +162,7 @@ export const getOrgAdapter = (
 				return null;
 			}
 			const user = await adapter.findOne<User>({
-				model: context.tables.user.tableName,
+				model: context.tables.user.modelName,
 				where: [
 					{
 						field: "id",
@@ -268,7 +268,7 @@ export const getOrgAdapter = (
 			organizationId: string | null,
 		) => {
 			const session = await adapter.update<Session>({
-				model: context.tables.session.tableName,
+				model: context.tables.session.modelName,
 				where: [
 					{
 						field: "id",
@@ -316,7 +316,7 @@ export const getOrgAdapter = (
 
 			const userIds = members.map((member) => member.userId);
 			const users = await adapter.findMany<User>({
-				model: context.tables.user.tableName,
+				model: context.tables.user.modelName,
 				where: [{ field: "id", value: userIds, operator: "in" }],
 			});
 

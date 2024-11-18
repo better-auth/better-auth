@@ -183,7 +183,7 @@ const createTransform = (options: BetterAuthOptions) => {
 			return clause;
 		},
 		getModelName: (model: string) => {
-			return schema[model].tableName;
+			return schema[model].modelName;
 		},
 		getField,
 	};

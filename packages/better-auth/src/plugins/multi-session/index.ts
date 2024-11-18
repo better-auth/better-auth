@@ -6,7 +6,6 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import {
-	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
@@ -20,17 +19,6 @@ interface MultiSessionConfig {
 	 * @default 5
 	 */
 	maximumSessions?: number;
-	/**
-	 * If true, all sessions will be signed out when
-	 * the user signs out.
-	 *
-	 * By default, only the active session will be signed out
-	 * and the next active session will be set to the first
-	 * valid session in the list.
-	 *
-	 * @default false
-	 */
-	signOutAll?: boolean;
 }
 
 export const multiSession = (options?: MultiSessionConfig) => {
@@ -199,46 +187,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					});
 				},
 			),
-			revokeAllDeviceSessions: createAuthEndpoint(
-				"/multi-session/revoke-all",
-				{
-					method: "POST",
-					requireHeaders: true,
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					const cookieHeader = ctx.headers?.get("cookie");
-					if (!cookieHeader) return ctx.json({ success: true });
-
-					const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
-					const sessionIds = (
-						await Promise.all(
-							Object.entries(cookies)
-								.filter(([key]) => isMultiSessionCookie(key))
-								.map(
-									async ([key]) =>
-										await ctx.getSignedCookie(key, ctx.context.secret),
-								),
-						)
-					).filter((v) => v !== undefined);
-					if (!sessionIds.length) return ctx.json({ success: true });
-
-					await ctx.context.internalAdapter.deleteSessions(sessionIds);
-					for (const sessionId of sessionIds) {
-						const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
-						ctx.setCookie(multiSessionCookieName, "", {
-							...ctx.context.authCookies.sessionToken.options,
-							maxAge: 0,
-						});
-					}
-					const isActive = ctx.context.session?.session.id;
-					if (!isActive) return ctx.json({ success: true });
-
-					deleteSessionCookie(ctx);
-					return ctx.json({ success: true });
-				},
-			),
 		},
 		hooks: {
 			after: [
@@ -299,46 +247,29 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
-						const sessionIds = (
-							await Promise.all(
-								Object.entries(cookies)
-									.filter(([key]) => isMultiSessionCookie(key))
-									.map(
-										async ([key]) =>
-											await ctx.getSignedCookie(key, ctx.context.secret),
-									),
-							)
-						).filter((v) => v !== undefined);
-						if (!sessionIds.length) return;
-						const internalAdapter = ctx.context.internalAdapter;
-						const sessions = await internalAdapter.findSessions(sessionIds);
-						const validSessions = sessions.filter(
-							(session) => session && session.session.expiresAt > new Date(),
+						await Promise.all(
+							Object.entries(cookies).map(async ([key, value]) => {
+								if (isMultiSessionCookie(key)) {
+									ctx.setCookie(key, "", { maxAge: 0 });
+									const id = key.split("_multi-")[1];
+									await ctx.context.internalAdapter.deleteSession(id);
+								}
+							}),
 						);
-						for (const sessionId of sessionIds) {
-							if (!validSessions.find((s) => s.session.id === sessionId)) {
-								const key = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
-								ctx.setCookie(key, "", {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: 0,
-								});
-							}
-						}
 
-						if (validSessions.length > 0 && !opts.signOutAll) {
-							const nextSession = validSessions[0];
-							await setSessionCookie(ctx, nextSession);
-						}
 						const response = ctx.context.returned;
 						if (response instanceof Response) {
-							response.headers.append(
+							response?.headers.append(
 								"Set-Cookie",
 								ctx.responseHeader.get("set-cookie")!,
 							);
-							return {
-								response,
-							};
+						} else {
+							ctx.responseHeader.set(
+								"set-cookie",
+								ctx.responseHeader.get("set-cookie")!,
+							);
 						}
+						return { response };
 					}),
 				},
 			],

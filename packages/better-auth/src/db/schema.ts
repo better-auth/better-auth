@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FieldAttribute } from ".";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, PluginSchema } from "../types";
 
 export const accountSchema = z.object({
 	id: z.string(),
@@ -171,4 +171,34 @@ export function parseSessionInput(
 ) {
 	const schema = getAllFields(options, "session");
 	return parseInputData(session, { fields: schema });
+}
+
+export function mergeSchema<S extends PluginSchema>(
+	schema: S,
+	newSchema?: {
+		[K in keyof S]?: {
+			modelName?: string;
+			fields?: {
+				[P: string]: string;
+			};
+		};
+	},
+) {
+	if (!newSchema) {
+		return schema;
+	}
+	for (const table in newSchema) {
+		const newModelName = newSchema[table]?.modelName;
+		if (newModelName) {
+			schema[table].modelName = newModelName;
+		}
+		for (const field in schema[table].fields) {
+			const newField = newSchema[table]?.fields?.[field];
+			if (!newField) {
+				continue;
+			}
+			schema[table].fields[field].fieldName = newField;
+		}
+	}
+	return schema;
 }

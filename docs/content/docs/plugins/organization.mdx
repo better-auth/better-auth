@@ -722,6 +722,25 @@ Table Name: `invitation`
   ]}
   />
 
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the organization plugin. 
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [organization({
+    schema: {
+      organization: {
+        modelName: "organizations",  //map the organization table to organizations
+        fields: { 
+          name: "title" //map the name field to title
+        }
+      }
+    }
+  })]
+})
+```
+
 ## Options
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
