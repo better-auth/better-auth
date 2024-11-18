@@ -166,7 +166,6 @@ export const resetPassword = createAuthEndpoint(
 
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
-
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid token",
