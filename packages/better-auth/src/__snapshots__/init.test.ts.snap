@@ -177,8 +177,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
-      "order": 3,
       "modelName": "account",
+      "order": 3,
     },
     "session": {
       "fields": {
@@ -208,8 +208,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
-      "order": 2,
       "modelName": "session",
+      "order": 2,
     },
     "user": {
       "fields": {
@@ -248,8 +248,8 @@ exports[`init > should match config 1`] = `
           "type": "date",
         },
       },
-      "order": 1,
       "modelName": "user",
+      "order": 1,
     },
     "verification": {
       "fields": {
@@ -275,8 +275,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
-      "order": 4,
       "modelName": "verification",
+      "order": 4,
     },
   },
   "trustedOrigins": [
