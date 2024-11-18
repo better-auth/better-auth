@@ -146,3 +146,48 @@ auth.api.getSession({
     headers: req.headers, // pass the headers
 });
 ```
+
+### Customize Session Response
+
+When you call `getSession` or `useSession`, the session data is returned as a `user` and `session` object. You can customize this response using the `customSession` plugin.
+
+```ts title="auth.ts"
+import { customSession } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        customSession(async (session) => {
+            const roles = findUserRoles(session.session.userId);
+            return {
+                roles,
+                user: {
+                    newField: "value",
+                },
+            };
+        }),
+    ],
+});
+```
+
+This will add `roles` and `user.newField` to the session response.
+
+**Infer on the Client**
+
+```ts title="client.ts"
+import type { auth } from "@/lib/auth"; // Import the auth instance as a type
+
+const authClient = createAuthClient({
+    plugins: [customSessionClient<typeof auth>()],
+});
+
+const { data } = await authClient.useSession();
+const { data: sessionData } = await authClient.getSession();
+// data.roles
+// data.user.newField
+```
+
+**Caveats**: 
+- When you return a `user` or `session` object, it will be merged with the default `user` or `session` object.  
+- The passed `session` object to the callback, does not infer fields added by plugins.  
+- If you cannot use the `auth` instance as a type, inference will not work on the client.  
+- Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.

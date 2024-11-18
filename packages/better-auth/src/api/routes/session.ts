@@ -1,4 +1,4 @@
-import { APIError, type Context } from "better-call";
+import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
