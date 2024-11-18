@@ -12,6 +12,13 @@ describe("anonymous", async () => {
 				async onLinkAccount(data) {
 					linkAccountFn(data);
 				},
+				schema: {
+					user: {
+						fields: {
+							isAnonymous: "is_anon",
+						},
+					},
+				},
 			}),
 		],
 	});

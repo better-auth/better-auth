@@ -61,6 +61,7 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onError?.(context);
 			},
+
 			async onRequest(context) {
 				const currentValue = value.get();
 				value.set({

@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { logger } from "../utils";
 import { parseJWT } from "oslo/jwt";

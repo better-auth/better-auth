@@ -89,19 +89,7 @@ await authClient.multiSession.revokeAll();
 
 ### Signout Behaviour
 
-When a user logs out, the plugin will revoke the current session and set the next active session as the current session. If there are no active sessions, the user will be logged out. You can change this behaviour by passing the `signOutAll` option to the plugin.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
-export const auth = betterAuth({
-    plugins: [
-        multiSession({
-            signOutAll: true
-        })
-    ]
-})
-```
+When a user logs out, the plugin will revoke all active sessions for the user.
 
 ### Max Sessions
 
