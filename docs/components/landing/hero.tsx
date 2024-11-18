@@ -25,7 +25,7 @@ const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 		name: "auth.ts",
 		code: `export const auth = betterAuth({
 	database: new Pool({
-		connectionString: process.env.DATABASE_URL,
+		connectionString: DATABASE_URL,
 	}),
     emailAndPassword: {
         enabled: true,
