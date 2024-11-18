@@ -10,6 +10,7 @@ import { createAuthEndpoint } from "../call";
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	errorMessage: z.string().optional(),
 	state: z.string().optional(),
 });
 
