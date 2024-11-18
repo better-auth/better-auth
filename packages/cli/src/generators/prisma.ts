@@ -28,8 +28,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
 			const fields = tables[table]?.fields;
-			const originalTable = tables[table]?.tableName;
-			const tableName = capitalizeFirstLetter(originalTable || "");
+			const originalTable = tables[table]?.modelName;
+			const modelName = capitalizeFirstLetter(originalTable || "");
 			function getType(type: FieldType, isOptional: boolean) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
@@ -51,17 +51,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 			const prismaModel = builder.findByType("model", {
-				name: tableName,
+				name: modelName,
 			});
 			if (!prismaModel) {
 				if (provider === "mongodb") {
 					builder
-						.model(tableName)
+						.model(modelName)
 						.field("id", "String")
 						.attribute("id")
 						.attribute(`map("_id")`);
 				} else {
-					builder.model(tableName).field("id", "String").attribute("id");
+					builder.model(modelName).field("id", "String").attribute("id");
 				}
 			}
 
@@ -79,14 +79,14 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				builder
-					.model(tableName)
+					.model(modelName)
 					.field(field, getType(attr.type, !attr?.required));
 				if (attr.unique) {
-					builder.model(tableName).blockAttribute(`unique([${field}])`);
+					builder.model(modelName).blockAttribute(`unique([${field}])`);
 				}
 				if (attr.references) {
 					builder
-						.model(tableName)
+						.model(modelName)
 						.field(
 							`${attr.references.model.toLowerCase()}`,
 							capitalizeFirstLetter(attr.references.model),
@@ -100,8 +100,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				name: "map",
 				within: prismaModel?.properties,
 			});
-			if (originalTable !== tableName && !hasAttribute) {
-				builder.model(tableName).blockAttribute("map", originalTable);
+			if (originalTable !== modelName && !hasAttribute) {
+				builder.model(modelName).blockAttribute("map", originalTable);
 			}
 		}
 	});

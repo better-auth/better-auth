@@ -182,7 +182,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					},
 				);
 			} catch (error) {
-				ctx.context.logger.error(error);
+				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "internal server error",
 				});
@@ -276,7 +276,12 @@ export const revokeSession = createAuthEndpoint(
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {
-			ctx.context.logger.error(error);
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
@@ -300,7 +305,12 @@ export const revokeSessions = createAuthEndpoint(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {
-			ctx.context.logger.error(error);
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({

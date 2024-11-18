@@ -17,7 +17,7 @@ describe("organization", async (it) => {
 			}),
 		],
 		logger: {
-			verboseLogging: true,
+			level: "error",
 		},
 	});
 
