@@ -1,36 +1,36 @@
-import type { Kysely } from "kysely";
-import { getAuthTables } from "./db/get-tables";
-import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
-import { getAdapter } from "./db/utils";
+import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "./utils/env";
+import { getAuthTables } from "./db/get-tables";
+import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	SecondaryStorage,
+	Session,
+	User,
 } from "./types";
-import { defu } from "defu";
-import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger, logger } from "./utils/logger";
+import { createLogger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { env, isProduction } from "./utils/env";
 import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
+	const logger = createLogger(options.logger);
 
-	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -60,7 +60,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	const cookies = getCookies(options);
-
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
@@ -100,11 +99,9 @@ export const init = async (options: BetterAuthOptions) => {
 					: ("memory" as const),
 		},
 		authCookies: cookies,
-		logger: createLogger({
-			disabled: options.logger?.disabled || false,
-		}),
-		db,
+		logger: logger,
 		uuid: generateId,
+		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -131,10 +128,13 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	session: {
+		session: Session;
+		user: User;
+	} | null;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: Kysely<any> | null;
 	rateLimit: {
 		enabled: boolean;
 		window: number;
@@ -153,7 +153,7 @@ export type AuthContext = {
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (hash: string, password: string) => Promise<boolean>;
+		verify: (password: string, hash: string) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;

@@ -1,6 +1,6 @@
 ---
 title: Session Management
-description: Better Auth Session Management
+description: Better Auth session management.
 ---
 
 Better Auth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid.
@@ -77,6 +77,14 @@ To end a session, use the `revokeSession` function. Just pass the session ID as 
 await authClient.revokeSession({
     id: session.id,
 })
+```
+
+### Revoke Other Sessions
+
+To revoke all other sessions except the current session, you can use the `revokeOtherSessions` function.
+
+```ts title="client.ts"
+await authClient.revokeOtherSessions()
 ```
 
 ### Revoke All Sessions

@@ -14,10 +14,12 @@ Email verification is a security feature that ensures users provide a valid emai
 
 To enable email verification, you need to pass a function that sends a verification email with a link.
 
-- **sendVerificationEmail**: This function is triggered when email verification starts. It accepts three arguments:
+- **sendVerificationEmail**: This function is triggered when email verification starts. It accepts a data object with the following properties:
   - `user`: The user object containing the email address.
   - `url`: The verification URL the user must click to verify their email.
   - `token`: The verification token used to complete the email verification to be used when implementing a custom verification URL.
+
+and a `request` object as the second parameter.
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
@@ -25,7 +27,7 @@ import { sendEmail } from './email'; // your email sending function
 
 export const auth = betterAuth({
     emailVerification: {
-        sendVerificationEmail: async (user, url, token) => {
+        sendVerificationEmail: async ({ user, url, token }, request) => {
             await sendEmail({
                 to: user.email,
                 subject: 'Verify your email address',
@@ -119,7 +121,18 @@ authClient.verifyEmail({
 })
 ```
 
+### Auto SignIn After Verification
 
+To sign in the user automatically after they successfully verify their email, set the `autoSignInAfterVerification` option to `true`:
+
+```ts
+const auth = betterAuth({
+    //...your other options
+    emailVerification: {
+        autoSignInAfterVerification: true
+    }
+})
+```
 
 ## Password Reset Email
 
@@ -134,7 +147,7 @@ import { sendEmail } from './email'; // your email sending function
 export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
-        sendResetPassword: async (user, url, token) => {
+        sendResetPassword: async ({ user, url, token }, request) => {
             await sendEmail({
                 to: user.email,
                 subject: 'Reset your password',

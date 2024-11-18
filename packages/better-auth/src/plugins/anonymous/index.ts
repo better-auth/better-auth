@@ -1,10 +1,20 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
-import { setSessionCookie } from "../../cookies";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	PluginSchema,
+	Session,
+	User,
+} from "../../types";
+import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { generateId } from "../../utils/id";
 import { getOrigin } from "../../utils/url";
+import { mergeSchema } from "../../db/schema";
 
+export interface UserWithAnonymous extends User {
+	isAnonymous: boolean;
+}
 export interface AnonymousOptions {
 	/**
 	 * Configure the domain name of the temporary email
@@ -12,7 +22,40 @@ export interface AnonymousOptions {
 	 * @default "baseURL"
 	 */
 	emailDomainName?: string;
+	/**
+	 * A useful hook to run after an anonymous user
+	 * is about to link their account.
+	 */
+	onLinkAccount?: (data: {
+		anonymousUser: {
+			user: UserWithAnonymous;
+			session: Session;
+		};
+		newUser: {
+			user: User;
+			session: Session;
+		};
+	}) => Promise<void> | void;
+	/**
+	 * Disable deleting the anonymous user after linking
+	 */
+	disableDeleteAnonymousUser?: boolean;
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
+
+const schema = {
+	user: {
+		fields: {
+			isAnonymous: {
+				type: "boolean",
+				required: false,
+			},
+		},
+	},
+} satisfies PluginSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	return {
@@ -65,81 +108,69 @@ export const anonymous = (options?: AnonymousOptions) => {
 					return ctx.json({ user: newUser, session });
 				},
 			),
-			linkAccount: createAuthEndpoint(
-				"/anonymous/link-account",
-				{
-					method: "POST",
-					body: z.object({
-						email: z.string().email().optional(),
-						password: z.string().min(6),
-					}),
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					const userId = ctx.context.session.user.id;
-					const { email, password } = ctx.body;
-					let updatedUser = null;
-					if (email && password) {
-						updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-							email: email,
-							isAnonymous: false,
-						});
-					}
-					if (!updatedUser) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: "Failed to update user",
-								status: 500,
-							},
-						});
-					}
-					const hash = await ctx.context.password.hash(password);
-					const updateUserAccount =
-						await ctx.context.internalAdapter.linkAccount({
-							userId: updatedUser.id,
-							providerId: "credential",
-							password: hash,
-							accountId: updatedUser.id,
-						});
-					if (!updateUserAccount) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: "Failed to update account",
-								status: 500,
-							},
-						});
-					}
-					const session = await ctx.context.internalAdapter.createSession(
-						updatedUser.id,
-						ctx.request,
-					);
-					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: "Could not create session",
-							},
-						});
-					}
-					await setSessionCookie(ctx, {
-						session,
-						user: updatedUser,
-					});
-					return ctx.json({ session, user: updatedUser });
-				},
-			),
 		},
-		schema: {
-			user: {
-				fields: {
-					isAnonymous: {
-						type: "boolean",
-						required: false,
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return (
+							context.path?.startsWith("/sign-in") ||
+							context.path?.startsWith("/sign-up")
+						);
+					},
+					async handler(ctx) {
+						const response = ctx.context.returned;
+						if (!(response instanceof Response)) {
+							return;
+						}
+						const setCookie = response.headers.get("set-cookie");
+						/**
+						 * We can consider the user is about to sign in or sign up
+						 * if the response contains a session token.
+						 */
+						const sessionTokenName = ctx.context.authCookies.sessionToken.name;
+						/**
+						 * The user is about to link their account.
+						 */
+						const sessionCookie = parseSetCookieHeader(setCookie || "")
+							.get(sessionTokenName)
+							?.value.split(".")[0];
+						if (!sessionCookie) {
+							return;
+						}
+						/**
+						 * Make sure the use had an anonymous session.
+						 */
+						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
+							ctx,
+						);
+						if (!session || !session.user.isAnonymous) {
+							return;
+						}
+						if (ctx.path === "/sign-in/anonymous") {
+							throw new APIError("BAD_REQUEST", {
+								message: "Anonymous users cannot sign in again anonymously",
+							});
+						}
+
+						if (options?.onLinkAccount) {
+							const newSession =
+								await ctx.context.internalAdapter.findSession(sessionCookie);
+							if (!newSession) {
+								return;
+							}
+							await options?.onLinkAccount?.({
+								anonymousUser: session,
+								newUser: newSession,
+							});
+						}
+						if (!options?.disableDeleteAnonymousUser) {
+							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						}
 					},
 				},
-			},
+			],
 		},
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };

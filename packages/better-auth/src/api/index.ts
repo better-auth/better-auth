@@ -19,6 +19,7 @@ import {
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
+	revokeOtherSessions,
 	listUserAccounts,
 	changePassword,
 	deleteUser,
@@ -103,6 +104,7 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		revokeOtherSessions,
 		linkSocialAccount,
 		listUserAccounts,
 	};
@@ -116,26 +118,26 @@ export function getEndpoints<
 	for (const [key, value] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
 			let c = await ctx;
+			// clear session so it doesn't persist between requests
+			c.session = null;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
-						const match = hook.matcher({
+						const ctx = {
 							...value,
 							...context,
-							context: c,
-						});
+							context: {
+								...c,
+								...context?.context,
+							},
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const hookRes = await hook.handler({
-								...context,
-								context: {
-									...c,
-									...context?.context,
-								},
-							});
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "context" in hookRes) {
-								c = {
-									...c,
-									...hookRes.context,
+								context = {
+									...hookRes,
+									...context,
 								};
 							}
 						}
@@ -177,13 +179,14 @@ export function getEndpoints<
 					for (const hook of afterPlugins || []) {
 						const match = hook.matcher(context);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
+							// @ts-expect-error - returned is not in the context type
+							c.returned = response;
+							const ctx = {
+								...value,
+								...context,
+								context: c,
+							};
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								pluginResponse = hookRes.response as any;
 							}
@@ -200,15 +203,18 @@ export function getEndpoints<
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
-						const match = hook.matcher(context);
+						const ctx = {
+							...context,
+							context: {
+								...c,
+								...context.context,
+								endpoint: value,
+								returned: response,
+							},
+						};
+						const match = hook.matcher(ctx);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
+							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								response = hookRes.response as any;
 							}
@@ -269,6 +275,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
+			if (e instanceof APIError && e.status === "FOUND") {
+				return;
+			}
 			if (options.onAPIError?.throw) {
 				throw e;
 			}
@@ -277,15 +286,45 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 				return;
 			}
 
-			const log = options.logger?.verboseLogging ? logger : undefined;
+			const optLogLevel = options.logger?.level;
+			const log =
+				optLogLevel === "error" ||
+				optLogLevel === "warn" ||
+				optLogLevel === "debug"
+					? logger
+					: undefined;
 			if (options.logger?.disabled !== true) {
+				if (
+					e &&
+					typeof e === "object" &&
+					"message" in e &&
+					typeof e.message === "string"
+				) {
+					if (
+						e.message.includes("no column") ||
+						e.message.includes("column") ||
+						e.message.includes("relation") ||
+						e.message.includes("table") ||
+						e.message.includes("does not exist")
+					) {
+						ctx.logger?.error(e.message);
+						ctx.logger?.error(
+							"If you are seeing this error, it is likely that you need to run the migrations for the database or you need to update your database schema. If you recently updated the package, make sure to run the migrations.",
+						);
+						return;
+					}
+				}
+
 				if (e instanceof APIError) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
-						logger.error(e);
+						ctx.logger.error(e.status, e);
 					}
 					log?.error(e.message);
 				} else {
-					logger?.error(e);
+					ctx.logger?.error(
+						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
+						e,
+					);
 				}
 			}
 		},

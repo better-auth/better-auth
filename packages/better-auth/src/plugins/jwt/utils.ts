@@ -1,63 +1,83 @@
-import {
-	createCipheriv,
-	createDecipheriv,
-	createHash,
-	randomBytes,
-} from "crypto";
+import { subtle, getRandomValues } from "uncrypto";
 
-// Helper function to handle different key formats and lengths
-function deriveKey(secretKey: string) {
-	let keyBuffer: string | Buffer;
+async function deriveKey(secretKey: string): Promise<CryptoKey> {
+	const enc = new TextEncoder();
+	const keyMaterial = await crypto.subtle.importKey(
+		"raw",
+		enc.encode(secretKey),
+		{ name: "PBKDF2" },
+		false,
+		["deriveKey"],
+	);
 
-	if (Buffer.byteLength(secretKey, "utf8") === 32) {
-		keyBuffer = Buffer.from(secretKey, "utf8"); // Key is already 32 bytes
-	} else {
-		keyBuffer = createHash("sha256").update(secretKey).digest(); // Hash to ensure 32 bytes
-	}
-
-	return keyBuffer;
+	return subtle.deriveKey(
+		{
+			name: "PBKDF2",
+			salt: enc.encode("encryption_salt"),
+			iterations: 100000,
+			hash: "SHA-256",
+		},
+		keyMaterial,
+		{ name: "AES-GCM", length: 256 },
+		false,
+		["encrypt", "decrypt"],
+	);
 }
 
-// Encryption function using the provided secret as a key
-export function encryptPrivateKey(privateKey: string, secretKey: string) {
-	const key = deriveKey(secretKey); // Derive a 32-byte key from the provided secret
+export async function encryptPrivateKey(
+	privateKey: string,
+	secretKey: string,
+): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
+	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
+	const iv = getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
 
-	const iv = randomBytes(12); // 12-byte IV for AES-GCM
-	const cipher = createCipheriv("aes-256-gcm", key, iv);
+	const enc = new TextEncoder();
+	const ciphertext = await subtle.encrypt(
+		{
+			name: "AES-GCM",
+			iv: iv,
+		},
+		key,
+		enc.encode(privateKey),
+	);
 
-	let ciphertext = cipher.update(privateKey, "utf8", "base64");
-	ciphertext += cipher.final("base64");
-
-	const authTag = cipher.getAuthTag(); // Get the authentication tag
+	const encryptedPrivateKey = Buffer.from(new Uint8Array(ciphertext)).toString(
+		"base64",
+	);
+	const ivBase64 = Buffer.from(iv).toString("base64");
 
 	return {
-		encryptedPrivateKey: ciphertext,
-		iv: iv.toString("base64"),
-		authTag: authTag.toString("base64"),
+		encryptedPrivateKey,
+		iv: ivBase64,
+		authTag: encryptedPrivateKey.slice(-16),
 	};
 }
 
-// Decryption function using the same secret
-export function decryptPrivateKey(
+export async function decryptPrivateKey(
 	encryptedPrivate: {
 		encryptedPrivateKey: string;
 		iv: string;
 		authTag: string;
 	},
 	secretKey: string,
-) {
-	const key = deriveKey(secretKey); // Derive a 32-byte key from the provided secret
+): Promise<string> {
+	const key = await deriveKey(secretKey);
+	const { encryptedPrivateKey, iv } = encryptedPrivate;
 
-	const { encryptedPrivateKey, iv, authTag } = encryptedPrivate;
+	const ivBuffer = Uint8Array.from(Buffer.from(iv, "base64"));
+	const ciphertext = Uint8Array.from(
+		Buffer.from(encryptedPrivateKey, "base64"),
+	);
 
-	const ivBuffer = Buffer.from(iv, "base64");
-	const authTagBuffer = Buffer.from(authTag, "base64");
+	const decrypted = await subtle.decrypt(
+		{
+			name: "AES-GCM",
+			iv: ivBuffer,
+		},
+		key,
+		ciphertext,
+	);
 
-	const decipher = createDecipheriv("aes-256-gcm", key, ivBuffer);
-	decipher.setAuthTag(authTagBuffer);
-
-	let plaintext = decipher.update(encryptedPrivateKey, "base64", "utf8");
-	plaintext += decipher.final("utf8");
-
-	return plaintext;
+	const dec = new TextDecoder();
+	return dec.decode(decrypted);
 }

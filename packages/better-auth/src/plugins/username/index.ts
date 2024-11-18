@@ -15,12 +15,12 @@ export const username = () => {
 					body: z.object({
 						username: z.string(),
 						password: z.string(),
-						dontRememberMe: z.boolean().optional(),
+						rememberMe: z.boolean().optional(),
 					}),
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<User>({
-						model: ctx.context.tables.user.tableName,
+						model: ctx.context.tables.user.modelName,
 						where: [
 							{
 								field: "username",
@@ -36,7 +36,7 @@ export const username = () => {
 						});
 					}
 					const account = await ctx.context.adapter.findOne<Account>({
-						model: ctx.context.tables.account.tableName,
+						model: "account",
 						where: [
 							{
 								field:
@@ -77,6 +77,7 @@ export const username = () => {
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
 						ctx.request,
+						ctx.body.rememberMe === false,
 					);
 					if (!session) {
 						return ctx.json(null, {
@@ -91,7 +92,7 @@ export const username = () => {
 						ctx.context.authCookies.sessionToken.name,
 						session.id,
 						ctx.context.secret,
-						ctx.body.dontRememberMe
+						ctx.body.rememberMe === false
 							? {
 									...ctx.context.authCookies.sessionToken.options,
 									maxAge: undefined,

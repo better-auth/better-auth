@@ -185,7 +185,7 @@ You can set the active organization by calling the `organization.setActive` func
    
 ```ts title="client.ts"
 client.organization.setActive({
-  orgId: "organization-id"
+  organizationId: "organization-id"
 })
 ```
 
@@ -256,8 +256,8 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 To get the full details of an organization, you can use the `getFull` function provided by the client. The `getFull` function takes an object with the following properties:
 
 ```ts title="client.ts"
-const organization = await client.organization.getFull({
-    orgId: "organization-id" // optional, by default it will use the active organization
+const organization = await client.organization.getFullOrganization({
+    organizationId: "organization-id" // optional, by default it will use the active organization
 })
 ```
 
@@ -654,6 +654,25 @@ Table Name: `invitation`
     },
   ]}
   />
+
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the organization plugin. 
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [organization({
+    schema: {
+      organization: {
+        modelName: "organizations",  //map the organization table to organizations
+        fields: { 
+          name: "title" //map the name field to title
+        }
+      }
+    }
+  })]
+})
+```
 
 ## Options
 

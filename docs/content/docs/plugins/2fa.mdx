@@ -1,6 +1,6 @@
 ---
 title: Two-Factor Authentication (2FA)
-description: Enhance your app's security with two-factor authentication
+description: Enhance your app's security with two-factor authentication.
 ---
 
 `OTP` `TOTP` `Backup Codes` `Trusted Devices`
@@ -60,7 +60,7 @@ This plugin offers two main methods to do a second factor verification:
     </Step>
 
         <Step>
-        ### Add the client Plugin
+        ### Add the client plugin
 
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
@@ -186,7 +186,7 @@ export default function UserCard(){
 
 #### Verifying TOTP
 
-After the user has entered their 2FA code, you can verify it usinng `twoFactor.verifyTotp` method.
+After the user has entered their 2FA code, you can verify it using `twoFactor.verifyTotp` method.
 
 ```ts
 const verifyTotp = async (code: string) => {
@@ -208,7 +208,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }, request) {
                     // send otp to user
 				},
 			},
@@ -276,6 +276,20 @@ await authClient.twoFactor.verifyBackupCode({code: ""}, {
 })
 ```
 
+once a backup code is used, it will be removed from the database and can't be used again.
+
+#### Viewing Backup Codes
+
+You can view the backup codes at any time by calling `viewBackupCodes`. This action can only be performed on the server using `auth.api`.
+
+```ts
+await auth.api.viewBackupCodes({
+    body: {
+        userId: "user-id"
+    }
+})
+```
+
 ### Trusted Devices
 
 You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `verifyOtp`.
@@ -323,7 +337,7 @@ Table: `twoFactor`
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
-**Issuer**: The issuer is the name of your application. It's used to generate totp codes. It'll be displayed in the authenticator apps.
+**Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
 **TOTP options**
 
@@ -332,13 +346,13 @@ these are options for TOTP.
 <TypeTable
   type={{
     digits:{
-        description: 'The number of digits the otp to be',
-        type: 'number',
+        description: "The number of digits the otp to be",
+        type: "number",
         default: 6,
     },
     period: {
-        description: 'The period for otp in seconds.',
-        type: 'number',
+        description: "The period for otp in seconds.",
+        type: "number",
         default: 30,
     },
   }}
@@ -355,8 +369,8 @@ these are options for OTP.
         type: "function",
     },
     period: {
-        description: 'The period for otp in seconds.',
-        type: 'number',
+        description: "The period for otp in seconds.", 
+        type: "number",
         default: 30,
     },
   }}
@@ -398,7 +412,7 @@ const client = createAuthClient({
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight]
         }) // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 

@@ -4,6 +4,7 @@ import { MongoClient } from "mongodb";
 import { runAdapterTest } from "../test";
 import { mongodbAdapter } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { BetterAuthOptions } from "../../types";
 
 describe("adapter test", async () => {
 	const dbClient = async (connectionString: string, dbName: string) => {
@@ -26,7 +27,16 @@ describe("adapter test", async () => {
 
 	const adapter = mongodbAdapter(db);
 	await runAdapterTest({
-		adapter,
+		adapter: adapter({
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+			session: {
+				modelName: "sessions",
+			},
+		} as BetterAuthOptions),
 	});
 });
 
@@ -35,8 +45,8 @@ describe("simple-flow", async () => {
 		{},
 		{
 			disableTestUser: true,
+			testWith: "mongodb",
 		},
-		"mongodb",
 	);
 	const testUser = {
 		email: "test-eamil@email.com",

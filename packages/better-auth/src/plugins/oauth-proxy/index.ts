@@ -3,6 +3,7 @@ import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
+import { getOrigin } from "../../utils/url";
 
 function getVenderBaseURL() {
 	const vercel = env.VERCEL_URL;
@@ -68,7 +69,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = ctx.context.returned;
-						if (!response) {
+						if (!response || !(response instanceof Response)) {
 							return;
 						}
 						const location = response.headers.get("location");
@@ -76,14 +77,22 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							if (!location.startsWith("http")) {
 								return;
 							}
-							const origin = new URL(location).origin;
+							const locationURL = new URL(location);
+							const origin = locationURL.origin;
 
 							/**
 							 * We don't want to redirect to the proxy URL if the origin is the same
 							 * as the current URL
 							 */
-							if (origin === ctx.context.baseURL) {
-								return;
+							if (origin === getOrigin(ctx.context.baseURL)) {
+								const newLocation = locationURL.searchParams.get("callbackURL");
+								if (!newLocation) {
+									return;
+								}
+								response.headers.set("location", newLocation);
+								return {
+									response,
+								};
 							}
 
 							const setCookies = response.headers.get("set-cookie");

@@ -17,7 +17,7 @@ describe("two factor", async () => {
 			plugins: [
 				twoFactor({
 					otpOptions: {
-						sendOTP(_, otp) {
+						sendOTP({ otp }) {
 							OTP = otp;
 						},
 					},
@@ -211,6 +211,28 @@ describe("two factor", async () => {
 				},
 			},
 		});
+		const currentBackupCodes = await auth.api.viewBackupCodes({
+			body: {
+				userId: session.data?.user.id!,
+			},
+		});
+		expect(currentBackupCodes.backupCodes).toBeDefined();
+		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
+
+		const res = await client.twoFactor.verifyBackupCode({
+			code: "invalid-code",
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					const token = parsed.get("better-auth.session_token")?.value;
+					expect(token?.length).toBeGreaterThan(0);
+				},
+			},
+		});
+		expect(res.error?.message).toBe("Invalid backup code");
 	});
 
 	it("should trust device", async () => {

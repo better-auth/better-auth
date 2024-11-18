@@ -3,7 +3,7 @@ title: OAuth Proxy
 description: OAuth Proxy plugin for Better Auth
 ---
 
-A proxy plugin, that allows you to proxy OAuth requests.Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider. 
+A proxy plugin, that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider. 
 
 ## Installation
 
@@ -63,4 +63,4 @@ To share cookies between the proxy server and your main server it uses url query
 
 ## Options
 
-**currentURL**: The application's current URL is automatically determined by the plugin. It first it check for the request URL if invoked by a client, then it checks the base URL from popular hosting providers,and finally falls back to the `baseURL` in your auth config. If the URL isn’t inferred correctly, you can specify it manually here.
+**currentURL**: The application's current URL is automatically determined by the plugin. It first it check for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn’t inferred correctly, you can specify it manually here.

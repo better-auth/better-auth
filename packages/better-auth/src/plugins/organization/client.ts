@@ -44,7 +44,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 									id: string;
 									name: string;
 									email: string;
-									image?: string;
+									image?: string | null;
 								};
 							}
 						>[];
@@ -56,9 +56,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				// setActive(orgId: string | null) {
-				// 	activeOrgId.set(orgId);
-				// },
 				hasPermission: async (data: {
 					permission: Partial<{
 						//@ts-expect-error fix this later
@@ -103,7 +100,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				>
 			>(
 				[$activeOrgSignal],
-				"/organization/get-full",
+				"/organization/get-full-organization",
 				$fetch,
 				() => ({
 					method: "GET",

@@ -13,6 +13,9 @@ import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { MysqlDialect } from "kysely";
+import { createPool } from "mysql2/promise";
+import { nextCookies } from "better-auth/next-js";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -22,14 +25,30 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
+const mysql = process.env.USE_MYSQL
+	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
+	: null;
+
+const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
-		dialect: libsql,
-		type: "sqlite",
+		dialect,
+		type: "mysql",
+	},
+	session: {
+		cookieCache: {
+			enabled: true,
+			maxAge: 60,
+		},
 	},
 	emailVerification: {
-		async sendVerificationEmail(user, url) {
+		async sendVerificationEmail({ user, url }) {
 			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
@@ -48,7 +67,7 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(user, url) {
+		async sendResetPassword({ user, url }) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -61,6 +80,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		facebook: {
+			clientId: process.env.FACEBOOK_CLIENT_ID || "",
+			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
+		},
 		github: {
 			clientId: process.env.GITHUB_CLIENT_ID || "",
 			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
@@ -81,6 +104,10 @@ export const auth = betterAuth({
 			clientId: process.env.TWITCH_CLIENT_ID || "",
 			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
+		twitter: {
+			clientId: process.env.TWITTER_CLIENT_ID || "",
+			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
@@ -99,8 +126,7 @@ export const auth = betterAuth({
 								? `http://localhost:3000/accept-invitation/${data.id}`
 								: `${
 										process.env.BETTER_AUTH_URL ||
-										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL
+										"https://demo.better-auth.com"
 									}/accept-invitation/${data.id}`,
 					}),
 				});
@@ -109,7 +135,7 @@ export const auth = betterAuth({
 		}),
 		twoFactor({
 			otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }) {
 					await resend.emails.send({
 						from,
 						to: user.email,
@@ -125,5 +151,6 @@ export const auth = betterAuth({
 		multiSession(),
 		oneTap(),
 		oAuthProxy(),
+		nextCookies(),
 	],
 });

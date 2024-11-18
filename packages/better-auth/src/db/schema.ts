@@ -1,23 +1,23 @@
 import { z } from "zod";
 import type { FieldAttribute } from ".";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, PluginSchema } from "../types";
 
 export const accountSchema = z.object({
 	id: z.string(),
 	providerId: z.string(),
 	accountId: z.string(),
 	userId: z.string(),
-	accessToken: z.string().nullable().optional(),
-	refreshToken: z.string().nullable().optional(),
-	idToken: z.string().nullable().optional(),
+	accessToken: z.string().nullish(),
+	refreshToken: z.string().nullish(),
+	idToken: z.string().nullish(),
 	/**
 	 * Access token expires at
 	 */
-	expiresAt: z.date().nullable().optional(),
+	expiresAt: z.date().nullish(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
-	password: z.string().optional().nullable(),
+	password: z.string().nullish(),
 });
 
 export const userSchema = z.object({
@@ -25,7 +25,7 @@ export const userSchema = z.object({
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
-	image: z.string().optional(),
+	image: z.string().nullish(),
 	createdAt: z.date().default(new Date()),
 	updatedAt: z.date().default(new Date()),
 });
@@ -34,13 +34,14 @@ export const sessionSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
 	expiresAt: z.date(),
-	ipAddress: z.string().optional(),
-	userAgent: z.string().optional(),
+	ipAddress: z.string().nullish(),
+	userAgent: z.string().nullish(),
 });
 
 export const verificationSchema = z.object({
 	id: z.string(),
 	value: z.string(),
+	createdAt: z.date(),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });
@@ -170,4 +171,34 @@ export function parseSessionInput(
 ) {
 	const schema = getAllFields(options, "session");
 	return parseInputData(session, { fields: schema });
+}
+
+export function mergeSchema<S extends PluginSchema>(
+	schema: S,
+	newSchema?: {
+		[K in keyof S]?: {
+			modelName?: string;
+			fields?: {
+				[P: string]: string;
+			};
+		};
+	},
+) {
+	if (!newSchema) {
+		return schema;
+	}
+	for (const table in newSchema) {
+		const newModelName = newSchema[table]?.modelName;
+		if (newModelName) {
+			schema[table].modelName = newModelName;
+		}
+		for (const field in schema[table].fields) {
+			const newField = newSchema[table]?.fields?.[field];
+			if (!newField) {
+				continue;
+			}
+			schema[table].fields[field].fieldName = newField;
+		}
+	}
+	return schema;
 }

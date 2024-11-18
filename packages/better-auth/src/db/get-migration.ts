@@ -3,7 +3,7 @@ import type {
 	CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
-import { logger } from "../utils/logger";
+import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -34,7 +34,7 @@ const mysqlMap = {
 		"float",
 		"double",
 	],
-	boolean: ["boolean"],
+	boolean: ["boolean", "tinyint"],
 	date: ["datetime", "date"],
 };
 
@@ -75,6 +75,7 @@ export function matchType(
 
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
+	const logger = createLogger(config.logger);
 
 	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
 

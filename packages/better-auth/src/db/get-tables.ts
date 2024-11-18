@@ -7,7 +7,7 @@ export type BetterAuthDbSchema = Record<
 		/**
 		 * The name of the table in the database
 		 */
-		tableName: string;
+		modelName: string;
 		/**
 		 * The fields of the table
 		 */
@@ -37,21 +37,21 @@ export const getAuthTables = (
 						...acc[key]?.fields,
 						...value.fields,
 					},
-					tableName: value.tableName || key,
+					modelName: value.modelName || key,
 				};
 			}
 			return acc;
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, FieldAttribute>; tableName: string }
+			{ fields: Record<string, FieldAttribute>; modelName: string }
 		>,
 	);
 
 	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";
 	const rateLimitTable = {
 		rateLimit: {
-			tableName: options.rateLimit?.tableName || "rateLimit",
+			modelName: options.rateLimit?.modelName || "rateLimit",
 			fields: {
 				key: {
 					type: "string",
@@ -72,7 +72,7 @@ export const getAuthTables = (
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
 	return {
 		user: {
-			tableName: options.user?.modelName || "user",
+			modelName: options.user?.modelName || "user",
 			fields: {
 				name: {
 					type: "string",
@@ -114,7 +114,7 @@ export const getAuthTables = (
 			order: 1,
 		},
 		session: {
-			tableName: options.session?.modelName || "session",
+			modelName: options.session?.modelName || "session",
 			fields: {
 				expiresAt: {
 					type: "date",
@@ -147,7 +147,7 @@ export const getAuthTables = (
 			order: 2,
 		},
 		account: {
-			tableName: options.account?.modelName || "account",
+			modelName: options.account?.modelName || "account",
 			fields: {
 				accountId: {
 					type: "string",
@@ -199,7 +199,7 @@ export const getAuthTables = (
 			order: 3,
 		},
 		verification: {
-			tableName: options.verification?.modelName || "verification",
+			modelName: options.verification?.modelName || "verification",
 			fields: {
 				identifier: {
 					type: "string",
@@ -215,6 +215,12 @@ export const getAuthTables = (
 					type: "date",
 					required: true,
 					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
+				},
+				createdAt: {
+					type: "date",
+					required: false,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
 				},
 			},
 			order: 4,

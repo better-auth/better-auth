@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -61,7 +60,7 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data, isPending, error } = useSession();
+	const { data } = useSession();
 	const session = data || props.session;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
@@ -94,7 +93,7 @@ export default function UserCard(props: {
 							<p className="text-sm">{session?.user.email}</p>
 						</div>
 					</div>
-					<EditUserDialog session={session} />
+					<EditUserDialog />
 				</div>
 
 				{session?.user.emailVerified ? null : (
@@ -147,14 +146,14 @@ export default function UserCard(props: {
 							return (
 								<div key={session.id}>
 									<div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white">
-										{new UAParser(session.userAgent).getDevice().type ===
+										{new UAParser(session.userAgent || "").getDevice().type ===
 										"mobile" ? (
 											<MobileIcon />
 										) : (
 											<Laptop size={16} />
 										)}
-										{new UAParser(session.userAgent).getOS().name},{" "}
-										{new UAParser(session.userAgent).getBrowser().name}
+										{new UAParser(session.userAgent || "").getOS().name},{" "}
+										{new UAParser(session.userAgent || "").getBrowser().name}
 										<button
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
@@ -544,7 +543,8 @@ function ChangePassword() {
 	);
 }
 
-function EditUserDialog(props: { session: Session | null }) {
+function EditUserDialog() {
+	const { data, isPending, error } = useSession();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);
@@ -580,7 +580,7 @@ function EditUserDialog(props: { session: Session | null }) {
 					<Input
 						id="name"
 						type="name"
-						placeholder={props.session?.user.name}
+						placeholder={data?.user.name}
 						required
 						onChange={(e) => {
 							setName(e.target.value);
@@ -726,7 +726,7 @@ function AddPasskey() {
 }
 
 function ListPasskeys() {
-	const { data, error } = client.useListPasskeys();
+	const { data } = client.useListPasskeys();
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
 

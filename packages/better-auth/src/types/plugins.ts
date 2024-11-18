@@ -1,4 +1,4 @@
-import type { Endpoint, EndpointResponse } from "better-call";
+import type { Endpoint, EndpointOptions, EndpointResponse } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
@@ -12,7 +12,7 @@ export type PluginSchema = {
 			[field in string]: FieldAttribute;
 		};
 		disableMigration?: boolean;
-		tableName?: string;
+		modelName?: string;
 	};
 };
 
@@ -59,13 +59,19 @@ export type BetterAuthPlugin = {
 			}>;
 		}[];
 		after?: {
-			matcher: (context: HookEndpointContext) => boolean;
+			matcher: (
+				context: HookEndpointContext<{
+					returned: unknown;
+					endpoint: Endpoint;
+				}>,
+			) => boolean;
 			handler: (
 				context: HookEndpointContext<{
-					returned: EndpointResponse;
+					returned: unknown;
+					endpoint: Endpoint;
 				}>,
 			) => Promise<void | {
-				response: EndpointResponse;
+				response: unknown;
 			}>;
 		}[];
 	};
@@ -119,3 +125,17 @@ export type BetterAuthPlugin = {
 		pathMatcher: (path: string) => boolean;
 	}[];
 };
+
+export type InferOptionSchema<S extends PluginSchema> = S extends Record<
+	string,
+	{ fields: infer Fields }
+>
+	? {
+			[K in keyof S]?: {
+				modelName?: string;
+				fields: {
+					[P in keyof Fields]?: string;
+				};
+			};
+		}
+	: never;

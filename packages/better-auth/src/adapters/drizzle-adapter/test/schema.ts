@@ -4,7 +4,7 @@ import { sqliteTable } from "drizzle-orm/sqlite-core";
 export const user = sqliteTable("user", {
 	id: text("id").primaryKey().default(new Date().toISOString()),
 	name: text("name"),
-	email: text("email").unique(),
+	email_address: text("email_address").unique(),
 	emailVerified: int("emailVerified", {
 		mode: "boolean",
 	}),
@@ -16,7 +16,7 @@ export const user = sqliteTable("user", {
 	}),
 });
 
-export const session = sqliteTable("session", {
+export const sessions = sqliteTable("sessions", {
 	id: text("id").primaryKey(),
 	userId: text("userId").references(() => user.id),
 	expiresAt: int("expiresAt", {

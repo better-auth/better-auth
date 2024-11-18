@@ -5,7 +5,11 @@ import {
 	createAuthMiddleware,
 	sessionMiddleware,
 } from "../../api";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import {
+	parseCookies,
+	parseSetCookieHeader,
+	setSessionCookie,
+} from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
 
 interface MultiSessionConfig {
@@ -54,25 +58,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionIds);
 
-					const validSessions = sessions
-						.filter(
-							(session) => session && session.session.expiresAt > new Date(),
-						)
-						.filter(
-							(session, index, self) =>
-								index === self.findIndex((s) => s.user.id === session.user.id),
-						);
-
-					Object.entries(cookies)
-						.filter(([key]) => isMultiSessionCookie(key))
-						.forEach(([key, value]) => {
-							if (!validSessions.some((s) => s.session.id === value)) {
-								ctx.setCookie(key, "", {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: 0,
-								});
-							}
-						});
+					const validSessions = sessions.filter(
+						(session) => session && session.session.expiresAt > new Date(),
+					);
 
 					return ctx.json(validSessions);
 				},
@@ -141,18 +129,59 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							message: "Invalid session id",
 						});
 					}
-					const session =
-						await ctx.context.internalAdapter.findSession(sessionId);
+
+					await ctx.context.internalAdapter.deleteSession(sessionId);
 					ctx.setCookie(multiSessionCookieName, "", {
 						...ctx.context.authCookies.sessionToken.options,
 						maxAge: 0,
 					});
-					if (!session) {
-						return ctx.json({
-							success: true,
+					const isActive = ctx.context.session?.session.id === sessionId;
+					if (!isActive) return ctx.json({ success: true });
+
+					const cookieHeader = ctx.headers?.get("cookie");
+					const authCookies = ctx.context.authCookies;
+					if (cookieHeader) {
+						const cookies = Object.fromEntries(parseCookies(cookieHeader));
+
+						const sessionIds = (
+							await Promise.all(
+								Object.entries(cookies)
+									.filter(([key]) => isMultiSessionCookie(key))
+									.map(
+										async ([key]) =>
+											await ctx.getSignedCookie(key, ctx.context.secret),
+									),
+							)
+						).filter((v): v is string => v !== undefined);
+						const internalAdapter = ctx.context.internalAdapter;
+
+						if (sessionIds.length > 0) {
+							const sessions = await internalAdapter.findSessions(sessionIds);
+							const validSessions = sessions.filter(
+								(session) => session && session.session.expiresAt > new Date(),
+							);
+
+							if (validSessions.length > 0) {
+								const nextSession = validSessions[0];
+								await setSessionCookie(ctx, nextSession);
+							} else {
+								ctx.setCookie(authCookies.sessionToken.name, "", {
+									...authCookies.sessionToken.options,
+									maxAge: 0,
+								});
+							}
+						} else {
+							ctx.setCookie(authCookies.sessionToken.name, "", {
+								...authCookies.sessionToken.options,
+								maxAge: 0,
+							});
+						}
+					} else {
+						ctx.setCookie(authCookies.sessionToken.name, "", {
+							...authCookies.sessionToken.options,
+							maxAge: 0,
 						});
 					}
-					await ctx.context.internalAdapter.deleteSession(sessionId);
 					return ctx.json({
 						success: true,
 					});
@@ -229,11 +258,17 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						);
 
 						const response = ctx.context.returned;
-						response?.headers.append(
-							"Set-Cookie",
-							ctx.responseHeader.get("set-cookie")!,
-						);
-
+						if (response instanceof Response) {
+							response?.headers.append(
+								"Set-Cookie",
+								ctx.responseHeader.get("set-cookie")!,
+							);
+						} else {
+							ctx.responseHeader.set(
+								"set-cookie",
+								ctx.responseHeader.get("set-cookie")!,
+							);
+						}
 						return { response };
 					}),
 				},

@@ -27,7 +27,7 @@ export const auth = betterAuth({
 })
 ```
 
-### Signup
+### Sign Up
 
 Before a user can sign in, they need to sign up. To sign up a user using email and password, you need to call the client method `signUp.email` with the user's information.
 
@@ -37,6 +37,7 @@ You can pass the following properties to the `signUp.email` method:
 - **password**: the user's password
 - **name**: the user's display name
 - **image**: the user's image url (optional)
+- **callbackURL**: a callbackURL if email verification is enabled.
 
 **Example: Using React**
 
@@ -82,7 +83,7 @@ export default function SignUp() {
 }
 ```
 
-By default, the user is automatically logged in after signing up. This behaviour can be changed by configuring your `auth-config`
+By default, the user is automatically signed in after signing up. This behaviour can be changed by configuring your `auth-config`
 
 ```js
 import { betterAuth } from "better-auth"
@@ -96,9 +97,9 @@ export const auth = betterAuth({
 })
 ```
 
-### Signin
+### Sign In
 
-To signin a user, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
+To sign a user in, you can use the `signIn.email` function provided by the client. The `signIn` function takes an object with the following properties:
 
 - **email**: the user's email address
 - **password**: the user's password
@@ -214,11 +215,11 @@ await authClient.signOut({
 
 ## Session Management
 
-Once a user is signed in, you'll want to access their session. Better Auth allows you easily to access the session data from the server and client side.
+Once a user is signed in, you'll want to access the user session. Better Auth allows you easily to access the session data from the server and client side.
 
 ### Client Side
 
-Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented in a reactive way for each supported framework, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
+Better Auth provides a `useSession` hook to easily access session data on the client side. This hook is implemented using nanostore and has support for each supported framework and vanilla client, ensuring that any changes to the session (such as signing out) are immediately reflected in your UI.
 
 It has the following properties:
 - **data**: the actual session data which includes `session` and `user` object.
@@ -416,7 +417,7 @@ Below is an example of how to add two factor authentication using two factor plu
 <Step>
 ### Server Configuration
 
-To add a plugin, you need to import the plugin and pass it to the `plugins` option of the auth instance. For example, to add two facor authentication, you can use the following code:
+To add a plugin, you need to import the plugin and pass it to the `plugins` option of the auth instance. For example, to add two factor authentication, you can use the following code:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -457,7 +458,7 @@ If you prefer adding the schema manually, you can check the schema required on t
 <Step>
 ### Client Configuration
 
-Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `plugins` option of the auth client. For example, to add two facor authentication, you can use the following code:
+Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `plugins` option of the auth client. For example, to add two factor authentication, you can use the following code:
 
 ```ts title="client.ts"  /
 import { createAuthClient } from "better-auth/client";

@@ -81,13 +81,15 @@ await authClient.multiSession.revoke({
 
 ### Revoke all sessions
 
-To revoke all sessions, you can call the existing `signOut` method.
+To revoke all sessions, you can call the `revokeAll` method.
 
 ```ts
-await authClient.signOut()
+await authClient.multiSession.revokeAll();
 ```
 
-## Options
+### Signout Behaviour
+
+When a user logs out, the plugin will revoke all active sessions for the user.
 
 ### Max Sessions
 

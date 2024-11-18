@@ -14,8 +14,7 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
-		"./mdx-components.{ts,tsx}",
-		"./node_modules/fumadocs-ui/dist/**/*.js",
+		"../node_modules/fumadocs-ui/dist/**/*.js",
 	],
 	presets: [
 		createPreset({
@@ -106,6 +105,22 @@ export default {
 				},
 			},
 			keyframes: {
+				marquee: {
+					from: { transform: "translateX(0)" },
+					to: { transform: "translateX(calc(-100% - var(--gap)))" },
+				},
+				"marquee-vertical": {
+					from: { transform: "translateY(0)" },
+					to: { transform: "translateY(calc(-100% - var(--gap)))" },
+				},
+				"hrtl-scroll": {
+					from: { transform: "translateX(0)" },
+					to: { transform: "translateX(calc(-95%))" },
+				},
+				"hrtl-scroll-reverse": {
+					from: { transform: "translateX(calc(-95%))" },
+					to: { transform: "translateX(0)" },
+				},
 				ripple: {
 					"0% , 100%": {
 						transform: "translate(-50% , -50%) scale(1)",
@@ -130,11 +145,21 @@ export default {
 						height: "0",
 					},
 				},
+				scroll: {
+					to: {
+						transform: "translate(calc(-50% - 0.5rem))",
+					},
+				},
 			},
 			animation: {
 				"accordion-down": "accordion-down 0.2s ease-out",
 				"accordion-up": "accordion-up 0.2s ease-out",
 				ripple: "ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite",
+				scroll:
+					"scroll var(--animation-duration, 40s) var(--animation-direction, forwards) linear infinite",
+				"hrtl-scroll": "hrtl-scroll var(--anime-duration,10s) linear infinite",
+				"hrtl-scroll-reverse":
+					"hrtl-scroll-reverse var(--anime-duration,10s) linear infinite",
 			},
 		},
 	},

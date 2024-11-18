@@ -2,13 +2,14 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Adapter, SecondaryStorage } from "./adapter";
+import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { RateLimit } from "./models";
-import type { AuthContext } from ".";
+import type { AuthContext, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
+import type { Logger } from "../utils";
 
 export interface BetterAuthOptions {
 	/**
@@ -21,7 +22,8 @@ export interface BetterAuthOptions {
 	appName?: string;
 	/**
 	 * Base URL for the better auth. This is typically the
-	 * root URL where your application server is hosted. If not explicitly set,
+	 * root URL where your application server is hosted.
+	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
 	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
@@ -30,7 +32,8 @@ export interface BetterAuthOptions {
 	 */
 	baseURL?: string;
 	/**
-	 * Base path for the better auth. This is typically the path where the
+	 * Base path for the better auth. This is typically
+	 * the path where the
 	 * better auth routes are mounted.
 	 *
 	 * @default "/api/auth"
@@ -68,7 +71,7 @@ export interface BetterAuthOptions {
 		| MysqlPool
 		| Database
 		| Dialect
-		| Adapter
+		| AdapterInstance
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
@@ -112,16 +115,27 @@ export interface BetterAuthOptions {
 	 */
 	emailVerification?: {
 		/**
-		 * @param user the user to send the
-		 * verification email to
-		 * @param url the url to send the verification email to
-		 * it contains the token as well
-		 * @param token the token to send the verification email to
+		 * Send a verification email
+		 * @param data the data object
+		 * @param request the request object
 		 */
 		sendVerificationEmail?: (
-			user: User,
-			url: string,
-			token: string,
+			/**
+			 * @param user the user to send the
+			 * verification email to
+			 * @param url the url to send the verification email to
+			 * it contains the token as well
+			 * @param token the token to send the verification email to
+			 */
+			data: {
+				user: User;
+				url: string;
+				token: string;
+			},
+			/**
+			 * The request object
+			 */
+			request?: Request,
 		) => Promise<void>;
 		/**
 		 * Send a verification email automatically
@@ -130,6 +144,10 @@ export interface BetterAuthOptions {
 		 * @default false
 		 */
 		sendOnSignUp?: boolean;
+		/**
+		 * Auto signin the user after they verify their email
+		 */
+		autoSignInAfterVerification?: boolean;
 	};
 	/**
 	 * Email and password authentication
@@ -164,10 +182,24 @@ export interface BetterAuthOptions {
 		/**
 		 * send reset password
 		 */
-		sendResetPassword?: (user: User, url: string) => Promise<void>;
+		sendResetPassword?: (
+			/**
+			 * @param user the user to send the
+			 * reset password email to
+			 * @param url the url to send the reset password email to
+			 * @param token the token to send to the user (could be used instead of sending the url
+			 * if you need to redirect the user to custom route)
+			 */
+			data: { user: User; url: string; token: string },
+			/**
+			 * The request object
+			 */
+			request?: Request,
+		) => Promise<void>;
 		/**
-		 * Number of seconds the reset password token is valid for.
-		 * @default 1 hour
+		 * Number of seconds the reset password token is
+		 * valid for.
+		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
 		/**
@@ -203,7 +235,7 @@ export interface BetterAuthOptions {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
-		fields?: Partial<Record<keyof User, string>>;
+		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
 		 * Additional fields for the session
 		 */
@@ -221,12 +253,17 @@ export interface BetterAuthOptions {
 			enabled: boolean;
 			/**
 			 * Send a verification email when the user changes their email.
+			 * @param data the data object
+			 * @param request the request object
 			 */
 			sendChangeEmailVerification?: (
-				user: User,
-				newEmail: string,
-				url: string,
-				token: string,
+				data: {
+					user: User;
+					newEmail: string;
+					url: string;
+					token: string;
+				},
+				request?: Request,
 			) => Promise<void>;
 		};
 	};
@@ -246,7 +283,7 @@ export interface BetterAuthOptions {
 		 *  userId: "user_id"
 		 * }
 		 */
-		fields?: Partial<Record<keyof Session, string>>;
+		fields?: Partial<Record<keyof OmitId<Session>, string>>;
 		/**
 		 * Expiration time for the session token. The value
 		 * should be in seconds.
@@ -296,7 +333,7 @@ export interface BetterAuthOptions {
 	};
 	account?: {
 		modelName?: string;
-		fields?: Partial<Record<keyof Account, string>>;
+		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -315,7 +352,7 @@ export interface BetterAuthOptions {
 	 */
 	verification?: {
 		modelName?: string;
-		fields?: Partial<Record<keyof Verification, string>>;
+		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 	};
 	/**
 	 * List of trusted origins.
@@ -375,7 +412,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default "rateLimit"
 		 */
-		tableName?: string;
+		modelName?: string;
 		/**
 		 * Custom field names for the rate limit table
 		 */
@@ -395,6 +432,28 @@ export interface BetterAuthOptions {
 	 * Advanced options
 	 */
 	advanced?: {
+		/**
+		 * Ip address configuration
+		 */
+		ipAddress?: {
+			/**
+			 * List of headers to use for ip address
+			 *
+			 * Ip address is used for rate limiting and session tracking
+			 *
+			 * @example ["x-client-ip", "x-forwarded-for"]
+			 *
+			 * @default
+			 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+			 */
+			ipAddressHeaders?: string[];
+			/**
+			 * Disable ip tracking
+			 *
+			 * ⚠︎ This is a security risk and it may expose your application to abuse
+			 */
+			disableIpTracking?: boolean;
+		};
 		/**
 		 * Use secure cookies
 		 *
@@ -455,18 +514,7 @@ export interface BetterAuthOptions {
 		 */
 		cookiePrefix?: string;
 	};
-	logger?: {
-		/**
-		 * Disable logging
-		 *
-		 * @default false
-		 */
-		disabled?: boolean;
-		/**
-		 * log verbose information
-		 */
-		verboseLogging?: boolean;
-	};
+	logger?: Logger;
 	/**
 	 * allows you to define custom hooks that can be
 	 * executed during lifecycle of core database

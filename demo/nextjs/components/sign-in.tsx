@@ -14,7 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import {
+	DiscordLogoIcon,
+	GitHubLogoIcon,
+	TwitterLogoIcon,
+} from "@radix-ui/react-icons";
 import { Key, Loader2, TwitchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -87,7 +91,7 @@ export default function SignIn() {
 									email: email,
 									password: password,
 									callbackURL: "/dashboard",
-									dontRememberMe: !rememberMe,
+									rememberMe,
 								},
 								{
 									onRequest: () => {
@@ -105,10 +109,10 @@ export default function SignIn() {
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
 					</Button>
-					<div className="flex items-center gap-2">
+					<div className="grid grid-cols-4 gap-2">
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "github",
@@ -120,7 +124,7 @@ export default function SignIn() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "discord",
@@ -131,29 +135,7 @@ export default function SignIn() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
-							onClick={async () => {
-								await signIn.social({
-									provider: "twitch",
-									callbackURL: "/dashboard",
-								});
-							}}
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="1.2em"
-								height="1.2em"
-								viewBox="0 0 24 24"
-							>
-								<path
-									fill="currentColor"
-									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
-								></path>
-							</svg>
-						</Button>
-						<Button
-							variant="outline"
-							className="w-full gap-2"
+							className=" gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "google",
@@ -187,7 +169,7 @@ export default function SignIn() {
 						</Button>
 						<Button
 							variant="outline"
-							className="w-full gap-2"
+							className="gap-2"
 							onClick={async () => {
 								await signIn.social({
 									provider: "microsoft",
@@ -205,6 +187,82 @@ export default function SignIn() {
 									fill="currentColor"
 									d="M2 3h9v9H2zm9 19H2v-9h9zM21 3v9h-9V3zm0 19h-9v-9h9z"
 								></path>
+							</svg>
+						</Button>
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitch",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.2em"
+								height="1.2em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43Z"
+								></path>
+							</svg>
+						</Button>
+
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "facebook",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1.3em"
+								height="1.3em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="currentColor"
+									d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95"
+								></path>
+							</svg>
+						</Button>
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.social({
+									provider: "twitter",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 14 14"
+							>
+								<g fill="none">
+									<g clipPath="url(#primeTwitter0)">
+										<path
+											fill="currentColor"
+											d="M11.025.656h2.147L8.482 6.03L14 13.344H9.68L6.294 8.909l-3.87 4.435H.275l5.016-5.75L0 .657h4.43L7.486 4.71zm-.755 11.4h1.19L3.78 1.877H2.504z"
+										></path>
+									</g>
+									<defs>
+										<clipPath id="primeTwitter0">
+											<path fill="#fff" d="M0 0h14v14H0z"></path>
+										</clipPath>
+									</defs>
+								</g>
 							</svg>
 						</Button>
 					</div>

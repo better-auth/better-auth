@@ -8,6 +8,8 @@ export type FieldType =
 	| "date"
 	| `${"string" | "number"}[]`;
 
+type Primitive = string | number | boolean | Date | null | undefined;
+
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
 	 * If the field should be required on a new record.
@@ -25,21 +27,21 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 */
 	input?: boolean;
 	/**
-	 * If the value should be hashed when it's stored.
-	 * @default false
-	 */
-	hashValue?: boolean;
-	/**
 	 * Default value for the field
 	 *
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: any;
+	defaultValue?: Primitive | (() => Primitive);
 	/**
 	 * transform the value before storing it.
 	 */
-	transform?: (value: InferValueType<T>) => InferValueType<T>;
+	transform?: {
+		input?: (value: InferValueType<T>) => Primitive | Promise<Primitive>;
+		output?: (
+			value: Primitive,
+		) => InferValueType<T> | Promise<InferValueType<T>>;
+	};
 	/**
 	 * Reference to another model.
 	 */
@@ -67,14 +69,12 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
 	 * A zod schema to validate the value.
 	 */
-	validator?: ZodSchema;
+	validator?: {
+		input?: ZodSchema;
+		output?: ZodSchema;
+	};
 	/**
 	 * The name of the field on the database.
-	 *
-	 * @default
-	 * ```txt
-	 * the key in the fields object.
-	 * ```
 	 */
 	fieldName?: string;
 };
@@ -121,7 +121,7 @@ export type InferFieldsOutput<Field> = Field extends Record<
 		} & {
 			[key in Key as Field[key]["returned"] extends false
 				? never
-				: key]?: InferFieldOutput<Field[key]>;
+				: key]?: InferFieldOutput<Field[key]> | null;
 		}
 	: {};
 
@@ -140,7 +140,8 @@ export type InferFieldsInput<Field> = Field extends Record<
 		} & {
 			[key in Key as Field[key]["input"] extends false ? never : key]:
 				| InferFieldInput<Field[key]>
-				| undefined;
+				| undefined
+				| null;
 		}
 	: {};
 
@@ -158,14 +159,14 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 					? never
 					: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]?: InferFieldInput<Field[key]> | undefined;
+			[key in Key]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 
 type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined
+		? InferValueType<T["type"]> | undefined | null
 		: InferValueType<T["type"]>;
 
 type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;

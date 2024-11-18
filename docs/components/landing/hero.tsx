@@ -24,10 +24,9 @@ const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
 		name: "auth.ts",
 		code: `export const auth = betterAuth({
-	database: {
-        provider: "postgresql",
-        url: process.env.DATABASE_URL,
-    },
+	database: new Pool({
+		connectionString: process.env.DATABASE_URL,
+	}),
     emailAndPassword: {
         enabled: true,
     },
@@ -75,7 +74,7 @@ export default function Hero() {
 							</div>
 
 							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight md:text-2xl">
-								The most comprehensive authentication library for TypeScript.
+								The most comprehensive authentication framework for TypeScript.
 							</p>
 							{
 								<>
@@ -148,7 +147,7 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:from-stone-950/70 dark:to-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
 				>
 					<div ref={ref}>
 						<div className="absolute -top-px left-0 right-0 h-px" />
@@ -260,7 +259,7 @@ function CodePreview() {
 									<Link
 										href="https://demo.better-auth.com"
 										target="_blank"
-										className="shadow-md shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"

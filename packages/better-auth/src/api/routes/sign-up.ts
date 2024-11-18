@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodOptional, ZodString } from "zod";
+import { z, ZodObject, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -13,7 +13,6 @@ import type {
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -96,7 +95,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				}
 			} catch (e) {
-				logger.error("Failed to create user", e);
+				ctx.context.logger.error("Failed to create user", e);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "Failed to create user",
 					details: e,
@@ -129,9 +128,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					body.callbackURL || ctx.query?.currentURL || "/"
 				}`;
 				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-					createdUser,
-					url,
-					token,
+					{
+						user: createdUser,
+						url,
+						token,
+					},
+					ctx.request,
 				);
 			}
 
@@ -139,23 +141,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				!ctx.context.options.emailAndPassword.autoSignIn ||
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
-				return ctx.json(
-					{
-						user: createdUser as InferUser<O>,
-						session: null,
-					},
-					{
-						body: body.callbackURL
-							? {
-									url: body.callbackURL,
-									redirect: true,
-								}
-							: {
-									user: createdUser,
-									session: null,
-								},
-					},
-				);
+				return ctx.json({
+					user: createdUser as InferUser<O>,
+					session: null,
+				});
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(

@@ -10,15 +10,15 @@ describe("general types", async (it) => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
-				ipAddress?: string | undefined;
-				userAgent?: string | undefined;
+				ipAddress?: string | undefined | null;
+				userAgent?: string | undefined | null;
 			};
 			user: {
 				id: string;
 				email: string;
 				emailVerified: boolean;
 				name: string;
-				image?: string | undefined;
+				image?: string | undefined | null;
 				createdAt: Date;
 				updatedAt: Date;
 			};
@@ -34,19 +34,19 @@ describe("general types", async (it) => {
 			email: string;
 			emailVerified: boolean;
 			name: string;
-			image?: string | undefined;
+			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;
-			twoFactorEnabled: boolean | undefined;
+			twoFactorEnabled: boolean | undefined | null;
 		}>();
 
 		expectTypeOf<typeof auth.$Infer.Session.session>().toEqualTypeOf<{
 			id: string;
 			userId: string;
 			expiresAt: Date;
-			ipAddress?: string | undefined;
-			userAgent?: string | undefined;
-			activeOrganizationId?: string | undefined;
+			ipAddress?: string | undefined | null;
+			userAgent?: string | undefined | null;
+			activeOrganizationId?: string | undefined | null;
 		}>();
 	});
 });

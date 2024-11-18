@@ -5,10 +5,15 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InferSession,
 	InferUser,
 	Prettify,
+	Session,
+	User,
 } from "../../types";
+import { hmac } from "../../crypto/hash";
+import { safeJSONParse } from "../../utils/json";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -33,15 +38,34 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.secret,
 				);
 				if (!sessionCookieToken) {
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
-				const sessionData = await ctx.getSignedCookie(
+				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
-					ctx.context.secret,
 				);
+				const sessionDataPayload = sessionDataCookie
+					? safeJSONParse<{
+							session: {
+								session: Session;
+								user: User;
+							};
+							signature: string;
+							expiresAt: number;
+						}>(Buffer.from(sessionDataCookie, "base64").toString())
+					: null;
+				if (sessionDataPayload) {
+					const isValid = await hmac.verify({
+						value: JSON.stringify(sessionDataPayload.session),
+						signature: sessionDataPayload?.signature,
+						secret: ctx.context.secret,
+					});
+					if (!isValid) {
+						deleteSessionCookie(ctx);
+						return ctx.json(null);
+					}
+				}
+
 				const dontRememberMe = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -50,18 +74,26 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * If session data is present in the cookie, return it
 				 */
 				if (
-					sessionData &&
+					sessionDataPayload?.session &&
 					ctx.context.options.session?.cookieCache?.enabled &&
 					!ctx.query?.disableCookieCache
 				) {
-					const session = JSON.parse(sessionData)?.session;
-					if (session?.expiresAt > new Date()) {
+					const session = sessionDataPayload.session;
+					const hasExpired =
+						sessionDataPayload.expiresAt < Date.now() ||
+						session.session.expiresAt < new Date();
+					if (!hasExpired) {
 						return ctx.json(
 							session as {
 								session: InferSession<Option>;
 								user: InferUser<Option>;
 							},
 						);
+					} else {
+						const dataCookie = ctx.context.authCookies.sessionData.name;
+						ctx.setCookie(dataCookie, "", {
+							maxAge: 0,
+						});
 					}
 				}
 
@@ -76,9 +108,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						 */
 						await ctx.context.internalAdapter.deleteSession(session.session.id);
 					}
-					return ctx.json(null, {
-						status: 401,
-					});
+					return ctx.json(null);
 				}
 
 				/**
@@ -152,21 +182,36 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					},
 				);
 			} catch (error) {
-				ctx.context.logger.error(error);
-				return ctx.json(null, { status: 500 });
+				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "internal server error",
+				});
 			}
 		},
 	);
 
-export const getSessionFromCtx = async (ctx: Context<any, any>) => {
-	//@ts-ignore
+export const getSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: GenericEndpointContext,
+) => {
+	if (ctx.context.session) {
+		return ctx.context.session as {
+			session: S & Session;
+			user: U & User;
+		};
+	}
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",
 		headers: ctx.headers!,
 	});
-
-	return session;
+	ctx.context.session = session;
+	return session as {
+		session: S & Session;
+		user: U & User;
+	};
 };
 
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
@@ -174,6 +219,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
+
 	return {
 		session,
 	};
@@ -230,7 +276,12 @@ export const revokeSession = createAuthEndpoint(
 		try {
 			await ctx.context.internalAdapter.deleteSession(id);
 		} catch (error) {
-			ctx.context.logger.error(error);
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
 		return ctx.json({
@@ -254,9 +305,46 @@ export const revokeSessions = createAuthEndpoint(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {
-			ctx.context.logger.error(error);
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
 			throw new APIError("INTERNAL_SERVER_ERROR");
 		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const revokeOtherSessions = createAuthEndpoint(
+	"/revoke-other-sessions",
+	{
+		method: "POST",
+		requireHeaders: true,
+		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session;
+		if (!session.user) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		const sessions = await ctx.context.internalAdapter.listSessions(
+			session.user.id,
+		);
+		const activeSessions = sessions.filter((session) => {
+			return session.expiresAt > new Date();
+		});
+		const otherSessions = activeSessions.filter(
+			(session) => session.id !== ctx.context.session.session.id,
+		);
+		await Promise.all(
+			otherSessions.map((session) =>
+				ctx.context.internalAdapter.deleteSession(session.id),
+			),
+		);
 		return ctx.json({
 			status: true,
 		});
