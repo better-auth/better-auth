@@ -1,6 +1,6 @@
 ---
 title: Two-Factor Authentication (2FA)
-description: Enhance your app's security with two-factor authentication
+description: Enhance your app's security with two-factor authentication.
 ---
 
 `OTP` `TOTP` `Backup Codes` `Trusted Devices`
@@ -60,7 +60,7 @@ This plugin offers two main methods to do a second factor verification:
     </Step>
 
         <Step>
-        ### Add the client Plugin
+        ### Add the client plugin
 
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
@@ -337,7 +337,7 @@ Table: `twoFactor`
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
-**Issuer**: The issuer is the name of your application. It's used to generate totp codes. It'll be displayed in the authenticator apps.
+**Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
 **TOTP options**
 
@@ -346,13 +346,13 @@ these are options for TOTP.
 <TypeTable
   type={{
     digits:{
-        description: 'The number of digits the otp to be',
-        type: 'number',
+        description: "The number of digits the otp to be",
+        type: "number",
         default: 6,
     },
     period: {
-        description: 'The period for otp in seconds.',
-        type: 'number',
+        description: "The period for otp in seconds.",
+        type: "number",
         default: 30,
     },
   }}
@@ -369,8 +369,8 @@ these are options for OTP.
         type: "function",
     },
     period: {
-        description: 'The period for otp in seconds.',
-        type: 'number',
+        description: "The period for otp in seconds.", 
+        type: "number",
         default: 30,
     },
   }}
@@ -412,7 +412,7 @@ const client = createAuthClient({
         twoFactorClient({ // [!code highlight]
             twoFactorPage: "/two-factor" // [!code highlight]
         }) // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 

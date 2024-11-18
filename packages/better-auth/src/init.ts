@@ -1,15 +1,8 @@
 import { defu } from "defu";
-import {
-	type BetterAuthCookies,
-	createCookieGetter,
-	getCookies,
-} from "./cookies";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
 import { getAuthTables } from "./db/get-tables";
 import { getAdapter } from "./db/utils";
-import type { OAuthProvider } from "./oauth2";
-import { socialProviderList, socialProviders } from "./social-providers";
 import type {
 	Adapter,
 	BetterAuthOptions,
@@ -18,10 +11,17 @@ import type {
 	Session,
 	User,
 } from "./types";
-import { generateId } from "./utils";
 import { DEFAULT_SECRET } from "./utils/constants";
+import {
+	type BetterAuthCookies,
+	createCookieGetter,
+	getCookies,
+} from "./cookies";
+import { createLogger } from "./utils/logger";
+import { socialProviderList, socialProviders } from "./social-providers";
+import type { OAuthProvider } from "./oauth2";
+import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
-import { createLogger, logger } from "./utils/logger";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
 
@@ -29,6 +29,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
+	const logger = createLogger(options.logger);
 
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
@@ -59,7 +60,6 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 	};
 	const cookies = getCookies(options);
-
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
@@ -99,9 +99,7 @@ export const init = async (options: BetterAuthOptions) => {
 					: ("memory" as const),
 		},
 		authCookies: cookies,
-		logger: createLogger({
-			disabled: options.logger?.disabled || false,
-		}),
+		logger: logger,
 		uuid: generateId,
 		session: null,
 		secondaryStorage: options.secondaryStorage,

@@ -5,7 +5,7 @@ import { multiSessionClient } from "./client";
 import { parseSetCookieHeader } from "../../cookies";
 
 describe("multi-session", async () => {
-	const { auth, client, signInWithTestUser, testUser } = await getTestInstance(
+	const { client, testUser, cookieSetter } = await getTestInstance(
 		{
 			plugins: [
 				multiSession({
@@ -17,7 +17,6 @@ describe("multi-session", async () => {
 			clientOptions: {
 				plugins: [multiSessionClient()],
 			},
-			testWith: "postgres",
 		},
 	);
 
@@ -48,18 +47,12 @@ describe("multi-session", async () => {
 					expect(multiSession).not.toBe(null);
 					expect(multiSession).toContain(sessionToken);
 					expect(setCookieString).toContain("better-auth.session_token_multi-");
-					headers.set("cookie", `${setCookieString?.split(",").join(";")}`);
 				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		await client.signUp.email(testUser2, {
-			onSuccess(context) {
-				const setCookieString = context.response.headers.get("set-cookie");
-				headers.set(
-					"cookie",
-					`${headers.get("cookie")}; ${setCookieString?.split(",").join(";")}`,
-				);
-			},
+			onSuccess: cookieSetter(headers),
 		});
 	});
 
@@ -96,19 +89,36 @@ describe("multi-session", async () => {
 		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
-	it("should sign-out a session", async () => {
-		await client.multiSession.revoke({
-			fetchOptions: {
-				headers,
-			},
-			sessionId,
+	it("should revoke a session and set the next active", async () => {
+		const testUser3 = {
+			email: "my-email@email.com",
+			password: "password",
+			name: "Name",
+		};
+		const signUpRes = await client.signUp.email(testUser3, {
+			onSuccess: cookieSetter(headers),
 		});
+		await client.multiSession.revoke(
+			{
+				fetchOptions: {
+					headers,
+				},
+				sessionId: signUpRes.data?.session.id || "",
+			},
+			{
+				onSuccess(context) {
+					expect(context.response.headers.get("set-cookie")).toContain(
+						`better-auth.session_token`,
+					);
+				},
+			},
+		);
 		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(res.data).toHaveLength(1);
+		expect(res.data).toHaveLength(2);
 	});
 
 	it("should sign-out all sessions", async () => {
@@ -117,7 +127,6 @@ describe("multi-session", async () => {
 				headers,
 			},
 		});
-
 		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
 				headers,

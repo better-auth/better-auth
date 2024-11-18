@@ -4,7 +4,7 @@ import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { generateState, logger } from "../../utils";
+import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const signInSocial = createAuthEndpoint(
@@ -22,7 +22,8 @@ export const signInSocial = createAuthEndpoint(
 			.optional(),
 		body: z.object({
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to redirect to after the user
+			 * has signed in.
 			 */
 			callbackURL: z.string().optional(),
 			/**
@@ -36,6 +37,13 @@ export const signInSocial = createAuthEndpoint(
 			 * OAuth2 provider to use`
 			 */
 			provider: z.enum(socialProviderList),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z.boolean().optional(),
 			/**
 			 * ID token from the provider
 			 *
@@ -171,7 +179,7 @@ export const signInSocial = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -190,7 +198,8 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			password: z.string(),
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to use as a redirect for email
+			 * verification and for possible redirects
 			 */
 			callbackURL: z.string().optional(),
 			/**
@@ -260,7 +269,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				logger.error(
+				ctx.context.logger.error(
 					"Email verification is required but no email verification handler is provided",
 				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -271,7 +280,9 @@ export const signInEmail = createAuthEndpoint(
 				ctx.context.secret,
 				user.user.email,
 			);
-			const url = `${ctx.context.baseURL}/verify-email?token=${token}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
 				{
 					user: user.user,

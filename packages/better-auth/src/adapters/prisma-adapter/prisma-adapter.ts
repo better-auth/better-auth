@@ -59,7 +59,7 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	}
 
 	function getModelName(model: string) {
-		return schema[model].tableName;
+		return schema[model].modelName;
 	}
 	const shouldGenerateId = config?.generateId !== false;
 	return {

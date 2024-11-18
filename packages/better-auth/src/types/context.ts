@@ -3,14 +3,16 @@ import type { AuthContext } from "../init";
 
 export type HookEndpointContext<C extends Record<string, any> = {}> =
 	ContextTools & {
-		context: AuthContext & C;
+		context: AuthContext &
+			C & {
+				returned: unknown;
+			};
 	} & {
 		body: any;
 		request?: Request;
 		headers?: Headers;
 		params?: Record<string, string> | undefined;
 		query?: any;
-		returned: unknown;
 		returnedHeaders: Headers;
 		endpointOptions: EndpointOptions;
 		method?: any;

@@ -24,7 +24,8 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
-	const { createWithHooks, updateWithHooks } = getWithHooks(adapter, ctx);
+	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
+		getWithHooks(adapter, ctx);
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
@@ -580,7 +581,7 @@ export const createInternalAdapter = (
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
-			const account = await updateWithHooks<Account>(
+			await updateManyWithHooks(
 				{
 					password,
 				},
@@ -596,7 +597,6 @@ export const createInternalAdapter = (
 				],
 				"account",
 			);
-			return account;
 		},
 		findAccounts: async (userId: string) => {
 			const accounts = await adapter.findMany<Account>({
@@ -617,6 +617,18 @@ export const createInternalAdapter = (
 					{
 						field: "accountId",
 						value: accountId,
+					},
+				],
+			});
+			return account;
+		},
+		findAccountByUserId: async (userId: string) => {
+			const account = await adapter.findMany<Account>({
+				model: "account",
+				where: [
+					{
+						field: "userId",
+						value: userId,
 					},
 				],
 			});
@@ -659,7 +671,7 @@ export const createInternalAdapter = (
 				limit: 10,
 			});
 			const lastVerification = verification[0];
-			return lastVerification;
+			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
 			await adapter.delete<Verification>({

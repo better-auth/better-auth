@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
+import { createAccessControl } from "./access";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
@@ -17,7 +18,7 @@ describe("organization", async (it) => {
 			}),
 		],
 		logger: {
-			verboseLogging: true,
+			level: "error",
 		},
 	});
 
@@ -243,7 +244,6 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		console.log(org);
 		if (!org.data) throw new Error("Organization not found");
 		expect(org.data.members[0].role).toBe("owner");
 		const removedMember = await client.organization.removeMember({
@@ -295,5 +295,97 @@ describe("organization", async (it) => {
 	it("should have server side methods", async () => {
 		expectTypeOf(auth.api.createOrganization).toBeFunction();
 		expectTypeOf(auth.api.getInvitation).toBeFunction();
+	});
+});
+
+describe("access control", async (it) => {
+	const ac = createAccessControl({
+		project: ["create", "read", "update", "delete"],
+	});
+	const owner = ac.newRole({
+		project: ["create", "delete", "update", "read"],
+	});
+	const admin = ac.newRole({
+		project: ["create", "read"],
+	});
+	const member = ac.newRole({
+		project: ["read"],
+	});
+	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
+		await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+				}),
+			],
+		});
+
+	const {
+		organization: { checkRolePermission, hasPermission, create },
+	} = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			organizationClient({
+				ac,
+				roles: {
+					admin,
+					member,
+					owner,
+				},
+			}),
+		],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	const org = await create(
+		{
+			name: "test",
+			slug: "test",
+			metadata: {
+				test: "test",
+			},
+		},
+		{
+			onSuccess: sessionSetter(headers),
+			headers,
+		},
+	);
+
+	it("should return success", async () => {
+		const canCreateProject = checkRolePermission({
+			role: "admin",
+			permission: {
+				project: ["create"],
+			},
+		});
+		expect(canCreateProject).toBe(true);
+		const canCreateProjectServer = await hasPermission({
+			permission: {
+				project: ["create"],
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(canCreateProjectServer.data?.success).toBe(true);
+	});
+
+	it("should return not success", async () => {
+		const canCreateProject = checkRolePermission({
+			role: "admin",
+			permission: {
+				project: ["delete"],
+			},
+		});
+		expect(canCreateProject).toBe(false);
 	});
 });
