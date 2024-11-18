@@ -22,7 +22,8 @@ export const signInSocial = createAuthEndpoint(
 			.optional(),
 		body: z.object({
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to redirect to after the user
+			 * has signed in.
 			 */
 			callbackURL: z.string().optional(),
 			/**
@@ -190,7 +191,8 @@ export const signInEmail = createAuthEndpoint(
 			 */
 			password: z.string(),
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to use as a redirect for email
+			 * verification and for possible redirects
 			 */
 			callbackURL: z.string().optional(),
 			/**
@@ -271,7 +273,9 @@ export const signInEmail = createAuthEndpoint(
 				ctx.context.secret,
 				user.user.email,
 			);
-			const url = `${ctx.context.baseURL}/verify-email?token=${token}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
 				{
 					user: user.user,
