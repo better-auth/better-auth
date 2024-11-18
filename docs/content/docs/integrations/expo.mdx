@@ -1,6 +1,6 @@
 ---
-title: Expo
-description: Learn how to use Better Auth with Expo.
+title: Expo Integration
+description: Integrate Better Auth with Expo.
 ---
 
 Expo is a popular framework for building cross-platform apps with React Native. Better Auth supports both Expo native and web apps.
@@ -43,8 +43,8 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         Add the Expo plugin to your Better Auth server.
 
         ```ts title="server.ts"
-        import { betterAuth } from 'better-auth';
-        import { expo } from '@better-auth/expo';
+        import { betterAuth } from "better-auth";
+        import { expo } from "@better-auth/expo";
 
         export const auth = betterAuth({
             plugins: [
@@ -67,14 +67,14 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         - **Secure Cookie Management:** stores cookies securely and automatically adds them to the headers of your auth requests.
 
         ```ts title="src/auth-client.ts"
-        import { createAuthClient } from 'better-auth/react';
-        import { expoClient } from '@better-auth/expo/client';
+        import { createAuthClient } from "better-auth/react";
+        import { expoClient } from "@better-auth/expo/client";
 
         const authClient = createAuthClient({
-            baseURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
             plugins: [
                 expoClient({
-                    scheme: 'myapp',
+                    scheme: "myapp",
                     storagePrefix: "myapp"
                 })
             ]
@@ -115,10 +115,10 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
 
         ```ts title="src/auth-client.ts"
-        import { createAuthClient } from 'better-auth/react';
+        import { createAuthClient } from "better-auth/react";
 
         const authClient = createAuthClient({
-            baseURL: 'http://localhost:8081', /* base url of your Better Auth backend. */
+            baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
         });
         ```
         <Callout>
@@ -152,13 +152,13 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 <Tabs items={["sign-in", "sign-up"]}>
     <Tab value="sign-in">
         ```tsx title="app/sign-in.tsx"
-        import { useState } from 'react';
-        import { View, TextInput, Button } from 'react-native';
-        import { authClient } from './auth-client';
+        import { useState } from "react"; 
+        import { View, TextInput, Button } from "react-native";
+        import { authClient } from "./auth-client";
 
         export default function App() {
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
+            const [email, setEmail] = useState("");
+            const [password, setPassword] = useState("");
 
             const handleLogin = async () => {
             await authClient.signIn.email({
@@ -187,14 +187,14 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
     </Tab>
     <Tab value="sign-up">
         ```tsx title="app/sign-up.tsx"
-        import { useState } from 'react';
-        import { View, TextInput, Button } from 'react-native';
-        import { authClient } from './auth-client';
+        import { useState } from "react";
+        import { View, TextInput, Button } from "react-native";
+        import { authClient } from "./auth-client";
 
         export default function App() {
-            const [email, setEmail] = useState('');
-            const [name, setName] = useState('');
-            const [password, setPassword] = useState('');
+            const [email, setEmail] = useState("");
+            const [name, setName] = useState("");
+            const [password, setPassword] = useState("");
 
             const handleLogin = async () => {
                 await authClient.signUp.email({
@@ -233,12 +233,12 @@ For social sign-in, you can use the `authClient.signIn.social` method with the p
 
 ```tsx title="app/social-sign-in.tsx"
 
-import { Button } from 'react-native';
+import { Button } from "react-native";
 
 export default function App() {
     const handleLogin = async () => {
         await authClient.signIn.social({
-            provider: 'google',
+            provider: "google",
             callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
         })
     };
@@ -252,7 +252,7 @@ Better Auth provides a `useSession` hook to access the current user's session in
 
 ```tsx title="src/App.tsx"
 
-import { authClient } from '@/lib/auth-client';
+import { authClient } from "@/lib/auth-client";
 
 export default function App() {
     const { data: session } = authClient.useSession();
@@ -278,13 +278,13 @@ To make authenticated requests to your server that require the user's session, y
 Better Auth provides a built-in fetch client powered by [Better Fetch](http://better-fetch.vercel.app). This client automatically includes the session cookie in the headers of your requests.
 
 ```tsx
-import { authClient } from '@/lib/auth-client';
+import { authClient } from "@/lib/auth-client";
 
 const $fetch = authClient.$fetch;
 
 // Example usage
-$fetch('/api/secure-endpoint', {
-  method: 'GET',
+$fetch("/api/secure-endpoint", {
+  method: "GET",
 });
 ```
 
@@ -295,20 +295,20 @@ For more details, see the [Better Fetch documentation](http://better-fetch.verce
 If you prefer using your own fetch client, you can retrieve the session cookie stored in the device using `authClient.getCookie` and manually add it to your request headers.
 
 ```tsx
-import { authClient } from '@/lib/auth-client';
+import { authClient } from "@/lib/auth-client";
 
 const makeAuthenticatedRequest = async () => {
   const cookies = authClient.getCookie(); // [!code highlight]
   const headers = {
-    'Cookie': cookies, // [!code highlight]
+    "Cookie": cookies, // [!code highlight]
   };
-  const response = await fetch('http://localhost:8081/api/secure-endpoint', { headers });
+  const response = await fetch("http://localhost:8081/api/secure-endpoint", { headers });
   const data = await response.json();
   return data;
 };
 ```
 
-**Exampe: Usage With TRPC**
+**Example: Usage With TRPC**
     
 ```tsx title="lib/trpc-provider.tsx"
 //...other imports
@@ -352,11 +352,11 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 **storage**: on native you can pass a storage option to the client to change the storage mechanism. By default, the client will use SecureStore.
 
 ```ts title="src/auth-client.ts"
-import { createAuthClient } from 'better-auth/react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAuthClient } from "better-auth/react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const authClient = createAuthClient({
-    baseURL: 'http://localhost:8081',
+    baseURL: "http://localhost:8081",
     storage: AsyncStorage
 });
 ```
@@ -364,21 +364,21 @@ const authClient = createAuthClient({
 **scheme**: scheme is used to deep link back to your app after a user has authenticated using oAuth providers. By default, Better Auth tries to read the scheme from the `app.json` file. If you need to override this, you can pass the scheme option to the client.
 
 ```ts title="src/auth-client.ts"
-import { createAuthClient } from 'better-auth/react';
+import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
-    baseURL: 'http://localhost:8081',
-    scheme: 'myapp'
+    baseURL: "http://localhost:8081",
+    scheme: "myapp"
 });
 ```
 
 **disableCache**: By default, the client will cache the session data in SecureStore. You can disable this behavior by passing the `disableCache` option to the client.
 
 ```ts title="src/auth-client.ts"
-import { createAuthClient } from 'better-auth/react';
+import { createAuthClient } from "better-auth/react";
 
 const authClient = createAuthClient({
-    baseURL: 'http://localhost:8081',
+    baseURL: "http://localhost:8081",
     disableCache: true
 });
 ```

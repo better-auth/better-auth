@@ -515,7 +515,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "X (Twitter)",
+				title: "Twitter (X)",
 				href: "/docs/authentication/twitter",
 				icon: () => (
 					<svg
@@ -568,7 +568,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Gitlab",
+				title: "GitLab",
 				href: "/docs/authentication/gitlab",
 				icon: () => (
 					<svg
@@ -623,7 +623,7 @@ export const contents: Content[] = [
 				href: "/docs/integrations/remix",
 			},
 			{
-				title: "Next",
+				title: "Next.js",
 				icon: Icons.nextJS,
 				href: "/docs/integrations/next",
 			},
@@ -633,12 +633,12 @@ export const contents: Content[] = [
 				href: "/docs/integrations/nuxt",
 			},
 			{
-				title: "Svelte Kit",
+				title: "SvelteKit",
 				icon: Icons.svelteKit,
 				href: "/docs/integrations/svelte-kit",
 			},
 			{
-				title: "Solid Start",
+				title: "SolidStart",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
 			},
@@ -984,7 +984,7 @@ export const examples: Content[] = [
 		),
 		list: [
 			{
-				title: "Astro + SolidJs",
+				title: "Astro + SolidJS",
 				href: "/docs/examples/astro",
 				icon: Icons.astro,
 			},
@@ -994,7 +994,7 @@ export const examples: Content[] = [
 				icon: Icons.remix,
 			},
 			{
-				title: "Next JS",
+				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
 			},
@@ -1004,7 +1004,7 @@ export const examples: Content[] = [
 				icon: Icons.nuxt,
 			},
 			{
-				title: "Svelte Kit",
+				title: "SvelteKit",
 				href: "/docs/examples/svelte-kit",
 				icon: Icons.svelteKit,
 			},
