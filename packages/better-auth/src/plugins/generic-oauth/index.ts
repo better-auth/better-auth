@@ -312,11 +312,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					) as {
 						id: string;
 					};
-					const id = ctx.context.generateId({ type: "user" });
-					const data = userSchema.safeParse({
-						...userInfo,
-						id,
-					});
+					const data = userSchema.safeParse(userInfo);
 
 					if (!userInfo || data.success === false) {
 						logger.error("Unable to get user info", data.error);

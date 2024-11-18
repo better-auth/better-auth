@@ -1,5 +1,6 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
@@ -80,10 +81,18 @@ const createTransform = (
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		transformInput(data: Record<string, any>, model: string) {
-			const { id, ...rest } = data;
-			const transformedData: Record<string, any> =
-				id && !useDatabaseGeneratedId ? { id } : {};
-			for (const key in rest) {
+			const transformedData: Record<string, any> = useDatabaseGeneratedId
+				? {}
+				: {
+						id:
+							data.id ||
+							(options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: generateId()),
+					};
+			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
 					transformedData[field.fieldName || key] = transformValueToDB(

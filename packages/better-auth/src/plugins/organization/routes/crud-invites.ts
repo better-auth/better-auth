@@ -145,7 +145,6 @@ export const acceptInvitation = createAuthEndpoint(
 			status: "accepted",
 		});
 		const member = await adapter.createMember({
-			id: ctx.context.generateId({ type: "member" }),
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
 			role: invitation.role,

@@ -282,6 +282,5 @@ exports[`init > should match config 1`] = `
   "trustedOrigins": [
     "http://localhost:3000",
   ],
-  "uuid": [Function],
 }
 `;

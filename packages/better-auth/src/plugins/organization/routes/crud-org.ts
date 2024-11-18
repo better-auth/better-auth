@@ -63,7 +63,6 @@ export const createOrganization = createAuthEndpoint(
 		}
 		const organization = await adapter.createOrganization({
 			organization: {
-				id: ctx.context.generateId({ type: "organization" }),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,

@@ -81,11 +81,6 @@ export const callbackOAuth = createAuthEndpoint(
 		const userInfo = await provider
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
-		const id = c.context.generateId({ type: "user" });
-		const data = {
-			id,
-			...userInfo,
-		};
 
 		function redirectOnError(error: string) {
 			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
@@ -101,7 +96,7 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError("unable_to_get_user_info");
 		}
 
-		if (!data.email) {
+		if (!userInfo.email) {
 			c.context.logger.error(
 				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
@@ -115,7 +110,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== data.email.toLowerCase()) {
+			if (link.email !== userInfo.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
@@ -138,11 +133,11 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
-				email: data.email,
-				id: data.id,
-				name: data.name || "",
-				image: data.image,
-				emailVerified: data.emailVerified || false,
+				id: userInfo.id,
+				email: userInfo.email,
+				name: userInfo.name || "",
+				image: userInfo.image,
+				emailVerified: userInfo.emailVerified || false,
 			},
 			account: {
 				providerId: provider.id,

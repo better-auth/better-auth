@@ -60,7 +60,6 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 					await db.create({
 						model: tableName ?? "rateLimit",
 						data: {
-							id: ctx.generateId({ type: "rate-limit" }),
 							key,
 							count: value.count,
 							lastRequest: value.lastRequest,

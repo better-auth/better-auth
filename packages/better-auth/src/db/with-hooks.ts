@@ -13,9 +13,7 @@ export function getWithHooks(
 		Models,
 		"user" | "account" | "session" | "verification"
 	>;
-	async function createWithHooks<
-		T extends { id: string } & Record<string, any>,
-	>(
+	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModels,
 		customCreateFn?: {

@@ -20,6 +20,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
 import { env } from "../../utils/env";
+import { generateId } from "../../utils";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -143,7 +144,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 					});
 
-					const id = ctx.context.uuid();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -214,7 +215,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							id: session?.user.id || "",
 						},
 					};
-					const id = ctx.context.uuid();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -307,7 +308,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							webauthnUserID: ctx.context.uuid(),
+							webauthnUserID: ctx.context.generateId({ model: "passkey" }),
 							id: credentialID,
 							publicKey: pubKey,
 							counter,

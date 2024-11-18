@@ -7,7 +7,8 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	IdTypes,
+	LiteralUnion,
+	Models,
 	SecondaryStorage,
 	Session,
 	User,
@@ -25,7 +26,6 @@ import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
 import { checkPassword } from "./utils/password";
-import { signCookieValue } from "better-call";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -78,9 +78,9 @@ export const init = async (options: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
-	const generateIdFunc: AuthContext["generateId"] = ({ type, size }) => {
+	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
 		if (typeof options?.advanced?.generateId === "function") {
-			return options.advanced.generateId({ type, size });
+			return options.advanced.generateId({ model, size });
 		}
 		return generateId(size);
 	};
@@ -111,7 +111,6 @@ export const init = async (options: BetterAuthOptions) => {
 		logger: createLogger({
 			disabled: options.logger?.disabled || false,
 		}),
-		uuid: generateId,
 		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
@@ -162,8 +161,10 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
-	uuid: (size?: number) => string;
-	generateId: (options: { type: IdTypes; size?: number }) => string;
+	generateId: (options: {
+		model: LiteralUnion<Models, string>;
+		size?: number;
+	}) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;

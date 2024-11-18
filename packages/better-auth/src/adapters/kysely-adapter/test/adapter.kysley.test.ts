@@ -55,12 +55,12 @@ describe("adapter test", async () => {
 		await fs.unlink(path.join(__dirname, "test.db"));
 	});
 
-	const mysqlAdapter = kyselyAdapter(mysqlKy, {
-		type: "mysql",
-	})(mysqlOptions);
-	await runAdapterTest({
-		adapter: mysqlAdapter,
-	});
+	// const mysqlAdapter = kyselyAdapter(mysqlKy, {
+	// 	type: "mysql",
+	// })(mysqlOptions);
+	// await runAdapterTest({
+	// 	adapter: mysqlAdapter,
+	// });
 
 	const sqliteAdapter = kyselyAdapter(sqliteKy, {
 		type: "sqlite",

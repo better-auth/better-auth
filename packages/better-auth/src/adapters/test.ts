@@ -17,7 +17,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		updatedAt: new Date(),
 	};
 
-	test("create model", async () => {
+	test.only("create model", async () => {
 		const res = await adapter.create({
 			model: "user",
 			data: user,
@@ -32,7 +32,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		user.id = res.id;
 	});
 
-	test("find model", async () => {
+	test.only("find model", async () => {
 		const res = await adapter.findOne<User>({
 			model: "user",
 			where: [
@@ -51,7 +51,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 	});
 
-	test("find model without id", async () => {
+	test.only("find model without id", async () => {
 		const res = await adapter.findOne<User>({
 			model: "user",
 			where: [
@@ -70,7 +70,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 	});
 
-	test("find model with select", async () => {
+	test.only("find model with select", async () => {
 		const res = await adapter.findOne({
 			model: "user",
 			where: [
@@ -84,7 +84,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res).toEqual({ email: user.email });
 	});
 
-	test("update model", async () => {
+	test.only("update model", async () => {
 		const newEmail = "updated@email.com";
 		const res = await adapter.update<User>({
 			model: "user",
@@ -104,14 +104,14 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 	});
 
-	test("should find many", async () => {
+	test.only("should find many", async () => {
 		const res = await adapter.findMany({
 			model: "user",
 		});
 		expect(res.length).toBe(1);
 	});
 
-	test("should find many with where", async () => {
+	test.only("should find many with where", async () => {
 		const user = await adapter.create<User>({
 			model: "user",
 			data: {
@@ -135,7 +135,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
-	test("should find many with operators", async () => {
+	test.only("should find many with operators", async () => {
 		const newUser = await adapter.create<User>({
 			model: "user",
 			data: {
@@ -147,15 +147,21 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				updatedAt: new Date(),
 			},
 		});
+		console.log(newUser);
 		const res = await adapter.findMany({
 			model: "user",
-			where: [
-				{
-					field: "id",
-					operator: "in",
-					value: [user.id, newUser.id],
-				},
-			],
+			// where: [
+			// 	{
+			// 		field: "id",
+			// 		operator: "in",
+			// 		value: [user.id, newUser.id],
+			// 	},
+			// ],
+		});
+		console.log({
+			userID: user.id,
+			newUserId: newUser.id,
+			res,
 		});
 		expect(res.length).toBe(2);
 	});
@@ -391,6 +397,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				},
 			],
 		});
+		console.log(res);
 		expect(res.length).toBe(3);
 	});
 

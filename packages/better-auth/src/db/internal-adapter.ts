@@ -12,6 +12,7 @@ import {
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
+import { generateId } from "../utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -33,7 +34,6 @@ export const createInternalAdapter = (
 			try {
 				const createdUser = await createWithHooks(
 					{
-						id: ctx.generateId({ type: "user" }),
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
@@ -42,7 +42,6 @@ export const createInternalAdapter = (
 				);
 				const createdAccount = await createWithHooks(
 					{
-						id: ctx.generateId({ type: "account" }),
 						...account,
 						userId: createdUser.id || user.id,
 					},
@@ -64,7 +63,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
-					id: ctx.generateId({ type: "user" }),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					emailVerified: false,
@@ -81,7 +79,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdAccount = await createWithHooks(
 				{
-					id: ctx.generateId({ type: "account" }),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
@@ -184,7 +181,7 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: ctx.generateId({ type: "session", size: 32 }),
+				id: generateId(32), //avoid using custom generator
 				userId,
 				/**
 				 * If the user doesn't want to be remembered
@@ -538,13 +535,7 @@ export const createInternalAdapter = (
 			return user;
 		},
 		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
-			const _account = await createWithHooks(
-				{
-					id: ctx.generateId({ type: "account" }),
-					...account,
-				},
-				"account",
-			);
+			const _account = await createWithHooks(account, "account");
 			return _account;
 		},
 		updateUser: async (
@@ -635,7 +626,6 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
-					id: ctx.generateId({ type: "verification" }),
 					createdAt: new Date(),
 					...data,
 				},
