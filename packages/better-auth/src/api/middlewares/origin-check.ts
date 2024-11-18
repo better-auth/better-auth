@@ -1,6 +1,5 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
-import { logger } from "../../utils";
 
 /**
  * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
@@ -37,8 +36,8 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
 		);
 		if (!isTrustedOrigin) {
-			logger.error(`Invalid ${label}: ${url}`);
-			logger.info(
+			ctx.context.logger.error(`Invalid ${label}: ${url}`);
+			ctx.context.logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${trustedOrigins}`,
 			);

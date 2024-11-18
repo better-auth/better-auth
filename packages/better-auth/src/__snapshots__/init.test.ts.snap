@@ -79,12 +79,9 @@ exports[`init > should match config 1`] = `
     "updateVerificationValue": [Function],
   },
   "logger": {
-    "box": [Function],
-    "break": [Function],
     "debug": [Function],
     "error": [Function],
     "info": [Function],
-    "log": [Function],
     "success": [Function],
     "warn": [Function],
   },
@@ -177,8 +174,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
+      "modelName": "account",
       "order": 3,
-      "tableName": "account",
     },
     "session": {
       "fields": {
@@ -208,8 +205,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
+      "modelName": "session",
       "order": 2,
-      "tableName": "session",
     },
     "user": {
       "fields": {
@@ -248,8 +245,8 @@ exports[`init > should match config 1`] = `
           "type": "date",
         },
       },
+      "modelName": "user",
       "order": 1,
-      "tableName": "user",
     },
     "verification": {
       "fields": {
@@ -275,8 +272,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
+      "modelName": "verification",
       "order": 4,
-      "tableName": "verification",
     },
   },
   "trustedOrigins": [
