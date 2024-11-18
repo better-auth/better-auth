@@ -15,6 +15,7 @@ import {
 } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 
 export interface UserWithRole extends User {
@@ -149,23 +150,19 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (returned instanceof Response) {
-							const json = (await returned
-								.clone()
-								.json()) as SessionWithImpersonatedBy[];
-							const newJson = json.filter((session) => {
-								return !session.impersonatedBy;
-							});
-							const response = new Response(JSON.stringify(newJson), {
-								status: 200,
-								statusText: "OK",
-								headers: returned.headers,
-							});
-							return ctx.json({
-								response: response,
-							});
+						const response =
+							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
+
+						if (!response) {
+							return;
 						}
+						const newJson = response.filter((session) => {
+							return !session.impersonatedBy;
+						});
+
+						return {
+							response: newJson,
+						};
 					}),
 				},
 			],

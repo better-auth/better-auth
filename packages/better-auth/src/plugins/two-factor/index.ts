@@ -15,6 +15,7 @@ import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 import { schema } from "./schema";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -175,30 +176,19 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (
-							(returned instanceof Response && returned?.status !== 200) ||
-							returned instanceof APIError
-						) {
-							return;
-						}
-						const response = (
-							returned instanceof Response
-								? await returned.clone().json()
-								: returned
-						) as {
+						const response = await getEndpointResponse<{
 							user: UserWithTwoFactor;
 							session: Session;
-						};
+						}>(ctx);
+						if (!response) {
+							return;
+						}
 						if (!response.user.twoFactorEnabled) {
 							return;
 						}
 						// Check for trust device cookie
 						const trustDeviceCookieName = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
-							{
-								maxAge: 30 * 24 * 60 * 60, // 30 days
-							},
 						);
 						const trustDeviceCookie = await ctx.getSignedCookie(
 							trustDeviceCookieName.name,
@@ -253,16 +243,13 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-						const res = new Response(
-							JSON.stringify({
-								twoFactorRedirect: true,
-							}),
-							{
-								headers: ctx.responseHeader,
-							},
-						);
+						const res = {
+							twoFactorRedirect: true,
+						};
+
 						return {
 							response: res,
+							responseHeader: ctx.responseHeader,
 						};
 					}),
 				},

@@ -115,19 +115,19 @@ export function getEndpoints<
 		error,
 	};
 	let api: Record<string, any> = {};
-	for (const [key, value] of Object.entries(endpoints)) {
+	for (const [key, endpointOptions] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
-			let c = await ctx;
+			let authCtx = await ctx;
 			// clear session so it doesn't persist between requests
-			c.session = null;
+			authCtx.session = null;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.before) {
 					for (const hook of plugin.hooks.before) {
 						const ctx = {
-							...value,
+							...endpointOptions,
 							...context,
 							context: {
-								...c,
+								...authCtx,
 								...context?.context,
 							},
 						};
@@ -147,10 +147,10 @@ export function getEndpoints<
 			let endpointRes: any;
 			try {
 				//@ts-ignore
-				endpointRes = await value({
+				endpointRes = await endpointOptions({
 					...context,
 					context: {
-						...c,
+						...authCtx,
 						...context.context,
 					},
 				});
@@ -177,15 +177,19 @@ export function getEndpoints<
 					let pluginResponse: Request | undefined = undefined;
 
 					for (const hook of afterPlugins || []) {
-						const match = hook.matcher(context);
+						const ctx = {
+							...endpointOptions,
+							...context,
+							context: {
+								...authCtx,
+								...context.context,
+								endpoint: endpointOptions,
+								returned: response,
+							},
+						};
+
+						const match = hook.matcher(ctx);
 						if (match) {
-							// @ts-expect-error - returned is not in the context type
-							c.returned = response;
-							const ctx = {
-								...value,
-								...context,
-								context: c,
-							};
 							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								pluginResponse = hookRes.response as any;
@@ -204,30 +208,47 @@ export function getEndpoints<
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
 						const ctx = {
+							...endpointOptions,
 							...context,
 							context: {
-								...c,
+								...authCtx,
 								...context.context,
-								endpoint: value,
+								endpoint: endpointOptions,
 								returned: response,
 							},
 						};
 						const match = hook.matcher(ctx);
 						if (match) {
 							const hookRes = await hook.handler(ctx);
-							if (hookRes && "response" in hookRes) {
-								response = hookRes.response as any;
+							if (hookRes) {
+								if ("response" in hookRes) {
+									response = hookRes.response as any;
+								}
+								if ("responseHeader" in hookRes) {
+									if (response instanceof Response) {
+										response = new Response(response.body, {
+											status: response.status,
+											headers: {
+												...response.headers,
+												...hookRes.responseHeader,
+											},
+										});
+									} else {
+										api[key].headers = hookRes.responseHeader;
+									}
+								}
 							}
 						}
 					}
 				}
 			}
+
 			return response;
 		};
-		api[key].path = value.path;
-		api[key].method = value.method;
-		api[key].options = value.options;
-		api[key].headers = value.headers;
+		api[key].path = endpointOptions.path;
+		api[key].method = endpointOptions.method;
+		api[key].options = endpointOptions.options;
+		api[key].headers = endpointOptions.headers;
 	}
 	return {
 		api: api as typeof endpoints & PluginEndpoint,

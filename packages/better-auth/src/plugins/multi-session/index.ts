@@ -257,19 +257,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							}),
 						);
 
-						const response = ctx.context.returned;
-						if (response instanceof Response) {
-							response?.headers.append(
-								"Set-Cookie",
-								ctx.responseHeader.get("set-cookie")!,
-							);
-						} else {
-							ctx.responseHeader.set(
-								"set-cookie",
-								ctx.responseHeader.get("set-cookie")!,
-							);
-						}
-						return { response };
+						return {
+							responseHeader: ctx.responseHeader,
+						};
 					}),
 				},
 			],
