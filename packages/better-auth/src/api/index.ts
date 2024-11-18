@@ -177,20 +177,19 @@ export function getEndpoints<
 					let pluginResponse: Request | undefined = undefined;
 
 					for (const hook of afterPlugins || []) {
-						const match = hook.matcher(context);
+						const ctx = {
+							...endpointOptions,
+							...context,
+							context: {
+								...authCtx,
+								...context.context,
+								endpoint: endpointOptions,
+								returned: response,
+							},
+						};
+
+						const match = hook.matcher(ctx);
 						if (match) {
-							// @ts-expect-error - returned is not in the context type
-							c.returned = response;
-							const ctx = {
-								...endpointOptions,
-								...context,
-								context: {
-									...authCtx,
-									...context.context,
-									endpoint: endpointOptions,
-									returned: response,
-								},
-							};
 							const hookRes = await hook.handler(ctx);
 							if (hookRes && "response" in hookRes) {
 								pluginResponse = hookRes.response as any;
