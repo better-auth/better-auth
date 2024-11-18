@@ -73,6 +73,10 @@ export const createOrganization = createAuthEndpoint(
 			},
 			user,
 		});
+		await adapter.setActiveOrganization(
+			ctx.context.session.session.id,
+			organization.id,
+		);
 		return ctx.json(organization);
 	},
 );

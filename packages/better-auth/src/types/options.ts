@@ -412,7 +412,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default "rateLimit"
 		 */
-		tableName?: string;
+		modelName?: string;
 		/**
 		 * Custom field names for the rate limit table
 		 */

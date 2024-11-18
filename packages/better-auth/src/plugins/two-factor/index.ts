@@ -8,17 +8,18 @@ import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import type { Session } from "../../db/schema";
+import { mergeSchema, type Session } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { schema } from "./schema";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
-		twoFactorTable: options?.twoFactorTable || ("twoFactor" as const),
+		twoFactorTable: "twoFactor",
 	};
 	const totp = totp2fa(
 		{
@@ -267,42 +268,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			],
 		},
-		schema: {
-			user: {
-				fields: {
-					twoFactorEnabled: {
-						type: "boolean",
-						required: false,
-						defaultValue: false,
-						input: false,
-					},
-				},
-			},
-			twoFactor: {
-				tableName: opts.twoFactorTable,
-				fields: {
-					secret: {
-						type: "string",
-						required: true,
-						returned: false,
-					},
-					backupCodes: {
-						type: "string",
-						required: true,
-						returned: false,
-					},
-					userId: {
-						type: "string",
-						required: true,
-						returned: false,
-						references: {
-							model: "user",
-							field: "id",
-						},
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {

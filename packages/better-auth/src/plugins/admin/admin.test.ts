@@ -6,7 +6,17 @@ import { adminClient } from "./client";
 describe("Admin plugin", async () => {
 	const { client, signInWithTestUser } = await getTestInstance(
 		{
-			plugins: [admin()],
+			plugins: [
+				admin({
+					schema: {
+						user: {
+							fields: {
+								role: "_role",
+							},
+						},
+					},
+				}),
+			],
 			logger: {
 				level: "error",
 			},

@@ -40,8 +40,8 @@ const createTransform = (
 	}
 
 	const getModelName = (model: string) => {
-		return schema[model].tableName !== model
-			? schema[model].tableName
+		return schema[model].modelName !== model
+			? schema[model].modelName
 			: config.usePlural
 				? `${model}s`
 				: model;
