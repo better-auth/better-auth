@@ -106,7 +106,7 @@ export function getWithHooks(
 	async function updateManyWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: Models,
+		model: BaseModels,
 		customUpdateFn?: {
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
