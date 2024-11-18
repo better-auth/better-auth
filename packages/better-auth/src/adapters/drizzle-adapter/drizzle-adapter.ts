@@ -252,6 +252,7 @@ export const drizzleAdapter =
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
+
 				const res = await db
 					.select()
 					.from(schemaModel)
