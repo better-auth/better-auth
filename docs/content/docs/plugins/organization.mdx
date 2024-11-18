@@ -337,8 +337,8 @@ await client.organization.acceptInvitation({
 To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation id as an argument.
 
 ```ts title="client.ts"
-//cancel invitation
-await client.organization.cancelInvitation({
+//revoke invitation
+await client.organization.revokeInvitation({
     invitationId: "invitation-id"
 })
 

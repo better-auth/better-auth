@@ -22,7 +22,7 @@ import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
 	acceptInvitation,
-	cancelInvitation,
+	revokeInvitation,
 	createInvitation,
 	getInvitation,
 	rejectInvitation,
@@ -202,7 +202,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		getFullOrganization,
 		listOrganization,
 		createInvitation,
-		cancelInvitation,
+		revokeInvitation,
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,

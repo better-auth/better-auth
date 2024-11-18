@@ -207,8 +207,8 @@ export const rejectInvitation = createAuthEndpoint(
 	},
 );
 
-export const cancelInvitation = createAuthEndpoint(
-	"/organization/cancel-invitation",
+export const revokeInvitation = createAuthEndpoint(
+	"/organization/revoke-invitation",
 	{
 		method: "POST",
 		body: z.object({
@@ -242,11 +242,11 @@ export const cancelInvitation = createAuthEndpoint(
 				message: "You are not allowed to cancel this invitation",
 			});
 		}
-		const canceledI = await adapter.updateInvitation({
+		const revokedInvitation = await adapter.updateInvitation({
 			invitationId: ctx.body.invitationId,
-			status: "canceled",
+			status: "revoked",
 		});
-		return ctx.json(canceledI);
+		return ctx.json(revokedInvitation);
 	},
 );
 

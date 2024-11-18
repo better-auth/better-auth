@@ -445,7 +445,7 @@ export const getOrgAdapter = (
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "accepted" | "revoked" | "rejected";
 		}) => {
 			const invitation = await adapter.update<Invitation>({
 				model: "invitation",

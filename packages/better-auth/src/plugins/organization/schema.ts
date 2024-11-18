@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const role = z.enum(["admin", "member", "owner"]);
 export const invitationStatus = z
-	.enum(["pending", "accepted", "rejected", "canceled"])
+	.enum(["pending", "accepted", "rejected", "revoked"])
 	.default("pending");
 export const organizationSchema = z.object({
 	id: z.string(),
