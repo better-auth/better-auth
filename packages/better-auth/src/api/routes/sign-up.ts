@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodOptional, ZodString } from "zod";
+import { z, ZodObject, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -13,7 +13,6 @@ import type {
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { logger } from "../../utils";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -96,7 +95,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				}
 			} catch (e) {
-				logger.error("Failed to create user", e);
+				ctx.context.logger.error("Failed to create user", e);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "Failed to create user",
 					details: e,

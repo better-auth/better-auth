@@ -79,12 +79,9 @@ exports[`init > should match config 1`] = `
     "updateVerificationValue": [Function],
   },
   "logger": {
-    "box": [Function],
-    "break": [Function],
     "debug": [Function],
     "error": [Function],
     "info": [Function],
-    "log": [Function],
     "success": [Function],
     "warn": [Function],
   },

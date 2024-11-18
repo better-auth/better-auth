@@ -66,7 +66,7 @@ export async function migrateAction(opts: any) {
 
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
-		logger.success("🚀 No migrations needed.");
+		logger.info("🚀 No migrations needed.");
 		process.exit(0);
 	}
 
@@ -102,7 +102,7 @@ export async function migrateAction(opts: any) {
 	spinner?.start("migrating...");
 	await runMigrations();
 	spinner.stop();
-	logger.success("🚀 migration was completed successfully!");
+	logger.info("🚀 migration was completed successfully!");
 	process.exit(0);
 }
 

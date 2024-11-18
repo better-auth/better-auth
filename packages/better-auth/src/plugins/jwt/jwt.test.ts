@@ -9,7 +9,7 @@ describe("jwt", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
 		logger: {
-			verboseLogging: true,
+			level: "error",
 		},
 	});
 

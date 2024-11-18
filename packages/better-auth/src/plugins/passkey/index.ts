@@ -459,7 +459,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							},
 						);
 					} catch (e) {
-						ctx.context.logger.error(e);
+						ctx.context.logger.error("Failed to verify authentication", e);
 						throw new APIError("BAD_REQUEST", {
 							message: "Failed to verify authentication",
 						});

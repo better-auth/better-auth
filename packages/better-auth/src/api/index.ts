@@ -286,36 +286,45 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 				return;
 			}
 
-			if (
-				e &&
-				typeof e === "object" &&
-				"message" in e &&
-				typeof e.message === "string"
-			) {
-				if (
-					e.message.includes("no column") ||
-					e.message.includes("column") ||
-					e.message.includes("relation") ||
-					e.message.includes("table") ||
-					e.message.includes("does not exist")
-				) {
-					logger.error(e.message);
-					logger.error(
-						"If you are seeing this error, it is likely that you need to run the migrations for the database or you need to update your database schema. If you recently updated the package, make sure to run the migrations.",
-					);
-					return;
-				}
-			}
-
-			const log = options.logger?.verboseLogging ? logger : undefined;
+			const optLogLevel = options.logger?.level;
+			const log =
+				optLogLevel === "error" ||
+				optLogLevel === "warn" ||
+				optLogLevel === "debug"
+					? logger
+					: undefined;
 			if (options.logger?.disabled !== true) {
+				if (
+					e &&
+					typeof e === "object" &&
+					"message" in e &&
+					typeof e.message === "string"
+				) {
+					if (
+						e.message.includes("no column") ||
+						e.message.includes("column") ||
+						e.message.includes("relation") ||
+						e.message.includes("table") ||
+						e.message.includes("does not exist")
+					) {
+						ctx.logger?.error(e.message);
+						ctx.logger?.error(
+							"If you are seeing this error, it is likely that you need to run the migrations for the database or you need to update your database schema. If you recently updated the package, make sure to run the migrations.",
+						);
+						return;
+					}
+				}
+
 				if (e instanceof APIError) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
-						logger.error(e);
+						ctx.logger.error(e.status, e);
 					}
 					log?.error(e.message);
 				} else {
-					logger?.error(e);
+					ctx.logger?.error(
+						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
+						e,
+					);
 				}
 			}
 		},

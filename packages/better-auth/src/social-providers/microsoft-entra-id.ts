@@ -82,7 +82,12 @@ export const microsoft = (options: MicrosoftOptions) => {
 								Buffer.from(pictureBuffer).toString("base64");
 							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
 						} catch (e) {
-							logger.error(e);
+							logger.error(
+								e && typeof e === "object" && "name" in e
+									? (e.name as string)
+									: "",
+								e,
+							);
 						}
 					},
 				},

@@ -18,7 +18,7 @@ describe("Admin plugin", async () => {
 				}),
 			],
 			logger: {
-				verboseLogging: true,
+				level: "error",
 			},
 			databaseHooks: {
 				user: {
