@@ -381,7 +381,7 @@
     "@types/prompts": "^2.4.9",
     "@types/react": "^18.3.3",
     "better-sqlite3": "^11.3.0",
-    "drizzle-orm": "^0.33.0",
+    "drizzle-orm": "^0.35.3",
     "happy-dom": "^15.7.4",
     "hono": "^4.5.4",
     "listhen": "^1.7.2",

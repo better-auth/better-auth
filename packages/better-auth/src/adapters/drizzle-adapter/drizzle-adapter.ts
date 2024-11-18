@@ -252,11 +252,11 @@ export const drizzleAdapter =
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-
 				const res = await db
 					.select()
 					.from(schemaModel)
 					.where(...clause);
+
 				if (!res.length) return null;
 				return transformOutput(res[0], model, select);
 			},
