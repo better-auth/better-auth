@@ -5,7 +5,6 @@ export const multiSessionClient = () => {
 	return {
 		id: "multi-session",
 		$InferServerPlugin: {} as ReturnType<typeof multiSession>,
-
 		atomListeners: [
 			{
 				matcher(path) {

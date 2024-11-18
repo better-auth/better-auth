@@ -15,9 +15,10 @@ import { shimContext } from "../../utils/shim";
 import {
 	type AccessControl,
 	type Role,
+	createAccessControl,
 	defaultRoles,
 	type defaultStatements,
-} from "../access";
+} from "./access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -68,11 +69,12 @@ export interface OrganizationOptions {
 	 */
 	organizationLimit?: number | ((user: User) => Promise<boolean> | boolean);
 	/**
-	 * The role that is assigned to the creator of the organization.
+	 * The role that is assigned to the creator of the
+	 * organization.
 	 *
-	 * @default "admin"
+	 * @default "owner"
 	 */
-	creatorRole?: "admin" | "owner";
+	creatorRole?: string;
 	/**
 	 * The number of memberships a user can have in an organization.
 	 *
@@ -80,15 +82,15 @@ export interface OrganizationOptions {
 	 */
 	membershipLimit?: number;
 	/**
-	 * Configure the roles and permissions for the organization plugin.
-	 *
+	 * Configure the roles and permissions for the
+	 * organization plugin.
 	 */
 	ac?: AccessControl;
 	/**
 	 * Custom permissions for roles.
 	 */
 	roles?: {
-		[key in "admin" | "member" | "owner"]?: Role<any>;
+		[key in string]?: Role<any>;
 	};
 	/**
 	 * The expiration time for the invitation link.
@@ -129,13 +131,13 @@ export interface OrganizationOptions {
 			/**
 			 * the role of the user
 			 */
-			role: "admin" | "owner" | "member";
+			role: string;
 			/**
 			 * the email of the user
 			 */
 			email: string;
 			/**
-			 * the organization the user is invited to
+			 * the organization the user is invited to join
 			 */
 			organization: Organization;
 			/**
@@ -194,6 +196,13 @@ export interface OrganizationOptions {
  * });
  * ```
  */
+
+const ac = createAccessControl({
+	name: ["action"],
+});
+const a = ac.newRole({
+	name: ["action"],
+});
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
@@ -202,14 +211,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		setActiveOrganization,
 		getFullOrganization,
 		listOrganization,
-		createInvitation,
+		createInvitation: createInvitation(options as O),
 		cancelInvitation,
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
-		addMember,
+		addMember: addMember<O>(),
 		removeMember,
-		updateMemberRole,
+		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
 	};
 
@@ -271,7 +280,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							message: "You are not a member of this organization",
 						});
 					}
-					const role = roles[member.role];
+					const role = roles[member.role as keyof typeof roles];
 					const result = role.authorize(ctx.body.permission as any);
 					if (result.error) {
 						return ctx.json(
