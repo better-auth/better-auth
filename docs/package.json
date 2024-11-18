@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
+    "build:docs": "node ./scripts/generate-docs.mjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
@@ -60,6 +61,7 @@
     "fumadocs-core": "14.0.2",
     "fumadocs-docgen": "^1.1.0",
     "fumadocs-mdx": "11.1.0",
+    "fumadocs-openapi": "^5.7.0",
     "fumadocs-twoslash": "^1.1.2",
     "fumadocs-typescript": "^3.0.2",
     "fumadocs-ui": "14.0.2",
@@ -82,6 +84,7 @@
     "recharts": "^2.12.7",
     "rehype-mermaid": "^2.1.0",
     "remark-codesandbox": "^0.10.1",
+    "rimraf": "^6.0.1",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
