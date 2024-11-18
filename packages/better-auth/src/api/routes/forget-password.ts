@@ -187,15 +187,7 @@ export const resetPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		const updatedUser = await ctx.context.internalAdapter.updatePassword(
-			userId,
-			hashedPassword,
-		);
-		if (!updatedUser) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Failed to update password",
-			});
-		}
+		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		return ctx.json({
 			status: true,
 		});
