@@ -4,7 +4,7 @@ import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
 import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { generateState, logger } from "../../utils";
+import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 
 export const signInSocial = createAuthEndpoint(
@@ -181,14 +181,23 @@ export const signInEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
+			/**
+			 * Email of the user
+			 */
 			email: z.string(),
+			/**
+			 * Password of the user
+			 */
 			password: z.string(),
+			/**
+			 * Callback URL to redirect to after the user has signed in.
+			 */
 			callbackURL: z.string().optional(),
 			/**
 			 * If this is false, the session will not be remembered
 			 * @default true
 			 */
-			rememberMe: z.boolean().default(false).optional(),
+			rememberMe: z.boolean().default(true).optional(),
 		}),
 	},
 	async (ctx) => {
@@ -251,7 +260,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				logger.error(
+				ctx.context.logger.error(
 					"Email verification is required but no email verification handler is provided",
 				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {

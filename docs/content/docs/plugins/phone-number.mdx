@@ -111,6 +111,18 @@ export const auth = betterAuth({
 })
 ```
 
+### SignIn with Phone number
+
+In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
+
+```ts
+await authClient.signIn.phoneNumber({
+    phoneNumber: "+123456789",
+    password: "password",
+    remeberMe: true //optional defaults to true
+})
+```
+
 ### Update Phone Number
 
 Updating phone number uses the same process as verifying a phone number. The user will receive an OTP code to verify the new phone number.

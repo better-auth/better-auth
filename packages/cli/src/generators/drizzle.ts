@@ -19,7 +19,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const fileExist = existsSync(filePath);
 
 	for (const table in tables) {
-		const tableName = tables[table].tableName;
+		const modelName = tables[table].modelName;
 		const fields = tables[table].fields;
 		function getType(name: string, type: FieldType) {
 			if (type === "string") {
@@ -45,7 +45,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				return `timestamp('${name}')`;
 			}
 		}
-		const schema = `export const ${table} = ${databaseType}Table("${tableName}", {
+		const schema = `export const ${table} = ${databaseType}Table("${modelName}", {
 					id: text("id").primaryKey(),
 					${Object.keys(fields)
 						.map((field) => {

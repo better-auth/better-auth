@@ -3,7 +3,7 @@ import { alphabet, generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, User } from "../types";
+import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
@@ -168,7 +168,7 @@ export async function getTestInstance<
 	async function signInWithUser(email: string, password: string) {
 		let headers = new Headers();
 		//@ts-expect-error
-		const res = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email,
 			password,
 			fetchOptions: {
@@ -182,7 +182,10 @@ export async function getTestInstance<
 			},
 		});
 		return {
-			res,
+			res: data as {
+				user: User;
+				session: Session;
+			},
 			headers,
 		};
 	}
@@ -205,7 +208,37 @@ export async function getTestInstance<
 			}
 		};
 	}
+	function cookieSetter(headers: Headers) {
+		return (context: SuccessContext) => {
+			const setCookieHeader = context.response.headers.get("set-cookie");
+			if (!setCookieHeader) {
+				return;
+			}
 
+			const cookieMap = new Map<string, string>();
+
+			const existingCookiesHeader = headers.get("cookie") || "";
+			existingCookiesHeader.split(";").forEach((cookie) => {
+				const [name, ...rest] = cookie.trim().split("=");
+				if (name && rest.length > 0) {
+					cookieMap.set(name, rest.join("="));
+				}
+			});
+
+			const setCookieHeaders = setCookieHeader.split(",");
+			setCookieHeaders.forEach((header) => {
+				const cookies = parseSetCookieHeader(header);
+				cookies.forEach((value, name) => {
+					cookieMap.set(name, value.value);
+				});
+			});
+
+			const updatedCookies = Array.from(cookieMap.entries())
+				.map(([name, value]) => `${name}=${value}`)
+				.join("; ");
+			headers.set("cookie", updatedCookies);
+		};
+	}
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
 		baseURL: getBaseURL(
@@ -222,6 +255,7 @@ export async function getTestInstance<
 		testUser,
 		signInWithTestUser,
 		signInWithUser,
+		cookieSetter,
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),

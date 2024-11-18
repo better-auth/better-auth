@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { generateId } from "../../utils";
 
-export const role = z.enum(["admin", "member", "owner"]);
+export const role = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
+
 export const organizationSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string(),
@@ -41,6 +42,3 @@ export const invitationSchema = z.object({
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
-export type MemberInput = z.input<typeof memberSchema>;
-export type OrganizationInput = z.input<typeof organizationSchema>;
-export type InvitationInput = z.input<typeof invitationSchema>;

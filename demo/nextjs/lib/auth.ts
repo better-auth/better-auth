@@ -16,6 +16,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
+import * as ac from "./access-control";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -25,11 +26,15 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
-const mysql = new MysqlDialect(
-	createPool(process.env.MYSQL_DATABASE_URL || ""),
-);
+const mysql = process.env.USE_MYSQL
+	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
+	: null;
 
 const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
@@ -76,6 +81,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		facebook: {
+			clientId: process.env.FACEBOOK_CLIENT_ID || "",
+			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
+		},
 		github: {
 			clientId: process.env.GITHUB_CLIENT_ID || "",
 			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
@@ -103,6 +112,12 @@ export const auth = betterAuth({
 	},
 	plugins: [
 		organization({
+			ac: ac.ac,
+			roles: {
+				admin: ac.admin,
+				owner: ac.owner,
+				member: ac.member,
+			},
 			async sendInvitationEmail(data) {
 				const res = await resend.emails.send({
 					from,
@@ -118,8 +133,7 @@ export const auth = betterAuth({
 								? `http://localhost:3000/accept-invitation/${data.id}`
 								: `${
 										process.env.BETTER_AUTH_URL ||
-										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL
+										"https://demo.better-auth.com"
 									}/accept-invitation/${data.id}`,
 					}),
 				});

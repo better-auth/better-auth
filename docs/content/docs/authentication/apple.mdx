@@ -1,6 +1,6 @@
 ---
 title: Apple
-description: Apple
+description: Apple provider setup and usage.
 ---
 
 <Steps>
@@ -21,12 +21,12 @@ description: Apple
         import { betterAuth } from "better-auth"
 
         export const auth = betterAuth({
-            socialProviders: { // [!code highlight]
+            socialProviders: {
                 apple: { // [!code highlight]
                     clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.APPLE_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
-            }, // [!code highlight]
+            },
         })
         ```
     </Step>
@@ -35,16 +35,16 @@ description: Apple
 
 ## Usage
 
-### Signin with Apple
+### Sign In with Apple
 
-To signin with Apple, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+To sign in with Apple, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 - `provider`: The provider to use. It should be set to `apple`.
 
 ```ts title="client.ts"  /
 import { createAuthClient } from "better-auth/client"
 const client = createAuthClient()
 
-const signin = async () => {
+const signIn = async () => {
     const data = await client.signIn.social({
         provider: "apple"
     })
@@ -52,9 +52,9 @@ const signin = async () => {
 ```
 
 
-### Signin with Apple With ID Token
+### Sign In with Apple With ID Token
 
-To signin with Apple using the ID Token, you can use the `signIn.social` function to pass the ID Token. 
+To sign in with Apple using the ID Token, you can use the `signIn.social` function to pass the ID Token. 
 
 This is useful when you have the ID Token from Apple on the client-side and want to use it to sign in on the server.
 

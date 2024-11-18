@@ -75,7 +75,7 @@ const createTransform = (
 	}
 
 	function getModelName(model: string) {
-		return schema[model].tableName;
+		return schema[model].modelName;
 	}
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;

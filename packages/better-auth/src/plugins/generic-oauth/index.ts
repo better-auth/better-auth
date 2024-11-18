@@ -4,7 +4,6 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
-import { logger } from "../../utils/logger";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
 import { setSessionCookie } from "../../cookies";
@@ -178,7 +177,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							token_endpoint: string;
 						}>(discoveryUrl, {
 							onError(context) {
-								logger.error(context.error, {
+								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
 								});
 							},
@@ -290,7 +289,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					} catch (e) {
-						ctx.context.logger.error(e);
+						ctx.context.logger.error(
+							e && typeof e === "object" && "name" in e
+								? (e.name as string)
+								: "",
+							e,
+						);
 						throw ctx.redirect(
 							`${errorURL}?error=oauth_code_verification_failed`,
 						);
@@ -315,7 +319,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const data = userSchema.safeParse(userInfo);
 
 					if (!userInfo || data.success === false) {
-						logger.error("Unable to get user info", data.error);
+						ctx.context.logger.error("Unable to get user info", data.error);
 						throw ctx.redirect(
 							`${ctx.context.baseURL}/error?error=please_restart_the_process`,
 						);
