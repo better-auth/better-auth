@@ -2,11 +2,11 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
-import type { RateLimit } from "./models";
-import type { AuthContext, OmitId } from ".";
+import type { Models, RateLimit } from "./models";
+import type { AuthContext, LiteralUnion, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
@@ -75,15 +75,6 @@ export interface BetterAuthOptions {
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
-				/**
-				 * Custom generateId function.
-				 *
-				 * If not provided, nanoid will be used.
-				 * If set to false, the database's auto generated id will be used.
-				 *
-				 * @default nanoid
-				 */
-				generateId?: ((size?: number) => string) | false;
 		  }
 		| {
 				/**
@@ -94,15 +85,6 @@ export interface BetterAuthOptions {
 				 * Database type between postgres, mysql and sqlite
 				 */
 				type: KyselyDatabaseType;
-				/**
-				 * Custom generateId function.
-				 *
-				 * If not provided, nanoid will be used.
-				 * If set to false, the database's auto generated id will be used.
-				 *
-				 * @default nanoid
-				 */
-				generateId?: ((size?: number) => string) | false;
 		  };
 	/**
 	 * Secondary storage configuration
@@ -513,6 +495,20 @@ export interface BetterAuthOptions {
 		 * ```
 		 */
 		cookiePrefix?: string;
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?:
+			| ((options: {
+					model: LiteralUnion<Models, string>;
+					size?: number;
+			  }) => string)
+			| false;
 	};
 	logger?: Logger;
 	/**

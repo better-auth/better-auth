@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
+import { setSessionCookie } from "../../../cookies";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -64,7 +64,6 @@ export const createOrganization = createAuthEndpoint(
 		}
 		const organization = await adapter.createOrganization({
 			organization: {
-				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,
@@ -293,7 +292,14 @@ export const setActiveOrganization = createAuthEndpoint(
 				message: "You are not a member of this organization",
 			});
 		}
-		await adapter.setActiveOrganization(session.session.id, organizationId);
+		const updatedSession = await adapter.setActiveOrganization(
+			session.session.id,
+			organizationId,
+		);
+		await setSessionCookie(ctx, {
+			session: updatedSession,
+			user: session.user,
+		});
 		const organization = await adapter.findFullOrganization(organizationId);
 		return ctx.json(organization);
 	},

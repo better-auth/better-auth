@@ -258,7 +258,7 @@ describe("Admin plugin", async () => {
 		);
 		expect(sessions.data?.sessions.length).toBe(4);
 		const res = await client.admin.revokeUserSession(
-			{ sessionId: sessions.data?.sessions[0].id || "" },
+			{ sessionId: sessions.data?.sessions[0].token || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);

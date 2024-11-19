@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
+import { setSessionCookie } from "../../cookies";
 
 export const username = () => {
 	return {
@@ -88,16 +89,10 @@ export const username = () => {
 							},
 						});
 					}
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						session.id,
-						ctx.context.secret,
-						ctx.body.rememberMe === false
-							? {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: undefined,
-								}
-							: ctx.context.authCookies.sessionToken.options,
+					await setSessionCookie(
+						ctx,
+						{ session, user },
+						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
 						user: user,

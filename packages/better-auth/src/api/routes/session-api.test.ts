@@ -232,7 +232,7 @@ describe("session", async () => {
 			fetchOptions: {
 				headers,
 			},
-			id: res.data?.session?.id || "",
+			token: res.data?.session?.token || "",
 		});
 		const session = await client.getSession({
 			fetchOptions: {
@@ -280,8 +280,8 @@ describe("session storage", async () => {
 		});
 		expect(session.data).toMatchObject({
 			session: {
-				id: expect.any(String),
 				userId: expect.any(String),
+				token: expect.any(String),
 				expiresAt: expect.any(String),
 				ipAddress: expect.any(String),
 				userAgent: expect.any(String),
@@ -320,7 +320,7 @@ describe("session storage", async () => {
 			fetchOptions: {
 				headers,
 			},
-			id: session.data?.session?.id || "",
+			token: session.data?.session?.token || "",
 		});
 		const revokedSession = await client.getSession({
 			fetchOptions: {

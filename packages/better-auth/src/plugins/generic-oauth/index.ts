@@ -6,7 +6,6 @@ import { betterFetch } from "@better-fetch/fetch";
 import { generateState, parseState } from "../../oauth2/state";
 import { parseJWT } from "oslo/jwt";
 import { userSchema } from "../../db/schema";
-import { generateId } from "../../utils/id";
 import { setSessionCookie } from "../../cookies";
 import {
 	createAuthorizationURL,
@@ -112,13 +111,23 @@ async function getUserInfo(
 		return null;
 	}
 
-	const userInfo = await betterFetch<User>(finalUserInfoUrl, {
+	const userInfo = await betterFetch<{
+		email: string;
+		sub?: string;
+		name: string;
+		email_verified: boolean;
+	}>(finalUserInfoUrl, {
 		method: "GET",
 		headers: {
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
-	return userInfo.data;
+	return {
+		id: userInfo.data?.sub,
+		emailVerified: userInfo.data?.email_verified,
+		email: userInfo.data?.email,
+		...userInfo.data,
+	};
 }
 
 /**
@@ -314,23 +323,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									provider.type || "oauth2",
 									finalUserInfoUrl,
 								)
-					) as {
-						id: string;
-					};
-					const id = generateId();
-					const data = userSchema.safeParse({
-						...userInfo,
-						id,
-					});
+					) as User | null;
 
-					if (!userInfo || data.success === false) {
-						ctx.context.logger.error("Unable to get user info", data.error);
+					if (!userInfo?.email) {
+						ctx.context.logger.error("Unable to get user info", userInfo);
 						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=please_restart_the_process`,
+							`${ctx.context.baseURL}/error?error=email_is_missing`,
 						);
 					}
+
 					const result = await handleOAuthUserInfo(ctx, {
-						userInfo: data.data,
+						userInfo: userInfo,
 						account: {
 							providerId: provider.providerId,
 							accountId: userInfo.id,

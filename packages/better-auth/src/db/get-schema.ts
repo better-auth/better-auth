@@ -21,7 +21,6 @@ export function getSchema(config: BetterAuthOptions) {
 				if (refTable) {
 					actualFields[field.fieldName || key].references = {
 						model: refTable.modelName,
-
 						field: field.references.field,
 					};
 				}

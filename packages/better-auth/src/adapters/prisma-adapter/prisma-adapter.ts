@@ -1,5 +1,6 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
 
 interface PrismaConfig {
 	/**
@@ -12,15 +13,6 @@ interface PrismaConfig {
 		| "postgresql"
 		| "sqlserver"
 		| "mongodb";
-	/**
-	 * Custom generateId function.
-	 *
-	 * If not provided, nanoid will be used.
-	 * If set to false, the database's auto generated id will be used.
-	 *
-	 * @default nanoid
-	 */
-	generateId?: ((size?: number) => string) | false;
 }
 
 interface PrismaClient {}
@@ -61,15 +53,26 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	function getModelName(model: string) {
 		return schema[model].modelName;
 	}
-	const shouldGenerateId = config?.generateId !== false;
+
+	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(data: Record<string, any>, model: string) {
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				data.id && shouldGenerateId
-					? {
-							id: config?.generateId ? config.generateId() : data.id,
-						}
-					: {};
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id:
+								data.id ||
+								(options.advanced?.generateId
+									? options.advanced.generateId({
+											model,
+										})
+									: generateId()),
+						};
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
@@ -175,7 +178,7 @@ export const prismaAdapter =
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -210,7 +213,7 @@ export const prismaAdapter =
 			async update(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
 					where: whereClause,
 					data: transformed,
@@ -220,7 +223,7 @@ export const prismaAdapter =
 			async updateMany(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
 					where: whereClause,
 					data: transformed,
