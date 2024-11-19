@@ -192,9 +192,10 @@ const { data: sessionData } = await authClient.getSession();
 ```
 
 **Some Caveats**: 
-- The passed `session` object to the callback, does not infer fields added by plugins.
 
-but as a workaround, you can pull your auth options or atlest just least of plugins and other releveant options that could affect the session object and pass it to the plugin.
+- The passed `session` object to the callback does not infer fields added by plugins.  
+
+However, as a workaround, you can pull up your auth options and pass it to the plugin to infer the fields.
 
 ```ts
 import { betterAuth, BetterAuthOptions } from "better-auth";
