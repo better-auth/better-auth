@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "0.8.7-beta.4",
+  "version": "0.8.7-beta.5",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
