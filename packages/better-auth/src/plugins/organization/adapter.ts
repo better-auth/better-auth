@@ -275,19 +275,10 @@ export const getOrgAdapter = (
 			sessionId: string,
 			organizationId: string | null,
 		) => {
-			const session = await adapter.update<Session>({
-				model: "session",
-				where: [
-					{
-						field: "id",
-						value: sessionId,
-					},
-				],
-				update: {
-					activeOrganizationId: organizationId,
-				},
+			const session = await context.internalAdapter.updateSession(sessionId, {
+				activeOrganizationId: organizationId,
 			});
-			return session;
+			return session as Session;
 		},
 		findOrganizationById: async (organizationId: string) => {
 			const organization = await adapter.findOne<Organization>({

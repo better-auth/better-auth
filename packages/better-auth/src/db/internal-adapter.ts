@@ -378,7 +378,10 @@ export const createInternalAdapter = (
 				user: User;
 			}[];
 		},
-		updateSession: async (sessionToken: string, session: Partial<Session>) => {
+		updateSession: async (
+			sessionToken: string,
+			session: Partial<Session> & Record<string, any>,
+		) => {
 			const updatedSession = await updateWithHooks<Session>(
 				session,
 				[{ field: "token", value: sessionToken }],
