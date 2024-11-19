@@ -652,11 +652,13 @@ export const createInternalAdapter = (
 			return account;
 		},
 		createVerificationValue: async (
-			data: Omit<Verification, "createdAt" | "id"> & Partial<Verification>,
+			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
+				Partial<Verification>,
 		) => {
 			const verification = await createWithHooks(
 				{
 					createdAt: new Date(),
+					updatedAt: new Date(),
 					...data,
 				},
 				"verification",

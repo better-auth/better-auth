@@ -230,8 +230,11 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
+				token: string;
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
+				createdAt: Date;
+				updatedAt: Date;
 			};
 			user: {
 				id: string;

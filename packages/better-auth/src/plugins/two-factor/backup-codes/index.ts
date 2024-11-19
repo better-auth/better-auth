@@ -156,7 +156,7 @@ export const backupCode2fa = (
 
 					if (!ctx.body.disableSession) {
 						await setSessionCookie(ctx, {
-							session: ctx.context.session,
+							session: ctx.context.session.session,
 							user,
 						});
 					}
