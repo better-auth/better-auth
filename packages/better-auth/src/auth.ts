@@ -7,6 +7,7 @@ import type {
 	InferSession,
 	InferUser,
 	Prettify,
+	PrettifyDeep,
 	UnionToIntersection,
 } from "./types";
 import { getBaseURL } from "./utils/url";
@@ -35,7 +36,7 @@ type FilterActions<API> = Omit<
 		: never
 >;
 
-type InferSessionAPI<API, O extends BetterAuthOptions> = API extends {
+type InferSessionAPI<API> = API extends {
 	[key: string]: infer E;
 }
 	? UnionToIntersection<
@@ -44,29 +45,14 @@ type InferSessionAPI<API, O extends BetterAuthOptions> = API extends {
 					? {
 							getSession: (context: {
 								headers: Headers;
-							}) => Promise<
-								Prettify<
-									Awaited<ReturnType<E>> & {
-										session: InferSession<O>;
-										user: Prettify<
-											InferUser<O> & Awaited<ReturnType<E>> extends {
-												user: infer U;
-											}
-												? U extends Record<string, any>
-													? U
-													: {}
-												: {}
-										>;
-									}
-								>
-							>;
+							}) => Promise<PrettifyDeep<Awaited<ReturnType<E>>>>;
 						}
 					: never
 				: never
 		>
 	: never;
 
-type InferAPI<API, O extends BetterAuthOptions> = InferSessionAPI<API, O> &
+type InferAPI<API, O extends BetterAuthOptions> = InferSessionAPI<API> &
 	FilteredAPI<API>;
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {

@@ -1,13 +1,22 @@
-import Database from "better-sqlite3";
 import { createAuthEndpoint, getSessionFromCtx } from "../../api";
-import { betterAuth } from "../../auth";
-import type { BetterAuthPlugin, Session, User } from "../../types";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	InferSession,
+	InferUser,
+	Session,
+	User,
+} from "../../types";
 
-export const customSession = <Returns extends Record<string, any>>(
+export const customSession = <
+	Returns extends Record<string, any>,
+	O extends BetterAuthOptions = BetterAuthOptions,
+>(
 	fn: (session: {
-		user: User;
-		session: Session;
+		user: InferUser<O>;
+		session: InferSession<O>;
 	}) => Promise<Returns>,
+	options?: O,
 ) => {
 	return {
 		id: "custom-session",
@@ -16,39 +25,19 @@ export const customSession = <Returns extends Record<string, any>>(
 				"/get-session",
 				{
 					method: "GET",
+					metadata: {
+						CUSTOM_SESSION: true,
+					},
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session);
-					return ctx.json({
-						...fnResult,
-						user: {
-							...session.user,
-							...((fnResult.user || {}) as {}),
-						},
-						session: {
-							...session.session,
-							...((fnResult.session || {}) as {}),
-						},
-					});
+					const fnResult = await fn(session as any);
+					return ctx.json(fnResult);
 				},
 			),
 		},
 	} satisfies BetterAuthPlugin;
 };
-
-const auth = betterAuth({
-	database: Database("./"),
-	plugins: [
-		customSession(async (c) => {
-			return {
-				user: {
-					newField: "new",
-				},
-			};
-		}),
-	],
-});

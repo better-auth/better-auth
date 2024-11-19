@@ -138,7 +138,11 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 											]
 								) => Promise<
 									BetterFetchResponse<
-										InferReturn<Awaited<R>, COpts>,
+										T["options"]["metadata"] extends {
+											CUSTOM_SESSION: boolean;
+										}
+											? NonNullable<Awaited<R>>
+											: InferReturn<Awaited<R>, COpts>,
 										unknown,
 										FetchOptions["throw"] extends true
 											? true
