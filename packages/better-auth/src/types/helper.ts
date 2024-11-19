@@ -13,7 +13,7 @@ export type PrettifyDeep<T> = {
 				? T[K]
 				: T[K] extends Date
 					? T[K]
-					: Prettify<T[K]>
+					: PrettifyDeep<T[K]>
 			: T[K];
 } & {};
 export type LiteralUnion<LiteralType, BaseType extends Primitive> =

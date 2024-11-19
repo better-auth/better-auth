@@ -1,4 +1,3 @@
-import type { Endpoint } from "better-call";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
@@ -6,54 +5,10 @@ import type {
 	InferPluginTypes,
 	InferSession,
 	InferUser,
-	Prettify,
 	PrettifyDeep,
-	UnionToIntersection,
 } from "./types";
 import { getBaseURL } from "./utils/url";
-
-type FilteredAPI<API> = Omit<
-	API,
-	API extends { [key in infer K]: Endpoint }
-		? K extends string
-			? K extends "getSession"
-				? K
-				: API[K]["options"]["metadata"] extends { isAction: false }
-					? K
-					: never
-			: never
-		: never
->;
-
-type FilterActions<API> = Omit<
-	API,
-	API extends { [key in infer K]: Endpoint }
-		? K extends string
-			? API[K]["options"]["metadata"] extends { isAction: false }
-				? K
-				: never
-			: never
-		: never
->;
-
-type InferSessionAPI<API> = API extends {
-	[key: string]: infer E;
-}
-	? UnionToIntersection<
-			E extends Endpoint
-				? E["path"] extends "/get-session"
-					? {
-							getSession: (context: {
-								headers: Headers;
-							}) => Promise<PrettifyDeep<Awaited<ReturnType<E>>>>;
-						}
-					: never
-				: never
-		>
-	: never;
-
-type InferAPI<API, O extends BetterAuthOptions> = InferSessionAPI<API> &
-	FilteredAPI<API>;
+import type { FilterActions, InferAPI } from "./types/api";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
@@ -80,13 +35,13 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 			const { handler } = router(ctx, options);
 			return handler(request);
 		},
-		api: api as InferAPI<typeof api, O>,
+		api: api as InferAPI<typeof api>,
 		options: options as O,
 		$context: authContext,
 		$Infer: {} as {
 			Session: {
-				session: Prettify<InferSession<O>>;
-				user: Prettify<InferUser<O>>;
+				session: PrettifyDeep<InferSession<O>>;
+				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
 	};

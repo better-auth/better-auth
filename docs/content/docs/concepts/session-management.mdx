@@ -47,6 +47,8 @@ import { authClient } from "@/lib/client"
 const session = await authClient.getSession()
 ```
 
+To learn how to customize the session response check the [Customizing Session Response](#customizing-session-response) section.
+
 ### Use Session
 
 The `useSession` action provides a reactive way to access the current session.
@@ -147,7 +149,8 @@ auth.api.getSession({
 });
 ```
 
-### Customize Session Response
+
+### Customizing Session Response
 
 When you call `getSession` or `useSession`, the session data is returned as a `user` and `session` object. You can customize this response using the `customSession` plugin.
 
@@ -156,13 +159,15 @@ import { customSession } from "better-auth/plugins";
 
 export const auth = betterAuth({
     plugins: [
-        customSession(async (session) => {
+        customSession(async ({ user, session }) => {
             const roles = findUserRoles(session.session.userId);
             return {
                 roles,
                 user: {
-                    newField: "value",
+                    ...user,
+                    newField: "newField",
                 },
+                session
             };
         }),
     ],
@@ -186,8 +191,35 @@ const { data: sessionData } = await authClient.getSession();
 // data.user.newField
 ```
 
-**Caveats**: 
-- When you return a `user` or `session` object, it will be merged with the default `user` or `session` object.  
-- The passed `session` object to the callback, does not infer fields added by plugins.  
+**Some Caveats**: 
+- The passed `session` object to the callback, does not infer fields added by plugins.
+
+but as a workaround, you can pull your auth options or atlest just least of plugins and other releveant options that could affect the session object and pass it to the plugin.
+
+```ts
+import { betterAuth, BetterAuthOptions } from "better-auth";
+
+const options = {
+  //...config options
+  plugins: [
+    //...plugins
+  ]
+} satisfies BetterAuthOptions;
+
+export const auth = betterAuth({
+    ...options,
+    plugins: [{
+        ...options.plugins,
+        customSession(async ({ user, session }) => {
+            // now both user and session will infer the fields added by plugins and your custom fields
+            retunr {
+                user,
+                session
+            }
+        }, options), // pass options here  // [!code highlight]
+    }]
+})
+```
+
 - If you cannot use the `auth` instance as a type, inference will not work on the client.  
 - Session caching, including secondary storage or cookie cache, does not include custom fields. Each time the session is fetched, your custom session function will be called.
