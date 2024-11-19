@@ -12,7 +12,7 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId">;
+		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 	},
 ) {

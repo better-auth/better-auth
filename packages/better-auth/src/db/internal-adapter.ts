@@ -30,7 +30,8 @@ export const createInternalAdapter = (
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
-			account: Omit<Account, "userId" | "id"> & Partial<Account>,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
 		) => {
 			try {
 				const createdUser = await createWithHooks(
@@ -45,6 +46,8 @@ export const createInternalAdapter = (
 					{
 						...account,
 						userId: createdUser.id || user.id,
+						createdAt: new Date(),
+						updatedAt: new Date(),
 					},
 					"account",
 				);
@@ -203,7 +206,7 @@ export const createInternalAdapter = (
 				"session",
 				secondaryStorage
 					? {
-							fn: async (input) => {
+							fn: async () => {
 								const user = await adapter.findOne<User>({
 									model: "user",
 									where: [{ field: "id", value: userId }],
@@ -540,8 +543,18 @@ export const createInternalAdapter = (
 			});
 			return user;
 		},
-		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
-			const _account = await createWithHooks(account, "account");
+		linkAccount: async (
+			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+		) => {
+			const _account = await createWithHooks(
+				{
+					...account,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				"account",
+			);
 			return _account;
 		},
 		updateUser: async (

@@ -139,6 +139,11 @@ exports[`init > should match config 1`] = `
           "required": true,
           "type": "string",
         },
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": false,
@@ -164,6 +169,11 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
+        },
         "userId": {
           "fieldName": "userId",
           "references": {
@@ -180,6 +190,11 @@ exports[`init > should match config 1`] = `
     },
     "session": {
       "fields": {
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,
@@ -189,6 +204,17 @@ exports[`init > should match config 1`] = `
           "fieldName": "ipAddress",
           "required": false,
           "type": "string",
+        },
+        "token": {
+          "fieldName": "token",
+          "required": true,
+          "type": "string",
+          "unique": true,
+        },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
         },
         "userAgent": {
           "fieldName": "userAgent",
@@ -266,6 +292,12 @@ exports[`init > should match config 1`] = `
           "fieldName": "identifier",
           "required": true,
           "type": "string",
+        },
+        "updatedAt": {
+          "defaultValue": [Function],
+          "fieldName": "updatedAt",
+          "required": false,
+          "type": "date",
         },
         "value": {
           "fieldName": "value",
