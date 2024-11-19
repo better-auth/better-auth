@@ -90,6 +90,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
 							ctx.request,
+							false,
+							ctx.context.session.session,
 						);
 						/**
 						 * Update the session cookie with the new user data
@@ -98,6 +100,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							session: newSession,
 							user,
 						});
+
+						//remove current session
+						await ctx.context.internalAdapter.deleteSession(
+							ctx.context.session.session.id,
+						);
 					}
 					//delete existing two factor
 					await ctx.context.adapter.deleteMany({
@@ -164,6 +171,23 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						],
 					});
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					);
+					/**
+					 * Update the session cookie with the new user data
+					 */
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user,
+					});
+					//remove current session
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.context.session.session.id,
+					);
 					return ctx.json({ status: true });
 				},
 			),
