@@ -3,136 +3,43 @@ title: Migrating from NextAuth to BetterAuth
 description: A step-by-step guide to getting started with BetterAuth.
 ---
 
-In this section, we'll explore how to seamlessly transition a project from NextAuth to BetterAuth while ensuring no data or functionality is lost. 
-For this demonstration, we'll use an existing project built with the `T3 Stack` with `Prisma` with `Postgresql` as the database, complete with pre-existing data. 
+In this guide, we'll explore how to seamlessly transition a project from Next Auth to Better Auth while ensuring no data or functionality is lost. 
+
 ## Before we get started
 
-For this demonstration, we'll use Discord as our authentication provider. While this process works seamlessly with any other provider, we'll specifically focus on transitioning the Discord integration from NextAuth to BetterAuth—because why not do it in a better way? 😉
+For this demonstration, we'll use Discord as our authentication provider. While this process should work with any other provider, we'll specifically focus on transitioning the Discord integration from NextAuth to BetterAuth.
 
 **Ensure** you have your `Discord Client ID` and `Discord Client Secret` handy. You can retrieve these from the [Discord Developer Portal](https://discord.com/developers/applications). Once obtained, add them to your `.env` file if you haven't already:  
 
-```env  
+```env
 DISCORD_CLIENT_ID=your-client-id  
 DISCORD_CLIENT_SECRET=your-client-secret  
 ```  
 <Steps>
     <Step>
-        ## Install the package
+        ### Setup Better auth
 
-        Let's start by adding Better Auth to your project:
-        ```package-install
-        better-auth
-        ```
+        Before we start the migration process, we need to setup BetterAuth in our project. You can use the [installation guide](/docs/guides/installation) to get started.
     </Step>
-
     <Step>
-        ## Create an auth.ts entry point
-
-        Let’s start by clearing out everything in the existing `server/auth` file or where your `auth` and `authConfig` variables are defined. Afterward, create a new file named auth.ts.
-
-        To integrate BetterAuth into your project, you'll need an entry point to handle authentication. You can create this file in either:
-
-        `src/libs/auth.ts`
-        `src/utils/auth.ts`
-        Choose the location that aligns with your project’s organization.
-
-        Once the file is created, copy and paste the following code into it:
-
-        ```typescript
-            import { betterAuth } from "better-auth";
-            import { nextCookies } from "better-auth/next-js";
-            import { prismaAdapter } from "better-auth/adapters/prisma";
-            import { PrismaClient } from "@prisma/client";
-            import { headers } from "next/headers";
-
-            const prisma = new PrismaClient();
-            export const auth = betterAuth({
-            database: prismaAdapter(prisma, {
-                provider: "postgresql",
-            }),
-            plugins: [
-                nextCookies()
-            ],
-            socialProviders: {
-                discord: {
-                clientId: process.env.AUTH_DISCORD_ID!,
-                clientSecret: process.env.AUTH_DISCORD_SECRET!,
-                },
-            },
-            });
-
-            export const getSession = async () => {
-            return await auth.api.getSession({
-                headers: await headers()
-            })
-            }
-        ```
-    </Step>
-
-    <Step>
-        ## Generate a BetterAuth database schema
-
-        Inorder not to overwrite our old prisma schema we'll specify a new place to generate a schema. I named it `better-auth.prisma` but you can name it to anything you want. Generate a database schema with the better-auth cli using:
-
-        ```bash
-            npx @better-auth/cli generate --output prisma/better-auth.prisma
-        ```
-        if your auth.ts file is not in at `src/libs` or `src/utils` make sure to use this command to point to your file path.
-
-        ```bash
-            npx @better-auth/cli generate --config <path-to-your-auth.ts> --output prisma/better-auth.prisma
-        ```
-        BetterAuth relies on the following key attributes to function properly, such as in the users table. Here’s an example of the required fields:
-        <DatabaseTable
-            fields={[
-                {
-                name: "id",
-                type: "string",
-                description: "Unique identifier for each user",
-                isPrimaryKey: true
-                },
-                {
-                name: "name",
-                type: "string",
-                description: "User's chosen display name"
-                },
-                {
-                name: "email",
-                type: "string",
-                description: "User's email address for communication and login"
-                },
-                {
-                name: "emailVerified",
-                type: "boolean",
-                description: "Whether the user's email is verified", 
-                },
-                {
-                name: "createdAt",
-                type: "Date",
-                description: "Timestamp of when the user account was created"
-                },
-                {
-                name: "updatedAt",
-                type: "Date",
-                description: "Timestamp of the last update to the user's information"
-                },
-            ]}
-        /> 
-
-        Make sure to include the fields name, email, emailVerified, createdAt, and updatedAt in your existing schema. These are essential for BetterAuth to function properly and to ensure seamless integration with its authentication system. Adjust or map them accordingly if your database uses different field names.
-
-        For more details on other tables and attributes, check out the [Core Schema](https://www.better-auth.com/docs/concepts/database#core-schema) section in the documentation.
-
         ### Mapping Existing Columns
         
-        Rather than replacing existing column names in your Prisma schema, you can map them to match BetterAuth's requirements. For example, if your database uses expires for sessions but BetterAuth expects expiresAt, you can map it in your auth.ts file as shown below:
+        Rather than replacing existing column names in your database, you can map them to Better Auth’s expected structure. This way, you can maintain your existing database schema. 
+
+
+        #### User Schema
+
+        Next Auth default uesr schema is the same as what is expected by Better Auth so there shouldn't be any problem there.
+
+        #### Session Schema
+
         
-        ```typescript
+        ```ts
         export const auth = betterAuth({
         // Other configs
             session: {
                 fields: {
-                    expiresAt: "expires"
+                    expiresAt: "expires" // Map expiresAt to expires
                 }
             },
         });

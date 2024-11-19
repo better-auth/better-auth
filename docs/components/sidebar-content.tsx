@@ -681,95 +681,6 @@ export const contents: Content[] = [
       },
     ],
   },
-  {
-    title: "Plugins",
-    Icon: () => (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="1.4em"
-        height="1.4em"
-        viewBox="0 0 24 24"
-      >
-        <g fill="none">
-          <path d="M24 0v24H0V0zM12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035c-.01-.004-.019-.001-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z" />
-          <path
-            fill="currentColor"
-            d="M15 20a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2zm0-18a1 1 0 0 1 .993.883L16 3v3h2a2 2 0 0 1 1.995 1.85L20 8v5a6 6 0 0 1-5.775 5.996L14 19h-4a6 6 0 0 1-5.996-5.775L4 13V8a2 2 0 0 1 1.85-1.995L6 6h2V3a1 1 0 0 1 1.993-.117L10 3v3h4V3a1 1 0 0 1 1-1"
-          />
-        </g>
-      </svg>
-    ),
-    list: [
-      {
-        title: "Authentication",
-        group: true,
-        href: "/docs/plugins/1st-party-plugins",
-        icon: () => <LucideAArrowDown className="w-4 h-4" />,
-      },
-			{
-				title: "Remix",
-				icon: Icons.remix,
-				href: "/docs/integrations/remix",
-			},
-			{
-				title: "Next.js",
-				icon: Icons.nextJS,
-				href: "/docs/integrations/next",
-			},
-			{
-				title: "Nuxt",
-				icon: Icons.nuxt,
-				href: "/docs/integrations/nuxt",
-			},
-			{
-				title: "SvelteKit",
-				icon: Icons.svelteKit,
-				href: "/docs/integrations/svelte-kit",
-			},
-			{
-				title: "SolidStart",
-				icon: Icons.solidStart,
-				href: "/docs/integrations/solid-start",
-			},
-			{
-				title: "TanStack Start",
-				icon: Icons.tanstack,
-				href: "/docs/integrations/tanstack",
-			},
-			{
-				group: true,
-				title: "Backend",
-				href: "/docs/integrations",
-				icon: LucideAArrowDown,
-			},
-			{
-				title: "Hono",
-				icon: Icons.hono,
-				href: "/docs/integrations/hono",
-			},
-			{
-				title: "Node",
-				icon: Icons.node,
-				href: "/docs/integrations/node",
-			},
-			{
-				title: "Elysia",
-				icon: Icons.elysia,
-				href: "/docs/integrations/elysia",
-			},
-			{
-				group: true,
-				title: "Mobile & Desktop",
-				href: "/docs/integrations",
-				icon: LucideAArrowDown,
-			},
-			{
-				title: "Expo",
-				icon: Icons.expo,
-				href: "/docs/integrations/expo",
-			},
-		],
-	},
 	{
 		title: "Plugins",
 		Icon: () => (
@@ -1054,19 +965,19 @@ export const contents: Content[] = [
         height="1.8em"
 		fill="currentColor"
         viewBox="0 0 100 125"
-        enable-background="new 0 0 100 100"
+        enableBackground="new 0 0 100 100"
       >
         <path d="M45.1,77.7L97.9,47l-5.7-3.3L45.1,71.1l-7.9-4.6v0l-29-16.7v-7.7L45,63.4l52.8-30.7L55,7.9L2.1,38.6h0v0l0,0l0,0v14.3h0l0,0  h0v14.3h0l32,18.4v0l11,6.3l52.8-30.7l-5.7-3.3L45.1,85.4l-7.9-4.6v0l-29-16.7v-7.7l26,15v0L45.1,77.7z M39.4,36.4  c1.6-0.8,3.1-1.2,4.4-1.4c1.8-0.2,4.3-0.1,7.6,0.2c1.6,0.2,3.2,0.2,4.7,0c1.5-0.2,2.8-0.7,4-1.3c1.2-0.7,1.9-1.5,2-2.3  c0.1-0.8-0.5-1.6-1.7-2.3c-1-0.6-2.1-0.9-3.4-0.9c-0.8,0-1.6,0.1-2.4,0.3c-0.9,0.3-2.1,0.2-2.9-0.3c0,0,0,0,0,0L47,25.7  c-0.6-0.4-0.6-0.9,0.1-1.2c2.7-1.4,5.6-1.9,8.8-1.7c3.6,0.3,7,1.4,10.3,3.3c3.5,2,5.4,4.2,5.7,6.4c0.3,2.2-1.1,4.2-4.1,5.9  c-1.8,1.1-4.1,1.7-6.8,2c-2.7,0.3-5.3,0.2-7.9-0.3c-1.6-0.2-2.9-0.2-3.9,0.1c-0.7,0.2-1.5,0.4-2.3,0.8c-0.6,0.3-1.6,0.3-2.2-0.1  l-5.2-3C38.7,37.4,38.7,36.8,39.4,36.4z M30.6,41.6l2.7-1.6c0.9-0.5,2.4-0.5,3.3,0l4.2,2.4c0.9,0.5,0.9,1.4,0,1.9l-2.7,1.6  c-0.9,0.5-2.4,0.5-3.3,0l-4.2-2.4C29.7,42.9,29.7,42.1,30.6,41.6z" />
       </svg>
     ),
     list: [
       {
-        title: "Next Auth",
-        href: "/docs/guides/next-auth",
+        title: "Authjs (next-auth) Migration Guide",
+        href: "/docs/guides/next-auth-migration-guide",
         icon: () => (
           <svg
-            width="1.2em"
-            height="1.2em"
+            width="1.7em"
+            height="1.7em"
             viewBox="0 0 24 24"
             fill="none"
             opacity=".5"
@@ -1112,8 +1023,8 @@ export const contents: Content[] = [
                 y2="5.5493"
                 gradientUnits="userSpaceOnUse"
               >
-                <stop stop-color="#fff" />
-                <stop offset="1" stop-color="#fafafa" />
+                <stop stopColor="#fff" />
+                <stop offset="1" stopColor="#fafafa" />
               </linearGradient>
               <linearGradient
                 id="paint1_linear_156_252"
@@ -1123,8 +1034,8 @@ export const contents: Content[] = [
                 y2="9.66197"
                 gradientUnits="userSpaceOnUse"
               >
-                <stop stop-color="#fff" />
-                <stop offset="1" stop-color="#fafafa" />
+                <stop stopColor="#fff" />
+                <stop offset="1" stopColor="#fafafa" />
               </linearGradient>
               <linearGradient
                 id="paint2_linear_156_252"
@@ -1134,8 +1045,8 @@ export const contents: Content[] = [
                 y2="16.9859"
                 gradientUnits="userSpaceOnUse"
               >
-                <stop stop-color="#4e4e4e" />
-                <stop offset="1" stop-color="#2e2e2e" />
+                <stop stopColor="#4e4e4e" />
+                <stop offset="1" stopColor="#2e2e2e" />
               </linearGradient>
             </defs>
           </svg>
