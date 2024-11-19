@@ -185,8 +185,6 @@ export const createInternalAdapter = (
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const data: Session = {
-				id: generateId(32),
-				userId,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
@@ -198,6 +196,8 @@ export const createInternalAdapter = (
 				ipAddress: request ? getIp(request, ctx.options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...override,
+				id: generateId(32),
+				userId,
 			};
 			const res = await createWithHooks(
 				data,
