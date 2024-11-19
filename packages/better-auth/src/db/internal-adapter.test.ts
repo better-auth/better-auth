@@ -46,6 +46,8 @@ describe("adapter test", async () => {
 				providerId: "provider",
 				accountId: "account",
 				expiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			},
 		);
 
