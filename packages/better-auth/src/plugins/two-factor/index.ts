@@ -15,7 +15,10 @@ import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { getEndpointResponse } from "../../utils/plugin-helper";
+import {
+	getEndpointResponse,
+	returnHookResponse,
+} from "../../utils/plugin-helper";
 import { schema } from "./schema";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -243,14 +246,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-						const res = {
-							twoFactorRedirect: true,
-						};
 
-						return {
-							response: res,
-							responseHeader: ctx.responseHeader,
-						};
+						return returnHookResponse(ctx, {
+							twoFactorRedirect: true,
+						});
 					}),
 				},
 			],
