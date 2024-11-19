@@ -50,12 +50,12 @@ export default function ResetPassword() {
           <form onSubmit={handleSubmit}>
             <div className="grid w-full items-center gap-2">
               <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="email">New password</Label>
+                <Label htmlFor="password">New password</Label>
                 <PasswordInput
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="password"
+                  autoComplete="new-password"
                   placeholder="Password"
                 />
               </div>
@@ -65,7 +65,7 @@ export default function ResetPassword() {
                   id="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="password"
+                  autoComplete="new-password"
                   placeholder="Confirm password"
                 />
               </div>
