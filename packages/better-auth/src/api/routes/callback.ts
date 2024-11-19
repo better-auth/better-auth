@@ -142,9 +142,8 @@ export const callbackOAuth = createAuthEndpoint(
 			account: {
 				providerId: provider.id,
 				accountId: userInfo.id,
-				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
-				expiresAt: tokens.accessTokenExpiresAt,
+				...tokens,
+				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
 		});

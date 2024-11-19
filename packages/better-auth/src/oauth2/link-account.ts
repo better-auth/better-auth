@@ -63,7 +63,9 @@ export async function handleOAuthUserInfo(
 					accessToken: account.accessToken,
 					idToken: account.idToken,
 					refreshToken: account.refreshToken,
-					expiresAt: account.expiresAt,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
@@ -77,7 +79,8 @@ export async function handleOAuthUserInfo(
 				accessToken: account.accessToken,
 				idToken: account.idToken,
 				refreshToken: account.refreshToken,
-				expiresAt: account.expiresAt,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 			});
 		}
 	} else {
@@ -96,7 +99,9 @@ export async function handleOAuthUserInfo(
 						accessToken: account.accessToken,
 						idToken: account.idToken,
 						refreshToken: account.refreshToken,
-						expiresAt: account.expiresAt,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},

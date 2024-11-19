@@ -200,10 +200,24 @@ export const getAuthTables = (
 					required: false,
 					fieldName: options.account?.fields?.idToken || "idToken",
 				},
-				expiresAt: {
+				accessTokenExpiresAt: {
 					type: "date",
 					required: false,
-					fieldName: options.account?.fields?.expiresAt || "expiresAt",
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"accessTokenExpiresAt",
+				},
+				refreshTokenExpiresAt: {
+					type: "date",
+					required: false,
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"refreshTokenExpiresAt",
+				},
+				scope: {
+					type: "string",
+					required: false,
+					fieldName: options.account?.fields?.scope || "scope",
 				},
 				password: {
 					type: "string",
