@@ -74,7 +74,8 @@ describe("multi-session", async () => {
 		});
 		if (res.data) {
 			sessionId =
-				res.data.find((s) => s.user.email === testUser.email)?.session.id || "";
+				res.data.find((s) => s.user.email === testUser.email)?.session.token ||
+				"";
 		}
 		expect(res.data).toHaveLength(2);
 	});
@@ -103,12 +104,12 @@ describe("multi-session", async () => {
 				fetchOptions: {
 					headers,
 				},
-				sessionId: signUpRes.data?.session.id || "",
+				sessionId: signUpRes.data?.session.token || "",
 			},
 			{
 				onSuccess(context) {
 					expect(context.response.headers.get("set-cookie")).toContain(
-						`better-auth.session_token`,
+						`better-auth.session_token=`,
 					);
 				},
 			},

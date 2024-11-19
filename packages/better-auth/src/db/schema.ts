@@ -18,6 +18,8 @@ export const accountSchema = z.object({
 	 * Password is only stored in the credential provider
 	 */
 	password: z.string().nullish(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 });
 
 export const userSchema = z.object({
@@ -26,14 +28,17 @@ export const userSchema = z.object({
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
-	createdAt: z.date().default(new Date()),
-	updatedAt: z.date().default(new Date()),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 });
 
 export const sessionSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
 	expiresAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
+	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
 });
@@ -41,7 +46,8 @@ export const sessionSchema = z.object({
 export const verificationSchema = z.object({
 	id: z.string(),
 	value: z.string(),
-	createdAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });

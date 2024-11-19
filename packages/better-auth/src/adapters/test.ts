@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import type { Adapter, User } from "../types";
 import { nanoid } from "nanoid";
+import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	adapter: Adapter;
@@ -161,7 +162,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should work with reference fields", async () => {
-		const user = await adapter.create<Record<string, any>>({
+		const user = await adapter.create<{ id: string } & Record<string, any>>({
 			model: "user",
 			data: {
 				id: "4",
@@ -176,6 +177,9 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			model: "session",
 			data: {
 				id: "1",
+				token: generateId(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 				userId: user.id,
 				expiresAt: new Date(),
 			},

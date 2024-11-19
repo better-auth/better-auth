@@ -135,7 +135,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						...ctx.context.authCookies.sessionToken.options,
 						maxAge: 0,
 					});
-					const isActive = ctx.context.session?.session.id === sessionId;
+					const isActive = ctx.context.session?.session.token === sessionId;
 					if (!isActive) return ctx.json({ success: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");
