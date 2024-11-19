@@ -1,22 +1,13 @@
 import type { BetterFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
-import type { Prettify } from "../types/helper";
-import type {
-	ClientOptions,
-	InferSessionFromClient,
-	InferUserFromClient,
-} from "./types";
 import { useAuthQuery } from "./query";
+import type { Session, User } from "../types";
 
-export function getSessionAtom<Option extends ClientOptions>(
-	$fetch: BetterFetch,
-) {
-	type UserWithAdditionalFields = InferUserFromClient<Option>;
-	type SessionWithAdditionalFields = InferSessionFromClient<Option>;
+export function getSessionAtom($fetch: BetterFetch) {
 	const $signal = atom<boolean>(false);
 	const session = useAuthQuery<{
-		user: Prettify<UserWithAdditionalFields>;
-		session: Prettify<SessionWithAdditionalFields>;
+		user: User;
+		session: Session;
 	}>($signal, "/get-session", $fetch, {
 		method: "GET",
 	});

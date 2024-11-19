@@ -7,13 +7,14 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
-	InferSessionFromClient,
-	InferUserFromClient,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
 import type { UnionToIntersection } from "../../types/helper";
-import type { BetterFetchError } from "@better-fetch/fetch";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -55,14 +56,16 @@ export function createAuthClient<Option extends ClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
-	type Session = {
-		session: InferSessionFromClient<Option>;
-		user: InferUserFromClient<Option>;
-	};
+	type ClientAPI = InferClientAPI<Option>;
+	type Session = ClientAPI extends {
+		getSession: () => Promise<BetterFetchResponse<infer D>>;
+	}
+		? D
+		: ClientAPI;
 
 	function useSession(): () => DeepReadonly<
 		Ref<{
-			data: Session | null;
+			data: Session;
 			isPending: boolean;
 			isRefetching: boolean;
 			error: BetterFetchError | null;
@@ -114,12 +117,13 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
+
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
 			$Infer: {
-				Session: Session;
+				Session: NonNullable<Session>;
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;

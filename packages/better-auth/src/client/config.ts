@@ -27,7 +27,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 					...pluginsFetchPlugins,
 				],
 	});
-	const { $sessionSignal, session } = getSessionAtom<O>($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
