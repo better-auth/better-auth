@@ -59,7 +59,6 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
-					id: c.context.uuid(),
 					userId: dbUser.user.id,
 					accessToken: account.accessToken,
 					idToken: account.idToken,
@@ -88,7 +87,8 @@ export async function handleOAuthUserInfo(
 				.createOAuthUser(
 					{
 						...userInfo,
-						id: c.context.uuid(),
+						// setting id to undefined to let the database generate it
+						id: undefined,
 						emailVerified,
 						email: userInfo.email.toLowerCase(),
 					},

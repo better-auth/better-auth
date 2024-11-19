@@ -8,7 +8,6 @@ import type {
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { z } from "zod";
-import { generateId } from "../../utils/id";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 
@@ -69,7 +68,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 				async (ctx) => {
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
-					const id = generateId();
+					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
 					const newUser = await ctx.context.internalAdapter.createUser({
 						id,

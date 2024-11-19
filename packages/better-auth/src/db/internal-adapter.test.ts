@@ -16,14 +16,16 @@ describe("adapter test", async () => {
 		database: {
 			dialect: sqliteDialect,
 			type: "sqlite",
-			generateId() {
-				return (id++).toString();
-			},
 		},
 		user: {
 			fields: {
 				email: "email_address",
 				emailVerified: "email_verified",
+			},
+		},
+		advanced: {
+			generateId() {
+				return (id++).toString();
 			},
 		},
 	} satisfies BetterAuthOptions;
@@ -34,6 +36,9 @@ describe("adapter test", async () => {
 	const internalAdapter = createInternalAdapter(adapter, {
 		options: opts,
 		hooks: [],
+		generateId() {
+			return opts.advanced.generateId();
+		},
 	});
 	it("should create oauth user with custom generate id", async () => {
 		const user = await internalAdapter.createOAuthUser(

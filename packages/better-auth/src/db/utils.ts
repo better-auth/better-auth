@@ -2,7 +2,6 @@ import type { FieldAttribute } from ".";
 import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
-import { getAuthTables } from "./get-tables";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 
@@ -20,10 +19,6 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
 	return kyselyAdapter(kysely, {
-		generateId:
-			"generateId" in options.database
-				? options.database.generateId
-				: undefined,
 		type: databaseType || "sqlite",
 	})(options);
 }

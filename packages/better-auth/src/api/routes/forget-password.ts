@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
+import { generateId } from "../../utils";
 
 function redirectError(
 	ctx: AuthContext,
@@ -81,7 +82,7 @@ export const forgetPassword = createAuthEndpoint(
 				defaultExpiresIn,
 			"sec",
 		);
-		const verificationToken = ctx.context.uuid();
+		const verificationToken = generateId(24);
 		await ctx.context.internalAdapter.createVerificationValue({
 			value: user.user.id,
 			identifier: `reset-password:${verificationToken}`,
@@ -180,7 +181,7 @@ export const resetPassword = createAuthEndpoint(
 				userId,
 				providerId: "credential",
 				password: hashedPassword,
-				accountId: ctx.context.uuid(),
+				accountId: userId,
 			});
 			return ctx.json({
 				status: true,

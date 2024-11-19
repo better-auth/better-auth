@@ -161,7 +161,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should work with reference fields", async () => {
-		const user = await adapter.create<Record<string, any>>({
+		const user = await adapter.create<{ id: string } & Record<string, any>>({
 			model: "user",
 			data: {
 				id: "4",

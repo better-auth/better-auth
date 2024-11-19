@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "../types";
+import type { AuthContext, BetterAuthOptions } from "../types";
 import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import {
@@ -9,16 +9,17 @@ import {
 	type User,
 	type Verification,
 } from "./schema";
-import { generateId } from "../utils/id";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
+import { generateId } from "../utils";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
 	ctx: {
 		options: BetterAuthOptions;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		generateId: AuthContext["generateId"];
 	},
 ) => {
 	const options = ctx.options;
@@ -34,7 +35,6 @@ export const createInternalAdapter = (
 			try {
 				const createdUser = await createWithHooks(
 					{
-						id: generateId(),
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
@@ -43,7 +43,6 @@ export const createInternalAdapter = (
 				);
 				const createdAccount = await createWithHooks(
 					{
-						id: generateId(),
 						...account,
 						userId: createdUser.id || user.id,
 					},
@@ -65,7 +64,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
-					id: generateId(),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					emailVerified: false,
@@ -82,7 +80,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdAccount = await createWithHooks(
 				{
-					id: generateId(),
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...account,
@@ -543,19 +540,8 @@ export const createInternalAdapter = (
 			});
 			return user;
 		},
-		linkAccount: async (
-			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-		) => {
-			const _account = await createWithHooks(
-				{
-					id: generateId(),
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...account,
-				},
-				"account",
-			);
+		linkAccount: async (account: Omit<Account, "id"> & Partial<Account>) => {
+			const _account = await createWithHooks(account, "account");
 			return _account;
 		},
 		updateUser: async (
@@ -657,7 +643,6 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
-					id: generateId(),
 					createdAt: new Date(),
 					...data,
 				},
