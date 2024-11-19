@@ -5,9 +5,18 @@ import {
 	createAuthMiddleware,
 	getSessionFromCtx,
 } from "../../api";
-import type { BetterAuthPlugin, Session, User, Where } from "../../types";
+import {
+	type BetterAuthPlugin,
+	type InferOptionSchema,
+	type PluginSchema,
+	type Session,
+	type User,
+	type Where,
+} from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
+import { getEndpointResponse } from "../../utils/plugin-helper";
+import { mergeSchema } from "../../db/schema";
 
 export interface UserWithRole extends User {
 	role?: string | null;
@@ -53,9 +62,13 @@ interface AdminOptions {
 	 * By default, the impersonation session lasts 1 hour
 	 */
 	impersonationSessionDuration?: number;
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
-export const admin = (options?: AdminOptions) => {
+export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
 		defaultRole: "user",
 		adminRole: "admin",
@@ -137,23 +150,19 @@ export const admin = (options?: AdminOptions) => {
 						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (returned instanceof Response) {
-							const json = (await returned
-								.clone()
-								.json()) as SessionWithImpersonatedBy[];
-							const newJson = json.filter((session) => {
-								return !session.impersonatedBy;
-							});
-							const response = new Response(JSON.stringify(newJson), {
-								status: 200,
-								statusText: "OK",
-								headers: returned.headers,
-							});
-							return ctx.json({
-								response: response,
-							});
+						const response =
+							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
+
+						if (!response) {
+							return;
 						}
+						const newJson = response.filter((session) => {
+							return !session.impersonatedBy;
+						});
+
+						return {
+							response: newJson,
+						};
 					}),
 				},
 			],
@@ -478,40 +487,42 @@ export const admin = (options?: AdminOptions) => {
 				},
 			),
 		},
-		schema: {
-			user: {
-				fields: {
-					role: {
-						type: "string",
-						required: false,
-						input: false,
-					},
-					banned: {
-						type: "boolean",
-						defaultValue: false,
-						required: false,
-						input: false,
-					},
-					banReason: {
-						type: "string",
-						required: false,
-						input: false,
-					},
-					banExpires: {
-						type: "date",
-						required: false,
-						input: false,
-					},
-				},
-			},
-			session: {
-				fields: {
-					impersonatedBy: {
-						type: "string",
-						required: false,
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, opts.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+const schema = {
+	user: {
+		fields: {
+			role: {
+				type: "string",
+				required: false,
+				input: false,
+			},
+			banned: {
+				type: "boolean",
+				defaultValue: false,
+				required: false,
+				input: false,
+			},
+			banReason: {
+				type: "string",
+				required: false,
+				input: false,
+			},
+			banExpires: {
+				type: "date",
+				required: false,
+				input: false,
+			},
+		},
+	},
+	session: {
+		fields: {
+			impersonatedBy: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies PluginSchema;

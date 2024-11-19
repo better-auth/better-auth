@@ -135,8 +135,8 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 	return {
 		id: "otp",
 		endpoints: {
-			send2FaOTP,
-			verifyOTP,
+			sendTwoFactorOTP: send2FaOTP,
+			verifyTwoFactorOTP: verifyOTP,
 		},
 	} satisfies TwoFactorProvider;
 };

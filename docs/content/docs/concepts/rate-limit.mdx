@@ -64,7 +64,7 @@ export const auth = betterAuth({
     //...other options
     rateLimit: {
         storage: "database",
-        tableName: "rateLimit", //optional by default "rateLimit" is used
+        modelName: "rateLimit", //optional by default "rateLimit" is used
     },
 })
 ```

@@ -400,7 +400,7 @@ The organization plugin providers a very flexible access control system. You can
 
 ### Roles
 
-Currently only three roles are supported:
+By default, there are three roles in the organization:
 
 `owner`: The user who created the organization by default. The owner has full control over the organization and can perform any action.
 
@@ -408,9 +408,6 @@ Currently only three roles are supported:
 
 `member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
 
-<Callout type="warn">
-    Currently, you can't create custom roles
-</Callout>
 
 ### Permissions
 
@@ -433,7 +430,6 @@ The owner have full control over all the resources and actions. The admin have f
 ### Custom Permissions
 
 the plugin providers easy way to define your own set of permission for each role.
-
 
 <Steps>
     <Step>
@@ -479,6 +475,29 @@ the plugin providers easy way to define your own set of permission for each role
     const owner = ac.newRole({ // [!code highlight]
         project: ["create", "update", "delete"], // [!code highlight]
     }); // [!code highlight]
+
+    const myCustomRole = ac.newRole({ // [!code highlight]
+        project: ["create", "update", "delete"], // [!code highlight]
+        organization: ["update"], // [!code highlight]
+    }); // [!code highlight]
+    ```
+
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+
+    ```ts title="permissions.ts"
+    import { createAccessControl, defaultStatement, adminAc } from "better-auth/plugins/access";
+
+    const statement = { 
+        ...defaultStatements, // [!code highlight]
+        project: ["create", "share", "update", "delete"],
+    } as const;
+    
+    const ac = createAccessControl(statement);
+
+    const admin = ac.newRole({
+        project: ["create", "update"],
+        ...adminAc.statements, // [!code highlight]
+    });
     ```
 
     </Step>
@@ -500,14 +519,15 @@ the plugin providers easy way to define your own set of permission for each role
                     roles: {
                         owner,
                         admin,
-                        member
+                        member,
+                        myCustomRole
                     }
                 }),
             ],
         });
         ```
 
-        You also need to pass the access controller to the client plugin. This is useful for type checking and auto-completion.
+        You also need to pass the access controller and the roles to the client plugin.
 
         ```ts title="auth-client"
         import { createAuthClient } from "better-auth/client"
@@ -518,6 +538,12 @@ the plugin providers easy way to define your own set of permission for each role
             plugins: [
                 organizationClient({
                     ac: ac,
+                    roles: {
+                        owner,
+                        admin,
+                        member,
+                        myCustomRole
+                    }
                 })
             ]
         })
@@ -525,6 +551,47 @@ the plugin providers easy way to define your own set of permission for each role
     </Step>
 </Steps>
 
+
+### Access Control Usage
+
+**Has Permisson**:
+
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+
+auth.api.hasPermission({
+    role: "admin",
+    permission: {
+        project: ["create"]
+    }
+})
+```
+
+If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client. 
+
+```ts title="client.ts"
+const canCreateProject = await client.organization.hasPermission({
+    role: "admin",
+    permission: {
+        project: ["create"]
+    }
+})
+```
+
+**Check Role Permission**:
+
+Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+
+```ts title="client.ts"
+const canCreateProject = client.organization.checkRolePermission({
+	permission: {
+		organization: ["delete"],
+	},
+	role: "admin",
+});
+```
 
 ## Schema
 
@@ -654,6 +721,25 @@ Table Name: `invitation`
     },
   ]}
   />
+
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the organization plugin. 
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [organization({
+    schema: {
+      organization: {
+        modelName: "organizations",  //map the organization table to organizations
+        fields: { 
+          name: "title" //map the name field to title
+        }
+      }
+    }
+  })]
+})
+```
 
 ## Options
 

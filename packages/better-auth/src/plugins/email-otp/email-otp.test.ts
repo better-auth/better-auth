@@ -131,7 +131,6 @@ describe("email-otp", async () => {
 				type: "sign-in",
 			},
 		});
-		console.log(res);
 	});
 });
 

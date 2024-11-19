@@ -19,23 +19,6 @@ interface KyselyAdapterConfig {
 	generateId?: ((size?: number) => string) | false;
 }
 
-function formatDateForMySQL(date: Date): string {
-	const pad = (n: number) => (n < 10 ? "0" + n : n);
-	return (
-		date.getFullYear() +
-		"-" +
-		pad(date.getMonth() + 1) +
-		"-" +
-		pad(date.getDate()) +
-		" " +
-		pad(date.getHours()) +
-		":" +
-		pad(date.getMinutes()) +
-		":" +
-		pad(date.getSeconds())
-	);
-}
-
 const createTransform = (
 	db: Kysely<any>,
 	options: BetterAuthOptions,
@@ -61,10 +44,7 @@ const createTransform = (
 			return value ? 1 : 0;
 		}
 		if (f.type === "date" && value && value instanceof Date) {
-			if (type === "mysql") {
-				return formatDateForMySQL(value);
-			}
-			return value.toISOString();
+			return type === "sqlite" ? value.toISOString() : value;
 		}
 		return value;
 	}
@@ -83,7 +63,7 @@ const createTransform = (
 	}
 
 	function getModelName(model: string) {
-		return schema[model].tableName;
+		return schema[model].modelName;
 	}
 
 	const shouldGenerateId = config?.generateId !== false;
@@ -257,6 +237,7 @@ export const kyselyAdapter =
 			async create(data) {
 				const { model, data: values, select } = data;
 				const transformed = transformInput(values, model);
+
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),

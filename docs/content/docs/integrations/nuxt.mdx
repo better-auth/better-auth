@@ -1,6 +1,6 @@
 ---
 title: Nuxt Integration
-description: Learn how to integrate Better Auth with Nuxt
+description: Integrate Better Auth with Nuxt.
 ---
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
@@ -89,7 +89,7 @@ const { data: session } = authClient.useSession(useFetch);
 
 ### Middleware
 
-To add middleware to your nuxt project, you can use the `useSession` method from the client.
+To add middleware to your Nuxt project, you can use the `useSession` method from the client.
 
 ```ts title="middleware/auth.global.ts"
 import { authClient } from "~/lib/auth-client";

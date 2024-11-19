@@ -9,6 +9,7 @@ import type { RateLimit } from "./models";
 import type { AuthContext, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
+import type { Logger } from "../utils";
 
 export interface BetterAuthOptions {
 	/**
@@ -411,7 +412,7 @@ export interface BetterAuthOptions {
 		 *
 		 * @default "rateLimit"
 		 */
-		tableName?: string;
+		modelName?: string;
 		/**
 		 * Custom field names for the rate limit table
 		 */
@@ -513,18 +514,7 @@ export interface BetterAuthOptions {
 		 */
 		cookiePrefix?: string;
 	};
-	logger?: {
-		/**
-		 * Disable logging
-		 *
-		 * @default false
-		 */
-		disabled?: boolean;
-		/**
-		 * log verbose information
-		 */
-		verboseLogging?: boolean;
-	};
+	logger?: Logger;
 	/**
 	 * allows you to define custom hooks that can be
 	 * executed during lifecycle of core database
