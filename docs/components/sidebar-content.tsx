@@ -972,7 +972,7 @@ export const contents: Content[] = [
     ),
     list: [
       {
-        title: "Authjs (next-auth) Migration Guide",
+        title: "Auth js (next-auth) Migration Guide",
         href: "/docs/guides/next-auth-migration-guide",
         icon: () => (
           <svg

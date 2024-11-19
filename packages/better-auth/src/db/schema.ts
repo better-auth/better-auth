@@ -13,7 +13,15 @@ export const accountSchema = z.object({
 	/**
 	 * Access token expires at
 	 */
-	expiresAt: z.date().nullish(),
+	accessTokenExpiresAt: z.date().nullish(),
+	/**
+	 * Refresh token expires at
+	 */
+	refreshTokenExpiresAt: z.date().nullish(),
+	/**
+	 * The scopes that the user has authorized
+	 */
+	scope: z.string().nullish(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
