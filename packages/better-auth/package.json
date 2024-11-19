@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "0.8.7-canary.2",
+  "version": "0.9.0-canary.1",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
