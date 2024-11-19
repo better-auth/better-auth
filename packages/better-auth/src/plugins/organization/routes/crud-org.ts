@@ -4,6 +4,7 @@ import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
+import { setSessionCookie } from "../../../cookies";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -293,7 +294,14 @@ export const setActiveOrganization = createAuthEndpoint(
 				message: "You are not a member of this organization",
 			});
 		}
-		await adapter.setActiveOrganization(session.session.id, organizationId);
+		const updatedSession = await adapter.setActiveOrganization(
+			session.session.id,
+			organizationId,
+		);
+		await setSessionCookie(ctx, {
+			session: updatedSession,
+			user: session.user,
+		});
 		const organization = await adapter.findFullOrganization(organizationId);
 		return ctx.json(organization);
 	},
