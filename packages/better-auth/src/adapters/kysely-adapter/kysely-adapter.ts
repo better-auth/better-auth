@@ -237,6 +237,7 @@ export const kyselyAdapter =
 			async create(data) {
 				const { model, data: values, select } = data;
 				const transformed = transformInput(values, model);
+
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),

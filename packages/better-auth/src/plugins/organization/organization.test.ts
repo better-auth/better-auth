@@ -7,12 +7,18 @@ import { createAccessControl } from "./access";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		user: {
+			modelName: "users",
+		},
 		plugins: [
 			organization({
 				async sendInvitationEmail(data, request) {},
 				schema: {
 					organization: {
 						modelName: "team",
+					},
+					member: {
+						modelName: "teamMembers",
 					},
 				},
 			}),

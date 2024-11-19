@@ -372,7 +372,6 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-
 			return organizations;
 		},
 		createInvitation: async ({

@@ -309,6 +309,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			organization: {
+				modelName: options?.schema?.organization?.modelName,
 				fields: {
 					name: {
 						type: "string",
@@ -338,6 +339,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			member: {
+				modelName: options?.schema?.member?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -367,6 +369,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
