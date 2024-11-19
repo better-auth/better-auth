@@ -193,7 +193,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 		id: "totp",
 		endpoints: {
 			generateTOTP: generateTOTP,
-			viewTOTPURI: getTOTPURI,
+			getTOTPURI: getTOTPURI,
 			verifyTOTP,
 		},
 	} satisfies TwoFactorProvider;
