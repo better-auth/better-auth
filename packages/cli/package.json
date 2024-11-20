@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.0.0-canary.4",
+  "version": "1.0.0-canary.5",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
