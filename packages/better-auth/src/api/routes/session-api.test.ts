@@ -107,6 +107,9 @@ describe("session", async () => {
 		expect(session2.data?.session.expiresAt).not.toBe(
 			session.data?.session.expiresAt,
 		);
+		expect(
+			new Date(session2.data!.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(session.data!.session.expiresAt).getTime());
 	});
 
 	it("should handle 'don't remember me' option", async () => {
