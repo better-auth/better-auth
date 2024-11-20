@@ -288,6 +288,7 @@ export const kyselyAdapter =
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
 				const transformedData = transformInput(values, model, "update");
+
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
@@ -295,10 +296,11 @@ export const kyselyAdapter =
 				if (or) {
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
-				return transformOutput(
+				const res = await transformOutput(
 					await withReturning(transformedData, query, model, where),
 					model,
 				);
+				return res;
 			},
 			async updateMany(data) {
 				const { model, where, update: values } = data;

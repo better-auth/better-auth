@@ -65,7 +65,7 @@ describe("multi-session", async () => {
 		expect(session.data?.user.email).toBe(testUser2.email);
 	});
 
-	let sessionId = "";
+	let sessionToken = "";
 	it("should list all device sessions", async () => {
 		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
@@ -73,7 +73,7 @@ describe("multi-session", async () => {
 			},
 		});
 		if (res.data) {
-			sessionId =
+			sessionToken =
 				res.data.find((s) => s.user.email === testUser.email)?.session.token ||
 				"";
 		}
@@ -82,7 +82,7 @@ describe("multi-session", async () => {
 
 	it("should set active session", async () => {
 		const res = await client.multiSession.setActive({
-			sessionId,
+			sessionToken,
 			fetchOptions: {
 				headers,
 			},
@@ -104,7 +104,7 @@ describe("multi-session", async () => {
 				fetchOptions: {
 					headers,
 				},
-				sessionId: signUpRes.data?.session.token || "",
+				sessionToken: signUpRes.data?.session.token || "",
 			},
 			{
 				onSuccess(context) {

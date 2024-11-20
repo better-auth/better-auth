@@ -50,7 +50,8 @@ describe("adapter test", async () => {
 			{
 				providerId: "provider",
 				accountId: "account",
-				expiresAt: new Date(),
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			},
@@ -73,7 +74,8 @@ describe("adapter test", async () => {
 				accountId: "account",
 				accessToken: null,
 				refreshToken: null,
-				expiresAt: expect.any(Date),
+				refreshTokenExpiresAt: expect.any(Date),
+				accessTokenExpiresAt: expect.any(Date),
 			},
 		});
 		expect(user?.user.id).toBe(user?.account.userId);

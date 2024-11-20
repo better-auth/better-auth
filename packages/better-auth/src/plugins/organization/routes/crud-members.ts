@@ -88,7 +88,7 @@ export const removeMember = createAuthEndpoint(
 			session.user.id === existing.userId &&
 			session.session.activeOrganizationId === existing.organizationId
 		) {
-			await adapter.setActiveOrganization(session.session.id, null);
+			await adapter.setActiveOrganization(session.session.token, null);
 		}
 		return ctx.json({
 			member: existing,

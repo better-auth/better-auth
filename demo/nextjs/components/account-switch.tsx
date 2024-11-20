@@ -82,7 +82,7 @@ export default function AccountSwitcher({
 										key={i}
 										onSelect={async () => {
 											await client.multiSession.setActive({
-												sessionId: u.session.id,
+												sessionToken: u.session.id,
 											});
 											setOpen(false);
 										}}

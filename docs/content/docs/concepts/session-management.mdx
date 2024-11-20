@@ -9,7 +9,7 @@ Better Auth manages session using a traditional cookie-based session management.
 
 The session table stores the session data. The session table has the following fields:
 
-- `id`: The session id. Which is also used as the session cookie.
+- `id`: The session token. Which is also used as the session cookie.
 - `userId`: The user id of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
@@ -73,7 +73,7 @@ const sessions = await authClient.listSessions()
 
 When a user signs out of a device, the session is automatically ended. However, you can also end a session manually from any device the user is signed into.
 
-To end a session, use the `revokeSession` function. Just pass the session ID as a parameter.
+To end a session, use the `revokeSession` function. Just pass the session token as a parameter.
 
 ```ts title="client.ts"
 await authClient.revokeSession({

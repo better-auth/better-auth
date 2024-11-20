@@ -443,12 +443,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string(),
 					}),
 					use: [adminMiddleware],
 				},
 				async (ctx) => {
-					await ctx.context.internalAdapter.deleteSession(ctx.body.sessionId);
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.body.sessionToken,
+					);
 					return ctx.json({
 						success: true,
 					});

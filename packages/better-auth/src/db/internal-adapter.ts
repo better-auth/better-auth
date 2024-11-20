@@ -184,11 +184,11 @@ export const createInternalAdapter = (
 			override?: Partial<Session> & Record<string, any>,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
+			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
-				userId,
-				token: generateId(32),
-				createdAt: new Date(),
-				updatedAt: new Date(),
+				ipAddress: request ? getIp(request, ctx.options) || "" : "",
+				userAgent: headers?.get("user-agent") || "",
+				...rest,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
@@ -197,9 +197,10 @@ export const createInternalAdapter = (
 				expiresAt: dontRememberMe
 					? getDate(60 * 60 * 24, "sec") // 1 day
 					: getDate(sessionExpiration, "sec"),
-				ipAddress: request ? getIp(request, ctx.options) || "" : "",
-				userAgent: headers?.get("user-agent") || "",
-				...override,
+				userId,
+				token: generateId(32),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			};
 			const res = await createWithHooks(
 				data,
@@ -220,7 +221,7 @@ export const createInternalAdapter = (
 									sessionExpiration,
 								);
 								/**
-								 * store the session id for the user
+								 * store the session token for the user
 								 * so we can retrieve it later for listing sessions
 								 */
 								const currentList = await secondaryStorage.get(
@@ -414,6 +415,7 @@ export const createInternalAdapter = (
 												)
 											: sessionExpiration,
 									);
+									return updatedSession;
 								} else {
 									return null;
 								}

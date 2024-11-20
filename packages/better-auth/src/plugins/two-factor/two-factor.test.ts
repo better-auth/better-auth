@@ -8,7 +8,6 @@ import { TOTPController } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
-import { APIError } from "better-call";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 
 describe("two factor", async () => {

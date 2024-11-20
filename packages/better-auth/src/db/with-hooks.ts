@@ -99,7 +99,6 @@ export function getWithHooks(
 				await toRun(updated as any);
 			}
 		}
-
 		return updated;
 	}
 

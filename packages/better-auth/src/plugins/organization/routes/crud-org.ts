@@ -73,7 +73,7 @@ export const createOrganization = createAuthEndpoint(
 			user,
 		});
 		await adapter.setActiveOrganization(
-			ctx.context.session.session.id,
+			ctx.context.session.session.token,
 			organization.id,
 		);
 		return ctx.json(organization);
@@ -215,7 +215,7 @@ export const deleteOrganization = createAuthEndpoint(
 			/**
 			 * If the organization is deleted, we set the active organization to null
 			 */
-			await adapter.setActiveOrganization(session.session.id, null);
+			await adapter.setActiveOrganization(session.session.token, null);
 		}
 		await adapter.deleteOrganization(organizationId);
 		return ctx.json(organizationId);
@@ -272,7 +272,7 @@ export const setActiveOrganization = createAuthEndpoint(
 			if (!sessionOrgId) {
 				return ctx.json(null);
 			}
-			await adapter.setActiveOrganization(session.session.id, null);
+			await adapter.setActiveOrganization(session.session.token, null);
 			return ctx.json(null);
 		}
 		if (!organizationId) {
@@ -287,13 +287,13 @@ export const setActiveOrganization = createAuthEndpoint(
 			organizationId: organizationId,
 		});
 		if (!isMember) {
-			await adapter.setActiveOrganization(session.session.id, null);
+			await adapter.setActiveOrganization(session.session.token, null);
 			throw new APIError("FORBIDDEN", {
 				message: "You are not a member of this organization",
 			});
 		}
 		const updatedSession = await adapter.setActiveOrganization(
-			session.session.id,
+			session.session.token,
 			organizationId,
 		);
 		await setSessionCookie(ctx, {

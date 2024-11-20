@@ -272,12 +272,15 @@ export const getOrgAdapter = (
 			return organizationId;
 		},
 		setActiveOrganization: async (
-			sessionId: string,
+			sessionToken: string,
 			organizationId: string | null,
 		) => {
-			const session = await context.internalAdapter.updateSession(sessionId, {
-				activeOrganizationId: organizationId,
-			});
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
+					activeOrganizationId: organizationId,
+				},
+			);
 			return session as Session;
 		},
 		findOrganizationById: async (organizationId: string) => {

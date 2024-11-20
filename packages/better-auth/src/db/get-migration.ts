@@ -215,6 +215,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 								`${field.references.model}.${field.references.field}`,
 							);
 						}
+						if (field.unique) {
+							col = col.unique();
+						}
 						return col;
 					});
 				migrations.push(exec);

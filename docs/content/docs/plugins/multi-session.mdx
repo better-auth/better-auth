@@ -65,7 +65,7 @@ To set the active session, you can call the `setActive` method.
 
 ```ts
 await authClient.multiSession.setActive({
-    sessionId: "session-id"
+    sessionToken: "session-token"
 })
 ```
 
@@ -75,7 +75,7 @@ To revoke a session, you can call the `revoke` method.
 
 ```ts
 await authClient.multiSession.revoke({
-    sessionId: "session-id"
+    sessionToken: "session-token"
 })
 ```
 

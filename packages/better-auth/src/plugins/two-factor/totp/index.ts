@@ -176,14 +176,20 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 						twoFactorEnabled: true,
 					},
 				);
-				const newSession = await ctx.context.internalAdapter.createSession(
-					user.id,
-					ctx.request,
-					false,
-					ctx.context.session.session,
-				);
+				const newSession = await ctx.context.internalAdapter
+					.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					)
+					.catch((e) => {
+						console.log(e);
+						throw e;
+					});
+				console.log({ newSession });
 				await ctx.context.internalAdapter.deleteSession(
-					ctx.context.session.session.id,
+					ctx.context.session.session.token,
 				);
 				await setSessionCookie(ctx, {
 					session: newSession,

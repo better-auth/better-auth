@@ -108,6 +108,27 @@ describe("email-otp", async () => {
 			"email-verification",
 		);
 	});
+
+	it("should send forget password otp", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+	});
+
+	it("should reset password", async () => {
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "changed-password",
+		});
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password",
+		});
+		expect(data?.session).toBeDefined();
+	});
+
 	it("should create verification otp on server", async () => {
 		otp = await auth.api.createVerificationOTP({
 			body: {

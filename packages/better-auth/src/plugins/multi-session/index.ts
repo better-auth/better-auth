@@ -46,7 +46,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 					const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
-					const sessionIds = (
+					const sessionTokens = (
 						await Promise.all(
 							Object.entries(cookies)
 								.filter(([key]) => isMultiSessionCookie(key))
@@ -56,9 +56,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								),
 						)
 					).filter((v) => v !== undefined);
-					if (!sessionIds.length) return ctx.json([]);
+					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
-						await ctx.context.internalAdapter.findSessions(sessionIds);
+						await ctx.context.internalAdapter.findSessions(sessionTokens);
 
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
@@ -72,32 +72,32 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string(),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
-					const sessionId = ctx.body.sessionId;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
+					const sessionToken = ctx.body.sessionToken;
+					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: "Invalid session token",
 						});
 					}
 					const session =
-						await ctx.context.internalAdapter.findSession(sessionId);
+						await ctx.context.internalAdapter.findSession(sessionToken);
 					if (!session || session.session.expiresAt < new Date()) {
 						ctx.setCookie(multiSessionCookieName, "", {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: "Invalid session token",
 						});
 					}
 					await setSessionCookie(ctx, session);
@@ -109,37 +109,37 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string(),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
-					const sessionId = ctx.body.sessionId;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
+					const sessionToken = ctx.body.sessionToken;
+					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: "Invalid session token",
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteSession(sessionId);
+					await ctx.context.internalAdapter.deleteSession(sessionToken);
 					ctx.setCookie(multiSessionCookieName, "", {
 						...ctx.context.authCookies.sessionToken.options,
 						maxAge: 0,
 					});
-					const isActive = ctx.context.session?.session.token === sessionId;
+					const isActive = ctx.context.session?.session.token === sessionToken;
 					if (!isActive) return ctx.json({ success: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");
 					if (cookieHeader) {
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
-						const sessionIds = (
+						const sessionTokens = (
 							await Promise.all(
 								Object.entries(cookies)
 									.filter(([key]) => isMultiSessionCookie(key))
@@ -151,8 +151,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						).filter((v): v is string => v !== undefined);
 						const internalAdapter = ctx.context.internalAdapter;
 
-						if (sessionIds.length > 0) {
-							const sessions = await internalAdapter.findSessions(sessionIds);
+						if (sessionTokens.length > 0) {
+							const sessions =
+								await internalAdapter.findSessions(sessionTokens);
 							const validSessions = sessions.filter(
 								(session) => session && session.session.expiresAt > new Date(),
 							);

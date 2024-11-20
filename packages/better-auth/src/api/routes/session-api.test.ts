@@ -288,7 +288,7 @@ describe("session storage", async () => {
 			},
 			user: {
 				id: expect.any(String),
-				name: "test",
+				name: "test user",
 				email: "test@test.com",
 				emailVerified: false,
 				image: null,

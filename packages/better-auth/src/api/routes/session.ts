@@ -106,7 +106,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						/**
 						 * if session expired clean up the session
 						 */
-						await ctx.context.internalAdapter.deleteSession(session.session.id);
+						await ctx.context.internalAdapter.deleteSession(
+							session.session.token,
+						);
 					}
 					return ctx.json(null);
 				}
@@ -338,11 +340,11 @@ export const revokeOtherSessions = createAuthEndpoint(
 			return session.expiresAt > new Date();
 		});
 		const otherSessions = activeSessions.filter(
-			(session) => session.id !== ctx.context.session.session.id,
+			(session) => session.token !== ctx.context.session.session.token,
 		);
 		await Promise.all(
 			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.id),
+				ctx.context.internalAdapter.deleteSession(session.token),
 			),
 		);
 		return ctx.json({
