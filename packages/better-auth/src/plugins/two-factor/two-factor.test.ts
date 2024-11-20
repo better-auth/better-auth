@@ -108,6 +108,7 @@ describe("two factor", async () => {
 			code,
 			fetchOptions: {
 				headers,
+				onSuccess: sessionSetter(headers),
 			},
 		});
 		expect(res.data?.session).toBeDefined();
@@ -356,10 +357,17 @@ describe("two factor auth api", async () => {
 				password: testUser.password,
 			},
 			headers,
+			asResponse: true,
 		});
-		expect(res.backupCodes.length).toBe(10);
-		expect(res.totpURI).toBeDefined();
+		headers = convertSetCookieToCookie(res.headers);
 
+		const json = (await res.json()) as {
+			status: boolean;
+			backupCodes: string[];
+			totpURI: string;
+		};
+		expect(json.backupCodes.length).toBe(10);
+		expect(json.totpURI).toBeDefined();
 		const session = await auth.api.getSession({
 			headers,
 		});
@@ -428,8 +436,10 @@ describe("two factor auth api", async () => {
 			body: {
 				password: testUser.password,
 			},
+			asResponse: true,
 		});
-		expect(res.status).toBe(true);
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
 		const session = await auth.api.getSession({
 			headers,
 		});

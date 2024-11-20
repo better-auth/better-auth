@@ -6,11 +6,13 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import {
+	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
+import { returnHookResponse } from "../../utils/plugin-helper";
 
 interface MultiSessionConfig {
 	/**
@@ -98,12 +100,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							message: "Invalid session id",
 						});
 					}
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						sessionId,
-						ctx.context.secret,
-						ctx.context.authCookies.sessionToken.options,
-					);
+					await setSessionCookie(ctx, session);
 					return ctx.json(session);
 				},
 			),
@@ -139,7 +136,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					if (!isActive) return ctx.json({ success: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");
-					const authCookies = ctx.context.authCookies;
 					if (cookieHeader) {
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
@@ -165,22 +161,13 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								const nextSession = validSessions[0];
 								await setSessionCookie(ctx, nextSession);
 							} else {
-								ctx.setCookie(authCookies.sessionToken.name, "", {
-									...authCookies.sessionToken.options,
-									maxAge: 0,
-								});
+								deleteSessionCookie(ctx);
 							}
 						} else {
-							ctx.setCookie(authCookies.sessionToken.name, "", {
-								...authCookies.sessionToken.options,
-								maxAge: 0,
-							});
+							deleteSessionCookie(ctx);
 						}
 					} else {
-						ctx.setCookie(authCookies.sessionToken.name, "", {
-							...authCookies.sessionToken.options,
-							maxAge: 0,
-						});
+						deleteSessionCookie(ctx);
 					}
 					return ctx.json({
 						success: true,
@@ -244,22 +231,27 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
-
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
-						await Promise.all(
-							Object.entries(cookies).map(async ([key, value]) => {
+						const ids = Object.keys(cookies)
+							.map((key) => {
 								if (isMultiSessionCookie(key)) {
 									ctx.setCookie(key, "", { maxAge: 0 });
 									const id = key.split("_multi-")[1];
-									await ctx.context.internalAdapter.deleteSession(id);
+									return id;
 								}
-							}),
-						);
-
-						return {
-							responseHeader: ctx.responseHeader,
-						};
+								return null;
+							})
+							.filter((v): v is string => v !== null);
+						await ctx.context.internalAdapter.deleteSessions(ids);
+						const response = ctx.context.returned;
+						if (response instanceof Response) {
+							console.log("response", ctx.responseHeader.get("set-cookie"));
+							response.headers.append(
+								"Set-Cookie",
+								ctx.responseHeader.get("set-cookie")!,
+							);
+							return { response };
+						}
 					}),
 				},
 			],

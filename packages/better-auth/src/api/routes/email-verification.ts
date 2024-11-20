@@ -90,15 +90,21 @@ export const verifyEmail = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
+		function redirectOnError(error: string) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
+			}
+			throw new APIError("UNAUTHORIZED", {
+				message: error,
+			});
+		}
 		const { token } = ctx.query;
 		let jwt: JWT;
 		try {
 			jwt = await validateJWT("HS256", Buffer.from(ctx.context.secret), token);
 		} catch (e) {
 			ctx.context.logger.error("Failed to verify email", e);
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
-			});
+			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
 			email: z.string().email(),
@@ -109,9 +115,7 @@ export const verifyEmail = createAuthEndpoint(
 			parsed.email,
 		);
 		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User not found",
-			});
+			return redirectOnError("user_not_found");
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
@@ -119,17 +123,13 @@ export const verifyEmail = createAuthEndpoint(
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
-				throw new APIError("UNAUTHORIZED", {
-					message: "Session not found",
-				});
+				return redirectOnError("unauthorized");
 			}
 			if (session.user.email !== parsed.email) {
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
-				throw new APIError("UNAUTHORIZED", {
-					message: "Invalid session",
-				});
+				return redirectOnError("unauthorized");
 			}
 
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(

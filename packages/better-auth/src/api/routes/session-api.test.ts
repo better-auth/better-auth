@@ -19,7 +19,7 @@ describe("session", async () => {
 					const cookies = parseSetCookieHeader(header || "");
 					expect(cookies.get("better-auth.session_token")).toMatchObject({
 						value: expect.any(String),
-						"max-age": (60 * 60 * 24 * 7).toString(),
+						"max-age": 60 * 60 * 24 * 7,
 						path: "/",
 						httponly: true,
 						samesite: "lax",
@@ -141,7 +141,7 @@ describe("session", async () => {
 					const cookies = parseSetCookieHeader(header || "");
 					expect(cookies.get("better-auth.session_token")).toMatchObject({
 						value: expect.any(String),
-						"max-age": (60 * 60 * 24 * 7).toString(),
+						"max-age": 60 * 60 * 24 * 7,
 						path: "/",
 						httponly: true,
 						samesite: "lax",
