@@ -63,7 +63,7 @@ export default function InvitationPage() {
 		email: string;
 		expiresAt: Date;
 		organizationId: string;
-		role: "member" | "admin" | "owner";
+		role: string;
 		inviterId: string;
 	} | null>(null);
 

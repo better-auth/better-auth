@@ -12,7 +12,6 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
-import { returnHookResponse } from "../../utils/plugin-helper";
 
 interface MultiSessionConfig {
 	/**

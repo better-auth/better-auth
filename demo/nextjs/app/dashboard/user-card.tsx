@@ -159,7 +159,7 @@ export default function UserCard(props: {
 											onClick={async () => {
 												setIsTerminating(session.id);
 												const res = await client.revokeSession({
-													id: session.id,
+													token: session.token
 												});
 
 												if (res.error) {
