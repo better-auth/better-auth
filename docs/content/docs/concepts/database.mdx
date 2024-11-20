@@ -345,6 +345,16 @@ Table Name: `session`
       description: "The user agent information of the device",
       isOptional: true
     },
+      {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
   />
 
@@ -389,10 +399,14 @@ Table Name: `account`
       isOptional: true,
     },
     {
-      name: "expiresAt",
+      name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the access token expires",
-      isOptional: true,
+      description: "The time when the verification request expires"
+    },
+    {
+      name: "refreshTokenExpiresAt",
+      type: "Date",
+      description: "The time when the verification request expires"
     },
     {
       name: "password",
@@ -400,6 +414,16 @@ Table Name: `account`
       description: "The password of the account. Mainly used for email and password authentication",
       isOptional: true,
     },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
 />
 
@@ -435,6 +459,11 @@ Table Name: `verification`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
     }
   ]}
 />
