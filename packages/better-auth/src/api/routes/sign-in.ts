@@ -269,10 +269,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				ctx.context.logger.error(
-					"Email verification is required but no email verification handler is provided",
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				throw new APIError("UNAUTHORIZED", {
 					message: "Email is not verified.",
 				});
 			}
