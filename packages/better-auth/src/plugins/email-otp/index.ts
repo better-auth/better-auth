@@ -14,7 +14,7 @@ interface EmailOTPOptions {
 		data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification";
+			type: "sign-in" | "email-verification" | "forget-password";
 		},
 		request?: Request,
 	) => Promise<void>;
@@ -41,6 +41,8 @@ interface EmailOTPOptions {
 	disableSignUp?: boolean;
 }
 
+const types = ["email-verification", "sign-in", "forget-password"] as const;
+
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expireIn: 5 * 60,
@@ -56,7 +58,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "POST",
 					body: z.object({
 						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						type: z.enum(types),
 					}),
 				},
 				async (ctx) => {
@@ -107,7 +109,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "POST",
 					body: z.object({
 						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						type: z.enum(types),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -130,7 +132,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "GET",
 					query: z.object({
 						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						type: z.enum(types),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -274,6 +276,94 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					return ctx.json({
 						session,
 						user,
+					});
+				},
+			),
+			forgetEmailOTP: createAuthEndpoint(
+				"/forget-password/email-otp",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "User not found",
+						});
+					}
+					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: otp,
+						identifier: `forget-password-otp-${email}`,
+						expiresAt: getDate(opts.expireIn, "sec"),
+					});
+					await options.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						success: true,
+					});
+				},
+			),
+			resetPasswordEmailOTP: createAuthEndpoint(
+				"/email-otp/reset-password",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string(),
+						otp: z.string(),
+						password: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "User not found",
+						});
+					}
+					const verificationValue =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`forget-password-otp-${email}`,
+						);
+					if (!verificationValue || verificationValue.expiresAt < new Date()) {
+						if (verificationValue) {
+							await ctx.context.internalAdapter.deleteVerificationValue(
+								verificationValue.id,
+							);
+						}
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid OTP",
+						});
+					}
+					const otp = ctx.body.otp;
+					if (verificationValue.value !== otp) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid OTP",
+						});
+					}
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
+					const passwordHash = await ctx.context.password.hash(
+						ctx.body.password,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						user.user.id,
+						passwordHash,
+					);
+					return ctx.json({
+						success: true,
 					});
 				},
 			),

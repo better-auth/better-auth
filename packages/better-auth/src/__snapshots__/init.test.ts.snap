@@ -134,6 +134,11 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "accessTokenExpiresAt": {
+          "fieldName": "accessTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
         "accountId": {
           "fieldName": "accountId",
           "required": true,
@@ -142,11 +147,6 @@ exports[`init > should match config 1`] = `
         "createdAt": {
           "fieldName": "createdAt",
           "required": true,
-          "type": "date",
-        },
-        "expiresAt": {
-          "fieldName": "expiresAt",
-          "required": false,
           "type": "date",
         },
         "idToken": {
@@ -166,6 +166,16 @@ exports[`init > should match config 1`] = `
         },
         "refreshToken": {
           "fieldName": "refreshToken",
+          "required": false,
+          "type": "string",
+        },
+        "refreshTokenExpiresAt": {
+          "fieldName": "refreshTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
+        "scope": {
+          "fieldName": "scope",
           "required": false,
           "type": "string",
         },
