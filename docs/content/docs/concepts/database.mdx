@@ -377,6 +377,12 @@ Table Name: `account`
       description: "The id of the provider",
     },
     {
+      name: "idToken",
+      type: "string",
+      description: "The ID token of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
       name: "accessToken",
       type: "string",
       description: "The access token of the account. Returned by the provider",
