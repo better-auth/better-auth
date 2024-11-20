@@ -41,7 +41,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: "mysql",
+		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
 	},
 	session: {
 		cookieCache: {

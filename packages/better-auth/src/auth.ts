@@ -25,13 +25,11 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				ctx.options.baseURL = baseURL;
 				ctx.baseURL = baseURL;
 			}
-			ctx.trustedOrigins.push(url.origin);
-			if (!ctx.options.baseURL) {
-				return new Response("Base URL not set", { status: 400 });
-			}
-			if (url.pathname === basePath || url.pathname === `${basePath}/`) {
-				return new Response("Welcome to BetterAuth", { status: 200 });
-			}
+			ctx.trustedOrigins = [
+				...(options.trustedOrigins || []),
+				ctx.baseURL,
+				url.origin,
+			];
 			const { handler } = router(ctx, options);
 			return handler(request);
 		},

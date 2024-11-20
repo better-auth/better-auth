@@ -44,7 +44,7 @@ export const forgetPassword = createAuthEndpoint(
 			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
 			 * token=VALID_TOKEN
 			 */
-			redirectTo: z.string(),
+			redirectTo: z.string().optional(),
 		}),
 	},
 	async (ctx) => {

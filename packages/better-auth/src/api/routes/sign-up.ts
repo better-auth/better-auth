@@ -12,7 +12,6 @@ import type {
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
-import { getDate } from "../../utils/date";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
