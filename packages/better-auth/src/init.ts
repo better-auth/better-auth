@@ -93,7 +93,10 @@ export const init = async (options: BetterAuthOptions) => {
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
 		sessionConfig: {
-			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
+			updateAge:
+				options.session?.updateAge !== undefined
+					? options.session.updateAge
+					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 		},
 		secret,
