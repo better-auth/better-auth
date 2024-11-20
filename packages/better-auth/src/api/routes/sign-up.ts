@@ -115,7 +115,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				providerId: "credential",
 				accountId: createdUser.id,
 				password: hash,
-				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
 			if (ctx.context.options.emailVerification?.sendOnSignUp) {
 				const token = await createEmailVerificationToken(
