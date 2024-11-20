@@ -916,100 +916,14 @@ export const contents: Content[] = [
     title: "Guides",
     href: "/docs/guides",
     Icon: () => (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        version="1.1"
-        x="0px"
-        y="0px"
-		    width="1.4em"
-        height="1.4em"
-		    fill="currentColor"
-        viewBox="0 0 100 125"
-        enableBackground="new 0 0 100 100"
-      >
-        <path d="M45.1,77.7L97.9,47l-5.7-3.3L45.1,71.1l-7.9-4.6v0l-29-16.7v-7.7L45,63.4l52.8-30.7L55,7.9L2.1,38.6h0v0l0,0l0,0v14.3h0l0,0  h0v14.3h0l32,18.4v0l11,6.3l52.8-30.7l-5.7-3.3L45.1,85.4l-7.9-4.6v0l-29-16.7v-7.7l26,15v0L45.1,77.7z M39.4,36.4  c1.6-0.8,3.1-1.2,4.4-1.4c1.8-0.2,4.3-0.1,7.6,0.2c1.6,0.2,3.2,0.2,4.7,0c1.5-0.2,2.8-0.7,4-1.3c1.2-0.7,1.9-1.5,2-2.3  c0.1-0.8-0.5-1.6-1.7-2.3c-1-0.6-2.1-0.9-3.4-0.9c-0.8,0-1.6,0.1-2.4,0.3c-0.9,0.3-2.1,0.2-2.9-0.3c0,0,0,0,0,0L47,25.7  c-0.6-0.4-0.6-0.9,0.1-1.2c2.7-1.4,5.6-1.9,8.8-1.7c3.6,0.3,7,1.4,10.3,3.3c3.5,2,5.4,4.2,5.7,6.4c0.3,2.2-1.1,4.2-4.1,5.9  c-1.8,1.1-4.1,1.7-6.8,2c-2.7,0.3-5.3,0.2-7.9-0.3c-1.6-0.2-2.9-0.2-3.9,0.1c-0.7,0.2-1.5,0.4-2.3,0.8c-0.6,0.3-1.6,0.3-2.2-0.1  l-5.2-3C38.7,37.4,38.7,36.8,39.4,36.4z M30.6,41.6l2.7-1.6c0.9-0.5,2.4-0.5,3.3,0l4.2,2.4c0.9,0.5,0.9,1.4,0,1.9l-2.7,1.6  c-0.9,0.5-2.4,0.5-3.3,0l-4.2-2.4C29.7,42.9,29.7,42.1,30.6,41.6z" />
-      </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="1.4em" height="1.4em" viewBox="0 0 20 20"><path fill="currentColor" d="M6.819 17.259q.111.408.335.74h-.156c-1.104 0-2-.895-2.001-2l-.005-5.535zM4 16.499q0 .228.04.446l-.056-.015a2 2 0 0 1-1.416-2.45l1.426-5.34zm3.655.018a2 2 0 0 0 2.451 1.414l5.416-1.451a2 2 0 0 0 1.413-2.45L14.099 3.482a2 2 0 0 0-2.451-1.413l-5.416 1.45a2 2 0 0 0-1.413 2.449zM9 6.25a.75.75 0 1 1-1.5 0a.75.75 0 0 1 1.5 0"></path></svg>
     ),
     list: [
       {
-        title: "Auth js (next-auth) Migration Guide",
+        title: "Next Auth Migration Guide",
         href: "/docs/guides/next-auth-migration-guide",
         icon: () => (
-          <svg
-            width="1.7em"
-            height="1.7em"
-            viewBox="0 0 24 24"
-            fill="none"
-            opacity=".5"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M3.71875 3.92972C5.62789 3.36733 8.45568 2.52411 9.64828 2.16812C10.0173 2.05797 10.4075 2.05711 10.7771 2.16533C11.926 2.50173 14.5984 3.28783 16.6648 3.92349C17.0828 4.05209 17.3679 4.44593 17.3575 4.88319C17.1188 14.9867 12.0196 17.4105 10.5842 17.8936C10.3388 17.9762 10.0837 17.9764 9.83802 17.8945C8.39567 17.4137 3.25421 14.9951 3.00907 4.89714C2.9983 4.45317 3.29276 4.05521 3.71875 3.92972Z"
-              fill="#D9D9D9"
-            />
-            <mask
-              id="mask0_156_252"
-              maskUnits="userSpaceOnUse"
-              x="3"
-              y="2"
-              width="15"
-              height="16"
-            >
-              <path
-                d="M3.71875 3.92972C5.62789 3.36733 8.45568 2.52411 9.64828 2.16812C10.0173 2.05797 10.4075 2.05711 10.7771 2.16533C11.926 2.50173 14.5984 3.28783 16.6648 3.92349C17.0828 4.05209 17.3679 4.44593 17.3575 4.88319C17.1188 14.9867 12.0196 17.4105 10.5842 17.8936C10.3388 17.9762 10.0837 17.9764 9.83802 17.8945C8.39567 17.4137 3.25421 14.9951 3.00907 4.89714C2.9983 4.45317 3.29276 4.05521 3.71875 3.92972Z"
-                fill="#D9D9D9"
-              />
-            </mask>
-            <g mask="url(#mask0_156_252)">
-              <path
-                d="M10.2112 9.77465L10.0986 1.71831L17.8169 3.80282L10.2112 9.77465Z"
-                fill="url(#paint0_linear_156_252)"
-              />
-              <path
-                d="M10.2113 9.77465V2L2.83098 3.97183L1.81689 8.76056L5.02816 13.7746L10.2113 9.77465Z"
-                fill="url(#paint1_linear_156_252)"
-              />
-              <path
-                d="M17.5915 3.97183L4.91547 13.7746V18.2254H17.4225L17.5915 3.97183Z"
-                fill="url(#paint2_linear_156_252)"
-              />
-            </g>
-            <defs>
-              <linearGradient
-                id="paint0_linear_156_252"
-                x1="10.2112"
-                y1="2"
-                x2="15.6197"
-                y2="5.5493"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#fff" />
-                <stop offset="1" stopColor="#fafafa" />
-              </linearGradient>
-              <linearGradient
-                id="paint1_linear_156_252"
-                x1="3.05633"
-                y1="4.14085"
-                x2="10.2113"
-                y2="9.66197"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#fff" />
-                <stop offset="1" stopColor="#fafafa" />
-              </linearGradient>
-              <linearGradient
-                id="paint2_linear_156_252"
-                x1="17.3098"
-                y1="4.02817"
-                x2="7.95772"
-                y2="16.9859"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#4e4e4e" />
-                <stop offset="1" stopColor="#2e2e2e" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="4"><path strokeLinecap="round" d="M24 4v37"></path><path fill="currentColor" d="M24 8h15.545L42 12l-2.455 4H24zm0 14H8.455L6 26l2.455 4H24z"></path><path strokeLinecap="round" d="M16 42h16"></path></g></svg>
         ),
       },
     ],
@@ -1114,3 +1028,4 @@ export const examples: Content[] = [
     ],
   },	
 ];
+  
