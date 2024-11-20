@@ -67,14 +67,14 @@ In this guide, we’ll explore how to seamlessly transition a project from Next 
         });
         ```
 
-        **NOTE:** If you're using orm adapters, you can also map the fields in the adapter like
+        **NOTE:** If you're using orm adapters, you can also map the fields in your schema file
 
         **Example with Prisma**
         ```prisma title="schema.prisma"
         model Session {
             id          String   @id @default(cuid())
             expires     DateTime @map("expiresAt") // Map expires to your existing expires field // [!code highlight]
-            token       String   @@map("sessionToken") // Map token to your existing sessionToken field // [!code highlight]
+            token       String   @map("sessionToken") // Map token to your existing sessionToken field // [!code highlight]
             userId      String
             user        User     @relation(fields: [userId], references: [id])
         }
