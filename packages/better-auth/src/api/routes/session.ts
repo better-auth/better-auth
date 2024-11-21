@@ -37,6 +37,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
+
 				if (!sessionCookieToken) {
 					return ctx.json(null);
 				}
