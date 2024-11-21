@@ -14,6 +14,7 @@ import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
+import { openapi } from '@/app/source';
 
 export default async function Page({
 	params,
@@ -73,6 +74,7 @@ export default async function Page({
 						Features,
 						ForkButton,
 						DatabaseTable,
+						APIPage: openapi.APIPage,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
