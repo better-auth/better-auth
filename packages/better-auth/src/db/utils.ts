@@ -12,14 +12,8 @@ const memoryDB = {};
 
 export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
-		// If no database is provided, use memory adapter in development
-		if (isDevelopment) {
-			logger.warn(
-				"No database configuration provided. Using memory adapter in development",
-			);
-			return memoryAdapter(memoryDB)(options);
-		}
-		throw new BetterAuthError("Database configuration is required");
+		logger.warn("No database configuration provided. Using memory adapter");
+		return memoryAdapter(memoryDB)(options);
 	}
 
 	if (typeof options.database === "function") {

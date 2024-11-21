@@ -7,7 +7,7 @@ import clsx from "clsx";
 
 import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Github, Icon } from "lucide-react";
+import { Check, Copy, Github, Icon, PlusIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import {
@@ -19,6 +19,7 @@ import {
 import { Icons } from "../icons";
 import { Cover } from "../ui/cover";
 import { PulicBetaBadge } from "../beta/badge";
+import { Builder } from "../buidler";
 
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
@@ -63,7 +64,7 @@ export default function Hero() {
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
-								<PulicBetaBadge text="Beta" />
+								<PulicBetaBadge text="v1 is out now!" />
 								<div className="relative mt-2 flex items-center gap-2">
 									<Cover>
 										<p className="2xl relative inline tracking-tight opacity-90 md:text-3xl lg:text-5xl dark:text-white">
@@ -78,7 +79,7 @@ export default function Hero() {
 							</p>
 							{
 								<>
-									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start">
+									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
 										<Link
 											href="/docs"
 											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
@@ -86,19 +87,7 @@ export default function Hero() {
 											Get Started
 										</Link>
 
-										<Link
-											href="https://github.com/better-auth/better-auth"
-											target="__blank"
-										>
-											<Button
-												variant="outline"
-												size="lg"
-												className="flex items-center gap-2 rounded-none"
-											>
-												<Github size={16} />
-												View on GitHub
-											</Button>
-										</Link>
+										<Builder />
 									</div>
 								</>
 							}
