@@ -1,4 +1,9 @@
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
+import {
+	APIError,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	getSessionFromCtx,
+} from "../../api";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
@@ -117,12 +122,9 @@ export const anonymous = (options?: AnonymousOptions) => {
 							context.path?.startsWith("/sign-up")
 						);
 					},
-					async handler(ctx) {
-						const response = ctx.context.returned;
-						if (!(response instanceof Response)) {
-							return;
-						}
-						const setCookie = response.headers.get("set-cookie");
+					handler: createAuthMiddleware(async (ctx) => {
+						const headers = ctx.responseHeader;
+						const setCookie = headers.get("set-cookie");
 						/**
 						 * We can consider the user is about to sign in or sign up
 						 * if the response contains a session token.
@@ -166,7 +168,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						if (!options?.disableDeleteAnonymousUser) {
 							await ctx.context.internalAdapter.deleteUser(session.user.id);
 						}
-					},
+					}),
 				},
 			],
 		},

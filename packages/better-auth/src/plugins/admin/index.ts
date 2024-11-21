@@ -160,9 +160,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							return !session.impersonatedBy;
 						});
 
-						return {
-							response: newJson,
-						};
+						return ctx.json(newJson);
 					}),
 				},
 			],

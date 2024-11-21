@@ -180,15 +180,8 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						if (
-							!ctx.context.returned ||
-							!(ctx.context.returned instanceof Response)
-						)
-							return;
-
-						const cookieString = ctx.context.returned.headers.get("set-cookie");
+						const cookieString = ctx.responseHeader.get("set-cookie");
 						if (!cookieString) return;
-
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 						const sessionToken = setCookies.get(
@@ -198,6 +191,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 						const rawSession = sessionToken.split(".")[0];
+						if (!rawSession) {
+							return;
+						}
 						const cookieName = `${sessionCookieConfig.name}_multi-${rawSession}`;
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
@@ -217,13 +213,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							ctx.context.secret,
 							sessionCookieConfig.options,
 						);
-						const response = ctx.context.returned;
-						response.headers.append(
-							"Set-Cookie",
-							ctx.responseHeader.get("set-cookie")!,
-						);
-
-						return { response };
 					}),
 				},
 				{
@@ -243,15 +232,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							})
 							.filter((v): v is string => v !== null);
 						await ctx.context.internalAdapter.deleteSessions(ids);
-						const response = ctx.context.returned;
-						if (response instanceof Response) {
-							console.log("response", ctx.responseHeader.get("set-cookie"));
-							response.headers.append(
-								"Set-Cookie",
-								ctx.responseHeader.get("set-cookie")!,
-							);
-							return { response };
-						}
 					}),
 				},
 			],

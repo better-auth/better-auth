@@ -1,4 +1,4 @@
-import type { Endpoint, EndpointOptions, EndpointResponse } from "better-call";
+import type { APIError, Endpoint } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
@@ -54,26 +54,38 @@ export type BetterAuthPlugin = {
 	hooks?: {
 		before?: {
 			matcher: (context: HookEndpointContext) => boolean;
-			handler: (context: HookEndpointContext) => Promise<void | {
-				context: Partial<HookEndpointContext>;
-			}>;
+			handler: (context: HookEndpointContext) => Promise<
+				| void
+				| {
+						context?: Partial<HookEndpointContext>;
+				  }
+				| Response
+				| {
+						response: Record<string, any>;
+						body: any;
+						_flag: "json";
+				  }
+			>;
 		}[];
 		after?: {
 			matcher: (
 				context: HookEndpointContext<{
-					returned: unknown;
+					returned: APIError | Response | Record<string, any>;
 					endpoint: Endpoint;
 				}>,
 			) => boolean;
-			handler: (
-				context: HookEndpointContext<{
-					returned: unknown;
-					endpoint: Endpoint;
-				}>,
-			) => Promise<void | {
-				response?: unknown;
-				responseHeader?: Headers;
-			}>;
+			handler: (context: HookEndpointContext) => Promise<
+				| void
+				| {
+						responseHeader?: Partial<HookEndpointContext>;
+				  }
+				| Response
+				| {
+						response: Record<string, any>;
+						body: any;
+						_flag: "json";
+				  }
+			>;
 		}[];
 	};
 	/**

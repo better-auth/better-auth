@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api";
+import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
@@ -69,17 +69,15 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = ctx.context.returned;
-						if (!response || !(response instanceof Response)) {
-							return;
-						}
-						const location = response.headers.get("location");
+						const headers =
+							response instanceof APIError ? response.headers : null;
+						const location = headers?.get("location");
 						if (location?.includes("/oauth-proxy-callback?callbackURL")) {
 							if (!location.startsWith("http")) {
 								return;
 							}
 							const locationURL = new URL(location);
 							const origin = locationURL.origin;
-
 							/**
 							 * We don't want to redirect to the proxy URL if the origin is the same
 							 * as the current URL
@@ -89,13 +87,12 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 								if (!newLocation) {
 									return;
 								}
-								response.headers.set("location", newLocation);
-								return {
-									response,
-								};
+								ctx.setHeader("location", newLocation);
+								return;
 							}
 
-							const setCookies = response.headers.get("set-cookie");
+							const setCookies = headers?.get("set-cookie");
+
 							if (!setCookies) {
 								return;
 							}
@@ -106,10 +103,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							const locationWithCookies = `${location}&cookies=${encodeURIComponent(
 								encryptedCookies,
 							)}`;
-							response.headers.set("location", locationWithCookies);
-							return {
-								response,
-							};
+							ctx.setHeader("location", locationWithCookies);
 						}
 					}),
 				},

@@ -187,7 +187,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 						console.log(e);
 						throw e;
 					});
-				console.log({ newSession });
+
 				await ctx.context.internalAdapter.deleteSession(
 					ctx.context.session.session.token,
 				);
