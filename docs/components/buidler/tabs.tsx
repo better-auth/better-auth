@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type Tab = {
@@ -40,7 +39,7 @@ export const AuthTabs = ({
 		<>
 			<div
 				className={cn(
-					"flex flex-row items-center justify-start mt-0 [perspective:1000px] relative overflow-auto sm:overflow-visible no-visible-scrollbar border-x w-full border-t max-w-max bg-opacity-0",
+					"flex flex-row items-center justify-start mt-0 relative no-visible-scrollbar border-x w-full border-t max-w-max bg-opacity-0",
 					containerClassName,
 				)}
 			>
@@ -56,21 +55,9 @@ export const AuthTabs = ({
 							"relative px-4 py-2 rounded-full opacity-80 hover:opacity-100",
 							tabClassName,
 						)}
-						style={{
-							transformStyle: "preserve-3d",
-						}}
 					>
 						{active.value === tab.value && (
-							<motion.div
-								transition={{
-									duration: 0.2,
-									delay: 0.1,
-
-									type: "keyframes",
-								}}
-								animate={{
-									x: tabs.indexOf(tab) === 0 ? [0, 0, 0] : [0, 0, 0],
-								}}
+							<div
 								className={cn(
 									"absolute inset-0 bg-gray-200 dark:bg-zinc-900/90 opacity-100",
 									activeTabClassName,
@@ -93,24 +80,17 @@ export const AuthTabs = ({
 			</div>
 			<div className="relative w-full h-full">
 				{tabs.map((tab, idx) => (
-					<motion.div
+					<div
 						key={tab.value}
 						style={{
 							scale: 1 - idx * 0.1,
 							zIndex: -idx,
 							opacity: idx < 3 ? 1 - idx * 0.1 : 0,
 						}}
-						animate={{
-							transition: {
-								duration: 0.2,
-								delay: 0.1,
-								type: "keyframes",
-							},
-						}}
 						className={cn("w-50 h-full", isActive(tab) ? "" : "hidden")}
 					>
 						{tab.content}
-					</motion.div>
+					</div>
 				))}
 			</div>
 		</>

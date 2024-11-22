@@ -17,6 +17,7 @@ import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Separator } from "../ui/separator";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
@@ -82,6 +83,16 @@ export default function SignIn() {
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
 					</Button>
+					<Button variant="outline" className="gap-2" onClick={async () => {}}>
+						<Key size={16} />
+						Sign-in with Passkey
+					</Button>
+
+					<div className="flex items-center gap-4 justify-between w-full">
+						<Separator className="w-4/12" />
+						<p className="text-xs">Continue with</p>
+						<Separator className="w-4/12" />
+					</div>
 					<div className="grid grid-cols-4 gap-2">
 						<Button
 							variant="outline"
@@ -205,19 +216,8 @@ export default function SignIn() {
 							</svg>
 						</Button>
 					</div>
-					<Button variant="outline" className="gap-2" onClick={async () => {}}>
-						<Key size={16} />
-						Sign-in with Passkey
-					</Button>
 				</div>
 			</CardContent>
-			<CardFooter>
-				<div className="flex justify-center w-full border-t py-4">
-					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
-					</p>
-				</div>
-			</CardFooter>
 		</Card>
 	);
 }
