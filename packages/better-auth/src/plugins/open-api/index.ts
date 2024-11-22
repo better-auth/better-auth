@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint } from "better-auth/plugins";
-import { getEndpoints } from "better-auth/api";
 import { generator } from "./generator";
+import { logo } from "./logo";
 
 const getHTML = (apiReference: Record<string, any>) => `<!doctype html>
 <html>
@@ -18,7 +18,20 @@ const getHTML = (apiReference: Record<string, any>) => `<!doctype html>
       type="application/json">
     ${JSON.stringify(apiReference)}
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+	 <script>
+      var configuration = {
+	  	favicon: "data:image/svg+xml;utf8,${encodeURIComponent(logo)}",
+	   	theme: "saturn",
+        metaData: {
+			title: "Better Auth API",
+			description: "API Reference for your Better Auth Instance",
+		}
+      }
+
+      document.getElementById('api-reference').dataset.configuration =
+        JSON.stringify(configuration)
+    </script>
+	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
 </html>`;
 
@@ -27,7 +40,7 @@ export const openAPI = () => {
 		id: "open-api",
 		endpoints: {
 			openAPI: createAuthEndpoint(
-				"/api-reference",
+				"/reference",
 				{
 					method: "GET",
 				},

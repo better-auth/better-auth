@@ -44,9 +44,6 @@ importers:
 
   demo/nextjs:
     dependencies:
-      '@better-auth/open-api':
-        specifier: workspace:1.0.0-canary.12
-        version: link:../../packages/open-api
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
@@ -1350,8 +1347,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(encoding@0.1.13)
       better-call:
-        specifier: 0.3.1
-        version: 0.3.1
+        specifier: 0.3.2
+        version: 0.3.2
       consola:
         specifier: ^3.2.3
         version: 3.2.3
@@ -1559,16 +1556,6 @@ importers:
       vitest:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@22.8.6)(happy-dom@15.8.0)(lightningcss@1.27.0)(terser@5.36.0)
-
-  packages/open-api:
-    dependencies:
-      better-call:
-        specifier: ^0.3.0
-        version: 0.3.0
-    devDependencies:
-      better-auth:
-        specifier: workspace:*
-        version: link:../better-auth
 
 packages:
 
@@ -8109,11 +8096,8 @@ packages:
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
 
-  better-call@0.3.0:
-    resolution: {integrity: sha512-nBWeQl+O1NCPMkb958VQzVn0AfSWwILGoLCpLbTzz3p0QnsqFYSTe6z8Uzo4p/6Iah8zrRBoLBQvFLUFl80jxA==}
-
-  better-call@0.3.1:
-    resolution: {integrity: sha512-uJoTAVLHCIrRebBxu2rQ/CPpf7r1c7FrfFIL2OS5dVx1z/64nGMZ5sH2GUtYu22XRjbOGEn7KI9eNkLpIo41CQ==}
+  better-call@0.3.2:
+    resolution: {integrity: sha512-ZYUADh4S4JF3QOIgC0QAm4N9Ifb7v3rOEcwkIxr3UXxd+GCrGmEzv7VDe35o1ldX0Zcb9CX3QfT0jdJoMIKA9w==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -25761,15 +25745,7 @@ snapshots:
       set-cookie-parser: 2.7.1
       typescript: 5.6.3
 
-  better-call@0.3.0:
-    dependencies:
-      '@better-fetch/fetch': 1.1.12
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.1
-      uncrypto: 0.1.3
-      zod: 3.23.8
-
-  better-call@0.3.1:
+  better-call@0.3.2:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1

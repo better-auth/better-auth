@@ -10,6 +10,34 @@ export const listUserAccounts = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "List all accounts linked to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+											},
+											provider: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const session = c.context.session;
@@ -45,13 +73,45 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * Callback URL to redirect to after the user has signed in.
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after the user has signed in",
+				})
+				.optional(),
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList),
+			provider: z.enum(socialProviderList, {
+				description: "The OAuth2 provider to use",
+			}),
 		}),
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Link a social account to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const session = c.context.session;

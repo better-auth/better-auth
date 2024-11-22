@@ -8,7 +8,7 @@ import {
 	twoFactor,
 	oneTap,
 	oAuthProxy,
-	createAuthEndpoint,
+	openAPI,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -18,7 +18,6 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { customSession } from "./auth/plugins/custom-session";
-import { openAPI } from "@better-auth/open-api";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";

@@ -14,7 +14,6 @@ import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
-import { openapi } from '@/app/source';
 
 export default async function Page({
 	params,
@@ -74,11 +73,9 @@ export default async function Page({
 						Features,
 						ForkButton,
 						DatabaseTable,
-						APIPage: openapi.APIPage,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
-						APIPage: openapi.APIPage,
 					}}
 				/>
 			</DocsBody>
@@ -87,48 +84,48 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
-	// const res = source.getPages().map((page) => ({
-	// 	slug: page.slugs,
-	// }));
+	const res = source.getPages().map((page) => ({
+		slug: page.slugs,
+	}));
 	return source.generateParams();
 }
 
-// export async function generateMetadata({
-// 	params,
-// }: { params: Promise<{ slug?: string[] }> }) {
-// 	const { slug } = await params;
-// 	const page = source.getPage(slug);
-// 	if (page == null) notFound();
-// 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-// 	const url = new URL(`${baseUrl}/api/og`);
-// 	const { title, description } = page.data;
-// 	const pageSlug = page.file.path;
-// 	url.searchParams.set("type", "Documentation");
-// 	url.searchParams.set("mode", "dark");
-// 	url.searchParams.set("heading", `${title}`);
+export async function generateMetadata({
+	params,
+}: { params: Promise<{ slug?: string[] }> }) {
+	const { slug } = await params;
+	const page = source.getPage(slug);
+	if (page == null) notFound();
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	const url = new URL(`${baseUrl}/api/og`);
+	const { title, description } = page.data;
+	const pageSlug = page.file.path;
+	url.searchParams.set("type", "Documentation");
+	url.searchParams.set("mode", "dark");
+	url.searchParams.set("heading", `${title}`);
 
-// 	return {
-// 		title,
-// 		description,
-// 		openGraph: {
-// 			title,
-// 			description,
-// 			type: "website",
-// 			url: absoluteUrl(`docs/${pageSlug}`),
-// 			images: [
-// 				{
-// 					url: url.toString(),
-// 					width: 1200,
-// 					height: 630,
-// 					alt: title,
-// 				},
-// 			],
-// 		},
-// 		twitter: {
-// 			card: "summary_large_image",
-// 			title,
-// 			description,
-// 			images: [url.toString()],
-// 		},
-// 	};
-// }
+	return {
+		title,
+		description,
+		openGraph: {
+			title,
+			description,
+			type: "website",
+			url: absoluteUrl(`docs/${pageSlug}`),
+			images: [
+				{
+					url: url.toString(),
+					width: 1200,
+					height: 630,
+					alt: title,
+				},
+			],
+		},
+		twitter: {
+			card: "summary_large_image",
+			title,
+			description,
+			images: [url.toString()],
+		},
+	};
+}

@@ -11,13 +11,49 @@ export const createOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			name: z.string(),
-			slug: z.string(),
-			userId: z.string().optional(),
-			logo: z.string().optional(),
-			metadata: z.record(z.string(), z.any()).optional(),
+			name: z.string({
+				description: "The name of the organization",
+			}),
+			slug: z.string({
+				description: "The slug of the organization",
+			}),
+			userId: z
+				.string({
+					description:
+						"The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.",
+				})
+				.optional(),
+			logo: z
+				.string({
+					description: "The logo of the organization",
+				})
+				.optional(),
+			metadata: z
+				.record(z.string(), z.any(), {
+					description: "The metadata of the organization",
+				})
+				.optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Create an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									description: "The organization that was created",
+									$ref: "#/components/schemas/Organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const user = ctx.context.session.user;
@@ -89,15 +125,46 @@ export const updateOrganization = createAuthEndpoint(
 		body: z.object({
 			data: z
 				.object({
-					name: z.string().optional(),
-					slug: z.string().optional(),
-					logo: z.string().optional(),
+					name: z
+						.string({
+							description: "The name of the organization",
+						})
+						.optional(),
+					slug: z
+						.string({
+							description: "The slug of the organization",
+						})
+						.optional(),
+					logo: z
+						.string({
+							description: "The logo of the organization",
+						})
+						.optional(),
 				})
 				.partial(),
 			organizationId: z.string().optional(),
 		}),
 		requireHeaders: true,
 		use: [orgMiddleware],
+		metadata: {
+			openapi: {
+				description: "Update an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									description: "The updated organization",
+									$ref: "#/components/schemas/Organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await ctx.context.getSession(ctx);
@@ -162,10 +229,30 @@ export const deleteOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string(),
+			organizationId: z.string({
+				description: "The organization id to delete",
+			}),
 		}),
 		requireHeaders: true,
 		use: [orgMiddleware],
+		metadata: {
+			openapi: {
+				description: "Delete an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "string",
+									description: "The organization id that was deleted",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await ctx.context.getSession(ctx);
@@ -230,11 +317,34 @@ export const getFullOrganization = createAuthEndpoint(
 		method: "GET",
 		query: z.optional(
 			z.object({
-				organizationId: z.string().optional(),
+				organizationId: z
+					.string({
+						description: "The organization id to get",
+					})
+					.optional(),
 			}),
 		),
 		requireHeaders: true,
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Get the full organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									description: "The organization",
+									$ref: "#/components/schemas/Organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -261,9 +371,34 @@ export const setActiveOrganization = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			organizationId: z.string().nullable().optional(),
+			organizationId: z
+				.string({
+					description:
+						"The organization id to set as active. Can be null to unset the active organization",
+				})
+				.nullable()
+				.optional(),
 		}),
 		use: [orgSessionMiddleware, orgMiddleware],
+		metadata: {
+			openapi: {
+				description: "Set the active organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									description: "The organization",
+									$ref: "#/components/schemas/Organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -319,6 +454,26 @@ export const listOrganizations = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "List all organizations",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										$ref: "#/components/schemas/Organization",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);

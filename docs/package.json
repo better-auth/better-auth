@@ -7,7 +7,6 @@
     "dev": "next dev",
     "start": "next start",
     "build:docs": "node ./scripts/generate-docs.mjs",
-    "build:docs": "node ./scripts/generate-docs.mjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
