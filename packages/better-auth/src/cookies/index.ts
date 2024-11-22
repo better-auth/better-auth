@@ -95,7 +95,7 @@ export type BetterAuthCookies = ReturnType<typeof getCookies>;
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
-		session: Session;
+		session: Session & Record<string, any>;
 		user: User;
 	},
 	dontRememberMe?: boolean,
@@ -107,7 +107,7 @@ export async function setSessionCookie(
 		: ctx.context.sessionConfig.expiresIn;
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
-		session.session.token,
+		session.session.id,
 		ctx.context.secret,
 		{
 			...options,
@@ -154,7 +154,7 @@ export async function setSessionCookie(
 	 */
 	if (ctx.context.options.secondaryStorage) {
 		await ctx.context.secondaryStorage?.set(
-			session.session.token,
+			session.session.id,
 			JSON.stringify({
 				user: session.user,
 				session: session.session,

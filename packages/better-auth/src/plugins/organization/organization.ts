@@ -37,7 +37,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
-	listOrganization,
+	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
@@ -209,7 +209,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		deleteOrganization,
 		setActiveOrganization,
 		getFullOrganization,
-		listOrganization,
+		listOrganizations,
 		createInvitation: createInvitation(options as O),
 		cancelInvitation,
 		acceptInvitation,

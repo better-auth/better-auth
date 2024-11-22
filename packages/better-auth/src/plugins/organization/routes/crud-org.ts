@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
+import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
@@ -64,6 +65,7 @@ export const createOrganization = createAuthEndpoint(
 		}
 		const organization = await adapter.createOrganization({
 			organization: {
+				id: generateId(),
 				slug: ctx.body.slug,
 				name: ctx.body.name,
 				logo: ctx.body.logo,
@@ -73,7 +75,7 @@ export const createOrganization = createAuthEndpoint(
 			user,
 		});
 		await adapter.setActiveOrganization(
-			ctx.context.session.session.token,
+			ctx.context.session.session.id,
 			organization.id,
 		);
 		return ctx.json(organization);
@@ -215,7 +217,7 @@ export const deleteOrganization = createAuthEndpoint(
 			/**
 			 * If the organization is deleted, we set the active organization to null
 			 */
-			await adapter.setActiveOrganization(session.session.token, null);
+			await adapter.setActiveOrganization(session.session.id, null);
 		}
 		await adapter.deleteOrganization(organizationId);
 		return ctx.json(organizationId);
@@ -272,7 +274,14 @@ export const setActiveOrganization = createAuthEndpoint(
 			if (!sessionOrgId) {
 				return ctx.json(null);
 			}
-			await adapter.setActiveOrganization(session.session.token, null);
+			await adapter.setActiveOrganization(session.session.id, null);
+			await setSessionCookie(ctx, {
+				session: {
+					...session.session,
+					activeOrganizationId: null,
+				},
+				user: session.user,
+			});
 			return ctx.json(null);
 		}
 		if (!organizationId) {
@@ -287,13 +296,13 @@ export const setActiveOrganization = createAuthEndpoint(
 			organizationId: organizationId,
 		});
 		if (!isMember) {
-			await adapter.setActiveOrganization(session.session.token, null);
+			await adapter.setActiveOrganization(session.session.id, null);
 			throw new APIError("FORBIDDEN", {
 				message: "You are not a member of this organization",
 			});
 		}
 		const updatedSession = await adapter.setActiveOrganization(
-			session.session.token,
+			session.session.id,
 			organizationId,
 		);
 		await setSessionCookie(ctx, {
@@ -305,7 +314,7 @@ export const setActiveOrganization = createAuthEndpoint(
 	},
 );
 
-export const listOrganization = createAuthEndpoint(
+export const listOrganizations = createAuthEndpoint(
 	"/organization/list",
 	{
 		method: "GET",
