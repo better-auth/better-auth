@@ -405,7 +405,7 @@
     "@noble/hashes": "^1.5.0",
     "@simplewebauthn/browser": "^10.0.0",
     "@simplewebauthn/server": "^10.0.1",
-    "better-call": "0.2.15-beta.7",
+    "better-call": "0.3.1",
     "consola": "^3.2.3",
     "defu": "^6.1.4",
     "jose": "^5.9.4",

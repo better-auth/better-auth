@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/open-api": "workspace:1.0.0-canary.12",
     "@better-fetch/fetch": "1.1.12",
     "@hookform/resolvers": "^3.9.0",
     "@libsql/client": "^0.12.0",

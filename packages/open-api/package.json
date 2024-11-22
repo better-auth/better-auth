@@ -1,0 +1,28 @@
+{
+  "name": "@better-auth/open-api",
+  "version": "1.0.0-canary.12",
+  "description": "",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "scripts": {
+    "test": "vitest",
+    "build": "tsup --dts --minify --clean",
+    "dev": "tsup --watch --sourcemap --dts"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "better-auth": "workspace:*"
+  },
+  "dependencies": {
+    "better-call": "^0.3.0"
+  }
+}

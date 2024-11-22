@@ -30,6 +30,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}),
 			),
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					tags: ["Session"],
+				},
+			},
 		},
 		async (ctx) => {
 			try {
