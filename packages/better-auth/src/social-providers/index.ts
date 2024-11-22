@@ -35,10 +35,12 @@ export const socialProviderList = Object.keys(socialProviders) as [
 export type SocialProviderList = typeof socialProviderList;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Prettify<Parameters<typeof socialProviders[K]>[0] & {
-		enabled?: boolean;
-	}>;
-}
+	[K in SocialProviderList[number]]?: Prettify<
+		Parameters<(typeof socialProviders)[K]>[0] & {
+			enabled?: boolean;
+		}
+	>;
+};
 
 export * from "./github";
 export * from "./google";
