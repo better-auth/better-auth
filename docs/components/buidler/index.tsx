@@ -478,25 +478,7 @@ export function Builder() {
 										<Separator />
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2">
-												<Mail size={16} />
-												<Label>Email</Label>
-											</div>
-											<Switch />
-										</div>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="1em"
-													height="1em"
-													viewBox="0 0 24 24"
-												>
-													<path
-														fill="currentColor"
-														d="M3 17h18q.425 0 .713.288T22 18t-.288.713T21 19H3q-.425 0-.712-.288T2 18t.288-.712T3 17m1-5.55l-.475.85q-.15.275-.45.35t-.575-.075t-.35-.45t.075-.575l.475-.85h-.95q-.325 0-.537-.212T1 9.95t.213-.537t.537-.213h.95l-.475-.8q-.15-.275-.075-.575t.35-.45t.575-.075t.45.35l.475.8l.475-.8q.15-.275.45-.35t.575.075t.35.45t-.075.575l-.475.8h.95q.325 0 .538.213T7 9.95t-.213.538t-.537.212H5.3l.475.85q.15.275.075.575t-.35.45t-.575.075t-.45-.35zm8 0l-.475.85q-.15.275-.45.35t-.575-.075t-.35-.45t.075-.575l.475-.85h-.95q-.325 0-.537-.212T9 9.95t.213-.537t.537-.213h.95l-.475-.8q-.15-.275-.075-.575t.35-.45t.575-.075t.45.35l.475.8l.475-.8q.15-.275.45-.35t.575.075t.35.45t-.075.575l-.475.8h.95q.325 0 .537.213T15 9.95t-.213.538t-.537.212h-.95l.475.85q.15.275.075.575t-.35.45t-.575.075t-.45-.35zm8 0l-.475.85q-.15.275-.45.35t-.575-.075t-.35-.45t.075-.575l.475-.85h-.95q-.325 0-.537-.212T17 9.95t.213-.537t.537-.213h.95l-.475-.8q-.15-.275-.075-.575t.35-.45t.575-.075t.45.35l.475.8l.475-.8q.15-.275.45-.35t.575.075t.35.45t-.075.575l-.475.8h.95q.325 0 .538.213T23 9.95t-.213.538t-.537.212h-.95l.475.85q.15.275.075.575t-.35.45t-.575.075t-.45-.35z"
-													></path>
-												</svg>
-												<Label>Password</Label>
+												<Label>Enabled</Label>
 											</div>
 											<Switch />
 										</div>
@@ -558,40 +540,7 @@ export function Builder() {
 											</div>
 											<Switch />
 										</div>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="1em"
-													height="1em"
-													viewBox="0 0 24 24"
-												>
-													<path
-														fill="currentColor"
-														d="M14 13h5v-2h-5zm0-3h5V8h-5zm-9 6h8v-.55q0-1.125-1.1-1.787T9 13t-2.9.663T5 15.45zm4-4q.825 0 1.413-.587T11 10t-.587-1.412T9 8t-1.412.588T7 10t.588 1.413T9 12m-5 8q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20z"
-													></path>
-												</svg>
-												<Label>Username</Label>
-											</div>
-											<Switch />
-										</div>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="1em"
-													height="1em"
-													viewBox="0 0 24 24"
-												>
-													<path
-														fill="currentColor"
-														d="M9 6h6v8H9zm13-2v12c0 1.11-.89 2-2 2h-4l-4 4l-4-4H4a2 2 0 0 1-2-2V4c0-1.1.9-2 2-2h16a2 2 0 0 1 2 2m-6 1.09C16 4.5 15.5 4 14.86 4H9.14C8.5 4 8 4.5 8 5.09v9.82C8 15.5 8.5 16 9.14 16h5.72c.64 0 1.14-.5 1.14-1.09z"
-													></path>
-												</svg>
-												<Label>Phone Number</Label>
-											</div>
-											<Switch />
-										</div>
+
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2">
 												<svg
@@ -609,23 +558,6 @@ export function Builder() {
 													</g>
 												</svg>
 												<Label>Magic Link</Label>
-											</div>
-											<Switch />
-										</div>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="1em"
-													height="1em"
-													viewBox="0 0 512 512"
-												>
-													<path
-														fill="currentColor"
-														d="M424 80H88a56.06 56.06 0 0 0-56 56v240a56.06 56.06 0 0 0 56 56h336a56.06 56.06 0 0 0 56-56V136a56.06 56.06 0 0 0-56-56m-14.18 92.63l-144 112a16 16 0 0 1-19.64 0l-144-112a16 16 0 1 1 19.64-25.26L256 251.73l134.18-104.36a16 16 0 0 1 19.64 25.26"
-													></path>
-												</svg>
-												<Label>Email OTP</Label>
 											</div>
 											<Switch />
 										</div>
