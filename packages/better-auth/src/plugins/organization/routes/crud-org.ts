@@ -274,12 +274,12 @@ export const setActiveOrganization = createAuthEndpoint(
 			if (!sessionOrgId) {
 				return ctx.json(null);
 			}
-			await adapter.setActiveOrganization(session.session.id, null);
+			const updatedSession = await adapter.setActiveOrganization(
+				session.session.token,
+				null,
+			);
 			await setSessionCookie(ctx, {
-				session: {
-					...session.session,
-					activeOrganizationId: null,
-				},
+				session: updatedSession,
 				user: session.user,
 			});
 			return ctx.json(null);
