@@ -19,7 +19,7 @@ import {
 import { Icons } from "../icons";
 import { Cover } from "../ui/cover";
 import { PulicBetaBadge } from "../beta/badge";
-import { Builder } from "../buidler";
+import { Builder } from "../builder";
 
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{

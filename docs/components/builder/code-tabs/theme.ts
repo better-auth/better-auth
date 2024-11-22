@@ -2,14 +2,14 @@ import { PrismTheme } from "prism-react-renderer";
 
 const theme: PrismTheme = {
 	plain: {
-		color: "#e0e0e0",
-		backgroundColor: "#1a1a1a",
+		color: "#d0d0d0",
+		backgroundColor: "#000000", // Changed to true black
 	},
 	styles: [
 		{
 			types: ["comment", "prolog", "doctype", "cdata"],
 			style: {
-				color: "#999999",
+				color: "#555555",
 				fontStyle: "italic",
 			},
 		},
@@ -22,13 +22,13 @@ const theme: PrismTheme = {
 		{
 			types: ["string", "attr-value"],
 			style: {
-				color: "#a3d9ff", // Soft blue for strings
+				color: "#8ab4f8", // Darker soft blue for strings
 			},
 		},
 		{
 			types: ["punctuation", "operator"],
 			style: {
-				color: "#cccccc",
+				color: "#888888",
 			},
 		},
 		{
@@ -45,32 +45,32 @@ const theme: PrismTheme = {
 				"inserted",
 			],
 			style: {
-				color: "#b3b3b3",
+				color: "#a0a0a0",
 			},
 		},
 		{
 			types: ["atrule", "keyword", "attr-name", "selector"],
 			style: {
-				color: "#e6e6e6",
-				fontWeight: "bold", // Bold for keywords
+				color: "#c5c5c5",
+				fontWeight: "bold",
 			},
 		},
 		{
 			types: ["function", "deleted", "tag"],
 			style: {
-				color: "#70c0ff", // Soft blue for functions
+				color: "#7aa2f7", // Darker soft blue for functions
 			},
 		},
 		{
 			types: ["function-variable"],
 			style: {
-				color: "#a6a6a6",
+				color: "#9e9e9e",
 			},
 		},
 		{
 			types: ["tag", "selector", "keyword"],
 			style: {
-				color: "#f0f0f0",
+				color: "#cccccc", // Adjusted to a slightly lighter gray for better contrast on true black
 			},
 		},
 	],

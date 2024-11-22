@@ -11,14 +11,8 @@ type Tab = {
 
 export const AuthTabs = ({
 	tabs: propTabs,
-	containerClassName,
-	activeTabClassName,
-	tabClassName,
 }: {
 	tabs: Tab[];
-	containerClassName?: string;
-	activeTabClassName?: string;
-	tabClassName?: string;
 }) => {
 	const [active, setActive] = useState<Tab>(propTabs[0]);
 	const [tabs, setTabs] = useState<Tab[]>(propTabs);
@@ -33,14 +27,11 @@ export const AuthTabs = ({
 		setActive(newTabs[0]);
 	};
 
-	const [hovering, setHovering] = useState(false);
-
 	return (
 		<>
 			<div
 				className={cn(
 					"flex flex-row items-center justify-start mt-0 relative no-visible-scrollbar border-x w-full border-t max-w-max bg-opacity-0",
-					containerClassName,
 				)}
 			>
 				{propTabs.map((tab, idx) => (
@@ -49,18 +40,14 @@ export const AuthTabs = ({
 						onClick={() => {
 							moveSelectedTabToTop(idx);
 						}}
-						onMouseEnter={() => setHovering(true)}
-						onMouseLeave={() => setHovering(false)}
 						className={cn(
 							"relative px-4 py-2 rounded-full opacity-80 hover:opacity-100",
-							tabClassName,
 						)}
 					>
 						{active.value === tab.value && (
 							<div
 								className={cn(
 									"absolute inset-0 bg-gray-200 dark:bg-zinc-900/90 opacity-100",
-									activeTabClassName,
 								)}
 							/>
 						)}
