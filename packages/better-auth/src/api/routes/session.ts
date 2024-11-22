@@ -228,6 +228,30 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
+export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
+	const session = await getSessionFromCtx(ctx);
+	if (!session?.session) {
+		throw new APIError("UNAUTHORIZED");
+	}
+	if (ctx.context.sessionConfig.freshAge === 0) {
+		return {
+			session,
+		};
+	}
+	const freshAge = ctx.context.sessionConfig.freshAge;
+	const sessionAge = session.session.createdAt.valueOf();
+	const now = Date.now();
+	const isFresh = sessionAge + freshAge * 1000 > now;
+	if (!isFresh) {
+		throw new APIError("FORBIDDEN", {
+			message: "Session is not fresh",
+		});
+	}
+	return {
+		session,
+	};
+});
+
 /**
  * user active sessions list
  */

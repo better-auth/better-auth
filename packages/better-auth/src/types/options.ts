@@ -312,6 +312,20 @@ export interface BetterAuthOptions {
 			 */
 			enabled?: boolean;
 		};
+		/**
+		 * The age of the session to consider it fresh.
+		 *
+		 * This is used to check if the session is fresh
+		 * for sensitive operations. (e.g. changing email)
+		 *
+		 * If the session is not fresh, the user should be prompted
+		 * to sign in again.
+		 *
+		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
+		 *
+		 * @default 5 minutes (5 * 60)
+		 */
+		freshAge?: number;
 	};
 	account?: {
 		modelName?: string;

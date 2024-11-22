@@ -98,6 +98,7 @@ export const init = async (options: BetterAuthOptions) => {
 					? options.session.updateAge
 					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+			freshAge: options.session?.freshAge || 60 * 5 /* 5 minutes */,
 		},
 		secret,
 		rateLimit: {
@@ -161,6 +162,7 @@ export type AuthContext = {
 	sessionConfig: {
 		updateAge: number;
 		expiresIn: number;
+		freshAge: number;
 	};
 	generateId: (options: {
 		model: LiteralUnion<Models, string>;
