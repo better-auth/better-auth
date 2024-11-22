@@ -120,6 +120,9 @@ export const apple = (options: AppleOptions) => {
 			return !!jwtClaims;
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}

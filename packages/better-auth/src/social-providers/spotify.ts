@@ -40,6 +40,9 @@ export const spotify = (options: SpotifyOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<SpotifyProfile>(
 				"https://api.spotify.com/v1/me",
 				{

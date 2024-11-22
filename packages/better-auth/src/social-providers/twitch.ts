@@ -56,6 +56,9 @@ export const twitch = (options: TwitchOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const idToken = token.idToken;
 			if (!idToken) {
 				logger.error("No idToken found in token");

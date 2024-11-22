@@ -125,6 +125,9 @@ export const twitter = (options: TwitterOption) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<TwitterProfile>(
 				"https://api.x.com/2/users/me?user.fields=profile_image_url",
 				{

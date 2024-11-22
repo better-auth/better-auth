@@ -52,6 +52,9 @@ export const dropbox = (options: DropboxOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<DropboxProfile>(
 				"https://api.dropboxapi.com/2/users/get_current_account",
 				{
