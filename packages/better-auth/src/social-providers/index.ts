@@ -32,13 +32,13 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	...(keyof typeof socialProviders)[],
 ];
 
-export type SocialProviders = typeof socialProviders extends {
-	[key in infer K]: infer V;
+export type SocialProviderList = typeof socialProviderList;
+
+export type SocialProviders = {
+	[K in SocialProviderList[number]]?: Prettify<Parameters<typeof socialProviders[K]>[0] & {
+		enabled?: boolean;
+	}>;
 }
-	? V extends (options: infer V) => any
-		? Partial<Record<K, Prettify<V & { enabled?: boolean }>>>
-		: never
-	: never;
 
 export * from "./github";
 export * from "./google";
@@ -52,5 +52,3 @@ export * from "./twitter";
 export * from "./dropbox";
 export * from "./linkedin";
 export * from "./gitlab";
-
-export type SocialProviderList = typeof socialProviderList;
