@@ -198,7 +198,7 @@ export const signInString = (options: any) => `"use client"
 	import { Loader2 } from "lucide-react";
 	import { signIn } from "@/lib/auth-client";
 	
-function SignInCard() {
+export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [loading, setLoading] = useState(false);

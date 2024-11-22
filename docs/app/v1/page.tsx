@@ -1,11 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowRight, GitCommit, Zap, Shield, Copy } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { ShipText } from "./_components/v1-text";
 import { ReactNode } from "react";
 import { BackgroundLines } from "./bg-line";
 import Link from "next/link";
@@ -53,27 +50,18 @@ export default function V1Ship() {
 						What does V1 means?
 					</h2>
 					<p>
-						Hey there human! Thanks for stopping by. Since announcing Better
-						Auth, the community excitement has been incredibly motivating—thank
-						you! <br />
-						<br />
-						V1 is an important milestone for us, but it simply means we believe
-						you can use it in production. And we'll try to keep APIs stable
-						until next major version. We'll continue improving, adding new
-						features, and fixing bugs at the same pace as before. While we
-						strive to make this version as stable and secure as possible, we
-						don't expect it to be perfect. <br /> <br />
-						If you're using Better Auth, we recommend updating to V1 as soon as
-						possible. There are some breaking changes, but join us on{" "}
-						<Link
-							href="https://discord.gg/GYC3W7tZzb"
-							className="underline"
-							target="_blank"
-						>
-							Discord
-						</Link>
-						, and we'll gladly help if you've been using Better Auth in
-						production.
+						Since introducing Better Auth, the community's excitement has been
+						incredibly motivating—thank you! <br /> <br />
+						V1 is an important milestone, but it simply means we believe you can
+						use it in production and that we'll strive to keep the APIs stable
+						until the next major version. However, we'll continue improving,
+						adding new features, and fixing bugs at the same pace as before.
+						<br /> <br />
+						If you were using Better Auth for production, we recommend updating
+						to V1 as soon as possible. There are some breaking changes, feel
+						free to join us on{" "}
+						<Link href="https://discord.gg/GYC3W7tZzb">Discord</Link>, and we'll
+						gladly assist.
 					</p>
 				</div>
 			</div>
@@ -88,12 +76,15 @@ export default function V1Ship() {
 							version="1.0.0"
 							date="2024"
 							changes={[
-								"feat: Open API Docs Plugin",
+								"feat: Open API Docs",
 								"docs: Sign In Box Builder",
-								"fix: Bug fixes and performance improvements",
 								"feat: New server only endpoints for Organization and Two Factor plugins",
 								"refactor: all core tables now have `createdAt` and `updatedAt` fields",
-								"refactor: session id and token are now stored in separate fields",
+								"refactor: accounts now store `expiresAt` for both refresh and access tokens",
+								"feat: Email OTP forget password flow",
+								"docs: NextAuth.js migration guide",
+								"feat: sensitive endpoints now check for fresh tokens",
+								"and a lot more bug fixes and improvements...",
 							]}
 						/>
 					</div>
