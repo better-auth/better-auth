@@ -67,12 +67,12 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						 */
 						const token = await hs256(
 							ctx.context.secret,
-							`${user.id}!${session.id}`,
+							`${user.id}!${session.token}`,
 						);
 
 						await ctx.setSignedCookie(
 							trustDeviceCookie.name,
-							`${token}!${session.id}`,
+							`${token}!${session.token}`,
 							ctx.context.secret,
 							trustDeviceCookie.attributes,
 						);
@@ -88,7 +88,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					});
 				},
 				session: {
-					id: session.id,
+					id: session.token,
 					userId: session.userId,
 					expiresAt: session.expiresAt,
 					user,

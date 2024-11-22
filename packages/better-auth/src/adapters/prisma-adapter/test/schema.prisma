@@ -19,5 +19,8 @@ model User {
 model Sessions {
     id        String   @id @default(cuid())
     userId    String
+    token     String   @unique
     expiresAt DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
 }

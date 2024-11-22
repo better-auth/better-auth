@@ -12,7 +12,7 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId">;
+		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 	},
 ) {
@@ -59,12 +59,13 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
-					id: c.context.uuid(),
 					userId: dbUser.user.id,
 					accessToken: account.accessToken,
 					idToken: account.idToken,
 					refreshToken: account.refreshToken,
-					expiresAt: account.expiresAt,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
@@ -78,7 +79,8 @@ export async function handleOAuthUserInfo(
 				accessToken: account.accessToken,
 				idToken: account.idToken,
 				refreshToken: account.refreshToken,
-				expiresAt: account.expiresAt,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 			});
 		}
 	} else {
@@ -88,7 +90,8 @@ export async function handleOAuthUserInfo(
 				.createOAuthUser(
 					{
 						...userInfo,
-						id: c.context.uuid(),
+						// setting id to undefined to let the database generate it
+						id: undefined,
 						emailVerified,
 						email: userInfo.email.toLowerCase(),
 					},
@@ -96,7 +99,9 @@ export async function handleOAuthUserInfo(
 						accessToken: account.accessToken,
 						idToken: account.idToken,
 						refreshToken: account.refreshToken,
-						expiresAt: account.expiresAt,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},

@@ -12,7 +12,10 @@ import type {
 import { createDynamicPathProxy } from "../proxy";
 import type { UnionToIntersection } from "../../types/helper";
 import type { Atom } from "nanostores";
-import type { BetterFetchError } from "@better-fetch/fetch";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -60,15 +63,17 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
-	type Session = {
-		session: InferSessionFromClient<Option>;
-		user: InferUserFromClient<Option>;
-	};
+	type ClientAPI = InferClientAPI<Option>;
+	type Session = ClientAPI extends {
+		getSession: () => Promise<BetterFetchResponse<infer D>>;
+	}
+		? D
+		: ClientAPI;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: () => Atom<{
-				data: Session | null;
+				data: Session;
 				error: BetterFetchError | null;
 				isPending: boolean;
 				isRefetching: boolean;
@@ -76,7 +81,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			$fetch: typeof $fetch;
 			$store: typeof $store;
 			$Infer: {
-				Session: Session;
+				Session: NonNullable<Session>;
 			};
 		};
 }

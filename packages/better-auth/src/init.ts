@@ -7,6 +7,8 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	LiteralUnion,
+	Models,
 	SecondaryStorage,
 	Session,
 	User,
@@ -76,6 +78,13 @@ export const init = async (options: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
+	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
+		if (typeof options?.advanced?.generateId === "function") {
+			return options.advanced.generateId({ model, size });
+		}
+		return generateId(size);
+	};
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -84,7 +93,10 @@ export const init = async (options: BetterAuthOptions) => {
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
 		sessionConfig: {
-			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
+			updateAge:
+				options.session?.updateAge !== undefined
+					? options.session.updateAge
+					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 		},
 		secret,
@@ -100,7 +112,7 @@ export const init = async (options: BetterAuthOptions) => {
 		},
 		authCookies: cookies,
 		logger: logger,
-		uuid: generateId,
+		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
@@ -116,6 +128,7 @@ export const init = async (options: BetterAuthOptions) => {
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
 	};
@@ -149,7 +162,10 @@ export type AuthContext = {
 		updateAge: number;
 		expiresIn: number;
 	};
-	uuid: (size?: number) => string;
+	generateId: (options: {
+		model: LiteralUnion<Models, string>;
+		size?: number;
+	}) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
@@ -192,6 +208,7 @@ function runPluginInit(ctx: AuthContext) {
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),
+		generateId: ctx.generateId,
 	});
 	context.options = options;
 	return { context };

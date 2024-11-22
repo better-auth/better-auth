@@ -37,33 +37,28 @@ export const expo: () => BetterAuthPlugin = () => {
 						return context.path?.startsWith("/callback");
 					},
 					handler: async (ctx) => {
-						const response = ctx.context.returned as Response;
-						if (response.status === 302) {
-							const location = response.headers.get("location");
-							if (!location) {
-								return;
-							}
-							const trustedOrigins = ctx.context.trustedOrigins.filter(
-								(origin) => !origin.startsWith("http"),
-							);
-							const isTrustedOrigin = trustedOrigins.some((origin) =>
-								location?.startsWith(origin),
-							);
-							if (!isTrustedOrigin) {
-								return;
-							}
-							const cookie = response.headers.get("set-cookie");
+						const headers = ctx.responseHeader;
 
-							if (!cookie) {
-								return;
-							}
-							const url = new URL(location);
-							url.searchParams.set("cookie", cookie);
-							response.headers.set("location", url.toString());
-							return {
-								response,
-							};
+						const location = headers.get("location");
+						if (!location) {
+							return;
 						}
+						const trustedOrigins = ctx.context.trustedOrigins.filter(
+							(origin) => !origin.startsWith("http"),
+						);
+						const isTrustedOrigin = trustedOrigins.some((origin) =>
+							location?.startsWith(origin),
+						);
+						if (!isTrustedOrigin) {
+							return;
+						}
+						const cookie = headers.get("set-cookie");
+						if (!cookie) {
+							return;
+						}
+						const url = new URL(location);
+						url.searchParams.set("cookie", cookie);
+						ctx.setHeader("location", url.toString());
 					},
 				},
 			],

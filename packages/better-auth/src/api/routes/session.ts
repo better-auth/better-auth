@@ -1,4 +1,4 @@
-import { APIError, type Context } from "better-call";
+import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -37,6 +37,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
+
 				if (!sessionCookieToken) {
 					return ctx.json(null);
 				}
@@ -106,7 +107,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						/**
 						 * if session expired clean up the session
 						 */
-						await ctx.context.internalAdapter.deleteSession(session.session.id);
+						await ctx.context.internalAdapter.deleteSession(
+							session.session.token,
+						);
 					}
 					return ctx.json(null);
 				}
@@ -141,7 +144,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (shouldBeUpdated) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
-							session.session.id,
+							session.session.token,
 							{
 								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
 							},
@@ -257,14 +260,14 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			id: z.string(),
+			token: z.string(),
 		}),
 		use: [sessionMiddleware],
 		requireHeaders: true,
 	},
 	async (ctx) => {
-		const id = ctx.body.id;
-		const findSession = await ctx.context.internalAdapter.findSession(id);
+		const token = ctx.body.token;
+		const findSession = await ctx.context.internalAdapter.findSession(token);
 		if (!findSession) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Session not found",
@@ -274,7 +277,7 @@ export const revokeSession = createAuthEndpoint(
 			throw new APIError("UNAUTHORIZED");
 		}
 		try {
-			await ctx.context.internalAdapter.deleteSession(id);
+			await ctx.context.internalAdapter.deleteSession(token);
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
@@ -338,11 +341,11 @@ export const revokeOtherSessions = createAuthEndpoint(
 			return session.expiresAt > new Date();
 		});
 		const otherSessions = activeSessions.filter(
-			(session) => session.id !== ctx.context.session.session.id,
+			(session) => session.token !== ctx.context.session.session.token,
 		);
 		await Promise.all(
 			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.id),
+				ctx.context.internalAdapter.deleteSession(session.token),
 			),
 		);
 		return ctx.json({

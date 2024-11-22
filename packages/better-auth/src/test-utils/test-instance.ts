@@ -106,7 +106,7 @@ export async function getTestInstance<
 	const testUser = {
 		email: "test@test.com",
 		password: "test123456",
-		name: "test",
+		name: "test user",
 		...config?.testUser,
 	};
 	async function createTestUser() {

@@ -26,6 +26,7 @@ export const createAuthMiddleware = createMiddlewareCreator({
 		createMiddleware(async () => {
 			return {} as {
 				returned?: unknown;
+				endpoint: Endpoint;
 			};
 		}),
 	],

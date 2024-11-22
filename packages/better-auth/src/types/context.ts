@@ -1,11 +1,11 @@
-import type { ContextTools, EndpointOptions } from "better-call";
+import type { APIError, ContextTools, EndpointOptions } from "better-call";
 import type { AuthContext } from "../init";
 
 export type HookEndpointContext<C extends Record<string, any> = {}> =
 	ContextTools & {
 		context: AuthContext &
 			C & {
-				returned: unknown;
+				returned: APIError | Response | Record<string, any>;
 			};
 	} & {
 		body: any;

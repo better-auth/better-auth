@@ -9,7 +9,7 @@ import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
-import D from "path";
+import { getTsconfig } from "get-tsconfig";
 
 let possiblePaths = ["auth.ts", "auth.tsx"];
 
@@ -25,24 +25,11 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function stripJsonComments(jsonString: string): string {
-	return jsonString.replace(
-		/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
-		(m, g) => (g ? "" : m),
-	);
-}
-
 function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
-	if (!fs.existsSync(tsConfigPath)) {
-		logger.warn("[#better-auth]: tsconfig.json not found.");
-		return null;
-	}
 	try {
-		const tsConfigContent = fs.readFileSync(tsConfigPath, "utf8");
-		const strippedTsConfigContent = stripJsonComments(tsConfigContent);
-		const tsConfig = JSON.parse(strippedTsConfigContent);
-		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
+		const tsConfigContent = getTsconfig();
+		const paths = tsConfigContent?.config.compilerOptions?.paths || {};
+		const baseUrl = tsConfigContent?.config.compilerOptions?.baseUrl || "";
 
 		const result: Record<string, string> = {};
 		const obj = Object.entries(paths) as [string, string[]][];

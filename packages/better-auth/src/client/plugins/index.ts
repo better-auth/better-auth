@@ -13,3 +13,5 @@ export * from "../../plugins/jwt/client";
 export * from "../../plugins/multi-session/client";
 export * from "../../plugins/email-otp/client";
 export * from "../../plugins/one-tap/client";
+export * from "../../plugins/custom-session/client";
+export * from "./infer-plugin";

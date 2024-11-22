@@ -623,7 +623,7 @@ export const contents: Content[] = [
 				href: "/docs/integrations/remix",
 			},
 			{
-				title: "Next.js",
+				title: "Next",
 				icon: Icons.nextJS,
 				href: "/docs/integrations/next",
 			},
@@ -633,12 +633,12 @@ export const contents: Content[] = [
 				href: "/docs/integrations/nuxt",
 			},
 			{
-				title: "SvelteKit",
+				title: "Svelte Kit",
 				icon: Icons.svelteKit,
 				href: "/docs/integrations/svelte-kit",
 			},
 			{
-				title: "SolidStart",
+				title: "Solid Start",
 				icon: Icons.solidStart,
 				href: "/docs/integrations/solid-start",
 			},
@@ -913,6 +913,51 @@ export const contents: Content[] = [
 		],
 	},
 	{
+		title: "Guides",
+		href: "/docs/guides",
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="1.4em"
+				height="1.4em"
+				viewBox="0 0 20 20"
+			>
+				<path
+					fill="currentColor"
+					d="M6.819 17.259q.111.408.335.74h-.156c-1.104 0-2-.895-2.001-2l-.005-5.535zM4 16.499q0 .228.04.446l-.056-.015a2 2 0 0 1-1.416-2.45l1.426-5.34zm3.655.018a2 2 0 0 0 2.451 1.414l5.416-1.451a2 2 0 0 0 1.413-2.45L14.099 3.482a2 2 0 0 0-2.451-1.413l-5.416 1.45a2 2 0 0 0-1.413 2.449zM9 6.25a.75.75 0 1 1-1.5 0a.75.75 0 0 1 1.5 0"
+				></path>
+			</svg>
+		),
+		list: [
+			{
+				title: "Next Auth Migration Guide",
+				href: "/docs/guides/next-auth-migration-guide",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 48 48"
+					>
+						<g
+							fill="none"
+							stroke="currentColor"
+							strokeLinejoin="round"
+							strokeWidth="4"
+						>
+							<path strokeLinecap="round" d="M24 4v37"></path>
+							<path
+								fill="currentColor"
+								d="M24 8h15.545L42 12l-2.455 4H24zm0 14H8.455L6 26l2.455 4H24z"
+							></path>
+							<path strokeLinecap="round" d="M16 42h16"></path>
+						</g>
+					</svg>
+				),
+			},
+		],
+	},
+	{
 		title: "Reference",
 		Icon: () => (
 			<svg
@@ -984,7 +1029,7 @@ export const examples: Content[] = [
 		),
 		list: [
 			{
-				title: "Astro + SolidJS",
+				title: "Astro + SolidJs",
 				href: "/docs/examples/astro",
 				icon: Icons.astro,
 			},
@@ -994,7 +1039,7 @@ export const examples: Content[] = [
 				icon: Icons.remix,
 			},
 			{
-				title: "Next.js",
+				title: "Next JS",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
 			},
@@ -1004,7 +1049,7 @@ export const examples: Content[] = [
 				icon: Icons.nuxt,
 			},
 			{
-				title: "SvelteKit",
+				title: "Svelte Kit",
 				href: "/docs/examples/svelte-kit",
 				icon: Icons.svelteKit,
 			},

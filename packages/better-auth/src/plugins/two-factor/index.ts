@@ -15,10 +15,7 @@ import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import {
-	getEndpointResponse,
-	returnHookResponse,
-} from "../../utils/plugin-helper";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 import { schema } from "./schema";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -103,7 +100,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 
 						//remove current session
 						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.id,
+							ctx.context.session.session.token,
 						);
 					}
 					//delete existing two factor
@@ -120,7 +117,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					await ctx.context.adapter.create({
 						model: opts.twoFactorTable,
 						data: {
-							id: ctx.context.uuid(),
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
@@ -186,7 +182,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					//remove current session
 					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.id,
+						ctx.context.session.session.token,
 					);
 					return ctx.json({ status: true });
 				},
@@ -223,21 +219,21 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 
 						if (trustDeviceCookie) {
-							const [token, sessionId] = trustDeviceCookie.split("!");
+							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await hs256(
 								ctx.context.secret,
-								`${response.user.id}!${sessionId}`,
+								`${response.user.id}!${sessionToken}`,
 							);
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
 								const newToken = await hs256(
 									ctx.context.secret,
-									`${response.user.id}!${response.session.id}`,
+									`${response.user.id}!${response.session.token}`,
 								);
 								await ctx.setSignedCookie(
 									trustDeviceCookieName.name,
-									`${newToken}!${response.session.id}`,
+									`${newToken}!${response.session.token}`,
 									ctx.context.secret,
 									trustDeviceCookieName.attributes,
 								);
@@ -250,7 +246,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						deleteSessionCookie(ctx);
 						await ctx.context.internalAdapter.deleteSession(
-							response.session.id,
+							response.session.token,
 						);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
@@ -270,8 +266,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-
-						return returnHookResponse(ctx, {
+						return ctx.json({
 							twoFactorRedirect: true,
 						});
 					}),

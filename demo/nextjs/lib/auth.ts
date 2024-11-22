@@ -8,6 +8,7 @@ import {
 	twoFactor,
 	oneTap,
 	oAuthProxy,
+	createAuthEndpoint,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -16,6 +17,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
+import { customSession } from "./auth/plugins/custom-session";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -39,7 +41,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: "mysql",
+		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
 	},
 	session: {
 		cookieCache: {
@@ -152,5 +154,6 @@ export const auth = betterAuth({
 		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
+		customSession(),
 	],
 });

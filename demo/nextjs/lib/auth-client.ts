@@ -8,6 +8,7 @@ import {
 	oneTapClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
+import { customSessionClient } from "./auth/plugins/session-client";
 
 export const client = createAuthClient({
 	plugins: [
@@ -22,6 +23,7 @@ export const client = createAuthClient({
 		oneTapClient({
 			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
 		}),
+		customSessionClient(),
 	],
 	fetchOptions: {
 		onError(e) {

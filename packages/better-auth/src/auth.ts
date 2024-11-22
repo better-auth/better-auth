@@ -1,20 +1,14 @@
-import type { Endpoint, Prettify } from "better-call";
 import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
-import type { InferPluginTypes, InferSession, InferUser } from "./types";
+import type {
+	InferPluginTypes,
+	InferSession,
+	InferUser,
+	PrettifyDeep,
+} from "./types";
 import { getBaseURL } from "./utils/url";
-
-type InferAPI<API> = Omit<
-	API,
-	API extends { [key in infer K]: Endpoint }
-		? K extends string
-			? API[K]["options"]["metadata"] extends { isAction: false }
-				? K
-				: never
-			: never
-		: never
->;
+import type { FilterActions, InferAPI } from "./types/api";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
@@ -31,13 +25,11 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				ctx.options.baseURL = baseURL;
 				ctx.baseURL = baseURL;
 			}
-			ctx.trustedOrigins.push(url.origin);
-			if (!ctx.options.baseURL) {
-				return new Response("Base URL not set", { status: 400 });
-			}
-			if (url.pathname === basePath || url.pathname === `${basePath}/`) {
-				return new Response("Welcome to BetterAuth", { status: 200 });
-			}
+			ctx.trustedOrigins = [
+				...(options.trustedOrigins || []),
+				ctx.baseURL,
+				url.origin,
+			];
 			const { handler } = router(ctx, options);
 			return handler(request);
 		},
@@ -46,8 +38,8 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 		$context: authContext,
 		$Infer: {} as {
 			Session: {
-				session: Prettify<InferSession<O>>;
-				user: Prettify<InferUser<O>>;
+				session: PrettifyDeep<InferSession<O>>;
+				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
 	};
@@ -55,6 +47,6 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 
 export type Auth = {
 	handler: (request: Request) => Promise<Response>;
-	api: InferAPI<ReturnType<typeof router>["endpoints"]>;
+	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
 };
