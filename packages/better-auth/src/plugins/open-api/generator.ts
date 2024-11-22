@@ -1,9 +1,9 @@
 import type { Endpoint, EndpointOptions } from "better-call";
 import { ZodObject, ZodOptional, ZodSchema } from "zod";
 import type { OpenAPISchemaType, OpenAPIParameter } from "better-call";
-import type { AuthContext, BetterAuthOptions } from "better-auth";
-import { getEndpoints } from "better-auth/api";
 import { getAuthTables } from "../../db";
+import type { AuthContext, BetterAuthOptions } from "../../types";
+import { getEndpoints } from "../../api";
 
 interface Path {
 	get?: {

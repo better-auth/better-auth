@@ -66,7 +66,7 @@ export interface BetterAuthOptions {
 	/**
 	 * Database configuration
 	 */
-	database?:
+	database:
 		| PostgresPool
 		| MysqlPool
 		| Database

@@ -1,7 +1,7 @@
-import type { BetterAuthPlugin } from "better-auth";
-import { createAuthEndpoint } from "better-auth/plugins";
 import { generator } from "./generator";
 import { logo } from "./logo";
+import type { BetterAuthPlugin } from "../../types";
+import { createAuthEndpoint } from "../../api";
 
 const getHTML = (apiReference: Record<string, any>) => `<!doctype html>
 <html>
