@@ -17,7 +17,6 @@ This plugin offers two main methods to do a second factor verification:
 - Enabling/disabling 2FA
 - Managing trusted devices
 
-
 ## Installation
 
 <Steps>
@@ -64,15 +63,13 @@ This plugin offers two main methods to do a second factor verification:
 
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { twoFactorClient } from "better-auth/client/plugins"
 
-        const client = createAuthClient({
+        const authClient = createAuthClient({
             plugins: [
-                twoFactorClient({
-                    twoFactorPage: "/two-factor" //redirect for two factor verification is required // [!code highlight]
-                })
+                twoFactorClient()
             ]
         })
         ```
@@ -120,7 +117,9 @@ await authClient.signIn.email({
 })
 ```
 
-By default, if a user has 2FA enabled, they will be redirected to the `twoFactorPage`. If you want to manage the 2FA verification directly within your application instead, simply pass `redirect:false` to the client plugin and handle the verification in the callback.
+If a user enabled two-factor instead of session data, the response will contain `twoFactorRedirect` set to `true`. This indicates that the user needs to verify their 2FA code.
+
+You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
 ```ts title="sign-in.ts"
 import { createAuthClient } from "better-auth/client";
@@ -128,10 +127,16 @@ import { twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
     plugins: [twoFactorClient({
-        redirect: false
+        onTwoFactorRedirect(){
+            // Handle the 2FA verification globally
+        }
     })]
 })
+```
 
+Or you can handle it in place:
+
+```ts
 await authClient.signIn.email({
         email: "user@example.com",
         password: "password123",
@@ -159,7 +164,7 @@ const response = await auth.api.signInEmail({
 s
 ### TOTP
 
-TOTP (Time-Based One-Time Password) is an algorithm that generates a unique password for each login attempt using time as a counter. Every fixed interval (Better Auth deafults to 30 seconds), a new password is generated. This addresses several issues with traditional passwords: they can be forgotten, stolen, or guessed. OTPs solve some of these problems, but their delivery via SMS or email can be unreliable (or even risky, considering it opens new attack vectors).
+TOTP (Time-Based One-Time Password) is an algorithm that generates a unique password for each login attempt using time as a counter. Every fixed interval (Better Auth defaults to 30 seconds), a new password is generated. This addresses several issues with traditional passwords: they can be forgotten, stolen, or guessed. OTPs solve some of these problems, but their delivery via SMS or email can be unreliable (or even risky, considering it opens new attack vectors).
 
 TOTP, however, generates codes offline, making it both secure and convenient. You just need an authenticator app on your phone, and you’re set—no internet required.
 
