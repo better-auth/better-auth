@@ -4,7 +4,7 @@ import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
 
-interface DB {
+export interface DB {
 	[key: string]: any;
 }
 
@@ -193,7 +193,7 @@ const createTransform = (
 	};
 };
 
-interface DrizzleAdapterConfig {
+export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
 	 */
