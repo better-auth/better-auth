@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.0.0-canary.12",
+  "version": "1.0.0-canary.13",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
