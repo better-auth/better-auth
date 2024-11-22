@@ -314,7 +314,7 @@ export const setActiveOrganization = createAuthEndpoint(
 	},
 );
 
-export const listOrganization = createAuthEndpoint(
+export const listOrganizations = createAuthEndpoint(
 	"/organization/list",
 	{
 		method: "GET",
