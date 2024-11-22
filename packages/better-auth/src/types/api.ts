@@ -32,12 +32,15 @@ export type InferSessionAPI<API> = API extends {
 			E extends Endpoint
 				? E["path"] extends "/get-session"
 					? {
-							getSession: (context: {
+							getSession: ((context: {
 								headers: Headers;
 								query?: {
 									disableCookieCache?: boolean;
 								};
-							}) => Promise<PrettifyDeep<Awaited<ReturnType<E>>>>;
+							}) => Promise<PrettifyDeep<Awaited<ReturnType<E>>>>) & {
+								options: E["options"];
+								path: E["path"];
+							};
 						}
 					: never
 				: never
