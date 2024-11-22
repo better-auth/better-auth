@@ -2,7 +2,7 @@ import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { sessionMiddleware } from "./session";
+import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
@@ -214,34 +214,10 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		body: z.object({
-			password: z.string(),
-		}),
-		use: [sessionMiddleware],
+		use: [freshSessionMiddleware],
 	},
 	async (ctx) => {
-		const { password } = ctx.body;
 		const session = ctx.context.session;
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
-		);
-		if (!account || !account.password) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User does not have a password",
-			});
-		}
-		const verify = await ctx.context.password.verify(
-			account.password,
-			password,
-		);
-		if (!verify) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Incorrect password",
-			});
-		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		deleteSessionCookie(ctx);
@@ -262,7 +238,7 @@ export const changeEmail = createAuthEndpoint(
 			newEmail: z.string().email(),
 			callbackURL: z.string().optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [freshSessionMiddleware],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {

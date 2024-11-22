@@ -77,7 +77,7 @@ To end a session, use the `revokeSession` function. Just pass the session token 
 
 ```ts title="client.ts"
 await authClient.revokeSession({
-    id: session.id,
+    token: "session-token"
 })
 ```
 

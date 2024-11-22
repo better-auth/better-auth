@@ -316,7 +316,7 @@ export interface BetterAuthOptions {
 		 * The age of the session to consider it fresh.
 		 *
 		 * This is used to check if the session is fresh
-		 * for sensitive operations. (e.g. changing email)
+		 * for sensitive operations. (e.g. deleting an account)
 		 *
 		 * If the session is not fresh, the user should be prompted
 		 * to sign in again.

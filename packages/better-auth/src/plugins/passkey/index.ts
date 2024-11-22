@@ -15,7 +15,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import { getSessionFromCtx } from "../../api/routes";
+import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
@@ -114,7 +114,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-register-options",
 				{
 					method: "GET",
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
 					metadata: {
 						client: false,
 					},
@@ -254,7 +254,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						response: z.any(),
 						name: z.string().optional(),
 					}),
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
