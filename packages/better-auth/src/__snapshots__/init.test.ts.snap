@@ -123,6 +123,7 @@ exports[`init > should match config 1`] = `
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
+    "freshAge": 300,
     "updateAge": 86400,
   },
   "socialProviders": [],
