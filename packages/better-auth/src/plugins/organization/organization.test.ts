@@ -302,6 +302,31 @@ describe("organization", async (it) => {
 		expectTypeOf(auth.api.createOrganization).toBeFunction();
 		expectTypeOf(auth.api.getInvitation).toBeFunction();
 	});
+
+	it("should add member on the server directly", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-member@email.com",
+				password: "password",
+				name: "new member",
+			},
+		});
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: newUser.user.email,
+				role: "admin",
+			},
+		});
+		expect(member?.role).toBe("admin");
+	});
 });
 
 describe("access control", async (it) => {

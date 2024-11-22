@@ -393,6 +393,21 @@ To get the current member of the organization you can use the `organization.getA
 const member = await client.organization.getActiveMember()
 ```
 
+### Add Member
+
+If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+
+auth.api.addMember({
+  body: {
+      userId: "user-id",
+      organizationId: "organization-id",
+      role: "admin"
+  }
+})
+```
 
 ## Access Control
 
