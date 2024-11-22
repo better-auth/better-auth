@@ -103,6 +103,9 @@ export const google = (options: GoogleOptions) => {
 			return isValid;
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}

@@ -78,6 +78,9 @@ export const github = (options: GithubOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{

@@ -576,12 +576,17 @@ You can use the `hasPermission` action provided by the `api` to check the permis
 ```ts title="api.ts"
 import { auth } from "@/auth";
 
-auth.api.hasPermission({
-    role: "admin",
-    permission: {
-        project: ["create"]
-    }
-})
+    auth.api.hasPermission({
+        headers: await headers(),
+        body: {
+            role: {
+                in: ['admin']
+            },
+            permission: {
+                project: ["create"] // This must match the structure in your access control
+            }
+        }
+    });
 ```
 
 If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client. 
