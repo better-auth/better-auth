@@ -64,7 +64,9 @@ export default function Hero() {
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
-								<PulicBetaBadge text="v1 is out now!" />
+								<Link href="/v1">
+									<PulicBetaBadge text="v1 is out now!" />
+								</Link>
 								<div className="relative mt-2 flex items-center gap-2">
 									<Cover>
 										<p className="2xl relative inline tracking-tight opacity-90 md:text-3xl lg:text-5xl dark:text-white">

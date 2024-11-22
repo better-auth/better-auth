@@ -17,7 +17,7 @@ export default function V1Ship() {
 			<div className="h-[50vh] bg-transparent/10 relative">
 				<BackgroundLines>
 					<div className="absolute bottom-1/3 left-1/2 transform -translate-x-1/2 text-center">
-						<h1 className="text-5xl mb-4">V1.0 - nov.22.2024</h1>
+						<h1 className="text-5xl mb-4">V1.0 - nov.22</h1>
 						<p className="text-lg text-gray-400 max-w-xl mx-auto">
 							We are excited to announce the Better Auth V1.0 release.
 						</p>
@@ -53,11 +53,13 @@ export default function V1Ship() {
 						What does V1 means?
 					</h2>
 					<p>
-						Hey there! Thanks for stopping by. Since announcing Better Auth,
-						your excitement has been incredibly motivating—thank you! <br />
+						Hey there human! Thanks for stopping by. Since announcing Better
+						Auth, the community excitement has been incredibly motivating—thank
+						you! <br />
 						<br />
 						V1 is an important milestone for us, but it simply means we believe
-						you can use it in production. We'll continue improving, adding new
+						you can use it in production. And we'll try to keep APIs stable
+						until next major version. We'll continue improving, adding new
 						features, and fixing bugs at the same pace as before. While we
 						strive to make this version as stable and secure as possible, we
 						don't expect it to be perfect. <br /> <br />
@@ -77,45 +79,6 @@ export default function V1Ship() {
 			</div>
 
 			<ReleaseRelated />
-
-			{/* <div className="max-w-6xl mx-auto px-6 py-24">
-				<motion.div
-					className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-					initial={{ opacity: 0, y: 20 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ delay: 0.2 }}
-				>
-					<FeatureCard
-						icon={<Zap className="w-6 h-6" />}
-						title="Enhanced Performance"
-						description="50% faster load times and optimized resource usage"
-					/>
-					<FeatureCard
-						icon={<Shield className="w-6 h-6" />}
-						title="Advanced Security"
-						description="End-to-end encryption and improved authentication"
-					/>
-					<FeatureCard
-						icon={<GitCommit className="w-6 h-6" />}
-						title="New Architecture"
-						description="Rebuilt from ground up for better scalability"
-					/>
-				</motion.div>
-
-				<motion.div
-					className="text-center mt-20"
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					transition={{ delay: 0.4 }}
-				>
-					<Button
-						size="lg"
-						className="bg-white text-black hover:bg-gray-200 font-medium"
-					>
-						Get Started <ArrowRight className="ml-2 w-4 h-4" />
-					</Button>
-				</motion.div>
-			</div> */}
 
 			<div className="border-t border-white/10">
 				<div className="max-w-4xl mx-auto px-6 py-24">
@@ -156,11 +119,6 @@ function ReleaseRelated() {
 				</div>
 			</div>
 			<div className="max-w-6xl mx-auto px-6 relative z-10">
-				<h2 className="text-7xl font-bold mb-16 font-geist leading-tight">
-					What will you
-					<br />
-					do next?
-				</h2>
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 					<div>
 						<h3 className="text-xl font-semibold mb-4">Install Latest</h3>
@@ -206,8 +164,8 @@ function ReleaseRelated() {
 					</div>
 					<div>
 						<h3 className="text-xl font-semibold mb-4">
-							Check out the change log, the new UI Builder, OpenAPI Docs, and ⭐
-							on GitHub (if you haven't already)
+							Check out the change log, the new UI Builder, OpenAPI Docs, and
+							more
 						</h3>
 						<p className="text-sm text-gray-400 mb-4">
 							We have some exciting new features and updates that you should
