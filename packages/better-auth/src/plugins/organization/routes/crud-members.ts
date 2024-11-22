@@ -82,13 +82,58 @@ export const removeMember = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			memberIdOrEmail: z.string(),
+			memberIdOrEmail: z.string({
+				description: "The ID or email of the member to remove",
+			}),
 			/**
 			 * If not provided, the active organization will be used
 			 */
-			organizationId: z.string().optional(),
+			organizationId: z
+				.string({
+					description:
+						"The ID of the organization to remove the member from. If not provided, the active organization will be used",
+				})
+				.optional(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Remove a member from an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										member: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												userId: {
+													type: "string",
+												},
+												organizationId: {
+													type: "string",
+												},
+												role: {
+													type: "string",
+												},
+											},
+											required: ["id", "userId", "organizationId", "role"],
+										},
+									},
+									required: ["member"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -181,6 +226,44 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				organizationId: z.string().optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Update the role of a member in an organization",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											member: {
+												type: "object",
+												properties: {
+													id: {
+														type: "string",
+													},
+													userId: {
+														type: "string",
+													},
+													organizationId: {
+														type: "string",
+													},
+													role: {
+														type: "string",
+													},
+												},
+												required: ["id", "userId", "organizationId", "role"],
+											},
+										},
+										required: ["member"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
@@ -255,6 +338,38 @@ export const getActiveMember = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Get the active member in the organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										id: {
+											type: "string",
+										},
+										userId: {
+											type: "string",
+										},
+										organizationId: {
+											type: "string",
+										},
+										role: {
+											type: "string",
+										},
+									},
+									required: ["id", "userId", "organizationId", "role"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;

@@ -20,6 +20,47 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Update the current user",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										name: {
+											type: "string",
+											description: "The name of the user",
+										},
+										image: {
+											type: "string",
+											description: "The image of the user",
+										},
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user: {
+												type: "object",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const body = ctx.body as {
@@ -74,18 +115,49 @@ export const changePassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string(),
+			newPassword: z.string({
+				description: "The new password to set",
+			}),
 			/**
 			 * The current password of the user
 			 */
-			currentPassword: z.string(),
+			currentPassword: z.string({
+				description: "The current password",
+			}),
 			/**
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
-			revokeOtherSessions: z.boolean().optional(),
+			revokeOtherSessions: z
+				.boolean({
+					description: "Revoke all other sessions",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Change the password of the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											description: "The user object",
+											$ref: "#/components/schemas/User",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
@@ -214,7 +286,29 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
+		body: z.object({
+			password: z.string({
+				description: "The password of the user",
+			}),
+		}),
 		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Delete the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -235,10 +329,42 @@ export const changeEmail = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newEmail: z.string().email(),
-			callbackURL: z.string().optional(),
+			newEmail: z
+				.string({
+					description: "The new email to set",
+				})
+				.email(),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after email verification",
+				})
+				.optional(),
 		}),
-		use: [freshSessionMiddleware],
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {

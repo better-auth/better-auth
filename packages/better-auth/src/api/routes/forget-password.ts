@@ -37,15 +37,47 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.string().email(),
+			email: z
+				.string({
+					description:
+						"The email address of the user to send a password reset email to",
+				})
+				.email(),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
 			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
 			 * token=VALID_TOKEN
 			 */
-			redirectTo: z.string().optional(),
+			redirectTo: z
+				.string({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Send a password reset email to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -108,8 +140,32 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z.string(),
+			callbackURL: z.string({
+				description: "The URL to redirect the user to reset their password",
+			}),
 		}),
+		metadata: {
+			openapi: {
+				description: "Redirects the user to the callback URL with the token",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										token: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { token } = ctx.params;
@@ -144,9 +200,37 @@ export const resetPassword = createAuthEndpoint(
 		),
 		method: "POST",
 		body: z.object({
-			newPassword: z.string(),
-			token: z.string().optional(),
+			newPassword: z.string({
+				description: "The new password to set",
+			}),
+			token: z
+				.string({
+					description: "The token to reset the password",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Reset the password for a user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const token =

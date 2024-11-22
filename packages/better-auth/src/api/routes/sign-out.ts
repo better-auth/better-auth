@@ -8,6 +8,28 @@ export const signOut = createAuthEndpoint(
 	{
 		method: "POST",
 		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Sign out the current user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const sessionCookieToken = await ctx.getSignedCookie(

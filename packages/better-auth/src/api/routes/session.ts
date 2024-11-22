@@ -26,10 +26,52 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z.boolean().optional(),
+					disableCookieCache: z
+						.boolean({
+							description:
+								"Disable cookie cache and fetch session from database",
+						})
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Get the current session",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											session: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+													},
+													userId: {
+														type: "string",
+													},
+													expiresAt: {
+														type: "string",
+													},
+												},
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			try {
@@ -262,6 +304,37 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			method: "GET",
 			use: [sessionMiddleware],
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "List all active sessions for the user",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												token: {
+													type: "string",
+												},
+												userId: {
+													type: "string",
+												},
+												expiresAt: {
+													type: "string",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const sessions = await ctx.context.internalAdapter.listSessions(
@@ -284,10 +357,32 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			token: z.string(),
+			token: z.string({
+				description: "The token to revoke",
+			}),
 		}),
 		use: [sessionMiddleware],
 		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Revoke a single session",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									token: {
+										type: "string",
+									},
+								},
+								required: ["token"],
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
@@ -325,6 +420,29 @@ export const revokeSessions = createAuthEndpoint(
 		method: "POST",
 		use: [sessionMiddleware],
 		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Revoke all sessions for the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+									required: ["status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		try {
@@ -352,6 +470,29 @@ export const revokeOtherSessions = createAuthEndpoint(
 		method: "POST",
 		requireHeaders: true,
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description:
+					"Revoke all other sessions for the user except the current one",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
