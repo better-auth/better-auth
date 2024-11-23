@@ -16,6 +16,7 @@ let possiblePaths = ["auth.ts", "auth.tsx"];
 possiblePaths = [
 	...possiblePaths,
 	...possiblePaths.map((it) => `lib/server${it}`),
+	...possiblePaths.map((it) => `server${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
