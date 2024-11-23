@@ -398,6 +398,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 					role: {
 						type: "string",
