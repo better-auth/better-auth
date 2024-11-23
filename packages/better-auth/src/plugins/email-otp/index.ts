@@ -265,6 +265,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							session,
 						});
 					}
+
+					if (!user.user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(user.user.id, {
+							emailVerified: true,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
 						ctx.request,
