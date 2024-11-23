@@ -97,12 +97,14 @@ export default function V1Ship() {
 							changes={[
 								"feat: Open API Docs",
 								"docs: Sign In Box Builder",
+								"feat: default memory adapter. If no database is provided, it will use memory adapter",
 								"feat: New server only endpoints for Organization and Two Factor plugins",
 								"refactor: all core tables now have `createdAt` and `updatedAt` fields",
 								"refactor: accounts now store `expiresAt` for both refresh and access tokens",
 								"feat: Email OTP forget password flow",
 								"docs: NextAuth.js migration guide",
 								"feat: sensitive endpoints now check for fresh tokens",
+								"feat: two-factor now have different interface for redirect and callback",
 								"and a lot more bug fixes and improvements...",
 							]}
 						/>
