@@ -61,6 +61,32 @@ export const expo: () => BetterAuthPlugin = () => {
 						ctx.setHeader("location", url.toString());
 					},
 				},
+				{
+					matcher(context) {
+						return context.path?.startsWith("/sign-in/social");
+					},
+					handler: async (ctx) => {
+						const response = ctx.context.returned as Response;
+						let data = await response.json();
+
+						if (data.idToken) {
+							const cookie = ctx.responseHeader.get("set-cookie");
+							if (!cookie) {
+								return;
+							}
+
+							data = {
+								...data,
+								redirect: false,
+								cookie,
+							};
+						}
+
+						ctx.context.returned = new Response(JSON.stringify(data), {
+							status: 200,
+						});
+					},
+				},
 			],
 		},
 	};

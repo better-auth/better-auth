@@ -237,6 +237,7 @@ export const signInSocial = createAuthEndpoint(
 					c.body.callbackURL || c.query?.currentURL || c.context.options.baseURL
 				}`,
 				redirect: true,
+				idToken: true,
 			});
 		}
 

@@ -50,6 +50,17 @@ vi.mock("expo-secure-store", async () => {
 	};
 });
 
+const mockGoogleProfile = {
+	sub: "mock-user-id",
+	name: "Test User",
+	id: "mock-user-id",
+	email: "test@example.com",
+	picture: "https://example.com/avatar.jpg",
+	email_verified: true,
+	aud: "test",
+	iss: "https://accounts.google.com",
+};
+
 const fn = vi.fn();
 
 describe("expo", async () => {
@@ -65,6 +76,11 @@ describe("expo", async () => {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
+				verifyIdToken: vi.fn().mockResolvedValue(true),
+				getUserInfo: vi.fn().mockResolvedValue({
+					user: mockGoogleProfile,
+					data: mockGoogleProfile,
+				}),
 			},
 		},
 		plugins: [expo()],
@@ -129,5 +145,21 @@ describe("expo", async () => {
 			expect.stringContaining("accounts.google"),
 			"better-auth:///dashboard",
 		);
+	});
+
+	it("should be able to auth with id token", async () => {
+		const { data: res } = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			idToken: {
+				token: "test",
+			},
+		});
+		expect(res).toMatchObject({
+			idToken: true,
+			redirect: false,
+			cookie: expect.stringContaining("better-auth.session_token"),
+			url: "better-auth:///dashboard",
+		});
 	});
 });
