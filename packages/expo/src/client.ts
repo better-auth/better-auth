@@ -159,20 +159,30 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 							storage.setItem(localCacheName, JSON.stringify(data));
 						}
 
-						if (
-							context.data.redirect &&
-							context.request.url.toString().includes("/sign-in")
-						) {
-							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
-							const to = callbackURL;
-							const signInURL = context.data?.url;
-							const result = await Browser.openAuthSessionAsync(signInURL, to);
-							if (result.type !== "success") return;
-							const url = new URL(result.url);
-							const cookie = String(url.searchParams.get("cookie"));
-							if (!cookie) return;
-							storage.setItem(cookieName, getSetCookie(cookie));
-							store?.notify("$sessionSignal");
+						if (context.request.url.toString().includes("/sign-in")) {
+							const cookie =
+								context.response.headers.get("set-cookie") ?? undefined;
+							if (cookie) {
+								storage.setItem(cookieName, getSetCookie(cookie));
+								store?.notify("$sessionSignal");
+							}
+							if (context.data.redirect) {
+								const callbackURL = JSON.parse(
+									context.request.body,
+								)?.callbackURL;
+								const to = callbackURL;
+								const signInURL = context.data?.url;
+								const result = await Browser.openAuthSessionAsync(
+									signInURL,
+									to,
+								);
+								if (result.type !== "success") return;
+								const url = new URL(result.url);
+								const cookie = String(url.searchParams.get("cookie"));
+								if (!cookie) return;
+								storage.setItem(cookieName, getSetCookie(cookie));
+								store?.notify("$sessionSignal");
+							}
 						}
 					},
 				},
