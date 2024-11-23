@@ -15,7 +15,7 @@ export default {
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
 		"../node_modules/fumadocs-ui/dist/**/*.js",
-		'../node_modules/fumadocs-openapi/dist/**/*.js',
+		"../node_modules/fumadocs-openapi/dist/**/*.js",
 	],
 	presets: [
 		createPreset({

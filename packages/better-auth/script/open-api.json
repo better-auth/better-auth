@@ -1,419 +1,385 @@
 {
-  "/get-session": {
-    "get": {
-      "tags": [
-        "Session"
-      ],
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/verify-email": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [
-        {
-          "name": "token",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "callbackURL",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/reset-password/:token": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [
-        {
-          "name": "callbackURL",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/list-sessions": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/list-accounts": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/oauth-proxy-callback": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [
-        {
-          "name": "callbackURL",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "cookies",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/ok": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/error": {
-    "get": {
-      "security": [
-        {
-          "bearerAuth": []
-        }
-      ],
-      "parameters": [],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "message"
-                ]
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"/get-session": {
+		"get": {
+			"tags": ["Session"],
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/verify-email": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [
+				{
+					"name": "token",
+					"in": "query",
+					"schema": {
+						"type": "string"
+					}
+				},
+				{
+					"name": "callbackURL",
+					"in": "query",
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/reset-password/:token": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [
+				{
+					"name": "callbackURL",
+					"in": "query",
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/list-sessions": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/list-accounts": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/oauth-proxy-callback": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [
+				{
+					"name": "callbackURL",
+					"in": "query",
+					"schema": {
+						"type": "string"
+					}
+				},
+				{
+					"name": "cookies",
+					"in": "query",
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/ok": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"/error": {
+		"get": {
+			"security": [
+				{
+					"bearerAuth": []
+				}
+			],
+			"parameters": [],
+			"responses": {
+				"200": {
+					"description": "Success",
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				},
+				"400": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"message": {
+										"type": "string"
+									}
+								},
+								"required": ["message"]
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
