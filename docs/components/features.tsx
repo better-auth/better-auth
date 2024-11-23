@@ -114,7 +114,7 @@ export default function Features({ stars }: { stars: string | null }) {
 						</div>
 					))}
 				</div>
-				<div className="w-full border-l-2">
+				<div className="w-full border-l-2 hidden md:block">
 					<Testimonial />
 				</div>
 				<div className="relative col-span-3 border-t-[1.2px] border-l-[1.2px] md:border-b-[1.2px] dark:border-b-0  h-full py-20">
