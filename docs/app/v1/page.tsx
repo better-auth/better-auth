@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 	title: "V1.0 Release",
 	description: "Better Auth V1.0 release notes",
 	openGraph: {
-		images: [{ url: "https://better-auth.com/v1-og.png" }],
+		images: "https://better-auth.com/v1-og.png",
 		title: "V1.0 Release",
 		description: "Better Auth V1.0 release notes",
 		url: "https://better-auth.com/v1",
@@ -17,11 +17,12 @@ export const metadata: Metadata = {
 		siteName: "Better Auth",
 	},
 	twitter: {
-		images: [{ url: "https://better-auth.com/v1-og.png" }],
+		images: "https://better-auth.com/v1-og.png",
 		card: "summary_large_image",
 		site: "@better_auth",
 		creator: "@better_auth",
 		title: "V1.0 Release",
+		description: "Better Auth V1.0 release notes",
 	},
 };
 
