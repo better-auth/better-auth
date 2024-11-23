@@ -182,23 +182,30 @@ function ReleaseRelated() {
 							We have some exciting new features and updates that you should
 							check out.
 						</p>
-						<Button variant="outline" className="w-full justify-between">
-							<div className="flex items-center gap-2">
-								<GitHubLogoIcon fontSize={10} />
-								Star on GitHub
-							</div>
-							<ArrowRight className="w-4 h-4" />
-						</Button>
-						<Button
-							variant="outline"
-							className="w-full justify-between border-t-0"
+						<Link
+							className="w-full"
+							href="https://github.com/better-auth/better-auth"
 						>
-							<div className="flex items-center gap-2">
-								<DiscordLogoIcon />
-								Join Discord
-							</div>
-							<ArrowRight className="w-4 h-4" />
-						</Button>
+							<Button variant="outline" className="w-full justify-between">
+								<div className="flex items-center gap-2">
+									<GitHubLogoIcon fontSize={10} />
+									Star on GitHub
+								</div>
+								<ArrowRight className="w-4 h-4" />
+							</Button>
+						</Link>
+						<Link className="w-full" href="https://discord.gg/GYC3W7tZzb">
+							<Button
+								variant="outline"
+								className="w-full justify-between border-t-0"
+							>
+								<div className="flex items-center gap-2">
+									<DiscordLogoIcon />
+									Join Discord
+								</div>
+								<ArrowRight className="w-4 h-4" />
+							</Button>
+						</Link>
 					</div>
 				</div>
 			</div>
