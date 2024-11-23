@@ -1,24 +1,13 @@
 ---
+
 title: Svelte Kit Integration
 description: Learn how to integrate Better Auth with Svelte Kit
+
 ---
 
-Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](https://www.notion.so/docs/installation).
 
-### Mount the handler
-
-We need to mount the handler to svelte kit server hook.
-
-```ts title="hooks.server.ts"
-import { auth } from "$lib/auth";
-import { svelteKitHandler } from "better-auth/svelte-kit";
-
-export async function handle({ event, resolve }) {
-	return svelteKitHandler({ event, resolve, auth });
-}
-```
-
-## Create a client
+## Create the Client
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
@@ -26,68 +15,166 @@ Create a client instance. You can name the file anything you want. Here we are c
 import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svelte
 
 export const authClient = createAuthClient({
-    //you can pass client configuration here
+    // you can pass client configuration here
 })
 ```
 
 Once you have created the client, you can use it to sign up, sign in, and perform other actions.
 Some of the actions are reactive. The client use [nano-store](https://github.com/nanostores/nanostores) to store the state and reflect changes when there is a change like a user signing in or out affecting the session state.
 
-### Example usage
-```svelte
+### Example Usage
+
+```
 <script lang="ts">
   import { authClient } from "$lib/client";
   const session = authClient.useSession();
 </script>
+
+<div>
+  {#if $session.data}
     <div>
-      {#if $session.data}
-        <div>
-          <p>
-            {$session?.data?.user.name}
-          </p>
-          <button
-            on:click={async () => {
-              await authClient.signOut();
-            }}
-          >
-            Signout
-          </button>
-        </div>
-      {:else}
-        <button
-          on:click={async () => {
-            await authClient.signIn.social({
-              provider: "github",
-            });
-          }}
-        >
-          Continue with github
-        </button>
-      {/if}
+      <p>{$session?.data?.user.name}</p>
+      <button on:click={async () => await authClient.signOut()}>
+        Sign Out
+      </button>
     </div>
+  {:else}
+    <button
+      on:click={async () => {
+        await authClient.signIn.social({ provider: "github" });
+      }}
+    >
+      Continue with GitHub
+    </button>
+  {/if}
+</div>
+
 ```
 
-### Example: Getting Session on a loader
+## Mount the Handler
+
+In `hooks.server.ts`, mount the handler and attach the session data to `event.locals`. Since the handler is invoked for every incoming request and response passing through the app, the session is dynamically updated to reflect the current state.
+
+```ts title="hooks.server.ts"
+import { auth } from "$lib/auth";
+import { svelteKitHandler } from "better-auth/svelte-kit";
+
+export async function handle({ event, resolve }) {
+    // Fetch the session
+    const session = await auth.api.getSession({
+        headers: event.request.headers,
+    });
+
+    // Attach session and user data to event.locals
+    event.locals.session = session?.session;
+    event.locals.user = session?.user;
+
+    return svelteKitHandler({ event, resolve, auth });
+}
+
+```
+
+### Updating `app.d.ts`
+
+If you're using TypeScript, update `app.d.ts` to define the `session` and `user` types:
+
+```ts title="app.d.ts"
+import type { User, Session } from "better-auth/types";
+
+declare global {
+    namespace App {
+        interface Locals {
+            session: Session | undefined;
+            user: User | undefined;
+        }
+    }
+}
+
+export {};
+```
+
+### Why Attach to `event.locals`?
+
+By attaching session and user data to `event.locals`, you make it easily accessible throughout your app in server-side logic, including load functions, form actions, and endpoints. This approach ensures consistency across your app while reducing code duplication and making it more concise.
+
+## Examples of Accessing Session Data
+
+### In Load Functions
 
 ```ts title="+page.server.ts"
-import { auth } from "$lib/auth";
-import type { PageServerLoad } from "./$types";
+// Example: Protecting a Route
+import { redirect } from "@sveltejs/kit";
+export async function load({ locals }) {
+    const session = locals.session;
 
-export const load: PageServerLoad = async ({request}) => {
-	const session = await auth.api.getSession({
-		headers: request.headers,
-	});
-	if (!session) {
-		return {
-			status: 401,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				error: "Unauthorized",
-			}),
-		};
-	}
-	return session;
+    if (!session) {
+        throw redirect(302, "/auth/signin");
+    }
+
+    return { session };
 }
+
+```
+
+### Accessing Session in Svelte Pages
+
+```svelte title="+page.svelte"
+<script lang="ts">
+  // Svelte 5
+  const { data } = $props();
+  console.log(data.session);
+</script>
+```
+
+```svelte title="+page.svelte"
+<script lang="ts">
+  // Svelte 4
+  export let data;
+  console.log(data.session);
+</script>
+```
+
+### In Form Actions
+
+```ts title="+page.server.ts"
+// Example: Check session before processing form
+export const actions = {
+    default: async ({ locals, request }) => {
+        const session = locals.session;
+
+        if (!session) {
+            return { status: 401, error: "Unauthorized" };
+        }
+
+        // Process the data with session or user information
+        const formData = await request.formData();
+        const someData = formData.get("someField");
+
+        return { success: true };
+    },
+};
+
+```
+
+### In Server Endpoints
+
+```ts title="+server.ts"
+// Example: validate requests or process user-specific data
+import type { RequestHandler } from "@sveltejs/kit";
+
+export const POST: RequestHandler = async ({ locals, request }) => {
+    const session = locals.session;
+
+    if (!session) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const body = await request.json();
+
+    // Use session or user data for processing
+    return new Response(
+        JSON.stringify({ message: "Success", user: session.user }),
+        { headers: { "Content-Type": "application/json" } }
+    );
+};
 ```
