@@ -2,15 +2,34 @@
 
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ReactNode } from "react";
 import { BackgroundLines } from "./bg-line";
 import Link from "next/link";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+	title: "V1.0 Release",
+	description: "Better Auth V1.0 release notes",
+	openGraph: {
+		images: [{ url: "https://better-auth.com/v1-og.png" }],
+		title: "V1.0 Release",
+		description: "Better Auth V1.0 release notes",
+		url: "https://better-auth.com/v1",
+		type: "article",
+		siteName: "Better Auth",
+	},
+	twitter: {
+		images: [{ url: "https://better-auth.com/v1-og.png" }],
+		card: "summary_large_image",
+		site: "@better_auth",
+		creator: "@better_auth",
+		title: "V1.0 Release",
+	},
+};
 
 export default function V1Ship() {
 	return (
-		<div className="min-h-screen bg-transparnt overflow-hidden">
+		<div className="min-h-screen bg-transparent overflow-hidden">
 			<div className="h-[50vh] bg-transparent/10 relative">
 				<BackgroundLines>
 					<div className="absolute bottom-1/3 left-1/2 transform -translate-x-1/2 text-center">
@@ -186,22 +205,6 @@ function ReleaseRelated() {
 	);
 }
 
-function FeatureCard({
-	icon,
-	title,
-	description,
-}: { icon: ReactNode; title: string; description: string }) {
-	return (
-		<div className="p-6 rounded-none border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
-			<div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center mb-4">
-				{icon}
-			</div>
-			<h3 className="text-xl font-bold mb-2 font-geist">{title}</h3>
-			<p className="text-gray-400">{description}</p>
-		</div>
-	);
-}
-
 function ChangelogItem({
 	version,
 	date,
@@ -222,19 +225,5 @@ function ChangelogItem({
 				))}
 			</ul>
 		</div>
-	);
-}
-
-function ChangeCard({
-	title,
-	description,
-}: { title: string; description: string }) {
-	return (
-		<Card className="bg-white/5 rounded-none border-white/10 hover:bg-white/10 transition-colors">
-			<div className="p-6">
-				<h3 className="text-xl font-bold mb-2 font-geist-mono">{title}</h3>
-				<p className="text-gray-400 font-geist-mono">{description}</p>
-			</div>
-		</Card>
 	);
 }
