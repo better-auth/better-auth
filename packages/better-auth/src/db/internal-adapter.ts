@@ -430,7 +430,7 @@ export const createInternalAdapter = (
 			if (secondaryStorage) {
 				await secondaryStorage.delete(token);
 				if (options.session?.storeSessionInDatabase) {
-					await adapter.delete<Session>({
+					await adapter.deleteMany({
 						model: "session",
 						where: [
 							{
@@ -442,7 +442,7 @@ export const createInternalAdapter = (
 				}
 				return;
 			}
-			await adapter.delete<Session>({
+			await adapter.deleteMany({
 				model: "session",
 				where: [
 					{
