@@ -406,12 +406,14 @@ Table Name: `account`
     {
       name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the verification request expires"
+      description: "The time when the verification request expires",
+      isOptional: true,
     },
     {
       name: "refreshTokenExpiresAt",
       type: "Date",
       description: "The time when the verification request expires"
+      isOptional: true,
     },
     {
       name: "scope",
