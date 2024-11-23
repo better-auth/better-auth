@@ -1,4 +1,4 @@
-import { APIError, type Context } from "better-call";
+import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -26,10 +26,52 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * If cookie cache is enabled, it will disable the cache
 					 * and fetch the session from the database
 					 */
-					disableCookieCache: z.boolean().optional(),
+					disableCookieCache: z
+						.boolean({
+							description:
+								"Disable cookie cache and fetch session from database",
+						})
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Get the current session",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											session: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+													},
+													userId: {
+														type: "string",
+													},
+													expiresAt: {
+														type: "string",
+													},
+												},
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			try {
@@ -37,6 +79,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
+
 				if (!sessionCookieToken) {
 					return ctx.json(null);
 				}
@@ -106,7 +149,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						/**
 						 * if session expired clean up the session
 						 */
-						await ctx.context.internalAdapter.deleteSession(session.session.id);
+						await ctx.context.internalAdapter.deleteSession(
+							session.session.token,
+						);
 					}
 					return ctx.json(null);
 				}
@@ -141,7 +186,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (shouldBeUpdated) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
-							session.session.id,
+							session.session.token,
 							{
 								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
 							},
@@ -211,7 +256,7 @@ export const getSessionFromCtx = async <
 	return session as {
 		session: S & Session;
 		user: U & User;
-	};
+	} | null;
 };
 
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
@@ -220,6 +265,30 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 		throw new APIError("UNAUTHORIZED");
 	}
 
+	return {
+		session,
+	};
+});
+
+export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
+	const session = await getSessionFromCtx(ctx);
+	if (!session?.session) {
+		throw new APIError("UNAUTHORIZED");
+	}
+	if (ctx.context.sessionConfig.freshAge === 0) {
+		return {
+			session,
+		};
+	}
+	const freshAge = ctx.context.sessionConfig.freshAge;
+	const sessionAge = session.session.createdAt.valueOf();
+	const now = Date.now();
+	const isFresh = sessionAge + freshAge * 1000 > now;
+	if (!isFresh) {
+		throw new APIError("FORBIDDEN", {
+			message: "Session is not fresh",
+		});
+	}
 	return {
 		session,
 	};
@@ -235,6 +304,37 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			method: "GET",
 			use: [sessionMiddleware],
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "List all active sessions for the user",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												token: {
+													type: "string",
+												},
+												userId: {
+													type: "string",
+												},
+												expiresAt: {
+													type: "string",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const sessions = await ctx.context.internalAdapter.listSessions(
@@ -257,14 +357,36 @@ export const revokeSession = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			id: z.string(),
+			token: z.string({
+				description: "The token to revoke",
+			}),
 		}),
 		use: [sessionMiddleware],
 		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Revoke a single session",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									token: {
+										type: "string",
+									},
+								},
+								required: ["token"],
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
-		const id = ctx.body.id;
-		const findSession = await ctx.context.internalAdapter.findSession(id);
+		const token = ctx.body.token;
+		const findSession = await ctx.context.internalAdapter.findSession(token);
 		if (!findSession) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Session not found",
@@ -274,7 +396,7 @@ export const revokeSession = createAuthEndpoint(
 			throw new APIError("UNAUTHORIZED");
 		}
 		try {
-			await ctx.context.internalAdapter.deleteSession(id);
+			await ctx.context.internalAdapter.deleteSession(token);
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
@@ -298,6 +420,29 @@ export const revokeSessions = createAuthEndpoint(
 		method: "POST",
 		use: [sessionMiddleware],
 		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Revoke all sessions for the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+									required: ["status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		try {
@@ -325,6 +470,29 @@ export const revokeOtherSessions = createAuthEndpoint(
 		method: "POST",
 		requireHeaders: true,
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description:
+					"Revoke all other sessions for the user except the current one",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -338,11 +506,11 @@ export const revokeOtherSessions = createAuthEndpoint(
 			return session.expiresAt > new Date();
 		});
 		const otherSessions = activeSessions.filter(
-			(session) => session.id !== ctx.context.session.session.id,
+			(session) => session.token !== ctx.context.session.session.token,
 		);
 		await Promise.all(
 			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.id),
+				ctx.context.internalAdapter.deleteSession(session.token),
 			),
 		);
 		return ctx.json({

@@ -42,10 +42,12 @@ If you see any security issue we prefer you to disclose it via an email (securit
 1. Fork the repo
 2. clone your fork.
 3. install node.js (preferable latest LTS).
-4. run pnpm i in your terminal to install dependencies.
+4. run `pnpm i` in your terminal to install dependencies.
 5. create a branch.
-6. create a draft pull request. link the relevant issue by referring to it in the PR's description. Eg.closes #123 will link the PR to issue/pull request #123.
-7. implement your changes.
+6. build the project using `pnpm build`
+7. run `pnpm -F docs` dev (to run the docs section)
+8. create a draft pull request. link the relevant issue by referring to it in the PR's description. Eg.closes #123 will link the PR to issue/pull request #123.
+9. implement your changes.
 
 ## Testing
 

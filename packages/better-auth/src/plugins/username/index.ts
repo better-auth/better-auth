@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
+import { setSessionCookie } from "../../cookies";
 
 export const username = () => {
 	return {
@@ -20,7 +21,7 @@ export const username = () => {
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<User>({
-						model: ctx.context.tables.user.modelName,
+						model: "user",
 						where: [
 							{
 								field: "username",
@@ -39,15 +40,11 @@ export const username = () => {
 						model: "account",
 						where: [
 							{
-								field:
-									ctx.context.tables.account.fields.userId.fieldName ||
-									"userId",
+								field: "userId",
 								value: user.id,
 							},
 							{
-								field:
-									ctx.context.tables.account.fields.providerId.fieldName ||
-									"providerId",
+								field: "providerId",
 								value: "credential",
 							},
 						],
@@ -88,16 +85,10 @@ export const username = () => {
 							},
 						});
 					}
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						session.id,
-						ctx.context.secret,
-						ctx.body.rememberMe === false
-							? {
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: undefined,
-								}
-							: ctx.context.authCookies.sessionToken.options,
+					await setSessionCookie(
+						ctx,
+						{ session, user },
+						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
 						user: user,

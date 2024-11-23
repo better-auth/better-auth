@@ -29,6 +29,7 @@ import {
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
+	addMember,
 	getActiveMember,
 	removeMember,
 	updateMemberRole,
@@ -37,7 +38,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
-	listOrganization,
+	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
@@ -209,12 +210,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		deleteOrganization,
 		setActiveOrganization,
 		getFullOrganization,
-		listOrganization,
+		listOrganizations,
 		createInvitation: createInvitation(options as O),
 		cancelInvitation,
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
@@ -260,6 +262,48 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						}>;
 					}>,
 					use: [orgSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+												},
+											},
+											required: ["permission"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
+													},
+												},
+												required: ["success"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!ctx.context.session.session.activeOrganizationId) {

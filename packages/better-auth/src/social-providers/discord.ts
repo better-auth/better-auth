@@ -102,6 +102,9 @@ export const discord = (options: DiscordOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
 				"https://discord.com/api/users/@me",
 				{

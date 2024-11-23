@@ -10,7 +10,10 @@ import type {
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
 import type { UnionToIntersection } from "../../types/helper";
-import type { BetterFetchError } from "@better-fetch/fetch";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
 import { useStore } from "./react-store";
 
 function getAtomKey(str: string) {
@@ -69,21 +72,23 @@ export function createAuthClient<Option extends ClientOptions>(
 		atomListeners,
 	);
 
-	type Session = {
-		session: InferSessionFromClient<Option>;
-		user: InferUserFromClient<Option>;
-	};
+	type ClientAPI = InferClientAPI<Option>;
+	type Session = ClientAPI extends {
+		getSession: () => Promise<BetterFetchResponse<infer D>>;
+	}
+		? D
+		: ClientAPI;
 
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		InferClientAPI<Option> &
+		ClientAPI &
 		InferActions<Option> & {
 			useSession: () => {
-				data: Session | null;
+				data: Session;
 				isPending: boolean;
 				error: BetterFetchError | null;
 			};
 			$Infer: {
-				Session: Session;
+				Session: NonNullable<Session>;
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;

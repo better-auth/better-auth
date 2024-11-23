@@ -9,6 +9,9 @@ describe("general types", async (it) => {
 			session: {
 				id: string;
 				userId: string;
+				token: string;
+				createdAt: Date;
+				updatedAt: Date;
 				expiresAt: Date;
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
@@ -44,6 +47,9 @@ describe("general types", async (it) => {
 			id: string;
 			userId: string;
 			expiresAt: Date;
+			createdAt: Date;
+			updatedAt: Date;
+			token: string;
 			ipAddress?: string | undefined | null;
 			userAgent?: string | undefined | null;
 			activeOrganizationId?: string | undefined | null;

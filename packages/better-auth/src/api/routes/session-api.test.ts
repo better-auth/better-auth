@@ -82,6 +82,34 @@ describe("session", async () => {
 		expect(
 			new Date(response.data?.session?.expiresAt).getTime(),
 		).toBeGreaterThanOrEqual(nearExpiryDate.getTime());
+		vi.useRealTimers();
+	});
+
+	it("should update the session every time when set to 0", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			session: {
+				updateAge: 0,
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
+		const session2 = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session2.data?.session.expiresAt).not.toBe(
+			session.data?.session.expiresAt,
+		);
+		expect(
+			new Date(session2.data!.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(session.data!.session.expiresAt).getTime());
 	});
 
 	it("should handle 'don't remember me' option", async () => {
@@ -232,7 +260,7 @@ describe("session", async () => {
 			fetchOptions: {
 				headers,
 			},
-			id: res.data?.session?.id || "",
+			token: res.data?.session?.token || "",
 		});
 		const session = await client.getSession({
 			fetchOptions: {
@@ -280,15 +308,15 @@ describe("session storage", async () => {
 		});
 		expect(session.data).toMatchObject({
 			session: {
-				id: expect.any(String),
 				userId: expect.any(String),
+				token: expect.any(String),
 				expiresAt: expect.any(String),
 				ipAddress: expect.any(String),
 				userAgent: expect.any(String),
 			},
 			user: {
 				id: expect.any(String),
-				name: "test",
+				name: "test user",
 				email: "test@test.com",
 				emailVerified: false,
 				image: null,
@@ -320,7 +348,7 @@ describe("session storage", async () => {
 			fetchOptions: {
 				headers,
 			},
-			id: session.data?.session?.id || "",
+			token: session.data?.session?.token || "",
 		});
 		const revokedSession = await client.getSession({
 			fetchOptions: {

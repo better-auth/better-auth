@@ -103,6 +103,9 @@ export const gitlab = (options: GitlabOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<GitlabProfile>(
 				userinfoEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },

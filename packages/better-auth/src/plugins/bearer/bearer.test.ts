@@ -11,7 +11,7 @@ describe("bearer", async () => {
 	let encryptedToken: string | undefined;
 	it("should get session", async () => {
 		const { res, headers } = await signInWithTestUser();
-		token = res.data?.session.id || "";
+		token = res.data?.session.token || "";
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
@@ -22,7 +22,7 @@ describe("bearer", async () => {
 		encryptedToken = headers
 			.get("cookie")
 			?.split("better-auth.session_token=")[1];
-		expect(session.data?.session.id).toBe(res.data?.session.id);
+		expect(session.data?.session.token).toBe(res.data?.session.token);
 	});
 
 	it("should list session", async () => {
@@ -38,13 +38,13 @@ describe("bearer", async () => {
 
 	it("should work on server actions", async () => {
 		const { res } = await signInWithTestUser();
-		token = res.data?.session.id || "";
+		token = res.data?.session.token || "";
 		const headers = new Headers();
 		headers.set("authorization", `Bearer ${token}`);
 		const session = await auth.api.getSession({
 			headers,
 		});
-		expect(session?.session.id).toBe(token);
+		expect(session?.session.token).toBe(token);
 	});
 
 	it("should work with encrypted token", async () => {

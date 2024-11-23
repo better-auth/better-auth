@@ -10,7 +10,6 @@ exports[`init > should match config 1`] = `
     "findOne": [Function],
     "id": "kysely",
     "options": {
-      "generateId": undefined,
       "type": "sqlite",
     },
     "update": [Function],
@@ -50,6 +49,7 @@ exports[`init > should match config 1`] = `
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
+  "generateId": [Function],
   "internalAdapter": {
     "createAccount": [Function],
     "createOAuthUser": [Function],
@@ -123,6 +123,7 @@ exports[`init > should match config 1`] = `
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
+    "freshAge": 300,
     "updateAge": 86400,
   },
   "socialProviders": [],
@@ -134,14 +135,19 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "accessTokenExpiresAt": {
+          "fieldName": "accessTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
         "accountId": {
           "fieldName": "accountId",
           "required": true,
           "type": "string",
         },
-        "expiresAt": {
-          "fieldName": "expiresAt",
-          "required": false,
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
           "type": "date",
         },
         "idToken": {
@@ -164,6 +170,21 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "refreshTokenExpiresAt": {
+          "fieldName": "refreshTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
+        "scope": {
+          "fieldName": "scope",
+          "required": false,
+          "type": "string",
+        },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
+        },
         "userId": {
           "fieldName": "userId",
           "references": {
@@ -180,6 +201,11 @@ exports[`init > should match config 1`] = `
     },
     "session": {
       "fields": {
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,
@@ -189,6 +215,17 @@ exports[`init > should match config 1`] = `
           "fieldName": "ipAddress",
           "required": false,
           "type": "string",
+        },
+        "token": {
+          "fieldName": "token",
+          "required": true,
+          "type": "string",
+          "unique": true,
+        },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
         },
         "userAgent": {
           "fieldName": "userAgent",
@@ -267,6 +304,12 @@ exports[`init > should match config 1`] = `
           "required": true,
           "type": "string",
         },
+        "updatedAt": {
+          "defaultValue": [Function],
+          "fieldName": "updatedAt",
+          "required": false,
+          "type": "date",
+        },
         "value": {
           "fieldName": "value",
           "required": true,
@@ -280,6 +323,5 @@ exports[`init > should match config 1`] = `
   "trustedOrigins": [
     "http://localhost:3000",
   ],
-  "uuid": [Function],
 }
 `;

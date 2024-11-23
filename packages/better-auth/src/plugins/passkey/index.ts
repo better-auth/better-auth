@@ -15,7 +15,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import { getSessionFromCtx } from "../../api/routes";
+import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
@@ -23,8 +23,8 @@ import type {
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
-import { generateId } from "../../utils/id";
 import { env } from "../../utils/env";
+import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 
 interface WebAuthnChallengeValue {
@@ -114,7 +114,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-register-options",
 				{
 					method: "GET",
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
 					metadata: {
 						client: false,
 					},
@@ -153,7 +153,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 					});
 
-					const id = generateId();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -224,7 +224,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							id: session?.user.id || "",
 						},
 					};
-					const id = generateId();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -254,7 +254,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						response: z.any(),
 						name: z.string().optional(),
 					}),
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
@@ -314,11 +314,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							credentialBackedUp,
 						} = registrationInfo;
 						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
-						const userID = generateId();
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							webauthnUserID: userID,
+							webauthnUserID: ctx.context.generateId({ model: "passkey" }),
 							id: credentialID,
 							publicKey: pubKey,
 							counter,

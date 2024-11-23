@@ -345,6 +345,16 @@ Table Name: `session`
       description: "The user agent information of the device",
       isOptional: true
     },
+      {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
   />
 
@@ -389,10 +399,19 @@ Table Name: `account`
       isOptional: true,
     },
     {
-      name: "expiresAt",
+      name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the access token expires",
-      isOptional: true,
+      description: "The time when the verification request expires"
+    },
+    {
+      name: "refreshTokenExpiresAt",
+      type: "Date",
+      description: "The time when the verification request expires"
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "The scope of the account. Returned by the provider",
     },
     {
       name: "password",
@@ -400,6 +419,16 @@ Table Name: `account`
       description: "The password of the account. Mainly used for email and password authentication",
       isOptional: true,
     },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
 />
 
@@ -435,6 +464,11 @@ Table Name: `verification`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
     }
   ]}
 />
@@ -549,22 +583,24 @@ res.user.lang // > "fr"
 
 ### ID Generation
 
-Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can pass your own function through the adapter or database configuration.
+Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` section of the <Link href="/docs/reference/options">options</Link>.
 
 **Guidelines:**
 
 - IDs need to be in string format.
 - The ID should be unique for each entity type (like users, sessions, etc.).
-- Since the session ID acts as the token, it should be both unique and sufficiently long for security.
+- Since the session token acts as the token, it should be both unique and sufficiently long for security.
 
-**Example: Built In Kysley Adapter**
+**Example: Custom ID Generation**
 ```ts title="auth.ts" 
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
 export const auth = betterAuth({
    database: {
-      db: db,
+      db: db
+   },
+   advanced: {
       generateId: () => {
          // custom id generation logic
       }
@@ -572,21 +608,22 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Prisma Adapter**
-```ts title="auth.ts"
+You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
+
+**Example: Automatic Database IDs**
+```ts title="auth.ts" 
 import { betterAuth } from "better-auth";
+import { db } from "./db";
 
 export const auth = betterAuth({
-   database: prismaAdapter(prisma, {
-      provider: "sqlite",
-      generateId: () => {
-         // custom id generation logic
-      }
-   })
+   database: {
+      db: db
+   },
+   advanced: {
+      generateId: false,
+   },
 })
 ```
-
-You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
 
 ### Database Hooks
 

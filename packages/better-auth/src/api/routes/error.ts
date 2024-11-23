@@ -87,7 +87,24 @@ export const error = createAuthEndpoint(
 	"/error",
 	{
 		method: "GET",
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			openapi: {
+				description: "Displays an error page",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"text/html": {
+								schema: {
+									type: "string",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const query =

@@ -2,7 +2,7 @@ import { z, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { sessionMiddleware } from "./session";
+import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
@@ -20,6 +20,47 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Update the current user",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										name: {
+											type: "string",
+											description: "The name of the user",
+										},
+										image: {
+											type: "string",
+											description: "The image of the user",
+										},
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user: {
+												type: "object",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const body = ctx.body as {
@@ -74,18 +115,49 @@ export const changePassword = createAuthEndpoint(
 			/**
 			 * The new password to set
 			 */
-			newPassword: z.string(),
+			newPassword: z.string({
+				description: "The new password to set",
+			}),
 			/**
 			 * The current password of the user
 			 */
-			currentPassword: z.string(),
+			currentPassword: z.string({
+				description: "The current password",
+			}),
 			/**
 			 * revoke all sessions that are not the
 			 * current one logged in by the user
 			 */
-			revokeOtherSessions: z.boolean().optional(),
+			revokeOtherSessions: z
+				.boolean({
+					description: "Revoke all other sessions",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Change the password of the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											description: "The user object",
+											$ref: "#/components/schemas/User",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
@@ -215,33 +287,31 @@ export const deleteUser = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			password: z.string(),
+			password: z.string({
+				description: "The password of the user",
+			}),
 		}),
-		use: [sessionMiddleware],
+		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Delete the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
-		const { password } = ctx.body;
 		const session = ctx.context.session;
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
-		);
-		if (!account || !account.password) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User does not have a password",
-			});
-		}
-		const verify = await ctx.context.password.verify(
-			account.password,
-			password,
-		);
-		if (!verify) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Incorrect password",
-			});
-		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		deleteSessionCookie(ctx);
@@ -259,10 +329,42 @@ export const changeEmail = createAuthEndpoint(
 			})
 			.optional(),
 		body: z.object({
-			newEmail: z.string().email(),
-			callbackURL: z.string().optional(),
+			newEmail: z
+				.string({
+					description: "The new email to set",
+				})
+				.email(),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after email verification",
+				})
+				.optional(),
 		}),
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {

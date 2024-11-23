@@ -30,7 +30,7 @@ const { data } = await authClient.signIn.email({
     password: "securepassword"
 });
 
-const token = data.session.id;
+const token = data.session.token
 // Store the token securely (e.g., in localStorage)
 localStorage.setItem("bearer_token", token);
 ```

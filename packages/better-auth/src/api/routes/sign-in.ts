@@ -25,25 +25,41 @@ export const signInSocial = createAuthEndpoint(
 			 * Callback URL to redirect to after the user
 			 * has signed in.
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to redirect to after the user has signed in",
+				})
+				.optional(),
 			/**
 			 * Callback url to redirect to if an error happens
 			 *
 			 * If it's initiated from the client sdk this defaults to
 			 * the current url.
 			 */
-			errorCallbackURL: z.string().optional(),
+			errorCallbackURL: z
+				.string({
+					description: "Callback URL to redirect to if an error happens",
+				})
+				.optional(),
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList),
+			provider: z.enum(socialProviderList, {
+				description: "OAuth2 provider to use",
+			}),
 			/**
 			 * Disable automatic redirection to the provider
 			 *
 			 * This is useful if you want to handle the redirection
 			 * yourself like in a popup or a different tab.
 			 */
-			disableRedirect: z.boolean().optional(),
+			disableRedirect: z
+				.boolean({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
 			/**
 			 * ID token from the provider
 			 *
@@ -60,26 +76,80 @@ export const signInSocial = createAuthEndpoint(
 					/**
 					 * ID token from the provider
 					 */
-					token: z.string(),
+					token: z.string({
+						description: "ID token from the provider",
+					}),
 					/**
 					 * The nonce used to generate the token
 					 */
-					nonce: z.string().optional(),
+					nonce: z
+						.string({
+							description: "Nonce used to generate the token",
+						})
+						.optional(),
 					/**
 					 * Access token from the provider
 					 */
-					accessToken: z.string().optional(),
+					accessToken: z
+						.string({
+							description: "Access token from the provider",
+						})
+						.optional(),
 					/**
 					 * Refresh token from the provider
 					 */
-					refreshToken: z.string().optional(),
+					refreshToken: z
+						.string({
+							description: "Refresh token from the provider",
+						})
+						.optional(),
 					/**
 					 * Expiry date of the token
 					 */
-					expiresAt: z.number().optional(),
+					expiresAt: z
+						.number({
+							description: "Expiry date of the token",
+						})
+						.optional(),
 				}),
+				{
+					description:
+						"ID token from the provider to sign in the user with id token",
+				},
 			),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with a social provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										session: {
+											type: "string",
+										},
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -192,22 +262,69 @@ export const signInEmail = createAuthEndpoint(
 			/**
 			 * Email of the user
 			 */
-			email: z.string(),
+			email: z.string({
+				description: "Email of the user",
+			}),
 			/**
 			 * Password of the user
 			 */
-			password: z.string(),
+			password: z.string({
+				description: "Password of the user",
+			}),
 			/**
 			 * Callback URL to use as a redirect for email
 			 * verification and for possible redirects
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to use as a redirect for email verification",
+				})
+				.optional(),
 			/**
 			 * If this is false, the session will not be remembered
 			 * @default true
 			 */
-			rememberMe: z.boolean().default(true).optional(),
+			rememberMe: z
+				.boolean({
+					description:
+						"If this is false, the session will not be remembered. Default is `true`.",
+				})
+				.default(true)
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with email and password",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										session: {
+											type: "string",
+										},
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
@@ -269,10 +386,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				ctx.context.logger.error(
-					"Email verification is required but no email verification handler is provided",
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				throw new APIError("UNAUTHORIZED", {
 					message: "Email is not verified.",
 				});
 			}

@@ -1,8 +1,14 @@
 import type { Session, User } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
-import type { Invitation, Member, Organization } from "./schema";
+import type {
+	Invitation,
+	InvitationInput,
+	Member,
+	MemberInput,
+	Organization,
+	OrganizationInput,
+} from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
 
@@ -25,10 +31,13 @@ export const getOrgAdapter = (
 			return organization;
 		},
 		createOrganization: async (data: {
-			organization: Organization;
+			organization: OrganizationInput;
 			user: User;
 		}) => {
-			const organization = await adapter.create<Organization>({
+			const organization = await adapter.create<
+				OrganizationInput,
+				Organization
+			>({
 				model: "organization",
 				data: {
 					...data.organization,
@@ -37,10 +46,9 @@ export const getOrgAdapter = (
 						: undefined,
 				},
 			});
-			const member = await adapter.create<Member>({
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: {
-					id: generateId(),
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
@@ -183,8 +191,8 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		createMember: async (data: Member) => {
-			const member = await adapter.create<Member>({
+		createMember: async (data: MemberInput) => {
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: data,
 			});
@@ -264,12 +272,15 @@ export const getOrgAdapter = (
 			return organizationId;
 		},
 		setActiveOrganization: async (
-			sessionId: string,
+			sessionToken: string,
 			organizationId: string | null,
 		) => {
-			const session = await context.internalAdapter.updateSession(sessionId, {
-				activeOrganizationId: organizationId,
-			});
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
+					activeOrganizationId: organizationId,
+				},
+			);
 			return session as Session;
 		},
 		findOrganizationById: async (organizationId: string) => {
@@ -380,10 +391,9 @@ export const getOrgAdapter = (
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
 			);
-			const invite = await adapter.create<Invitation>({
+			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
 				data: {
-					id: generateId(),
 					email: invitation.email,
 					role: invitation.role,
 					organizationId: invitation.organizationId,

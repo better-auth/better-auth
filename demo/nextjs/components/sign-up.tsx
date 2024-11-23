@@ -166,8 +166,8 @@ export function SignUp() {
 									onError: (ctx) => {
 										toast.error(ctx.error.message);
 									},
-									onSuccess: () => {
-										router.push("/");
+									onSuccess: async () => {
+										router.push("/dashboard");
 									},
 								},
 							});

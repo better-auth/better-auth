@@ -1,4 +1,4 @@
-import { source } from "@/app/source";
+import { source, openapi } from "@/app/source";
 import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
@@ -87,7 +87,7 @@ export async function generateStaticParams() {
 	const res = source.getPages().map((page) => ({
 		slug: page.slugs,
 	}));
-	return res;
+	return source.generateParams();
 }
 
 export async function generateMetadata({

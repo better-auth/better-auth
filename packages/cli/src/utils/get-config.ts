@@ -26,10 +26,11 @@ possiblePaths = [
 ];
 
 function stripJsonComments(jsonString: string): string {
-	return jsonString.replace(
-		/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
-		(m, g) => (g ? "" : m),
-	);
+	return jsonString
+		.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
+			g ? "" : m,
+		)
+		.replace(/,(?=\s*[}\]])/g, "");
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {

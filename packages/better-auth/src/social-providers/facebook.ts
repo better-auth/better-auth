@@ -42,6 +42,9 @@ export const facebook = (options: FacebookOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
 				"https://graph.facebook.com/me?fields=id,name,email,picture",
 				{

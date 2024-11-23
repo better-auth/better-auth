@@ -27,25 +27,33 @@ model User {
 model Session {
   id        String   @id @map("_id")
   expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
   ipAddress String?
   userAgent String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([token])
   @@map("session")
 }
 
 model Account {
-  id           String    @id @map("_id")
-  accountId    String
-  providerId   String
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken  String?
-  refreshToken String?
-  idToken      String?
-  expiresAt    DateTime?
-  password     String?
+  id                    String    @id @map("_id")
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
 
   @@map("account")
 }
@@ -56,6 +64,7 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime?
+  updatedAt  DateTime?
 
   @@map("verification")
 }

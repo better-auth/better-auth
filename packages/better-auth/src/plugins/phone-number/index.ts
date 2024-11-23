@@ -319,7 +319,7 @@ export const phoneNumber = (options?: {
 					}
 
 					let user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
-						model: ctx.context.tables.user.modelName,
+						model: "user",
 						where: [
 							{
 								value: ctx.body.phoneNumber,

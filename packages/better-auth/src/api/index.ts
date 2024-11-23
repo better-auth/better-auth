@@ -1,4 +1,14 @@
-import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
+import {
+	APIError,
+	type CookieOptions,
+	type CookiePrefixOptions,
+	type Endpoint,
+	createRouter,
+	getCookie,
+	getSignedCookie,
+	setCookie,
+	setSignedCookie,
+} from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
@@ -115,45 +125,89 @@ export function getEndpoints<
 		error,
 	};
 	let api: Record<string, any> = {};
-	for (const [key, endpointOptions] of Object.entries(endpoints)) {
+	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
+			endpoint.headers = new Headers();
+			let internalCtx = {
+				setHeader(key: string, value: string) {
+					endpoint.headers.set(key, value);
+				},
+				setCookie(key: string, value: string, options?: CookieOptions) {
+					setCookie(endpoint.headers, key, value, options);
+				},
+				getCookie(key: string, prefix?: CookiePrefixOptions) {
+					const header = context.headers;
+					const cookieH = header?.get("cookie");
+					const cookie = getCookie(cookieH || "", key, prefix);
+					return cookie;
+				},
+				getSignedCookie(
+					key: string,
+					secret: string,
+					prefix?: CookiePrefixOptions,
+				) {
+					const header = context.headers;
+					if (!header) {
+						return null;
+					}
+					const cookie = getSignedCookie(header, secret, key, prefix);
+					return cookie;
+				},
+				async setSignedCookie(
+					key: string,
+					value: string,
+					secret: string | BufferSource,
+					options?: CookieOptions,
+				) {
+					await setSignedCookie(endpoint.headers, key, value, secret, options);
+				},
+				redirect(url: string) {
+					endpoint.headers.set("Location", url);
+					return new APIError("FOUND");
+				},
+				responseHeader: endpoint.headers,
+			};
+
 			let authCtx = await ctx;
-			// clear session so it doesn't persist between requests
+
+			let internalContext = {
+				...internalCtx,
+				...context,
+				path: endpoint.path,
+				context: {
+					...authCtx,
+					...context.context,
+					endpoint,
+				},
+			};
+
 			authCtx.session = null;
-			for (const plugin of options.plugins || []) {
-				if (plugin.hooks?.before) {
-					for (const hook of plugin.hooks.before) {
-						const ctx = {
-							...endpointOptions,
-							...context,
-							context: {
-								...authCtx,
-								...context?.context,
-							},
+			const plugins = options.plugins || [];
+			for (const plugin of plugins) {
+				const beforeHooks = plugin.hooks?.before ?? [];
+				for (const hook of beforeHooks) {
+					if (!hook.matcher(internalContext)) continue;
+					const hookRes = await hook.handler(internalContext);
+					if (hookRes && "context" in hookRes) {
+						// modify the context with the response from the hook
+						internalContext = {
+							...internalContext,
+							...hookRes.context,
 						};
-						const match = hook.matcher(ctx);
-						if (match) {
-							const hookRes = await hook.handler(ctx);
-							if (hookRes && "context" in hookRes) {
-								context = {
-									...hookRes,
-									...context,
-								};
-							}
-						}
+						continue;
+					}
+
+					if (hookRes) {
+						// return with the response from the hook
+						return hookRes;
 					}
 				}
 			}
+
 			let endpointRes: any;
 			try {
 				//@ts-ignore
-				endpointRes = await endpointOptions({
-					...context,
-					context: {
-						...authCtx,
-						...context.context,
-					},
-				});
+				endpointRes = await endpoint(internalContext);
 			} catch (e) {
 				if (e instanceof APIError) {
 					const afterPlugins = options.plugins
@@ -165,90 +219,81 @@ export function getEndpoints<
 						.filter((plugin) => plugin !== undefined)
 						.flat();
 
+					/**
+					 * If there are no after plugins, we can directly throw the error
+					 */
 					if (!afterPlugins?.length) {
+						e.headers = endpoint.headers;
 						throw e;
 					}
-
-					let response = new Response(JSON.stringify(e.body), {
-						status: statusCode[e.status],
-						headers: e.headers,
-					});
-
-					let pluginResponse: Request | undefined = undefined;
-
+					internalContext.context.returned = e;
+					internalContext.context.returned.headers = endpoint.headers;
 					for (const hook of afterPlugins || []) {
-						const ctx = {
-							...endpointOptions,
-							...context,
-							context: {
-								...authCtx,
-								...context.context,
-								endpoint: endpointOptions,
-								returned: response,
-							},
-						};
-
-						const match = hook.matcher(ctx);
+						const match = hook.matcher(internalContext);
 						if (match) {
-							const hookRes = await hook.handler(ctx);
-							if (hookRes && "response" in hookRes) {
-								pluginResponse = hookRes.response as any;
+							try {
+								const hookRes = await hook.handler(internalContext);
+								if (hookRes && "response" in hookRes) {
+									internalContext.context.returned = hookRes.response;
+								}
+							} catch (e) {
+								if (e instanceof APIError) {
+									internalContext.context.returned = e;
+									continue;
+								}
+								throw e;
 							}
 						}
 					}
-					if (pluginResponse instanceof Response) {
-						return pluginResponse;
+					if (internalContext.context.returned instanceof APIError) {
+						// set the headers from the endpoint
+						internalContext.context.returned.headers = endpoint.headers;
+						throw internalContext.context.returned;
 					}
-					throw e;
+
+					return internalContext.context.returned;
 				}
 				throw e;
 			}
-			let response = endpointRes;
+			internalContext.context.returned = endpointRes;
+			internalContext.responseHeader = endpoint.headers;
 			for (const plugin of options.plugins || []) {
 				if (plugin.hooks?.after) {
 					for (const hook of plugin.hooks.after) {
-						const ctx = {
-							...endpointOptions,
-							...context,
-							context: {
-								...authCtx,
-								...context.context,
-								endpoint: endpointOptions,
-								returned: response,
-							},
-						};
-						const match = hook.matcher(ctx);
+						const match = hook.matcher(internalContext);
 						if (match) {
-							const hookRes = await hook.handler(ctx);
-							if (hookRes) {
-								if ("response" in hookRes) {
-									response = hookRes.response as any;
+							try {
+								const hookRes = await hook.handler(internalContext);
+								if (hookRes) {
+									internalContext.context.returned = hookRes;
 								}
-								if ("responseHeader" in hookRes) {
-									if (response instanceof Response) {
-										response = new Response(response.body, {
-											status: response.status,
-											headers: {
-												...response.headers,
-												...hookRes.responseHeader,
-											},
-										});
-									} else {
-										api[key].headers = hookRes.responseHeader;
-									}
+							} catch (e) {
+								if (e instanceof APIError) {
+									internalContext.context.returned = e;
+									continue;
 								}
+								throw e;
 							}
 						}
 					}
 				}
 			}
-
+			const response = internalContext.context.returned;
+			if (response instanceof Response) {
+				endpoint.headers.forEach((value, key) => {
+					if (key === "set-cookie") {
+						response.headers.append(key, value);
+					} else {
+						response.headers.set(key, value);
+					}
+				});
+			}
 			return response;
 		};
-		api[key].path = endpointOptions.path;
-		api[key].method = endpointOptions.method;
-		api[key].options = endpointOptions.options;
-		api[key].headers = endpointOptions.headers;
+		api[key].path = endpoint.path;
+		api[key].method = endpoint.method;
+		api[key].options = endpoint.options;
+		api[key].headers = endpoint.headers;
 	}
 	return {
 		api: api as typeof endpoints & PluginEndpoint,

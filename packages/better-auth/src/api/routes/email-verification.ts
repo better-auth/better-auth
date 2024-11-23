@@ -38,13 +38,68 @@ export const sendVerificationEmail = createAuthEndpoint(
 		method: "POST",
 		query: z
 			.object({
-				currentURL: z.string().optional(),
+				currentURL: z
+					.string({
+						description: "The URL to use for email verification callback",
+					})
+					.optional(),
 			})
 			.optional(),
 		body: z.object({
-			email: z.string().email(),
-			callbackURL: z.string().optional(),
+			email: z
+				.string({
+					description: "The email to send the verification email to",
+				})
+				.email(),
+			callbackURL: z
+				.string({
+					description: "The URL to use for email verification callback",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Send a verification email to the user",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									email: {
+										type: "string",
+										description: "The email to send the verification email to",
+									},
+									callbackURL: {
+										type: "string",
+										description:
+											"The URL to use for email verification callback",
+									},
+								},
+								required: ["email"],
+							},
+						},
+					},
+				},
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
@@ -85,9 +140,41 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string(),
-			callbackURL: z.string().optional(),
+			token: z.string({
+				description: "The token to verify the email",
+			}),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after email verification",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Verify the email of the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										status: {
+											type: "boolean",
+										},
+									},
+									required: ["user", "status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		function redirectOnError(error: string) {

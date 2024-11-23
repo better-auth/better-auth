@@ -12,7 +12,6 @@ import type {
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
-import { getDate } from "../../utils/date";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -30,6 +29,60 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				password: ZodString;
 			}> &
 				toZod<AdditionalUserFieldsInput<O>>,
+			metadata: {
+				openapi: {
+					description: "Sign up a user using email and password",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										name: {
+											type: "string",
+											description: "The name of the user",
+										},
+										email: {
+											type: "string",
+											description: "The email of the user",
+										},
+										password: {
+											type: "string",
+											description: "The password of the user",
+										},
+										callbackURL: {
+											type: "string",
+											description:
+												"The URL to use for email verification callback",
+										},
+									},
+									required: ["name", "email", "password"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user: {
+												type: "object",
+											},
+											session: {
+												type: "object",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!ctx.context.options.emailAndPassword?.enabled) {
@@ -115,7 +168,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				providerId: "credential",
 				accountId: createdUser.id,
 				password: hash,
-				expiresAt: getDate(60 * 60 * 24 * 30, "sec"),
 			});
 			if (ctx.context.options.emailVerification?.sendOnSignUp) {
 				const token = await createEmailVerificationToken(

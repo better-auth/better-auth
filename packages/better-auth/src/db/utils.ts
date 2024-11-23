@@ -1,14 +1,24 @@
-import type { FieldAttribute } from ".";
+import { getAuthTables, type FieldAttribute } from ".";
 import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import type { Adapter } from "../types/adapter";
-import { getAuthTables } from "./get-tables";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
+import { memoryAdapter } from "../adapters/memory-adapter";
+import { logger } from "../utils";
 
 export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
-		throw new BetterAuthError("Database configuration is required");
+		const tables = getAuthTables(options);
+		const memoryDB = Object.keys(tables).reduce((acc, key) => {
+			// @ts-ignore
+			acc[key] = [];
+			return acc;
+		}, {});
+		logger.warn(
+			"No database configuration provided. Using memory adapter in development",
+		);
+		return memoryAdapter(memoryDB)(options);
 	}
 
 	if (typeof options.database === "function") {
@@ -20,10 +30,6 @@ export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
 	return kyselyAdapter(kysely, {
-		generateId:
-			"generateId" in options.database
-				? options.database.generateId
-				: undefined,
 		type: databaseType || "sqlite",
 	})(options);
 }

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { getSessionFromCtx } from "../../../api/routes";
-import { generateId } from "../../../utils/id";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferRolesFromOption } from "../schema";
@@ -17,11 +16,73 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			method: "POST",
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
-				email: z.string(),
-				role: z.string() as unknown as InferRolesFromOption<O>,
-				organizationId: z.string().optional(),
-				resend: z.boolean().optional(),
+				email: z.string({
+					description: "The email address of the user to invite",
+				}),
+				role: z.string({
+					description: "The role to assign to the user",
+				}) as unknown as InferRolesFromOption<O>,
+				organizationId: z
+					.string({
+						description: "The organization ID to invite the user to",
+					})
+					.optional(),
+				resend: z
+					.boolean({
+						description:
+							"Resend the invitation email, if the user is already invited",
+					})
+					.optional(),
 			}),
+			metadata: {
+				openapi: {
+					description: "Invite a user to an organization",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+											},
+											email: {
+												type: "string",
+											},
+											role: {
+												type: "string",
+											},
+											organizationId: {
+												type: "string",
+											},
+											inviterId: {
+												type: "string",
+											},
+											status: {
+												type: "string",
+											},
+											expiresAt: {
+												type: "string",
+											},
+										},
+										required: [
+											"id",
+											"email",
+											"role",
+											"organizationId",
+											"inviterId",
+											"status",
+											"expiresAt",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!ctx.context.orgOptions.sendInvitationEmail) {
@@ -122,9 +183,36 @@ export const acceptInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string(),
+			invitationId: z.string({
+				description: "The ID of the invitation to accept",
+			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Accept an invitation to an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										invitation: {
+											type: "object",
+										},
+										member: {
+											type: "object",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -149,14 +237,13 @@ export const acceptInvitation = createAuthEndpoint(
 			status: "accepted",
 		});
 		const member = await adapter.createMember({
-			id: generateId(),
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
 			role: invitation.role,
 			createdAt: new Date(),
 		});
 		await adapter.setActiveOrganization(
-			session.session.id,
+			session.session.token,
 			invitation.organizationId,
 		);
 		if (!acceptedI) {
@@ -178,9 +265,36 @@ export const rejectInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string(),
+			invitationId: z.string({
+				description: "The ID of the invitation to reject",
+			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Reject an invitation to an organization",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										invitation: {
+											type: "object",
+										},
+										member: {
+											type: "null",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -216,9 +330,31 @@ export const cancelInvitation = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			invitationId: z.string(),
+			invitationId: z.string({
+				description: "The ID of the invitation to cancel",
+			}),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		openapi: {
+			description: "Cancel an invitation to an organization",
+			responses: {
+				"200": {
+					description: "Success",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									invitation: {
+										type: "object",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -261,8 +397,71 @@ export const getInvitation = createAuthEndpoint(
 		use: [orgMiddleware],
 		requireHeaders: true,
 		query: z.object({
-			id: z.string(),
+			id: z.string({
+				description: "The ID of the invitation to get",
+			}),
 		}),
+		metadata: {
+			openapi: {
+				description: "Get an invitation by ID",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										id: {
+											type: "string",
+										},
+										email: {
+											type: "string",
+										},
+										role: {
+											type: "string",
+										},
+										organizationId: {
+											type: "string",
+										},
+										inviterId: {
+											type: "string",
+										},
+										status: {
+											type: "string",
+										},
+										expiresAt: {
+											type: "string",
+										},
+										organizationName: {
+											type: "string",
+										},
+										organizationSlug: {
+											type: "string",
+										},
+										inviterEmail: {
+											type: "string",
+										},
+									},
+									required: [
+										"id",
+										"email",
+										"role",
+										"organizationId",
+										"inviterId",
+										"status",
+										"expiresAt",
+										"organizationName",
+										"organizationSlug",
+										"inviterEmail",
+									],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
