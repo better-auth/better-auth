@@ -12,24 +12,17 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Separator } from "../ui/separator";
 import { useAtom } from "jotai";
 import { optionsAtom } from "./store";
 import { socialProviders } from "./social-provider";
 import { cn } from "@/lib/utils";
 
 export default function SignIn() {
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [rememberMe, setRememberMe] = useState(false);
-	const router = useRouter();
-	const [loading, setLoading] = useState(false);
-	const [options, setOptions] = useAtom(optionsAtom);
+	const [options] = useAtom(optionsAtom);
 	return (
 		<Card className="z-50 rounded-none max-w-md">
 			<CardHeader>
@@ -49,10 +42,6 @@ export default function SignIn() {
 									type="email"
 									placeholder="m@example.com"
 									required
-									onChange={(e) => {
-										setEmail(e.target.value);
-									}}
-									value={email}
 								/>
 							</div>
 
@@ -79,11 +68,7 @@ export default function SignIn() {
 
 							{options.rememberMe && (
 								<div className="flex items-center gap-2">
-									<Checkbox
-										onClick={() => {
-											setRememberMe(!rememberMe);
-										}}
-									/>
+									<Checkbox />
 									<Label>Remember me</Label>
 								</div>
 							)}
@@ -98,10 +83,6 @@ export default function SignIn() {
 								type="email"
 								placeholder="m@example.com"
 								required
-								onChange={(e) => {
-									setEmail(e.target.value);
-								}}
-								value={email}
 							/>
 							<Button className="gap-2" onClick={async () => {}}>
 								Sign-in with Magic Link
@@ -110,26 +91,13 @@ export default function SignIn() {
 					)}
 
 					{options.email && (
-						<Button
-							type="submit"
-							className="w-full"
-							disabled={loading}
-							onClick={async () => {}}
-						>
-							{loading ? (
-								<Loader2 size={16} className="animate-spin" />
-							) : (
-								"Login"
-							)}
+						<Button type="submit" className="w-full" onClick={async () => {}}>
+							Login
 						</Button>
 					)}
 
 					{options.passkey && (
-						<Button
-							variant="secondary"
-							className="gap-2"
-							onClick={async () => {}}
-						>
+						<Button variant="secondary" className="gap-2">
 							<Key size={16} />
 							Sign-in with Passkey
 						</Button>
@@ -154,7 +122,6 @@ export default function SignIn() {
 												? "flex-grow"
 												: "w-full gap-2",
 										)}
-										onClick={async () => {}}
 									>
 										<Icon width="1.2em" height="1.2em" />
 										{options.socialProviders.length <= 3 &&

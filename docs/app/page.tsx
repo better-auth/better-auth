@@ -24,9 +24,9 @@ async function getGitHubStars() {
 export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
-		<main className="h-min mx-auto ">
+		<main className="h-min mx-auto overflow-x-hidden">
 			<Section
-				className="-z-1 mb-1  overflow-y-clip"
+				className="-z-1 mb-1 overflow-y-clip"
 				crosses
 				crossesOffset="lg:translate-y-[5.25rem]"
 				customPaddings
