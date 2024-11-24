@@ -194,8 +194,7 @@ import {  createAuthMiddleware } from "better-auth/plugins";
 const myPlugin = {
     id: "my-plugin",
     hooks: {
-        before: {
-            [{
+        before: [{
                 matcher: (context)=>{
                     return context.headers.get("x-my-header") === "my-value"
                 },
@@ -205,8 +204,7 @@ const myPlugin = {
                         context: ctx // if you want to modify the context
                     }
                 })
-            }]
-        },
+            }],
         after: [{
             matcher: (context)=>{
                 return context.req.method === "POST
