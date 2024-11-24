@@ -206,7 +206,11 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  ${options.rememberMe ? 'const [rememberMe, setRememberMe] = useState(false);' : ''}
+  ${
+		options.rememberMe
+			? "const [rememberMe, setRememberMe] = useState(false);"
+			: ""
+	}
   
   return (
     <Card className="max-w-md">
@@ -218,8 +222,9 @@ export default function SignIn() {
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
-          ${options.email ? 
-            `<div className="grid gap-2">
+          ${
+						options.email
+							? `<div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -236,14 +241,16 @@ export default function SignIn() {
             <div className="grid gap-2">
               <div className="flex items-center">
                 <Label htmlFor="password">Password</Label>
-                ${options.forgetPassword ? 
-                  `<Link
+                ${
+									options.forgetPassword
+										? `<Link
                     href="#"
                     className="ml-auto inline-block text-sm underline"
                   >
                     Forgot your password?
                   </Link>`
-                : ''}
+										: ""
+								}
               </div>
 
               <Input
@@ -256,8 +263,9 @@ export default function SignIn() {
               />
             </div>
 
-            ${options.rememberMe ? 
-              `<div className="flex items-center gap-2">
+            ${
+							options.rememberMe
+								? `<div className="flex items-center gap-2">
                 <Checkbox
                   id="remember"
                   onClick={() => {
@@ -266,11 +274,14 @@ export default function SignIn() {
                 />
                 <Label htmlFor="remember">Remember me</Label>
               </div>`
-            : ''}`
-          : ''}
+								: ""
+						}`
+							: ""
+					}
 
-          ${options.magicLink ? 
-            `<div className="grid gap-2">
+          ${
+						options.magicLink
+							? `<div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -288,10 +299,12 @@ export default function SignIn() {
                 Sign-in with Magic Link
               </Button>
             </div>`
-          : ''}
+							: ""
+					}
 
-          ${options.email ? 
-            `<Button
+          ${
+						options.email
+							? `<Button
               type="submit"
               className="w-full"
               disabled={loading}
@@ -305,10 +318,12 @@ export default function SignIn() {
                 "Login"
               )}
             </Button>`
-          : ''}
+							: ""
+					}
 
-          ${options.passkey ? 
-            `<Button
+          ${
+						options.passkey
+							? `<Button
               variant="secondary"
               className="gap-2"
               onClick={async () => {
@@ -318,25 +333,32 @@ export default function SignIn() {
               <Key size={16} />
               Sign-in with Passkey
             </Button>`
-          : ''}
+							: ""
+					}
 
-          ${options.socialProviders?.length > 0 ? 
-            `<div className={cn(
+          ${
+						options.socialProviders?.length > 0
+							? `<div className={cn(
               "w-full gap-2 flex items-center",
-              ${options.socialProviders.length > 3 ? 
-                '"justify-between flex-wrap"' : 
-                '"justify-between flex-col"'
-              }
+              ${
+								options.socialProviders.length > 3
+									? '"justify-between flex-wrap"'
+									: '"justify-between flex-col"'
+							}
             )}>
-              ${options.socialProviders.map((provider: string) => {
-                const icon = socialProviders[provider as keyof typeof socialProviders]?.stringIcon || '';
-                return `<Button
+              ${options.socialProviders
+								.map((provider: string) => {
+									const icon =
+										socialProviders[provider as keyof typeof socialProviders]
+											?.stringIcon || "";
+									return `<Button
                   variant="outline"
                   className={cn(
-                    ${options.socialProviders.length > 3 ? 
-                      '"flex-grow"' : 
-                      '"w-full gap-2"'
-                    }
+                    ${
+											options.socialProviders.length > 3
+												? '"flex-grow"'
+												: '"w-full gap-2"'
+										}
                   )}
                   onClick={async () => {
                     await signIn.social({ 
@@ -346,18 +368,24 @@ export default function SignIn() {
                   }}
                 >
                   ${icon}
-                  ${options.socialProviders.length <= 3 ? 
-                    `Sign in with ${provider.charAt(0).toUpperCase() + provider.slice(1)}` : 
-                    ''
-                  }
+                  ${
+										options.socialProviders.length <= 3
+											? `Sign in with ${
+													provider.charAt(0).toUpperCase() + provider.slice(1)
+												}`
+											: ""
+									}
                 </Button>`;
-              }).join('')}
+								})
+								.join("")}
             </div>`
-          : ''}
+							: ""
+					}
         </div>
       </CardContent>
-      ${options.label ? 
-        `<CardFooter>
+      ${
+				options.label
+					? `<CardFooter>
           <div className="flex justify-center w-full border-t py-4">
             <p className="text-center text-xs text-neutral-500">
               Powered by{" "}
@@ -371,7 +399,8 @@ export default function SignIn() {
             </p>
           </div>
         </CardFooter>`
-      : ''}
+					: ""
+			}
     </Card>
   );
 }`;
