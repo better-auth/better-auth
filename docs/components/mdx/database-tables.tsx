@@ -8,7 +8,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CircleDot, Key, Link } from "lucide-react";
+import { CircleDot, Key, Link, Fingerprint } from "lucide-react";
 import { Label } from "../ui/label";
 import {
 	Tooltip,
@@ -24,6 +24,7 @@ interface Field {
 	isPrimaryKey?: boolean;
 	isForeignKey?: boolean;
 	isOptional?: boolean;
+	isUnique?: boolean;
 }
 
 interface DatabaseTableProps {
@@ -85,8 +86,25 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 										</Tooltip>
 									</TooltipProvider>
 								)}
+								{field.isUnique && (
+									<TooltipProvider delayDuration={0}>
+										<Tooltip>
+											<TooltipTrigger>
+												<Badge
+													variant="secondary"
+													className="mr-1 rounded-sm bg-purple-500"
+												>
+													<Fingerprint className="w-3 h-3 mr-1" size={14} />
+													UQ
+												</Badge>
+											</TooltipTrigger>
+											<TooltipContent>Unique Constraint</TooltipContent>
+										</Tooltip>
+									</TooltipProvider>
+								)}
 								{!field.isPrimaryKey &&
 									!field.isForeignKey &&
+									!field.isUnique &&
 									!field.isOptional && (
 										<span className="text-muted text-center">-</span>
 									)}
