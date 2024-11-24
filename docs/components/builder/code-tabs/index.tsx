@@ -4,7 +4,7 @@ import { CodeEditor } from "./code-editor";
 import { useAtom } from "jotai";
 import { optionsAtom } from "../store";
 import { js_beautify } from "js-beautify";
-import { singUpString } from "../sign-up";
+import { signUpString } from "../sign-up";
 import { signInString } from "../sign-in";
 
 export default function CodeTabs() {
@@ -102,7 +102,7 @@ ${
 		initialFiles.push({
 			id: "4",
 			name: "sign-up.tsx",
-			content: singUpString,
+			content: signUpString,
 		});
 	}
 
