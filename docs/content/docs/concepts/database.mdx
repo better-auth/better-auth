@@ -319,7 +319,7 @@ Table Name: `session`
     {
       name: "id",
       type: "string",
-      description: "Unique identifier for each session. This is used as the session token.",
+      description: "Unique identifier for each session",
       isPrimaryKey: true
     },
     {
@@ -331,7 +331,8 @@ Table Name: `session`
     {
       name:"token",
       type: "string",
-      description: "The session token",
+      description: "The unique session token",
+      isUnique: true
     },
     {
       name: "expiresAt",
