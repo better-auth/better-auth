@@ -4,6 +4,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { setSessionCookie } from "../../cookies";
+import { sendVerificationEmailFn } from "../../api";
 
 export const username = () => {
 	return {
@@ -36,6 +37,17 @@ export const username = () => {
 							message: "Invalid username or password",
 						});
 					}
+
+					if (
+						!user.emailVerified &&
+						ctx.context.options.emailAndPassword?.requireEmailVerification
+					) {
+						await sendVerificationEmailFn(ctx, user);
+						throw new APIError("UNAUTHORIZED", {
+							message: "Email not verified",
+						});
+					}
+
 					const account = await ctx.context.adapter.findOne<Account>({
 						model: "account",
 						where: [
