@@ -61,9 +61,6 @@ export const openAPI = (options?: OpenAPIOptions) => {
 				"/open-api/schema",
 				{
 					method: "GET",
-					metadata: {
-						isAction: false,
-					},
 				},
 				async (ctx) => {
 					const schema = await generator(ctx.context, ctx.context.options);
