@@ -219,12 +219,6 @@ export default function ArticleLayout() {
 						</div>
 					</MotionConfig>
 				</div>
-				<div className="flex items-center gap-2 py-4">
-					<div className="flex items-center w-full gap-2 px-4">
-						<GitHubIcon className="w-4 h-4" />
-					</div>
-					<Separator className="" />
-				</div>
 			</aside>
 		</div>
 	);
