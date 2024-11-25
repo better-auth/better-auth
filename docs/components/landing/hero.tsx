@@ -72,9 +72,44 @@ export default function Hero() {
 								</div>
 
 								<div className="relative mt-2 flex items-center gap-2">
-									<div className="relative group/cover inline-block dark:bg-neutral-950 bg-neutral-100 px-4 py-2 border-l-4 dark:border-zinc-900">
-										<p className="2xl relative inline tracking-tight opacity-90 md:text-3xl lg:text-5xl dark:text-white	">
-											Better Auth.
+									<div className="relative group/cover dark:bg-neutral-950 bg-neutral-100  py-2 border dark:border-zinc-900/30 flex items-center gap-2 px-4">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="1em"
+											height="1em"
+											className="text-[#7b9c35]"
+											viewBox="0 0 16 16"
+										>
+											<path
+												fill="none"
+												stroke="currentColor"
+												d="M3 8h10m-3.25 3.5l3.5-3.5l-3.5-3.5"
+											></path>
+										</svg>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="0.8em"
+											height="0.8em"
+											viewBox="0 0 24 24"
+										>
+											<path
+												fill="currentColor"
+												d="M4 22V8h3V6q0-2.075 1.463-3.537T12 1t3.538 1.463T17 6v2h3v14zm8-5q.825 0 1.413-.587T14 15t-.587-1.412T12 13t-1.412.588T10 15t.588 1.413T12 17M9 8h6V6q0-1.25-.875-2.125T12 3t-2.125.875T9 6z"
+											></path>
+										</svg>
+										<p className="md:text-sm text-xs font-mono">
+											<span>
+												<span className="text-[#4498c8]">git:</span>
+												<span className="text-[#F07178]">(main) </span>
+											</span>
+											<span className="italic text-amber-600"> x</span>
+										</p>
+										<p className=" relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono">
+											npm add{" "}
+											<span className="relative dark:text-fuchsia-200 text-fuchsia-950">
+												better-auth
+												<span className="absolute h-1 bg-gradient-to-tr from-white to-amber-300 blur-3xl w-full top-0 left-0 shadow-2xl"></span>
+											</span>
 										</p>
 									</div>
 								</div>

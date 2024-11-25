@@ -171,7 +171,7 @@ export default {
 				"hrtl-scroll": "hrtl-scroll var(--anime-duration,10s) linear infinite",
 				"hrtl-scroll-reverse":
 					"hrtl-scroll-reverse var(--anime-duration,10s) linear infinite",
-				spotlight: "spotlight 2s ease .75s 1 forwards",
+				spotlight: "spotlight 2s ease .30s 1 forwards",
 			},
 		},
 	},
