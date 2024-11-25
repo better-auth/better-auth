@@ -14,10 +14,44 @@ export const username = () => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string(),
-						password: z.string(),
-						rememberMe: z.boolean().optional(),
+						username: z.string({
+							description: "The username of the user",
+						}),
+						password: z.string({
+							description: "The password of the user",
+						}),
+						rememberMe: z
+							.boolean({
+								description: "Remember the user session",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Sign in with username",
+							description: "Sign in with username",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<User>({

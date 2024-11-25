@@ -63,6 +63,29 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Send two factor OTP",
+					description: "Send two factor OTP to the user",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!options || !options.sendOTP) {
@@ -99,9 +122,34 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string(),
+				code: z.string({
+					description: "The otp code to verify",
+				}),
 			}),
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Verify two factor OTP",
+					description: "Verify two factor OTP",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const user = ctx.context.session.user;

@@ -147,14 +147,53 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							 * Redirect to the current URL after the
 							 * user has signed in.
 							 */
-							currentURL: z.string().optional(),
+							currentURL: z
+								.string({
+									description: "Redirect to the current URL after sign in",
+								})
+								.optional(),
 						})
 						.optional(),
 					body: z.object({
-						providerId: z.string(),
-						callbackURL: z.string().optional(),
-						errorCallbackURL: z.string().optional(),
+						providerId: z.string({
+							description: "The provider ID for the OAuth provider",
+						}),
+						callbackURL: z
+							.string({
+								description: "The URL to redirect to after sign in",
+							})
+							.optional(),
+						errorCallbackURL: z
+							.string({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with OAuth2",
+							responses: {
+								200: {
+									description: "Sign in with OAuth2",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+													},
+													redirect: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { providerId } = ctx.body;
@@ -240,10 +279,42 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						code: z.string().optional(),
-						error: z.string().optional(),
-						state: z.string(),
+						code: z
+							.string({
+								description: "The OAuth2 code",
+							})
+							.optional(),
+						error: z
+							.string({
+								description: "The error message, if any",
+							})
+							.optional(),
+						state: z.string({
+							description: "The state parameter from the OAuth2 request",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "OAuth2 callback",
+							responses: {
+								200: {
+									description: "OAuth2 callback",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {

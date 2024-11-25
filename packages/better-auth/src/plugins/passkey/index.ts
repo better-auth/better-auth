@@ -117,6 +117,109 @@ export const passkey = (options?: PasskeyOptions) => {
 					use: [freshSessionMiddleware],
 					metadata: {
 						client: false,
+						openapi: {
+							description: "Generate registration options for a new passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													challenge: {
+														type: "string",
+													},
+													rp: {
+														type: "object",
+														properties: {
+															name: {
+																type: "string",
+															},
+															id: {
+																type: "string",
+															},
+														},
+													},
+													user: {
+														type: "object",
+														properties: {
+															id: {
+																type: "string",
+															},
+															name: {
+																type: "string",
+															},
+															displayName: {
+																type: "string",
+															},
+														},
+													},
+													pubKeyCredParams: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																type: {
+																	type: "string",
+																},
+																alg: {
+																	type: "number",
+																},
+															},
+														},
+													},
+													timeout: {
+														type: "number",
+													},
+													excludeCredentials: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																id: {
+																	type: "string",
+																},
+																type: {
+																	type: "string",
+																},
+																transports: {
+																	type: "array",
+																	items: {
+																		type: "string",
+																	},
+																},
+															},
+														},
+													},
+													authenticatorSelection: {
+														type: "object",
+														properties: {
+															authenticatorAttachment: {
+																type: "string",
+															},
+															requireResidentKey: {
+																type: "boolean",
+															},
+															userVerification: {
+																type: "string",
+															},
+														},
+													},
+													attestation: {
+														type: "string",
+													},
+
+													extensions: {
+														type: "object",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -186,9 +289,103 @@ export const passkey = (options?: PasskeyOptions) => {
 					method: "POST",
 					body: z
 						.object({
-							email: z.string().optional(),
+							email: z
+								.string({
+									description: "The email address of the user",
+								})
+								.optional(),
 						})
 						.optional(),
+					metadata: {
+						openapi: {
+							description: "Generate authentication options for a passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													challenge: {
+														type: "string",
+													},
+													rp: {
+														type: "object",
+														properties: {
+															name: {
+																type: "string",
+															},
+															id: {
+																type: "string",
+															},
+														},
+													},
+													user: {
+														type: "object",
+														properties: {
+															id: {
+																type: "string",
+															},
+															name: {
+																type: "string",
+															},
+															displayName: {
+																type: "string",
+															},
+														},
+													},
+													timeout: {
+														type: "number",
+													},
+													allowCredentials: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																id: {
+																	type: "string",
+																},
+																type: {
+																	type: "string",
+																},
+																transports: {
+																	type: "array",
+																	items: {
+																		type: "string",
+																	},
+																},
+															},
+														},
+													},
+													userVerification: {
+														type: "string",
+													},
+													authenticatorSelection: {
+														type: "object",
+														properties: {
+															authenticatorAttachment: {
+																type: "string",
+															},
+															requireResidentKey: {
+																type: "boolean",
+															},
+															userVerification: {
+																type: "string",
+															},
+														},
+													},
+													extensions: {
+														type: "object",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
@@ -251,10 +448,36 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any(),
-						name: z.string().optional(),
+						response: z.any({
+							description: "The response from the authenticator",
+						}),
+						name: z
+							.string({
+								description: "Name of the passkey",
+							})
+							.optional(),
 					}),
 					use: [freshSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Verify registration of a new passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												$ref: "#/components/schemas/Passkey",
+											},
+										},
+									},
+								},
+								400: {
+									description: "Bad request",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
@@ -348,6 +571,31 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z.object({
 						response: z.any(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Verify authentication of a passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";

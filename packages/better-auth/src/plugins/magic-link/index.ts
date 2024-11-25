@@ -52,9 +52,39 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z.string().email(),
-						callbackURL: z.string().optional(),
+						email: z
+							.string({
+								description: "Email address to send the magic link",
+							})
+							.email(),
+						callbackURL: z
+							.string({
+								description: "URL to redirect after magic link verification",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with magic link",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
@@ -111,10 +141,42 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string(),
-						callbackURL: z.string().optional(),
+						token: z.string({
+							description: "Verification token",
+						}),
+						callbackURL: z
+							.string({
+								description:
+									"URL to redirect after magic link verification, if not provided will return session",
+							})
+							.optional(),
 					}),
 					requireHeaders: true,
+					metadata: {
+						openapi: {
+							description: "Verify magic link",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { token, callbackURL } = ctx.query;

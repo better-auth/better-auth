@@ -42,9 +42,45 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						callbackURL: z.string(),
-						cookies: z.string(),
+						callbackURL: z.string({
+							description: "The URL to redirect to after the proxy",
+						}),
+						cookies: z.string({
+							description: "The cookies to set after the proxy",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "OAuth Proxy Callback",
+							parameters: [
+								{
+									in: "query",
+									name: "callbackURL",
+									required: true,
+									description: "The URL to redirect to after the proxy",
+								},
+								{
+									in: "query",
+									name: "cookies",
+									required: true,
+									description: "The cookies to set after the proxy",
+								},
+							],
+							responses: {
+								302: {
+									description: "Redirect",
+									headers: {
+										Location: {
+											description: "The URL to redirect to",
+											schema: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const cookies = ctx.query.cookies;
