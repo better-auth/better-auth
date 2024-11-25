@@ -273,14 +273,10 @@ export const drizzleAdapter =
 					.select()
 					.from(schemaModel)
 					.limit(limit || 100)
-					.offset(offset || 0)
-					.orderBy(
-						sortFn(
-							schemaModel[
-								sortBy?.field ? getField(model, sortBy?.field) : "id"
-							],
-						),
-					);
+					.offset(offset || 0);
+				if (sortBy?.field) {
+					builder.orderBy(sortFn(schemaModel[getField(model, sortBy?.field)]));
+				}
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
 			},
