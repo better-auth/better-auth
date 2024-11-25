@@ -103,7 +103,12 @@ async function getUserInfo(
 	if (type === "oidc" && tokens.idToken) {
 		const decoded = parseJWT(tokens.idToken);
 		if (decoded?.payload) {
-			return decoded.payload;
+			return {
+				id: decoded.payload.sub,
+				emailVerified: decoded.payload.email_verified,
+				email: decoded.payload.email,
+				...decoded.payload,
+			};
 		}
 	}
 
