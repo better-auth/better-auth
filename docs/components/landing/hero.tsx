@@ -4,15 +4,13 @@ import { Fragment, useId, useState } from "react";
 import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
-
-import { GridPattern } from "./grid-pattern";
 import { Button } from "@/components/ui/button";
 import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { Builder } from "../builder";
-import { Spotlight } from "./bg-box";
+import { Spotlight } from "./spotlight";
 
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
