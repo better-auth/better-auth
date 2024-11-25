@@ -75,6 +75,12 @@ export interface BetterAuthOptions {
 		| {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
+				/**
+				 * casing for table names
+				 *
+				 * @default "camel"
+				 */
+				casing?: "snake" | "camel";
 		  }
 		| {
 				/**
@@ -85,6 +91,12 @@ export interface BetterAuthOptions {
 				 * Database type between postgres, mysql and sqlite
 				 */
 				type: KyselyDatabaseType;
+				/**
+				 * casing for table names
+				 *
+				 * @default "camel"
+				 */
+				casing?: "snake" | "camel";
 		  };
 	/**
 	 * Secondary storage configuration
