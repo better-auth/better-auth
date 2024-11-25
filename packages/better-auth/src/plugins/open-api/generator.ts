@@ -5,7 +5,7 @@ import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
 import { getEndpoints } from "../../api";
 
-interface Path {
+export interface Path {
 	get?: {
 		tags?: string[];
 		operationId?: string;
