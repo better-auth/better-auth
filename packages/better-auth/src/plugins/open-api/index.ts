@@ -67,11 +67,7 @@ export const openAPI = (options?: OpenAPIOptions) => {
 				},
 				async (ctx) => {
 					const schema = await generator(ctx.context, ctx.context.options);
-					return new Response(JSON.stringify(schema), {
-						headers: {
-							"Content-Type": "application/json",
-						},
-					});
+					return ctx.json(schema);
 				},
 			),
 			openAPIReference: createAuthEndpoint(
