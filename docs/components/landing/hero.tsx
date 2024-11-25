@@ -12,6 +12,7 @@ import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { Builder } from "../builder";
+import { Spotlight } from "./bg-box";
 
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
@@ -50,7 +51,8 @@ function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
 
 export default function Hero() {
 	return (
-		<section className="mx-auto flex min-h-[85vh] w-full items-center justify-center gap-20 px-10 py-16">
+		<section className="h-[40rem] w-full rounded-md flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] relative overflow-hidden px-8">
+			<Spotlight />
 			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
 				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
 					<div className="relative z-10 md:text-center lg:text-left">
@@ -109,11 +111,11 @@ export default function Hero() {
 					</div>
 				</div>
 			</div>
-			<GridPattern
+			{/* <GridPattern
 				className="fill-neutral-100 stroke-neutral-700/5 absolute inset-x-0 -top-14 -z-10 h-full w-full [mask-image:linear-gradient(to_bottom_left,white_40%,transparent_50%)] dark:fill-secondary/30 dark:stroke-secondary/30"
 				yOffset={-96}
 				interactive
-			/>
+			/> */}
 		</section>
 	);
 }
