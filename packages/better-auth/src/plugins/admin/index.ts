@@ -22,7 +22,7 @@ export interface UserWithRole extends User {
 	role?: string | null;
 	banned?: boolean | null;
 	banReason?: string | null;
-	banExpires?: number | null;
+	banExpires?: Date | null;
 }
 
 interface SessionWithImpersonatedBy extends Session {
