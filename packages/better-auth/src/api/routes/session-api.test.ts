@@ -92,11 +92,13 @@ describe("session", async () => {
 			},
 		});
 		const { headers } = await signInWithTestUser();
+
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
+
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
 		const session2 = await client.getSession({
