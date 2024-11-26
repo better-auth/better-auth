@@ -8,7 +8,15 @@ export type FieldType =
 	| "date"
 	| `${"string" | "number"}[]`;
 
-type Primitive = string | number | boolean | Date | null | undefined;
+type Primitive =
+	| string
+	| number
+	| boolean
+	| Date
+	| null
+	| undefined
+	| string[]
+	| number[];
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
@@ -37,10 +45,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * transform the value before storing it.
 	 */
 	transform?: {
-		input?: (value: InferValueType<T>) => Primitive | Promise<Primitive>;
-		output?: (
-			value: Primitive,
-		) => InferValueType<T> | Promise<InferValueType<T>>;
+		input?: (value: Primitive) => Primitive | Promise<Primitive>;
+		output?: (value: Primitive) => Primitive | Promise<Primitive>;
 	};
 	/**
 	 * Reference to another model.

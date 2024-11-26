@@ -1,6 +1,7 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
@@ -32,7 +33,12 @@ const createTransform = (
 	function transformValueToDB(value: any, model: string, field: string) {
 		const { type = "sqlite" } = config || {};
 		const f = schema[model].fields[field];
-		if (f.type === "boolean" && type === "sqlite") {
+		if (
+			f.type === "boolean" &&
+			type === "sqlite" &&
+			value !== null &&
+			value !== undefined
+		) {
 			return value ? 1 : 0;
 		}
 		if (f.type === "date" && value && value instanceof Date) {
@@ -75,15 +81,14 @@ const createTransform = (
 									})
 								: data.id || generateId(),
 						};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = transformValueToDB(
-						data[key],
-						model,
-						key,
-					);
-				}
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					transformValueToDB(value, model, field),
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},

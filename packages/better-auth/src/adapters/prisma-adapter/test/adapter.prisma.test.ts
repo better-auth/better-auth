@@ -20,6 +20,12 @@ describe("adapter test", async () => {
 					fields: {
 						email: "email_address",
 					},
+					additionalFields: {
+						test: {
+							type: "string",
+							defaultValue: "test",
+						},
+					},
 				},
 				session: {
 					modelName: "sessions",

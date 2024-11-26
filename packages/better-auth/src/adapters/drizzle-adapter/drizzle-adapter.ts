@@ -3,6 +3,7 @@ import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 
 export interface DB {
 	[key: string]: any;
@@ -66,11 +67,17 @@ const createTransform = (
 									})
 								: data.id || generateId(),
 						};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = data[key];
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				if (value === undefined && !fields[field].defaultValue) {
+					continue;
 				}
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					value,
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},

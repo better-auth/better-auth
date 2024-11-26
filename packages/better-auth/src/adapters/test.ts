@@ -414,8 +414,9 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
-	if (!opts.skipGenerateIdTest) {
-		test("should prefer generateId if provided", async () => {
+	test.skipIf(opts.skipGenerateIdTest)(
+		"should prefer generateId if provided",
+		async () => {
 			const customAdapter = await opts.getAdapter({
 				advanced: {
 					generateId: () => "mocked-id",
@@ -435,6 +436,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			});
 
 			expect(res.id).toBe("mocked-id");
-		});
-	}
+		},
+	);
 }
