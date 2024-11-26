@@ -72,6 +72,9 @@ const createTransform = (
 			const fields = schema[model].fields;
 			for (const field in fields) {
 				const value = data[field];
+				if (value === undefined && !fields[field].defaultValue) {
+					continue;
+				}
 				transformedData[fields[field].fieldName || field] = withApplyDefault(
 					value,
 					fields[field],
