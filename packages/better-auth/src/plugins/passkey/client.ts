@@ -153,32 +153,6 @@ export const getPasskeyActions = (
 		}
 	};
 
-	const updatePasskey = async (
-		opts: {
-			fetchOptions?: BetterFetchOption;
-			id: string;
-			name: string;
-		},
-		fetchOpts?: BetterFetchOption,
-	) => {
-		const updated = await $fetch<{
-			passkey: Passkey;
-		}>("/passkey/update-passkey", {
-			...opts.fetchOptions,
-			...fetchOpts,
-			body: {
-				id: opts.id,
-				name: opts.name,
-			},
-			method: "POST",
-		});
-		if (!updated.data) {
-			return updated;
-		}
-		$listPasskeys.set(Math.random());
-		return updated;
-	};
-
 	return {
 		signIn: {
 			/**
@@ -191,10 +165,6 @@ export const getPasskeyActions = (
 			 * Add a passkey to the user account
 			 */
 			addPasskey: registerPasskey,
-			/**
-			 * Update the name of a passkey
-			 */
-			updatePasskey: updatePasskey,
 		},
 		/**
 		 * Inferred Internal Types

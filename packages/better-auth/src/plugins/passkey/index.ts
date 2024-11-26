@@ -804,14 +804,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							message: "Failed to update passkey",
 						});
 					}
-
-					return ctx.json({
-						passkey: updatedPasskey,
-					}, {
-						status: 200,
-					});
-				}
-			)
+					return ctx.json(
+						{
+							passkey: updatedPasskey,
+						},
+						{
+							status: 200,
+						},
+					);
+				},
+			),
 		},
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
@@ -858,7 +860,6 @@ const schema = {
 			},
 			createdAt: {
 				type: "date",
-				defaultValue: new Date(),
 				required: false,
 			},
 		},
