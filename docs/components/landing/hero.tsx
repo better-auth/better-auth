@@ -80,20 +80,6 @@ export default function Hero() {
 							<div className="relative mt-2 flex items-center gap-2 w-10/12">
 								<GradientBG className="w-full flex items-center justify-between">
 									<div className="w-full flex items-center gap-2">
-										<p className="text-xs font-bold">|-]</p>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="1em"
-											height="1em"
-											className="text-[#359c51]"
-											viewBox="0 0 16 16"
-										>
-											<path
-												fill="none"
-												stroke="currentColor"
-												d="M3 8h10m-3.25 3.5l3.5-3.5l-3.5-3.5"
-											></path>
-										</svg>
 										<p className="md:text-sm text-xs font-mono">
 											<span>
 												<span className="text-[#4498c8]">git:</span>
