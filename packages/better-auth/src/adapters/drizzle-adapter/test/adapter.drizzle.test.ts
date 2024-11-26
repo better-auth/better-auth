@@ -58,7 +58,9 @@ describe("Drizzle Adapter Tests", async () => {
 	const adapter = drizzleAdapter(db, { provider: "pg", schema });
 
 	await runAdapterTest({
-		adapter: adapter(opts),
+		getAdapter: async (customOptions = {}) => {
+			return adapter({ ...opts, ...customOptions });
+		},
 	});
 });
 
