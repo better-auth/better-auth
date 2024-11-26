@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { migrate } from "./commands/migrate";
 import { generate } from "./commands/generate";
 import "dotenv/config";
-import { generateSecret } from "./commands/secert";
+import { generateSecret } from "./commands/secret";
 
 async function main() {
 	const program = new Command("better-auth");
