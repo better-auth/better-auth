@@ -112,7 +112,10 @@ export async function setSessionCookie(
 		return null;
 	});
 	if (hasAlreadySession) {
-		if (hasAlreadySession.session.userId === session.session.userId) {
+		if (
+			hasAlreadySession.session.userId === session.session.userId &&
+			hasAlreadySession.session.token !== session.session.token
+		) {
 			// If the user already has a session, delete the old session
 			await ctx.context.internalAdapter.deleteSession(
 				hasAlreadySession.session.token,
