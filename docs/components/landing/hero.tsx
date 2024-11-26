@@ -71,41 +71,6 @@ export default function Hero() {
 									</svg>
 									<span className="text-xs text-opacity-75">Own Your Auth</span>
 								</div>
-
-								<div className="relative mt-2 flex items-center gap-2">
-									<div className="relative group/cover dark:bg-zinc-950 bg-neutral-100  py-2 border dark:border-zinc-900/30 md:flex items-center gap-2  px-4 hidden">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="1em"
-											height="1em"
-											className="text-[#359c51]"
-											viewBox="0 0 16 16"
-										>
-											<path
-												fill="none"
-												stroke="currentColor"
-												d="M3 8h10m-3.25 3.5l3.5-3.5l-3.5-3.5"
-											></path>
-										</svg>
-										<p className="md:text-sm opacity-70 text-xs">
-											the-next-big-thing
-										</p>
-										<p className="md:text-sm text-xs font-mono">
-											<span>
-												<span className="text-[#4498c8]">git:</span>
-												<span className="text-[#F07178]">(main) </span>
-											</span>
-											<span className="italic text-amber-600"> x</span>
-										</p>
-										<p className=" relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono">
-											npm add{" "}
-											<span className="relative dark:text-fuchsia-100 text-fuchsia-950">
-												better-auth
-												<span className="absolute h-2 bg-gradient-to-tr from-white via-yellow-500 to-amber-400 blur-3xl w-full top-0 left-2"></span>
-											</span>
-										</p>
-									</div>
-								</div>
 							</div>
 
 							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight text-2xl md:text-3xl">
