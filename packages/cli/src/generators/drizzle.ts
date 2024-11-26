@@ -20,7 +20,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const fileExist = existsSync(filePath);
 
 	for (const table in tables) {
-		const modelName = usePlural ? `${tables[table].modelName}s` : tables[table].modelName;
+		const modelName = usePlural
+			? `${tables[table].modelName}s`
+			: tables[table].modelName;
 		const fields = tables[table].fields;
 		function getType(name: string, type: FieldType) {
 			if (type === "string") {
@@ -55,7 +57,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
-									? `.references(()=> ${usePlural ? `${attr.references.model}s` : attr.references.model}.${attr.references.field})`
+									? `.references(()=> ${
+											usePlural
+												? `${attr.references.model}s`
+												: attr.references.model
+										}.${attr.references.field})`
 									: ""
 							}`;
 						})
