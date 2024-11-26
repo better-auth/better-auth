@@ -14,16 +14,19 @@ describe("adapter test", async () => {
 	});
 
 	await runAdapterTest({
-		adapter: adapter({
-			user: {
-				fields: {
-					email: "email_address",
+		getAdapter: async (customOptions = {}) => {
+			return adapter({
+				user: {
+					fields: {
+						email: "email_address",
+					},
 				},
-			},
-			session: {
-				modelName: "sessions",
-			},
-		} as BetterAuthOptions),
+				session: {
+					modelName: "sessions",
+				},
+				...customOptions,
+			});
+		},
 	});
 });
 
