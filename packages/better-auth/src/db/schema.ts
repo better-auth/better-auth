@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FieldAttribute } from ".";
 import type { BetterAuthOptions, PluginSchema } from "../types";
+import { APIError } from "better-call";
 
 export const accountSchema = z.object({
 	id: z.string(),
@@ -143,12 +144,23 @@ export function parseInputData<T extends Record<string, any>>(
 				}
 				continue;
 			}
+			if (fields[key].validator?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key].validator.input.parse(data[key]);
+				continue;
+			}
 			parsedData[key] = data[key];
 			continue;
 		}
+
 		if (fields[key].defaultValue && action === "create") {
 			parsedData[key] = fields[key].defaultValue;
 			continue;
+		}
+
+		if (fields[key].required && action === "create") {
+			throw new APIError("BAD_REQUEST", {
+				message: `${key} is required`,
+			});
 		}
 	}
 	return parsedData as Partial<T>;
