@@ -27,15 +27,15 @@ describe("adapter test", async () => {
 				fields: {
 					email: "email_address",
 				},
-			},
-			session: {
-				modelName: "sessions",
 				additionalFields: {
 					test: {
 						type: "string",
 						defaultValue: "test",
 					},
 				},
+			},
+			session: {
+				modelName: "sessions",
 			},
 		}) satisfies BetterAuthOptions;
 	const mysqlOptions = opts({

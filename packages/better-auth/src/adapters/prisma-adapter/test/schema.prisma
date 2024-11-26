@@ -10,6 +10,7 @@ datasource db {
 model User {
     id            String   @id @default(cuid())
     email_address String   @unique
+    test          String
     emailVerified Boolean  @default(false)
     name          String
     createdAt     DateTime @default(now())
@@ -21,7 +22,6 @@ model Sessions {
     userId    String
     token     String   @unique
     expiresAt DateTime
-    test      String
     createdAt DateTime @default(now())
     updatedAt DateTime @default(now()) @updatedAt
 }

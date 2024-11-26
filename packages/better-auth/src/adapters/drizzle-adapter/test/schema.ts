@@ -6,7 +6,7 @@ export const user = pgTable("user", {
 	name: text("name").notNull(),
 	email_address: text("email_address").notNull().unique(),
 	emailVerified: boolean("emailVerified").notNull(),
-
+	test: text("test").notNull(),
 	image: text("image"),
 	createdAt: timestamp("createdAt").notNull(),
 	updatedAt: timestamp("updatedAt").notNull(),
@@ -17,7 +17,6 @@ export const sessions = pgTable("sessions", {
 	expiresAt: timestamp("expiresAt").notNull(),
 	ipAddress: text("ipAddress"),
 	userAgent: text("userAgent"),
-	test: text("test").notNull(),
 	token: text("token").notNull(),
 	createdAt: timestamp("createdAt").notNull(),
 	updatedAt: timestamp("updatedAt").notNull(),
