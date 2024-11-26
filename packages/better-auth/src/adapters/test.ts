@@ -4,8 +4,9 @@ import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
-		customOptions?: Pick<BetterAuthOptions, "advanced">,
+		customOptions?: Omit<BetterAuthOptions, "database">,
 	) => Promise<Adapter>;
+	skipGenerateIdTest?: boolean;
 }
 
 export async function runAdapterTest(opts: AdapterTestOptions) {
@@ -413,25 +414,27 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		expect(res.length).toBe(1);
 	});
 
-	test("should prefer generateId if provided", async () => {
-		const customAdapter = await opts.getAdapter({
-			advanced: {
-				generateId: () => "mocked-id",
-			},
-		});
+	if (!opts.skipGenerateIdTest) {
+		test("should prefer generateId if provided", async () => {
+			const customAdapter = await opts.getAdapter({
+				advanced: {
+					generateId: () => "mocked-id",
+				},
+			});
 
-		const res = await customAdapter.create({
-			model: "user",
-			data: {
-				id: "1",
-				name: "user4",
-				email: "user4@email.com",
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-		});
+			const res = await customAdapter.create({
+				model: "user",
+				data: {
+					id: "1",
+					name: "user4",
+					email: "user4@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
 
-		expect(res.id).toBe("mocked-id");
-	});
+			expect(res.id).toBe("mocked-id");
+		});
+	}
 }

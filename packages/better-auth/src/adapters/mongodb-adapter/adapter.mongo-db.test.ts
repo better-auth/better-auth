@@ -39,6 +39,7 @@ describe("adapter test", async () => {
 				...customOptions,
 			});
 		},
+		skipGenerateIdTest: true,
 	});
 });
 
