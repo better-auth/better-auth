@@ -35,6 +35,12 @@ describe("adapter test", async () => {
 			},
 			session: {
 				modelName: "sessions",
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test",
+					},
+				},
 			},
 		} as BetterAuthOptions),
 	});

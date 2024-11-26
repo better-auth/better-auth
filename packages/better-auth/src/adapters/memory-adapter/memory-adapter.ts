@@ -1,6 +1,7 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -37,7 +38,10 @@ const createTransform = (options: BetterAuthOptions) => {
 			for (const key in data) {
 				const field = schema[model].fields[key];
 				if (field) {
-					transformedData[field.fieldName || key] = data[key];
+					transformedData[field.fieldName || key] = withApplyDefault(
+						data[key],
+						field,
+					);
 				}
 			}
 			return transformedData;
