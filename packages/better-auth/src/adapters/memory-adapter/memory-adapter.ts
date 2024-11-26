@@ -26,13 +26,11 @@ const createTransform = (options: BetterAuthOptions) => {
 				action === "update"
 					? {}
 					: {
-							id:
-								data.id ||
-								(options.advanced?.generateId
-									? options.advanced.generateId({
-											model,
-										})
-									: generateId()),
+							id: options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: data.id || generateId(),
 						};
 			for (const key in data) {
 				const field = schema[model].fields[key];

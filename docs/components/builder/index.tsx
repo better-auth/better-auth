@@ -260,7 +260,7 @@ export function Builder() {
 					<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
 				</button>
 			</DialogTrigger>
-			<DialogContent className="max-w-7xl h-5/6 overflow-clip">
+			<DialogContent className="max-w-7xl h-5/6 overflow-clip !rounded-none">
 				<DialogHeader>
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>

@@ -41,3 +41,12 @@ npx @better-auth/cli@latest migrate
 If you see this error, it means the CLI can’t resolve imported modules in your Better Auth config file. We're working on a fix for many of these issues, but in the meantime, you can try the following:
 
 - Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
+
+
+## Secret
+
+The CLI also provides a way to generate a secret key for your Better Auth instance.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest secret
+```

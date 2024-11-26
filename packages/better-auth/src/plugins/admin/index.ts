@@ -22,7 +22,7 @@ export interface UserWithRole extends User {
 	role?: string | null;
 	banned?: boolean | null;
 	banReason?: string | null;
-	banExpires?: number | null;
+	banExpires?: Date | null;
 }
 
 interface SessionWithImpersonatedBy extends Session {
@@ -126,7 +126,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									)) as UserWithRole;
 
 									if (user.banned) {
-										if (user.banExpires && user.banExpires < Date.now()) {
+										if (
+											user.banExpires &&
+											user.banExpires.getTime() < Date.now()
+										) {
 											await ctx.internalAdapter.updateUser(session.userId, {
 												banned: false,
 												banReason: null,

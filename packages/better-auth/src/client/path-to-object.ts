@@ -143,7 +143,10 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 										}
 											? NonNullable<Awaited<R>>
 											: InferReturn<Awaited<R>, COpts>,
-										unknown,
+										{
+											code?: string;
+											message?: string;
+										},
 										FetchOptions["throw"] extends true
 											? true
 											: COpts["fetchOptions"] extends { throw: true }
