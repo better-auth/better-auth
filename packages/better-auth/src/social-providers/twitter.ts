@@ -144,7 +144,7 @@ export const twitter = (options: TwitterOption) => {
 				user: {
 					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.email || null,
+					email: profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
 				},
