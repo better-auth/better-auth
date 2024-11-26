@@ -753,6 +753,65 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			updatePasskey: createAuthEndpoint(
+				"/passkey/update-passkey",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+						name: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const passkey = await ctx.context.adapter.findOne<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+					});
+
+					if (!passkey) {
+						throw new APIError("NOT_FOUND", {
+							message: "Passkey not found",
+						});
+					}
+
+					if (passkey.userId !== ctx.context.session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "You are not authorized to update this passkey",
+						});
+					}
+
+					const updatedPasskey = await ctx.context.adapter.update<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+						update: {
+							name: ctx.body.name,
+						},
+					});
+
+					if (!updatedPasskey) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to update passkey",
+						});
+					}
+
+					return ctx.json({
+						passkey: updatedPasskey,
+					}, {
+						status: 200,
+					});
+				}
+			)
 		},
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
