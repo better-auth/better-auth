@@ -116,7 +116,7 @@ export const forgetPassword = createAuthEndpoint(
 		);
 		const verificationToken = generateId(24);
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
+			value: user.user.id.toString(),
 			identifier: `reset-password:${verificationToken}`,
 			expiresAt,
 		});
