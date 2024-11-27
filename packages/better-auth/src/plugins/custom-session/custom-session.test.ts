@@ -4,7 +4,7 @@ import { customSession } from ".";
 import { admin } from "../admin";
 import { createAuthClient } from "../../client";
 import { customSessionClient } from "./client";
-import type { BetterAuthOptions, InferUser } from "../../types";
+import type { BetterAuthOptions } from "../../types";
 import { adminClient } from "../admin/client";
 
 describe("Custom Session Plugin Tests", async () => {
