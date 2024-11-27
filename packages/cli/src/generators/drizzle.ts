@@ -14,7 +14,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
-	let code = `import { ${databaseType}Table, text, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+	const text = databaseType === "mysql" ? "varchar" : "text";
+	let code = `import { ${databaseType}Table, ${text}, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
 			`;
 
 	const fileExist = existsSync(filePath);
@@ -26,6 +27,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const fields = tables[table].fields;
 		function getType(name: string, type: FieldType) {
 			if (type === "string") {
+				if (databaseType === "mysql") {
+					return `varchar('${name}', {
+								length: 255
+							})`;
+				}
 				return `text('${name}')`;
 			}
 			if (type === "number") {
