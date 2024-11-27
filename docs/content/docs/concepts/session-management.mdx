@@ -179,6 +179,7 @@ This will add `roles` and `user.newField` to the session response.
 **Infer on the Client**
 
 ```ts title="client.ts"
+import { customSessionClient } from "better-auth/client/plugins";
 import type { auth } from "@/lib/auth"; // Import the auth instance as a type
 
 const authClient = createAuthClient({
