@@ -116,21 +116,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}/magic-link/verify?token=${verificationToken}&callbackURL=${
 						ctx.body.callbackURL || "/"
 					}`;
-					try {
-						await options.sendMagicLink(
-							{
-								email,
-								url,
-								token: verificationToken,
-							},
-							ctx.request,
-						);
-					} catch (e) {
-						ctx.context.logger.error("Failed to send magic link", e);
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to send magic link",
-						});
-					}
+					await options.sendMagicLink(
+						{
+							email,
+							url,
+							token: verificationToken,
+						},
+						ctx.request,
+					);
 					return ctx.json({
 						status: true,
 					});
