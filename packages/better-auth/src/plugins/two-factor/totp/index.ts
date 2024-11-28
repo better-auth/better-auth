@@ -48,6 +48,29 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Generate TOTP code",
+					description: "Use this endpoint to generate a TOTP code",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											code: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!options) {
@@ -85,8 +108,33 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				password: z.string(),
+				password: z.string({
+					description: "User password",
+				}),
 			}),
+			metadata: {
+				openapi: {
+					summary: "Get TOTP URI",
+					description: "Use this endpoint to get the TOTP URI",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											totpURI: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!options) {
@@ -129,9 +177,34 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string(),
+				code: z.string({
+					description: "The otp code to verify",
+				}),
 			}),
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Verify two factor TOTP",
+					description: "Verify two factor TOTP",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!options) {

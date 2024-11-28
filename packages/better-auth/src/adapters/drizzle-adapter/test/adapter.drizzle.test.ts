@@ -27,8 +27,18 @@ const cleanupDatabase = async (postgres: Kysely<any>) => {
 
 const createTestOptions = (pg: Pool): BetterAuthOptions => ({
 	database: pg,
-	user: { fields: { email: "email_address" } },
-	session: { modelName: "sessions" },
+	user: {
+		fields: { email: "email_address" },
+		additionalFields: {
+			test: {
+				type: "string",
+				defaultValue: "test",
+			},
+		},
+	},
+	session: {
+		modelName: "sessions",
+	},
 });
 
 describe("Drizzle Adapter Tests", async () => {
@@ -50,7 +60,9 @@ describe("Drizzle Adapter Tests", async () => {
 	const adapter = drizzleAdapter(db, { provider: "pg", schema });
 
 	await runAdapterTest({
-		adapter: adapter(opts),
+		getAdapter: async (customOptions = {}) => {
+			return adapter({ ...opts, ...customOptions });
+		},
 	});
 });
 

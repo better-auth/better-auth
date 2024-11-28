@@ -11,12 +11,15 @@ describe("adapter test", async () => {
 	};
 	const adapter = memoryAdapter(db);
 	await runAdapterTest({
-		adapter: adapter({
-			user: {
-				fields: {
-					email: "email_address",
+		getAdapter: async (customOptions = {}) => {
+			return adapter({
+				user: {
+					fields: {
+						email: "email_address",
+					},
 				},
-			},
-		} as BetterAuthOptions),
+				...customOptions,
+			});
+		},
 	});
 });

@@ -1,6 +1,7 @@
 import { ObjectId, type Db } from "mongodb";
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { withApplyDefault } from "../utils";
 
 const createTransform = (options: BetterAuthOptions) => {
 	const schema = getAuthTables(options);
@@ -69,17 +70,28 @@ const createTransform = (options: BetterAuthOptions) => {
 		return f.fieldName || field;
 	}
 	return {
-		transformInput(data: Record<string, any>, model: string) {
-			const transformedData: Record<string, any> = {};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = serializeID(
-						key,
-						data[key],
-						model,
-					);
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
+			const transformedData: Record<string, any> =
+				action === "update"
+					? {}
+					: {
+							_id: new ObjectId(),
+						};
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				if (value === undefined && !fields[field].defaultValue) {
+					continue;
 				}
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					serializeID(field, value, model),
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},
@@ -195,7 +207,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		id: "mongodb-adapter",
 		async create(data) {
 			const { model, data: values, select } = data;
-			const transformedData = transform.transformInput(values, model);
+			const transformedData = transform.transformInput(values, model, "create");
 			if (transformedData.id) {
 				// biome-ignore lint/performance/noDelete: setting id to undefined will cause the id to be null in the database which is not what we want
 				delete transformedData.id;
@@ -235,7 +247,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		async update(data) {
 			const { model, where, update: values } = data;
 			const clause = transform.convertWhereClause(where, model);
-			const transformedData = transform.transformInput(values, model);
+			const transformedData = transform.transformInput(values, model, "update");
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOneAndUpdate(
@@ -251,7 +263,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		async updateMany(data) {
 			const { model, where, update: values } = data;
 			const clause = transform.convertWhereClause(where, model);
-			const transformedData = transform.transformInput(values, model);
+			const transformedData = transform.transformInput(values, model, "update");
 			const res = await db
 				.collection(transform.getModelName(model))
 				.updateMany(clause, { $set: transformedData });

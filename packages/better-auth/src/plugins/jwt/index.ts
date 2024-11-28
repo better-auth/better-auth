@@ -98,6 +98,51 @@ export const jwt = (options?: JwtOptions) => {
 				"/jwks",
 				{
 					method: "GET",
+					metadata: {
+						openapi: {
+							description: "Get the JSON Web Key Set",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													keys: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																kid: {
+																	type: "string",
+																},
+																kty: {
+																	type: "string",
+																},
+																use: {
+																	type: "string",
+																},
+																alg: {
+																	type: "string",
+																},
+																n: {
+																	type: "string",
+																},
+																e: {
+																	type: "string",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
@@ -119,6 +164,28 @@ export const jwt = (options?: JwtOptions) => {
 					method: "GET",
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Get a JWT token",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);

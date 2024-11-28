@@ -10,6 +10,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const tables = getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
 	const databaseType = adapter.options?.provider;
+	const usePlural = adapter.options?.usePlural;
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
@@ -19,7 +20,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const fileExist = existsSync(filePath);
 
 	for (const table in tables) {
-		const modelName = tables[table].modelName;
+		const modelName = usePlural
+			? `${tables[table].modelName}s`
+			: tables[table].modelName;
 		const fields = tables[table].fields;
 		function getType(name: string, type: FieldType) {
 			if (type === "string") {
@@ -45,7 +48,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				return `timestamp('${name}')`;
 			}
 		}
-		const schema = `export const ${table} = ${databaseType}Table("${modelName}", {
+		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
 					id: text("id").primaryKey(),
 					${Object.keys(fields)
 						.map((field) => {
@@ -54,7 +57,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
-									? `.references(()=> ${attr.references.model}.${attr.references.field})`
+									? `.references(()=> ${
+											usePlural
+												? `${attr.references.model}s`
+												: attr.references.model
+										}.${attr.references.field})`
 									: ""
 							}`;
 						})

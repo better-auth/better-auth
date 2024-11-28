@@ -176,7 +176,7 @@ async function convertImageToBase64(file: File): Promise<string> {
 	});
 }
 
-export const singUpString = `"use client";
+export const signUpString = `"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -192,6 +192,7 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
+import { signUp } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -204,6 +205,7 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
+	const [loading, setLoading] = useState(false);
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -216,7 +218,6 @@ export function SignUp() {
 			reader.readAsDataURL(file);
 		}
 	};
-	const [loading, setLoading] = useState(false);
 
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -271,6 +272,7 @@ export function SignUp() {
 						<Label htmlFor="password">Password</Label>
 						<Input
 							id="password"
+							type="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
 							autoComplete="new-password"
@@ -281,6 +283,7 @@ export function SignUp() {
 						<Label htmlFor="password">Confirm Password</Label>
 						<Input
 							id="password_confirmation"
+							type="password"
 							value={passwordConfirmation}
 							onChange={(e) => setPasswordConfirmation(e.target.value)}
 							autoComplete="new-password"

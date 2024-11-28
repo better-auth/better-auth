@@ -5,6 +5,7 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
+import type { GenericEndpointContext, User } from "../../types";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -30,6 +31,36 @@ export async function createEmailVerificationToken(
 		},
 	);
 	return token;
+}
+
+/**
+ * A function to send a verification email to the user
+ */
+export async function sendVerificationEmailFn(
+	ctx: GenericEndpointContext,
+	user: User,
+) {
+	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		ctx.context.logger.error("Verification email isn't enabled.");
+		throw new APIError("BAD_REQUEST", {
+			message: "Verification email isn't enabled",
+		});
+	}
+	const token = await createEmailVerificationToken(
+		ctx.context.secret,
+		user.email,
+	);
+	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+		ctx.body.callbackURL || ctx.query?.currentURL || "/"
+	}`;
+	await ctx.context.options.emailVerification.sendVerificationEmail(
+		{
+			user: user,
+			url,
+			token,
+		},
+		ctx.request,
+	);
 }
 
 export const sendVerificationEmail = createAuthEndpoint(
@@ -115,20 +146,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 				message: "User not found",
 			});
 		}
-		const token = await createEmailVerificationToken(ctx.context.secret, email);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${
-			ctx.body.callbackURL || ctx.query?.currentURL || "/"
-		}`;
-		await ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: user.user,
-				url,
-				token,
-			},
-			ctx.request,
-		);
+		await sendVerificationEmailFn(ctx, user.user);
 		return ctx.json({
 			status: true,
 		});

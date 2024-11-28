@@ -4,6 +4,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { setSessionCookie } from "../../cookies";
+import { sendVerificationEmailFn } from "../../api";
 
 export const username = () => {
 	return {
@@ -14,10 +15,44 @@ export const username = () => {
 				{
 					method: "POST",
 					body: z.object({
-						username: z.string(),
-						password: z.string(),
-						rememberMe: z.boolean().optional(),
+						username: z.string({
+							description: "The username of the user",
+						}),
+						password: z.string({
+							description: "The password of the user",
+						}),
+						rememberMe: z
+							.boolean({
+								description: "Remember the user session",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Sign in with username",
+							description: "Sign in with username",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = await ctx.context.adapter.findOne<User>({
@@ -36,6 +71,17 @@ export const username = () => {
 							message: "Invalid username or password",
 						});
 					}
+
+					if (
+						!user.emailVerified &&
+						ctx.context.options.emailAndPassword?.requireEmailVerification
+					) {
+						await sendVerificationEmailFn(ctx, user);
+						throw new APIError("UNAUTHORIZED", {
+							message: "Email not verified",
+						});
+					}
+
 					const account = await ctx.context.adapter.findOne<Account>({
 						model: "account",
 						where: [

@@ -105,7 +105,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 
 	const baseURL = ctx.baseURL;
-	const path = req.url.replace(baseURL, "");
+	const path = req.url.replace(baseURL, "").split("?")[0];
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
 	const key = getIp(req, ctx.options) + path;

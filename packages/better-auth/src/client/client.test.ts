@@ -181,9 +181,7 @@ describe("type", () => {
 				},
 			},
 		});
-		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
-			() => Readonly<Ref<number>>
-		>();
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<Readonly<Ref<number>>>();
 	});
 	it("should infer resolved hooks svelte", () => {
 		const client = createSvelteClient({

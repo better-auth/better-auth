@@ -22,6 +22,28 @@ To avoid instantiation and reference errors, configure your TypeScript config fi
 
 If you're using a monorepo and want to share the `auth` package across multiple projects, either export the TypeScript files as-is without compilation or use build tools like `tsup` to transpile the package.
 
+### Strict Mode
+
+Better Auth is designed to work with TypeScript's strict mode. We recommend enabling strict mode in your TypeScript config file:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+```
+
+if you can't set `strict` to `true`, you can enable `strictNullChecks`:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strictNullChecks": true,
+  }
+}
+```
+
 ## Inferring Types
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.

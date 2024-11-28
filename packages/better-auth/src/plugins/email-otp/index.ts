@@ -57,9 +57,35 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						type: z.enum(types),
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Send verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!options?.sendVerificationOTP) {
@@ -108,11 +134,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						type: z.enum(types),
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
+						openapi: {
+							description: "Create verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -131,11 +176,33 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string(),
+						email: z.string({
+							description: "Email address to get the OTP",
+						}),
 						type: z.enum(types),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
+						openapi: {
+							description: "Get verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													otp: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -159,9 +226,35 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						otp: z.string(),
+						email: z.string({
+							description: "Email address to verify",
+						}),
+						otp: z.string({
+							description: "OTP to verify",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Verify email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
@@ -211,9 +304,38 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						otp: z.string(),
+						email: z.string({
+							description: "Email address to sign in",
+						}),
+						otp: z.string({
+							description: "OTP sent to the email",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
@@ -286,13 +408,37 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
-			forgetEmailOTP: createAuthEndpoint(
+			forgetPasswordEmailOTP: createAuthEndpoint(
 				"/forget-password/email-otp",
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Forget password with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
@@ -326,10 +472,38 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						otp: z.string(),
-						password: z.string(),
+						email: z.string({
+							description: "Email address to reset the password",
+						}),
+						otp: z.string({
+							description: "OTP sent to the email",
+						}),
+						password: z.string({
+							description: "New password",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Reset password with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;

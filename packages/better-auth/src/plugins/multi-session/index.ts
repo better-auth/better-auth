@@ -71,10 +71,34 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string(),
+						sessionToken: z.string({
+							description: "The session token to set as active",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Set the active session",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
@@ -108,10 +132,34 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionToken: z.string(),
+						sessionToken: z.string({
+							description: "The session token to revoke",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Revoke a device session",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;

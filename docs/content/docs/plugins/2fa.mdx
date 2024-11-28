@@ -108,7 +108,7 @@ You can skip verification by setting `skipVerificationOnEnable` to true in your 
 
 ### Sign In with 2FA
 
-When a user with 2FA enabled tries to sign in via email, they will be redirected to the `twoFactorPage` (specified in your client config) unless they're using a trusted device.
+When a user with 2FA enabled tries to sign in via email, the response will contain `twoFactorRedirect` set to `true`. This indicates that the user needs to verify their 2FA code.
 
 ```ts title="sign-in.ts"
 await authClient.signIn.email({
@@ -116,8 +116,6 @@ await authClient.signIn.email({
     password: "password123",
 })
 ```
-
-If a user enabled two-factor instead of session data, the response will contain `twoFactorRedirect` set to `true`. This indicates that the user needs to verify their 2FA code.
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
@@ -429,7 +427,9 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const client = createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            twoFactorPage: "/two-factor" // [!code highlight]
+            onTwoFactorRedirect(){
+                window.location.href = "/2fa" // Handle the 2FA verification redirect
+            }
         }) // [!code highlight]
     ]
 })
@@ -438,6 +438,4 @@ const client = createAuthClient({
 
 **Options**
 
-`twoFactorPage`: The page to redirect the user to after they have enabled 2-Factor. This is the page where the user will be redirected to verify their 2-Factor code.
-
-`redirect`: If set to `false`, the user will not be redirected to the `twoFactorPage` after they have enabled 2-Factor.
+`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. This can be used to redirect the user to the 2FA page.

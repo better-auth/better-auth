@@ -742,6 +742,23 @@ Table Name: `invitation`
   ]}
   />
 
+### Session
+
+Table Name: `session` 
+
+You need to add one more field to the session table to store the active organization id.
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "activeOrganizationId", 
+      type: "string", 
+      description: "The id of the active organization",
+      isOptional: true
+    },
+  ]}
+  />
+
 ### Customizing the Schema
 
 To change the schema table name or fields, you can pass `schema` option to the organization plugin. 

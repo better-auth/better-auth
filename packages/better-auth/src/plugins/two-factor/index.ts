@@ -52,9 +52,45 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().min(8),
+						password: z
+							.string({
+								description: "User password",
+							})
+							.min(8),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							summary: "Enable two factor authentication",
+							description:
+								"Use this endpoint to enable two factor authentication. This will generate a TOTP URI and backup codes. Once the user verifies the TOTP URI, the two factor authentication will be enabled.",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													totpURI: {
+														type: "string",
+														description: "TOTP URI",
+													},
+													backupCodes: {
+														type: "array",
+														items: {
+															type: "string",
+														},
+														description: "Backup codes",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
@@ -139,9 +175,37 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().min(8),
+						password: z
+							.string({
+								description: "User password",
+							})
+							.min(8),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							summary: "Disable two factor authentication",
+							description:
+								"Use this endpoint to disable two factor authentication.",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;

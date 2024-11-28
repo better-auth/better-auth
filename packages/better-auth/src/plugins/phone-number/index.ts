@@ -109,10 +109,47 @@ export const phoneNumber = (options?: {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string(),
-						password: z.string(),
-						rememberMe: z.boolean().optional(),
+						phoneNumber: z.string({
+							description: "Phone number to sign in",
+						}),
+						password: z.string({
+							description: "Password to use for sign in",
+						}),
+						rememberMe: z
+							.boolean({
+								description: "Remember the session",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Sign in with phone number",
+							description: "Use this endpoint to sign in with phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Invalid phone number or password",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { password, phoneNumber } = ctx.body;
@@ -203,8 +240,33 @@ export const phoneNumber = (options?: {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string(),
+						phoneNumber: z.string({
+							description: "Phone number to send OTP",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Send OTP to phone number",
+							description: "Use this endpoint to send OTP to phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!options?.sendOTP) {
@@ -256,23 +318,65 @@ export const phoneNumber = (options?: {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string(),
+						phoneNumber: z.string({
+							description: "Phone number to verify",
+						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string(),
+						code: z.string({
+							description: "OTP code",
+						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
-						disableSession: z.boolean().optional(),
+						disableSession: z
+							.boolean({
+								description: "Disable session creation after verification",
+							})
+							.optional(),
 						/**
 						 * This checks if there is a session already
 						 * and updates the phone number with the provided
 						 * phone number
 						 */
-						updatePhoneNumber: z.boolean().optional(),
+						updatePhoneNumber: z
+							.boolean({
+								description:
+									"Check if there is a session and update the phone number",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Verify phone number",
+							description: "Use this endpoint to verify phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Invalid OTP",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const otp = await ctx.context.internalAdapter.findVerificationValue(

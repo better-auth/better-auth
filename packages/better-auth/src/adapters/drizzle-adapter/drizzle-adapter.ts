@@ -3,6 +3,7 @@ import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 
 export interface DB {
 	[key: string]: any;
@@ -60,19 +61,23 @@ const createTransform = (
 				useDatabaseGeneratedId || action === "update"
 					? {}
 					: {
-							id:
-								data.id ||
-								(options.advanced?.generateId
-									? options.advanced.generateId({
-											model,
-										})
-									: generateId()),
+							id: options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: data.id || generateId(),
 						};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = data[key];
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				if (value === undefined && !fields[field].defaultValue) {
+					continue;
 				}
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					value,
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},
@@ -273,14 +278,10 @@ export const drizzleAdapter =
 					.select()
 					.from(schemaModel)
 					.limit(limit || 100)
-					.offset(offset || 0)
-					.orderBy(
-						sortFn(
-							schemaModel[
-								sortBy?.field ? getField(model, sortBy?.field) : "id"
-							],
-						),
-					);
+					.offset(offset || 0);
+				if (sortBy?.field) {
+					builder.orderBy(sortFn(schemaModel[getField(model, sortBy?.field)]));
+				}
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
 			},

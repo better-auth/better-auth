@@ -55,7 +55,7 @@ To add endpoints to the server, you can pass `endpoints` which requires an objec
 
 To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
 
-Better Auth uses a library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
+Better Auth uses wraps around another library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
 
 ```ts title="plugin.ts"
 import { createAuthEndpoint } from "better-auth/api";
@@ -184,6 +184,10 @@ const myPlugin = {
 
 This will add an `age` field to the `user` table and all `user` returning endpoints will include the `age` field and it'll be inferred properly by typescript.
 
+<Callout type="warn">
+Don't store sensitive information in `user` or `session` table. Crate a new table if you need to store sensitive information.
+</Callout>
+
 ### Hooks
  
 Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
@@ -194,8 +198,7 @@ import {  createAuthMiddleware } from "better-auth/plugins";
 const myPlugin = {
     id: "my-plugin",
     hooks: {
-        before: {
-            [{
+        before: [{
                 matcher: (context)=>{
                     return context.headers.get("x-my-header") === "my-value"
                 },
@@ -205,26 +208,20 @@ const myPlugin = {
                         context: ctx // if you want to modify the context
                     }
                 })
-            }]
-        },
+            }],
         after: [{
             matcher: (context)=>{
-                return context.req.method === "POST
+                return context.req.method === "POST"
             },
             handler: async(ctx)=>{
-                return {
-                    // you can modify the response here
-                    response: new Response(JSON.stringify({message: "Hello World"}))
-                }
+                return ctx.json({
+                    message: "Hello World"
+                }) // if you want to modify the response
             }
         }]
     }
 } satisfies BetterAuthPlugin
 ```
-
-<Callout type="warn">
-Don't store sensitive information in `user` or `session` table. Crate a new table if you need to store sensitive information.
-</Callout>
 
 ### Middleware
 

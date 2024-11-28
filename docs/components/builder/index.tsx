@@ -249,7 +249,7 @@ export function Builder() {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<button className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white md:inline-block hidden">
+				<button className="bg-stone-950 no-underline group cursor-pointer relative  p-px text-xs font-semibold leading-6  text-white md:inline-block hidden">
 					<span className="absolute inset-0 overflow-hidden rounded-sm">
 						<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
 					</span>
@@ -260,7 +260,7 @@ export function Builder() {
 					<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
 				</button>
 			</DialogTrigger>
-			<DialogContent className="max-w-7xl h-5/6 overflow-clip">
+			<DialogContent className="max-w-7xl h-5/6 overflow-clip !rounded-none">
 				<DialogHeader>
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>

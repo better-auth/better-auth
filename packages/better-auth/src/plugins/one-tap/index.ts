@@ -23,8 +23,41 @@ export const oneTap = (options?: OneTapOptions) =>
 				{
 					method: "POST",
 					body: z.object({
-						idToken: z.string(),
+						idToken: z.string({
+							description:
+								"Google ID token, which the client obtains from the One Tap API",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							summary: "One tap callback",
+							description:
+								"Use this endpoint to authenticate with Google One Tap",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Invalid token",
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const { idToken } = c.body;

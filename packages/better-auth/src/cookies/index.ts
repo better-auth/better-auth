@@ -8,6 +8,7 @@ import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { isProduction } from "../utils/env";
+import { getSessionFromCtx } from "../api";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -105,6 +106,23 @@ export async function setSessionCookie(
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
+
+	const hasAlreadySession = await getSessionFromCtx(ctx).catch(() => {
+		// this could throw error when headers isn't found. but we don't want to throw error
+		return null;
+	});
+	if (hasAlreadySession) {
+		if (
+			hasAlreadySession.session.userId === session.session.userId &&
+			hasAlreadySession.session.token !== session.session.token
+		) {
+			// If the user already has a session, delete the old session
+			await ctx.context.internalAdapter.deleteSession(
+				hasAlreadySession.session.token,
+			);
+		}
+	}
+
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
