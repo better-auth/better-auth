@@ -77,7 +77,7 @@ export default function Hero() {
 							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight text-2xl md:text-3xl">
 								The most comprehensive authentication framework for TypeScript.
 							</p>
-							<div className="relative mt-2 flex items-center gap-2 w-10/12">
+							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden">
 								<GradientBG className="w-full flex items-center justify-between">
 									<div className="w-full flex items-center gap-2">
 										<p className="md:text-sm text-xs font-mono">
