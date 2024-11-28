@@ -84,6 +84,25 @@ describe(
 				expect(response.error?.status).toBe(i >= 20 ? 429 : undefined);
 			}
 		});
+
+		it("query params should be ignored", async () => {
+			for (let i = 0; i < 25; i++) {
+				const response = await client.listSessions({
+					fetchOptions: {
+						// @ts-ignore
+						query: {
+							"test-query": Math.random().toString(),
+						},
+					},
+				});
+
+				if (i >= 20) {
+					expect(response.error?.status).toBe(429);
+				} else {
+					expect(response.error?.status).toBe(401);
+				}
+			}
+		});
 	},
 );
 
