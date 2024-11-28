@@ -8,7 +8,7 @@ describe("open-api", async (it) => {
 	});
 
 	it("should generate open api schema", async () => {
-		const schema = await auth.api.openAPIGenerator();
+		const schema = await auth.api.generateOpenAPISchema();
 		expect(schema).toBeDefined();
 	});
 });

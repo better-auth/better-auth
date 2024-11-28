@@ -77,7 +77,7 @@ export default function Hero() {
 							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight text-2xl md:text-3xl">
 								The most comprehensive authentication framework for TypeScript.
 							</p>
-							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden">
+							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden border border-white/5">
 								<GradientBG className="w-full flex items-center justify-between">
 									<div className="w-full flex items-center gap-2">
 										<p className="md:text-sm text-xs font-mono">
@@ -91,7 +91,7 @@ export default function Hero() {
 											npm add{" "}
 											<span className="relative dark:text-fuchsia-100 text-fuchsia-950">
 												better-auth
-												<span className="absolute h-2 bg-gradient-to-tr from-white via-yellow-500 to-amber-400 blur-3xl w-full top-0 left-2"></span>
+												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
 										</p>
 									</div>

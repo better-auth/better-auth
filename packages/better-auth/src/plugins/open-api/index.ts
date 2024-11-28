@@ -58,8 +58,8 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 	return {
 		id: "open-api",
 		endpoints: {
-			openAPIGenerator: createAuthEndpoint(
-				"/open-api/schema",
+			generateOpenAPISchema: createAuthEndpoint(
+				"/open-api/generate-schema",
 				{
 					method: "GET",
 				},
