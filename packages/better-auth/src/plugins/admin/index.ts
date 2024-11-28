@@ -25,7 +25,7 @@ export interface UserWithRole extends User {
 	banExpires?: Date | null;
 }
 
-interface SessionWithImpersonatedBy extends Session {
+export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
 }
 
