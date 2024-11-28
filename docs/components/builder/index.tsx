@@ -1,15 +1,4 @@
-import { cn } from "@/lib/utils";
-import { useAtom } from "jotai";
-import { Moon, PlusIcon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
-import { useState } from "react";
-import {
-	Card,
-	CardContent,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "../ui/card";
+import { ChevronLeft, Copy, Mail, Moon, PlusIcon, Sun } from "lucide-react";
 import {
 	Dialog,
 	DialogContent,
@@ -18,16 +7,28 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "../ui/dialog";
-import { Label } from "../ui/label";
-import { ScrollArea } from "../ui/scroll-area";
-import { Separator } from "../ui/separator";
-import { Switch } from "../ui/switch";
-import CodeTabs from "./code-tabs";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "../ui/card";
 import SignIn from "./sign-in";
 import { SignUp } from "./sign-up";
-import { socialProviders } from "./social-provider";
-import { optionsAtom } from "./store";
 import { AuthTabs } from "./tabs";
+import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
+import { Separator } from "../ui/separator";
+import { useState } from "react";
+import CodeTabs from "./code-tabs";
+import { cn } from "@/lib/utils";
+import { socialProviders } from "./social-provider";
+import { useAtom } from "jotai";
+import { optionsAtom } from "./store";
+import { useTheme } from "next-themes";
+import { ScrollArea } from "../ui/scroll-area";
+import { Button } from "../ui/button";
 
 const frameworks = [
 	{
