@@ -55,7 +55,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
-					id: text("id").primaryKey(),
+					id: ${text}("id").primaryKey(),
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field];
