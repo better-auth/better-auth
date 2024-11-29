@@ -1,4 +1,8 @@
-import { getAuthTables, type FieldAttribute, type FieldType } from "better-auth/db";
+import {
+	getAuthTables,
+	type FieldAttribute,
+	type FieldType,
+} from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
@@ -65,7 +69,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
 									? `.references(()=> ${
-											usePlural 
+											usePlural
 												? `${attr.references.model}s`
 												: attr.references.model
 										}.${attr.references.field})`
