@@ -237,7 +237,10 @@ export const getOrgAdapter = (
 						value: organizationId,
 					},
 				],
-				update: data,
+				update: {
+					...data,
+					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
+				},
 			});
 			return organization;
 		},
