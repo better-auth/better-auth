@@ -15,11 +15,11 @@ export default function CodeTabs() {
 			id: "1",
 			name: "auth.ts",
 			content: `import { betterAuth } from 'better-auth';
-	
+
 	export const auth = betterAuth({
 		${
 			options.email
-				? `emailAndPassword: { 
+				? `emailAndPassword: {
 		enabled: true,
 ${
 	options.forgetPassword
@@ -61,7 +61,7 @@ ${
 		]`
 				: ""
 		}
-		/** if no database is provided, the user data will be stored in memory. 
+		/** if no database is provided, the user data will be stored in memory.
 	 * Make sure to provide a database to persist user data **/
 	});
 	`,
@@ -77,7 +77,7 @@ ${
 						} } from "better-auth/client/plugins";`
 					: ""
 			}
-			
+
 			export const authClient = createAuthClient({
 				baseURL: process.env.NEXT_PUBLIC_APP_URL,
 				${
@@ -123,14 +123,14 @@ ${
 	const activeFile = files.find((file) => file.id === activeFileId);
 
 	return (
-		<div className="w-full max-w-3xl mx-auto mt-8 border border-border rounded-md overflow-hidden">
+		<div className="w-full mr-auto max-w-3xl mt-8 border border-border rounded-md overflow-hidden">
 			<TabBar
 				files={files}
 				activeFileId={activeFileId}
 				onTabClick={handleTabClick}
 				onTabClose={handleTabClose}
 			/>
-			<div className="bg-background">
+			<div className="bg-back">
 				{activeFile && (
 					<CodeEditor
 						language="typescript"

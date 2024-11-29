@@ -25,16 +25,18 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 	};
 
 	return (
-		<div className="relative">
+		<div className="relative w-full">
 			<Highlight theme={theme} code={code} language={language}>
 				{({ className, style, tokens, getLineProps, getTokenProps }) => (
 					<pre
-						className={`${className} p-4 overflow-auto max-h-[400px] rounded-md`}
+						className={`${className} text-sm p-4 w-fit overflow-scroll  max-h-[400px] rounded-md`}
 						style={style}
 					>
 						{tokens.map((line, i) => (
 							<div key={i} {...getLineProps({ line, key: i })}>
-								<span className="mr-4 text-gray-500 select-none">{i + 1}</span>
+								<span className="inline-block w-4 mr-3 text-gray-500 select-none">
+									{i + 1}
+								</span>
 								{line.map((token, key) => (
 									<span key={key} {...getTokenProps({ token, key })} />
 								))}

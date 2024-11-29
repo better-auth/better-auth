@@ -292,7 +292,7 @@ export function Builder() {
 							)}
 						</div>
 					</ScrollArea>
-					<ScrollArea className="w-5/12  flex-grow">
+					<ScrollArea className="w-[45%] flex-grow">
 						<div className="h-[580px]">
 							{currentStep === 0 ? (
 								<Card className="rounded-none flex-grow h-full">
@@ -540,14 +540,14 @@ export function Builder() {
 									</CardContent>
 								</Card>
 							) : (
-								<Card className="rounded-none flex-grow  h-full overflow-scroll">
+								<Card className="rounded-none w-full overflow-y-hidden h-full overflow-auto">
 									<CardHeader>
-										<div className="flex flex-col items-start">
+										<div className="flex flex-col -mb-2 items-start">
 											<CardTitle>Code</CardTitle>
 										</div>
 									</CardHeader>
 									<CardContent>
-										<div>
+										<div className="flex gap-2 items-baseline">
 											<p>
 												Copy the code below and paste it in your application to
 												get started.

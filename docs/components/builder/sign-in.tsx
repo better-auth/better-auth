@@ -178,7 +178,7 @@ export default function SignIn() {
 			? "const [rememberMe, setRememberMe] = useState(false);"
 			: ""
 	}
-  
+
   return (
     <Card className="max-w-md">
       <CardHeader>
@@ -328,9 +328,9 @@ export default function SignIn() {
 										}
                   )}
                   onClick={async () => {
-                    await signIn.social({ 
-                      provider: "${provider}", 
-                      callbackURL: "/dashboard" 
+                    await signIn.social({
+                      provider: "${provider}",
+                      callbackURL: "/dashboard"
                     });
                   }}
                 >

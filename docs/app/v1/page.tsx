@@ -217,7 +217,11 @@ function ChangelogItem({
 	version,
 	date,
 	changes,
-}: { version: string; date: string; changes: string[] }) {
+}: {
+	version: string;
+	date: string;
+	changes: string[];
+}) {
 	return (
 		<div className="border-l-2 border-white/10 pl-6 relative">
 			<div className="absolute w-3 h-3 bg-white rounded-full -left-[7px] top-2" />
