@@ -191,10 +191,10 @@ export const changePassword = createAuthEndpoint(
 			});
 		}
 		const passwordHash = await ctx.context.password.hash(newPassword);
-		const verify = await ctx.context.password.verify(
-			account.password,
-			currentPassword,
-		);
+		const verify = await ctx.context.password.verify({
+			hash: account.password,
+			password: currentPassword,
+		});
 		if (!verify) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Incorrect password",

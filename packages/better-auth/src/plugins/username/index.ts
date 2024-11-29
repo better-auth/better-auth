@@ -107,10 +107,10 @@ export const username = () => {
 							message: "Unexpected error",
 						});
 					}
-					const validPassword = await ctx.context.password.verify(
-						currentPassword,
-						ctx.body.password,
-					);
+					const validPassword = await ctx.context.password.verify({
+						hash: currentPassword,
+						password: ctx.body.password,
+					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {

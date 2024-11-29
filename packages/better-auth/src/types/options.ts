@@ -206,7 +206,7 @@ export interface BetterAuthOptions {
 		 */
 		password?: {
 			hash?: (password: string) => Promise<string>;
-			verify?: (hash: string, password: string) => Promise<boolean>;
+			verify?: (data: { hash: string; password: string }) => Promise<boolean>;
 		};
 		/**
 		 * Automatically sign in the user after sign up

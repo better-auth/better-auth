@@ -199,10 +199,10 @@ export const phoneNumber = (options?: {
 							message: "Unexpected error",
 						});
 					}
-					const validPassword = await ctx.context.password.verify(
-						currentPassword,
+					const validPassword = await ctx.context.password.verify({
+						hash: currentPassword,
 						password,
-					);
+					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
