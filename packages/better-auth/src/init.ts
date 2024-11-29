@@ -141,7 +141,7 @@ export type AuthContext = {
 	options: BetterAuthOptions;
 	appName: string;
 	baseURL: string;
-	trustedOrigins: string[];
+	trustedOrigins: (origin: string) => string | null;
 	session: {
 		session: Session;
 		user: User;
@@ -224,18 +224,27 @@ function getInternalPlugins(options: BetterAuthOptions) {
 	return plugins;
 }
 
-function getTrustedOrigins(options: BetterAuthOptions) {
+function getTrustedOrigins(
+	options: BetterAuthOptions,
+): (origin: string) => string | null {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 	if (!baseURL) {
-		return [];
+		return () => null;
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins) {
+	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
 		trustedOrigins.push(...options.trustedOrigins);
+	} else if (options.trustedOrigins) {
+		return options.trustedOrigins;
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}
-	return trustedOrigins;
+	return (origin: string) => {
+		if (trustedOrigins.includes(origin)) {
+			return origin;
+		}
+		return null;
+	};
 }

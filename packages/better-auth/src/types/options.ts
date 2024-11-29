@@ -351,9 +351,9 @@ export interface BetterAuthOptions {
 		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 	};
 	/**
-	 * List of trusted origins.
+	 * List of trusted origins, or a function that returns a trusted origin
 	 */
-	trustedOrigins?: string[];
+	trustedOrigins?: string[] | ((origin: string) => string | null);
 	/**
 	 * Rate limiting configuration
 	 */
