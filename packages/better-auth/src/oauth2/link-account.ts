@@ -75,13 +75,19 @@ export async function handleOAuthUserInfo(
 				};
 			}
 		} else {
-			await c.context.internalAdapter.updateAccount(hasBeenLinked.id, {
-				accessToken: account.accessToken,
-				idToken: account.idToken,
-				refreshToken: account.refreshToken,
-				accessTokenExpiresAt: account.accessTokenExpiresAt,
-				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-			});
+			const updateData = Object.fromEntries(
+				Object.entries({
+					accessToken: account.accessToken,
+					idToken: account.idToken,
+					refreshToken: account.refreshToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				}).filter(([_, value]) => value !== undefined)
+			);
+
+			if (Object.keys(updateData).length > 0) {
+				await c.context.internalAdapter.updateAccount(hasBeenLinked.id, updateData);
+			}
 		}
 	} else {
 		try {
