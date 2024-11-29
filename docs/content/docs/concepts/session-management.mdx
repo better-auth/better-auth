@@ -99,7 +99,7 @@ await authClient.revokeSessions()
 
 ### Revoking Sessions on Password Change
 
-You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePAssword` function.
+You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePassword` function.
 
 ```ts title="auth.ts"
 await authClient.changePassword({
