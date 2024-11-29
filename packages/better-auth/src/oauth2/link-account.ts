@@ -82,11 +82,14 @@ export async function handleOAuthUserInfo(
 					refreshToken: account.refreshToken,
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-				}).filter(([_, value]) => value !== undefined)
+				}).filter(([_, value]) => value !== undefined),
 			);
 
 			if (Object.keys(updateData).length > 0) {
-				await c.context.internalAdapter.updateAccount(hasBeenLinked.id, updateData);
+				await c.context.internalAdapter.updateAccount(
+					hasBeenLinked.id,
+					updateData,
+				);
 			}
 		}
 	} else {
