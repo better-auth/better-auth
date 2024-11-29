@@ -40,7 +40,13 @@ export const createInternalAdapter = (
 				user: data.user,
 			}),
 			data.session.expiresAt
-				? Math.floor((data.session.expiresAt.getTime() - Date.now()) / 1000)
+				? Math.floor(
+						((data.session.expiresAt instanceof Date
+							? data.session.expiresAt.getTime()
+							: new Date(data.session.expiresAt).getTime()) -
+							Date.now()) /
+							1000,
+					)
 				: sessionExpiration,
 		);
 	};
