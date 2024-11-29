@@ -1,4 +1,4 @@
-import { getAuthTables, type FieldType } from "better-auth/db";
+import { getAuthTables, type FieldAttribute, type FieldType } from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
@@ -14,7 +14,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
-	const text = databaseType === "mysql" ? "varchar" : "text";
+	const text = databaseType === "mysql" ? "varchar, text" : "text";
 	let code = `import { ${databaseType}Table, ${text}, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
 			`;
 
@@ -25,46 +25,47 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			? `${tables[table].modelName}s`
 			: tables[table].modelName;
 		const fields = tables[table].fields;
-		function getType(name: string, type: FieldType) {
-			if (type === "string") {
-				if (databaseType === "mysql") {
-					return `varchar('${name}', {
-								length: 255
-							})`;
-				}
-				return `text('${name}')`;
-			}
-			if (type === "number") {
-				return `${int}('${name}')`;
-			}
-			if (type === "boolean") {
-				if (databaseType === "sqlite") {
-					return `integer('${name}', {
-								mode: "boolean"
-							})`;
-				}
-				return `boolean('${name}')`;
-			}
-			if (type === "date") {
-				if (databaseType === "sqlite") {
-					return `integer('${name}', {
-								mode: "timestamp"
-							})`;
-				}
-				return `timestamp('${name}')`;
-			}
+		function getType(name: string, field: FieldAttribute) {
+			const type = field.type;
+			const typeMap = {
+				string: {
+					sqlite: `text('${name}')`,
+					pg: `text('${name}')`,
+					mysql: field.unique
+						? `varchar('${name}', { length: 255 })`
+						: field.references
+							? `varchar('${name}', { length: 36 })`
+							: `text('${name}')`,
+				},
+				boolean: {
+					sqlite: `integer('${name}', { mode: 'boolean' })`,
+					pg: `boolean('${name}')`,
+					mysql: `boolean('${name}')`,
+				},
+				number: {
+					sqlite: `integer('${name}')`,
+					pg: `integer('${name}')`,
+					mysql: `int('${name}')`,
+				},
+				date: {
+					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					pg: `timestamp('${name}')`,
+					mysql: `timestamp('${name}')`,
+				},
+			} as const;
+			return typeMap[type][databaseType || "sqlite"];
 		}
 		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
-					id: ${text}("id").primaryKey(),
+					id: varchar("id", { length: 36 }).primaryKey(),
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field];
-							return `${field}: ${getType(field, attr.type)}${
+							return `${field}: ${getType(field, attr)}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
 								attr.references
 									? `.references(()=> ${
-											usePlural
+											usePlural 
 												? `${attr.references.model}s`
 												: attr.references.model
 										}.${attr.references.field})`
