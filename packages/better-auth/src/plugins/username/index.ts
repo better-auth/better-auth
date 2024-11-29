@@ -60,7 +60,7 @@ export const username = () => {
 						where: [
 							{
 								field: "username",
-								value: ctx.body.username,
+								value: ctx.body.username.toLowerCase(),
 							},
 						],
 					});
