@@ -669,6 +669,11 @@ export const contents: Content[] = [
 				href: "/docs/integrations/elysia",
 			},
 			{
+				title: "Nitro",
+				icon: Icons.nitro,
+				href: "/docs/integrations/nitro",
+			},
+			{
 				group: true,
 				title: "Mobile & Desktop",
 				href: "/docs/integrations",
