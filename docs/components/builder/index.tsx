@@ -323,9 +323,15 @@ export function Builder() {
 											<Separator />
 											<div className="flex items-center justify-between">
 												<div className="flex items-center">
-													<Label>Enabled</Label>
+													<Label
+														className="cursor-pointer"
+														htmlFor="email-provider-email"
+													>
+														Enabled
+													</Label>
 												</div>
 												<Switch
+													id="email-provider-email"
 													checked={options.email}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
@@ -339,9 +345,15 @@ export function Builder() {
 											</div>
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2">
-													<Label>Remember Me</Label>
+													<Label
+														className="cursor-pointer"
+														htmlFor="email-provider-remember-me"
+													>
+														Remember Me
+													</Label>
 												</div>
 												<Switch
+													id="email-provider-remember-me"
 													checked={options.rememberMe}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
@@ -353,9 +365,15 @@ export function Builder() {
 											</div>
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2">
-													<Label>Forget Password</Label>
+													<Label
+														className="cursor-pointer"
+														htmlFor="email-provider-forget-password"
+													>
+														Forget Password
+													</Label>
 												</div>
 												<Switch
+													id="email-provider-forget-password"
 													checked={options.forgetPassword}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
@@ -379,12 +397,19 @@ export function Builder() {
 													>
 														<div className="flex items-center gap-2">
 															<Icon />
-															<Label>
+															<Label
+																className="cursor-pointer"
+																htmlFor={"social-provider".concat(
+																	"-",
+																	provider,
+																)}
+															>
 																{provider.charAt(0).toUpperCase() +
 																	provider.slice(1)}
 															</Label>
 														</div>
 														<Switch
+															id={"social-provider".concat("-", provider)}
 															checked={options.socialProviders.includes(
 																provider,
 															)}
@@ -421,9 +446,15 @@ export function Builder() {
 															d="M5 20q-.825 0-1.412-.587T3 18v-.8q0-.85.438-1.562T4.6 14.55q1.55-.775 3.15-1.162T11 13q.35 0 .7.013t.7.062q.275.025.437.213t.163.462q.05 1.175.575 2.213t1.4 1.762q.175.125.275.313t.1.412V19q0 .425-.288.713T14.35 20zm6-8q-1.65 0-2.825-1.175T7 8t1.175-2.825T11 4t2.825 1.175T15 8t-1.175 2.825T11 12m7.5 2q.425 0 .713-.288T19.5 13t-.288-.712T18.5 12t-.712.288T17.5 13t.288.713t.712.287m.15 8.65l-1-1q-.05-.05-.15-.35v-4.45q-1.1-.325-1.8-1.237T15 13.5q0-1.45 1.025-2.475T18.5 10t2.475 1.025T22 13.5q0 1.125-.638 2t-1.612 1.25l.9.9q.15.15.15.35t-.15.35l-.8.8q-.15.15-.15.35t.15.35l.8.8q.15.15.15.35t-.15.35l-1.3 1.3q-.15.15-.35.15t-.35-.15"
 														></path>
 													</svg>
-													<Label>Passkey</Label>
+													<Label
+														className="cursor-pointer"
+														htmlFor="plugin-passkey"
+													>
+														Passkey
+													</Label>
 												</div>
 												<Switch
+													id="plugin-passkey"
 													checked={options.passkey}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
@@ -450,9 +481,15 @@ export function Builder() {
 															></path>
 														</g>
 													</svg>
-													<Label>Magic Link</Label>
+													<Label
+														className="cursor-pointer"
+														htmlFor="plugin-otp-magic-link"
+													>
+														Magic Link
+													</Label>
 												</div>
 												<Switch
+													id="plugin-otp-magic-link"
 													checked={options.magicLink}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
@@ -468,8 +505,14 @@ export function Builder() {
 										<div className="mt-4">
 											<Separator />
 											<div className="flex items-center justify-between mt-2">
-												<Label>Powered by label</Label>
+												<Label
+													className="cursor-pointer"
+													htmlFor="label-powered-by"
+												>
+													Powered by label
+												</Label>
 												<Switch
+													id="label-powered-by"
 													checked={options.label}
 													onCheckedChange={(checked) => {
 														setOptions((prev) => ({
