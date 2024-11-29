@@ -657,6 +657,7 @@ export const passkey = (options?: PasskeyOptions) => {
 									",",
 								) as AuthenticatorTransportFuture[],
 							},
+							requireUserVerification: false,
 						});
 						const { verified } = verification;
 						if (!verified)
