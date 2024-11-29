@@ -140,6 +140,11 @@ export const updateOrganization = createAuthEndpoint(
 							description: "The logo of the organization",
 						})
 						.optional(),
+					metadata: z
+						.record(z.string(), z.any(), {
+							description: "The metadata of the organization",
+						})
+						.optional(),
 				})
 				.partial(),
 			organizationId: z.string().optional(),
