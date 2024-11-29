@@ -1,11 +1,8 @@
-import { z } from "zod";
-import { APIError } from "better-call";
-import type { BetterAuthPlugin, User } from "../../types";
-import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateState, parseState } from "../../oauth2/state";
+import { APIError } from "better-call";
 import { parseJWT } from "oslo/jwt";
-import { userSchema } from "../../db/schema";
+import { z } from "zod";
+import { createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import {
 	createAuthorizationURL,
@@ -13,6 +10,8 @@ import {
 	type OAuth2Tokens,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { generateState, parseState } from "../../oauth2/state";
+import type { BetterAuthPlugin, User } from "../../types";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -418,7 +417,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						account: {
 							providerId: provider.providerId,
 							accountId: userInfo.id,
-							accessToken: tokens.accessToken,
+							...tokens,
+							scope: tokens.scopes?.join(',')
 						},
 					});
 					function redirectOnError(error: string) {
