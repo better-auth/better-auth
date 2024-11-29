@@ -214,7 +214,7 @@ export const auth = betterAuth({
         ...options.plugins,
         customSession(async ({ user, session }) => {
             // now both user and session will infer the fields added by plugins and your custom fields
-            retunr {
+            return {
                 user,
                 session
             }
