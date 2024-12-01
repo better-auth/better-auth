@@ -174,8 +174,8 @@ const sessions = await authClient.admin.listUserSessions({
 Revokes a specific session for a user.
 
 ```ts title="admin.ts"
-const revokedSessions = await authClient.admin.revokeSession({
- sessionToken: "session_id_here"
+const revokedSession = await authClient.admin.revokeUserSession({
+ sessionToken: "session_token_here"
 });
 ```
 
