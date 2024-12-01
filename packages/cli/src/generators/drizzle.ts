@@ -18,7 +18,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
-	const text = databaseType === "mysql" ? "varchar, text" : "text";
+	const text = databaseType === "mysql" || databaseType === "pg" ? "varchar, text" : "text";
 	let code = `import { ${databaseType}Table, ${text}, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
 			`;
 
