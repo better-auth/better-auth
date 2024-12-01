@@ -39,7 +39,7 @@ export type TOTPOptions = {
 export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const opts = {
 		...options,
-		digits: 6,
+		digits: options?.digits || 6,
 		period: new TimeSpan(options?.period || 30, "s"),
 	};
 
