@@ -18,6 +18,14 @@ export interface OTPOptions {
 	 * @default "3 mins"
 	 */
 	period?: number;
+
+	/**
+	 * Number of digits for the OTP code
+	 *
+	 * @default 6
+	 */
+	digits?: 6 | 8;
+
 	/**
 	 * Send the otp to the user
 	 *
@@ -49,10 +57,11 @@ export interface OTPOptions {
 export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 	const opts = {
 		...options,
+		digits: options?.digits || 6,
 		period: new TimeSpan(options?.period || 3, "m"),
 	};
 	const totp = new TOTPController({
-		digits: 6,
+		digits: opts.digits,
 		period: opts.period,
 	});
 	/**
