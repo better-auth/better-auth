@@ -164,7 +164,7 @@ const unbannedUser = await authClient.admin.unbanUser({
 Lists all sessions for a user.
 
 ```ts title="admin.ts"
-const sessions = await authClient.admin.listSessions({
+const sessions = await authClient.admin.listUserSessions({
   userId: "user_id_here"
 });
 ```
