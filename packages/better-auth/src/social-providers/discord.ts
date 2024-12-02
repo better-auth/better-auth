@@ -74,7 +74,7 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export interface DiscordOptions extends ProviderOptions {}
+export interface DiscordOptions extends ProviderOptions<DiscordProfile> {}
 
 export const discord = (options: DiscordOptions) => {
 	return {
@@ -134,6 +134,7 @@ export const discord = (options: DiscordOptions) => {
 					email: profile.email,
 					emailVerified: profile.verified,
 					image: profile.image_url,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

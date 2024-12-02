@@ -133,11 +133,9 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
-				id: userInfo.id,
+				...userInfo,
 				email: userInfo.email,
-				name: userInfo.name || "",
-				image: userInfo.image,
-				emailVerified: userInfo.emailVerified || false,
+				name: userInfo.name || userInfo.email,
 			},
 			account: {
 				providerId: provider.id,

@@ -47,7 +47,7 @@ export interface GitlabProfile extends Record<string, any> {
 	extra_shared_runners_minutes_limit: number;
 }
 
-export interface GitlabOptions extends ProviderOptions {
+export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
 	issuer?: string;
 }
 
@@ -120,6 +120,7 @@ export const gitlab = (options: GitlabOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: true,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

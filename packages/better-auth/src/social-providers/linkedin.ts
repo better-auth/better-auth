@@ -16,7 +16,7 @@ export interface LinkedInProfile {
 	email_verified: boolean;
 }
 
-export interface LinkedInOptions extends ProviderOptions {}
+export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {}
 
 export const linkedin = (options: LinkedInOptions) => {
 	const authorizationEndpoint =
@@ -68,6 +68,7 @@ export const linkedin = (options: LinkedInOptions) => {
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
 					image: profile.picture,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

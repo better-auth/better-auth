@@ -16,7 +16,7 @@ export interface FacebookProfile {
 		};
 	};
 }
-export interface FacebookOptions extends ProviderOptions {}
+export interface FacebookOptions extends ProviderOptions<FacebookProfile> {}
 export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
@@ -64,6 +64,7 @@ export const facebook = (options: FacebookOptions) => {
 					email: profile.email,
 					image: profile.picture.data.url,
 					emailVerified: profile.email_verified,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

@@ -12,7 +12,8 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	picture: string;
 }
 
-export interface MicrosoftOptions extends ProviderOptions {
+export interface MicrosoftOptions
+	extends ProviderOptions<MicrosoftEntraIDProfile> {
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
@@ -102,6 +103,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					email: user.email,
 					image: user.picture,
 					emailVerified: true,
+					...options.mapProfileToUser?.(user),
 				},
 				data: user,
 			};

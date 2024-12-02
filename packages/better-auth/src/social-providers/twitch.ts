@@ -22,7 +22,7 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export interface TwitchOptions extends ProviderOptions {
+export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	claims?: string[];
 }
 export const twitch = (options: TwitchOptions) => {
@@ -72,6 +72,7 @@ export const twitch = (options: TwitchOptions) => {
 					email: profile.email,
 					image: profile.picture,
 					emailVerified: false,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

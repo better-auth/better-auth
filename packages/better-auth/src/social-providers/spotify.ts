@@ -11,7 +11,7 @@ export interface SpotifyProfile {
 	}[];
 }
 
-export interface SpotifyOptions extends ProviderOptions {}
+export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {}
 
 export const spotify = (options: SpotifyOptions) => {
 	return {
@@ -62,6 +62,7 @@ export const spotify = (options: SpotifyOptions) => {
 					email: profile.email,
 					image: profile.images[0]?.url,
 					emailVerified: false,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

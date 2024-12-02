@@ -65,7 +65,7 @@ export interface AppleNonConformUser {
 	email: string;
 }
 
-export interface AppleOptions extends ProviderOptions {}
+export interface AppleOptions extends ProviderOptions<AppleProfile> {}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -139,6 +139,7 @@ export const apple = (options: AppleOptions) => {
 					name: name,
 					emailVerified: false,
 					email: profile.email,
+					...options.mapProfileToUser?.(profile),
 				},
 				data: profile,
 			};

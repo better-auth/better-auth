@@ -42,7 +42,7 @@ export interface OAuthProvider<
 	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
 }
 
-export type ProviderOptions = {
+export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client ID of your application
 	 */
@@ -74,5 +74,27 @@ export type ProviderOptions = {
 	/**
 	 * Custom function to get user info from the provider
 	 */
-	getUserInfo?: (token: OAuth2Tokens) => Promise<any>;
+	getUserInfo?: (token: OAuth2Tokens) => Promise<{
+		user: {
+			id: string;
+			name?: string;
+			email?: string | null;
+			image?: string;
+			emailVerified: boolean;
+			[key: string]: any;
+		};
+		data: any;
+	}>;
+	/**
+	 * Custom function to map the provider profile to a
+	 * user.
+	 */
+	mapProfileToUser?: (profile: Profile) => {
+		id?: string;
+		name?: string;
+		email?: string | null;
+		image?: string;
+		emailVerified?: boolean;
+		[key: string]: any;
+	};
 };

@@ -94,15 +94,11 @@ export async function handleOAuthUserInfo(
 		}
 	} else {
 		try {
-			const emailVerified = userInfo.emailVerified || false;
 			user = await c.context.internalAdapter
 				.createOAuthUser(
 					{
 						...userInfo,
-						// setting id to undefined to let the database generate it
 						id: undefined,
-						emailVerified,
-						email: userInfo.email.toLowerCase(),
 					},
 					{
 						accessToken: account.accessToken,
@@ -117,7 +113,7 @@ export async function handleOAuthUserInfo(
 				)
 				.then((res) => res?.user);
 			if (
-				!emailVerified &&
+				!userInfo.emailVerified &&
 				user &&
 				c.context.options.emailVerification?.sendOnSignUp
 			) {
