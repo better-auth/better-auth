@@ -288,11 +288,6 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		body: z.object({
-			password: z.string({
-				description: "The password of the user",
-			}),
-		}),
 		use: [freshSessionMiddleware],
 		metadata: {
 			openapi: {
