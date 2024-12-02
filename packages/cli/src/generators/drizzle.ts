@@ -1,8 +1,4 @@
-import {
-	getAuthTables,
-	type FieldAttribute,
-	type FieldType,
-} from "better-auth/db";
+import { getAuthTables, type FieldAttribute } from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
@@ -57,10 +53,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `timestamp('${name}')`,
 				},
 			} as const;
-			return typeMap[type][databaseType || "sqlite"];
+			return typeMap[type as "boolean"][(databaseType as "sqlite") || "sqlite"];
 		}
+		const id =
+			databaseType === "mysql"
+				? `varchar("id", { length: 36 }).primaryKey()`
+				: `text("id").primaryKey()`;
 		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
-					id: varchar("id", { length: 36 }).primaryKey(),
+					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field];
