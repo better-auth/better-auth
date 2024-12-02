@@ -37,11 +37,22 @@ describe("updateUser", async () => {
 	it("should update the user's name", async () => {
 		const updated = await client.updateUser({
 			name: "newName",
+			image: "https://example.com/image.jpg",
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(updated.data?.user.name).toBe("newName");
+	});
+
+	it("should unset image", async () => {
+		const updated = await client.updateUser({
+			image: null,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(updated.data?.user.image).toBeNull();
 	});
 
 	it("should update user email", async () => {

@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodOptional, ZodString } from "zod";
+import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -14,11 +14,13 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
-				name: ZodOptional<ZodString>;
-				image: ZodOptional<ZodString>;
-			}> &
-				toZod<AdditionalUserFieldsInput<O>>,
+			body: z.record(z.string(), z.any()) as unknown as toZod<
+				AdditionalUserFieldsInput<O>
+			> &
+				ZodObject<{
+					name: ZodOptional<ZodString>;
+					image: ZodOptional<ZodString | ZodNull>;
+				}>,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -76,7 +78,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
-			if (!image && !name && Object.keys(rest).length === 0) {
+			if (image === undefined && !name && Object.keys(rest).length === 0) {
 				return ctx.json({
 					user: session.user,
 				});
