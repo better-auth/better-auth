@@ -107,6 +107,16 @@ describe("organization", async (it) => {
 		expect(org?.members.length).toBe(1);
 	});
 
+	it("should allow getting full org on server using slug", async () => {
+		const org = await auth.api.getFullOrganization({
+			headers,
+			query: {
+				organizationSlug: "test",
+			},
+		});
+		expect(org?.members.length).toBe(1);
+	});
+
 	it("invites user to organization", async () => {
 		const newUser = {
 			email: "test2@test.com",

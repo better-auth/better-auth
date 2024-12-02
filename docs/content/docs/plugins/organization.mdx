@@ -177,17 +177,52 @@ export default {
 
 ### Active Organization
 
-Active organization is the workspace the user is currently working on. By default when the user is signed in the active organization is set to `null`. 
+Active organization is the workspace the user is currently working on. By default when the user is signed in the active organization is set to `null`. You can set the active organization to the user session.
+
+<Callout type="info">
+ It's not always you want to persist the active organization in the session. You can manage the active organization in the client side only. For example, multiple tabs can have different active organizations.
+</Callout>
 
 #### Set Active Organization
 
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
-   
-```ts title="client.ts"
-client.organization.setActive({
-  organizationId: "organization-id"
-})
-```
+<Tabs items={["client", "server"]} defaultValue="client">
+  <Tab value="client">
+  ```ts title="client.ts"
+  import { client } from "@/lib/auth-client";
+
+  await client.organization.setActive({
+    organizationId: "organization-id"
+  })
+
+  // you can also use organizationSlug instead of organizationId
+  authClient.organization.setActive({
+    organizationSlug: "organization-slug"
+  })
+  ```
+  </Tab>
+
+  <Tab value="server">
+    ```ts title="api.ts"
+    import { auth } from "@/lib/auth";
+
+    auth.api.setActiveOrganization({
+      headers: // pass the headers,
+      body: {
+        organizationSlug: "organization-slug"
+      }
+    })
+
+    // you can also use organizationId instead of organizationSlug
+    auth.api.setActiveOrganization({
+      headers: // pass the headers,
+      body: {
+        organizationId: "organization-id"
+      }
+    })
+    ```
+  </Tab>
+</Tabs>
 
 #### Use Active Organization
 
@@ -253,24 +288,45 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 
 ### Get Full Organization
 
-To get the full details of an organization, you can use the `getFull` function provided by the client. The `getFull` function takes an object with the following properties:
+To get the full details of an organization, you can use the `getFullOrganization` function provided by the client. The function takes an object with the following properties:
 
-```ts title="client.ts"
-const organization = await client.organization.getFullOrganization({
-    organizationId: "organization-id" // optional, by default it will use the active organization
-})
-```
+- `organizationId`: The id of the organization. (Optional) – By default, it will use the active organization.
+- `organizationSlug`: The slug of the organization. (Optional) – To get the organization by slug.
 
-To get the full organization on the server
+<Tabs items={["client", "server"]}>
 
-```ts title="api.ts"
-import { auth } from "@/auth";
-import { headers } from "next/headers";
+  <Tab value="client">
+  ```ts title="client.ts"
+  const organization = await client.organization.getFullOrganization({
+      organizationId: "organization-id" // optional, by default it will use the active organization
+  })
+  //you can also use organizationSlug instead of organizationId
+  const organization = await client.organization.getFullOrganization({
+      organizationSlug: "organization-slug"
+  })
+  ```
+  </Tab>
 
-auth.api.getFullOrganization({
-    headers: await headers()
-})
-```
+  <Tab value="server">
+    ```ts title="api.ts"
+    import { auth } from "@/auth";
+
+    auth.api.getFullOrganization({
+        headers: // pass the headers
+    })
+
+    //  you can also use organizationSlug instead of organizationId
+    auth.api.getFullOrganization({
+        headers: // pass the headers,
+        query: {
+            organizationSlug: "organization-slug"
+        }
+    })
+    ```
+  </Tab>
+</Tabs>
+
+
 
 ## Invitations
 
