@@ -418,7 +418,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							providerId: provider.providerId,
 							accountId: userInfo.id,
 							...tokens,
-							scope: tokens.scopes?.join(',')
+							scope: tokens.scopes?.join(","),
 						},
 					});
 					function redirectOnError(error: string) {
