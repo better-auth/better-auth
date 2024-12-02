@@ -301,19 +301,28 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (organizationId: string) => {
-			const [org, invitations, members] = await Promise.all([
-				adapter.findOne<Organization>({
-					model: "organization",
-					where: [{ field: "id", value: organizationId }],
-				}),
+		findFullOrganization: async ({
+			organizationId,
+			isSlug,
+		}: {
+			organizationId: string;
+			isSlug?: boolean;
+		}) => {
+			const org = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
+			});
+			if (!org) {
+				return null;
+			}
+			const [invitations, members] = await Promise.all([
 				adapter.findMany<Invitation>({
 					model: "invitation",
-					where: [{ field: "organizationId", value: organizationId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 				adapter.findMany<Member>({
 					model: "member",
-					where: [{ field: "organizationId", value: organizationId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 			]);
 

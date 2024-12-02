@@ -327,6 +327,11 @@ export const getFullOrganization = createAuthEndpoint(
 						description: "The organization id to get",
 					})
 					.optional(),
+				organizationSlug: z
+					.string({
+						description: "The organization slug to get",
+					})
+					.optional(),
 			}),
 		),
 		requireHeaders: true,
@@ -354,14 +359,19 @@ export const getFullOrganization = createAuthEndpoint(
 	async (ctx) => {
 		const session = ctx.context.session;
 		const organizationId =
-			ctx.query?.organizationId || session.session.activeOrganizationId;
+			ctx.query?.organizationSlug ||
+			ctx.query?.organizationId ||
+			session.session.activeOrganizationId;
 		if (!organizationId) {
 			return ctx.json(null, {
 				status: 200,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const organization = await adapter.findFullOrganization(organizationId);
+		const organization = await adapter.findFullOrganization({
+			organizationId,
+			isSlug: !!ctx.query?.organizationSlug,
+		});
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Organization not found",
@@ -379,9 +389,15 @@ export const setActiveOrganization = createAuthEndpoint(
 			organizationId: z
 				.string({
 					description:
-						"The organization id to set as active. Can be null to unset the active organization",
+						"The organization id to set as active. It can be null to unset the active organization",
 				})
 				.nullable()
+				.optional(),
+			organizationSlug: z
+				.string({
+					description:
+						"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
+				})
 				.optional(),
 		}),
 		use: [orgSessionMiddleware, orgMiddleware],
@@ -408,7 +424,7 @@ export const setActiveOrganization = createAuthEndpoint(
 	async (ctx) => {
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 		const session = ctx.context.session;
-		let organizationId = ctx.body.organizationId;
+		let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
 		if (organizationId === null) {
 			const sessionOrgId = session.session.activeOrganizationId;
 			if (!sessionOrgId) {
@@ -431,10 +447,13 @@ export const setActiveOrganization = createAuthEndpoint(
 			}
 			organizationId = sessionOrgId;
 		}
-		const isMember = await adapter.findMemberByOrgId({
-			userId: session.user.id,
-			organizationId: organizationId,
+		const organization = await adapter.findFullOrganization({
+			organizationId,
+			isSlug: !!ctx.body.organizationSlug,
 		});
+		const isMember = organization?.members.find(
+			(member) => member.userId === session.user.id,
+		);
 		if (!isMember) {
 			await adapter.setActiveOrganization(session.session.token, null);
 			throw new APIError("FORBIDDEN", {
@@ -449,7 +468,6 @@ export const setActiveOrganization = createAuthEndpoint(
 			session: updatedSession,
 			user: session.user,
 		});
-		const organization = await adapter.findFullOrganization(organizationId);
 		return ctx.json(organization);
 	},
 );
