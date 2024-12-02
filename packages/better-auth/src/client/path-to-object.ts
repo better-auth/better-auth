@@ -46,7 +46,7 @@ type InferUserUpdateCtx<
 	ClientOpts extends ClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
-	image?: string;
+	image?: string | null;
 	name?: string;
 	fetchOptions?: FetchOptions;
 } & Partial<
