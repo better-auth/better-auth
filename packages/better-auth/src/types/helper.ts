@@ -1,6 +1,7 @@
 import type { Primitive } from "zod";
 
 export type LiteralString = "" | (string & Record<never, never>);
+export type LiteralNumber = 0 | (number & Record<never, never>);
 
 export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 

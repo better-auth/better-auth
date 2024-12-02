@@ -68,7 +68,9 @@ export function matchType(
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = types[fieldType].map((t) => t.toLowerCase());
+	const type = Array.isArray(fieldType)
+		? types["string"].map((t) => t.toLowerCase())
+		: types[fieldType].map((t) => t.toLowerCase());
 	const matches = type.includes(columnDataType.toLowerCase());
 	return matches;
 }
@@ -199,6 +201,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 		if (type === "string[]" || type === "number[]") {
 			return "jsonb";
+		}
+		if (Array.isArray(type)) {
+			return "text";
 		}
 		return typeMap[type][dbType || "sqlite"];
 	}

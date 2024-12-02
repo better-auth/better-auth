@@ -4,7 +4,7 @@ import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
 import type { DeepPartial, LiteralString } from "./helper";
-import type { Adapter, AuthContext, BetterAuthOptions } from ".";
+import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
 	[table in string]: {
