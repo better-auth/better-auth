@@ -177,7 +177,7 @@ export async function setSessionCookie(
 				user: session.user,
 				session: session.session,
 			}),
-			session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
+			new Date(session.session.expiresAt).getTime() - Date.now(), // set the expiry time to the same as the session
 		);
 	}
 }
