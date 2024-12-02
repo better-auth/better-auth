@@ -233,10 +233,6 @@ export const signInSocial = createAuthEndpoint(
 			return c.json({
 				session: data.data!.session,
 				user: data.data!.user,
-				url: `${
-					c.body.callbackURL || c.query?.currentURL || c.context.options.baseURL
-				}`,
-				redirect: true,
 			});
 		}
 
