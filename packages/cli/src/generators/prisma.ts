@@ -25,11 +25,32 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schemaPrisma = getNewPrisma(provider);
 	}
 
+	// Create a map to store many-to-many relationships
+	const manyToManyRelations = new Map();
+
+	// First pass: identify many-to-many relationships
+	for (const table in tables) {
+		const fields = tables[table]?.fields;
+		for (const field in fields) {
+			const attr = fields[field]!;
+			if (attr.references) {
+				const referencedModel = capitalizeFirstLetter(attr.references.model);
+				if (!manyToManyRelations.has(referencedModel)) {
+					manyToManyRelations.set(referencedModel, new Set());
+				}
+				manyToManyRelations
+					.get(referencedModel)
+					.add(capitalizeFirstLetter(table));
+			}
+		}
+	}
+
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
 			const fields = tables[table]?.fields;
 			const originalTable = tables[table]?.modelName;
 			const modelName = capitalizeFirstLetter(originalTable || "");
+
 			function getType(type: FieldType, isOptional: boolean) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
@@ -50,9 +71,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "Int[]" : "Int[]";
 				}
 			}
+
 			const prismaModel = builder.findByType("model", {
 				name: modelName,
 			});
+
 			if (!prismaModel) {
 				if (provider === "mongodb") {
 					builder
@@ -95,7 +118,30 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							`relation(fields: [${field}], references: [${attr.references.field}], onDelete: Cascade)`,
 						);
 				}
+				if (
+					!attr.unique &&
+					!attr.references &&
+					provider === "mysql" &&
+					attr.type === "string"
+				) {
+					builder.model(modelName).field(field).attribute("db.Text");
+				}
 			}
+
+			// Add many-to-many fields
+			if (manyToManyRelations.has(modelName)) {
+				for (const relatedModel of manyToManyRelations.get(modelName)) {
+					const fieldName = `${relatedModel.toLowerCase()}s`;
+					const existingField = builder.findByType("field", {
+						name: fieldName,
+						within: prismaModel?.properties,
+					});
+					if (!existingField) {
+						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
+					}
+				}
+			}
+
 			const hasAttribute = builder.findByType("attribute", {
 				name: "map",
 				within: prismaModel?.properties,
@@ -105,6 +151,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			}
 		}
 	});
+
 	return {
 		code: schema.trim() === schemaPrisma.trim() ? "" : schema,
 		fileName: filePath,

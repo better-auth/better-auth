@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id               String   @id @map("_id")
+  id               String      @id @map("_id")
   name             String
   email            String
   emailVerified    Boolean
@@ -18,6 +17,9 @@ model User {
   updatedAt        DateTime
   twoFactorEnabled Boolean?
   username         String?
+  sessions         Session[]
+  accounts         Account[]
+  twofactors       TwoFactor[]
 
   @@unique([email])
   @@unique([username])
