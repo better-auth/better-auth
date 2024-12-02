@@ -252,7 +252,7 @@ export const getOrgAdapter = (
 			return {
 				...organization,
 				metadata: organization.metadata
-					? parseJSON(organization.metadata)
+					? parseJSON<Record<string, any>>(organization.metadata)
 					: undefined,
 			};
 		},
