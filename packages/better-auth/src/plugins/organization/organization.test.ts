@@ -94,7 +94,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(organization.data?.metadata.test).toBe("test2");
+		expect(organization.data?.metadata?.test).toBe("test2");
 	});
 
 	it("should allow activating organization and set session", async () => {
