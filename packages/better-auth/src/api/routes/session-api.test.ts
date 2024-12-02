@@ -312,7 +312,7 @@ describe("session storage", async () => {
 			session: {
 				userId: expect.any(String),
 				token: expect.any(String),
-				expiresAt: expect.any(String),
+				expiresAt: expect.any(Date),
 				ipAddress: expect.any(String),
 				userAgent: expect.any(String),
 			},
@@ -322,8 +322,8 @@ describe("session storage", async () => {
 				email: "test@test.com",
 				emailVerified: false,
 				image: null,
-				createdAt: expect.any(String),
-				updatedAt: expect.any(String),
+				createdAt: expect.any(Date),
+				updatedAt: expect.any(Date),
 			},
 		});
 	});

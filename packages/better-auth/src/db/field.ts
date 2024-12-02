@@ -1,12 +1,13 @@
 import type { ZodSchema } from "zod";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, LiteralNumber, LiteralString } from "../types";
 
 export type FieldType =
 	| "string"
 	| "number"
 	| "boolean"
 	| "date"
-	| `${"string" | "number"}[]`;
+	| `${"string" | "number"}[]`
+	| Array<LiteralString>;
 
 type Primitive =
 	| string
@@ -108,11 +109,15 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends `${infer T}[]`
-				? T extends "string"
-					? string[]
-					: number[]
-				: never;
+			: T extends "date"
+				? Date
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: T extends Array<any>
+						? T[number]
+						: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,

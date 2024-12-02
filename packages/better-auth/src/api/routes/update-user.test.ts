@@ -4,21 +4,27 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db, auth } = await getTestInstance({
-		emailVerification: {
-			async sendVerificationEmail({ user, url, token }) {
-				emailVerificationToken = token;
-			},
-		},
-		user: {
-			changeEmail: {
-				enabled: true,
-				sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-					sendChangeEmail(user, newEmail, url, token);
+	const { client, testUser, sessionSetter, db, customFetchImpl } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					emailVerificationToken = token;
 				},
 			},
-		},
-	});
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailVerification: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
