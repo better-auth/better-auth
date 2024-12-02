@@ -4,7 +4,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db } = await getTestInstance({
+	const { client, testUser, sessionSetter, db, auth } = await getTestInstance({
 		emailVerification: {
 			async sendVerificationEmail({ user, url, token }) {
 				emailVerificationToken = token;
