@@ -41,7 +41,7 @@ describe("session", async () => {
 	});
 
 	it("should update session when update age is reached", async () => {
-		const { client, testUser, sessionSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			session: {
 				updateAge: 60,
 				expiresIn: 60 * 2,
