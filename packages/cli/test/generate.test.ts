@@ -28,7 +28,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.txt");
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
 	});
 
 	it("should generate prisma schema for mongodb", async () => {
@@ -51,7 +51,31 @@ describe("generate", async () => {
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-mongodb.txt",
+			"./__snapshots__/schema-mongodb.prisma",
+		);
+	});
+
+	it("should generate prisma schema for mysql", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "mysql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "mongodb",
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-mysql.prisma",
 		);
 	});
 
