@@ -233,6 +233,8 @@ export const signInSocial = createAuthEndpoint(
 			return c.json({
 				session: data.data!.session,
 				user: data.data!.user,
+				url: undefined,
+				redirect: false,
 			});
 		}
 

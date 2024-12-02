@@ -71,7 +71,7 @@ describe("Social Providers", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		state = new URL(signInRes.data!.url).searchParams.get("state") || "";
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 	});
 
 	it("should be able to sign in with social providers", async () => {
