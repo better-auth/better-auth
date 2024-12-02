@@ -73,27 +73,31 @@ describe("session", async () => {
 		expect(new Date(res.data?.session.expiresAt).getTime()).toBeLessThan(
 			new Date(Date.now() + 1000 * 2 * 60).getTime(),
 		);
-		const after1Minute = new Date();
-		after1Minute.setMinutes(after1Minute.getMinutes() + 1);
-		vi.setSystemTime(after1Minute);
-		const response = await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					const parsed = parseSetCookieHeader(
-						context.response.headers.get("set-cookie") || "",
-					);
-					const maxAge = parsed.get("better-auth.session_token")?.["max-age"];
-					expect(maxAge).toBe(60 * 2);
+		for (const t of [60, 80, 100, 121]) {
+			const span = new Date();
+			span.setSeconds(span.getSeconds() + t);
+			vi.setSystemTime(span);
+			const response = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						const parsed = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						const maxAge = parsed.get("better-auth.session_token")?.["max-age"];
+						expect(maxAge).toBe(t === 121 ? 0 : 60 * 2);
+					},
 				},
-			},
-		});
-		if (!response.data?.session) {
-			throw new Error("No session found");
+			});
+			if (t === 121) {
+				//expired
+				expect(response.data).toBeNull();
+			} else {
+				expect(
+					new Date(response.data?.session.expiresAt!).getTime(),
+				).toBeGreaterThan(new Date(Date.now() + 1000 * 2 * 59).getTime());
+			}
 		}
-		expect(
-			new Date(response.data?.session.expiresAt).getTime(),
-		).toBeGreaterThan(new Date(Date.now() + 1000 * 2 * 59).getTime());
 		vi.useRealTimers();
 	});
 
