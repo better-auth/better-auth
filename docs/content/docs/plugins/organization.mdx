@@ -224,6 +224,28 @@ You can set the active organization by calling the `organization.setActive` func
   </Tab>
 </Tabs>
 
+To set active organization when a session is created you can use [database hooks](/docs/concepts/database#database-hooks).
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  databaseHooks: {
+      session: {
+          create: {
+              before: async(session)=>{
+                  const organization = await getActiveOrganization(session.userId)
+                  return {
+                    data: {
+                      ...session,
+                      activeOrganizationId: organization.id
+                    }
+                  }
+              }
+          }
+      }
+  }
+})
+```
+
 #### Use Active Organization
 
 To retrieve the active organization for the user, you can call the `useActiveOrganization` hook. It returns the active organization for the user. Whenever the active organization changes, the hook will re-evaluate and return the new active organization.
