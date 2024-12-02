@@ -11,6 +11,7 @@ import type {
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
+import parseJSON from "../../client/parser";
 
 export const getOrgAdapter = (
 	context: AuthContext,
@@ -239,7 +240,10 @@ export const getOrgAdapter = (
 				],
 				update: {
 					...data,
-					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
+					metadata:
+						typeof data.metadata === "object"
+							? JSON.stringify(data.metadata)
+							: data.metadata,
 				},
 			});
 			if (!organization) {
@@ -248,7 +252,7 @@ export const getOrgAdapter = (
 			return {
 				...organization,
 				metadata: organization.metadata
-					? JSON.parse(organization.metadata)
+					? parseJSON(organization.metadata)
 					: undefined,
 			};
 		},

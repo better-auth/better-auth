@@ -4,7 +4,7 @@ import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
 import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
-import { betterJSON } from "./parser";
+import { parseJSON } from "./parser";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	/* check if the credentials property is supported. Useful for cf workers */
@@ -19,7 +19,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		jsonParser(text) {
-			return betterJSON(text, {
+			return parseJSON(text, {
 				strict: false,
 			});
 		},

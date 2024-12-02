@@ -78,7 +78,7 @@ function parseISODate(value: string): Date | null {
 	return isValidDate(date) ? date : null;
 }
 
-export function betterJSONParse<T = unknown>(
+function betterJSONParse<T = unknown>(
 	value: unknown,
 	options: ParseOptions = {},
 ): T {
@@ -169,11 +169,11 @@ export function betterJSONParse<T = unknown>(
 	}
 }
 
-export function betterJSON<T = unknown>(
+export function parseJSON<T = unknown>(
 	value: unknown,
 	options: ParseOptions = { strict: true },
 ): T {
 	return betterJSONParse<T>(value, options);
 }
 
-export default betterJSON;
+export default parseJSON;
