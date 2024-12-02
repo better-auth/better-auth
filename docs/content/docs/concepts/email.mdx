@@ -80,7 +80,7 @@ export const auth = betterAuth({
 
 if a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 await authClient.signIn.emailAndPassword({
     email: "email@example.com",
     password: "password"

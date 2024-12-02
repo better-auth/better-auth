@@ -56,11 +56,11 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
     <Step>  
         ### Add the client plugin
         
-         ```ts title="client.ts" 
+         ```ts title="auth-client.ts" 
             import { createAuthClient } from "better-auth/client"
             import { passkeyClient } from "better-auth/client/plugins"
             
-            const client = createAuthClient({
+            const authClient =  createAuthClient({
                 plugins: [ // [!code highlight]
                     passkeyClient() // [!code highlight]
                 ] // [!code highlight]
@@ -76,17 +76,17 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="client.ts" 
+```ts title="auth-client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { passkeyClient } from "better-auth/client/plugins"
     
-    const client = createAuthClient({
+    const authClient =  createAuthClient({
         plugins: [ // [!code highlight]
             passkeyClient() // [!code highlight]
         ] // [!code highlight]
     })
 // ---cut---
-const data = await client.passkey.addPasskey()
+const data = await authClient.passkey.addPasskey()
 ```
 This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
 
@@ -100,17 +100,17 @@ Signin method accepts:
 
 `callbackURL`: The URL to redirect to after the user has signed in. (optional)
 
-```ts title="client.ts" 
+```ts title="auth-client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { passkeyClient } from "better-auth/client/plugins"
     
-    const client = createAuthClient({
+    const authClient =  createAuthClient({
         plugins: [ // [!code highlight]
             passkeyClient() // [!code highlight]
         ] // [!code highlight]
     })
 // ---cut---
-const data = await client.signIn.passkey()
+const data = await authClient.signIn.passkey()
 ```
 
 ## Schema

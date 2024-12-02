@@ -24,7 +24,7 @@ export const auth = betterAuth({
 
 After a successful sign-in, you'll receive a session object containing the session object. The `id` is the token you need to send in the Authorization header for all subsequent requests.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 const { data } = await authClient.signIn.email({
     email: "user@example.com",
     password: "securepassword"
@@ -56,7 +56,7 @@ export const authClient = createAuthClient({
 
 Now you can make authenticated API calls:
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 // This request is automatically authenticated
 const { data } = await authClient.listSessions();
 ```
@@ -65,7 +65,7 @@ const { data } = await authClient.listSessions();
 
 You can also provide the token for individual requests:
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 const { data } = await authClient.listSessions({
     fetchOptions: {
         headers: {

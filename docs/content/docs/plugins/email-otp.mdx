@@ -33,11 +33,11 @@ The Email OTP plugin allows user to sign-in and verify their email using a one-t
     <Step>
     ### Add the client plugin
 
-    ```ts title="client.ts"
+    ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { emailOTPClient } from "better-auth/client/plugins"
     
-    const client = createAuthClient({
+    const authClient =  createAuthClient({
         plugins: [
             emailOTPClient()
         ]

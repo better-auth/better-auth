@@ -63,7 +63,7 @@ const session = await authClient.useSession()
 
 The `listSessions` function returns a list of sessions that are active for the user.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { authClient } from "@/lib/client"
 
 const sessions = await authClient.listSessions()
@@ -75,7 +75,7 @@ When a user signs out of a device, the session is automatically ended. However, 
 
 To end a session, use the `revokeSession` function. Just pass the session token as a parameter.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 await authClient.revokeSession({
     token: "session-token"
 })
@@ -85,7 +85,7 @@ await authClient.revokeSession({
 
 To revoke all other sessions except the current session, you can use the `revokeOtherSessions` function.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 await authClient.revokeOtherSessions()
 ```
 
@@ -93,7 +93,7 @@ await authClient.revokeOtherSessions()
 
 To revoke all sessions, you can use the `revokeSessions` function.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 await authClient.revokeSessions()
 ```
 
@@ -132,7 +132,7 @@ const auth = new BetterAuth({
 
 If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true`
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 const session = await authClient.getSession({ query: {
     disableCookieCache: true
 }})
@@ -178,7 +178,7 @@ This will add `roles` and `user.newField` to the session response.
 
 **Infer on the Client**
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { customSessionClient } from "better-auth/client/plugins";
 import type { auth } from "@/lib/auth"; // Import the auth instance as a type
 

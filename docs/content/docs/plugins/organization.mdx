@@ -45,7 +45,7 @@ export const auth = betterAuth({
 <Step>
     ### Add the client plugin
     
-    ```ts title="client.ts" 
+    ```ts title="auth-client.ts" 
     import { createAuthClient } from "better-auth/client"
     import { organizationClient } from "better-auth/client/plugins"
 
@@ -73,8 +73,8 @@ To create an organization, you need to provide:
 - `slug`: The slug of the organization.
 - `logo`: The logo of the organization. (Optional)
 
-```ts title="client.ts"
-await client.organization.create({
+```ts title="auth-client.ts"
+await authClient.organization.create({
     name: "My Organization",
     slug: "my-org",
     logo: "https://example.com/logo.png"
@@ -188,10 +188,10 @@ Active organization is the workspace the user is currently working on. By defaul
 You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
 <Tabs items={["client", "server"]} defaultValue="client">
   <Tab value="client">
-  ```ts title="client.ts"
+  ```ts title="auth-client.ts"
   import { client } from "@/lib/auth-client";
 
-  await client.organization.setActive({
+  await authClient.organization.setActive({
     organizationId: "organization-id"
   })
 
@@ -318,12 +318,12 @@ To get the full details of an organization, you can use the `getFullOrganization
 <Tabs items={["client", "server"]}>
 
   <Tab value="client">
-  ```ts title="client.ts"
-  const organization = await client.organization.getFullOrganization({
+  ```ts title="auth-client.ts"
+  const organization = await authClient.organization.getFullOrganization({
       organizationId: "organization-id" // optional, by default it will use the active organization
   })
   //you can also use organizationSlug instead of organizationId
-  const organization = await client.organization.getFullOrganization({
+  const organization = await authClient.organization.getFullOrganization({
       organizationSlug: "organization-slug"
   })
   ```
@@ -391,7 +391,7 @@ To invite users to an organization, you can use the `invite` function provided b
 - `organizationId`: The id of the organization. this is optional by default it will use the active organization. (Optional)
 
 ```ts title="invitation.ts"
-await client.organization.inviteMember({
+await authClient.organization.inviteMember({
     email: "test@email.com",
     role: "admin",
 })
@@ -404,8 +404,8 @@ When a user receives an invitation email, they can click on the invitation link 
 
 Make sure to call the `acceptInvitation` function after the user is logged in. 
 
-```ts title="client.ts"
-await client.organization.acceptInvitation({
+```ts title="auth-client.ts"
+await authClient.organization.acceptInvitation({
     invitationId: "invitation-id"
 })
 ```
@@ -414,14 +414,14 @@ await client.organization.acceptInvitation({
         
 To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation id as an argument.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 //cancel invitation
-await client.organization.cancelInvitation({
+await authClient.organization.cancelInvitation({
     invitationId: "invitation-id"
 })
 
 //reject invitation (needs to be called when the user who received the invitation is logged in)
-await client.organization.rejectInvitation({
+await authClient.organization.rejectInvitation({
     invitationId: "invitation-id"
 })
 ```
@@ -431,7 +431,7 @@ await client.organization.rejectInvitation({
 
 To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 client.organization.getInvitation({
     query: {
         id: params.id
@@ -445,9 +445,9 @@ client.organization.getInvitation({
 
 To remove you can use `organization.removeMember`
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 //remove member
-await client.organization.removeMember({
+await authClient.organization.removeMember({
     memberId: "member-id"
 })
 ```
@@ -456,8 +456,8 @@ await client.organization.removeMember({
 
 To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
 
-```ts title="client.ts"
-await client.organization.updateMemberRole({
+```ts title="auth-client.ts"
+await authClient.organization.updateMemberRole({
     memberId: "member-id",
     role: "admin"
 })
@@ -467,8 +467,8 @@ await client.organization.updateMemberRole({
 
 To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
 
-```ts title="client.ts"
-const member = await client.organization.getActiveMember()
+```ts title="auth-client.ts"
+const member = await authClient.organization.getActiveMember()
 ```
 
 ### Add Member
@@ -665,8 +665,8 @@ import { auth } from "@/auth";
 
 If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client. 
 
-```ts title="client.ts"
-const canCreateProject = await client.organization.hasPermission({
+```ts title="auth-client.ts"
+const canCreateProject = await authClient.organization.hasPermission({
     permission: {
         project: ["create"]
     }
@@ -677,7 +677,7 @@ const canCreateProject = await client.organization.hasPermission({
 
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 const canCreateProject = client.organization.checkRolePermission({
 	permission: {
 		organization: ["delete"],

@@ -25,10 +25,10 @@ export const auth = betterAuth({
 
 Client plugins are added when creating the client. Most plugin require both server and client plugins to work correctly.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 
-const client = createAuthClient({
+const authClient =  createAuthClient({
     plugins: [
         // Add your client plugins here
     ]
