@@ -196,3 +196,77 @@ describe("updateUser", async () => {
 		expect(updated.data?.user.newField).toBe("new");
 	});
 });
+
+describe("delete user", async () => {
+	it("should delete the user", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).toMatchObject({
+			success: true,
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toBeNull();
+	});
+
+	it("should delete with verification flow", async () => {
+		let token = "";
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).toMatchObject({
+			success: true,
+		});
+		expect(token.length).toBe(32);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toBeDefined();
+		const deleteCallbackRes = await client.deleteUser.callback({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteCallbackRes.data).toMatchObject({
+			success: true,
+		});
+		const nullSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(nullSession.data).toBeNull();
+	});
+});

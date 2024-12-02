@@ -44,6 +44,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
+		"/delete-user": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{
