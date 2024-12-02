@@ -55,8 +55,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			} as const;
 			return typeMap[type as "boolean"][(databaseType as "sqlite") || "sqlite"];
 		}
+		const id =
+			databaseType === "mysql"
+				? `varchar("id", { length: 36 }).primaryKey()`
+				: `text("id").primaryKey()`;
 		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
-					id: varchar("id", { length: 36 }).primaryKey(),
+					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
 							const attr = fields[field];
