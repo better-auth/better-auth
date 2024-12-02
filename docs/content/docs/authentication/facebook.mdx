@@ -33,12 +33,12 @@ description: Facebook provider setup and usage.
         To sign in with Facebook, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `facebook`.
 
-        ```ts title="client.ts"  /
-        import { createAuthClient } from "better-auth/client"
-        const client = createAuthClient()
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/auth-client"
+        const authClient = createAuthClient()
 
         const signIn = async () => {
-            const data = await client.signIn.social({
+            const data = await authClient.signIn.social({
                 provider: "facebook"
             })
         }

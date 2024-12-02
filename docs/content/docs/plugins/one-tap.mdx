@@ -30,11 +30,11 @@ export const auth = betterAuth({
 
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { oneTapClient } from "better-auth/client/plugins"
 
-        const client = createAuthClient({
+        const authClient =  createAuthClient({
             plugins: [
                 oneTapClient({
                     clientId: "YOUR_CLIENT_ID"

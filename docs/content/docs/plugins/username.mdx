@@ -44,11 +44,11 @@ The username plugin wraps the email and password authenticator and adds username
     <Step>
         ### Add the client plugin
         
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
         
-        const client = createAuthClient({
+        const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 usernameClient() // [!code highlight]
             ] // [!code highlight]
@@ -63,8 +63,8 @@ The username plugin wraps the email and password authenticator and adds username
 
 To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
 
-```ts title="client.ts"
-const data = await client.signUp.email({
+```ts title="auth-client.ts"
+const data = await authClient.signUp.email({
     email: "email@domain.com",
     name: "Test User",
     password: "password1234",
@@ -79,8 +79,8 @@ To signin a user with username, you can use the `signIn.username` function provi
 - `username`: The username of the user.
 - `password`: The password of the user.
 
-```ts title="client.ts" 
-const data = await client.signIn.username({
+```ts title="auth-client.ts" 
+const data = await authClient.signIn.username({
     username: "test",
     password: "password1234",
 })
@@ -90,8 +90,8 @@ const data = await client.signIn.username({
 
 To update the username of a user, you can use the `user.update` function provided by the client.
 
-```ts title="client.ts"
-const data = await client.user.update({
+```ts title="auth-client.ts"
+const data = await authClient.user.update({
     username: "new-username"
 })
 ```

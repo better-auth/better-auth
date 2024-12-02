@@ -40,12 +40,12 @@ description: Apple provider setup and usage.
 To sign in with Apple, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 - `provider`: The provider to use. It should be set to `apple`.
 
-```ts title="client.ts"  /
+```ts title="auth-client.ts"  /
 import { createAuthClient } from "better-auth/client"
-const client = createAuthClient()
+const authClient =  createAuthClient()
 
 const signIn = async () => {
-    const data = await client.signIn.social({
+    const data = await authClient.signIn.social({
         provider: "apple"
     })
 }
@@ -62,8 +62,8 @@ This is useful when you have the ID Token from Apple on the client-side and want
  If id token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
-```ts title="client.ts"
-    await client.signIn.social({
+```ts title="auth-client.ts"
+    await authClient.signIn.social({
         provider: "apple",
         idToken: {
             token: // Apple ID Token,

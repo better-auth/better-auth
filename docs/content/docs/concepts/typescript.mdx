@@ -48,10 +48,10 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.
 
-```ts title="client.ts" 
+```ts title="auth-client.ts" 
 import { createAuthClient } from "better-auth/client"
 
-const client = createAuthClient()
+const authClient =  createAuthClient()
 
 export type Session = typeof client.$Infer.Session
 ```

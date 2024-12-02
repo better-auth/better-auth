@@ -122,10 +122,10 @@ To handle rate limit errors on the client side, you can manage them either globa
 
 **Global Handling**
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 
-export const client = createAuthClient({
+export const authClient =  createAuthClient({
     fetchOptions: {
         onError: async (context) => {
             const { response } = context;
@@ -141,10 +141,10 @@ export const client = createAuthClient({
 
 **Per Request Handling**
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { client } from "./client";
 
-await client.signIn.email({
+await authClient.signIn.email({
     fetchOptions: {
         onError: async (context) => {
             const { response } = context;

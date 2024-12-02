@@ -465,7 +465,7 @@ If you prefer adding the schema manually, you can check the schema required on t
 
 Once we're done with the server, we need to add the plugin to the client. To do this, you need to import the plugin and pass it to the `plugins` option of the auth client. For example, to add two factor authentication, you can use the following code:
 
-```ts title="client.ts"  /
+```ts title="auth-client.ts"  
 import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins"; // [!code highlight]
 

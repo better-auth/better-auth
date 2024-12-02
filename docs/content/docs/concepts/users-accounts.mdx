@@ -165,7 +165,7 @@ Users already signed in can manually link their account to additional social pro
 - **Linking Social Accounts:** Use the `user.linkSocial` method on the client to link a social provider to the user's account.
 
   ```ts
-  await client.linkSocial({
+  await authClient.linkSocial({
       provider: "google", // Provider to link
       callbackURL: "/callback" // Callback URL after linking completes
   });

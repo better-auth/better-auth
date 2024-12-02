@@ -40,13 +40,13 @@ To sign in with Microsoft, you can use the `signIn.social` function provided by 
 
 - `provider`: The provider to use. It should be set to `microsoft`.
 
-```ts title="client.ts"  /
+```ts title="auth-client.ts"  /
 import { createAuthClient } from "better-auth/client"
 
-const client = createAuthClient()
+const authClient =  createAuthClient()
 
 const signIn = async () => {
-    const data = await client.signIn.social({
+    const data = await authClient.signIn.social({
         provider: "microsoft",
         callbackURL: "/dashboard" //the url to redirect to after the sign in
     })

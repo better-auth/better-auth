@@ -37,10 +37,10 @@ Magic link or email link is a way to authenticate users without a password. When
 
     Add the magic link plugin to your client:
 
-    ```ts title="client.ts"
+    ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
     import { magicLinkClient } from "better-auth/client/plugins";
-    const client = createAuthClient({
+    const authClient =  createAuthClient({
         plugins: [
             magicLinkClient()
         ]
@@ -56,7 +56,7 @@ Magic link or email link is a way to authenticate users without a password. When
 To sign in with a magic link, you need to call `signIn.magicLink` with the user's email address. The `sendMagicLink` function is called to send the magic link to the user's email. 
 
 ```ts title="magic-link.ts"
-const { data, error } = await client.signIn.magicLink({
+const { data, error } = await authClient.signIn.magicLink({
     email: "user@email.com",
     callbackURL: "/dashboard" //redirect after successful login (optional)
 });
@@ -75,7 +75,7 @@ If no `callbackURL` is provided, the user will be redirected to the root URL.
 If you want to handle the verification manually, (e.g, if you send the user a different url), you can use the `verify` function.
 
 ```ts title="magic-link.ts"
-const { data, error } = await client.magicLink.verify({
+const { data, error } = await authClient.magicLink.verify({
     query: {
         token
     }
