@@ -33,7 +33,7 @@ export default withMDX({
 			},
 			{
 				hostname: "github.com",
-			}
+			},
 		],
 	},
 });
