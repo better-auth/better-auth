@@ -6,7 +6,8 @@ export type FieldType =
 	| "number"
 	| "boolean"
 	| "date"
-	| `${"string" | "number"}[]`;
+	| `${"string" | "number"}[]`
+	| Array<string>;
 
 type Primitive =
 	| string
@@ -108,11 +109,15 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends `${infer T}[]`
-				? T extends "string"
-					? string[]
-					: number[]
-				: never;
+			: T extends "date"
+				? Date
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: T extends Array<string>
+						? T[number]
+						: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
