@@ -242,7 +242,15 @@ export const getOrgAdapter = (
 					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
 				},
 			});
-			return organization;
+			if (!organization) {
+				return null;
+			}
+			return {
+				...organization,
+				metadata: organization.metadata
+					? JSON.parse(organization.metadata)
+					: undefined,
+			};
 		},
 		deleteOrganization: async (organizationId: string) => {
 			await adapter.delete({

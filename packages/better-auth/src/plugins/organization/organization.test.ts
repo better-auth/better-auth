@@ -81,6 +81,22 @@ describe("organization", async (it) => {
 		expect(organization.data?.name).toBe("test2");
 	});
 
+	it("should allow updating organization metadata", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				metadata: {
+					test: "test2",
+				},
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.data?.metadata.test).toBe("test2");
+	});
+
 	it("should allow activating organization and set session", async () => {
 		const organization = await client.organization.setActive({
 			organizationId,
