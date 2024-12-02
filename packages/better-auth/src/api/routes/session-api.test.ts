@@ -5,7 +5,7 @@ import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
-	const { client, testUser, sessionSetter } = await getTestInstance({});
+	const { client, testUser, sessionSetter } = await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
 		const res = await client.signIn.email(
@@ -40,7 +40,13 @@ describe("session", async () => {
 		expect(response.data).toBeNull();
 	});
 
-	it("should update session when close to expiry", async () => {
+	it("should update session when update age is reached", async () => {
+		const { client, testUser, sessionSetter } = await getTestInstance({
+			session: {
+				updateAge: 60,
+				expiresIn: 60 * 2,
+			},
+		});
 		let headers = new Headers();
 
 		const res = await client.signIn.email(
@@ -61,27 +67,33 @@ describe("session", async () => {
 		if (!res.data?.session) {
 			throw new Error("No session found");
 		}
-		const after7Days = new Date();
-		after7Days.setDate(after7Days.getDate() + 6);
-		expect(
-			new Date(res.data?.session.expiresAt).getTime(),
-		).toBeGreaterThanOrEqual(after7Days.getTime());
-
-		const nearExpiryDate = new Date();
-		nearExpiryDate.setDate(nearExpiryDate.getDate() + 6);
-		vi.setSystemTime(nearExpiryDate);
+		expect(new Date(res.data?.session.expiresAt).getTime()).toBeGreaterThan(
+			new Date(Date.now() + 1000 * 2 * 59).getTime(),
+		);
+		expect(new Date(res.data?.session.expiresAt).getTime()).toBeLessThan(
+			new Date(Date.now() + 1000 * 2 * 60).getTime(),
+		);
+		const after1Minute = new Date();
+		after1Minute.setMinutes(after1Minute.getMinutes() + 1);
+		vi.setSystemTime(after1Minute);
 		const response = await client.getSession({
 			fetchOptions: {
 				headers,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					const maxAge = parsed.get("better-auth.session_token")?.["max-age"];
+					expect(maxAge).toBe(60 * 2);
+				},
 			},
 		});
 		if (!response.data?.session) {
 			throw new Error("No session found");
 		}
-		nearExpiryDate.setDate(nearExpiryDate.getDate() + 7);
 		expect(
-			new Date(response.data?.session?.expiresAt).getTime(),
-		).toBeGreaterThanOrEqual(nearExpiryDate.getTime());
+			new Date(response.data?.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(Date.now() + 1000 * 2 * 59).getTime());
 		vi.useRealTimers();
 	});
 
