@@ -141,7 +141,7 @@ export const backupCode2fa = (
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.update({
+					await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
