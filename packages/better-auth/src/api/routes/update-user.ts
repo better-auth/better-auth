@@ -345,10 +345,18 @@ export const deleteUser = createAuthEndpoint(
 				message: "Verification email sent",
 			});
 		}
+		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
+		if (beforeDelete) {
+			await beforeDelete(session.user, ctx.request);
+		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
+		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
+		if (afterDelete) {
+			await afterDelete(session.user, ctx.request);
+		}
 		return ctx.json({
 			success: true,
 			message: "User deleted",
@@ -393,10 +401,22 @@ export const deleteUserCallback = createAuthEndpoint(
 				message: "Invalid token",
 			});
 		}
+		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
+		if (beforeDelete) {
+			await beforeDelete(session.user, ctx.request);
+		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+
+		deleteSessionCookie(ctx);
+
+		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
+		if (afterDelete) {
+			await afterDelete(session.user, ctx.request);
+		}
+
 		return ctx.json({
 			success: true,
 			message: "User deleted",

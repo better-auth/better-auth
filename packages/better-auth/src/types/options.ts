@@ -283,6 +283,18 @@ export interface BetterAuthOptions {
 				},
 				request?: Request,
 			) => Promise<void>;
+			/**
+			 * A function that is called before a user is deleted.
+			 *
+			 * to interrupt with error you can throw `APIError`
+			 */
+			beforeDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * A function that is called after a user is deleted.
+			 *
+			 * This is useful for cleaning up user data
+			 */
+			afterDelete?: (user: User, request?: Request) => Promise<void>;
 		};
 	};
 	session?: {

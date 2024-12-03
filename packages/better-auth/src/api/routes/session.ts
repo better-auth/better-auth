@@ -259,7 +259,10 @@ export const getSessionFromCtx = async <
 			user: U & User;
 		};
 	}
-	ctx.query = config;
+	ctx.query = {
+		...ctx.query,
+		...config,
+	};
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",

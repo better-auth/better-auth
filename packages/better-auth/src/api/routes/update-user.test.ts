@@ -225,7 +225,7 @@ describe("delete user", async () => {
 
 	it("should delete with verification flow", async () => {
 		let token = "";
-		const { auth, client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,

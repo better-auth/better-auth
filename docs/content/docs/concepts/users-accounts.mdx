@@ -151,6 +151,59 @@ export const auth = betterAuth({
 - Authentication Check: The user must be signed in to the account they’re attempting to delete.
 If they aren’t signed in, the deletion process will fail. 
 
+### Callbacks
+
+**beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
+
+```ts
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user) => {
+                // Perform any cleanup or additional checks here
+            },
+        },
+    },
+});
+```
+you can also throw `APIError` to interrupt the deletion process.
+
+```ts
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user, request) => {
+                if (user.email.includes("admin")) {
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Admin accounts can't be deleted",
+                    });
+                }
+            },
+        },
+    },
+});
+```
+
+**afterDelete**: This callback is called after the user is deleted. You can use this callback to perform any cleanup or additional actions after the user is deleted.
+
+```ts
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            afterDelete: async (user, request) => {
+                // Perform any cleanup or additional actions here
+            },
+        },
+    },
+});
+```
+
 ## Accounts
 
 Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.
