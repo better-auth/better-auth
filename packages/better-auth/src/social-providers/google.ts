@@ -110,6 +110,7 @@ export const google = (options: GoogleOptions) => {
 				return null;
 			}
 			const user = parseJWT(token.idToken)?.payload as GoogleProfile;
+			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
 					id: user.sub,
@@ -117,7 +118,7 @@ export const google = (options: GoogleOptions) => {
 					email: user.email,
 					image: user.picture,
 					emailVerified: user.email_verified,
-					...options.mapProfileToUser?.(user),
+					...userMap,
 				},
 				data: user,
 			};

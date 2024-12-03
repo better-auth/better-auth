@@ -113,6 +113,7 @@ export const gitlab = (options: GitlabOptions) => {
 			if (error || profile.state !== "active" || profile.locked) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id.toString(),
@@ -120,7 +121,7 @@ export const gitlab = (options: GitlabOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: true,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

@@ -61,6 +61,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				return null;
 			}
 
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
@@ -68,7 +69,7 @@ export const linkedin = (options: LinkedInOptions) => {
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
 					image: profile.picture,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

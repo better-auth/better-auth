@@ -65,6 +65,7 @@ export const twitch = (options: TwitchOptions) => {
 				return null;
 			}
 			const profile = parseJWT(idToken)?.payload as TwitchProfile;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
@@ -72,7 +73,7 @@ export const twitch = (options: TwitchOptions) => {
 					email: profile.email,
 					image: profile.picture,
 					emailVerified: false,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

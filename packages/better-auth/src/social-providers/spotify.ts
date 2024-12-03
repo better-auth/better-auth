@@ -55,6 +55,7 @@ export const spotify = (options: SpotifyOptions) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -62,7 +63,7 @@ export const spotify = (options: SpotifyOptions) => {
 					email: profile.email,
 					image: profile.images[0]?.url,
 					emailVerified: false,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

@@ -68,7 +68,7 @@ export const dropbox = (options: DropboxOptions) => {
 			if (error) {
 				return null;
 			}
-
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.account_id,
@@ -76,7 +76,7 @@ export const dropbox = (options: DropboxOptions) => {
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
 					image: profile.profile_photo_url,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

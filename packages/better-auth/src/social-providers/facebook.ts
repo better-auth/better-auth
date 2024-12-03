@@ -57,6 +57,7 @@ export const facebook = (options: FacebookOptions) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -64,7 +65,7 @@ export const facebook = (options: FacebookOptions) => {
 					email: profile.email,
 					image: profile.picture.data.url,
 					emailVerified: profile.email_verified,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};

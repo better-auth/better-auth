@@ -89,12 +89,21 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
-	mapProfileToUser?: (profile: Profile) => {
-		id?: string;
-		name?: string;
-		email?: string | null;
-		image?: string;
-		emailVerified?: boolean;
-		[key: string]: any;
-	};
+	mapProfileToUser?: (profile: Profile) =>
+		| {
+				id?: string;
+				name?: string;
+				email?: string | null;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }
+		| Promise<{
+				id?: string;
+				name?: string;
+				email?: string | null;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }>;
 };

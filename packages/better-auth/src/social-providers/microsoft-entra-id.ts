@@ -96,6 +96,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					},
 				},
 			);
+			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
 					id: user.sub,
@@ -103,7 +104,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					email: user.email,
 					image: user.picture,
 					emailVerified: true,
-					...options.mapProfileToUser?.(user),
+					...userMap,
 				},
 				data: user,
 			};

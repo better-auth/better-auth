@@ -140,6 +140,7 @@ export const twitter = (options: TwitterOption) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.data.id,
@@ -147,7 +148,7 @@ export const twitter = (options: TwitterOption) => {
 					email: profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
-					...options.mapProfileToUser?.(profile),
+					...userMap,
 				},
 				data: profile,
 			};
