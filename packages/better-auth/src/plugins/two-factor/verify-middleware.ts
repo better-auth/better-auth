@@ -88,9 +88,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					});
 				},
 				session: {
-					id: session.token,
-					userId: session.userId,
-					expiresAt: session.expiresAt,
+					session,
 					user,
 				},
 			};
