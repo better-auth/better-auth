@@ -129,6 +129,15 @@ describe("email-otp", async () => {
 		expect(data?.session).toBeDefined();
 	});
 
+	it("should fail on invalid email", async () => {
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: "invalid-email",
+			type: "email-verification",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("INVALID_EMAIL");
+	});
+
 	it("should create verification otp on server", async () => {
 		otp = await auth.api.createVerificationOTP({
 			body: {
