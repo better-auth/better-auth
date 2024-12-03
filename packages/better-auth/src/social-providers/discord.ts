@@ -74,7 +74,9 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export interface DiscordOptions extends ProviderOptions<DiscordProfile> {}
+export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
+	prompt?: "none" | "consent";
+}
 
 export const discord = (options: DiscordOptions) => {
 	return {
@@ -90,7 +92,7 @@ export const discord = (options: DiscordOptions) => {
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
-				)}&state=${state}`,
+				)}&state=${state}&prompt=${options.prompt || "none"}`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
