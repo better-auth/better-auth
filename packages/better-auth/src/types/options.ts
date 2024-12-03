@@ -260,6 +260,42 @@ export interface BetterAuthOptions {
 				request?: Request,
 			) => Promise<void>;
 		};
+		/**
+		 * User deletion configuration
+		 */
+		deleteUser?: {
+			/**
+			 * Enable user deletion
+			 */
+			enabled?: boolean;
+			/**
+			 * Send a verification email when the user deletes their account.
+			 *
+			 * if this is not set, the user will be deleted immediately.
+			 * @param data the data object
+			 * @param request the request object
+			 */
+			sendDeleteAccountVerification?: (
+				data: {
+					user: User;
+					url: string;
+					token: string;
+				},
+				request?: Request,
+			) => Promise<void>;
+			/**
+			 * A function that is called before a user is deleted.
+			 *
+			 * to interrupt with error you can throw `APIError`
+			 */
+			beforeDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * A function that is called after a user is deleted.
+			 *
+			 * This is useful for cleaning up user data
+			 */
+			afterDelete?: (user: User, request?: Request) => Promise<void>;
+		};
 	};
 	session?: {
 		/**

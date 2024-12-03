@@ -482,6 +482,17 @@ export const createInternalAdapter = (
 				],
 			});
 		},
+		deleteAccounts: async (userId: string) => {
+			await adapter.deleteMany({
+				model: "account",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+		},
 		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {

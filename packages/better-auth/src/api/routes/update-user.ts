@@ -2,12 +2,17 @@ import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { freshSessionMiddleware, sessionMiddleware } from "./session";
+import {
+	freshSessionMiddleware,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
+import { alphabet, generateRandomString } from "../../crypto";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -288,11 +293,6 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		body: z.object({
-			password: z.string({
-				description: "The password of the user",
-			}),
-		}),
 		use: [freshSessionMiddleware],
 		metadata: {
 			openapi: {
@@ -313,11 +313,114 @@ export const deleteUser = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		if (!ctx.context.options.user?.deleteUser?.enabled) {
+			ctx.context.logger.error(
+				"Delete user is disabled. Enable it in the options",
+				{
+					session: ctx.context.session,
+				},
+			);
+			throw new APIError("NOT_FOUND");
+		}
 		const session = ctx.context.session;
+
+		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
+			const token = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: session.user.id,
+				identifier: `delete-account-${token}`,
+				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+			});
+			const url = `${ctx.context.baseURL}/delete-user/callback?token=${token}`;
+			await ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
+				{
+					user: session.user,
+					url,
+					token,
+				},
+				ctx.request,
+			);
+			return ctx.json({
+				success: true,
+				message: "Verification email sent",
+			});
+		}
+		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
+		if (beforeDelete) {
+			await beforeDelete(session.user, ctx.request);
+		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		deleteSessionCookie(ctx);
-		return ctx.json(null);
+		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
+		if (afterDelete) {
+			await afterDelete(session.user, ctx.request);
+		}
+		return ctx.json({
+			success: true,
+			message: "User deleted",
+		});
+	},
+);
+
+export const deleteUserCallback = createAuthEndpoint(
+	"/delete-user/callback",
+	{
+		method: "GET",
+		query: z.object({
+			token: z.string(),
+		}),
+	},
+	async (ctx) => {
+		if (!ctx.context.options.user?.deleteUser?.enabled) {
+			ctx.context.logger.error(
+				"Delete user is disabled. Enable it in the options",
+			);
+			throw new APIError("NOT_FOUND");
+		}
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("NOT_FOUND", {
+				message: "No session found",
+			});
+		}
+		const token = await ctx.context.internalAdapter.findVerificationValue(
+			`delete-account-${ctx.query.token}`,
+		);
+		if (!token || token.expiresAt < new Date()) {
+			if (token) {
+				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+			}
+			throw new APIError("NOT_FOUND", {
+				message: "Invalid token",
+			});
+		}
+		if (token.value !== session.user.id) {
+			throw new APIError("NOT_FOUND", {
+				message: "Invalid token",
+			});
+		}
+		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
+		if (beforeDelete) {
+			await beforeDelete(session.user, ctx.request);
+		}
+		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
+		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+
+		deleteSessionCookie(ctx);
+
+		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
+		if (afterDelete) {
+			await afterDelete(session.user, ctx.request);
+		}
+
+		return ctx.json({
+			success: true,
+			message: "User deleted",
+		});
 	},
 );
 
