@@ -107,24 +107,6 @@ export async function setSessionCookie(
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
 
-	const hasAlreadySession = await getSessionFromCtx(ctx, {
-		disableRefresh: true,
-	}).catch(() => {
-		// this could throw error when headers isn't found. but we don't want to throw error
-		return null;
-	});
-	if (hasAlreadySession) {
-		if (
-			hasAlreadySession.session.userId === session.session.userId &&
-			hasAlreadySession.session.token !== session.session.token
-		) {
-			// If the user already has a session, delete the old session
-			await ctx.context.internalAdapter.deleteSession(
-				hasAlreadySession.session.token,
-			);
-		}
-	}
-
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
