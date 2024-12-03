@@ -431,16 +431,23 @@ export interface BetterAuthOptions {
 		 * specific paths.
 		 */
 		customRules?: {
-			[key: string]: {
-				/**
-				 * The window to use for the custom rule.
-				 */
-				window: number;
-				/**
-				 * The maximum number of requests allowed within the window.
-				 */
-				max: number;
-			};
+			[key: string]:
+				| {
+						/**
+						 * The window to use for the custom rule.
+						 */
+						window: number;
+						/**
+						 * The maximum number of requests allowed within the window.
+						 */
+						max: number;
+				  }
+				| ((request: Request) =>
+						| { window: number; max: number }
+						| Promise<{
+								window: number;
+								max: number;
+						  }>);
 		};
 		/**
 		 * Storage configuration

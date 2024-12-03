@@ -1,5 +1,6 @@
 import type { AuthContext, RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
+import { wildcardMatch } from "../../utils/wildcard";
 
 function shouldRateLimit(
 	max: number,
@@ -135,10 +136,21 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 
 	if (ctx.rateLimit.customRules) {
-		const customRule = ctx.rateLimit.customRules[path];
-		if (customRule) {
-			window = customRule.window;
-			max = customRule.max;
+		const _path = Object.keys(ctx.rateLimit.customRules).find((p) => {
+			if (p.includes("*")) {
+				const isMatch = wildcardMatch(p)(path);
+				return isMatch;
+			}
+			return p === path;
+		});
+		if (_path) {
+			const customRule = ctx.rateLimit.customRules[_path];
+			const resolved =
+				typeof customRule === "function" ? await customRule(req) : customRule;
+			if (resolved) {
+				window = resolved.window;
+				max = resolved.max;
+			}
 		}
 	}
 

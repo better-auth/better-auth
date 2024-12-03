@@ -148,7 +148,7 @@ describe("should work with custom rules", async () => {
 			enabled: true,
 			storage: "database",
 			customRules: {
-				"/sign-in/email": {
+				"/sign-in/*": {
 					window: 10,
 					max: 2,
 				},
