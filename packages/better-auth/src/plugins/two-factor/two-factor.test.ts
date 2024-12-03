@@ -186,6 +186,7 @@ describe("two factor", async () => {
 	});
 
 	it("should allow sign in with backup code", async () => {
+		const headers = new Headers();
 		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -196,23 +197,31 @@ describe("two factor", async () => {
 					);
 					const token = parsed.get("better-auth.session_token")?.value;
 					expect(token).toBe("");
+					headers.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
 				},
 			},
 		});
 		const backupCode = backupCodes[0];
+
+		let parsedCookies = new Map();
 		await client.twoFactor.verifyBackupCode({
 			code: backupCode,
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
-					const parsed = parseSetCookieHeader(
+					parsedCookies = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					const token = parsed.get("better-auth.session_token")?.value;
-					expect(token?.length).toBeGreaterThan(0);
 				},
 			},
 		});
+		const token = parsedCookies.get("better-auth.session_token")?.value;
+		expect(token?.length).toBeGreaterThan(0);
 		const currentBackupCodes = await auth.api.viewBackupCodes({
 			body: {
 				userId: session.data?.user.id!,
