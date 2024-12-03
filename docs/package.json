@@ -11,9 +11,11 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@better-fetch/fetch": "1.1.12",
     "@codesandbox/sandpack-react": "^2.19.8",
     "@hookform/resolvers": "^3.9.0",
     "@loglib/tracker": "^0.8.0",
+    "@octokit/rest": "^21.0.2",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -83,9 +85,11 @@
     "react-day-picker": "8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.52.2",
+    "react-markdown": "^9.0.1",
     "react-resizable-panels": "^2.1.2",
     "react-use-measure": "^2.1.1",
     "recharts": "^2.12.7",
+    "rehype-highlight": "^7.0.1",
     "rehype-mermaid": "^2.1.0",
     "remark-codesandbox": "^0.10.1",
     "shiki": "^1.23.1",

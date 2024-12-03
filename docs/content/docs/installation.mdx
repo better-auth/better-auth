@@ -34,7 +34,8 @@ BETTER_AUTH_SECRET=
 
 2. **Set Base URL (optional)**
 
-Not required if the baseURL property is set in the createAuthClient function described below.
+Not required if the `baseURL` property is set in the createAuthClient function described below.
+
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
 ```
@@ -65,7 +66,7 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
 
-Better Auth requires a database to store user data. By default, it uses Kysely for database queries, supporting `postgresql`, `mysql`, and `sqlite` out of the box.
+Better Auth requires a database to store user data. You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, with Kysely handling queries and migrations for these databases.
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -104,7 +105,7 @@ Better Auth requires a database to store user data. By default, it uses Kysely f
     </Tab>
 </Tabs>
 
-You can also use any Kysely dialect in the database configuration.
+You can also provide any Kysely dialect or a Kysely instance to the `database` option.
 
 **Example with LibsqlDialect:**
 
@@ -127,7 +128,7 @@ export const auth = betterAuth({
 
 **Adapters**
 
-If your database isn’t supported by Kysely, you can use an adapter to connect. Simply import the adapter and pass it into the `database` option.
+If you prefer to use an ORM or if your database is not supported by Kysely, you can use one of the built-in adapters.
 
 <Tabs items={["prisma", "drizzle", "mongodb"]}>
     <Tab value="prisma">
@@ -171,23 +172,19 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     ```
     </Tab>
 </Tabs>
-   <Callout>
-     For optimal performance, use the built-in Kysely adapter if possible.
-    </Callout>
 </Step>
 
 <Step>
     ### Create Database Tables
+    Better Auth includes a CLI tool to help manage the schema required by the library.
 
-    Better Auth’s comes with a CLI tool to help manage schema required by the library.
-
-    **Generate**: Generates an ORM schema or SQL migration file.
+    - **Generate**: This command generates an ORM schema or SQL migration file if you're using Kysely. You can also directly apply the migration using the CLI if you're using Kysely.
 
     ```bash title="Terminal"
     npx @better-auth/cli generate
     ```
 
-    **Migrate**: Directly creates the required tables in the database. (only available for built-in Kysely adapter)
+    - **Migrate**: This command creates the required tables directly in the database. (Available only for the built-in Kysely adapter)
 
     ```bash title="Terminal"
     npx @better-auth/cli migrate

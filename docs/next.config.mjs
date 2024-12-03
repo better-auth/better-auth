@@ -31,6 +31,9 @@ export default withMDX({
 			{
 				hostname: "pbs.twimg.com",
 			},
+			{
+				hostname: "github.com",
+			},
 		],
 	},
 });

@@ -85,6 +85,26 @@ interface GenericOAuthConfig {
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	/**
+	 * Custom function to map the user profile to a User object.
+	 */
+	mapProfileToUser?: (profile: Record<string, any>) =>
+		| {
+				id?: string;
+				name?: string;
+				email?: string;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }
+		| Promise<{
+				id?: string;
+				name?: string;
+				email?: string;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }>;
 }
 
 interface GenericOAuthOptions {
@@ -412,8 +432,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						);
 					}
 
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
+						: null;
+
 					const result = await handleOAuthUserInfo(ctx, {
-						userInfo: userInfo,
+						userInfo: {
+							...userInfo,
+							...mapUser,
+						},
 						account: {
 							providerId: provider.providerId,
 							accountId: userInfo.id,

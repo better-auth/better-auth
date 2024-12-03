@@ -91,7 +91,7 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export interface TwitterOption extends ProviderOptions {}
+export interface TwitterOption extends ProviderOptions<TwitterProfile> {}
 
 export const twitter = (options: TwitterOption) => {
 	return {
@@ -140,6 +140,7 @@ export const twitter = (options: TwitterOption) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.data.id,
@@ -147,6 +148,7 @@ export const twitter = (options: TwitterOption) => {
 					email: profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
+					...userMap,
 				},
 				data: profile,
 			};

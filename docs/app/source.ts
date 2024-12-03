@@ -8,9 +8,4 @@ export const source = loader({
 	source: createMDXSource(docs, meta),
 });
 
-export const changelog = loader({
-	baseUrl: "/changelog",
-	source: createMDXSource(_changelog, meta),
-});
-
 export const openapi = createOpenAPI({});

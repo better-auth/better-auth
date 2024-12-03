@@ -74,7 +74,9 @@ export const init = async (options: BetterAuthOptions) => {
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return socialProviders[key as (typeof socialProviderList)[number]](value);
+			return socialProviders[key as (typeof socialProviderList)[number]](
+				value as any, // TODO: fix this
+			);
 		})
 		.filter((x) => x !== null);
 
