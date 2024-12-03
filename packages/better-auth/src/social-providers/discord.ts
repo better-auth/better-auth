@@ -74,7 +74,7 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export interface DiscordOptions extends ProviderOptions {}
+export interface DiscordOptions extends ProviderOptions<DiscordProfile> {}
 
 export const discord = (options: DiscordOptions) => {
 	return {
@@ -127,6 +127,7 @@ export const discord = (options: DiscordOptions) => {
 				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
 				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -134,6 +135,7 @@ export const discord = (options: DiscordOptions) => {
 					email: profile.email,
 					emailVerified: profile.verified,
 					image: profile.image_url,
+					...userMap,
 				},
 				data: profile,
 			};

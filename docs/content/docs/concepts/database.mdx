@@ -590,6 +590,39 @@ res.user.lang // > "fr"
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
 
+If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+
+**Example: Mapping Profile to User For `firstName` and `lastName`**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   socialProviders: {
+      github: {
+         clientId: "YOUR_GITHUB_CLIENT_ID",
+         clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.name.split(" ")[0],
+                lastName: profile.name.split(" ")[1],
+              }
+          }
+      },
+      google: {
+          clientId: "YOUR_GOOGLE_CLIENT_ID",
+          clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.given_name,
+                lastName: profile.family_name,
+              }
+          }
+      }
+    }
+})
+```
+
 ### ID Generation
 
 Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` section of the <Link href="/docs/reference/options">options</Link>.

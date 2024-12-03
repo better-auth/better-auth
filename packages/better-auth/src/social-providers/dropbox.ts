@@ -16,7 +16,7 @@ export interface DropboxProfile {
 	profile_photo_url: string;
 }
 
-export interface DropboxOptions extends ProviderOptions {}
+export interface DropboxOptions extends ProviderOptions<DropboxProfile> {}
 
 export const dropbox = (options: DropboxOptions) => {
 	const tokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
@@ -68,7 +68,7 @@ export const dropbox = (options: DropboxOptions) => {
 			if (error) {
 				return null;
 			}
-
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.account_id,
@@ -76,6 +76,7 @@ export const dropbox = (options: DropboxOptions) => {
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
 					image: profile.profile_photo_url,
+					...userMap,
 				},
 				data: profile,
 			};

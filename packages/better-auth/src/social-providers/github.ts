@@ -47,11 +47,9 @@ export interface GithubProfile {
 		private_repos: string;
 		collaborators: string;
 	};
-	first_name: string;
-	last_name: string;
 }
 
-export interface GithubOptions extends ProviderOptions {}
+export interface GithubOptions extends ProviderOptions<GithubProfile> {}
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
@@ -115,6 +113,7 @@ export const github = (options: GithubOptions) => {
 						data.find((e) => e.email === profile.email)?.verified ?? false;
 				}
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id.toString(),
@@ -122,6 +121,7 @@ export const github = (options: GithubOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified,
+					...userMap,
 				},
 				data: profile,
 			};

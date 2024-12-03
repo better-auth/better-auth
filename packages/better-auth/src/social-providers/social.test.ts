@@ -56,6 +56,12 @@ describe("Social Providers", async () => {
 			apple: {
 				clientId: "test",
 				clientSecret: "test",
+				mapProfileToUser(profile) {
+					return {
+						firstName: profile.user?.name.firstName,
+						lastName: profile.user?.name.lastName,
+					};
+				},
 			},
 		},
 	});
