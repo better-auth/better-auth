@@ -181,10 +181,11 @@ describe("Origin Check", async (it) => {
 				},
 			},
 		});
-		const res = await client.forgetPassword({
+		const res = await client.signIn.email({
 			email: testUser.email,
-			redirectTo: "https://sub-domain.my-site.com/reset-password",
+			password: testUser.password,
+			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
-		expect(res.data?.status).toBeTruthy();
+		expect(res.data?.session).toBeDefined();
 	});
 });

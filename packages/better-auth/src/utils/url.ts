@@ -56,3 +56,11 @@ export const checkURLValidity = (url: string) => {
 	const urlPattern = url.includes("://");
 	return urlPattern;
 };
+
+export function getHost(url: string) {
+	if (url.includes("://")) {
+		const parsedUrl = new URL(url);
+		return parsedUrl.host;
+	}
+	return url;
+}
