@@ -74,6 +74,9 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 
 const memory = new Map<string, RateLimit>();
 export function getRateLimitStorage(ctx: AuthContext) {
+	if (ctx.options.rateLimit?.customStorage) {
+		return ctx.options.rateLimit.customStorage;
+	}
 	if (ctx.rateLimit.storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
