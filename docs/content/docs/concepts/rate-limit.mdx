@@ -41,11 +41,32 @@ export const auth = betterAuth({
     rateLimit: {
         window: 60, // time window in seconds
         max: 100, // max requests in the window
-        customRules: { // custom rules for specific paths
+    },
+})
+```
+
+You can also pass custom rules for specific paths.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        window: 60, // time window in seconds
+        max: 100, // max requests in the window
+        customRules: {
             "/sign-in/email": {
                 window: 10,
-                max: 7, 
+                max: 3,
             },
+            "/two-factor/*": async (request)=> {
+                // custom function to return rate limit window and max
+                return {
+                    window: 10,
+                    max: 3,
+                }
+            }
         },
     },
 })
