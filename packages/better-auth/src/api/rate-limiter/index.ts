@@ -38,16 +38,17 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
-			const res = await db.findOne<RateLimit>({
+			const res = await db.findMany<RateLimit>({
 				model,
 				where: [{ field: "key", value: key }],
 			});
-			return res;
+			const data = res[0];
+			return data;
 		},
 		set: async (key: string, value: RateLimit, _update?: boolean) => {
 			try {
 				if (_update) {
-					await db.update({
+					await db.updateMany({
 						model: modelName ?? "rateLimit",
 						where: [{ field: "key", value: key }],
 						update: {
@@ -159,17 +160,25 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 			return rateLimitResponse(retryAfter);
 		} else if (timeSinceLastRequest > window * 1000) {
 			// Reset the count if the window has passed since the last request
-			await storage.set(key, {
-				...data,
-				count: 1,
-				lastRequest: now,
-			});
+			await storage.set(
+				key,
+				{
+					...data,
+					count: 1,
+					lastRequest: now,
+				},
+				true,
+			);
 		} else {
-			await storage.set(key, {
-				...data,
-				count: data.count + 1,
-				lastRequest: now,
-			});
+			await storage.set(
+				key,
+				{
+					...data,
+					count: data.count + 1,
+					lastRequest: now,
+				},
+				true,
+			);
 		}
 	}
 }

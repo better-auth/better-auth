@@ -141,3 +141,60 @@ describe("custom rate limiting storage", async () => {
 		}
 	});
 });
+
+describe("should work with custom rules", async () => {
+	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": {
+					window: 10,
+					max: 2,
+				},
+				"/sign-up/email": {
+					window: 10,
+					max: 3,
+				},
+			},
+		},
+	});
+
+	it("should use custom rules", async () => {
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+			if (i >= 2) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signUp.email({
+				email: `${Math.random()}@test.com`,
+				password: testUser.password,
+				name: "test",
+			});
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
+
+	it("should use default rules if custom rules are not defined", async () => {
+		for (let i = 0; i < 5; i++) {
+			const response = await client.getSession();
+			if (i >= 20) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
+});

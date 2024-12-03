@@ -109,9 +109,8 @@ export const init = async (options: BetterAuthOptions) => {
 			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
-				options.rateLimit?.storage || options.secondaryStorage
-					? ("secondary-storage" as const)
-					: ("memory" as const),
+				options.rateLimit?.storage ||
+				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
 		logger: logger,
