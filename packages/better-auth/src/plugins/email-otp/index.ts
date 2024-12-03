@@ -97,6 +97,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const email = ctx.body.email;
+					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+					if (!emailRegex.test(email)) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid email",
+						});
+					}
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 					await ctx.context.internalAdapter
 						.createVerificationValue({
@@ -258,6 +264,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
+					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+					if (!emailRegex.test(email)) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid email",
+						});
+					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`email-verification-otp-${email}`,
