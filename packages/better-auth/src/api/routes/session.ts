@@ -32,6 +32,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								"Disable cookie cache and fetch session from database",
 						})
 						.optional(),
+					disableRefresh: z
+						.boolean({
+							description:
+								"Disable session refresh. Useful for checking session status, without updating the session",
+						})
+						.optional(),
 				}),
 			),
 			requireHeaders: true,
@@ -159,8 +165,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
+				 * or if the session refresh is disabled
 				 */
-				if (dontRememberMe) {
+				if (dontRememberMe || ctx.query?.disableRefresh) {
 					return ctx.json(
 						session as unknown as {
 							session: InferSession<Option>;
@@ -241,6 +248,10 @@ export const getSessionFromCtx = async <
 	S extends Record<string, any> = Record<string, any>,
 >(
 	ctx: GenericEndpointContext,
+	config?: {
+		disableCookieCache?: boolean;
+		disableRefresh?: boolean;
+	},
 ) => {
 	if (ctx.context.session) {
 		return ctx.context.session as {
@@ -248,6 +259,7 @@ export const getSessionFromCtx = async <
 			user: U & User;
 		};
 	}
+	ctx.query = config;
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",

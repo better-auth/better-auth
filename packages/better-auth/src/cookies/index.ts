@@ -107,7 +107,9 @@ export async function setSessionCookie(
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
 
-	const hasAlreadySession = await getSessionFromCtx(ctx).catch(() => {
+	const hasAlreadySession = await getSessionFromCtx(ctx, {
+		disableRefresh: true,
+	}).catch(() => {
 		// this could throw error when headers isn't found. but we don't want to throw error
 		return null;
 	});
