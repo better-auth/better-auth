@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useId, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
@@ -192,6 +192,14 @@ function CodePreview() {
 		});
 	};
 
+	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
+
+	useEffect(() => {
+		setCodeTheme(
+			theme.resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
+		);
+	}, [theme.resolvedTheme]);
+
 	return (
 		<AnimatePresence initial={false}>
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
@@ -269,10 +277,7 @@ function CodePreview() {
 										code={code}
 										language={"javascript"}
 										theme={{
-											...(theme.resolvedTheme === "light"
-												? themes.oneLight
-												: themes.synthwave84),
-
+											...codeTheme,
 											plain: {
 												backgroundColor: "transparent",
 											},

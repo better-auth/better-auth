@@ -27,10 +27,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 			<body
 				className={`${GeistSans.variable} ${GeistMono.variable} font-sans relative`}
 			>
-				<RootProvider>
+				<RootProvider
+					theme={{
+						enableSystem: false,
+						defaultTheme: "dark",
+					}}
+				>
 					<NavbarProvider>
 						<Navbar />
-
 						{children}
 					</NavbarProvider>
 				</RootProvider>
