@@ -388,7 +388,9 @@ export interface BetterAuthOptions {
 			/**
 			 * List of trusted providers
 			 */
-			trustedProviders?: Array<SocialProviderList[number] | "email-password">;
+			trustedProviders?: Array<
+				LiteralUnion<SocialProviderList[number] | "email-password", string>
+			>;
 		};
 	};
 	/**
