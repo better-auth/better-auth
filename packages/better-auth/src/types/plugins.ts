@@ -128,6 +128,9 @@ export type BetterAuthPlugin = {
 	 * The options of the plugin
 	 */
 	options?: Record<string, any>;
+	/**
+	 * types to be inferred
+	 */
 	$Infer?: Record<string, any>;
 	/**
 	 * The rate limit rules to apply to specific paths.
@@ -137,6 +140,10 @@ export type BetterAuthPlugin = {
 		max: number;
 		pathMatcher: (path: string) => boolean;
 	}[];
+	/**
+	 * Error codes returned by the plugin
+	 */
+	$ErrorCodes?: Record<string, number>;
 };
 
 export type InferOptionSchema<S extends PluginSchema> = S extends Record<

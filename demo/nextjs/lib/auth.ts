@@ -9,6 +9,8 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
+	oidc,
+	genericOAuth,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -18,6 +20,7 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { addAccountToSession } from "./plugin";
+import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -41,7 +44,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+		type: "sqlite",
 	},
 	session: {
 		cookieCache: {
@@ -64,7 +67,7 @@ export const auth = betterAuth({
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github"],
+			trustedProviders: ["google", "github", "demo-app"],
 		},
 	},
 	emailAndPassword: {
@@ -155,6 +158,23 @@ export const auth = betterAuth({
 		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
-		addAccountToSession,
+		oidc({
+			consentPage: "/oauth/authorize",
+			loginPage: "/sign-in",
+		}),
+		genericOAuth({
+			config: [
+				{
+					clientId: "pkVwgJsnwEmoEIELqqOJsFJzVSEWnoiU",
+					clientSecret: "sVnTOpNZZSYpspiSwdRnDlIKayVDpltl",
+					authorizationUrl: "http://localhost:3000/api/auth/oauth2/authorize",
+					tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+					providerId: "better-auth",
+					type: "oidc",
+					scopes: ["openid", "profile", "email"],
+					prompt: "consent",
+				},
+			],
+		}),
 	],
 });

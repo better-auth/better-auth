@@ -41,6 +41,7 @@ export async function validateAuthorizationCode({
 		body: body,
 		headers,
 	});
+
 	if (error) {
 		throw error;
 	}
