@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import Image from "next/image";
 import Link from "next/link";
+import { ConsentBtns } from "./concet-buttons";
 
 export const metadata: Metadata = {
 	title: "Authorize Application",
@@ -104,14 +105,7 @@ export default async function AuthorizePage({
 								)}
 							</div>
 						</CardContent>
-						<CardFooter className="flex items-center gap-2">
-							<Link href={redirect_uri}>
-								<Button>Authorize</Button>
-							</Link>
-							<Link href={cancel_uri || ""}>
-								<Button variant="outline">Cancel</Button>
-							</Link>
-						</CardFooter>
+						<ConsentBtns />
 					</Card>
 				</div>
 			</div>

@@ -86,7 +86,6 @@ export async function authorize(
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} as Client;
 		});
-
 	if (!client) {
 		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
 	}
@@ -193,18 +192,9 @@ export async function authorize(
 	}
 
 	if (options?.consentPage) {
-		await ctx.setSignedCookie(
-			"oidc_consent_prompt",
-			JSON.stringify({
-				code,
-				clientId: client.clientId,
-				scope: requestScope,
-			}),
-			ctx.context.secret,
-			{
-				maxAge: 600,
-			},
-		);
+		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+			maxAge: 600,
+		});
 		const conceptURI = `${options.consentPage}?client_id=${
 			client.clientId
 		}&scope=${requestScope.join(" ")}`;

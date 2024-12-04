@@ -24,7 +24,6 @@ export function parseSetCookieHeader(
 		const value = valueParts.join("=");
 
 		if (!name || value === undefined) {
-			console.warn(`Malformed cookie: ${cookieString}`);
 			return;
 		}
 

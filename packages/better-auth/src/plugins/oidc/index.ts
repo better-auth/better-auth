@@ -1,17 +1,10 @@
 import { SignJWT } from "jose";
 import { z } from "zod";
-import { authorizeHTML } from "./ui";
-import {
-	APIError,
-	createAuthEndpoint,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, PluginSchema } from "../../types";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
+import type { BetterAuthPlugin } from "../../types";
 import { alphabet, generateRandomString } from "../../crypto";
 import { schema } from "./schema";
 import type {
-	AuthorizationQuery,
 	Client,
 	CodeVerificationValue,
 	OAuthAccessToken,
@@ -51,48 +44,47 @@ export const oidc = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc",
-		// hooks: {
-		// 	after: [
-		// 		{
-		// 			matcher(context) {
-		// 				return true;
-		// 			},
-		// 			handler: async (ctx) => {
-		// 				const cookie = await ctx.getSignedCookie(
-		// 					"oidc_login_prompt",
-		// 					ctx.context.secret,
-		// 				);
-		// 				const cookieName = ctx.context.authCookies.sessionToken.name;
-		// 				const parsedSetCookieHeader = parseSetCookieHeader(
-		// 					ctx.responseHeader.get("set-cookie") || "",
-		// 				);
-		// 				const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-		// 				if (!cookie || !hasSessionToken) {
-		// 					return;
-		// 				}
-		// 				ctx.setCookie(
-		// 					"oidc_login_prompt",
-		// 					cookie,
-		// 					ctx.context.authCookies.sessionToken.options,
-		// 				);
-		// 				const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-		// 				const sessionToken = sessionCookie?.split(".")[0];
-		// 				if (!sessionToken) {
-		// 					return;
-		// 				}
-		// 				const session =
-		// 					await ctx.context.internalAdapter.findSession(sessionToken);
-		// 				if (!session) {
-		// 					return;
-		// 				}
-		// 				ctx.query = JSON.parse(cookie);
-		// 				ctx.context.session = session;
-		// 				const response = await authorize(ctx, opts);
-		// 				return response;
-		// 			},
-		// 		},
-		// 	],
-		// },
+		hooks: {
+			after: [
+				{
+					matcher() {
+						return true;
+					},
+					handler: async (ctx) => {
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
+						);
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const parsedSetCookieHeader = parseSetCookieHeader(
+							ctx.responseHeader.get("set-cookie") || "",
+						);
+						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
+						if (!cookie || !hasSessionToken) {
+							return;
+						}
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
+						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
+						const sessionToken = sessionCookie?.split(".")[0];
+						if (!sessionToken) {
+							return;
+						}
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) {
+							return;
+						}
+						ctx.query = JSON.parse(cookie);
+						ctx.query.prompt = "consent";
+						ctx.context.session = session;
+						const response = await authorize(ctx, opts);
+						return response;
+					},
+				},
+			],
+		},
 		endpoints: {
 			oAuth2authorize: createAuthEndpoint(
 				"/oauth2/authorize",
@@ -148,6 +140,7 @@ export const oidc = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
+
 					if (!ctx.body.accept) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							verification.id,

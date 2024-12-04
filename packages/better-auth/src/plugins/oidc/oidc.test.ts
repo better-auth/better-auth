@@ -14,6 +14,7 @@ describe("oidc", async () => {
 		auth: authorizationServer,
 		signInWithTestUser,
 		customFetchImpl,
+		testUser,
 	} = await getTestInstance({
 		baseURL: "http://localhost:3000",
 		plugins: [
@@ -155,30 +156,31 @@ describe("oidc", async () => {
 
 	it("should sign in after a consent flow", async ({ expect }) => {
 		// The RP (Relying Party) - the client application
-		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: ["test"],
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
+					},
 				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "test",
-							clientId: oauthClient.clientId,
-							clientSecret: oauthClient.clientSecret,
-							authorizationUrl:
-								"http://localhost:3000/api/auth/oauth2/authorize",
-							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-							type: "oidc",
-							scopes: ["openid", "profile", "email"],
-							prompt: "consent",
-						},
-					],
-				}),
-			],
-		});
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: oauthClient.clientId,
+								clientSecret: oauthClient.clientSecret,
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								type: "oidc",
+								scopes: ["openid", "profile", "email"],
+								prompt: "consent",
+							},
+						],
+					}),
+				],
+			});
 
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -202,22 +204,130 @@ describe("oidc", async () => {
 		expect(data.url).toContain(`client_id=${oauthClient.clientId}`);
 
 		let redirectURI = "";
+		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
+				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
-		expect(redirectURI).toContain(
+		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		const res = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers: newHeaders,
+				throw: true,
+			},
+		);
+		expect(res.redirectURI).toContain(
 			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 		);
 
-		// let callbackURL = "";
-		// await client.$fetch(redirectURI, {
-		// 	onError(context) {
-		// 		callbackURL = context.response.headers.get("Location") || "";
-		// 	},
-		// });
-		// expect(callbackURL).toContain("/dashboard");
+		let callbackURL = "";
+		await client.$fetch(res.redirectURI, {
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in after a login flow", async ({ expect }) => {
+		// The RP (Relying Party) - the client application
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: oauthClient.clientId,
+								clientSecret: oauthClient.clientSecret,
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								type: "oidc",
+								scopes: ["openid", "profile", "email"],
+								prompt: "login",
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			"http://localhost:3000/api/auth/oauth2/authorize",
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.clientId}`);
+
+		let redirectURI = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+		expect(redirectURI).toContain("/login");
+
+		await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: newHeaders,
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+					cookieSetter(newHeaders)(context);
+				},
+			},
+		);
+		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
+		const res = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers: newHeaders,
+				throw: true,
+			},
+		);
+		expect(res.redirectURI).toContain(
+			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+		);
+		let callbackURL = "";
+		await client.$fetch(res.redirectURI, {
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
 	});
 });

@@ -42,7 +42,10 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: new Database("demo.sqlite"),
+	database: {
+		dialect,
+		type: "sqlite",
+	},
 	session: {
 		cookieCache: {
 			enabled: true,
@@ -162,11 +165,11 @@ export const auth = betterAuth({
 		genericOAuth({
 			config: [
 				{
-					clientId: "xWLcAkPdhXFRSlLOsaIWvkxfrBQuiKVq",
-					clientSecret: "gbbfZTrznylpKLUSsTXNroqSjtDbyHQW",
+					clientId: "pkVwgJsnwEmoEIELqqOJsFJzVSEWnoiU",
+					clientSecret: "sVnTOpNZZSYpspiSwdRnDlIKayVDpltl",
 					authorizationUrl: "http://localhost:3000/api/auth/oauth2/authorize",
 					tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-					providerId: "demo-app",
+					providerId: "better-auth",
 					type: "oidc",
 					scopes: ["openid", "profile", "email"],
 					prompt: "consent",
