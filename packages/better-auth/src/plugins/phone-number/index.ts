@@ -67,23 +67,23 @@ export const phoneNumber = (options?: {
 	 */
 	signUpOnVerification?: {
 		/**
-		 * When a user signs up, a temporary email will be need to be created
+		 * When a user signs up, these fields will be used if provided
+		 * otherwise fallback to temporary values
+		 */
+		fields?: {
+			name?: string;
+			email?: string;
+		};
+		/**
+		 * When a user signs up, a temporary email will be needed if not provided
 		 * to sign up the user. This function should return a temporary email
 		 * for the user given the phone number
-		 *
-		 * @param phoneNumber
-		 * @returns string (temporary email)
 		 */
 		getTempEmail: (phoneNumber: string) => string;
 		/**
-		 * When a user signs up, a temporary name will be need to be created
+		 * When a user signs up, a temporary name will be needed if not provided
 		 * to sign up the user. This function should return a temporary name
 		 * for the user given the phone number
-		 *
-		 * @param phoneNumber
-		 * @returns string (temporary name)
-		 *
-		 * @default phoneNumber - the phone number will be used as the name
 		 */
 		getTempName?: (phoneNumber: string) => string;
 	};
@@ -347,6 +347,18 @@ export const phoneNumber = (options?: {
 									"Check if there is a session and update the phone number",
 							})
 							.optional(),
+						/**
+						 * User's name (optional)
+						 */
+						name: z.string({
+							description: "User's name (optional)",
+						}).optional(),
+						/**
+						 * User's email (optional)
+						 */
+						email: z.string({
+							description: "User's email (optional)",
+						}).email().optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -441,14 +453,14 @@ export const phoneNumber = (options?: {
 					if (!user) {
 						if (options?.signUpOnVerification) {
 							user = await ctx.context.internalAdapter.createUser({
-								email: options.signUpOnVerification.getTempEmail(
-									ctx.body.phoneNumber,
-								),
-								name: options.signUpOnVerification.getTempName
-									? options.signUpOnVerification.getTempName(
-											ctx.body.phoneNumber,
-										)
-									: ctx.body.phoneNumber,
+								email: ctx.body.email || 
+										options.signUpOnVerification.fields?.email ||
+										options.signUpOnVerification.getTempEmail(ctx.body.phoneNumber),
+								name: ctx.body.name ||
+										options.signUpOnVerification.fields?.name ||
+										(options.signUpOnVerification.getTempName
+											? options.signUpOnVerification.getTempName(ctx.body.phoneNumber)
+											: ctx.body.phoneNumber),
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							});

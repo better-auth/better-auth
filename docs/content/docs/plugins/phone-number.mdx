@@ -98,6 +98,10 @@ export const auth = betterAuth({
                 // Implement sending OTP code via SMS
             },
             signUpOnVerification: {
+                fields: {
+                    name: "John",
+                    email: "john@example.com"
+                },
                 getTempEmail: (phoneNumber) => {
                     return `${phonNumber}@my-site.com`
                 },
@@ -182,8 +186,11 @@ export const auth = betterAuth({
 ```
 - `phoneNumberValidator`: A custom function to validate the phone number. It takes the phone number as an argument and returns a boolean indicating whether the phone number is valid.
 - `signUpOnVerification`: An object with the following properties:
-    - `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
-    - `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
+    - `fields`: Optional object containing default values for user fields:
+      - `name`: Default name to use if not provided during verification
+      - `email`: Default email to use if not provided during verification
+    - `getTempEmail`: A function that generates a temporary email for the user if no email is provided. It takes the phone number as an argument and returns the temporary email.
+    - `getTempName`: A function that generates a temporary name for the user if no name is provided. It takes the phone number as an argument and returns the temporary name.
     
 
 ## Schema
