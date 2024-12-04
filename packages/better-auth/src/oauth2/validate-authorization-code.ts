@@ -36,11 +36,13 @@ export async function validateAuthorizationCode({
 		body.set("client_id", options.clientId);
 		body.set("client_secret", options.clientSecret);
 	}
+	console.log({ tokenEndpoint });
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
 		headers,
 	});
+
 	if (error) {
 		throw error;
 	}

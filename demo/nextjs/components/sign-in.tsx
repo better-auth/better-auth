@@ -171,7 +171,7 @@ export default function SignIn() {
 							variant="outline"
 							className="gap-2"
 							onClick={async () => {
-								await signIn.social({
+								const { data } = await signIn.social({
 									provider: "microsoft",
 									callbackURL: "/dashboard",
 								});
@@ -264,6 +264,17 @@ export default function SignIn() {
 									</defs>
 								</g>
 							</svg>
+						</Button>
+						<Button
+							variant="outline"
+							className="gap-2"
+							onClick={async () => {
+								await signIn.oauth2({
+									providerId: "demo-app",
+								});
+							}}
+						>
+							My
 						</Button>
 					</div>
 					<Button
