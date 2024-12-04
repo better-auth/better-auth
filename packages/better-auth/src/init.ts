@@ -65,7 +65,10 @@ export const init = async (options: BetterAuthOptions) => {
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
-			const value = options.socialProviders?.[key as "github"]!;
+			const value = options.socialProviders?.[key as "github"];
+			if (!value) {
+				return null;
+			}
 			if (value.enabled === false) {
 				return null;
 			}
