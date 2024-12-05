@@ -46,25 +46,44 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client } = await getTestInstance({
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
-				enabled: true,
+	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					firstName: {
+						type: "string",
+					},
+					lastName: {
+						type: "string",
+					},
+					isOAuth: {
+						type: "boolean",
+					},
+				},
 			},
-			apple: {
-				clientId: "test",
-				clientSecret: "test",
-				mapProfileToUser(profile) {
-					return {
-						firstName: profile.user?.name.firstName,
-						lastName: profile.user?.name.lastName,
-					};
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser(profile) {
+						return {
+							firstName: profile.given_name,
+							lastName: profile.family_name,
+							isOAuth: true,
+						};
+					},
+				},
+				apple: {
+					clientId: "test",
+					clientSecret: "test",
 				},
 			},
 		},
-	});
+		{
+			disableTestUser: true,
+		},
+	);
 	let state = "";
 
 	const headers = new Headers();
@@ -97,6 +116,43 @@ describe("Social Providers", async () => {
 				);
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
+		});
+	});
+
+	it("should be able to map profile to user", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		const profile = await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				//TODO: fix this
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			isOAuth: true,
+			firstName: "First",
+			lastName: "Last",
 		});
 	});
 

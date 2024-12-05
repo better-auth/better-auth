@@ -56,6 +56,10 @@ describe("organization", async (it) => {
 		expect(organization.data?.metadata).toBeDefined();
 		expect(organization.data?.members.length).toBe(1);
 		expect(organization.data?.members[0].role).toBe("owner");
+		const session = await client.getSession({});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
 	});
 
 	it("should allow listing organizations", async () => {
