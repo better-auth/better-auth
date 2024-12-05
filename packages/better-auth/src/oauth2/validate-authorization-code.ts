@@ -23,7 +23,7 @@ export async function validateAuthorizationCode({
 		accept: "application/json",
 		"user-agent": "better-auth",
 		// to override if `compress` is set to `false`
-		"accept-encoding": "gzip, deflate, br",
+		"accept-encoding": "gzip,deflate",
 	};
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
