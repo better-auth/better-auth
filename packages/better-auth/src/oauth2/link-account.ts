@@ -93,50 +93,42 @@ export async function handleOAuthUserInfo(
 			}
 		}
 	} else {
-		try {
-			user = await c.context.internalAdapter
-				.createOAuthUser(
-					{
-						...userInfo,
-						id: undefined,
-					},
-					{
-						accessToken: account.accessToken,
-						idToken: account.idToken,
-						refreshToken: account.refreshToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
-				)
-				.then((res) => res?.user);
-			if (
-				!userInfo.emailVerified &&
-				user &&
-				c.context.options.emailVerification?.sendOnSignUp
-			) {
-				const token = await createEmailVerificationToken(
-					c.context.secret,
-					user.email,
-				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user,
-						url,
-						token,
-					},
-					c.request,
-				);
-			}
-		} catch (e) {
-			logger.error("Unable to create user", e);
-			return {
-				error: "unable to create user",
-				data: null,
-			};
+		user = await c.context.internalAdapter
+			.createOAuthUser(
+				{
+					...userInfo,
+					id: undefined,
+				},
+				{
+					accessToken: account.accessToken,
+					idToken: account.idToken,
+					refreshToken: account.refreshToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
+					providerId: account.providerId,
+					accountId: userInfo.id.toString(),
+				},
+			)
+			.then((res) => res?.user);
+		if (
+			!userInfo.emailVerified &&
+			user &&
+			c.context.options.emailVerification?.sendOnSignUp
+		) {
+			const token = await createEmailVerificationToken(
+				c.context.secret,
+				user.email,
+			);
+			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+			await c.context.options.emailVerification?.sendVerificationEmail?.(
+				{
+					user,
+					url,
+					token,
+				},
+				c.request,
+			);
 		}
 	}
 	if (!user) {
