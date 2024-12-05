@@ -264,6 +264,8 @@ export const getSessionFromCtx = async <
 		_flag: "json",
 		headers: ctx.headers!,
 		query: config,
+	}).catch((e) => {
+		return null;
 	});
 	ctx.context.session = session;
 	return session as {

@@ -5,6 +5,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
+import { getSessionFromCtx } from "../../../api";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -34,7 +35,7 @@ export const createOrganization = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware],
 		metadata: {
 			openapi: {
 				description: "Create an organization",
@@ -56,7 +57,17 @@ export const createOrganization = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const user = ctx.context.session.user;
+		const session = await getSessionFromCtx(ctx);
+		if (!session && (ctx.request || ctx.headers)) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		let user = session?.user || null;
+		if (!user) {
+			if (!ctx.body.userId) {
+				throw new APIError("UNAUTHORIZED");
+			}
+			user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
+		}
 		if (!user) {
 			return ctx.json(null, {
 				status: 401,
@@ -110,10 +121,12 @@ export const createOrganization = createAuthEndpoint(
 			},
 			user,
 		});
-		await adapter.setActiveOrganization(
-			ctx.context.session.session.token,
-			organization.id,
-		);
+		if (ctx.context.session) {
+			await adapter.setActiveOrganization(
+				ctx.context.session.session.token,
+				organization.id,
+			);
+		}
 		return ctx.json(organization);
 	},
 );

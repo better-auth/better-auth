@@ -66,13 +66,33 @@ describe("organization", async (it) => {
 		);
 	});
 
+	it("should create organization directly in the server without cookie", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const organization = await auth.api.createOrganization({
+			body: {
+				name: "test2",
+				slug: "test2",
+				userId: session.data?.session.userId,
+			},
+		});
+
+		expect(organization?.name).toBe("test2");
+		expect(organization?.members.length).toBe(1);
+		expect(organization?.members[0].role).toBe("owner");
+	});
+
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(organizations.data?.length).toBe(1);
+		expect(organizations.data?.length).toBe(2);
 	});
 
 	it("should allow updating organization", async () => {
