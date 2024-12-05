@@ -5,8 +5,6 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
-	InferSessionFromClient,
-	InferUserFromClient,
 	IsSignal,
 } from "./types";
 import { createDynamicPathProxy } from "./proxy";
@@ -17,23 +15,22 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: Atoms[key];
-					}
+export type InferResolvedHooks<O extends ClientOptions> =
+	O["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+				? Atoms extends Record<string, any>
+					? {
+							[key in keyof Atoms as IsSignal<key> extends true
+								? never
+								: key extends string
+									? `use${Capitalize<key>}`
+									: never]: Atoms[key];
+						}
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
 export function createAuthClient<Option extends ClientOptions>(
 	options?: Option,

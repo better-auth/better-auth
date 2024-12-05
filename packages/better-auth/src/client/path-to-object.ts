@@ -16,7 +16,7 @@ import type {
 	InferUserFromClient,
 } from "./types";
 
-type CamelCase<S extends string> =
+export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
 		? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
 		: Lowercase<S>;
@@ -30,7 +30,7 @@ export type PathToObject<
 		? { [K in CamelCase<Segment>]: Fn }
 		: never;
 
-type InferSignUpEmailCtx<
+export type InferSignUpEmailCtx<
 	ClientOpts extends ClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
@@ -42,7 +42,7 @@ type InferSignUpEmailCtx<
 	fetchOptions?: FetchOptions;
 } & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
 
-type InferUserUpdateCtx<
+export type InferUserUpdateCtx<
 	ClientOpts extends ClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
@@ -53,7 +53,7 @@ type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
-type InferCtx<
+export type InferCtx<
 	C extends Context<any, any>,
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
@@ -74,9 +74,12 @@ type InferCtx<
 					fetchOptions?: FetchOptions;
 				};
 
-type MergeRoutes<T> = UnionToIntersection<T>;
+export type MergeRoutes<T> = UnionToIntersection<T>;
 
-type InferReturn<R, O extends ClientOptions> = R extends Record<string, any>
+export type InferReturn<R, O extends ClientOptions> = R extends Record<
+	string,
+	any
+>
 	? StripEmptyObjects<
 			{
 				user: R extends { user: any } ? InferUserFromClient<O> : never;
