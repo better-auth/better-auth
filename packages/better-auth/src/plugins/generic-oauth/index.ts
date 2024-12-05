@@ -163,6 +163,9 @@ async function getUserInfo(
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const ERROR_CODES = {
+		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+	} as const;
 	return {
 		id: "generic-oauth",
 		endpoints: {
@@ -267,7 +270,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					if (!finalAuthUrl || !finalTokenUrl) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OAuth configuration.",
+							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
 					const { state, codeVerifier } = await generateState(ctx);
@@ -474,5 +477,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 			),
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

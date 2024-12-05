@@ -14,6 +14,7 @@ import type {
 } from "../../types";
 import { hmac } from "../../crypto/hash";
 import { safeJSONParse } from "../../utils/json";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -237,7 +238,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "internal server error",
+					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				});
 			}
 		},

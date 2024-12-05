@@ -2,6 +2,7 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type {
+	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
@@ -42,6 +43,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
+		$ErrorCodes: {} as InferPluginErrorCodes<O>,
 	};
 };
 

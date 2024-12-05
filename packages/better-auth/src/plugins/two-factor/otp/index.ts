@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { TimeSpan } from "oslo";
 import { alphabet, generateRandomString } from "../../../crypto";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 
 export interface OTPOptions {
 	/**
@@ -111,7 +112,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "OTP isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
 			}
 			const code = generateRandomString(opts.digits, alphabet("0-9"));
@@ -177,7 +178,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "OTP isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
 			}
 			const toCheckOtp =
@@ -186,7 +187,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 				);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				throw new APIError("BAD_REQUEST", {
-					message: "OTP has expired",
+					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
 			}
 			if (toCheckOtp.value === ctx.body.code) {

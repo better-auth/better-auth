@@ -5,6 +5,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -72,7 +73,8 @@ export const createOrganization = createAuthEndpoint(
 
 		if (!canCreateOrg) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not allowed to create an organization",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
 			});
 		}
 		const adapter = getOrgAdapter(ctx.context, options);
@@ -87,7 +89,8 @@ export const createOrganization = createAuthEndpoint(
 
 		if (hasReachedOrgLimit) {
 			throw new APIError("FORBIDDEN", {
-				message: "You have reached the organization limit",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
 			});
 		}
 
@@ -96,7 +99,7 @@ export const createOrganization = createAuthEndpoint(
 		);
 		if (existingOrganization) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Organization with this slug already exists",
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
 			});
 		}
 		const organization = await adapter.createOrganization({
@@ -184,7 +187,7 @@ export const updateOrganization = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "Organization id not found!",
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				},
 			});
 		}
@@ -197,7 +200,8 @@ export const updateOrganization = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "User is not a member of this organization!",
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				},
 			});
 		}
@@ -216,7 +220,8 @@ export const updateOrganization = createAuthEndpoint(
 		if (canUpdateOrg.error) {
 			return ctx.json(null, {
 				body: {
-					message: "You are not allowed to update this organization",
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				},
 				status: 403,
 			});
@@ -271,7 +276,7 @@ export const deleteOrganization = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "Organization id not found!",
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				},
 			});
 		}
@@ -284,7 +289,8 @@ export const deleteOrganization = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "User is not a member of this organization!",
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				},
 			});
 		}
@@ -302,7 +308,8 @@ export const deleteOrganization = createAuthEndpoint(
 		});
 		if (canDeleteOrg.error) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not allowed to delete this organization",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 			});
 		}
 		if (organizationId === session.session.activeOrganizationId) {
@@ -374,7 +381,7 @@ export const getFullOrganization = createAuthEndpoint(
 		});
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Organization not found",
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 			});
 		}
 		return ctx.json(organization);
@@ -457,7 +464,8 @@ export const setActiveOrganization = createAuthEndpoint(
 		if (!isMember) {
 			await adapter.setActiveOrganization(session.session.token, null);
 			throw new APIError("FORBIDDEN", {
-				message: "You are not a member of this organization",
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
 		const updatedSession = await adapter.setActiveOrganization(
