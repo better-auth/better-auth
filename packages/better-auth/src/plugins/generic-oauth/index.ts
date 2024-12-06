@@ -122,11 +122,13 @@ async function getUserInfo(
 			};
 		};
 		if (decoded?.payload) {
-			return {
-				id: decoded.payload.sub,
-				emailVerified: decoded.payload.email_verified,
-				...decoded.payload,
-			};
+			if (decoded.payload.sub && decoded.payload.email) {
+				return {
+					id: decoded.payload.sub,
+					emailVerified: decoded.payload.email_verified,
+					...decoded.payload,
+				};
+			}
 		}
 	}
 
