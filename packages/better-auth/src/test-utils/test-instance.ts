@@ -232,7 +232,9 @@ export async function getTestInstance<
 		};
 	}
 	function cookieSetter(headers: Headers) {
-		return (context: SuccessContext) => {
+		return (context: {
+			response: Response;
+		}) => {
 			const setCookieHeader = context.response.headers.get("set-cookie");
 			if (!setCookieHeader) {
 				return;
