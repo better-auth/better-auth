@@ -36,3 +36,4 @@ nuxtzzle
 Deel
 WorkOS
 authjs
+botid
