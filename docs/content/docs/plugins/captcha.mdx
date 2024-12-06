@@ -8,6 +8,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 - [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/)
 - [hCaptcha](https://www.hcaptcha.com/)
 - [CaptchaFox](https://captchafox.com/)
+- [Vercel BotID](https://vercel.com/docs/botid)
 
 <Callout type="info">
   This plugin works out of the box with <Link href="/docs/authentication/email-password">Email & Password</Link> authentication. To use it with other authentication methods, you will need to configure the <Link href="/docs/plugins/captcha#plugin-options">endpoints</Link> array in the plugin options.
@@ -17,7 +18,20 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
 <Steps>
   <Step>
+    ### Install dependencies (Optional)
+
+    If you are using **Vercel BotID** as your provider, you need to install the `botid` library:
+
+    ```package-install
+    npm install botid
+    ```
+  </Step>
+  <Step>
     ### Add the plugin to your **auth** config
+
+    <Callout type="info">
+      **Vercel BotID** doesn't require a `secretKey`. You can omit it from the plugin options.
+    </Callout>
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -26,7 +40,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     export const auth = betterAuth({
         plugins: [ // [!code highlight]
             captcha({ // [!code highlight]
-                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
+                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox, vercel-botid // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
         ], // [!code highlight]
@@ -39,6 +53,10 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
     <Callout type="warning">
       The `x-captcha-user-remote-ip` header is no longer required—IP is now auto-detected server-side.
+    </Callout>
+
+    <Callout type="info">
+      Using **Vercel BotID**? You don't need a captcha token header or a `secretKey`. Install the BotID library (`npm install botid`) and set `provider: "vercel-botid"` in the plugin options.
     </Callout>
 
     Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
@@ -59,6 +77,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     - To implement Google reCAPTCHA on the client side, follow the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use libraries like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha) (v2) and [react-google-recaptcha-v3](https://www.npmjs.com/package/react-google-recaptcha-v3) (v3).
     - To implement hCaptcha on the client side, follow the official [hCaptcha documentation](https://docs.hcaptcha.com/#add-the-hcaptcha-widget-to-your-webpage) or use libraries like [@hcaptcha/react-hcaptcha](https://www.npmjs.com/package/@hcaptcha/react-hcaptcha)
     - To implement CaptchaFox on the client side, follow the official [CaptchaFox documentation](https://docs.captchafox.com/getting-started) or use libraries like [@captchafox/react](https://www.npmjs.com/package/@captchafox/react)
+    - To implement Vercel BotID, follow the official [Vercel BotID documentation](https://vercel.com/docs/botid/get-started)
   </Step>
 </Steps>
 
@@ -83,8 +102,10 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 ## Plugin Options
 
 - **`provider` (required)**: your captcha provider.
-- **`secretKey` (required)**: your provider's secret key used for the server-side validation.
+- **`secretKey` (required for all providers except `vercel-botid`)**: your provider's secret key used for the server-side validation.
 - `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
 - `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 - `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 - `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.
+- `validateRequest` (optional - only *Vercel BotID*): custom validation logic. Return `true` to allow the request, `false` to reject it.
+- `checkBotIdOptions` (optional - only *Vercel BotID*): options passed to `checkBotId` from the BotID library.
