@@ -102,6 +102,7 @@ export async function handleOAuthUserInfo(
 			.createOAuthUser(
 				{
 					...userInfo,
+					email: userInfo.email.toLowerCase(),
 					id: undefined,
 				},
 				{
