@@ -44,7 +44,7 @@ The `getSession` function retrieves the current active session.
 ```ts client="client.ts"
 import { authClient } from "@/lib/client"
 
-const session = await authClient.getSession()
+const { data: session, error } = authClient.useSession();
 ```
 
 ### Use Session
