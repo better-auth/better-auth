@@ -97,6 +97,17 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 				: {}
 		>
 	: {};
+
+export type InferErrorCodes<O extends ClientOptions> =
+	O["plugins"] extends Array<infer Plugin>
+		? UnionToIntersection<
+				Plugin extends BetterAuthClientPlugin
+					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
+						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+						: {}
+					: {}
+			>
+		: {};
 /**
  * signals are just used to recall a computed value.
  * as a convention they start with "$"
