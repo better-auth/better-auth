@@ -95,6 +95,7 @@ export const createInternalAdapter = (
 					updatedAt: new Date(),
 					emailVerified: false,
 					...user,
+					email: user.email.toLowerCase(),
 				},
 				"user",
 			);

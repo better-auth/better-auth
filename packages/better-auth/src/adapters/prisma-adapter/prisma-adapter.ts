@@ -1,4 +1,5 @@
 import { getAuthTables } from "../../db";
+import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
 import { withApplyDefault } from "../utils";
@@ -181,6 +182,11 @@ export const prismaAdapter =
 			async create(data) {
 				const { model, data: values, select } = data;
 				const transformed = transformInput(values, model, "create");
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -190,6 +196,11 @@ export const prismaAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const whereClause = convertWhereClause(model, where);
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const result = await db[getModelName(model)].findFirst({
 					where: whereClause,
 					select: convertSelect(select, model),
@@ -199,6 +210,11 @@ export const prismaAdapter =
 			async findMany(data) {
 				const { model, where, limit, offset, sortBy } = data;
 				const whereClause = convertWhereClause(model, where);
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
 					take: limit || 100,
@@ -214,6 +230,11 @@ export const prismaAdapter =
 			},
 			async update(data) {
 				const { model, where, update } = data;
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const whereClause = convertWhereClause(model, where);
 				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({

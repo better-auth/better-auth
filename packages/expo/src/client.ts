@@ -164,8 +164,9 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 						}
 
 						if (
-							context.data.redirect &&
-							context.request.url.toString().includes("/sign-in")
+							context.data?.redirect &&
+							context.request.url.toString().includes("/sign-in") &&
+							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;

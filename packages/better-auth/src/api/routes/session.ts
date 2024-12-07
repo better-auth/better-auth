@@ -32,6 +32,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							description:
 								"Disable cookie cache and fetch session from database",
 						})
+						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 					disableRefresh: z
 						.boolean({
@@ -265,6 +266,8 @@ export const getSessionFromCtx = async <
 		_flag: "json",
 		headers: ctx.headers!,
 		query: config,
+	}).catch((e) => {
+		return null;
 	});
 	ctx.context.session = session;
 	return session as {

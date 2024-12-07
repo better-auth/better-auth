@@ -162,4 +162,24 @@ describe("oauth2", async () => {
 		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
 		expect(callbackURL).toContain("?error=");
 	});
+
+	it("should work with custom redirect uri", async () => {
+		const {} = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId,
+							discoveryUrl:
+								server.issuer.url ||
+								"http://localhost:8080/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							redirectURI: "http://localhost:3000/callback/",
+						},
+					],
+				}),
+			],
+		});
+	});
 });

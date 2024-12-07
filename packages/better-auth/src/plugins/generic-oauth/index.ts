@@ -25,11 +25,6 @@ interface GenericOAuthConfig {
 	 */
 	discoveryUrl?: string;
 	/**
-	 * Type of OAuth flow.
-	 * @default "oauth2"
-	 */
-	type?: "oauth2" | "oidc";
-	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */
@@ -116,10 +111,9 @@ interface GenericOAuthOptions {
 
 async function getUserInfo(
 	tokens: OAuth2Tokens,
-	type: "oauth2" | "oidc",
 	finalUserInfoUrl: string | undefined,
 ) {
-	if (type === "oidc" && tokens.idToken) {
+	if (tokens.idToken) {
 		const decoded = parseJWT(tokens.idToken) as {
 			payload: {
 				sub: string;
@@ -128,11 +122,13 @@ async function getUserInfo(
 			};
 		};
 		if (decoded?.payload) {
-			return {
-				id: decoded.payload.sub,
-				emailVerified: decoded.payload.email_verified,
-				...decoded.payload,
-			};
+			if (decoded.payload.sub && decoded.payload.email) {
+				return {
+					id: decoded.payload.sub,
+					emailVerified: decoded.payload.email_verified,
+					...decoded.payload,
+				};
+			}
 		}
 	}
 
@@ -145,6 +141,7 @@ async function getUserInfo(
 		sub?: string;
 		name: string;
 		email_verified: boolean;
+		picture: string;
 	}>(finalUserInfoUrl, {
 		method: "GET",
 		headers: {
@@ -155,6 +152,7 @@ async function getUserInfo(
 		id: userInfo.data?.sub,
 		emailVerified: userInfo.data?.email_verified,
 		email: userInfo.data?.email,
+		image: userInfo.data?.picture,
 		...userInfo.data,
 	};
 }
@@ -421,11 +419,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const userInfo = (
 						provider.getUserInfo
 							? await provider.getUserInfo(tokens)
-							: await getUserInfo(
-									tokens,
-									provider.type || "oauth2",
-									finalUserInfoUrl,
-								)
+							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
 
 					if (!userInfo?.email) {
