@@ -13,6 +13,7 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import { File, Folder, Files } from 'fumadocs-ui/components/files';
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 
 export default async function Page({
@@ -39,7 +40,7 @@ export default async function Page({
 			}}
 			tableOfContent={{
 				style: "clerk",
-				header: <div className="h-4 w-10"></div>,
+				header: <div className="w-10 h-4"></div>,
 			}}
 			footer={{
 				enabled: false,
@@ -64,6 +65,7 @@ export default async function Page({
 						),
 						Step,
 						Steps,
+						File, Folder, Files,
 						Tab,
 						Tabs,
 						AutoTypeTable,
