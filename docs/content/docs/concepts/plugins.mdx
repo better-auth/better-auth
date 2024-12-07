@@ -325,6 +325,37 @@ const myPlugin = {
 }
 ```
 
+### Server-plugin helper functions
+
+Some additional helper functions for creating server plugins.
+
+#### `getSessionFromCtx`
+
+Allows you to get the client's session data by passing the auth middleware's `context`.
+
+```ts title="plugin.ts"
+import {  createAuthMiddleware } from "better-auth/plugins";
+
+const myPlugin = {
+    id: "my-plugin",
+    hooks: {
+        before: [{
+                matcher: (context)=>{
+                    return context.headers.get("x-my-header") === "my-value"
+                },
+                handler: createAuthMiddleware(async (ctx) => {
+                    const {data, error} = await getSessionFromCtx(ctx);
+                    //do something with the client's session.
+
+                    return  {
+                        context: ctx
+                    }
+                })
+            }],
+    }
+} satisfies BetterAuthPlugin
+```
+
 ## Creating a client plugin
 
 If your endpoints needs to be called from the client, you'll need to also create a client plugin. Better Auth clients can infer the endpoints from the server plugins. You can also add additional client side logic.
