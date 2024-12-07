@@ -106,6 +106,12 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
+			if (password !== typeof "string") {
+				throw new APIError("BAD_REQUEST", {
+					message: "Password must be a string",
+				});
+			}
+
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (password.length < minPasswordLength) {
 				ctx.context.logger.error("Password is too short");
