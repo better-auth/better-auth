@@ -40,14 +40,28 @@ const authClient =  createAuthClient({
 To create a plugin you need to pass an object that satisfies the `BetterAuthPlugin` interface.
 
 The only required property is `id`, which is a unique identifier for the plugin.
+Both server and client plugins can use the same `id`.
+
+### Creating a server plugin
 
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
 
-const myPlugin = {
+export const myPlugin = {
     id: "my-plugin",
 } satisfies BetterAuthPlugin
 ```
+
+### Creating a client plugin
+
+```ts title="client-plugin.ts"
+import type { BetterAuthClientPlugin } from "better-auth";
+
+export const myPluginClient = {
+    id: "my-plugin",
+} satisfies BetterAuthClientPlugin
+```
+
 
 ### Endpoints
 
