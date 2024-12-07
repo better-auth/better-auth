@@ -106,7 +106,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			if (password !== typeof "string") {
+			if (typeof password !== "string") {
 				throw new APIError("BAD_REQUEST", {
 					message: "Password must be a string",
 				});
