@@ -27,7 +27,7 @@
   "devDependencies": {
     "@better-fetch/fetch": "1.1.12",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.5.0",
+    "better-sqlite3": "^11.6.0",
     "expo-constants": "~16.0.2",
     "expo-crypto": "^13.0.2",
     "expo-linking": "~6.3.1",
@@ -39,7 +39,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
-    "better-call": "^0.2.14",
+    "better-call": "^0.2.15",
     "zod": "^3.23.8"
   }
 }
