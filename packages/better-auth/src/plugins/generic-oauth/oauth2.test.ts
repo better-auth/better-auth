@@ -39,6 +39,7 @@ describe("oauth2", async () => {
 							"http://localhost:8080/.well-known/openid-configuration",
 						clientId: clientId,
 						clientSecret: clientSecret,
+						pkce: true,
 					},
 				],
 			}),
