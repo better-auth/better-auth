@@ -5,9 +5,11 @@ import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
-	const { client, testUser, sessionSetter } = await getTestInstance();
+	const { client, testUser, sessionSetter, cookieSetter } =
+		await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.email(
 			{
 				email: testUser.email,
@@ -17,6 +19,7 @@ describe("session", async () => {
 				onSuccess(context) {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
+					cookieSetter(headers)(context);
 					expect(cookies.get("better-auth.session_token")).toMatchObject({
 						value: expect.any(String),
 						"max-age": 60 * 60 * 24 * 7,
@@ -27,7 +30,12 @@ describe("session", async () => {
 				},
 			},
 		);
-		const expiresAt = new Date(res.data?.session?.expiresAt || "");
+		const { data } = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const expiresAt = new Date(data?.session.expiresAt || "");
 		const now = new Date();
 
 		expect(expiresAt.getTime()).toBeGreaterThan(
@@ -64,13 +72,21 @@ describe("session", async () => {
 			},
 		);
 
-		if (!res.data?.session) {
+		const data = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		if (!data) {
 			throw new Error("No session found");
 		}
-		expect(new Date(res.data?.session.expiresAt).getTime()).toBeGreaterThan(
+		expect(new Date(data?.session.expiresAt).getTime()).toBeGreaterThan(
 			new Date(Date.now() + 1000 * 2 * 59).getTime(),
 		);
-		expect(new Date(res.data?.session.expiresAt).getTime()).toBeLessThan(
+
+		expect(new Date(data?.session.expiresAt).getTime()).toBeLessThan(
 			new Date(Date.now() + 1000 * 2 * 60).getTime(),
 		);
 		for (const t of [60, 80, 100, 121]) {
@@ -153,10 +169,16 @@ describe("session", async () => {
 				},
 			},
 		);
-		if (!res.data?.session) {
+		const data = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		if (!data) {
 			throw new Error("No session found");
 		}
-		const expiresAt = res.data.session.expiresAt;
+		const expiresAt = data.session.expiresAt;
 		expect(new Date(expiresAt).valueOf()).toBeLessThanOrEqual(
 			getDate(1000 * 60 * 60 * 24).valueOf(),
 		);
@@ -195,7 +217,16 @@ describe("session", async () => {
 				},
 			},
 		);
-		const expiresAt = new Date(res.data?.session?.expiresAt || "");
+		const data = await client.getSession({
+			fetchOptions: {
+				headers: new Headers(),
+				throw: true,
+			},
+		});
+		if (!data) {
+			throw new Error("No session found");
+		}
+		const expiresAt = new Date(data?.session?.expiresAt || "");
 		const now = new Date();
 
 		expect(expiresAt.getTime()).toBeGreaterThan(
@@ -219,10 +250,14 @@ describe("session", async () => {
 				},
 			},
 		);
-		if (!res.data?.session) {
-			throw new Error("No session found");
-		}
-		expect(res.data.session).not.toBeNull();
+		const data = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(data).not.toBeNull();
 		await client.signOut({
 			fetchOptions: {
 				headers,
@@ -274,18 +309,24 @@ describe("session", async () => {
 				onSuccess: sessionSetter(headers2),
 			},
 		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
 		await client.revokeSession({
 			fetchOptions: {
 				headers,
 			},
-			token: res.data?.session?.token || "",
+			token: session?.session?.token || "",
 		});
-		const session = await client.getSession({
+		const newSession = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(session.data).toBeNull();
+		expect(newSession.data).toBeNull();
 		const revokeRes = await client.revokeSessions({
 			fetchOptions: {
 				headers: headers2,

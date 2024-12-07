@@ -67,16 +67,14 @@ describe("simple-flow", async () => {
 		const user = await auth.api.signUpEmail({
 			body: testUser,
 		});
-		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
+		expect(user).toBeDefined();
 	});
 
 	it("should sign in", async () => {
 		const user = await auth.api.signInEmail({
 			body: testUser,
 		});
-		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
+		expect(user).toBeDefined();
 	});
 
 	it("should get session", async () => {

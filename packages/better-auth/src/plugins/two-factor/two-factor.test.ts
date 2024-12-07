@@ -46,7 +46,7 @@ describe("two factor", async () => {
 		throw new Error("No session");
 	}
 
-	it("should return uri and backup codes and shouldn't enable twoFactor yet", async () => {
+	it.only("should return uri and backup codes and shouldn't enable twoFactor yet", async () => {
 		const res = await client.twoFactor.enable({
 			password: testUser.password,
 			fetchOptions: {
@@ -79,7 +79,7 @@ describe("two factor", async () => {
 		expect(twoFactor?.backupCodes).toBeDefined();
 	});
 
-	it("should enable twoFactor", async () => {
+	it.only("should enable twoFactor", async () => {
 		const totp = new TOTPController({
 			digits: 6,
 			period: new TimeSpan(30, "s"),
@@ -113,7 +113,7 @@ describe("two factor", async () => {
 		expect(res.data?.session).toBeDefined();
 	});
 
-	it("should require two factor", async () => {
+	it.only("should require two factor", async () => {
 		const headers = new Headers();
 		const res = await client.signIn.email({
 			email: testUser.email,

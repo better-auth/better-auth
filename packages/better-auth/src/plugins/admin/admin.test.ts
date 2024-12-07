@@ -188,7 +188,7 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user).toBeDefined();
 	});
 
 	it("should allow to unban user", async () => {
@@ -225,14 +225,14 @@ describe("Admin plugin", async () => {
 		const userToImpersonate = await client.signUp.email(data);
 		const res = await client.admin.impersonateUser(
 			{
-				userId: userToImpersonate.data?.user.id || "",
+				userId: userToImpersonate.data?.id || "",
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
 		expect(res.data?.session).toBeDefined();
-		expect(res.data?.user?.id).toBe(userToImpersonate.data?.user.id);
+		expect(res.data?.user?.id).toBe(userToImpersonate.data?.id);
 	});
 
 	it("should filter impersonated sessions", async () => {

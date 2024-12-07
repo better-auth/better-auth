@@ -96,13 +96,11 @@ describe("Authentication Flow Tests", async () => {
 
 	it("should successfully sign up a new user", async () => {
 		const user = await auth.api.signUpEmail({ body: testUser });
-		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
+		expect(user).toBeDefined();
 	});
 
 	it("should successfully sign in an existing user", async () => {
 		const user = await auth.api.signInEmail({ body: testUser });
 		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
 	});
 });

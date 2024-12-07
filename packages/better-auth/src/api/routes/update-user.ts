@@ -10,7 +10,11 @@ import {
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
-import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
+import type {
+	AdditionalUserFieldsInput,
+	BetterAuthOptions,
+	User,
+} from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto";
 
@@ -85,8 +89,14 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			const session = ctx.context.session;
 			if (image === undefined && !name && Object.keys(rest).length === 0) {
 				return ctx.json({
-					user: session.user,
-				});
+					id: session.user.id,
+					email: session.user.email,
+					name: session.user.name,
+					image: session.user.image,
+					emailVerified: session.user.emailVerified,
+					createdAt: session.user.createdAt,
+					updatedAt: session.user.updatedAt,
+				} as User);
 			}
 			const additionalFields = parseUserInput(
 				ctx.context.options,
@@ -109,8 +119,14 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				user,
 			});
 			return ctx.json({
-				user,
-			});
+				id: user.id,
+				email: user.email,
+				name: user.name,
+				image: user.image,
+				emailVerified: user.emailVerified,
+				createdAt: user.createdAt,
+				updatedAt: user.updatedAt,
+			} as User);
 		},
 	);
 

@@ -96,15 +96,22 @@ describe("multi-session", async () => {
 			password: "password",
 			name: "Name",
 		};
+		let token = "";
 		const signUpRes = await client.signUp.email(testUser3, {
-			onSuccess: cookieSetter(headers),
+			onSuccess: (ctx) => {
+				const header = ctx.response.headers.get("set-cookie");
+				expect(header).toContain("better-auth.session_token");
+				const cookies = parseSetCookieHeader(header || "");
+				token =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+			},
 		});
 		await client.multiSession.revoke(
 			{
 				fetchOptions: {
 					headers,
 				},
-				sessionToken: signUpRes.data?.session.token || "",
+				sessionToken: token,
 			},
 			{
 				onSuccess(context) {

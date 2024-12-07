@@ -144,8 +144,8 @@ export type AuthContext = {
 	baseURL: string;
 	trustedOrigins: string[];
 	session: {
-		session: Session;
-		user: User;
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
 	} | null;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
