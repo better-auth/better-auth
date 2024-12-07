@@ -11,7 +11,7 @@ export const checkCallbackURL = (
 ) => {
 	const trustedOrigins = ctx.context.trustedOrigins;
 	const callbackOrigin = callbackURL ? new URL(callbackURL).origin : null;
-	if (callbackOrigin && !trustedOrigins.includes(callbackOrigin)) {
+	if (callbackOrigin && !trustedOrigins(callbackOrigin)) {
 		throw new APIError("FORBIDDEN", {
 			message: "Invalid callback URL",
 		});
