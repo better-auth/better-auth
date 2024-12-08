@@ -3,6 +3,7 @@ import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type {
 	InferErrorCodes,
+	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
@@ -52,7 +53,10 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
-		$ERROR_CODES: errorCodes as InferErrorCodes<O>,
+		$ErrorCodes: {
+			...errorCodes,
+			...BASE_ERROR_CODES,
+		} as InferPluginErrorCodes<O> & typeof BASE_ERROR_CODES,
 	};
 };
 
