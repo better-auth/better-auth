@@ -242,6 +242,7 @@ export const verifyEmail = createAuthEndpoint(
 				parsed.email,
 				{
 					email: parsed.updateTo,
+					emailVerified: false
 				},
 			);
 
