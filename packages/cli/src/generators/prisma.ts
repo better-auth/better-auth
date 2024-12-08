@@ -13,7 +13,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 }) => {
 	const provider = adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
-	const filePath = file || "./prisma/schema.prisma";
+	const filePath = file || (existsSync(path.join(process.cwd(), "./schema.zmodel")) ? "./schema.zmodel" : "./prisma/schema.prisma");
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
