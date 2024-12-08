@@ -419,7 +419,7 @@ export const signInEmail = createAuthEndpoint(
 				message: "Failed to create session",
 			});
 		}
-
+		console.log("should set here");
 		// store the session in the context
 		ctx.context.session = {
 			session,

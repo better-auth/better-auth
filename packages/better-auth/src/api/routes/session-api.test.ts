@@ -10,7 +10,7 @@ describe("session", async () => {
 
 	it("should set cookies correctly on sign in", async () => {
 		const headers = new Headers();
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -20,12 +20,13 @@ describe("session", async () => {
 					const header = context.response.headers.get("set-cookie");
 					const cookies = parseSetCookieHeader(header || "");
 					cookieSetter(headers)(context);
-					expect(cookies.get("better-auth.session_token")).toMatchObject({
+					const cookie = cookies.get("better-auth.session_token");
+					expect(cookie).toMatchObject({
 						value: expect.any(String),
 						"max-age": 60 * 60 * 24 * 7,
 						path: "/",
-						httponly: true,
 						samesite: "lax",
+						httponly: true,
 					});
 				},
 			},
@@ -57,7 +58,7 @@ describe("session", async () => {
 		});
 		let headers = new Headers();
 
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -198,7 +199,8 @@ describe("session", async () => {
 	});
 
 	it("should set cookies correctly on sign in after changing config", async () => {
-		const res = await client.signIn.email(
+		const headers = new Headers();
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -214,12 +216,18 @@ describe("session", async () => {
 						httponly: true,
 						samesite: "lax",
 					});
+					headers.set(
+						"cookie",
+						`better-auth.session_token=${
+							cookies.get("better-auth.session_token")?.value
+						}`,
+					);
 				},
 			},
 		);
 		const data = await client.getSession({
 			fetchOptions: {
-				headers: new Headers(),
+				headers,
 				throw: true,
 			},
 		});

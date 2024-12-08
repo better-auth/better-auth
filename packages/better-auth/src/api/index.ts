@@ -177,28 +177,28 @@ export function getEndpoints<
 				...internalCtx,
 				...context,
 				path: endpoint.path,
-				// context: {
-				// 	...authCtx,
-				// 	...context.context,
-				// 	endpoint,
-				// 	session,
-				// },
-				context: new Proxy(authCtx, {
-					get(target, prop) {
-						if (prop === "session") {
-							return session;
-						}
-						return Reflect.get(target, prop);
+				context: new Proxy(
+					{
+						...authCtx,
+						...context.context,
 					},
-					set(target, prop, value) {
-						if (prop === "session") {
+					{
+						get(target, prop) {
+							if (prop === "session") {
+								return session;
+							}
+							return Reflect.get(target, prop);
+						},
+						set(target, prop, value) {
 							console.log("set", prop, value);
-							session = value;
-							return true;
-						}
-						return Reflect.set(target, prop, value);
+							if (prop === "session") {
+								session = value;
+								return true;
+							}
+							return Reflect.set(target, prop, value);
+						},
 					},
-				}),
+				),
 			};
 
 			authCtx.session = null;
