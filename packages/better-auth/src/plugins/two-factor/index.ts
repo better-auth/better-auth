@@ -21,6 +21,7 @@ import {
 } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { schema } from "./schema";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -45,6 +46,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 		},
 		opts.twoFactorTable,
 	);
+
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -105,7 +107,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid password",
+							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
