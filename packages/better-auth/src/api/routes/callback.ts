@@ -54,6 +54,7 @@ export const callbackOAuth = createAuthEndpoint(
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
 		);
+
 		if (!provider) {
 			c.context.logger.error(
 				"Oauth provider with id",
@@ -65,6 +66,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
+
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
