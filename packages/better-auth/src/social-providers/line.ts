@@ -12,50 +12,48 @@ export interface LineProfile extends Record<string, any> {
 }
 
 interface LineOpenIDInfo {
-    // Required claims
-    /**
-     * Line user ID
-     */
-    sub: string;
-    /**
-     * Issuer identifier (should be https://access.line.me)
-     */
-    iss: string;
-    /**
-     * OAuth 2.0 client ID
-     */
-    aud: string;
-    /**
-     * Expiration time
-     */
-    exp: number;
-    /**
-     * Issued at time
-     */
-    iat: number; 
-    
-    // Optional standard claims
-    name?: string;
-    picture?: string;
-    email?: string;
-    email_verified?: boolean;
-    
-    // Line-specific claims
-    /**
-     * Authentication methods references
-     */
-    amr?: string[];
-    /**
-     * Time of authentication
-     */
-    auth_time?: number;
-    /**
-     * Value used to prevent replay attacks
-     */
-    nonce?: string;
+	// Required claims
+	/**
+	 * Line user ID
+	 */
+	sub: string;
+	/**
+	 * Issuer identifier (should be https://access.line.me)
+	 */
+	iss: string;
+	/**
+	 * OAuth 2.0 client ID
+	 */
+	aud: string;
+	/**
+	 * Expiration time
+	 */
+	exp: number;
+	/**
+	 * Issued at time
+	 */
+	iat: number;
+
+	// Optional standard claims
+	name?: string;
+	picture?: string;
+	email?: string;
+	email_verified?: boolean;
+
+	// Line-specific claims
+	/**
+	 * Authentication methods references
+	 */
+	amr?: string[];
+	/**
+	 * Time of authentication
+	 */
+	auth_time?: number;
+	/**
+	 * Value used to prevent replay attacks
+	 */
+	nonce?: string;
 }
-
-
 
 export interface LineOptions extends ProviderOptions<LineProfile> {
 	/**
@@ -68,38 +66,38 @@ export interface LineOptions extends ProviderOptions<LineProfile> {
 	// authentication_method?: "auto-login" | "email-address" | "QR-code" | "SSO";
 	prompt?: "none" | "consent";
 	/**
-     * If set to true, auto login will be disabled. The default value is false.
-     * When this value is true, Single Sign On (SSO) login will be displayed if SSO is available, and log in with email address will be displayed if it is not available.
-     */
+	 * If set to true, auto login will be disabled. The default value is false.
+	 * When this value is true, Single Sign On (SSO) login will be displayed if SSO is available, and log in with email address will be displayed if it is not available.
+	 */
 	disable_auto_login?: boolean;
-    /**
-     * If set to true, auto login will be disabled in iOS. The default value is false. We recommend using the disable_auto_login parameter, which was added later.
-     */
-    disable_ios_auto_login?: boolean;
-    /**
-     * If `lineqr` is specified, Log in with QR code will be displayed by default instead of Log in with email address.
-     */
-    initial_amr_display?: String;
-    /**
-     * If set to `false`, hide the buttons for changing the login method, such as "Log in with email" or "QR code login". The default value is `true`.
-     */
-    switch_amr?: boolean;
-    /**
-     * Display language for LINE Login screens. Specify as one or more [RFC 5646 (BCP 47)](https://datatracker.ietf.org/doc/html/rfc5646) 
-     * language tags, separated by spaces, in order of preference. 
-     * Corresponds to the ui_locales parameter defined in the "Authentication Request" section of [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html).
-     */
-    ui_locales?: string;
-    /**
-     * The allowable elapsed time in seconds since the last time the user was authenticated.
-     * Corresponds to the max_age parameter defined in the "Authentication Request" section of [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html).
-     */
-    max_age?: number;
-    /**
-     * A string used to prevent [replay attacks](https://en.wikipedia.org/wiki/Replay_attack).
-     * This value is returned in an [ID token](https://developers.line.biz/en/docs/line-login/verify-id-token/#id-tokens).
-     */
-    nonce?: string;
+	/**
+	 * If set to true, auto login will be disabled in iOS. The default value is false. We recommend using the disable_auto_login parameter, which was added later.
+	 */
+	disable_ios_auto_login?: boolean;
+	/**
+	 * If `lineqr` is specified, Log in with QR code will be displayed by default instead of Log in with email address.
+	 */
+	initial_amr_display?: String;
+	/**
+	 * If set to `false`, hide the buttons for changing the login method, such as "Log in with email" or "QR code login". The default value is `true`.
+	 */
+	switch_amr?: boolean;
+	/**
+	 * Display language for LINE Login screens. Specify as one or more [RFC 5646 (BCP 47)](https://datatracker.ietf.org/doc/html/rfc5646)
+	 * language tags, separated by spaces, in order of preference.
+	 * Corresponds to the ui_locales parameter defined in the "Authentication Request" section of [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html).
+	 */
+	ui_locales?: string;
+	/**
+	 * The allowable elapsed time in seconds since the last time the user was authenticated.
+	 * Corresponds to the max_age parameter defined in the "Authentication Request" section of [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html).
+	 */
+	max_age?: number;
+	/**
+	 * A string used to prevent [replay attacks](https://en.wikipedia.org/wiki/Replay_attack).
+	 * This value is returned in an [ID token](https://developers.line.biz/en/docs/line-login/verify-id-token/#id-tokens).
+	 */
+	nonce?: string;
 }
 
 export const line = (options: LineOptions) => {
@@ -150,18 +148,19 @@ export const line = (options: LineOptions) => {
 			}
 
 			// Then get OpenID user info which includes email
-			const { data: openIdInfo, error: openIdError } = await betterFetch<LineOpenIDInfo>(
-				"https://api.line.me/oauth2/v2.1/userinfo",
-				{
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
+			const { data: openIdInfo, error: openIdError } =
+				await betterFetch<LineOpenIDInfo>(
+					"https://api.line.me/oauth2/v2.1/userinfo",
+					{
+						headers: {
+							authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 
 			if (openIdError) {
 				// console.error("Failed to fetch Line OpenID info:", openIdError);
-                return null;
+				return null;
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
