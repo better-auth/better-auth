@@ -127,8 +127,9 @@ export const init = async (options: BetterAuthOptions) => {
 			checkPassword,
 		},
 		setGlobalSession(session) {
-			// will be passed when endpoints are called
+			this.session = session;
 		},
+		newSession: null,
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,

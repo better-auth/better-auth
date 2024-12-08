@@ -268,12 +268,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const data = ctx.context.session;
-						console.log("data", data);
+
 						if (!data) {
 							return;
 						}
 
-						if (data?.user.twoFactorEnabled) {
+						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
 						// Check for trust device cookie

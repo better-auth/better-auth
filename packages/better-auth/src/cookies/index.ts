@@ -106,7 +106,6 @@ export async function setSessionCookie(
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
-
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
@@ -117,6 +116,7 @@ export async function setSessionCookie(
 			...overrides,
 		},
 	);
+
 	if (dontRememberMe) {
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.dontRememberToken.name,
@@ -149,6 +149,7 @@ export async function setSessionCookie(
 			),
 			ctx.context.authCookies.sessionData.options,
 		);
+	ctx.context.setGlobalSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
 	 * This is useful if the session got updated and we want to update the session data in the
