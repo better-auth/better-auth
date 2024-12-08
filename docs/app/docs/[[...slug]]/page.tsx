@@ -14,7 +14,6 @@ import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
-import { AutoTypeTable } from "fumadocs-typescript/ui";
 
 export default async function Page({
 	params,
@@ -70,7 +69,6 @@ export default async function Page({
 						Files,
 						Tab,
 						Tabs,
-						AutoTypeTable,
 						GenerateSecret,
 						AnimatePresence,
 						TypeTable,
