@@ -1,7 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookIcon, Github, Twitter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconLink } from "../changelogs/_components/changelog-layout";
 import { GitHubIcon, XIcon } from "../changelogs/_components/icons";

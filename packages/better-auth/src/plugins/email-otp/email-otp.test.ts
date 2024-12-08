@@ -126,7 +126,7 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			password: "changed-password",
 		});
-		expect(data?.session).toBeDefined();
+		expect(data?.user).toBeDefined();
 	});
 
 	it("should fail on invalid email", async () => {

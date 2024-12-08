@@ -577,10 +577,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					},
 					async handler(ctx) {
-						const response = await getEndpointResponse<{
-							user: User;
-						}>(ctx);
-						if (!response) {
+						const response = ctx.context.newSession;
+						if (!response?.user) {
 							return;
 						}
 						if (response.user.email && response.user.emailVerified === false) {

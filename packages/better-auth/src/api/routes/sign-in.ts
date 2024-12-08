@@ -303,9 +303,6 @@ export const signInEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										session: {
-											type: "string",
-										},
 										user: {
 											type: "object",
 										},
@@ -432,8 +429,15 @@ export const signInEmail = createAuthEndpoint(
 			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
-			user: user.user,
-			session,
+			user: {
+				id: user.user.id,
+				email: user.user.email,
+				name: user.user.name,
+				image: user.user.image,
+				emailVerified: user.user.emailVerified,
+				createdAt: user.user.createdAt,
+				updatedAt: user.user.updatedAt,
+			},
 			redirect: !!ctx.body.callbackURL,
 			url: ctx.body.callbackURL,
 		});

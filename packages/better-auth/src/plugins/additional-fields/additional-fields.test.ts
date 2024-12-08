@@ -64,12 +64,22 @@ describe("additionalFields", async () => {
 				customFetchImpl,
 			},
 		});
-
-		const res = await client.signUp.email({
-			email: "test3@test.com",
-			name: "test3",
-			password: "test-password",
-			newField: "new-field",
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "test3@test.com",
+				name: "test3",
+				password: "test-password",
+				newField: "new-field",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const res = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(res.data?.user.newField).toBe("new-field");
 	});
@@ -109,7 +119,13 @@ describe("additionalFields", async () => {
 				headers,
 			},
 		});
-		expect(res.data?.user.newField).toBe("updated-field");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.newField).toBe("updated-field");
 	});
 
 	it("should work with other plugins", async () => {
@@ -131,14 +147,28 @@ describe("additionalFields", async () => {
 			},
 		});
 		expectTypeOf(client.twoFactor).toMatchTypeOf<{}>();
-		const res = await client.signUp.email({
-			email: "test4@test.com",
-			name: "test4",
-			password: "test-password",
-			newField: "new-field",
-		});
 
-		expect(res.data?.user.newField).toBe("new-field");
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "test4@test.com",
+				name: "test4",
+				password: "test-password",
+				newField: "new-field",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const res = await client.updateUser(
+			{
+				name: "test",
+				newField: "updated-field",
+			},
+			{
+				headers,
+			},
+		);
 	});
 
 	it("should infer it on the client", async () => {

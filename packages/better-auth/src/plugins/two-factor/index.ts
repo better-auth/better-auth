@@ -14,10 +14,13 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	parseSetCookieHeader,
+	setSessionCookie,
+} from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { schema } from "./schema";
-import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -42,7 +45,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 		},
 		opts.twoFactorTable,
 	);
-
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -103,7 +105,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
+							message: "Invalid password",
 						});
 					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
@@ -265,14 +267,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const response = await getEndpointResponse<{
-							user: UserWithTwoFactor;
-							session: Session;
-						}>(ctx);
-						if (!response) {
+						const data = ctx.context.newSession;
+						if (!data) {
 							return;
 						}
-						if (!response.user.twoFactorEnabled) {
+
+						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
 						// Check for trust device cookie
@@ -283,23 +283,22 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							trustDeviceCookieName.name,
 							ctx.context.secret,
 						);
-
 						if (trustDeviceCookie) {
 							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await hs256(
 								ctx.context.secret,
-								`${response.user.id}!${sessionToken}`,
+								`${data.user.id}!${sessionToken}`,
 							);
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
 								const newToken = await hs256(
 									ctx.context.secret,
-									`${response.user.id}!${response.session.token}`,
+									`${data.user.id}!${data.session.token}`,
 								);
 								await ctx.setSignedCookie(
 									trustDeviceCookieName.name,
-									`${newToken}!${response.session.token}`,
+									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
 									trustDeviceCookieName.attributes,
 								);
@@ -311,9 +310,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * remove the session cookie. It's set by the sign in credential
 						 */
 						deleteSessionCookie(ctx);
-						await ctx.context.internalAdapter.deleteSession(
-							response.session.token,
-						);
+						await ctx.context.internalAdapter.deleteSession(data.session.token);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
@@ -328,7 +325,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							response.user.id,
+							data.user.id,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);

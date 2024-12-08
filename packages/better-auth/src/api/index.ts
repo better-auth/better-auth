@@ -10,7 +10,7 @@ import {
 	setSignedCookie,
 } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
@@ -43,6 +43,7 @@ import { error } from "./routes/error";
 import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
+import defu from "defu";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -172,6 +173,7 @@ export function getEndpoints<
 
 			let authCtx = await ctx;
 
+			let newSession = null;
 			let internalContext = {
 				...internalCtx,
 				...context,
@@ -179,11 +181,18 @@ export function getEndpoints<
 				context: {
 					...authCtx,
 					...context.context,
-					endpoint,
+					session: null,
+					setNewSession: function (
+						session: {
+							session: Session;
+							user: User;
+						} | null,
+					) {
+						newSession = session;
+					},
 				},
 			};
 
-			authCtx.session = null;
 			const plugins = options.plugins || [];
 			for (const plugin of plugins) {
 				const beforeHooks = plugin.hooks?.before ?? [];
@@ -192,10 +201,7 @@ export function getEndpoints<
 					const hookRes = await hook.handler(internalContext);
 					if (hookRes && "context" in hookRes) {
 						// modify the context with the response from the hook
-						internalContext = {
-							...internalContext,
-							...hookRes.context,
-						};
+						internalContext = defu(internalContext, hookRes.context);
 						continue;
 					}
 
@@ -210,6 +216,9 @@ export function getEndpoints<
 			try {
 				//@ts-ignore
 				endpointRes = await endpoint(internalContext);
+				if (newSession) {
+					internalContext.context.newSession = newSession;
+				}
 			} catch (e) {
 				if (e instanceof APIError) {
 					const afterPlugins = options.plugins
