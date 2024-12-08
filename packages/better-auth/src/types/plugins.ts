@@ -3,7 +3,7 @@ import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from "./context";
-import type { DeepPartial, LiteralString } from "./helper";
+import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
 import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
@@ -137,6 +137,10 @@ export type BetterAuthPlugin = {
 		max: number;
 		pathMatcher: (path: string) => boolean;
 	}[];
+	/**
+	 * The error codes returned by the plugin
+	 */
+	$ERROR_CODES?: Record<string, string>;
 };
 
 export type InferOptionSchema<S extends PluginSchema> = S extends Record<
@@ -152,3 +156,14 @@ export type InferOptionSchema<S extends PluginSchema> = S extends Record<
 			};
 		}
 	: never;
+
+export type InferPluginErrorCodes<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? UnionToIntersection<
+				P extends BetterAuthPlugin
+					? P["$ERROR_CODES"] extends Record<string, any>
+						? P["$ERROR_CODES"]
+						: {}
+					: {}
+			>
+		: {};

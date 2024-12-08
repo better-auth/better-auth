@@ -12,6 +12,7 @@ import type {
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -102,13 +103,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Invalid email",
-				});
-			}
-
-			if (typeof password !== "string") {
-				throw new APIError("BAD_REQUEST", {
-					message: "Password must be a string",
+					message: BASE_ERROR_CODES.INVALID_EMAIL,
 				});
 			}
 
@@ -116,7 +111,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			if (password.length < minPasswordLength) {
 				ctx.context.logger.error("Password is too short");
 				throw new APIError("BAD_REQUEST", {
-					message: "Password is too short",
+					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
 				});
 			}
 
@@ -124,14 +119,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			if (password.length > maxPasswordLength) {
 				ctx.context.logger.error("Password is too long");
 				throw new APIError("BAD_REQUEST", {
-					message: "Password is too long",
+					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 				});
 			}
 			const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (dbUser?.user) {
 				ctx.context.logger.info(`Sign-up attempt for existing email: ${email}`);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: "User with this email already exists",
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
 				});
 			}
 
@@ -139,21 +134,30 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options,
 				additionalFields as any,
 			);
-			const createdUser = await ctx.context.internalAdapter.createUser({
-				email: email.toLowerCase(),
-				name,
-				image,
-				...additionalData,
-				emailVerified: false,
-			});
-			if (!createdUser) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Failed to create user",
+			let createdUser: User;
+			try {
+				createdUser = await ctx.context.internalAdapter.createUser({
+					email: email.toLowerCase(),
+					name,
+					image,
+					...additionalData,
+					emailVerified: false,
+				});
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+					});
+				}
+			} catch (e) {
+				ctx.context.logger.error("Failed to create user", e);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+					details: e,
 				});
 			}
 			if (!createdUser) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
-					message: "Failed to create user",
+					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
 			/**
@@ -202,7 +206,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			);
 			if (!session) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Failed to create session",
+					message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				});
 			}
 			await setSessionCookie(ctx, {

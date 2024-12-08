@@ -6,6 +6,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { type InferRolesFromOption } from "../schema";
 import { APIError } from "better-call";
 import type { OrganizationOptions } from "../organization";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 
 export const createInvitation = <O extends OrganizationOptions | undefined>(
 	option: O,
@@ -99,7 +100,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Organization not found",
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -109,13 +110,13 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			});
 			if (!member) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Member not found!",
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
 			const role = ctx.context.roles[member.role];
 			if (!role) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Role not found!",
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
 			const canInvite = role.authorize({
@@ -123,7 +124,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			});
 			if (canInvite.error) {
 				throw new APIError("FORBIDDEN", {
-					message: "You are not allowed to invite members",
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 				});
 			}
 			const alreadyMember = await adapter.findMemberByEmail({
@@ -132,7 +134,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			});
 			if (alreadyMember) {
 				throw new APIError("BAD_REQUEST", {
-					message: "User is already a member of this organization",
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
 			const alreadyInvited = await adapter.findPendingInvitation({
@@ -141,7 +144,8 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 			});
 			if (alreadyInvited.length && !ctx.body.resend) {
 				throw new APIError("BAD_REQUEST", {
-					message: "User is already invited to this organization",
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
 			const invitation = await adapter.createInvitation({
@@ -157,7 +161,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Organization not found",
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
 
@@ -224,12 +228,13 @@ export const acceptInvitation = createAuthEndpoint(
 			invitation.status !== "pending"
 		) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invitation not found!",
+				message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 			});
 		}
 		if (invitation.email !== session.user.email) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not the recipient of the invitation",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 			});
 		}
 		const acceptedI = await adapter.updateInvitation({
@@ -250,7 +255,7 @@ export const acceptInvitation = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "Invitation not found!",
+					message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				},
 			});
 		}
@@ -311,7 +316,8 @@ export const rejectInvitation = createAuthEndpoint(
 		}
 		if (invitation.email !== session.user.email) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not the recipient of the invitation",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 			});
 		}
 		const rejectedI = await adapter.updateInvitation({
@@ -362,7 +368,7 @@ export const cancelInvitation = createAuthEndpoint(
 		const invitation = await adapter.findInvitationById(ctx.body.invitationId);
 		if (!invitation) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invitation not found!",
+				message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 			});
 		}
 		const member = await adapter.findMemberByOrgId({
@@ -371,7 +377,7 @@ export const cancelInvitation = createAuthEndpoint(
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Member not found!",
+				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
 		const canCancel = ctx.context.roles[member.role].authorize({
@@ -379,7 +385,8 @@ export const cancelInvitation = createAuthEndpoint(
 		});
 		if (canCancel.error) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not allowed to cancel this invitation",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,
 			});
 		}
 		const canceledI = await adapter.updateInvitation({
@@ -483,7 +490,8 @@ export const getInvitation = createAuthEndpoint(
 		}
 		if (invitation.email !== session.user.email) {
 			throw new APIError("FORBIDDEN", {
-				message: "You are not the recipient of the invitation",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 			});
 		}
 		const organization = await adapter.findOrganizationById(
@@ -491,7 +499,7 @@ export const getInvitation = createAuthEndpoint(
 		);
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Organization not found",
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 			});
 		}
 		const member = await adapter.findMemberByOrgId({
@@ -500,7 +508,8 @@ export const getInvitation = createAuthEndpoint(
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Inviter is no longer a member of the organization",
+				message:
+					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
 

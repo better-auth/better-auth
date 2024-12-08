@@ -4,17 +4,19 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
+	InferErrorCodes,
 	InferSessionFromClient,
 	InferUserFromClient,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
-import type { UnionToIntersection } from "../../types/helper";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./react-store";
+import type { BASE_ERROR_CODES } from "../../error/codes";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -92,6 +94,9 @@ export function createAuthClient<Option extends ClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
 		};
 }
 

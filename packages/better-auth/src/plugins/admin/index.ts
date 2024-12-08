@@ -74,6 +74,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		adminRole: "admin",
 		...options,
 	};
+	const ERROR_CODES = {
+		FAILED_TO_CREATE_USER: "Failed to create user",
+		USER_ALREADY_EXISTS: "User already exists",
+		USER_NOT_FOUND: "User not found",
+		YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
+		ONLY_ADMINS_CAN_ACCESS_THIS_ENDPOINT:
+			"Only admins can access this endpoint",
+	} as const;
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session) {
@@ -278,7 +286,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User already exists",
+							message: ERROR_CODES.USER_ALREADY_EXISTS,
 						});
 					}
 					const user =
@@ -291,7 +299,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create user",
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const hashedPassword = await ctx.context.password.hash(
@@ -589,7 +597,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				async (ctx) => {
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
-							message: "You cannot ban yourself",
+							message: ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
 					const user = await ctx.context.internalAdapter.updateUser(
@@ -674,7 +682,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create session",
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					await setSessionCookie(
@@ -821,6 +829,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				},
 			),
 		},
+		$ERROR_CODES: ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
 	} satisfies BetterAuthPlugin;
 };

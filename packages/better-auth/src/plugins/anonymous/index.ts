@@ -12,7 +12,6 @@ import type {
 	User,
 } from "../../types";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
-import { z } from "zod";
 import { getOrigin } from "../../utils/url";
 import { mergeSchema } from "../../db/schema";
 
@@ -62,6 +61,12 @@ const schema = {
 } satisfies PluginSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
+	const ERROR_CODES = {
+		FAILED_TO_CREATE_USER: "Failed to create user",
+		COULD_NOT_CREATE_SESSION: "Could not create session",
+		ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
+			"Anonymous users cannot sign in again anonymously",
+	} as const;
 	return {
 		id: "anonymous",
 		endpoints: {
@@ -113,7 +118,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						return ctx.json(null, {
 							status: 500,
 							body: {
-								message: "Failed to create user",
+								message: ERROR_CODES.FAILED_TO_CREATE_USER,
 								status: 500,
 							},
 						});
@@ -126,7 +131,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						return ctx.json(null, {
 							status: 400,
 							body: {
-								message: "Could not create session",
+								message: ERROR_CODES.COULD_NOT_CREATE_SESSION,
 							},
 						});
 					}
@@ -175,7 +180,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 						}
 						if (ctx.path === "/sign-in/anonymous") {
 							throw new APIError("BAD_REQUEST", {
-								message: "Anonymous users cannot sign in again anonymously",
+								message:
+									ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 							});
 						}
 
@@ -198,5 +204,6 @@ export const anonymous = (options?: AnonymousOptions) => {
 			],
 		},
 		schema: mergeSchema(schema, options?.schema),
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
