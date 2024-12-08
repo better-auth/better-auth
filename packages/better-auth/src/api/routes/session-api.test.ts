@@ -5,7 +5,7 @@ import { getDate } from "../../utils/date";
 import { memoryAdapter, type MemoryDB } from "../../adapters/memory-adapter";
 
 describe("session", async () => {
-	const { client, testUser, sessionSetter, cookieSetter } =
+	const { client, testUser, sessionSetter, cookieSetter, auth } =
 		await getTestInstance();
 
 	it("should set cookies correctly on sign in", async () => {
