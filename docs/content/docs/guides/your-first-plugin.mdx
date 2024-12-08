@@ -176,7 +176,7 @@ First, let's create our `client.ts` file first:
 Then, add the following code:
 ```ts title="client.ts"
 import { BetterAuthClientPlugin } from "better-auth";
-import { birthdayPlugin } from "./index";
+import type { birthdayPlugin } from "./index"; // make sure to import the server plugin as a type / [!code highlight]
 
 type BirthdayPlugin = typeof birthdayPlugin;
 
