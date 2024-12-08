@@ -52,6 +52,6 @@ describe("anonymous", async () => {
 		await client.signIn.email(testUser, {
 			headers,
 		});
-		expect(linkAccountFn).toHaveBeenCalled();
+		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 });

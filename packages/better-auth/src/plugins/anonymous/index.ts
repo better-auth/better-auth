@@ -187,8 +187,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						}
 
 						if (options?.onLinkAccount) {
-							const newSession =
-								await ctx.context.internalAdapter.findSession(sessionCookie);
+							const newSession = ctx.context.newSession;
 							if (!newSession) {
 								return;
 							}
