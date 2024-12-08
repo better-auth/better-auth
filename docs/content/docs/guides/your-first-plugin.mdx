@@ -63,6 +63,7 @@ export const birthdayPlugin = () =>
 
 ```
 Although this does nothing, you have technically just made yourself your first plugin, congratulations! 🎉
+
 </Step>
 
 <Step>
@@ -94,6 +95,7 @@ export const birthdayPlugin = () =>
     },
   } satisfies BetterAuthPlugin);
 ```
+
 </Step>
 
 <Step>
@@ -144,7 +146,7 @@ import { createAuthMiddleware } from "better-auth/plugins";
     const today = new Date();
     const fiveYearsAgo = new Date(today.setFullYear(today.getFullYear() - 5));
 
-    if(birthday <= fiveYearsAgo) throw APIError("BAD_REQUEST", { message: "User must be above 5 years old." })
+    if(birthday <= fiveYearsAgo) throw APIError("BAD_REQUEST", { message: "User must be above 5 years old." });
 
     return { context: ctx };
   }),
@@ -154,6 +156,7 @@ import { createAuthMiddleware } from "better-auth/plugins";
 **Authorized!** 🔒
 
 We've now successfully written code to ensure authorization for users above 5!
+
 </Step>
 
 <Step>
@@ -187,6 +190,7 @@ export const birthdayClientPlugin = () => {
 What we've done is allow the client plugin to infer the types defined by our schema from the server plugin.
 
 And that's it!  This is all it takes for the birthday client plugin. 🎂
+
 </Step>
 
 <Step>
@@ -202,7 +206,7 @@ export const auth = betterAuth({
     plugins: [
       birthdayPlugin(),
     ]
-})
+});
 ```
 
 ### Client initiation
@@ -210,11 +214,11 @@ export const auth = betterAuth({
 import { createAuthClient } from "better-auth/client";
 import { birthdayClientPlugin } from "./birthday-plugin/client";
  
-const authClient =  createAuthClient({
+const authClient = createAuthClient({
     plugins: [
       birthdayClientPlugin()
     ]
-})
+});
 ```
 
 ### Oh yeah, the schemas! 
@@ -226,11 +230,6 @@ npx @better-auth/cli@latest generate
 ```
 
 </Step>
-
-
-
-
-
 </Steps>
 
 ## Wrapping Up
