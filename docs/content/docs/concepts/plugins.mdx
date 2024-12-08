@@ -20,10 +20,11 @@ export const auth = betterAuth({
     plugins: [
         // Add your plugins here
     ]
-})
+});
 ```
 
 Client plugins are added when creating the client. Most plugin require both server and client plugins to work correctly.
+The Better-Auth auth client on the frontend uses the `createAuthClient` function provided by `better-auth/client`.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -32,8 +33,16 @@ const authClient =  createAuthClient({
     plugins: [
         // Add your client plugins here
     ]
-})
+});
 ```
+
+We recommend keeping the auth-client and your normal auth instance in separate files.
+<Files>
+  <Folder name="auth" defaultOpen>
+    <File name="server.ts" />
+    <File name="auth-client.ts" />
+  </Folder>
+</Files>
 
 ## Creating a Plugin
 
