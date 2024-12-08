@@ -37,6 +37,7 @@ export type InferSessionAPI<API> = API extends {
 								query?: {
 									disableCookieCache?: boolean;
 								};
+								asResponse?: boolean;
 							}) => Promise<PrettifyDeep<Awaited<ReturnType<E>>>>) & {
 								options: E["options"];
 								path: E["path"];
