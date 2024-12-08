@@ -13,7 +13,7 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
-import { File, Folder, Files } from 'fumadocs-ui/components/files';
+import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 
 export default async function Page({
@@ -65,7 +65,9 @@ export default async function Page({
 						),
 						Step,
 						Steps,
-						File, Folder, Files,
+						File,
+						Folder,
+						Files,
 						Tab,
 						Tabs,
 						AutoTypeTable,
