@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { INVALID, z } from "zod";
 import { APIError, createAuthEndpoint } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
 import { alphabet, generateRandomString } from "../../crypto";
@@ -49,6 +49,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		otpLength: 6,
 		...options,
 	};
+	const ERROR_CODES = {
+		OTP_EXPIRED: "otp expired",
+		INVALID_OTP: "invalid otp",
+		INVALID_EMAIL: "invalid email",
+		USER_NOT_FOUND: "user not found",
+	} as const;
 	return {
 		id: "email-otp",
 		endpoints: {
@@ -100,7 +106,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid email",
+							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
@@ -522,7 +528,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const verificationValue =
@@ -536,13 +542,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							);
 						}
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -597,5 +603,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			],
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

@@ -17,6 +17,7 @@ import type {
 } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { alphabet, generateRandomString } from "../../crypto";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -82,7 +83,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 
 			if (body.email) {
 				throw new APIError("BAD_REQUEST", {
-					message: "You can't update email",
+					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
 				});
 			}
 			const { name, image, ...rest } = body;
@@ -189,7 +190,7 @@ export const changePassword = createAuthEndpoint(
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
 			throw new APIError("BAD_REQUEST", {
-				message: "Password is too short",
+				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
 			});
 		}
 
@@ -198,7 +199,7 @@ export const changePassword = createAuthEndpoint(
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
 			throw new APIError("BAD_REQUEST", {
-				message: "Password too long",
+				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 			});
 		}
 
@@ -210,7 +211,7 @@ export const changePassword = createAuthEndpoint(
 		);
 		if (!account || !account.password) {
 			throw new APIError("BAD_REQUEST", {
-				message: "User does not have a password",
+				message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
 			});
 		}
 		const passwordHash = await ctx.context.password.hash(newPassword);
@@ -220,7 +221,7 @@ export const changePassword = createAuthEndpoint(
 		});
 		if (!verify) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Incorrect password",
+				message: BASE_ERROR_CODES.INVALID_PASSWORD,
 			});
 		}
 		await ctx.context.internalAdapter.updateAccount(account.id, {
@@ -234,7 +235,7 @@ export const changePassword = createAuthEndpoint(
 			);
 			if (!newSession) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "Unable to create session",
+					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				});
 			}
 			// set the new session cookie
@@ -270,7 +271,7 @@ export const setPassword = createAuthEndpoint(
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
 			throw new APIError("BAD_REQUEST", {
-				message: "Password is too short",
+				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
 			});
 		}
 
@@ -279,7 +280,7 @@ export const setPassword = createAuthEndpoint(
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
 			throw new APIError("BAD_REQUEST", {
-				message: "Password too long",
+				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 			});
 		}
 
@@ -398,7 +399,7 @@ export const deleteUserCallback = createAuthEndpoint(
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("NOT_FOUND", {
-				message: "No session found",
+				message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			});
 		}
 		const token = await ctx.context.internalAdapter.findVerificationValue(
@@ -409,12 +410,12 @@ export const deleteUserCallback = createAuthEndpoint(
 				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 			}
 			throw new APIError("NOT_FOUND", {
-				message: "Invalid token",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 		if (token.value !== session.user.id) {
 			throw new APIError("NOT_FOUND", {
-				message: "Invalid token",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;

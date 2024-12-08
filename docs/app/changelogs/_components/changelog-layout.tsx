@@ -122,7 +122,7 @@ export function IconLink({
 			{...props}
 			className={clsx(
 				className,
-				"group relative isolate flex items-center rounded-lg px-2 py-0.5 text-[0.8125rem]/6 font-medium text-black/70 dark:text-white/30 transition-colors hover:text-stone-300",
+				"group relative isolate flex items-center px-2 py-0.5 text-[0.8125rem]/6 font-medium text-black/70 dark:text-white/30 transition-colors hover:text-stone-300 rounded-none",
 				compact ? "gap-x-2" : "gap-x-3",
 			)}
 		>

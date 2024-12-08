@@ -5,8 +5,15 @@ import { APIError } from "better-call";
 import type { Account, User } from "../../db/schema";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
+import { BASE_ERROR_CODES } from "../../error/codes";
+import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
 
 export const username = () => {
+	const ERROR_CODES = {
+		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
+		EMAIL_NOT_VERIFIED: "email not verified",
+		UNEXPECTED_ERROR: "unexpected error",
+	};
 	return {
 		id: "username",
 		endpoints: {
@@ -68,7 +75,7 @@ export const username = () => {
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid username or password",
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 
@@ -78,7 +85,7 @@ export const username = () => {
 					) {
 						await sendVerificationEmailFn(ctx, user);
 						throw new APIError("UNAUTHORIZED", {
-							message: "Email not verified",
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 
@@ -97,14 +104,14 @@ export const username = () => {
 					});
 					if (!account) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid username or password",
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", { username });
 						throw new APIError("UNAUTHORIZED", {
-							message: "Unexpected error",
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -114,7 +121,7 @@ export const username = () => {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid username or password",
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -126,7 +133,7 @@ export const username = () => {
 						return ctx.json(null, {
 							status: 500,
 							body: {
-								message: "Failed to create session",
+								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 								status: 500,
 							},
 						});
@@ -160,5 +167,6 @@ export const username = () => {
 				},
 			},
 		},
+		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

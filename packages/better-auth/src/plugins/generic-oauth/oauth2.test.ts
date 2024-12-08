@@ -39,6 +39,7 @@ describe("oauth2", async () => {
 							"http://localhost:8080/.well-known/openid-configuration",
 						clientId: clientId,
 						clientSecret: clientSecret,
+						pkce: true,
 					},
 				],
 			}),
@@ -64,7 +65,11 @@ describe("oauth2", async () => {
 		userInfoResponse.statusCode = 200;
 	});
 
-	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+	async function simulateOAuthFlow(
+		authUrl: string,
+		headers: Headers,
+		fetchImpl?: (...args: any) => any,
+	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
 			method: "GET",
@@ -79,7 +84,7 @@ describe("oauth2", async () => {
 		let callbackURL = "";
 		await betterFetch(location, {
 			method: "GET",
-			customFetchImpl,
+			customFetchImpl: fetchImpl || customFetchImpl,
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
@@ -164,22 +169,43 @@ describe("oauth2", async () => {
 	});
 
 	it("should work with custom redirect uri", async () => {
-		const {} = await getTestInstance({
+		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
 						{
-							providerId,
+							providerId: "test2",
 							discoveryUrl:
-								server.issuer.url ||
 								"http://localhost:8080/.well-known/openid-configuration",
 							clientId: clientId,
 							clientSecret: clientSecret,
-							redirectURI: "http://localhost:3000/callback/",
+							redirectURI: "http://localhost:3000/api/auth/callback/test2",
+							pkce: true,
 						},
 					],
 				}),
 			],
 		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test2",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 });

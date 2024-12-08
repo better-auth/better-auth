@@ -4,6 +4,7 @@ import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 function redirectError(
 	ctx: AuthContext,
@@ -241,7 +242,7 @@ export const resetPassword = createAuthEndpoint(
 				: "");
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Token not found",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 
@@ -252,7 +253,7 @@ export const resetPassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.findVerificationValue(id);
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);

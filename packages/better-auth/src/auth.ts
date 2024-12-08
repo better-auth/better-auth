@@ -2,6 +2,7 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type {
+	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
@@ -9,11 +10,20 @@ import type {
 } from "./types";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types/api";
+import { BASE_ERROR_CODES } from "./error/codes";
 
 export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
-
+	const errorCodes = options.plugins?.reduce((acc, plugin) => {
+		if (plugin.$ERROR_CODES) {
+			return {
+				...acc,
+				...plugin.$ERROR_CODES,
+			};
+		}
+		return acc;
+	}, {});
 	return {
 		handler: async (request: Request) => {
 			const ctx = await authContext;
@@ -42,6 +52,10 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
+		$ErrorCodes: {
+			...errorCodes,
+			...BASE_ERROR_CODES,
+		} as InferPluginErrorCodes<O> & typeof BASE_ERROR_CODES,
 	};
 };
 
@@ -49,4 +63,5 @@ export type Auth = {
 	handler: (request: Request) => Promise<Response>;
 	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
+	$ERROR_CODES: typeof BASE_ERROR_CODES;
 };

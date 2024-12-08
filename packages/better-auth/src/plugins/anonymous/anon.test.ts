@@ -6,22 +6,23 @@ import { anonymousClient } from "./client";
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, sessionSetter, testUser } = await getTestInstance({
-		plugins: [
-			anonymous({
-				async onLinkAccount(data) {
-					linkAccountFn(data);
-				},
-				schema: {
-					user: {
-						fields: {
-							isAnonymous: "is_anon",
+	const { customFetchImpl, auth, sessionSetter, testUser } =
+		await getTestInstance({
+			plugins: [
+				anonymous({
+					async onLinkAccount(data) {
+						linkAccountFn(data);
+					},
+					schema: {
+						user: {
+							fields: {
+								isAnonymous: "is_anon",
+							},
 						},
 					},
-				},
-			}),
-		],
-	});
+				}),
+			],
+		});
 	const headers = new Headers();
 	const client = createAuthClient({
 		plugins: [anonymousClient()],

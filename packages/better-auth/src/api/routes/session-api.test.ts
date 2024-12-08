@@ -447,8 +447,9 @@ describe("cookie cache", async () => {
 
 	it("should cache cookies", async () => {});
 	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	const headers = new Headers();
 	it("should cache cookies", async () => {
-		const headers = new Headers();
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -477,5 +478,24 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("should disable cookie cache", async () => {
+		await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(1);
+		const session = await client.getSession({
+			query: {
+				disableCookieCache: true,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(3);
 	});
 });

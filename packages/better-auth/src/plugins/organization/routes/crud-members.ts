@@ -8,6 +8,8 @@ import type { User } from "../../../db/schema";
 import { generateId } from "../../../utils";
 import type { OrganizationOptions } from "../organization";
 import { getSessionFromCtx } from "../../../api";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { BASE_ERROR_CODES } from "../../../error/codes";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -38,7 +40,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "No active organization found!",
+						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					},
 				});
 			}
@@ -51,7 +53,7 @@ export const addMember = <O extends OrganizationOptions>() =>
 
 			if (!user) {
 				throw new APIError("BAD_REQUEST", {
-					message: "User not found!",
+					message: BASE_ERROR_CODES.USER_NOT_FOUND,
 				});
 			}
 
@@ -61,7 +63,8 @@ export const addMember = <O extends OrganizationOptions>() =>
 			});
 			if (alreadyMember) {
 				throw new APIError("BAD_REQUEST", {
-					message: "User is already a member of this organization",
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
 
@@ -143,7 +146,7 @@ export const removeMember = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "No active organization found!",
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				},
 			});
 		}
@@ -154,13 +157,13 @@ export const removeMember = createAuthEndpoint(
 		});
 		if (!member) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Member not found!",
+				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
 		const role = ctx.context.roles[member.role];
 		if (!role) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Role not found!",
+				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 			});
 		}
 		const isLeaving =
@@ -171,7 +174,8 @@ export const removeMember = createAuthEndpoint(
 			member.role === (ctx.context.orgOptions?.creatorRole || "owner");
 		if (isOwnerLeaving) {
 			throw new APIError("BAD_REQUEST", {
-				message: "You cannot leave the organization as the owner",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 			});
 		}
 
@@ -182,7 +186,8 @@ export const removeMember = createAuthEndpoint(
 			}).success;
 		if (!canDeleteMember) {
 			throw new APIError("UNAUTHORIZED", {
-				message: "You are not allowed to delete this member",
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
 			});
 		}
 		let existing: Member | null = null;
@@ -196,7 +201,7 @@ export const removeMember = createAuthEndpoint(
 		}
 		if (existing?.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Member not found!",
+				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
 		await adapter.deleteMember(existing.id);
@@ -273,7 +278,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "No active organization found!",
+						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 					},
 				});
 			}
@@ -286,7 +291,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "Member not found!",
+						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					},
 				});
 			}
@@ -295,7 +300,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "Role not found!",
+						message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 					},
 				});
 			}
@@ -325,7 +330,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "Member not found!",
+						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					},
 				});
 			}
@@ -378,7 +383,7 @@ export const getActiveMember = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "No active organization found!",
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				},
 			});
 		}
@@ -391,7 +396,7 @@ export const getActiveMember = createAuthEndpoint(
 			return ctx.json(null, {
 				status: 400,
 				body: {
-					message: "Member not found!",
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				},
 			});
 		}

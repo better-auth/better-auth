@@ -5,17 +5,19 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
+	InferErrorCodes,
 	InferSessionFromClient,
 	InferUserFromClient,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
-import type { UnionToIntersection } from "../../types/helper";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type { Atom } from "nanostores";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
+import type { BASE_ERROR_CODES } from "../../error/codes";
 
 type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 	infer Plugin
@@ -83,5 +85,8 @@ export function createAuthClient<Option extends ClientOptions>(
 			$Infer: {
 				Session: NonNullable<Session>;
 			};
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
 		};
 }

@@ -13,6 +13,7 @@ import type {
 	UserWithTwoFactor,
 } from "../types";
 import { setSessionCookie } from "../../../cookies";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 
 export type TOTPOptions = {
 	/**
@@ -93,7 +94,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
 			const totp = new TOTPController(opts);
@@ -157,7 +158,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor || !user.twoFactorEnabled) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
 			await ctx.context.password.checkPassword(user.id, ctx);
@@ -228,7 +229,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
 			const totp = new TOTPController(opts);
