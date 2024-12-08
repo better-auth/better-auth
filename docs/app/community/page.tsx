@@ -34,7 +34,7 @@ export default function CommunityPage() {
 								Chat in real-time, collaborate, and connect with other members.
 							</p>
 							<Link
-								href="https://discord.gg/YourInviteLink"
+								href="https://discord.gg/GYC3W7tZzb"
 								target="_blank"
 								rel="noopener noreferrer"
 							>
@@ -65,7 +65,7 @@ export default function CommunityPage() {
 								Join discussions, share ideas, and get help from the community.
 							</p>
 							<Link
-								href="https://discord.gg/YourInviteLink"
+								href="https://www.reddit.com/r/better_auth"
 								target="_blank"
 								rel="noopener noreferrer"
 							>
