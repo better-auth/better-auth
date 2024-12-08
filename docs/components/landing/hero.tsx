@@ -80,7 +80,7 @@ export default function Hero() {
 							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden border border-white/5">
 								<GradientBG className="w-full flex items-center justify-between">
 									<div className="w-full flex items-center gap-2">
-										<p className="md:text-sm text-xs font-mono">
+										<p className="md:text-sm text-xs font-mono select-none">
 											<span>
 												<span className="text-[#4498c8]">git:</span>
 												<span className="text-[#F07178]">(main) </span>
