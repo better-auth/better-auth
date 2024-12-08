@@ -38,12 +38,12 @@ export type InferSessionAPI<API> = API extends {
 									disableCookieCache?: boolean;
 								};
 								asResponse?: R;
-							}) => R extends true
-								? Promise<Response>
-								: Promise<PrettifyDeep<Awaited<ReturnType<E>>>> & {
+							}) => false extends R
+								? Promise<PrettifyDeep<Awaited<ReturnType<E>>>> & {
 										options: E["options"];
 										path: E["path"];
-									};
+									}
+								: Promise<Response>;
 						}
 					: never
 				: never
