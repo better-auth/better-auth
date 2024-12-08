@@ -149,7 +149,8 @@ export const anonymous = (options?: AnonymousOptions) => {
 					matcher(context) {
 						return (
 							context.path?.startsWith("/sign-in") ||
-							context.path?.startsWith("/sign-up")
+							context.path?.startsWith("/sign-up") ||
+							context.path?.startsWith("/callback")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
