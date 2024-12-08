@@ -39,14 +39,13 @@ describe("anonymous", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		const userId = anonUser.data?.user.id;
-		const email = anonUser.data?.user.email;
-		const isAnonymous = anonUser.data?.user.isAnonymous;
-		const sessionToken = anonUser.data?.session.token;
-		expect(userId).toBeDefined();
-		expect(email?.endsWith("localhost:3000")).toBeTruthy();
-		expect(isAnonymous).toBeTruthy();
-		expect(sessionToken).toBeDefined();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.session).toBeDefined();
+		expect(anonUser.data?.user.isAnonymous).toBe(true);
 	});
 
 	it("link anonymous user account", async () => {

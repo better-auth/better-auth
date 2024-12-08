@@ -173,7 +173,7 @@ export function getEndpoints<
 
 			let authCtx = await ctx;
 
-			let globalSession = null;
+			let newSession = null;
 			let internalContext = {
 				...internalCtx,
 				...context,
@@ -182,13 +182,13 @@ export function getEndpoints<
 					...authCtx,
 					...context.context,
 					session: null,
-					setGlobalSession: function (
+					setNewSession: function (
 						session: {
 							session: Session;
 							user: User;
 						} | null,
 					) {
-						globalSession = session;
+						newSession = session;
 					},
 				},
 			};
@@ -216,8 +216,8 @@ export function getEndpoints<
 			try {
 				//@ts-ignore
 				endpointRes = await endpoint(internalContext);
-				if (globalSession) {
-					internalContext.context.session = globalSession;
+				if (newSession) {
+					internalContext.context.newSession = newSession;
 				}
 			} catch (e) {
 				if (e instanceof APIError) {

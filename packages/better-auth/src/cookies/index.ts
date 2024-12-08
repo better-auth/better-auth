@@ -149,7 +149,7 @@ export async function setSessionCookie(
 			),
 			ctx.context.authCookies.sessionData.options,
 		);
-	ctx.context.setGlobalSession(session);
+	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
 	 * This is useful if the session got updated and we want to update the session data in the

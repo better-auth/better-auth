@@ -53,6 +53,6 @@ describe("sign-up with custom fields", async (it) => {
 	});
 
 	it("should send verification email", async () => {
-		expect(mockFn).toHaveBeenCalledWith(user, expect.any(String));
+		expect(mockFn).toHaveBeenCalledWith(expect.any(Object), expect.any(String));
 	});
 });

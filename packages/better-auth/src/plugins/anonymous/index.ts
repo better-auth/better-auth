@@ -178,6 +178,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						if (!session || !session.user.isAnonymous) {
 							return;
 						}
+
 						if (ctx.path === "/sign-in/anonymous") {
 							throw new APIError("BAD_REQUEST", {
 								message:

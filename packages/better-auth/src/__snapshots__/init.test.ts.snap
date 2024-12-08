@@ -87,6 +87,7 @@ exports[`init > should match config 1`] = `
     "success": [Function],
     "warn": [Function],
   },
+  "newSession": null,
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
@@ -127,6 +128,7 @@ exports[`init > should match config 1`] = `
     "freshAge": 300,
     "updateAge": 86400,
   },
+  "setNewSession": [Function],
   "socialProviders": [],
   "tables": {
     "account": {
