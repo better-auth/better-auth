@@ -421,10 +421,10 @@ export const signInEmail = createAuthEndpoint(
 		}
 		console.log("should set here");
 		// store the session in the context
-		ctx.context.session = {
+		ctx.context.setGlobalSession({
 			session,
 			user: user.user,
-		};
+		});
 
 		await setSessionCookie(
 			ctx,

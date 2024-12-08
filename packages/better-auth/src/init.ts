@@ -126,6 +126,9 @@ export const init = async (options: BetterAuthOptions) => {
 			},
 			checkPassword,
 		},
+		setGlobalSession(session) {
+			// will be passed when endpoints are called
+		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
@@ -147,6 +150,12 @@ export type AuthContext = {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
 	} | null;
+	setGlobalSession: (
+		session: {
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null,
+	) => void;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;

@@ -10,7 +10,7 @@ import {
 	setSignedCookie,
 } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
@@ -43,6 +43,7 @@ import { error } from "./routes/error";
 import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
+import defu from "defu";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -172,33 +173,24 @@ export function getEndpoints<
 
 			let authCtx = await ctx;
 
-			let session = authCtx.session;
+			let globalSession = authCtx.session;
 			let internalContext = {
 				...internalCtx,
 				...context,
 				path: endpoint.path,
-				context: new Proxy(
-					{
-						...authCtx,
-						...context.context,
+				context: {
+					...authCtx,
+					...context.context,
+					setGlobalSession: function (
+						session: {
+							session: Session;
+							user: User;
+						} | null,
+					) {
+						console.log("setGlobalSession", session);
+						this.session = session;
 					},
-					{
-						get(target, prop) {
-							if (prop === "session") {
-								return session;
-							}
-							return Reflect.get(target, prop);
-						},
-						set(target, prop, value) {
-							console.log("set", prop, value);
-							if (prop === "session") {
-								session = value;
-								return true;
-							}
-							return Reflect.set(target, prop, value);
-						},
-					},
-				),
+				},
 			};
 
 			authCtx.session = null;
@@ -210,10 +202,7 @@ export function getEndpoints<
 					const hookRes = await hook.handler(internalContext);
 					if (hookRes && "context" in hookRes) {
 						// modify the context with the response from the hook
-						internalContext = {
-							...internalContext,
-							...hookRes.context,
-						};
+						internalContext = defu(internalContext, hookRes.context);
 						continue;
 					}
 
