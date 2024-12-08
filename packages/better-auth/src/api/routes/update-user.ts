@@ -88,7 +88,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
-			if (image === undefined && !name && Object.keys(rest).length === 0) {
+			if (image === undefined && name === undefined && Object.keys(rest).length === 0) {
 				return ctx.json({
 					id: session.user.id,
 					email: session.user.email,
