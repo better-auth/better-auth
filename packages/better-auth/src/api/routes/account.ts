@@ -4,6 +4,7 @@ import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
 import { sessionMiddleware } from "./session";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -123,7 +124,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		);
 		if (existingAccount) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Social Account is already linked.",
+				message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
 			});
 		}
 		const provider = c.context.socialProviders.find(
@@ -137,7 +138,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				},
 			);
 			throw new APIError("NOT_FOUND", {
-				message: "Provider not found",
+				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 			});
 		}
 		const state = await generateState(c, {

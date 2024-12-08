@@ -4,36 +4,35 @@ import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
 
 describe("Admin plugin", async () => {
-	const { client, auth, signInWithTestUser, signInWithUser } =
-		await getTestInstance(
-			{
-				plugins: [admin()],
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => {
-								if (user.name === "Admin") {
-									return {
-										data: {
-											...user,
-											role: "admin",
-										},
-									};
-								}
-							},
+	const { client, signInWithTestUser, signInWithUser } = await getTestInstance(
+		{
+			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
 						},
 					},
 				},
 			},
-			{
-				testUser: {
-					name: "Admin",
-				},
-				clientOptions: {
-					plugins: [adminClient()],
-				},
+		},
+		{
+			testUser: {
+				name: "Admin",
 			},
-		);
+			clientOptions: {
+				plugins: [adminClient()],
+			},
+		},
+	);
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 

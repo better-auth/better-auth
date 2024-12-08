@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createAuthEndpoint, getSessionFromCtx } from "../../api";
 import type {
 	BetterAuthOptions,
@@ -28,6 +29,27 @@ export const customSession = <
 					metadata: {
 						CUSTOM_SESSION: true,
 					},
+					query: z.optional(
+						z.object({
+							/**
+							 * If cookie cache is enabled, it will disable the cache
+							 * and fetch the session from the database
+							 */
+							disableCookieCache: z
+								.boolean({
+									description:
+										"Disable cookie cache and fetch session from database",
+								})
+								.or(z.string().transform((v) => v === "true"))
+								.optional(),
+							disableRefresh: z
+								.boolean({
+									description:
+										"Disable session refresh. Useful for checking session status, without updating the session",
+								})
+								.optional(),
+						}),
+					),
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
