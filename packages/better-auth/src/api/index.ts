@@ -188,6 +188,7 @@ export function getEndpoints<
 							user: User;
 						} | null,
 					) {
+						this.newSession = session;
 						newSession = session;
 					},
 				},
@@ -220,6 +221,9 @@ export function getEndpoints<
 					internalContext.context.newSession = newSession;
 				}
 			} catch (e) {
+				if (newSession) {
+					internalContext.context.newSession = newSession;
+				}
 				if (e instanceof APIError) {
 					const afterPlugins = options.plugins
 						?.map((plugin) => {
