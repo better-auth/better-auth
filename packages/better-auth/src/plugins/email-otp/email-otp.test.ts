@@ -41,7 +41,7 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			otp,
 		});
-		expect(verifiedUser.data?.user.emailVerified).toBe(true);
+		expect(verifiedUser.data?.emailVerified).toBe(true);
 	});
 
 	it("should sign-in with otp", async () => {
@@ -138,6 +138,35 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it("should fail on expired otp", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("OTP_EXPIRED");
+	});
+
+	it("should not fail on time elapsed", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 4);
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(res.data?.emailVerified).toBe(true);
+	});
+
 	it("should create verification otp on server", async () => {
 		otp = await auth.api.createVerificationOTP({
 			body: {
@@ -201,8 +230,8 @@ describe("email-otp-verify", async () => {
 		});
 		const verifiedUser = await client.emailOtp.verifyEmail({
 			email: testUser.email,
-			otp: otp.pop() as string,
+			otp: otp[2],
 		});
-		expect(verifiedUser.data?.user.emailVerified).toBe(true);
+		expect(verifiedUser.data?.emailVerified).toBe(true);
 	});
 });
