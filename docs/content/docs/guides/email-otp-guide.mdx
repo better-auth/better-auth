@@ -5,6 +5,9 @@ description: A step-by-step guide to adding email OTP to your app.
 
 In this guide, we’ll walk you through the steps of adding email OTP to your app, and using <Link href="https://resend.com/">Resend</Link> to send those emails out.
 
+Resend has a free tier which allows you to send 3,000 emails per month completely for free.
+Visit their <Link href="https://resend.com/pricing">pricing page</Link> to learn more.
+
 <Callout type="warn">
 This guide assumes you have <Link href="/docs/installation">setup the basics</Link> of Better Auth and are ready to setup email OTP.
 </Callout>
@@ -12,6 +15,318 @@ This guide assumes you have <Link href="/docs/installation">setup the basics</Li
 
 <Steps>
 <Step>
-## Step 1
+## Server first
+As with most Better-Auth plugins, you must setup the plugin to your server auth instance.
+
+In this case, you'll want to import `emailOTP` from `better-auth/plugins`.
+
+<Files>
+  <Folder name="auth" defaultOpen>
+    <File name="server.ts" />
+  </Folder>
+</Files>
+
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+import { emailOTP } from "better-auth/plugins"; // [!code highlight]
+
+export const auth = betterAuth({
+    // ... other config options
+    plugins: [
+        emailOTP({ // [!code highlight]
+                async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
+                    // Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
+                }, // [!code highlight]
+        }) // [!code highlight]
+    ]
+});
+```
 </Step>
+
+<Step>
+### Email provider of choice
+
+In this guide, we will use <Link href="https://resend.com/">Resend</Link> to send verification emails out, but you can freely use any other email providers too!
+
+<Step>
+#### Install Resend
+<Tabs items={["npm", "bun", "pnpm", "yarn"]} defaultValue="npm">
+    <Tab value="npm">
+        ```bash
+       npm install resend
+        ```
+    </Tab>
+    <Tab value="bun">
+        ```bash
+       bun install resend
+        ```
+    </Tab>
+    <Tab value="pnpm">
+        ```bash
+       pnpm install resend
+        ```
+    </Tab>
+    <Tab value="yarn">
+        ```bash
+       yarn install resend
+        ```
+    </Tab>
+
+</Tabs>
+</Step>
+
+<Step>
+### Verification Email Template
+
+What's cool about Resend is that you can send emails straight from your React code!
+
+If your codebase doesn't use React, Resend will still work, you'll just have to manually write the HTML to send.
+
+    <Tabs items={["React", "!React"]} defaultValue="React">
+        <Tab value="react">
+            Find a suitable location in your project, and create an `emails` directory, with a `verification-email.tsx` file within. 
+            <Files>
+                <Folder name="emails" defaultOpen>
+                    <File name="verification-email.tsx" />
+                </Folder>
+            </Files>
+
+            ```tsx title="verification-email.tsx"
+            import * as React from 'react';
+
+            interface VerifyEmailProps {
+                otp: string;
+            }
+
+            export const VerifyEmail: React.FC<Readonly<VerifyEmailProps>> = ({
+                otp,
+            }) => (
+                <div style={{ textAlign: "center" }}>
+                    <h1>Thank you for signing up!</h1>
+                    <p>Your OTP is {otp}!</p>
+                </div>
+            );
+            ```
+        </Tab>
+    
+        <Tab value="!React">
+            <p className="italic text-sm">See what I did there? With the `!` in front of `React`?</p>
+
+            Jokes aside, if your codebase doesn't use React, you can skip this step. 👍 
+        </Tab>
+
+    </Tabs>
+
+</Step>
+
+<Step>
+### Resend API Key
+
+Before sending emails using Resend, you must get your API key.
+
+Visit <Link href="https://resend.com/api-keys">Resend API keys</Link> to get one.
+
+Then, head to your `.env` file and add `RESEND_API_KEY`.
+```env title=".env"
+RESEND_API_KEY=
+```
+
+</Step>
+
+<Step>
+    ### Time to send!
+    We're now ready to write the code to send emails off.
+    <Tabs items={["React", "!React"]} defaultValue="React">
+        <Tab value="react">
+            Head back into your `server.ts` file where your server auth instance lives, and import your newly created `VerifyEmail` component.
+
+            Then, by using the `type` variable, we'll check and and ensure it's specifically for email signups, to which we will send off your email.
+
+            <Callout>
+                You can learn more about the <Link href="https://resend.com/docs/introduction">Resend APIs here</Link>.
+            </Callout>
+
+            ```tsx title="server.ts"
+            //...
+            import { VerifyEmail } from "./emails/verification-email.tsx"; // [!code highlight]
+            import { Resend } from 'resend'; // [!code highlight]
+            const resend = new Resend(process.env.RESEND_API_KEY); // [!code highlight]
+
+            export const auth = betterAuth({
+                plugins: [
+                    emailOTP({ 
+                        async sendVerificationOTP({ email, otp, type}) { 
+                            if(type === "email-verification"){ // [!code highlight]
+                                const { data, error } = await resend.emails.send({ // [!code highlight]
+                                    from: 'Acme <onboarding@resend.dev>', // [!code highlight]
+                                    to: [email], // [!code highlight]
+                                    react: VerifyEmail({ otp }), // [!code highlight]
+                                    subject: `Verify your email address`, // [!code highlight]
+                                }); // [!code highlight]
+                            } // [!code highlight]
+                        },
+                    }) 
+                ]
+            })
+            ```
+        </Tab>
+    
+        <Tab value="!React">
+            To send your email OTP verification emails off, use the following code.
+
+            By using the `type` variable, we'll check and and ensure it's specifically for email signups, to which we will send off your email.
+
+            <Callout>
+                You can learn more about the <Link href="https://resend.com/docs/introduction">Resend APIs here</Link>.
+            </Callout>
+
+            ```tsx title="server.ts"
+            //...
+            import { Resend } from 'resend'; // [!code highlight]
+            const resend = new Resend(process.env.RESEND_API_KEY); // [!code highlight]
+
+            export const auth = betterAuth({
+                plugins: [
+                    emailOTP({ 
+                        async sendVerificationOTP({ email, otp, type}) { 
+                            if(type === "email-verification"){ // [!code highlight]
+                                const { data, error } = await resend.emails.send({ // [!code highlight]
+                                    from: 'Acme <onboarding@resend.dev>', // [!code highlight]
+                                    to: [email], // [!code highlight]
+                                    subject: `Verify your email address`, // [!code highlight]
+                                    html: `<div style={{ textAlign: "center" }}> // [!code highlight]
+                                               <h1>Thank you for signing up!</h1> // [!code highlight]
+                                               <p>Your OTP is ${otp}!</p> // [!code highlight]
+                                           </div>`, // [!code highlight]
+                                }); // [!code highlight]
+                            } // [!code highlight]
+                        },
+                    }) 
+                ]
+            })
+            ```
+        </Tab>
+    </Tabs>
+</Step>
+
+<Step>
+    ### Other types of OTPs
+
+    Congradulations! 🎉
+    At this point, your code is ready to send verification emails when time comes.
+
+    However you may want to also send other forms of verification OTP emails for situations such as signing in, or if a user forgets their password.
+    
+    There are three types of situations:
+    * `email-verification`
+    * `forget-password`
+    * `sign-in`
+
+    In our last step, we did `email-verification`, but to add `forget-password` and `sign-in`, you can follow this example code and the process should be similar.
+
+    ```tsx title="server.ts"
+    //...
+    export const auth = betterAuth({
+        plugins: [
+            emailOTP({ 
+                async sendVerificationOTP({ email, otp, type}) { 
+                    if(type === "email-verification"){ // [!code highlight]
+                       // send email-verification OTP email.// [!code highlight]
+                    } else if(type === "forget-password"){ // [!code highlight]
+                       // send forget-password OTP email.// [!code highlight]
+                    } else if(type === "sign-in"){ // [!code highlight]
+                       // send sign-in OTP email.// [!code highlight]
+                    }// [!code highlight]
+                },
+            }) 
+        ]
+    })
+    ```
+</Step>
+<Step>
+### All done! Server prepared! 🎉
+
+Congradulations, you've just prepared all the nessesary steps to send emails from your server.
+
+Simple, right? 🙂 
+
+
+</Step>
+
+<Step>
+## Client side
+
+Now that all your server preperations are complete, it's time to set up your client side.
+
+Head to your client auth instance, and add the `emailOTPClient` from `better-auth/client/plugins`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { emailOTPClient } from "better-auth/client/plugins" // [!code highlight]
+ 
+const authClient =  createAuthClient({
+    plugins: [
+        emailOTPClient(), // [!code highlight]
+    ]
+});
+```
+
+</Step>
+<Step>
+### Sending OTPs
+
+Everything is set, all that's left is to write your front-end code to tell Better-Auth when to send those OTP emails out.
+
+To send an email verification OTP, use the following code.
+
+```ts
+await authClient.emailOtp.sendVerificationOtp({
+    email: "user-email@email.com",
+    type: "email-verification"
+});
+```
+
+Or, if you want to send it for when a user signs in, use the following code.
+
+```ts
+await authClient.emailOtp.sendVerificationOtp({
+    email: "user-email@email.com",
+    type: "sign-in"
+});
+```
+</Step>
+
+<Step>
+### Verifying OTPs
+
+Now that you've sent out your OTPs via email, the user must enter the OTP in your app to verify it.
+
+For email verifications, use the following code.
+
+```ts
+const user = await authClient.emailOtp.verifyEmail({
+    email: "user-email@email.com",
+    otp: "123456"
+});
+```
+
+Or, if you're trying to verify a sign-in OTP:
+
+```ts
+const user = await authClient.signIn.emailOtp({
+    email: "user-email@email.com",
+    otp: "123456"
+});
+```
+</Step>
+
+</Step>
+
 </Steps>
+
+## That's all!
+
+Congratulations! You’ve successfully setup email OTP verification in your app. 
+
+For more information about using the emailOTP plugin, visit the <Link href="/docs/plugins/email-otp">Email OTP plugin docs</Link>.
