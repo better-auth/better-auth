@@ -139,7 +139,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 						session,
 						user: newUser,
 					});
-					return ctx.json({ user: newUser, session });
+					return ctx.json({
+						id: newUser.id,
+						email: newUser.email,
+						emailVerified: newUser.emailVerified,
+						name: newUser.name,
+						createdAt: newUser.createdAt,
+						updatedAt: newUser.updatedAt,
+					});
 				},
 			),
 		},
@@ -147,10 +154,11 @@ export const anonymous = (options?: AnonymousOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
-							context.path?.startsWith("/sign-in") ||
-							context.path?.startsWith("/sign-up")
+						const setCookie = context.responseHeader.get("set-cookie");
+						const hasSessionToken = setCookie?.includes(
+							context.context.authCookies.sessionToken.name,
 						);
+						return !!hasSessionToken;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.responseHeader;
@@ -166,6 +174,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						const sessionCookie = parseSetCookieHeader(setCookie || "")
 							.get(sessionTokenName)
 							?.value.split(".")[0];
+
 						if (!sessionCookie) {
 							return;
 						}
@@ -174,23 +183,26 @@ export const anonymous = (options?: AnonymousOptions) => {
 						 */
 						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
 							ctx,
+							{
+								disableRefresh: true,
+							},
 						);
+
 						if (!session || !session.user.isAnonymous) {
 							return;
 						}
+
 						if (ctx.path === "/sign-in/anonymous") {
 							throw new APIError("BAD_REQUEST", {
 								message:
 									ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 							});
 						}
-
+						const newSession = ctx.context.newSession;
+						if (!newSession) {
+							return;
+						}
 						if (options?.onLinkAccount) {
-							const newSession =
-								await ctx.context.internalAdapter.findSession(sessionCookie);
-							if (!newSession) {
-								return;
-							}
 							await options?.onLinkAccount?.({
 								anonymousUser: session,
 								newUser: newSession,

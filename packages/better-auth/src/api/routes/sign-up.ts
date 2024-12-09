@@ -6,7 +6,6 @@ import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
-	InferSession,
 	InferUser,
 	User,
 } from "../../types";
@@ -70,11 +69,25 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
-											user: {
-												type: "object",
+											id: {
+												type: "string",
+												description: "The id of the user",
 											},
-											session: {
-												type: "object",
+											email: {
+												type: "string",
+												description: "The email of the user",
+											},
+											name: {
+												type: "string",
+												description: "The name of the user",
+											},
+											image: {
+												type: "string",
+												description: "The image of the user",
+											},
+											emailVerified: {
+												type: "boolean",
+												description: "If the email is verified",
 											},
 										},
 									},
@@ -195,8 +208,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
 				return ctx.json({
-					user: createdUser as InferUser<O>,
-					session: null,
+					id: createdUser.id,
+					email: createdUser.email,
+					name: createdUser.name,
+					image: createdUser.image,
+					emailVerified: createdUser.emailVerified,
 				});
 			}
 
@@ -214,8 +230,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				user: createdUser,
 			});
 			return ctx.json({
-				user: createdUser as InferUser<O>,
-				session: session as InferSession<O>,
+				id: createdUser.id,
+				email: createdUser.email,
+				name: createdUser.name,
+				image: createdUser.image,
+				emailVerified: createdUser.emailVerified,
+				createdAt: createdUser.createdAt,
+				updatedAt: createdUser.updatedAt,
 			});
 		},
 	);

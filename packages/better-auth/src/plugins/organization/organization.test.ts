@@ -375,7 +375,7 @@ describe("organization", async (it) => {
 		const member = await auth.api.addMember({
 			body: {
 				organizationId: org?.id,
-				userId: newUser.user.id,
+				userId: newUser.id,
 				role: "admin",
 			},
 		});

@@ -70,6 +70,6 @@ export const navMenu = [
 	},
 	{
 		name: "community",
-		path: "https://discord.gg/GYC3W7tZzb",
+		path: "/community",
 	},
 ];

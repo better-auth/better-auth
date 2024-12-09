@@ -221,15 +221,15 @@ export const navMenu: {
 	},
 
 	{
-		name: "_docs",
+		name: "docs",
 		path: "/docs",
 	},
 	{
-		name: "_changelogs",
+		name: "changelogs",
 		path: "/changelogs",
 	},
 	{
-		name: "_community",
-		path: "https://discord.gg/GYC3W7tZzb",
+		name: "community",
+		path: "/community",
 	},
 ];

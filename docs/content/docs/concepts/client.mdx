@@ -292,6 +292,31 @@ if(error){
 }
 ```
 
+#### Error Codes
+
+The client instance contains $ERROR_CODES object that contains all the error codes returned by the server. You can use this to handle error translations or custom error messages.
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient();
+
+const myCustomErrorCodes = {
+	[authClient.$ERROR_CODES.USER_ALREADY_EXISTS]: {
+		en: "User already exists",
+		es: "El usuario ya existe",
+	},
+};
+
+const { error } = await authClient.signUp.email({
+	email: "user@email.com",
+	password: "password",
+	name: "User",
+});
+
+if (error?.message) {
+	alert(myCustomErrorCodes[error.message].en);
+}
+```
+
 ### Plugins
 
 You can extend the client with plugins to add more functionality. Plugins can add new functions to the client or modify existing ones. 

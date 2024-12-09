@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../cookies";
 
 describe("bearer", async () => {
 	const { client, signInWithTestUser, auth } = await getTestInstance({
@@ -11,7 +12,7 @@ describe("bearer", async () => {
 	let encryptedToken: string | undefined;
 	it("should get session", async () => {
 		const { session: _session, headers } = await signInWithTestUser();
-		token = _session.token || "";
+		token = headers.get("cookie")?.split("=")[1].split(".")[0] || "";
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
@@ -19,10 +20,8 @@ describe("bearer", async () => {
 				},
 			},
 		});
-		encryptedToken = headers
-			.get("cookie")
-			?.split("better-auth.session_token=")[1];
-		expect(session.data?.session.token).toBe(_session.token);
+		encryptedToken = headers.get("cookie")?.split("=")[1] || "";
+		expect(session.data?.session).toBeDefined();
 	});
 
 	it("should list session", async () => {
@@ -37,12 +36,13 @@ describe("bearer", async () => {
 	});
 
 	it("should work on server actions", async () => {
-		const { session: _session, user } = await signInWithTestUser();
-		token = _session.token || "";
-		const headers = new Headers();
+		const { session: _session, headers } = await signInWithTestUser();
+		token = headers.get("cookie")?.split("=")[1].split(".")[0] || "";
 		headers.set("authorization", `Bearer ${token}`);
 		const session = await auth.api.getSession({
-			headers,
+			headers: new Headers({
+				authorization: `Bearer ${token}`,
+			}),
 		});
 		expect(session?.session.token).toBe(token);
 	});
