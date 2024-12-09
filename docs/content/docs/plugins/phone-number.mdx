@@ -99,7 +99,7 @@ export const auth = betterAuth({
             },
             signUpOnVerification: {
                 getTempEmail: (phoneNumber) => {
-                    return `${phonNumber}@my-site.com`
+                    return `${phoneNumber}@my-site.com`
                 },
                 //optionally you can alos pass `getTempName` function to generate a temporary name for the user
                 getTempName: (phoneNumber) => {
