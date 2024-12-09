@@ -166,8 +166,7 @@ export const DocsNavBarMobile = () => {
 		useNavbarMobile();
 	const pathname = usePathname();
 
-	const content = pathname.startsWith('/docs/examples') ? examples : contents;
-	
+	const content = pathname.startsWith("/docs/examples") ? examples : contents;
 
 	return (
 		<AnimatePresence>

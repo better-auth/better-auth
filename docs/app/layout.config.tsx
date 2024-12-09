@@ -1,5 +1,8 @@
 import { source } from "@/app/source";
-import { DocsNavbarMobileBtn, DocsNavbarMobileTitle } from "@/components/nav-mobile";
+import {
+	DocsNavbarMobileBtn,
+	DocsNavbarMobileTitle,
+} from "@/components/nav-mobile";
 import { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 export const baseOptions: BaseLayoutProps = {
