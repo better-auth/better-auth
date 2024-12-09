@@ -285,6 +285,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							await ctx.context.internalAdapter.deleteVerificationValue(
 								verificationValue.id,
 							);
+							throw new APIError("BAD_REQUEST", {
+								message: "OTP expired",
+							});
 						}
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OTP",
@@ -313,8 +316,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					);
 					return ctx.json({
-						user: updatedUser,
-					});
+						id: updatedUser.id,
+						email: updatedUser.email,
+						emailVerified: updatedUser.emailVerified,
+						name: updatedUser.name,
+						image: updatedUser.image,
+						createdAt: updatedUser.createdAt,
+						updatedAt: updatedUser.updatedAt,
+					} as User);
 				},
 			),
 			signInEmailOTP: createAuthEndpoint(
