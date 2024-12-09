@@ -961,9 +961,9 @@ export const contents: Content[] = [
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
 						className="lucide lucide-users"
 					>
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -1040,6 +1040,28 @@ export const contents: Content[] = [
 						<path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17" />
 						<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
 						<path d="m15 5 4 4" />
+					</svg>
+				),
+			},
+			{
+				title: "Email OTP guide",
+				href: "/docs/guides/email-otp-guide",
+				icon: () => (
+					<svg 
+						xmlns="http://www.w3.org/2000/svg" 
+						width="1em" 
+						height="1em"
+						viewBox="0 0 24 24" 
+						fill="none" 
+						stroke="currentColor" 
+						strokeWidth="2" 
+						strokeLinecap="round" 
+						strokeLinejoin="round" 
+						className="lucide lucide-mail-check"
+					>
+						<path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8"/>
+						<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+						<path d="m16 19 2 2 4-4"/>
 					</svg>
 				),
 			},
