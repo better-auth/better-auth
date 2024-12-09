@@ -81,17 +81,17 @@ You can learn more about <Link href="/docs/concepts/plugins#schema">plugin schem
 export const birthdayPlugin = () =>
   ({
     id: "birthdayPlugin",
-    schema: {
-      user: {
-        fields: {
-          birthday: {
-            type: "date", // string, number, boolean, date
-            required: true, // if the field should be required on a new record. (default: false)
-            unique: false, // if the field should be unique. (default: false)
-            reference: null // if the field is a reference to another table. (default: null)
-          },
-        },
-      },
+    schema: {// [!code highlight]
+      user: {// [!code highlight]
+        fields: {// [!code highlight]
+          birthday: {// [!code highlight]
+            type: "date", // string, number, boolean, date // [!code highlight]
+            required: true, // if the field should be required on a new record. (default: false) // [!code highlight]
+            unique: false, // if the field should be unique. (default: false) // [!code highlight]
+            reference: null // if the field is a reference to another table. (default: null) // [!code highlight]
+          },// [!code highlight]
+        },// [!code highlight]
+      },// [!code highlight]
     },
   } satisfies BetterAuthPlugin);
 ```
@@ -176,7 +176,7 @@ First, let’s create our `client.ts` file first:
 Then, add the following code:
 ```ts title="client.ts"
 import { BetterAuthClientPlugin } from "better-auth";
-import type { birthdayPlugin } from "./index"; // make sure to import the server plugin as a type / [!code highlight]
+import type { birthdayPlugin } from "./index"; // make sure to import the server plugin as a type // [!code highlight]
 
 type BirthdayPlugin = typeof birthdayPlugin;
 
@@ -200,11 +200,11 @@ Both the `client` and `server` plugins are now ready, the last step is to import
 ### Server initiation
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
-import { birthdayPlugin } from "./birthday-plugin";
+import { birthdayPlugin } from "./birthday-plugin";// [!code highlight]
  
 export const auth = betterAuth({
     plugins: [
-      birthdayPlugin(),
+      birthdayPlugin(),// [!code highlight]
     ]
 });
 ```
@@ -212,11 +212,11 @@ export const auth = betterAuth({
 ### Client initiation
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { birthdayClientPlugin } from "./birthday-plugin/client";
+import { birthdayClientPlugin } from "./birthday-plugin/client";// [!code highlight]
  
 const authClient = createAuthClient({
     plugins: [
-      birthdayClientPlugin()
+      birthdayClientPlugin()// [!code highlight]
     ]
 });
 ```
