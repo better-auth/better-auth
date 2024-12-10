@@ -265,7 +265,7 @@ export function Builder() {
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>
 						Configure the sign in box to your liking and copy the code to your
-						application
+						application. For more advanced and iterative features you can use better-auth.farmui.com
 					</DialogDescription>
 				</DialogHeader>
 
