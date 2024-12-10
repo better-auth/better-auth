@@ -10,6 +10,7 @@ export async function createAuthorizationURL({
 	scopes,
 	claims,
 	redirectURI,
+	duration,
 }: {
 	id: string;
 	options: ProviderOptions;
@@ -19,6 +20,7 @@ export async function createAuthorizationURL({
 	codeVerifier?: string;
 	scopes: string[];
 	claims?: string[];
+	duration?: string;
 }) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
@@ -47,5 +49,9 @@ export async function createAuthorizationURL({
 			}),
 		);
 	}
+	if (duration) {
+		url.searchParams.set("duration", duration);
+	}
+
 	return url;
 }
