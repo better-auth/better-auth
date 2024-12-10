@@ -272,7 +272,8 @@ export function Builder() {
 							href="https://better-auth.farmui.com"
 						>
 							farmui
-						</Link>
+						</Link>{" "}
+						.
 					</DialogDescription>
 				</DialogHeader>
 
