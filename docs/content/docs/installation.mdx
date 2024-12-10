@@ -309,11 +309,16 @@ Better Auth supports any backend framework with standard Request and Response ob
     const port = 8000;
 
     app.all("/api/auth/*", toNodeHandler(auth));
+
+    // Mount express json middleware after Better Auth handler
+    // or only apply it to routes that don't interact with Better Auth
+    app.use(express.json());
+
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc.
+    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"
