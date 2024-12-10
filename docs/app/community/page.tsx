@@ -17,7 +17,7 @@ export default function CommunityPage() {
 				</div>
 
 				<div className="grid grid-cols-1 md:grid-cols-2	 gap-8">
-					<Card className="rounded-none bg-gradient-to-tr from-zinc-950 to-black/60 border border-stone-900">
+					<Card className="rounded-none  dark:bg-gradient-to-tr dark:from-zinc-950 dark:to-black/60 border dark:border-stone-900">
 						<CardContent className="flex flex-col items-center p-6">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -44,7 +44,8 @@ export default function CommunityPage() {
 							</Link>
 						</CardContent>
 					</Card>
-					<Card className="border- transition-colors rounded-none">
+
+					<Card className="transition-colors rounded-none">
 						<CardContent className="flex flex-col items-center p-6">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
