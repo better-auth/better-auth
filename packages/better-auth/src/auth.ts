@@ -7,6 +7,7 @@ import type {
 	InferSession,
 	InferUser,
 	PrettifyDeep,
+	Expand,
 } from "./types";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types/api";
