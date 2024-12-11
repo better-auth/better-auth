@@ -1359,6 +1359,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/utils':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
@@ -1395,9 +1398,6 @@ importers:
       nanostores:
         specifier: ^0.11.3
         version: 0.11.3
-      oslo:
-        specifier: ^1.2.1
-        version: 1.2.1
       uncrypto:
         specifier: ^0.1.3
         version: 0.1.3
@@ -2451,6 +2451,9 @@ packages:
   '@babel/types@7.26.0':
     resolution: {integrity: sha512-Z/yiTPj+lDVnF7lWeKCIJzaIkI0vYO87dMpZ4bg4TDrFe4XXLFWL1TbXU27gBP3QccxV9mZICCrnjnYlJjXHOA==}
     engines: {node: '>=6.9.0'}
+
+  '@better-auth/utils@0.2.1':
+    resolution: {integrity: sha512-1PgLrNJY3FZfwz8g6puKrAS/WJW3LWuNlLSFFKrzDLrn69SPBCuCXUF3tY6c1gURLX6nHARH6yx3dVy9f298cg==}
 
   '@better-fetch/fetch@1.1.12':
     resolution: {integrity: sha512-B3bfloI/2UBQWIATRN6qmlORrvx3Mp0kkNjmXLv0b+DtbtR+pP4/I5kQA/rDUv+OReLywCCldf6co4LdDmh8JA==}
@@ -18540,6 +18543,10 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
+
+  '@better-auth/utils@0.2.1':
+    dependencies:
+      uncrypto: 0.1.3
 
   '@better-fetch/fetch@1.1.12': {}
 

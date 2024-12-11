@@ -7,7 +7,7 @@ import type {
 } from "../../types/plugins";
 import { APIError } from "better-call";
 import { mergeSchema, type User } from "../../db/schema";
-import { alphabet, generateRandomString } from "../../crypto/random";
+import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
@@ -19,7 +19,7 @@ export interface UserWithPhoneNumber extends User {
 }
 
 function generateOTP(size: number) {
-	return generateRandomString(size, alphabet("0-9"));
+	return generateRandomString(size, "0-9");
 }
 
 export const phoneNumber = (options?: {

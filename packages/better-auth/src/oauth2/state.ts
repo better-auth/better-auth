@@ -1,11 +1,8 @@
-import {
-	generateCodeVerifier,
-	generateState as generateSateCode,
-} from "oslo/oauth2";
 import { z } from "zod";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
 import { getOrigin } from "../utils/url";
+import { generateRandomString } from "../crypto";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -23,8 +20,8 @@ export async function generateState(
 			message: "callbackURL is required",
 		});
 	}
-	const codeVerifier = generateCodeVerifier();
-	const state = generateSateCode();
+	const codeVerifier = generateRandomString(128);
+	const state = generateRandomString(32);
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,

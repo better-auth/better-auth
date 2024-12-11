@@ -1,7 +1,7 @@
 import { INVALID, z } from "zod";
 import { APIError, createAuthEndpoint } from "../../api";
 import type { BetterAuthPlugin, User } from "../../types";
-import { alphabet, generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -109,7 +109,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					const otp = generateRandomString(opts.otpLength, "0-9");
 					await ctx.context.internalAdapter
 						.createVerificationValue({
 							value: otp,
@@ -174,7 +174,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					const otp = generateRandomString(opts.otpLength, "0-9");
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `${ctx.body.type}-otp-${email}`,
@@ -475,7 +475,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: "User not found",
 						});
 					}
-					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					const otp = generateRandomString(opts.otpLength, "0-9");
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `forget-password-otp-${email}`,
@@ -591,7 +591,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							return;
 						}
 						if (response.user.email && response.user.emailVerified === false) {
-							const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+							const otp = generateRandomString(opts.otpLength, "0-9");
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
 								identifier: `email-verification-otp-${response.user.email}`,

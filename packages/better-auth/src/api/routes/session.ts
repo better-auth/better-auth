@@ -12,9 +12,11 @@ import type {
 	Session,
 	User,
 } from "../../types";
-import { hmac } from "../../crypto/hash";
 import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { base64 } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -103,14 +105,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							};
 							signature: string;
 							expiresAt: number;
-						}>(Buffer.from(sessionDataCookie, "base64").toString())
+						}>(binary.decode(base64.decode(sessionDataCookie)))
 					: null;
+
 				if (sessionDataPayload) {
-					const isValid = await hmac.verify({
-						value: JSON.stringify(sessionDataPayload.session),
-						signature: sessionDataPayload?.signature,
-						secret: ctx.context.secret,
-					});
+					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+						ctx.context.secret,
+						JSON.stringify(sessionDataPayload.session),
+						sessionDataPayload.signature,
+					);
 					if (!isValid) {
 						deleteSessionCookie(ctx);
 						return ctx.json(null);
