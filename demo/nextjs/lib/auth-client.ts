@@ -30,6 +30,7 @@ export const client = createAuthClient({
 				toast.error("Too many requests. Please try again later.");
 			}
 		},
+		throw: true,
 	},
 });
 
