@@ -93,7 +93,6 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	//@ts-expect-error
 	const auth = betterAuth({
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,

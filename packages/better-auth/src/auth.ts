@@ -15,9 +15,7 @@ import { BASE_ERROR_CODES } from "./error/codes";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <O extends BetterAuthOptions>(
-	options: WithJsDoc<O, BetterAuthOptions>,
-) => {
+export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 	const authContext = init(options as O);
 	const { api } = getEndpoints(authContext, options as O);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
