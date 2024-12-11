@@ -65,10 +65,14 @@ export function createAuthClient<Option extends ClientOptions>(
 	);
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {
-		getSession: () => Promise<BetterFetchResponse<infer D>>;
+		getSession: () => Promise<infer Res>;
 	}
-		? D
-		: ClientAPI;
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res extends Record<string, any>
+				? Res
+				: never
+		: never;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
