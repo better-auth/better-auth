@@ -116,6 +116,7 @@ export default function SignIn() {
 									socialProviders[provider as keyof typeof socialProviders];
 								return (
 									<Button
+										key={provider}
 										variant="outline"
 										className={cn(
 											options.socialProviders.length > 3

@@ -326,6 +326,18 @@ const verify2FA = async (code: string) => {
 
 When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
+### Issuer
+
+By adding an `issuer` you can set your application name for the 2fa application.
+
+For example, if your user uses Google Auth, the default appName will show up as `Better-Auth`. However, by using the following code, it will show up as `my-app-name`.
+
+```ts
+twoFactor({
+    issuer: "my-app-name" // [!code highlight]
+})
+```
+---
 
 ## Schema
 
