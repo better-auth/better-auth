@@ -2,18 +2,20 @@ import { getEndpoints, router } from "./api";
 import { init } from "./init";
 import type { BetterAuthOptions } from "./types/options";
 import type {
-	InferErrorCodes,
 	InferPluginErrorCodes,
 	InferPluginTypes,
 	InferSession,
 	InferUser,
+	PreserveJSDoc,
 	PrettifyDeep,
 } from "./types";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types/api";
 import { BASE_ERROR_CODES } from "./error/codes";
 
-export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
+export const betterAuth = <O extends BetterAuthOptions>(
+	options: PreserveJSDoc<O>,
+) => {
 	const authContext = init(options);
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {

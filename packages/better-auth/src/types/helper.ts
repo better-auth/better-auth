@@ -6,6 +6,9 @@ export type LiteralNumber = 0 | (number & Record<never, never>);
 export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
 export type Prettify<T> = Omit<T, never>;
+export type PreserveJSDoc<T> = {
+	[K in keyof T]: T[K];
+} & {};
 export type PrettifyDeep<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any
 		? T[K]
