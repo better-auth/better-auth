@@ -661,7 +661,7 @@ importers:
         specifier: ^7.6.12
         version: 7.6.12
       astro:
-        specifier: ^4.16.17
+        specifier: ^4.16.1
         version: 4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
       better-auth:
         specifier: workspace:*
