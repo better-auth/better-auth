@@ -15,6 +15,7 @@ export default defineConfig((env) => {
 			"adapters/mongodb": "./src/adapters/mongodb-adapter/index.ts",
 			"adapters/kysely": "./src/adapters/kysely-adapter/index.ts",
 			"adapters/memory": "./src/adapters/memory-adapter/index.ts",
+			"adapters/mikro-orm": "./src/adapters/mikro-orm-adapter/index.ts",
 			db: "./src/db/index.ts",
 			oauth2: "./src/oauth2/index.ts",
 			react: "./src/client/react/index.ts",

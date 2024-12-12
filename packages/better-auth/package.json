@@ -251,6 +251,16 @@
         "default": "./dist/adapters/memory.cjs"
       }
     },
+    "./adapters/mikro-orm": {
+      "import": {
+        "types": "./dist/adapters/mikro-orm.d.ts",
+        "default": "./dist/adapters/mikro-orm.js"
+      },
+      "require": {
+        "types": "./dist/adapters/mikro-orm.d.cts",
+        "default": "./dist/adapters/mikro-orm.cjs"
+      }
+    },
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access.d.ts",
@@ -334,6 +344,9 @@
       ],
       "adapters/memory": [
         "./dist/adapters/memory.d.ts"
+      ],
+      "adapters/mikro-orm": [
+        "./dist/adapters/mikro-orm.d.ts"
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
