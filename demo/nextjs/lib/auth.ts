@@ -17,7 +17,6 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
-import { addAccountToSession } from "./plugin";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -42,12 +41,6 @@ export const auth = betterAuth({
 	database: {
 		dialect,
 		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
-	},
-	session: {
-		cookieCache: {
-			enabled: true,
-			maxAge: 60,
-		},
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -155,6 +148,5 @@ export const auth = betterAuth({
 		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
-		addAccountToSession,
 	],
 });

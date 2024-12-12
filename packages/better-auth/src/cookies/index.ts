@@ -127,28 +127,31 @@ export async function setSessionCookie(
 	}
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
-	shouldStoreSessionDataInCookie &&
+
+	if (shouldStoreSessionDataInCookie) {
+		const data = JSON.stringify({
+			session: session,
+			expiresAt: getDate(
+				ctx.context.authCookies.sessionData.options.maxAge || 60,
+				"sec",
+			).getTime(),
+			signature: await hmac.sign({
+				value: JSON.stringify(session),
+				secret: ctx.context.secret,
+			}),
+		});
+		if (data.length > 4093) {
+			throw new BetterAuthError(
+				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			);
+		}
 		ctx.setCookie(
 			ctx.context.authCookies.sessionData.name,
-			JSON.stringify(
-				base64url.encode(
-					new TextEncoder().encode(
-						JSON.stringify({
-							session: session,
-							expiresAt: getDate(
-								ctx.context.authCookies.sessionData.options.maxAge || 60,
-								"sec",
-							).getTime(),
-							signature: await hmac.sign({
-								value: JSON.stringify(session),
-								secret: ctx.context.secret,
-							}),
-						}),
-					),
-				),
-			),
+			data,
 			ctx.context.authCookies.sessionData.options,
 		);
+	}
+
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
