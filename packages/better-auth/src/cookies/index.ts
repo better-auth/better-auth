@@ -8,7 +8,6 @@ import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { isProduction } from "../utils/env";
-import { getSessionFromCtx } from "../api";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -129,17 +128,24 @@ export async function setSessionCookie(
 		ctx.context.options.session?.cookieCache?.enabled;
 
 	if (shouldStoreSessionDataInCookie) {
-		const data = JSON.stringify({
-			session: session,
-			expiresAt: getDate(
-				ctx.context.authCookies.sessionData.options.maxAge || 60,
-				"sec",
-			).getTime(),
-			signature: await hmac.sign({
-				value: JSON.stringify(session),
-				secret: ctx.context.secret,
-			}),
-		});
+		const data = base64url.encode(
+			new TextEncoder().encode(
+				JSON.stringify({
+					session: session,
+					expiresAt: getDate(
+						ctx.context.authCookies.sessionData.options.maxAge || 60,
+						"sec",
+					).getTime(),
+					signature: await hmac.sign({
+						value: JSON.stringify(session),
+						secret: ctx.context.secret,
+					}),
+				}),
+			),
+			{
+				includePadding: false,
+			},
+		);
 		if (data.length > 4093) {
 			throw new BetterAuthError(
 				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
