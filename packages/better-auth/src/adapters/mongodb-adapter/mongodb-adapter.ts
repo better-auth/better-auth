@@ -84,7 +84,10 @@ const createTransform = (options: BetterAuthOptions) => {
 			const fields = schema[model].fields;
 			for (const field in fields) {
 				const value = data[field];
-				if (value === undefined && !fields[field].defaultValue) {
+				if (
+					value === undefined &&
+					(!fields[field].defaultValue || action === "update")
+				) {
 					continue;
 				}
 				transformedData[fields[field].fieldName || field] = withApplyDefault(
@@ -247,7 +250,9 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		async update(data) {
 			const { model, where, update: values } = data;
 			const clause = transform.convertWhereClause(where, model);
+
 			const transformedData = transform.transformInput(values, model, "update");
+
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOneAndUpdate(
