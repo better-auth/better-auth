@@ -4,10 +4,10 @@ import { wildcardMatch } from "../../utils/wildcard";
 import { getHost } from "../../utils/url";
 
 /**
- * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
+ * Middleware to validate callbackURL, redirectURL, errorURL, and origin against trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST") {
+	if (ctx.request?.method !== "POST" || !ctx.request) {
 		return;
 	}
 	const { body, query, context } = ctx;
@@ -15,41 +15,93 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
-	const currentURL = query?.currentURL;
 	const trustedOrigins = context.trustedOrigins;
 	const usesCookies = ctx.headers?.has("cookie");
 
-	const matchesPattern = (url: string, pattern: string): boolean => {
+	if (ctx.context.options.advanced?.customOriginChecker) {
+		if (callbackURL) {
+			const result = ctx.context.options.advanced.customOriginChecker(
+				{
+					url: callbackURL,
+					label: "callbackURL",
+				},
+				ctx.request,
+			);
+			if (!result) {
+				throw new APIError("FORBIDDEN", { message: "invalid callbackURL" });
+			}
+		}
+		if (redirectURL) {
+			const result = ctx.context.options.advanced.customOriginChecker(
+				{
+					url: redirectURL,
+					label: "callbackURL",
+				},
+				ctx.request,
+			);
+			if (!result) {
+				throw new APIError("FORBIDDEN", { message: "invalid callbackURL" });
+			}
+		}
+		if (origin) {
+			const result = ctx.context.options.advanced.customOriginChecker(
+				{
+					url: origin,
+					label: "origin",
+				},
+				ctx.request,
+			);
+			if (!result) {
+				throw new APIError("FORBIDDEN", { message: "invalid callbackURL" });
+			}
+		}
+		return;
+	}
+
+	const matchesPattern = (url: string, pattern: string) => {
 		if (url.startsWith("/")) {
 			return false;
 		}
+		const host = getHost(url);
 		if (pattern.includes("*")) {
-			return wildcardMatch(pattern)(getHost(url));
+			return wildcardMatch(pattern)(host);
 		}
 		return url.startsWith(pattern);
 	};
-	const validateURL = (url: string | undefined, label: string) => {
+
+	const validateURL = (url: string, label: string) => {
 		if (!url) {
 			return;
 		}
+
 		const isTrustedOrigin = trustedOrigins.some(
 			(origin) =>
 				matchesPattern(url, origin) ||
-				(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+				(url.startsWith("/") && label !== "origin" && !url.includes(":")),
 		);
+
 		if (!isTrustedOrigin) {
-			ctx.context.logger.error(`Invalid ${label}: ${url}`);
+			const errorMessage = `Invalid ${label}: ${url}`;
+			ctx.context.logger.error(errorMessage);
 			ctx.context.logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${trustedOrigins}`,
 			);
-			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+			throw new APIError("FORBIDDEN", { message: errorMessage });
 		}
 	};
-	if (usesCookies && !ctx.context.options.advanced?.disableCSRFCheck) {
+
+	if (usesCookies) {
+		if (!originHeader) {
+			throw new APIError("FORBIDDEN", {
+				message: "origin header missing",
+			});
+		}
 		validateURL(originHeader, "origin");
 	}
-	callbackURL && validateURL(callbackURL, "callbackURL");
-	redirectURL && validateURL(redirectURL, "redirectURL");
-	currentURL && validateURL(currentURL, "currentURL");
+
+	[
+		{ url: callbackURL, label: "callbackURL" },
+		{ url: redirectURL, label: "redirectURL" },
+	].forEach(({ url, label }) => validateURL(url, label));
 });

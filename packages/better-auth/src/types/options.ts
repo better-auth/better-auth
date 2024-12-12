@@ -520,6 +520,24 @@ export interface BetterAuthOptions {
 		 */
 		disableCSRFCheck?: boolean;
 		/**
+		 * Custom origin checker. This will completely override check for `trustedOrigins`.
+		 *
+		 * ⚠︎ This could easily expose you to open redirect and csrf attacks. Only use this
+		 * if you know what you're doing!
+		 *
+		 * @param url -  the url to check. it could be a path (e.g, `/dashboard`)
+		 * @param label - the label of the parameter the url between "origin" | "callbackURL"
+		 * @param request - the request object
+		 * @returns - boolean or promise that resolves boolean
+		 */
+		customOriginChecker?: (
+			input: {
+				url: string;
+				label: "callbackURL" | "origin";
+			},
+			request: Request,
+		) => boolean | Promise<boolean>;
+		/**
 		 * Configure cookies to be cross subdomains
 		 */
 		crossSubDomainCookies?: {
