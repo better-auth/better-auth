@@ -374,6 +374,9 @@
     }
   },
   "devDependencies": {
+    "@mikro-orm/better-sqlite": "^6.4.1",
+    "@mikro-orm/core": "^6.4.1",
+    "@mikro-orm/postgresql": "^6.4.1",
     "@prisma/client": "^5.22.0",
     "@simplewebauthn/types": "^10.0.0",
     "@types/better-sqlite3": "^7.6.12",
@@ -408,6 +411,7 @@
     "better-call": "0.3.3-beta.4",
     "consola": "^3.2.3",
     "defu": "^6.1.4",
+    "dset": "^3.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
     "nanoid": "^5.0.9",
