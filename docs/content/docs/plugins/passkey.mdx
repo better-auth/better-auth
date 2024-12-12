@@ -152,7 +152,7 @@ There are two requirements for conditional UI to work:
                  return;
                }
 
-              const data = await authClient.signIn.passkey({ autoFill: true })
+              void authClient.signIn.passkey({ autoFill: true })
             }, [])
             ```
             </Tab>
