@@ -376,7 +376,6 @@
   "devDependencies": {
     "@mikro-orm/better-sqlite": "^6.4.1",
     "@mikro-orm/core": "^6.4.1",
-    "@mikro-orm/postgresql": "^6.4.1",
     "@prisma/client": "^5.22.0",
     "@simplewebauthn/types": "^10.0.0",
     "@types/better-sqlite3": "^7.6.12",

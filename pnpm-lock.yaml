@@ -1414,9 +1414,6 @@ importers:
       '@mikro-orm/core':
         specifier: ^6.4.1
         version: 6.4.1
-      '@mikro-orm/postgresql':
-        specifier: ^6.4.1
-        version: 6.4.1(@mikro-orm/core@6.4.1)(better-sqlite3@11.6.0)(libsql@0.4.6)(mysql2@3.11.5)
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -4065,12 +4062,6 @@ packages:
         optional: true
       mariadb:
         optional: true
-
-  '@mikro-orm/postgresql@6.4.1':
-    resolution: {integrity: sha512-Y1fTORDKoxfvwpDLJwYqu7qIx5dTYdSzsfWReyOjFCyV9erZ5g7W07yjxc5/Gkf5bjLIpvL2QEiCXVUK3Ausaw==}
-    engines: {node: '>= 18.12.0'}
-    peerDependencies:
-      '@mikro-orm/core': ^6.0.0
 
   '@mongodb-js/saslprep@1.1.9':
     resolution: {integrity: sha512-tVkljjeEaAhCqTzajSdgbQ6gE6f3oneVwa3iXR6csiEwXXOFsiC6Uh9iAjAhXPtqa/XMDHWjjeNH/77m/Yq2dw==}
@@ -14216,10 +14207,6 @@ packages:
     resolution: {integrity: sha512-BSNDnbyZCXSxgA+1f5UU2GmwhoI0aU5yMxRGO8CdFEcY2BQF9xm/7MqKnYoM1nJDk8nONNWDk9WeSmePFhQdlw==}
     engines: {node: '>=12'}
 
-  postgres-interval@4.0.2:
-    resolution: {integrity: sha512-EMsphSQ1YkQqKZL2cuG0zHkmjCCzQqQ71l2GXITqRwjhRleCdv00bDk/ktaSi0LnlaPzAc3535KTrjXsTdtx7A==}
-    engines: {node: '>=12'}
-
   postgres-range@1.1.4:
     resolution: {integrity: sha512-i/hbxIE9803Alj/6ytL7UHQxRvZkI9O4Sy+J3HGc4F4oo/2eQAjTSNJ0bfxyse3bH0nuVesCk+3IRLaMtG3H6w==}
 
@@ -20381,25 +20368,6 @@ snapshots:
       - mysql
       - mysql2
       - pg
-      - pg-native
-      - sqlite3
-      - supports-color
-      - tedious
-
-  '@mikro-orm/postgresql@6.4.1(@mikro-orm/core@6.4.1)(better-sqlite3@11.6.0)(libsql@0.4.6)(mysql2@3.11.5)':
-    dependencies:
-      '@mikro-orm/core': 6.4.1
-      '@mikro-orm/knex': 6.4.1(@mikro-orm/core@6.4.1)(better-sqlite3@11.6.0)(libsql@0.4.6)(mysql2@3.11.5)(pg@8.13.1)
-      pg: 8.13.1
-      postgres-array: 3.0.2
-      postgres-date: 2.1.0
-      postgres-interval: 4.0.2
-    transitivePeerDependencies:
-      - better-sqlite3
-      - libsql
-      - mariadb
-      - mysql
-      - mysql2
       - pg-native
       - sqlite3
       - supports-color
@@ -33849,8 +33817,6 @@ snapshots:
       xtend: 4.0.2
 
   postgres-interval@3.0.0: {}
-
-  postgres-interval@4.0.2: {}
 
   postgres-range@1.1.4: {}
 
