@@ -176,6 +176,21 @@ export const auth = betterAuth({
 })
 ```
 
+### Mikro ORM adapter
+
+The Mikro ORM adapter expects the `MikroORM` instance created via `MikroORM.init` or `MikroORM.initSync`. The adapter will not manage database schema for you, so use Mikro ORM CLI for that.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { mikroOrmAdapter } from "better-auth/adapters/mikro-orm-adapter";
+
+import { orm } from "./orm";
+
+export const auth = betterAuth({
+  database: mikroOrmAdapter(orm)
+});
+```
+
 ## CLI 
 
 
