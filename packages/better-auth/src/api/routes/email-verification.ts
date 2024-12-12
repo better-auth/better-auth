@@ -198,6 +198,9 @@ export const verifyEmail = createAuthEndpoint(
 	async (ctx) => {
 		function redirectOnError(error: string) {
 			if (ctx.query.callbackURL) {
+				if (ctx.query.callbackURL.includes("?")) {
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+				}
 				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
 			}
 			throw new APIError("UNAUTHORIZED", {
