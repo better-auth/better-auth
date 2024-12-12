@@ -179,8 +179,14 @@ export const prismaAdapter =
 		} = createTransform(config, options);
 		return {
 			id: "prisma",
-			async create(data) {
+			async create(data, ctx) {
 				const { model, data: values, select } = data;
+				options.dbHooks?.before?.({
+					model,
+					data: values,
+					action: "create",
+					request: new Request(),
+				});
 				const transformed = transformInput(values, model, "create");
 				if (!db[getModelName(model)]) {
 					throw new BetterAuthError(

@@ -1,12 +1,21 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
-import type { BetterAuthPlugin } from "./plugins";
+import type {
+	BetterAuthPlugin,
+	HookAfterHandler,
+	HookBeforeHandler,
+} from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance, SecondaryStorage, Where } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
-import type { AuthContext, LiteralUnion, OmitId } from ".";
+import type {
+	AuthContext,
+	GenericEndpointContext,
+	LiteralUnion,
+	OmitId,
+} from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
@@ -669,6 +678,31 @@ export interface BetterAuthOptions {
 			};
 		};
 	};
+	dbHooks?: {
+		/**
+		 * Hook that is called before a request is processed
+		 */
+		before?: (
+			input: {
+				model: string;
+				action: "create" | "update" | "delete" | "findOne" | "findMany";
+				data: Record<string, any>;
+				where?: Where[];
+			},
+			ctx: GenericEndpointContext,
+		) => Promise<
+			| false
+			| void
+			| {
+					data?: Record<string, any>;
+					where?: Where[];
+			  }
+		>;
+		/**
+		 * Hook that is called after a request is processed
+		 */
+		after?: () => {};
+	};
 	/**
 	 * API error handling
 	 */
@@ -686,5 +720,18 @@ export interface BetterAuthOptions {
 		 * @param ctx - Auth context
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+	};
+	/**
+	 * Hooks
+	 */
+	hooks?: {
+		/**
+		 * Before a request is processed
+		 */
+		before?: HookBeforeHandler;
+		/**
+		 * After a request is processed
+		 */
+		after?: HookAfterHandler;
 	};
 }

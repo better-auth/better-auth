@@ -1,0 +1,87 @@
+---
+title: Hooks
+description: How to use hooks in BetterAuth
+---
+
+Hooks are functions that let you "hook into" the lifecycle of BetterAuth and execute custom logic. You can use hooks to customize the behavior of BetterAuth, such as adding custom authentication logic, handling redirects, or updating the UI based on the authentication state.
+
+## Hook Types
+
+- [Database Hooks](#database-hooks)
+- [Middleware](#middleware)
+
+## Database Hooks
+
+Database hooks are used to hook into the lifecycle of database calls made by BetterAuth. This is useful cause hooking into different plugins route may not be ideal but you could hook into the database calls they made to customize the behavior.
+
+### `before`
+
+The `before` hook is called before a database call is made. You can use this hook to modify the database call, to add additional data, to validate the data, to stop the call, or to perform any other custom logic.
+
+```ts title="auth.ts"
+import { betterAuth } from "betterauth";
+
+const auth = betterAuth({
+    hooks: {
+        database: {
+            before: (ctx)=>{
+
+            }
+        }
+    }
+});
+```
+
+the `ctx` object contains the following properties:
+
+- `model`: The model that is being called.
+- `action`: the action that is going to be performed between `create`, `update`, `delete`, `findMany`, `findOne`.
+- `data`: the data that is going to be passed to the database call. (this isn't typed so you may need to cast it to the correct type).
+- `where`: the where clause that is going to be passed to the database call. It's an array of objects containing `field`, `value` and optional `operator`.
+- `request`: the request object that originated the call (this may be empty in the case of the server side invoked calls).
+
+From the before hook you can return a new `ctx` object to modify the data that is going to be passed to the database call or false to stop the call.
+
+If you need to throw custom error you can throw `APIError`.
+
+```ts title="auth.ts"
+import { betterAuth, APIError } from "betterauth";
+
+const auth = betterAuth({
+    hooks: {
+        database: {
+            before: (ctx)=>{
+                if(ctx.action === "create" && ctx.model === "user"){
+                    if(ctx.data.password.length < 8){
+                        throw new APIError("BAD_REQUEST", {
+                            message: "Password must be at least 8 characters long"
+                        });
+                    }
+                }
+            }
+        }
+    }
+});
+```
+
+
+### `after`
+
+The `after` hook is called after a database call is made. This is mostly similar to the `before` hook but it's called after the database call is made and you can't stop the call.
+
+```ts title="auth.ts"
+import { betterAuth } from "betterauth";
+
+const auth = betterAuth({
+    hooks: {
+        database: {
+            after: (ctx)=>{
+
+            }
+        }
+    }
+});
+```
+
+the `ctx` object on top of the properties from the `before` hook also contains the following properties:
+- `result`: the result of the database call.
