@@ -77,7 +77,7 @@ export type BetterAuthPlugin = {
 			handler: (context: HookEndpointContext) => Promise<
 				| void
 				| {
-						responseHeader?: Partial<HookEndpointContext>;
+						responseHeader?: Headers;
 				  }
 				| Response
 				| {

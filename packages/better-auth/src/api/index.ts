@@ -280,7 +280,12 @@ export function getEndpoints<
 							try {
 								const hookRes = await hook.handler(internalContext);
 								if (hookRes) {
-									internalContext.context.returned = hookRes;
+									if ("responseHeader" in hookRes) {
+										const headers = hookRes.responseHeader as Headers;
+										internalContext.responseHeader = headers;
+									} else {
+										internalContext.context.returned = hookRes;
+									}
 								}
 							} catch (e) {
 								if (e instanceof APIError) {

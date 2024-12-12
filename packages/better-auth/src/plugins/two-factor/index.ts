@@ -14,12 +14,7 @@ import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
 import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
-import {
-	deleteSessionCookie,
-	parseSetCookieHeader,
-	setSessionCookie,
-} from "../../cookies";
-import { getEndpointResponse } from "../../utils/plugin-helper";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
@@ -352,3 +347,4 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 };
 
 export * from "./client";
+export * from "./types";
