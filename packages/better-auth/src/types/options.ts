@@ -403,7 +403,7 @@ export interface BetterAuthOptions {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[] | ((request: Request) => Promise<boolean>);
+	trustedOrigins?: string[];
 	/**
 	 * Rate limiting configuration
 	 */

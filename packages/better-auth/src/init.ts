@@ -252,9 +252,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
 	if (options.trustedOrigins) {
-		if (typeof options.trustedOrigins !== "function") {
-			trustedOrigins.push(...options.trustedOrigins);
-		}
+		trustedOrigins.push(...options.trustedOrigins);
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
