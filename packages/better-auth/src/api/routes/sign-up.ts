@@ -6,7 +6,6 @@ import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
-	InferUser,
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
