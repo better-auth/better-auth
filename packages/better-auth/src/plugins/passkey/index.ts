@@ -74,7 +74,7 @@ export type Passkey = {
 	name?: string;
 	publicKey: string;
 	userId: string;
-	webauthnUserID: string;
+	credentialID: string;
 	counter: number;
 	deviceType: CredentialDeviceType;
 	backedUp: boolean;
@@ -255,7 +255,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
-							id: passkey.id,
+							id: passkey.credentialID,
 							transports: passkey.transports?.split(
 								",",
 							) as AuthenticatorTransportFuture[],
@@ -418,7 +418,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						...(userPasskeys.length
 							? {
 									allowCredentials: userPasskeys.map((passkey) => ({
-										id: passkey.id,
+										id: passkey.credentialID,
 										transports: passkey.transports?.split(
 											",",
 										) as AuthenticatorTransportFuture[],
@@ -551,8 +551,8 @@ export const passkey = (options?: PasskeyOptions) => {
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							webauthnUserID: ctx.context.generateId({ model: "passkey" }),
-							id: credentialID,
+							id: ctx.context.generateId({ model: "passkey" }),
+							credentialID,
 							publicKey: pubKey,
 							counter,
 							deviceType: credentialDeviceType,
@@ -659,7 +659,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedOrigin: origin,
 							expectedRPID: opts.rpID,
 							authenticator: {
-								credentialID: passkey.id,
+								credentialID: passkey.credentialID,
 								credentialPublicKey: new Uint8Array(
 									Buffer.from(passkey.publicKey, "base64"),
 								),
@@ -851,7 +851,7 @@ const schema = {
 				},
 				required: true,
 			},
-			webauthnUserID: {
+			credentialID: {
 				type: "string",
 				required: true,
 			},
