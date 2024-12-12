@@ -14,10 +14,7 @@ export async function generateState(
 		userId: string;
 	},
 ) {
-	const callbackURL =
-		c.body?.callbackURL ||
-		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "") ||
-		c.context.options.baseURL;
+	const callbackURL = c.body?.callbackURL || "/";
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",
@@ -28,7 +25,7 @@ export async function generateState(
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
-		errorURL: c.body?.errorCallbackURL || c.query?.currentURL,
+		errorURL: c.body?.errorCallbackURL,
 		link,
 		/**
 		 * This is the actual expiry time of the state
