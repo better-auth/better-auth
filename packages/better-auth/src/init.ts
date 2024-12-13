@@ -126,6 +126,10 @@ export const init = async (options: BetterAuthOptions) => {
 			},
 			checkPassword,
 		},
+		setNewSession(session) {
+			this.newSession = session;
+		},
+		newSession: null,
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
@@ -143,10 +147,26 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
-	session: {
-		session: Session;
-		user: User;
+	/**
+	 * New session that will be set after the request
+	 * meaning: there is a `set-cookie` header that will set
+	 * the session cookie. This is the fetched session. And it's set
+	 * by `setNewSession` method.
+	 */
+	newSession: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
 	} | null;
+	session: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	} | null;
+	setNewSession: (
+		session: {
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null,
+	) => void;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;

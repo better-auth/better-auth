@@ -4,7 +4,6 @@ import type { BetterAuthPlugin, User } from "../../types";
 import { alphabet, generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
-import { getEndpointResponse } from "../../utils/plugin-helper";
 
 interface EmailOTPOptions {
 	/**
@@ -49,6 +48,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		otpLength: 6,
 		...options,
 	};
+	const ERROR_CODES = {
+		OTP_EXPIRED: "otp expired",
+		INVALID_OTP: "invalid otp",
+		INVALID_EMAIL: "invalid email",
+		USER_NOT_FOUND: "user not found",
+	} as const;
 	return {
 		id: "email-otp",
 		endpoints: {
@@ -100,7 +105,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid email",
+							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
@@ -267,27 +272,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid email",
+							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`email-verification-otp-${email}`,
 						);
-					if (!verificationValue || verificationValue.expiresAt < new Date()) {
-						if (verificationValue) {
-							await ctx.context.internalAdapter.deleteVerificationValue(
-								verificationValue.id,
-							);
-						}
+					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -296,7 +304,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -307,8 +315,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					);
 					return ctx.json({
-						user: updatedUser,
-					});
+						id: updatedUser.id,
+						email: updatedUser.email,
+						emailVerified: updatedUser.emailVerified,
+						name: updatedUser.name,
+						image: updatedUser.image,
+						createdAt: updatedUser.createdAt,
+						updatedAt: updatedUser.updatedAt,
+					} as User);
 				},
 			),
 			signInEmailOTP: createAuthEndpoint(
@@ -355,20 +369,23 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
 						);
-					if (!verificationValue || verificationValue.expiresAt < new Date()) {
-						if (verificationValue) {
-							await ctx.context.internalAdapter.deleteVerificationValue(
-								verificationValue.id,
-							);
-						}
+					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -378,7 +395,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					if (!user) {
 						if (opts.disableSignUp) {
 							throw new APIError("BAD_REQUEST", {
-								message: "User not found",
+								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const newUser = await ctx.context.internalAdapter.createUser({
@@ -457,7 +474,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
@@ -522,27 +539,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`forget-password-otp-${email}`,
 						);
-					if (!verificationValue || verificationValue.expiresAt < new Date()) {
-						if (verificationValue) {
-							await ctx.context.internalAdapter.deleteVerificationValue(
-								verificationValue.id,
-							);
-						}
+					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -571,10 +591,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					},
 					async handler(ctx) {
-						const response = await getEndpointResponse<{
-							user: User;
-						}>(ctx);
-						if (!response) {
+						const response = ctx.context.newSession;
+						if (!response?.user) {
 							return;
 						}
 						if (response.user.email && response.user.emailVerified === false) {
@@ -597,5 +615,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			],
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

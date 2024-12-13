@@ -22,7 +22,7 @@ const testimonials = [
 		description:
 			"When @better_auth meets @nuxt_hub to build full-stack Nuxt apps on Cloudflare (using D1 & KV).",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1042510623962275840/1Iw_Mvud_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1862505215624142848/7tSrng8r_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},

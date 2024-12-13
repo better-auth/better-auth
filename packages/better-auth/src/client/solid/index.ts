@@ -6,17 +6,17 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
-	InferSessionFromClient,
-	InferUserFromClient,
+	InferErrorCodes,
 	IsSignal,
 } from "../types";
 import type { Accessor } from "solid-js";
-import type { UnionToIntersection } from "../../types/helper";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import { useStore } from "./solid-store";
+import type { BASE_ERROR_CODES } from "../../error/codes";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -67,10 +67,14 @@ export function createAuthClient<Option extends ClientOptions>(
 	);
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {
-		getSession: () => Promise<BetterFetchResponse<infer D>>;
+		getSession: () => Promise<infer Res>;
 	}
-		? D
-		: ClientAPI;
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res extends Record<string, any>
+				? Res
+				: never
+		: never;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
@@ -84,5 +88,8 @@ export function createAuthClient<Option extends ClientOptions>(
 				Session: NonNullable<Session>;
 			};
 			$fetch: typeof $fetch;
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
 		};
 }

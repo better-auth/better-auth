@@ -159,7 +159,7 @@ const response = await auth.api.signInEmail({
     asResponse: true
 })
 ```
-s
+
 ### TOTP
 
 TOTP (Time-Based One-Time Password) is an algorithm that generates a unique password for each login attempt using time as a counter. Every fixed interval (Better Auth defaults to 30 seconds), a new password is generated. This addresses several issues with traditional passwords: they can be forgotten, stolen, or guessed. OTPs solve some of these problems, but their delivery via SMS or email can be unreliable (or even risky, considering it opens new attack vectors).
@@ -326,6 +326,18 @@ const verify2FA = async (code: string) => {
 
 When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
+### Issuer
+
+By adding an `issuer` you can set your application name for the 2fa application.
+
+For example, if your user uses Google Auth, the default appName will show up as `Better-Auth`. However, by using the following code, it will show up as `my-app-name`.
+
+```ts
+twoFactor({
+    issuer: "my-app-name" // [!code highlight]
+})
+```
+---
 
 ## Schema
 

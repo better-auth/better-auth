@@ -61,7 +61,7 @@ describe("db", async () => {
 			name: "test",
 			password: "password",
 		});
-		expect(res.data?.user.image).toBe("test-image");
+		expect(res.data?.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
 
@@ -78,7 +78,7 @@ describe("db", async () => {
 			password: "password",
 			name: "Test User",
 		});
-		expect(res.data?.user.email).toBe("test@email.com");
+		expect(res.data?.email).toBe("test@email.com");
 		const { headers } = await signInWithTestUser();
 		const res2 = await client.updateUser(
 			{
@@ -88,6 +88,6 @@ describe("db", async () => {
 				headers,
 			},
 		);
-		expect(res2.data?.user.name).toBe("New Name");
+		expect(res2.data?.name).toBe("New Name");
 	});
 });

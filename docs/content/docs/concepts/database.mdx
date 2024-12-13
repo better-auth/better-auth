@@ -711,6 +711,35 @@ export const auth = betterAuth({
 })
 ```
 
+#### Throwing Errors
+If you want to stop the database hook from proceeding, you can throw errors using the `APIError` class imported from `better-auth/api`.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (user.isAgreedToTerms === false) { // Your special condition.
+            // Send the API error.
+            throw new APIError("BAD_REQUEST", {
+              message: "User must agree to the TOS before signing up.",
+            });
+          }
+          return {
+            data: user
+          };
+        },
+      },
+    },
+  }
+})
+```
+
+
 ## Plugins Schema
 
 Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:

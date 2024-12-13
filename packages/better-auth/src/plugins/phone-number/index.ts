@@ -11,6 +11,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -101,6 +102,13 @@ export const phoneNumber = (options?: {
 		code: "code",
 		createdAt: "createdAt",
 	};
+
+	const ERROR_CODES = {
+		INVALID_PHONE_NUMBER: "Invalid phone number",
+		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
+		UNEXPECTED_ERROR: "Unexpected error",
+		OTP_NOT_FOUND: "OTP not found",
+	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -160,7 +168,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid phone number!",
+								message: ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -176,7 +184,7 @@ export const phoneNumber = (options?: {
 					});
 					if (!user) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid phone number or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const accounts =
@@ -189,14 +197,14 @@ export const phoneNumber = (options?: {
 							phoneNumber,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid password or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const currentPassword = credentialAccount?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", { phoneNumber });
 						throw new APIError("UNAUTHORIZED", {
-							message: "Unexpected error",
+							message: ERROR_CODES.UNEXPECTED_ERROR,
 						});
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -206,7 +214,7 @@ export const phoneNumber = (options?: {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -217,7 +225,7 @@ export const phoneNumber = (options?: {
 					if (!session) {
 						ctx.context.logger.error("Failed to create session");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Failed to create session",
+							message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						});
 					}
 
@@ -282,7 +290,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid phone number!",
+								message: ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -391,7 +399,7 @@ export const phoneNumber = (options?: {
 							});
 						}
 						throw new APIError("BAD_REQUEST", {
-							message: "OTP not found",
+							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
 					if (otp.value !== ctx.body.code) {
@@ -406,7 +414,7 @@ export const phoneNumber = (options?: {
 						const session = await getSessionFromCtx(ctx);
 						if (!session) {
 							throw new APIError("UNAUTHORIZED", {
-								message: "Session not found",
+								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const user = await ctx.context.internalAdapter.updateUser(
@@ -454,7 +462,7 @@ export const phoneNumber = (options?: {
 							});
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
-									message: "Failed to create user",
+									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 								});
 							}
 						} else {
@@ -468,7 +476,7 @@ export const phoneNumber = (options?: {
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to update user",
+							message: BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 						});
 					}
 
@@ -479,7 +487,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: "Failed to create session",
+								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 							});
 						}
 						await setSessionCookie(ctx, {
@@ -500,6 +508,7 @@ export const phoneNumber = (options?: {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 

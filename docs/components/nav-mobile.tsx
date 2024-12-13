@@ -1,7 +1,13 @@
 "use client";
 import { Menu, Sun, X } from "lucide-react";
 import Link from "next/link";
-import { Fragment, createContext, useContext, useState } from "react";
+import {
+	Fragment,
+	createContext,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 import {
 	Accordion,
 	AccordionContent,
@@ -9,8 +15,9 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
-import { contents } from "./sidebar-content";
+import { contents, examples } from "./sidebar-content";
 import { MobileThemeToggle, ThemeToggle } from "./theme-toggler";
+import { usePathname } from "next/navigation";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -80,7 +87,7 @@ export const NavbarMobile = () => {
 				{isOpen && (
 					<FadeIn
 						fromTopToBottom
-						className="bg-transparent p-5 divide-y overflow-y-auto"
+						className="p-5 overflow-y-auto bg-transparent divide-y"
 					>
 						{navMenu.map((menu, i) => (
 							<Fragment key={menu.name}>
@@ -95,7 +102,7 @@ export const NavbarMobile = () => {
 													<Link
 														href={child.path}
 														key={child.name}
-														className="block text-xl py-2 first:pt-0 last:pb-0 border-b last:border-0 text-muted-foreground"
+														className="block py-2 text-xl border-b first:pt-0 last:pb-0 last:border-0 text-muted-foreground"
 														onClick={toggleNavbar}
 													>
 														{child.name}
@@ -107,7 +114,7 @@ export const NavbarMobile = () => {
 								) : (
 									<Link
 										href={menu.path}
-										className="block text-2xl py-4 first:pt-0 last:pb-0"
+										className="block py-4 text-2xl first:pt-0 last:pb-0"
 										onClick={toggleNavbar}
 									>
 										{menu.name}
@@ -127,7 +134,7 @@ export const DocsNavbarMobileBtn: React.FC = () => {
 
 	return (
 		<button
-			className="text-muted-foreground ml-auto block md:hidden"
+			className="block ml-auto text-muted-foreground md:hidden"
 			onClick={() => {
 				toggleNavbar();
 			}}
@@ -157,6 +164,9 @@ export const DocsNavbarMobileBtn: React.FC = () => {
 export const DocsNavBarMobile = () => {
 	const { isDocsOpen: isOpen, toggleDocsNavbar: toggleNavbar } =
 		useNavbarMobile();
+	const pathname = usePathname();
+
+	const content = pathname.startsWith("/docs/examples") ? examples : contents;
 
 	return (
 		<AnimatePresence>
@@ -165,10 +175,10 @@ export const DocsNavBarMobile = () => {
 					fromTopToBottom
 					className="absolute top-[100px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-[1000] p-5 divide-y overflow-y-auto"
 				>
-					{contents.map((menu, i) => (
+					{content.map((menu, i) => (
 						<Accordion type="single" collapsible key={menu.title}>
 							<AccordionItem value={menu.title}>
-								<AccordionTrigger className=" font-normal text-foreground ">
+								<AccordionTrigger className="font-normal text-foreground">
 									<div className="flex items-center gap-2">
 										{!!menu.Icon && <menu.Icon className="w-5 h-5" />}
 										{menu.title}
@@ -179,13 +189,13 @@ export const DocsNavBarMobile = () => {
 										<Link
 											href={child.href}
 											key={child.title}
-											className="block text-sm py-2 first:pt-0 last:pb-0 border-b last:border-0 text-muted-foreground"
+											className="block py-2 text-sm border-b first:pt-0 last:pb-0 last:border-0 text-muted-foreground"
 											onClick={toggleNavbar}
 										>
 											{child.group ? (
-												<div className="flex flex-row gap-2 items-center ">
+												<div className="flex flex-row items-center gap-2 ">
 													<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
-													<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
+													<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 														{child.title}
 													</p>
 												</div>
@@ -221,15 +231,29 @@ export const navMenu: {
 	},
 
 	{
-		name: "_docs",
+		name: "docs",
 		path: "/docs",
 	},
 	{
-		name: "_changelogs",
+		name: "examples",
+		path: "/docs/examples/next-js",
+	},
+	{
+		name: "changelogs",
 		path: "/changelogs",
 	},
 	{
-		name: "_community",
-		path: "https://discord.gg/GYC3W7tZzb",
+		name: "community",
+		path: "/community",
 	},
 ];
+
+export const DocsNavbarMobileTitle = () => {
+	const pathname = usePathname();
+
+	if (pathname.startsWith("/docs/examples")) {
+		return <p>Examples</p>;
+	} else {
+		return <p>Docs</p>;
+	}
+};

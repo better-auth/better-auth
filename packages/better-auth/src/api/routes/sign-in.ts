@@ -6,6 +6,7 @@ import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -163,7 +164,7 @@ export const signInSocial = createAuthEndpoint(
 				},
 			);
 			throw new APIError("NOT_FOUND", {
-				message: "Provider not found",
+				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 			});
 		}
 
@@ -176,7 +177,7 @@ export const signInSocial = createAuthEndpoint(
 					},
 				);
 				throw new APIError("NOT_FOUND", {
-					message: "Provider does not support id token verification",
+					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
 				});
 			}
 			const { token, nonce } = c.body.idToken;
@@ -186,7 +187,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "Invalid id token",
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
 				});
 			}
 			const userInfo = await provider.getUserInfo({
@@ -199,7 +200,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "Failed to get user info",
+					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
 			if (!userInfo.user.email) {
@@ -207,7 +208,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "User email not found",
+					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 				});
 			}
 			const data = await handleOAuthUserInfo(c, {
@@ -302,9 +303,6 @@ export const signInEmail = createAuthEndpoint(
 								schema: {
 									type: "object",
 									properties: {
-										session: {
-											type: "string",
-										},
 										user: {
 											type: "object",
 										},
@@ -337,7 +335,7 @@ export const signInEmail = createAuthEndpoint(
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
+				message: BASE_ERROR_CODES.INVALID_EMAIL,
 			});
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
@@ -348,7 +346,7 @@ export const signInEmail = createAuthEndpoint(
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -358,14 +356,14 @@ export const signInEmail = createAuthEndpoint(
 		if (!credentialAccount) {
 			ctx.context.logger.error("Credential account not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
 			ctx.context.logger.error("Password not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Unexpected error",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 		const validPassword = await ctx.context.password.verify({
@@ -375,7 +373,7 @@ export const signInEmail = createAuthEndpoint(
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -385,7 +383,7 @@ export const signInEmail = createAuthEndpoint(
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
 				throw new APIError("UNAUTHORIZED", {
-					message: "Email is not verified.",
+					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
 			const token = await createEmailVerificationToken(
@@ -405,8 +403,7 @@ export const signInEmail = createAuthEndpoint(
 			);
 			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {
-				message:
-					"Email is not verified. Check your email for a verification link",
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
 		}
 
@@ -419,7 +416,7 @@ export const signInEmail = createAuthEndpoint(
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Failed to create session",
+				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
 
@@ -432,8 +429,15 @@ export const signInEmail = createAuthEndpoint(
 			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
-			user: user.user,
-			session,
+			user: {
+				id: user.user.id,
+				email: user.user.email,
+				name: user.user.name,
+				image: user.user.image,
+				emailVerified: user.user.emailVerified,
+				createdAt: user.user.createdAt,
+				updatedAt: user.user.updatedAt,
+			},
 			redirect: !!ctx.body.callbackURL,
 			url: ctx.body.callbackURL,
 		});

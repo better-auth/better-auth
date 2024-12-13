@@ -56,6 +56,34 @@ describe("organization", async (it) => {
 		expect(organization.data?.metadata).toBeDefined();
 		expect(organization.data?.members.length).toBe(1);
 		expect(organization.data?.members[0].role).toBe("owner");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+	});
+
+	it("should create organization directly in the server without cookie", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const organization = await auth.api.createOrganization({
+			body: {
+				name: "test2",
+				slug: "test2",
+				userId: session.data?.session.userId,
+			},
+		});
+
+		expect(organization?.name).toBe("test2");
+		expect(organization?.members.length).toBe(1);
+		expect(organization?.members[0].role).toBe("owner");
 	});
 
 	it("should allow listing organizations", async () => {
@@ -64,7 +92,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(organizations.data?.length).toBe(1);
+		expect(organizations.data?.length).toBe(2);
 	});
 
 	it("should allow updating organization", async () => {
@@ -347,7 +375,7 @@ describe("organization", async (it) => {
 		const member = await auth.api.addMember({
 			body: {
 				organizationId: org?.id,
-				userId: newUser.user.id,
+				userId: newUser.id,
 				role: "admin",
 			},
 		});

@@ -6,6 +6,7 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -143,7 +144,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
 			throw new APIError("BAD_REQUEST", {
-				message: "User not found",
+				message: BASE_ERROR_CODES.USER_NOT_FOUND,
 			});
 		}
 		await sendVerificationEmailFn(ctx, user.user);
@@ -197,6 +198,9 @@ export const verifyEmail = createAuthEndpoint(
 	async (ctx) => {
 		function redirectOnError(error: string) {
 			if (ctx.query.callbackURL) {
+				if (ctx.query.callbackURL.includes("?")) {
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+				}
 				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
 			}
 			throw new APIError("UNAUTHORIZED", {
@@ -241,15 +245,21 @@ export const verifyEmail = createAuthEndpoint(
 				parsed.email,
 				{
 					email: parsed.updateTo,
+					emailVerified: false,
 				},
+			);
+
+			const newToken = await createEmailVerificationToken(
+				ctx.context.secret,
+				parsed.updateTo,
 			);
 
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${token}`,
-					token,
+					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					token: newToken,
 				},
 				ctx.request,
 			);

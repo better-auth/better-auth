@@ -32,9 +32,7 @@ BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL (optional)**
-
-Not required if the `baseURL` property is set in the createAuthClient function described below.
+2. **Set Base URL**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
@@ -293,8 +291,7 @@ Better Auth supports any backend framework with standard Request and Response ob
 
     const app = new Hono();
 
-    app.get('/api/auth/*', (c) => auth.handler(c.req.raw));
-    app.post('/api/auth/*', (c) => auth.handler(c.req.raw));
+    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```
@@ -310,11 +307,16 @@ Better Auth supports any backend framework with standard Request and Response ob
     const port = 8000;
 
     app.all("/api/auth/*", toNodeHandler(auth));
+
+    // Mount express json middleware after Better Auth handler
+    // or only apply it to routes that don't interact with Better Auth
+    app.use(express.json());
+
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc.
+    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"

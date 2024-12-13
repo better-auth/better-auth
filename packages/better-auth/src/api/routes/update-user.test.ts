@@ -48,7 +48,7 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		expect(updated.data?.user.name).toBe("newName");
+		expect(updated.data?.name).toBe("newName");
 	});
 
 	it("should unset image", async () => {
@@ -58,7 +58,7 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		expect(updated.data?.user.image).toBeNull();
+		expect(updated.data?.image).toBeNull();
 	});
 
 	it("should update user email", async () => {
@@ -192,8 +192,14 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		//@ts-expect-error
-		expect(updated.data?.user.newField).toBe("new");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		// @ts-ignore
+		expect(session?.user.newField).toBe("new");
 	});
 });
 

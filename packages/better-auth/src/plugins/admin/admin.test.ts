@@ -4,36 +4,35 @@ import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
 
 describe("Admin plugin", async () => {
-	const { client, auth, signInWithTestUser, signInWithUser } =
-		await getTestInstance(
-			{
-				plugins: [admin()],
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => {
-								if (user.name === "Admin") {
-									return {
-										data: {
-											...user,
-											role: "admin",
-										},
-									};
-								}
-							},
+	const { client, signInWithTestUser, signInWithUser } = await getTestInstance(
+		{
+			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
 						},
 					},
 				},
 			},
-			{
-				testUser: {
-					name: "Admin",
-				},
-				clientOptions: {
-					plugins: [adminClient()],
-				},
+		},
+		{
+			testUser: {
+				name: "Admin",
 			},
-		);
+			clientOptions: {
+				plugins: [adminClient()],
+			},
+		},
+	);
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 
@@ -188,7 +187,7 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user).toBeDefined();
 	});
 
 	it("should allow to unban user", async () => {
@@ -225,14 +224,14 @@ describe("Admin plugin", async () => {
 		const userToImpersonate = await client.signUp.email(data);
 		const res = await client.admin.impersonateUser(
 			{
-				userId: userToImpersonate.data?.user.id || "",
+				userId: userToImpersonate.data?.id || "",
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
 		expect(res.data?.session).toBeDefined();
-		expect(res.data?.user?.id).toBe(userToImpersonate.data?.user.id);
+		expect(res.data?.user?.id).toBe(userToImpersonate.data?.id);
 	});
 
 	it("should filter impersonated sessions", async () => {

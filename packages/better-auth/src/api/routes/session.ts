@@ -14,6 +14,7 @@ import type {
 } from "../../types";
 import { hmac } from "../../crypto/hash";
 import { safeJSONParse } from "../../utils/json";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -31,6 +32,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							description:
 								"Disable cookie cache and fetch session from database",
 						})
+						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 					disableRefresh: z
 						.boolean({
@@ -237,7 +239,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "internal server error",
+					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				});
 			}
 		},
@@ -264,6 +266,8 @@ export const getSessionFromCtx = async <
 		_flag: "json",
 		headers: ctx.headers!,
 		query: config,
+	}).catch((e) => {
+		return null;
 	});
 	ctx.context.session = session;
 	return session as {
@@ -277,7 +281,6 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
-
 	return {
 		session,
 	};

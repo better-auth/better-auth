@@ -49,9 +49,9 @@ export const SelectTrigger = <T extends ValidComponent = "button">(
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="m8 9l4-4l4 4m0 6l-4 4l-4-4"
 				/>
 			</SelectPrimitive.Icon>
@@ -113,9 +113,9 @@ export const SelectItem = <T extends ValidComponent = "li">(
 					<path
 						fill="none"
 						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 						d="m5 12l5 5L20 7"
 					/>
 					<title>Checked</title>

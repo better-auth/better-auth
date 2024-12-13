@@ -8,6 +8,7 @@ import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	type OAuth2Tokens,
+	type OAuthProvider,
 } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
@@ -24,11 +25,6 @@ interface GenericOAuthConfig {
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string;
-	/**
-	 * Type of OAuth flow.
-	 * @default "oauth2"
-	 */
-	type?: "oauth2" | "oidc";
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -116,23 +112,27 @@ interface GenericOAuthOptions {
 
 async function getUserInfo(
 	tokens: OAuth2Tokens,
-	type: "oauth2" | "oidc",
 	finalUserInfoUrl: string | undefined,
 ) {
-	if (type === "oidc" && tokens.idToken) {
+	if (tokens.idToken) {
 		const decoded = parseJWT(tokens.idToken) as {
 			payload: {
 				sub: string;
 				email_verified: boolean;
 				email: string;
+				name: string;
+				picture: string;
 			};
 		};
 		if (decoded?.payload) {
-			return {
-				id: decoded.payload.sub,
-				emailVerified: decoded.payload.email_verified,
-				...decoded.payload,
-			};
+			if (decoded.payload.sub && decoded.payload.email) {
+				return {
+					id: decoded.payload.sub,
+					emailVerified: decoded.payload.email_verified,
+					image: decoded.payload.picture,
+					...decoded.payload,
+				};
+			}
 		}
 	}
 
@@ -145,6 +145,7 @@ async function getUserInfo(
 		sub?: string;
 		name: string;
 		email_verified: boolean;
+		picture: string;
 	}>(finalUserInfoUrl, {
 		method: "GET",
 		headers: {
@@ -155,6 +156,8 @@ async function getUserInfo(
 		id: userInfo.data?.sub,
 		emailVerified: userInfo.data?.email_verified,
 		email: userInfo.data?.email,
+		image: userInfo.data?.picture,
+		name: userInfo.data?.name,
 		...userInfo.data,
 	};
 }
@@ -163,8 +166,93 @@ async function getUserInfo(
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const ERROR_CODES = {
+		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+	} as const;
 	return {
 		id: "generic-oauth",
+		init: (ctx) => {
+			return {
+				context: {
+					socialProviders: options.config.map((c) => {
+						let finalTokenUrl = c.tokenUrl;
+						let finalUserInfoUrl = c.userInfoUrl;
+						return {
+							id: c.providerId,
+							name: c.providerId,
+							createAuthorizationURL(data) {
+								return createAuthorizationURL({
+									id: c.providerId,
+									options: {
+										clientId: c.clientId,
+										clientSecret: c.clientSecret,
+										redirectURI: c.redirectURI,
+									},
+									authorizationEndpoint: c.authorizationUrl!,
+									state: data.state,
+									codeVerifier: c.pkce ? data.codeVerifier : undefined,
+									scopes: c.scopes || [],
+									redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+								});
+							},
+							async validateAuthorizationCode(data) {
+								let finalTokenUrl = c.tokenUrl;
+								if (c.discoveryUrl) {
+									const discovery = await betterFetch<{
+										token_endpoint: string;
+										userinfo_endpoint: string;
+									}>(c.discoveryUrl, {
+										method: "GET",
+									});
+									if (discovery.data) {
+										finalTokenUrl = discovery.data.token_endpoint;
+										finalUserInfoUrl = discovery.data.userinfo_endpoint;
+									}
+								}
+								if (!finalTokenUrl) {
+									throw new APIError("BAD_REQUEST", {
+										message:
+											"Invalid OAuth configuration. Token URL not found.",
+									});
+								}
+								return validateAuthorizationCode({
+									code: data.code,
+									codeVerifier: data.codeVerifier,
+									redirectURI: data.redirectURI,
+									options: {
+										clientId: c.clientId,
+										clientSecret: c.clientSecret,
+									},
+									tokenEndpoint: finalTokenUrl,
+								});
+							},
+							async getUserInfo(tokens) {
+								if (!finalUserInfoUrl) {
+									return null;
+								}
+								const userInfo = c.getUserInfo
+									? await c.getUserInfo(tokens)
+									: await getUserInfo(tokens, finalUserInfoUrl);
+								if (!userInfo) {
+									return null;
+								}
+								return {
+									user: {
+										id: userInfo?.id,
+										email: userInfo?.email,
+										emailVerified: userInfo?.emailVerified,
+										image: userInfo?.image,
+										name: userInfo?.name,
+										...c.mapProfileToUser?.(userInfo),
+									},
+									data: userInfo,
+								};
+							},
+						} as OAuthProvider;
+					}),
+				},
+			};
+		},
 		endpoints: {
 			signInWithOAuth2: createAuthEndpoint(
 				"/sign-in/oauth2",
@@ -272,7 +360,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					if (!finalAuthUrl || !finalTokenUrl) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OAuth configuration.",
+							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
 					const { state, codeVerifier } = await generateState(ctx);
@@ -425,11 +513,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const userInfo = (
 						provider.getUserInfo
 							? await provider.getUserInfo(tokens)
-							: await getUserInfo(
-									tokens,
-									provider.type || "oauth2",
-									finalUserInfoUrl,
-								)
+							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as User | null;
 
 					if (!userInfo?.email) {
@@ -482,5 +566,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 			),
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

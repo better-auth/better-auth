@@ -54,7 +54,7 @@ describe("forget password", async (it) => {
 			email: testUser.email,
 			password: "new-password",
 		});
-		expect(newCred.data?.session).toBeDefined();
+		expect(newCred.data?.user).toBeDefined();
 	});
 
 	it("shouldn't allow the token to be used twice", async () => {

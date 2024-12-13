@@ -30,6 +30,10 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
 
+	const ERROR_CODES = {
+		INVALID_SESSION_TOKEN: "Invalid session token",
+	} as const;
+
 	return {
 		id: "multi-session",
 		endpoints: {
@@ -109,7 +113,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session token",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
 					const session =
@@ -120,7 +124,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							maxAge: 0,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session token",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
 					await setSessionCookie(ctx, session);
@@ -170,7 +174,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session token",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
 
@@ -284,5 +288,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 			],
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
