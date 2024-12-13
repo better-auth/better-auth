@@ -163,6 +163,11 @@ export const username = () => {
 						required: false,
 						unique: true,
 						returned: true,
+						transform: {
+							input(value) {
+								return value?.toString().toLowerCase();
+							},
+						},
 					},
 				},
 			},
