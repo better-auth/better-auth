@@ -256,6 +256,156 @@
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
       }
+    },
+    "./plugins/admin": {
+      "import": {
+        "types": "./dist/plugins/admin.d.ts",
+        "default": "./dist/plugins/admin.js"
+      },
+      "require": {
+        "types": "./dist/plugins/admin.d.cts",
+        "default": "./dist/plugins/admin.cjs"
+      }
+    },
+    "./plugins/anonymous": {
+      "import": {
+        "types": "./dist/plugins/anonymous.d.ts",
+        "default": "./dist/plugins/anonymous.js"
+      },
+      "require": {
+        "types": "./dist/plugins/anonymous.d.cts",
+        "default": "./dist/plugins/anonymous.cjs"
+      }
+    },
+    "./plugins/bearer": {
+      "import": {
+        "types": "./dist/plugins/bearer.d.ts",
+        "default": "./dist/plugins/bearer.js"
+      },
+      "require": {
+        "types": "./dist/plugins/bearer.d.cts",
+        "default": "./dist/plugins/bearer.cjs"
+      }
+    },
+    "./plugins/custom-session": {
+      "import": {
+        "types": "./dist/plugins/custom-session.d.ts",
+        "default": "./dist/plugins/custom-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/custom-session.d.cts",
+        "default": "./dist/plugins/custom-session.cjs"
+      }
+    },
+    "./plugins/email-otp": {
+      "import": {
+        "types": "./dist/plugins/email-otp.d.ts",
+        "default": "./dist/plugins/email-otp.js"
+      },
+      "require": {
+        "types": "./dist/plugins/email-otp.d.cts",
+        "default": "./dist/plugins/email-otp.cjs"
+      }
+    },
+    "./plugins/generic-oauth": {
+      "import": {
+        "types": "./dist/plugins/generic-oauth.d.ts",
+        "default": "./dist/plugins/generic-oauth.js"
+      },
+      "require": {
+        "types": "./dist/plugins/generic-oauth.d.cts",
+        "default": "./dist/plugins/generic-oauth.cjs"
+      }
+    },
+    "./plugins/jwt": {
+      "import": {
+        "types": "./dist/plugins/jwt.d.ts",
+        "default": "./dist/plugins/jwt.js"
+      },
+      "require": {
+        "types": "./dist/plugins/jwt.d.cts",
+        "default": "./dist/plugins/jwt.cjs"
+      }
+    },
+    "./plugins/magic-link": {
+      "import": {
+        "types": "./dist/plugins/magic-link.d.ts",
+        "default": "./dist/plugins/magic-link.js"
+      },
+      "require": {
+        "types": "./dist/plugins/magic-link.d.cts",
+        "default": "./dist/plugins/magic-link.cjs"
+      }
+    },
+    "./plugins/multi-session": {
+      "import": {
+        "types": "./dist/plugins/multi-session.d.ts",
+        "default": "./dist/plugins/multi-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/multi-session.d.cts",
+        "default": "./dist/plugins/multi-session.cjs"
+      }
+    },
+    "./plugins/oauth-proxy": {
+      "import": {
+        "types": "./dist/plugins/oauth-proxy.d.ts",
+        "default": "./dist/plugins/oauth-proxy.js"
+      },
+      "require": {
+        "types": "./dist/plugins/oauth-proxy..d.cts",
+        "default": "./dist/plugins/oauth-proxy..cjs"
+      }
+    },
+    "./plugins/organization": {
+      "import": {
+        "types": "./dist/plugins/organization.d.ts",
+        "default": "./dist/plugins/organization.js"
+      },
+      "require": {
+        "types": "./dist/plugins/organization.d.cts",
+        "default": "./dist/plugins/organization.cjs"
+      }
+    },
+    "./plugins/passkey": {
+      "import": {
+        "types": "./dist/plugins/passkey.d.ts",
+        "default": "./dist/plugins/passkey.js"
+      },
+      "require": {
+        "types": "./dist/plugins/passkey.d.cts",
+        "default": "./dist/plugins/passkey.cjs"
+      }
+    },
+    "./plugins/phone-number": {
+      "import": {
+        "types": "./dist/plugins/phone-number.d.ts",
+        "default": "./dist/plugins/phone-number.js"
+      },
+      "require": {
+        "types": "./dist/plugins/phone-number.d.cts",
+        "default": "./dist/plugins/phone-number.cjs"
+      }
+    },
+    "./plugins/two-factor": {
+      "import": {
+        "types": "./dist/plugins/two-factor.d.ts",
+        "default": "./dist/plugins/two-factor.js"
+      },
+      "require": {
+        "types": "./dist/plugins/two-factor.d.cts",
+        "default": "./dist/plugins/two-factor.cjs"
+      }
+    },
+    "./plugins/username": {
+      "import": {
+        "types": "./dist/plugins/username.d.ts",
+        "default": "./dist/plugins/username.js"
+      },
+      "require": {
+        "types": "./dist/plugins/username.d.cts",
+        "default": "./dist/plugins/username.cjs"
+      }
     }
   },
   "typesVersions": {
