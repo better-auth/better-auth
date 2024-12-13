@@ -129,6 +129,33 @@ export async function authorize(
 		);
 	}
 
+	if (
+		(!query.code_challenge || !query.code_challenge_method) &&
+		options.requirePKCE
+	) {
+		throw ctx.redirect(
+			redirectErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"pkce is required",
+			),
+		);
+	}
+
+	if (
+		!["s256", options.allowPlainCodeChallengeMethod ? "plain" : "s256"].includes(
+			query.code_challenge_method?.toLowerCase() || "",
+		)
+	) {
+		throw ctx.redirect(
+			redirectErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"invalid code_challenge method",
+			),
+		);
+	}
+
 	if (query.prompt === "login") {
 		await ctx.setSignedCookie(
 			"oidc_login_prompt",
@@ -169,6 +196,8 @@ export async function authorize(
 				 */
 				requireConsent: query.prompt === "consent",
 				state: query.prompt === "consent" ? query.state : null,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
 			}),
 			identifier: code,
 			expiresAt,

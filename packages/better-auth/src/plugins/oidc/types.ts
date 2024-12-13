@@ -75,6 +75,21 @@ export interface OIDCOptions {
 	 * prompt.
 	 */
 	loginPage: string;
+	/**
+	 * Weather to require PKCE (proof key code exchange) or not
+	 *
+	 * According to OAuth2.1 spec this should be required. But in any
+	 * case if you want to disable this you can use this options.
+	 *
+	 * @default true
+	 */
+	requirePKCE?: boolean;
+	/**
+	 * Allow plain to be used as a code challenge method.
+	 *
+	 * @default true
+	 */
+	allowPlainCodeChallengeMethod?: boolean;
 }
 
 export interface AuthorizationQuery {
@@ -167,6 +182,14 @@ export interface AuthorizationQuery {
 	 * 🏗️ currently not implemented
 	 */
 	id_token_hint?: string;
+	/**
+	 * Code challenge
+	 */
+	code_challenge?: string;
+	/**
+	 * Code challenge method used
+	 */
+	code_challenge_method?: "plain" | "s256";
 }
 
 export interface Client {
@@ -297,6 +320,14 @@ export interface CodeVerificationValue {
 	 * from using the code before the user consents.
 	 */
 	state: string | null;
+	/**
+	 * Code challenge
+	 */
+	codeChallenge?: string;
+	/**
+	 * Code Challenge Method
+	 */
+	codeChallengeMethod?: "sha256" | "plain";
 }
 
 export interface OAuthAccessToken {

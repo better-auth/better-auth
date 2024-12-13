@@ -1,4 +1,4 @@
-import { SignJWT } from "jose";
+import { base64url, SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
+import { sha256 } from "oslo/crypto";
 
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
@@ -204,6 +205,7 @@ export const oidc = (options: OIDCOptions) => {
 						code,
 						redirect_uri,
 						refresh_token,
+						code_verifier,
 					} = body;
 					if (grant_type === "refresh_token") {
 						if (!refresh_token) {
@@ -280,6 +282,14 @@ export const oidc = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+
+					if (options.requirePKCE && !code_verifier) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "code verifier is missing",
+							error: "invalid_request",
+						});
+					}
+
 					/**
 					 * We need to check if the code is valid before we can proceed
 					 * with the rest of the request.
@@ -303,6 +313,7 @@ export const oidc = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
+
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
@@ -382,6 +393,26 @@ export const oidc = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
+					if (value.codeChallenge && !code_verifier) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "code verifier is missing",
+							error: "invalid_request",
+						});
+					}
+
+					const challenge = value.codeChallengeMethod === "plain" ? 
+						code_verifier
+					: Buffer.from(
+						await sha256(new TextEncoder().encode(code_verifier || "")),
+					).toString("base64url");
+
+					if (challenge !== value.codeChallenge) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "code verification failed",
+							error: "invalid_request",
+						});
+					}
+
 					const requestedScopes = value.scope;
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						code.toString(),

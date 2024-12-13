@@ -21,6 +21,7 @@ describe("oidc", async () => {
 			oidc({
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
+				requirePKCE: true,
 			}),
 		],
 	});
@@ -105,8 +106,8 @@ describe("oidc", async () => {
 							authorizationUrl:
 								"http://localhost:3000/api/auth/oauth2/authorize",
 							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-							type: "oidc",
 							scopes: ["openid", "profile", "email"],
+							pkce: true,
 						},
 					],
 				}),
@@ -173,9 +174,9 @@ describe("oidc", async () => {
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-								type: "oidc",
 								scopes: ["openid", "profile", "email"],
 								prompt: "consent",
+								pkce: true,
 							},
 						],
 					}),
@@ -255,9 +256,9 @@ describe("oidc", async () => {
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-								type: "oidc",
 								scopes: ["openid", "profile", "email"],
 								prompt: "login",
+								pkce: true,
 							},
 						],
 					}),
