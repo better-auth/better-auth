@@ -67,7 +67,8 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
+		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
+			await parseState(c);
 
 		let tokens: OAuth2Tokens;
 		try {
@@ -127,7 +128,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			let toRedirectTo: string;
 			try {
-				const url = new URL(callbackURL);
+				const url = callbackURL;
 				toRedirectTo = url.toString();
 			} catch {
 				toRedirectTo = callbackURL;
@@ -160,10 +161,12 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 		let toRedirectTo: string;
 		try {
-			const url = new URL(callbackURL);
+			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
 			toRedirectTo = url.toString();
 		} catch {
-			toRedirectTo = callbackURL;
+			toRedirectTo = result.isRegister
+				? newUserURL || callbackURL
+				: callbackURL;
 		}
 		throw c.redirect(toRedirectTo);
 	},
