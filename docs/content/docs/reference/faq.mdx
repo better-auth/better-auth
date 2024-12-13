@@ -1,0 +1,41 @@
+---
+title: FAQ
+description: Frequently asked questions about Better-Auth.
+---
+
+This page contains frequently asked questions about common bugs or questions around Better-Auth.
+
+## createAuthClient not working 
+When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on enviroment.
+
+If you're using the auth client on react front-end, you'll need to import it from `/react`:
+```ts title="component.ts"
+import { createAuthClient } from "better-auth/react";
+```
+
+Where as if you're using the auth client in Next.js middelware, server-actions, server-components or anything server-related, you'll likely need to import it from `/client`:
+```ts title="server.ts"
+import { createAuthClient } from "better-auth/client";
+```
+
+---
+
+## getSession not working
+If you're running `getSession` from the server side (such as in a React Server Component), you need to pass headers for it to work.
+
+```ts title="server.ts"
+const result = authClient.getSession({ fetchOptions: {headers: yourHeaders }});
+```
+
+If you're using Next.js, you're likely able to access `headers()` from `next/headers`: (<Link href="https://nextjs.org/docs/app/api-reference/functions/headers">Read more here</Link>)
+```ts title="server.ts"
+import { headers } from "next/headers";
+//...
+const result = authClient.getSession({ fetchOptions: {headers: await headers() }});
+```
+
+---
+
+## Adding custom fields to the users table
+
+Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.

@@ -1,4 +1,5 @@
 import {
+	CircleHelp,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
@@ -1104,6 +1105,11 @@ export const contents: Content[] = [
 				title: "Security",
 				href: "/docs/reference/security",
 				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "FAQ",
+				href: "/docs/reference/faq",
+				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
 			},
 		],
 	},
