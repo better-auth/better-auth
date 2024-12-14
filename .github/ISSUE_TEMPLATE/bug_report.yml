@@ -1,7 +1,13 @@
 name: Report an issue
-description: Report an issue.
+description: Create a report to help us improve
 labels: ['bug']
 body:
+  - type: checkboxes
+    attributes:
+      label: Is this suited for github?
+      description: Feel free to join the discord community [here](https://discord.gg/GYC3W7tZzb), we can usually respond faster to any questions.
+      options:
+        - label: Yes, this is suited for github
   - type: markdown
     attributes:
       value: |
@@ -31,15 +37,21 @@ body:
       placeholder: 'Following the steps from the previous section, I expected A to happen, but I observed B instead.'
     validations:
       required: true
+  - type: input
+    attributes:
+      label: What version of Better Auth are you using?
+      description: Please provide the current version of `better-auth` that you are reporting the bug on
+      placeholder: "1.x.x"
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Provide environment information
       description: Please collect the following information and paste the results. 
       render: bash
       placeholder: |
-        - OS: [e.g. iOS]
+        - OS: [e.g. Windows 10]
         - Browser [e.g. chrome, safari]
-        - Version [e.g. 22]
     validations:
       required: true
   - type: dropdown
@@ -55,10 +67,18 @@ body:
         - 'Other'
     validations:
       required: true
-  - type: markdown
+  - type: textarea
     attributes:
+      label: Auth config (if applicable)
+      description: If you haven’t already shared a reproducible example or don’t think it’s unrelated, please include your auth config. Make sure to remove any sensitive information.
+      render: typescript
       value: |
-        Another way you can help the maintainers' job is to pinpoint the commit that introduced the issue.
+        import { betterAuth } from "better-auth"
+        export const auth = betterAuth({
+          emailAndPassword: {  
+            enabled: true
+          },
+        });
   - type: textarea
     attributes:
       label: Additional context
