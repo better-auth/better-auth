@@ -15,7 +15,7 @@ import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { createTypeTable } from "fumadocs-typescript/ui";
-import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 const { AutoTypeTable } = createTypeTable();
 
