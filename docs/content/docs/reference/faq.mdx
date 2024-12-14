@@ -46,6 +46,31 @@ const result = authClient.getSession({
     <Accordion title="Adding custom fields to the users table">
 
 Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
+
+</Accordion>
+
+<Accordion title="Difference between getSession and useSession">
+Both `useSession` and `getSession` instances are used fundamentally different based on the situation.
+
+`useSession` is a hook, meaning it can trigger re-renders whenever session data changes.
+
+If you have UI you need to change based on user or session data, you can use this hook.
+
+<Callout type="warn">
+  For performance reasons, do not use this hook on your `layout.tsx` file. 
+  
+  We recommend using RSC and use your server auth instance to get the session data
+  via `auth.api.getSession`.
+</Callout>
+
+`getSession` returns a promise containing data and error.
+
+For all other situations where you shouldn't use `useSession`, is when you should be using `getSession`.
+
+<Callout type="info">
+   `getSession` is avaliable on both server and client auth instances.
+   Not just the latter.
+</Callout>
 </Accordion>
 
 </Accordions>
