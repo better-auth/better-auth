@@ -57,9 +57,8 @@ Both `useSession` and `getSession` instances are used fundamentally different ba
 If you have UI you need to change based on user or session data, you can use this hook.
 
 <Callout type="warn">
-  For performance reasons, do not use this hook on your `layout.tsx` file. 
-  
-  We recommend using RSC and use your server auth instance to get the session data
+  For performance reasons, do not use this hook on your `layout.tsx` file. We
+  recommend using RSC and use your server auth instance to get the session data
   via `auth.api.getSession`.
 </Callout>
 
@@ -71,6 +70,15 @@ For all other situations where you shouldn't use `useSession`, is when you shoul
    `getSession` is avaliable on both server and client auth instances.
    Not just the latter.
 </Callout>
+</Accordion>
+
+<Accordion title="Common Typescript Errors">
+A common Typescript error we come across from users of Better Auth is due to their tsconfig.
+
+If you're facing Better-Auth related errors, ensure your tsconfig has `declarations` set to `false`, and `strict` set to `true`.
+
+You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">Typescript docs</Link>.
+
 </Accordion>
 
 </Accordions>
