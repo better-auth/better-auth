@@ -4,12 +4,41 @@ import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
 import { sessionMiddleware } from "./session";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
 	{
 		method: "GET",
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "List all accounts linked to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+											},
+											provider: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const session = c.context.session;
@@ -45,13 +74,45 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * Callback URL to redirect to after the user has signed in.
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after the user has signed in",
+				})
+				.optional(),
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList),
+			provider: z.enum(socialProviderList, {
+				description: "The OAuth2 provider to use",
+			}),
 		}),
 		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Link a social account to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const session = c.context.session;
@@ -63,7 +124,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		);
 		if (existingAccount) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Social Account is already linked.",
+				message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
 			});
 		}
 		const provider = c.context.socialProviders.find(
@@ -77,7 +138,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				},
 			);
 			throw new APIError("NOT_FOUND", {
-				message: "Provider not found",
+				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 			});
 		}
 		const state = await generateState(c, {

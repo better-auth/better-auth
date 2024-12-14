@@ -27,6 +27,12 @@ describe("adapter test", async () => {
 				fields: {
 					email: "email_address",
 				},
+				additionalFields: {
+					test: {
+						type: "string",
+						defaultValue: "test",
+					},
+				},
 			},
 			session: {
 				modelName: "sessions",
@@ -57,15 +63,19 @@ describe("adapter test", async () => {
 
 	const mysqlAdapter = kyselyAdapter(mysqlKy, {
 		type: "mysql",
-	})(mysqlOptions);
+	});
 	await runAdapterTest({
-		adapter: mysqlAdapter,
+		getAdapter: async (customOptions = {}) => {
+			return mysqlAdapter({ ...mysqlOptions, ...customOptions });
+		},
 	});
 
 	const sqliteAdapter = kyselyAdapter(sqliteKy, {
 		type: "sqlite",
-	})(sqliteOptions);
+	});
 	await runAdapterTest({
-		adapter: sqliteAdapter,
+		getAdapter: async (customOptions = {}) => {
+			return sqliteAdapter({ ...sqliteOptions, ...customOptions });
+		},
 	});
 });

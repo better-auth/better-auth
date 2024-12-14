@@ -2,8 +2,10 @@ import { and, asc, desc, eq, inArray, like, or, SQL } from "drizzle-orm";
 import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 
-interface DB {
+export interface DB {
 	[key: string]: any;
 }
 
@@ -33,7 +35,7 @@ const createTransform = (
 		const schemaModel = schema[model];
 		if (!schemaModel) {
 			throw new BetterAuthError(
-				`[# Drizzle Adapter]: The model "${modelName}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
+				`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
 			);
 		}
 		return schemaModel;
@@ -46,21 +48,36 @@ const createTransform = (
 				? `${model}s`
 				: model;
 	};
-	const shouldGenerateId = config?.generateId !== false;
+
+	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		getSchema,
-		transformInput(data: Record<string, any>, model: string) {
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				data.id && shouldGenerateId
-					? {
-							id: config?.generateId ? config.generateId() : data.id,
-						}
-					: {};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = data[key];
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id: options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: data.id || generateId(),
+						};
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				if (value === undefined && !fields[field].defaultValue) {
+					continue;
 				}
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					value,
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},
@@ -181,7 +198,7 @@ const createTransform = (
 	};
 };
 
-interface DrizzleAdapterConfig {
+export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
 	 */
@@ -196,15 +213,6 @@ interface DrizzleAdapterConfig {
 	 * has an object with a key "users" instead of "user"
 	 */
 	usePlural?: boolean;
-	/**
-	 * Custom generateId function.
-	 *
-	 * If not provided, nanoid will be used.
-	 * If set to false, the database's auto generated id will be used.
-	 *
-	 * @default nanoid
-	 */
-	generateId?: ((size?: number) => string) | false;
 }
 
 function checkMissingFields(
@@ -241,7 +249,7 @@ export const drizzleAdapter =
 			id: "drizzle",
 			async create(data) {
 				const { model, data: values } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const schemaModel = getSchema(model);
 				checkMissingFields(schemaModel, getModelName(model), transformed);
 				const builder = db.insert(schemaModel).values(transformed);
@@ -252,11 +260,11 @@ export const drizzleAdapter =
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-
 				const res = await db
 					.select()
 					.from(schemaModel)
 					.where(...clause);
+
 				if (!res.length) return null;
 				return transformOutput(res[0], model, select);
 			},
@@ -270,14 +278,10 @@ export const drizzleAdapter =
 					.select()
 					.from(schemaModel)
 					.limit(limit || 100)
-					.offset(offset || 0)
-					.orderBy(
-						sortFn(
-							schemaModel[
-								sortBy?.field ? getField(model, sortBy?.field) : "id"
-							],
-						),
-					);
+					.offset(offset || 0);
+				if (sortBy?.field) {
+					builder.orderBy(sortFn(schemaModel[getField(model, sortBy?.field)]));
+				}
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
 			},
@@ -285,7 +289,7 @@ export const drizzleAdapter =
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
 					.set(transformed)
@@ -297,7 +301,7 @@ export const drizzleAdapter =
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
 				const clause = convertWhereClause(where, model);
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
 					.set(transformed)

@@ -11,6 +11,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -101,6 +102,13 @@ export const phoneNumber = (options?: {
 		code: "code",
 		createdAt: "createdAt",
 	};
+
+	const ERROR_CODES = {
+		INVALID_PHONE_NUMBER: "Invalid phone number",
+		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
+		UNEXPECTED_ERROR: "Unexpected error",
+		OTP_NOT_FOUND: "OTP not found",
+	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -109,10 +117,47 @@ export const phoneNumber = (options?: {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string(),
-						password: z.string(),
-						rememberMe: z.boolean().optional(),
+						phoneNumber: z.string({
+							description: "Phone number to sign in",
+						}),
+						password: z.string({
+							description: "Password to use for sign in",
+						}),
+						rememberMe: z
+							.boolean({
+								description: "Remember the session",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Sign in with phone number",
+							description: "Use this endpoint to sign in with phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Invalid phone number or password",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { password, phoneNumber } = ctx.body;
@@ -123,7 +168,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid phone number!",
+								message: ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -139,7 +184,7 @@ export const phoneNumber = (options?: {
 					});
 					if (!user) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid phone number or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const accounts =
@@ -152,24 +197,24 @@ export const phoneNumber = (options?: {
 							phoneNumber,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid password or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const currentPassword = credentialAccount?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", { phoneNumber });
 						throw new APIError("UNAUTHORIZED", {
-							message: "Unexpected error",
+							message: ERROR_CODES.UNEXPECTED_ERROR,
 						});
 					}
-					const validPassword = await ctx.context.password.verify(
-						currentPassword,
+					const validPassword = await ctx.context.password.verify({
+						hash: currentPassword,
 						password,
-					);
+					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid email or password",
+							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -180,7 +225,7 @@ export const phoneNumber = (options?: {
 					if (!session) {
 						ctx.context.logger.error("Failed to create session");
 						throw new APIError("UNAUTHORIZED", {
-							message: "Failed to create session",
+							message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						});
 					}
 
@@ -203,8 +248,33 @@ export const phoneNumber = (options?: {
 				{
 					method: "POST",
 					body: z.object({
-						phoneNumber: z.string(),
+						phoneNumber: z.string({
+							description: "Phone number to send OTP",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Send OTP to phone number",
+							description: "Use this endpoint to send OTP to phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!options?.sendOTP) {
@@ -220,7 +290,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid phone number!",
+								message: ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -256,23 +326,65 @@ export const phoneNumber = (options?: {
 						/**
 						 * Phone number
 						 */
-						phoneNumber: z.string(),
+						phoneNumber: z.string({
+							description: "Phone number to verify",
+						}),
 						/**
 						 * OTP code
 						 */
-						code: z.string(),
+						code: z.string({
+							description: "OTP code",
+						}),
 						/**
 						 * Disable session creation after verification
 						 * @default false
 						 */
-						disableSession: z.boolean().optional(),
+						disableSession: z
+							.boolean({
+								description: "Disable session creation after verification",
+							})
+							.optional(),
 						/**
 						 * This checks if there is a session already
 						 * and updates the phone number with the provided
 						 * phone number
 						 */
-						updatePhoneNumber: z.boolean().optional(),
+						updatePhoneNumber: z
+							.boolean({
+								description:
+									"Check if there is a session and update the phone number",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							summary: "Verify phone number",
+							description: "Use this endpoint to verify phone number",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+								400: {
+									description: "Invalid OTP",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const otp = await ctx.context.internalAdapter.findVerificationValue(
@@ -287,7 +399,7 @@ export const phoneNumber = (options?: {
 							});
 						}
 						throw new APIError("BAD_REQUEST", {
-							message: "OTP not found",
+							message: ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
 					if (otp.value !== ctx.body.code) {
@@ -302,7 +414,7 @@ export const phoneNumber = (options?: {
 						const session = await getSessionFromCtx(ctx);
 						if (!session) {
 							throw new APIError("UNAUTHORIZED", {
-								message: "Session not found",
+								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const user = await ctx.context.internalAdapter.updateUser(
@@ -319,7 +431,7 @@ export const phoneNumber = (options?: {
 					}
 
 					let user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
-						model: ctx.context.tables.user.modelName,
+						model: "user",
 						where: [
 							{
 								value: ctx.body.phoneNumber,
@@ -350,7 +462,7 @@ export const phoneNumber = (options?: {
 							});
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
-									message: "Failed to create user",
+									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 								});
 							}
 						} else {
@@ -364,7 +476,7 @@ export const phoneNumber = (options?: {
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to update user",
+							message: BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 						});
 					}
 
@@ -375,7 +487,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!session) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: "Failed to create session",
+								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 							});
 						}
 						await setSessionCookie(ctx, {
@@ -396,6 +508,7 @@ export const phoneNumber = (options?: {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 

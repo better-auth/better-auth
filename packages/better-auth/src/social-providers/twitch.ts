@@ -22,7 +22,7 @@ export interface TwitchProfile {
 	picture: string;
 }
 
-export interface TwitchOptions extends ProviderOptions {
+export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	claims?: string[];
 }
 export const twitch = (options: TwitchOptions) => {
@@ -56,12 +56,16 @@ export const twitch = (options: TwitchOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const idToken = token.idToken;
 			if (!idToken) {
 				logger.error("No idToken found in token");
 				return null;
 			}
 			const profile = parseJWT(idToken)?.payload as TwitchProfile;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
@@ -69,6 +73,7 @@ export const twitch = (options: TwitchOptions) => {
 					email: profile.email,
 					image: profile.picture,
 					emailVerified: false,
+					...userMap,
 				},
 				data: profile,
 			};

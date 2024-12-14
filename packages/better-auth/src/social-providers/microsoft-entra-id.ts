@@ -12,7 +12,8 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	picture: string;
 }
 
-export interface MicrosoftOptions extends ProviderOptions {
+export interface MicrosoftOptions
+	extends ProviderOptions<MicrosoftEntraIDProfile> {
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
@@ -60,6 +61,9 @@ export const microsoft = (options: MicrosoftOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}
@@ -92,6 +96,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					},
 				},
 			);
+			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
 					id: user.sub,
@@ -99,6 +104,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					email: user.email,
 					image: user.picture,
 					emailVerified: true,
+					...userMap,
 				},
 				data: user,
 			};

@@ -7,6 +7,8 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	LiteralUnion,
+	Models,
 	SecondaryStorage,
 	Session,
 	User,
@@ -72,9 +74,18 @@ export const init = async (options: BetterAuthOptions) => {
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return socialProviders[key as (typeof socialProviderList)[number]](value);
+			return socialProviders[key as (typeof socialProviderList)[number]](
+				value as any, // TODO: fix this
+			);
 		})
 		.filter((x) => x !== null);
+
+	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
+		if (typeof options?.advanced?.generateId === "function") {
+			return options.advanced.generateId({ model, size });
+		}
+		return generateId(size);
+	};
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -84,8 +95,12 @@ export const init = async (options: BetterAuthOptions) => {
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
 		sessionConfig: {
-			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
+			updateAge:
+				options.session?.updateAge !== undefined
+					? options.session.updateAge
+					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+			freshAge: options.session?.freshAge || 60 * 5 /* 5 minutes */,
 		},
 		secret,
 		rateLimit: {
@@ -94,13 +109,12 @@ export const init = async (options: BetterAuthOptions) => {
 			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
-				options.rateLimit?.storage || options.secondaryStorage
-					? ("secondary-storage" as const)
-					: ("memory" as const),
+				options.rateLimit?.storage ||
+				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
 		logger: logger,
-		uuid: generateId,
+		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
@@ -112,10 +126,15 @@ export const init = async (options: BetterAuthOptions) => {
 			},
 			checkPassword,
 		},
+		setNewSession(session) {
+			this.newSession = session;
+		},
+		newSession: null,
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
 	};
@@ -128,10 +147,26 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
-	session: {
-		session: Session;
-		user: User;
+	/**
+	 * New session that will be set after the request
+	 * meaning: there is a `set-cookie` header that will set
+	 * the session cookie. This is the fetched session. And it's set
+	 * by `setNewSession` method.
+	 */
+	newSession: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
 	} | null;
+	session: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	} | null;
+	setNewSession: (
+		session: {
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null,
+	) => void;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
@@ -148,12 +183,16 @@ export type AuthContext = {
 	sessionConfig: {
 		updateAge: number;
 		expiresIn: number;
+		freshAge: number;
 	};
-	uuid: (size?: number) => string;
+	generateId: (options: {
+		model: LiteralUnion<Models, string>;
+		size?: number;
+	}) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (password: string, hash: string) => Promise<boolean>;
+		verify: (data: { password: string; hash: string }) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
@@ -192,6 +231,7 @@ function runPluginInit(ctx: AuthContext) {
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),
+		generateId: ctx.generateId,
 	});
 	context.options = options;
 	return { context };

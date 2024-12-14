@@ -13,7 +13,7 @@ interface EmailOTPOptions {
 		data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification";
+			type: "sign-in" | "email-verification" | "forget-password";
 		},
 		request?: Request,
 	) => Promise<void>;
@@ -40,12 +40,20 @@ interface EmailOTPOptions {
 	disableSignUp?: boolean;
 }
 
+const types = ["email-verification", "sign-in", "forget-password"] as const;
+
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expireIn: 5 * 60,
 		otpLength: 6,
 		...options,
 	};
+	const ERROR_CODES = {
+		OTP_EXPIRED: "otp expired",
+		INVALID_OTP: "invalid otp",
+		INVALID_EMAIL: "invalid email",
+		USER_NOT_FOUND: "user not found",
+	} as const;
 	return {
 		id: "email-otp",
 		endpoints: {
@@ -54,9 +62,35 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Send verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!options?.sendVerificationOTP) {
@@ -68,6 +102,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const email = ctx.body.email;
+					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+					if (!emailRegex.test(email)) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_EMAIL,
+						});
+					}
 					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 					await ctx.context.internalAdapter
 						.createVerificationValue({
@@ -105,11 +145,30 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
+						openapi: {
+							description: "Create verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -128,11 +187,33 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						email: z.string(),
-						type: z.enum(["email-verification", "sign-in"]),
+						email: z.string({
+							description: "Email address to get the OTP",
+						}),
+						type: z.enum(types),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
+						openapi: {
+							description: "Get verification OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													otp: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -156,30 +237,65 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						otp: z.string(),
+						email: z.string({
+							description: "Email address to verify",
+						}),
+						otp: z.string({
+							description: "OTP to verify",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Verify email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
+					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+					if (!emailRegex.test(email)) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_EMAIL,
+						});
+					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`email-verification-otp-${email}`,
 						);
-					if (!verificationValue || verificationValue.expiresAt < new Date()) {
-						if (verificationValue) {
-							await ctx.context.internalAdapter.deleteVerificationValue(
-								verificationValue.id,
-							);
-						}
+					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -188,7 +304,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User not found",
+							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -199,8 +315,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						},
 					);
 					return ctx.json({
-						user: updatedUser,
-					});
+						id: updatedUser.id,
+						email: updatedUser.email,
+						emailVerified: updatedUser.emailVerified,
+						name: updatedUser.name,
+						image: updatedUser.image,
+						createdAt: updatedUser.createdAt,
+						updatedAt: updatedUser.updatedAt,
+					} as User);
 				},
 			),
 			signInEmailOTP: createAuthEndpoint(
@@ -208,9 +330,38 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						otp: z.string(),
+						email: z.string({
+							description: "Email address to sign in",
+						}),
+						otp: z.string({
+							description: "OTP sent to the email",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
@@ -218,20 +369,23 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
 						);
-					if (!verificationValue || verificationValue.expiresAt < new Date()) {
-						if (verificationValue) {
-							await ctx.context.internalAdapter.deleteVerificationValue(
-								verificationValue.id,
-							);
-						}
+					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
+							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -241,7 +395,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					if (!user) {
 						if (opts.disableSignUp) {
 							throw new APIError("BAD_REQUEST", {
-								message: "User not found",
+								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const newUser = await ctx.context.internalAdapter.createUser({
@@ -262,6 +416,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							session,
 						});
 					}
+
+					if (!user.user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(user.user.id, {
+							emailVerified: true,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
 						ctx.request,
@@ -276,6 +437,149 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			forgetPasswordEmailOTP: createAuthEndpoint(
+				"/forget-password/email-otp",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string({
+							description: "Email address to send the OTP",
+						}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Forget password with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+					const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: otp,
+						identifier: `forget-password-otp-${email}`,
+						expiresAt: getDate(opts.expireIn, "sec"),
+					});
+					await options.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						success: true,
+					});
+				},
+			),
+			resetPasswordEmailOTP: createAuthEndpoint(
+				"/email-otp/reset-password",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string({
+							description: "Email address to reset the password",
+						}),
+						otp: z.string({
+							description: "OTP sent to the email",
+						}),
+						password: z.string({
+							description: "New password",
+						}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Reset password with email OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+					const verificationValue =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`forget-password-otp-${email}`,
+						);
+					if (!verificationValue) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
+						});
+					}
+					const otp = ctx.body.otp;
+					if (verificationValue.value !== otp) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
+					const passwordHash = await ctx.context.password.hash(
+						ctx.body.password,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						user.user.id,
+						passwordHash,
+					);
+					return ctx.json({
+						success: true,
+					});
+				},
+			),
 		},
 		hooks: {
 			after: [
@@ -287,13 +591,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					},
 					async handler(ctx) {
-						const returned = ctx.context.returned as Response;
-						if (returned?.status !== 200) {
+						const response = ctx.context.newSession;
+						if (!response?.user) {
 							return;
 						}
-						const response = (await returned.clone().json()) as {
-							user: User;
-						};
 						if (response.user.email && response.user.emailVerified === false) {
 							const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 							await ctx.context.internalAdapter.createVerificationValue({
@@ -314,5 +615,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			],
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

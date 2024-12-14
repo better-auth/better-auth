@@ -1,14 +1,23 @@
 import type { ZodSchema } from "zod";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, LiteralNumber, LiteralString } from "../types";
 
 export type FieldType =
 	| "string"
 	| "number"
 	| "boolean"
 	| "date"
-	| `${"string" | "number"}[]`;
+	| `${"string" | "number"}[]`
+	| Array<LiteralString>;
 
-type Primitive = string | number | boolean | Date | null | undefined;
+type Primitive =
+	| string
+	| number
+	| boolean
+	| Date
+	| null
+	| undefined
+	| string[]
+	| number[];
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
@@ -37,10 +46,8 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * transform the value before storing it.
 	 */
 	transform?: {
-		input?: (value: InferValueType<T>) => Primitive | Promise<Primitive>;
-		output?: (
-			value: Primitive,
-		) => InferValueType<T> | Promise<InferValueType<T>>;
+		input?: (value: Primitive) => Primitive | Promise<Primitive>;
+		output?: (value: Primitive) => Primitive | Promise<Primitive>;
 	};
 	/**
 	 * Reference to another model.
@@ -102,11 +109,15 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends `${infer T}[]`
-				? T extends "string"
-					? string[]
-					: number[]
-				: never;
+			: T extends "date"
+				? Date
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: T extends Array<any>
+						? T[number]
+						: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
@@ -157,9 +168,15 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 				? never
 				: Field[key]["defaultValue"] extends string | number | boolean | Date
 					? never
-					: key]: InferFieldInput<Field[key]>;
+					: Field[key]["input"] extends false
+						? never
+						: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]?: InferFieldInput<Field[key]> | undefined | null;
+			[key in Key as Field[key]["input"] extends false
+				? never
+				: Field[key]["required"] extends false
+					? key
+					: never]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 

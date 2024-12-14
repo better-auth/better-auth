@@ -1,8 +1,11 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
+import { wildcardMatch } from "../../utils/wildcard";
+import { getHost } from "../../utils/url";
 
 /**
- * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
+ * A middleware to validate callbackURL and origin against
+ * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST") {
@@ -14,15 +17,17 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const currentURL = query?.currentURL;
+	const errorCallbackURL = body?.errorCallbackURL;
+	const newUserCallbackURL = body?.newUserCallbackURL;
 	const trustedOrigins = context.trustedOrigins;
 	const usesCookies = ctx.headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
+		if (url.startsWith("/")) {
+			return false;
+		}
 		if (pattern.includes("*")) {
-			const regex = new RegExp(
-				"^" + pattern.replace(/\*/g, "[^/]+").replace(/\./g, "\\.") + "$",
-			);
-			return regex.test(url);
+			return wildcardMatch(pattern)(getHost(url));
 		}
 		return url.startsWith(pattern);
 	};
@@ -50,4 +55,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	currentURL && validateURL(currentURL, "currentURL");
+	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
+	newUserCallbackURL && validateURL(redirectURL, "newUserCallbackURL");
 });

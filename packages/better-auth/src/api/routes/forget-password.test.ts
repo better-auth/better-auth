@@ -1,24 +1,44 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, vi, beforeAll } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
 	let token = "";
-	const { client, testUser } = await getTestInstance({
-		emailAndPassword: {
-			enabled: true,
-			async sendResetPassword({ url }) {
-				token = url.split("?")[0].split("/").pop() || "";
-				await mockSendEmail();
+
+	const { client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword({ url }) {
+					token = url.split("?")[0].split("/").pop() || "";
+					await mockSendEmail();
+				},
 			},
 		},
-	});
+		{
+			testWith: "sqlite",
+		},
+	);
 	it("should send a reset password email when enabled", async () => {
 		await client.forgetPassword({
 			email: testUser.email,
 			redirectTo: "http://localhost:3000",
 		});
 		expect(token.length).toBeGreaterThan(10);
+	});
+
+	it("should fail on invalid password", async () => {
+		const res = await client.resetPassword(
+			{
+				newPassword: "short",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+		expect(res.error?.status).toBe(400);
 	});
 
 	it("should verify the token", async () => {
@@ -33,7 +53,6 @@ describe("forget password", async (it) => {
 				},
 			},
 		);
-
 		expect(res.data).toMatchObject({
 			status: true,
 		});
@@ -49,7 +68,7 @@ describe("forget password", async (it) => {
 			email: testUser.email,
 			password: "new-password",
 		});
-		expect(newCred.data?.session).toBeDefined();
+		expect(newCred.data?.user).toBeDefined();
 	});
 
 	it("shouldn't allow the token to be used twice", async () => {

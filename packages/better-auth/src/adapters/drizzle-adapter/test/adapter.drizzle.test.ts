@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { BetterAuthOptions } from "../../../types";
 import { Pool } from "pg";
 import { Kysely, PostgresDialect, sql } from "kysely";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import { betterAuth } from "../../../auth";
 
 const TEST_DB_URL = "postgres://user:password@localhost:5432/better_auth";
 
@@ -27,8 +27,18 @@ const cleanupDatabase = async (postgres: Kysely<any>) => {
 
 const createTestOptions = (pg: Pool): BetterAuthOptions => ({
 	database: pg,
-	user: { fields: { email: "email_address" } },
-	session: { modelName: "sessions" },
+	user: {
+		fields: { email: "email_address" },
+		additionalFields: {
+			test: {
+				type: "string",
+				defaultValue: "test",
+			},
+		},
+	},
+	session: {
+		modelName: "sessions",
+	},
 });
 
 describe("Drizzle Adapter Tests", async () => {
@@ -50,41 +60,34 @@ describe("Drizzle Adapter Tests", async () => {
 	const adapter = drizzleAdapter(db, { provider: "pg", schema });
 
 	await runAdapterTest({
-		adapter: adapter(opts),
+		getAdapter: async (customOptions = {}) => {
+			return adapter({ ...opts, ...customOptions });
+		},
 	});
 });
 
-describe("Authentication Flow Tests", () => {
-	let pg: Pool;
+describe("Authentication Flow Tests", async () => {
+	const pg = createTestPool();
 	let postgres: Kysely<any>;
-	let auth: any;
-	let client: any;
-	let sessionSetter: any;
-	let db: any;
-
+	const opts = createTestOptions(pg);
 	const testUser = {
 		email: "test-email@email.com",
 		password: "password",
 		name: "Test Name",
 	};
-
 	beforeAll(async () => {
-		pg = createTestPool();
 		postgres = createKyselyInstance(pg);
-		const opts = createTestOptions(pg);
 
 		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
+	});
 
-		const testInstance = await getTestInstance(
-			{
-				...opts,
-				database: drizzleAdapter(drizzle(pg), { provider: "pg", schema }),
-			},
-			{ disableTestUser: true },
-		);
-
-		({ auth, client, sessionSetter, db } = testInstance);
+	const auth = betterAuth({
+		...opts,
+		database: drizzleAdapter(drizzle(pg), { provider: "pg", schema }),
+		emailAndPassword: {
+			enabled: true,
+		},
 	});
 
 	afterAll(async () => {
@@ -93,30 +96,11 @@ describe("Authentication Flow Tests", () => {
 
 	it("should successfully sign up a new user", async () => {
 		const user = await auth.api.signUpEmail({ body: testUser });
-		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
+		expect(user).toBeDefined();
 	});
 
 	it("should successfully sign in an existing user", async () => {
 		const user = await auth.api.signInEmail({ body: testUser });
 		expect(user.user).toBeDefined();
-		expect(user.session).toBeDefined();
-	});
-
-	it("should retrieve a valid session for an authenticated user", async () => {
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-		const { data: session } = await client.getSession({
-			fetchOptions: { headers },
-		});
-		expect(session?.user).toBeDefined();
 	});
 });

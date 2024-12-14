@@ -1,13 +1,16 @@
 import { expect, test } from "vitest";
-import type { Adapter, User } from "../types";
-import { nanoid } from "nanoid";
+import type { Adapter, BetterAuthOptions, User } from "../types";
+import { generateId } from "../utils";
 
 interface AdapterTestOptions {
-	adapter: Adapter;
+	getAdapter: (
+		customOptions?: Omit<BetterAuthOptions, "database">,
+	) => Promise<Adapter>;
+	skipGenerateIdTest?: boolean;
 }
 
 export async function runAdapterTest(opts: AdapterTestOptions) {
-	const { adapter } = opts;
+	const adapter = await opts.getAdapter();
 	const user = {
 		id: "1",
 		name: "user",
@@ -86,6 +89,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 
 	test("update model", async () => {
 		const newEmail = "updated@email.com";
+
 		const res = await adapter.update<User>({
 			model: "user",
 			where: [
@@ -161,7 +165,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should work with reference fields", async () => {
-		const user = await adapter.create<Record<string, any>>({
+		const user = await adapter.create<{ id: string } & Record<string, any>>({
 			model: "user",
 			data: {
 				id: "4",
@@ -176,6 +180,9 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			model: "session",
 			data: {
 				id: "1",
+				token: generateId(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 				userId: user.id,
 				expiresAt: new Date(),
 			},
@@ -407,4 +414,29 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		expect(res.length).toBe(1);
 	});
+
+	test.skipIf(opts.skipGenerateIdTest)(
+		"should prefer generateId if provided",
+		async () => {
+			const customAdapter = await opts.getAdapter({
+				advanced: {
+					generateId: () => "mocked-id",
+				},
+			});
+
+			const res = await customAdapter.create({
+				model: "user",
+				data: {
+					id: "1",
+					name: "user4",
+					email: "user4@email.com",
+					emailVerified: true,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			expect(res.id).toBe("mocked-id");
+		},
+	);
 }

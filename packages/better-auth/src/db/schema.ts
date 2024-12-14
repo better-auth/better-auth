@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FieldAttribute } from ".";
 import type { BetterAuthOptions, PluginSchema } from "../types";
+import { APIError } from "better-call";
 
 export const accountSchema = z.object({
 	id: z.string(),
@@ -13,11 +14,21 @@ export const accountSchema = z.object({
 	/**
 	 * Access token expires at
 	 */
-	expiresAt: z.date().nullish(),
+	accessTokenExpiresAt: z.date().nullish(),
+	/**
+	 * Refresh token expires at
+	 */
+	refreshTokenExpiresAt: z.date().nullish(),
+	/**
+	 * The scopes that the user has authorized
+	 */
+	scope: z.string().nullish(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
 	password: z.string().nullish(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 });
 
 export const userSchema = z.object({
@@ -26,14 +37,17 @@ export const userSchema = z.object({
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
-	createdAt: z.date().default(new Date()),
-	updatedAt: z.date().default(new Date()),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 });
 
 export const sessionSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
 	expiresAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
+	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
 });
@@ -41,7 +55,8 @@ export const sessionSchema = z.object({
 export const verificationSchema = z.object({
 	id: z.string(),
 	value: z.string(),
-	createdAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().default(() => new Date()),
 	expiresAt: z.date(),
 	identifier: z.string(),
 });
@@ -129,12 +144,27 @@ export function parseInputData<T extends Record<string, any>>(
 				}
 				continue;
 			}
+			if (fields[key].validator?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key].validator.input.parse(data[key]);
+				continue;
+			}
+			if (fields[key].transform?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key].transform?.input(data[key]);
+				continue;
+			}
 			parsedData[key] = data[key];
 			continue;
 		}
+
 		if (fields[key].defaultValue && action === "create") {
 			parsedData[key] = fields[key].defaultValue;
 			continue;
+		}
+
+		if (fields[key].required && action === "create") {
+			throw new APIError("BAD_REQUEST", {
+				message: `${key} is required`,
+			});
 		}
 	}
 	return parsedData as Partial<T>;

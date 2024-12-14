@@ -35,7 +35,7 @@ const mysqlMap = {
 		"double",
 	],
 	boolean: ["boolean", "tinyint"],
-	date: ["datetime", "date"],
+	date: ["timestamp", "datetime", "date"],
 };
 
 const sqliteMap = {
@@ -68,7 +68,9 @@ export function matchType(
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = types[fieldType].map((t) => t.toLowerCase());
+	const type = Array.isArray(fieldType)
+		? types["string"].map((t) => t.toLowerCase())
+		: types[fieldType].map((t) => t.toLowerCase());
 	const matches = type.includes(columnDataType.toLowerCase());
 	return matches;
 }
@@ -162,28 +164,53 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(type: FieldType) {
+	function getType(field: FieldAttribute) {
+		const type = field.type;
 		const typeMap = {
-			string: "text",
-			boolean: "boolean",
-			number: "integer",
-			date: "date",
+			string: {
+				sqlite: "text",
+				postgres: "text",
+				mysql: field.unique
+					? "varchar(255)"
+					: field.references
+						? "varchar(36)"
+						: "text",
+				mssql: "text",
+			},
+			boolean: {
+				sqlite: "integer",
+				postgres: "boolean",
+				mysql: "boolean",
+				mssql: "boolean",
+			},
+			number: {
+				sqlite: "integer",
+				postgres: "integer",
+				mysql: "integer",
+				mssql: "integer",
+			},
+			date: {
+				sqlite: "date",
+				postgres: "timestamp",
+				mysql: "datetime",
+				mssql: "datetime",
+			},
 		} as const;
-		if (dbType === "mysql" && type === "string") {
-			return "varchar(255)";
-		}
 		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
 		}
 		if (type === "string[]" || type === "number[]") {
 			return "jsonb";
 		}
-		return typeMap[type];
+		if (Array.isArray(type)) {
+			return "text";
+		}
+		return typeMap[type][dbType || "sqlite"];
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field.type);
+				const type = getType(field);
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
@@ -192,6 +219,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 							col = col.references(
 								`${field.references.model}.${field.references.field}`,
 							);
+						}
+						if (field.unique) {
+							col = col.unique();
 						}
 						return col;
 					});
@@ -203,12 +233,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
 				.createTable(table.table)
-				.addColumn("id", getType("string"), (col) =>
+				.addColumn("id", dbType === "mysql" ? "varchar(36)" : "text", (col) =>
 					col.primaryKey().notNull(),
 				);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field.type);
+				const type = getType(field);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {

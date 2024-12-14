@@ -70,7 +70,7 @@ describe("oauth-proxy", async () => {
 				throw: true,
 			},
 		);
-		const state = new URL(res.url).searchParams.get("state");
+		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
 				const location = context.response.headers.get("location");
@@ -104,7 +104,7 @@ describe("oauth-proxy", async () => {
 				throw: true,
 			},
 		);
-		const state = new URL(res.url).searchParams.get("state");
+		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
 				const location = context.response.headers.get("location");

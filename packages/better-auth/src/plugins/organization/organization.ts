@@ -29,6 +29,7 @@ import {
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
+	addMember,
 	getActiveMember,
 	removeMember,
 	updateMemberRole,
@@ -37,12 +38,13 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
-	listOrganization,
+	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 
 export interface OrganizationOptions {
 	/**
@@ -209,12 +211,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		deleteOrganization,
 		setActiveOrganization,
 		getFullOrganization,
-		listOrganization,
+		listOrganizations,
 		createInvitation: createInvitation(options as O),
 		cancelInvitation,
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
@@ -260,11 +263,53 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						}>;
 					}>,
 					use: [orgSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+												},
+											},
+											required: ["permission"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
+													},
+												},
+												required: ["success"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (!ctx.context.session.session.activeOrganizationId) {
 						throw new APIError("BAD_REQUEST", {
-							message: "No active organization",
+							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
 					}
 					const adapter = getOrgAdapter(ctx.context);
@@ -275,7 +320,8 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					});
 					if (!member) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "You are not a member of this organization",
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
 					const role = roles[member.role as keyof typeof roles];
@@ -309,6 +355,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			organization: {
+				modelName: options?.schema?.organization?.modelName,
 				fields: {
 					name: {
 						type: "string",
@@ -338,6 +385,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			member: {
+				modelName: options?.schema?.member?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -352,6 +400,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						type: "string",
 						required: true,
 						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 					role: {
 						type: "string",
@@ -367,6 +419,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				},
 			},
 			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -430,5 +483,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				}
 			>,
 		},
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

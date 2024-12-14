@@ -16,6 +16,7 @@ import { createTOTPKeyURI } from "oslo/otp";
 import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
@@ -40,6 +41,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 		},
 		opts.twoFactorTable,
 	);
+
 	return {
 		id: "two-factor",
 		endpoints: {
@@ -51,9 +53,45 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().min(8),
+						password: z
+							.string({
+								description: "User password",
+							})
+							.min(8),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							summary: "Enable two factor authentication",
+							description:
+								"Use this endpoint to enable two factor authentication. This will generate a TOTP URI and backup codes. Once the user verifies the TOTP URI, the two factor authentication will be enabled.",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													totpURI: {
+														type: "string",
+														description: "TOTP URI",
+													},
+													backupCodes: {
+														type: "array",
+														items: {
+															type: "string",
+														},
+														description: "Backup codes",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
@@ -64,7 +102,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					});
 					if (!isPasswordValid) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid password",
+							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
 					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
@@ -86,6 +124,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
 							ctx.request,
+							false,
+							ctx.context.session.session,
 						);
 						/**
 						 * Update the session cookie with the new user data
@@ -94,6 +134,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							session: newSession,
 							user,
 						});
+
+						//remove current session
+						await ctx.context.internalAdapter.deleteSession(
+							ctx.context.session.session.token,
+						);
 					}
 					//delete existing two factor
 					await ctx.context.adapter.deleteMany({
@@ -109,7 +154,6 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					await ctx.context.adapter.create({
 						model: opts.twoFactorTable,
 						data: {
-							id: ctx.context.uuid(),
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
@@ -132,9 +176,37 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						password: z.string().min(8),
+						password: z
+							.string({
+								description: "User password",
+							})
+							.min(8),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							summary: "Disable two factor authentication",
+							description:
+								"Use this endpoint to disable two factor authentication.",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
@@ -160,6 +232,23 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							},
 						],
 					});
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					);
+					/**
+					 * Update the session cookie with the new user data
+					 */
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user,
+					});
+					//remove current session
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.context.session.session.token,
+					);
 					return ctx.json({ status: true });
 				},
 			),
@@ -175,52 +264,38 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (
-							(returned instanceof Response && returned?.status !== 200) ||
-							returned instanceof APIError
-						) {
+						const data = ctx.context.newSession;
+						if (!data) {
 							return;
 						}
-						const response = (
-							returned instanceof Response
-								? await returned.clone().json()
-								: returned
-						) as {
-							user: UserWithTwoFactor;
-							session: Session;
-						};
-						if (!response.user.twoFactorEnabled) {
+
+						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
 						// Check for trust device cookie
 						const trustDeviceCookieName = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
-							{
-								maxAge: 30 * 24 * 60 * 60, // 30 days
-							},
 						);
 						const trustDeviceCookie = await ctx.getSignedCookie(
 							trustDeviceCookieName.name,
 							ctx.context.secret,
 						);
-
 						if (trustDeviceCookie) {
-							const [token, sessionId] = trustDeviceCookie.split("!");
+							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await hs256(
 								ctx.context.secret,
-								`${response.user.id}!${sessionId}`,
+								`${data.user.id}!${sessionToken}`,
 							);
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
 								const newToken = await hs256(
 									ctx.context.secret,
-									`${response.user.id}!${response.session.id}`,
+									`${data.user.id}!${data.session.token}`,
 								);
 								await ctx.setSignedCookie(
 									trustDeviceCookieName.name,
-									`${newToken}!${response.session.id}`,
+									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
 									trustDeviceCookieName.attributes,
 								);
@@ -232,9 +307,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 * remove the session cookie. It's set by the sign in credential
 						 */
 						deleteSessionCookie(ctx);
-						await ctx.context.internalAdapter.deleteSession(
-							response.session.id,
-						);
+						await ctx.context.internalAdapter.deleteSession(data.session.token);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{
@@ -249,21 +322,13 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
-							response.user.id,
+							data.user.id,
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-						const res = new Response(
-							JSON.stringify({
-								twoFactorRedirect: true,
-							}),
-							{
-								headers: ctx.responseHeader,
-							},
-						);
-						return {
-							response: res,
-						};
+						return ctx.json({
+							twoFactorRedirect: true,
+						});
 					}),
 				},
 			],
@@ -282,3 +347,4 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 };
 
 export * from "./client";
+export * from "./types";

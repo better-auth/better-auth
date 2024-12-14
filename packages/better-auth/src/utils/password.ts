@@ -16,10 +16,10 @@ export async function validatePassword(
 	if (!credentialAccount || !currentPassword) {
 		return false;
 	}
-	const compare = await ctx.context.password.verify(
-		currentPassword,
-		data.password,
-	);
+	const compare = await ctx.context.password.verify({
+		hash: currentPassword,
+		password: data.password,
+	});
 	return compare;
 }
 
@@ -29,15 +29,15 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 		(account) => account.providerId === "credential",
 	);
 	const currentPassword = credentialAccount?.password;
-	if (!credentialAccount || !currentPassword) {
+	if (!credentialAccount || !currentPassword || !c.body.password) {
 		throw new APIError("BAD_REQUEST", {
 			message: "No password credential found",
 		});
 	}
-	const compare = await c.context.password.verify(
-		currentPassword,
-		c.body.password,
-	);
+	const compare = await c.context.password.verify({
+		hash: currentPassword,
+		password: c.body.password,
+	});
 	if (!compare) {
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid password",

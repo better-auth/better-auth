@@ -16,16 +16,17 @@ import {
 } from "../../types";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 
 export interface UserWithRole extends User {
 	role?: string | null;
 	banned?: boolean | null;
 	banReason?: string | null;
-	banExpires?: number | null;
+	banExpires?: Date | null;
 }
 
-interface SessionWithImpersonatedBy extends Session {
+export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
 }
 
@@ -74,6 +75,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		adminRole: "admin",
 		...options,
 	};
+	const ERROR_CODES = {
+		FAILED_TO_CREATE_USER: "Failed to create user",
+		USER_ALREADY_EXISTS: "User already exists",
+		USER_NOT_FOUND: "User not found",
+		YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
+		ONLY_ADMINS_CAN_ACCESS_THIS_ENDPOINT:
+			"Only admins can access this endpoint",
+	} as const;
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session) {
@@ -126,7 +135,10 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									)) as UserWithRole;
 
 									if (user.banned) {
-										if (user.banExpires && user.banExpires < Date.now()) {
+										if (
+											user.banExpires &&
+											user.banExpires.getTime() < Date.now()
+										) {
 											await ctx.internalAdapter.updateUser(session.userId, {
 												banned: false,
 												banReason: null,
@@ -150,23 +162,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						return context.path === "/list-sessions";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.returned;
-						if (returned instanceof Response) {
-							const json = (await returned
-								.clone()
-								.json()) as SessionWithImpersonatedBy[];
-							const newJson = json.filter((session) => {
-								return !session.impersonatedBy;
-							});
-							const response = new Response(JSON.stringify(newJson), {
-								status: 200,
-								statusText: "OK",
-								headers: returned.headers,
-							});
-							return ctx.json({
-								response: response,
-							});
+						const response =
+							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
+
+						if (!response) {
+							return;
 						}
+						const newJson = response.filter((session) => {
+							return !session.impersonatedBy;
+						});
+
+						return ctx.json(newJson);
 					}),
 				},
 			],
@@ -177,10 +183,38 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
-						role: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
+						role: z.string({
+							description: "The role to set. `admin` or `user` by default",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "setRole",
+							summary: "Set the role of a user",
+							description: "Set the role of a user",
+							responses: {
+								200: {
+									description: "User role updated",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -199,16 +233,53 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						email: z.string(),
-						password: z.string(),
-						name: z.string(),
-						role: z.string(),
+						email: z.string({
+							description: "The email of the user",
+						}),
+						password: z.string({
+							description: "The password of the user",
+						}),
+						name: z.string({
+							description: "The name of the user",
+						}),
+						role: z.string({
+							description: "The role of the user",
+						}),
 						/**
 						 * extra fields for user
 						 */
-						data: z.optional(z.record(z.any())),
+						data: z.optional(
+							z.record(z.any(), {
+								description:
+									"Extra fields for the user. Including custom additional fields.",
+							}),
+						),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "createUser",
+							summary: "Create a new user",
+							description: "Create a new user",
+							responses: {
+								200: {
+									description: "User created",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
@@ -216,7 +287,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: "User already exists",
+							message: ERROR_CODES.USER_ALREADY_EXISTS,
 						});
 					}
 					const user =
@@ -229,7 +300,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create user",
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const hashedPassword = await ctx.context.password.hash(
@@ -252,21 +323,90 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z.string().optional(),
-						searchField: z.enum(["email", "name"]).optional(),
-						searchOperator: z
-							.enum(["contains", "starts_with", "ends_with"])
+						searchValue: z
+							.string({
+								description: "The value to search for",
+							})
 							.optional(),
-						limit: z.string().or(z.number()).optional(),
-						offset: z.string().or(z.number()).optional(),
-						sortBy: z.string().optional(),
-						sortDirection: z.enum(["asc", "desc"]).optional(),
-						filterField: z.string().optional(),
-						filterValue: z.string().or(z.number()).or(z.boolean()).optional(),
+						searchField: z
+							.enum(["email", "name"], {
+								description:
+									"The field to search in, defaults to email. Can be `email` or `name`",
+							})
+							.optional(),
+						searchOperator: z
+							.enum(["contains", "starts_with", "ends_with"], {
+								description:
+									"The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`",
+							})
+							.optional(),
+						limit: z
+							.string({
+								description: "The number of users to return",
+							})
+							.or(z.number())
+							.optional(),
+						offset: z
+							.string({
+								description: "The offset to start from",
+							})
+							.or(z.number())
+							.optional(),
+						sortBy: z
+							.string({
+								description: "The field to sort by",
+							})
+							.optional(),
+						sortDirection: z
+							.enum(["asc", "desc"], {
+								description: "The direction to sort by",
+							})
+							.optional(),
+						filterField: z
+							.string({
+								description: "The field to filter by",
+							})
+							.optional(),
+						filterValue: z
+							.string({
+								description: "The value to filter by",
+							})
+							.or(z.number())
+							.or(z.boolean())
+							.optional(),
 						filterOperator: z
-							.enum(["eq", "ne", "lt", "lte", "gt", "gte"])
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+								description: "The operator to use for the filter",
+							})
 							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							operationId: "listUsers",
+							summary: "List users",
+							description: "List users",
+							responses: {
+								200: {
+									description: "List of users",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													users: {
+														type: "array",
+														items: {
+															$ref: "#/components/schemas/User",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const where: Where[] = [];
@@ -316,8 +456,37 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					method: "POST",
 					use: [adminMiddleware],
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
+					metadata: {
+						openapi: {
+							operationId: "listUserSessions",
+							summary: "List user sessions",
+							description: "List user sessions",
+							responses: {
+								200: {
+									description: "List of user sessions",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													sessions: {
+														type: "array",
+														items: {
+															$ref: "#/components/schemas/Session",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const sessions = await ctx.context.internalAdapter.listSessions(
@@ -333,9 +502,35 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "unbanUser",
+							summary: "Unban a user",
+							description: "Unban a user",
+							responses: {
+								200: {
+									description: "User unbanned",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const user = await ctx.context.internalAdapter.updateUser(
@@ -354,22 +549,56 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 						/**
 						 * Reason for the ban
 						 */
-						banReason: z.string().optional(),
+						banReason: z
+							.string({
+								description: "The reason for the ban",
+							})
+							.optional(),
 						/**
 						 * Number of seconds until the ban expires
 						 */
-						banExpiresIn: z.number().optional(),
+						banExpiresIn: z
+							.number({
+								description: "The number of seconds until the ban expires",
+							})
+							.optional(),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "banUser",
+							summary: "Ban a user",
+							description: "Ban a user",
+							responses: {
+								200: {
+									description: "User banned",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
-							message: "You cannot ban yourself",
+							message: ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
 					const user = await ctx.context.internalAdapter.updateUser(
@@ -397,9 +626,38 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "impersonateUser",
+							summary: "Impersonate a user",
+							description: "Impersonate a user",
+							responses: {
+								200: {
+									description: "Impersonation session created",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const targetUser = await ctx.context.internalAdapter.findUserById(
@@ -425,7 +683,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to create session",
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const authCookies = ctx.context.authCookies;
@@ -500,12 +758,40 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string({
+							description: "The session token",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "revokeUserSession",
+							summary: "Revoke a user session",
+							description: "Revoke a user session",
+							responses: {
+								200: {
+									description: "Session revoked",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
-					await ctx.context.internalAdapter.deleteSession(ctx.body.sessionId);
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.body.sessionToken,
+					);
 					return ctx.json({
 						success: true,
 					});
@@ -516,9 +802,35 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "revokeUserSessions",
+							summary: "Revoke all user sessions",
+							description: "Revoke all user sessions",
+							responses: {
+								200: {
+									description: "Sessions revoked",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -532,9 +844,36 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						userId: z.string(),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "removeUser",
+							summary: "Remove a user",
+							description:
+								"Delete a user and all their sessions and accounts. Cannot be undone.",
+							responses: {
+								200: {
+									description: "User removed",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
@@ -544,6 +883,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				},
 			),
 		},
+		$ERROR_CODES: ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
 	} satisfies BetterAuthPlugin;
 };

@@ -95,8 +95,12 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
 	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
 	const storage = opts?.storage || SecureStore;
-	const scheme = opts?.scheme || Constants.platform?.scheme;
 	const isWeb = Platform.OS === "web";
+
+	const rawScheme =
+		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
+	const scheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+
 	if (!scheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
@@ -160,8 +164,9 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 						}
 
 						if (
-							context.data.redirect &&
-							context.request.url.toString().includes("/sign-in")
+							context.data?.redirect &&
+							context.request.url.toString().includes("/sign-in") &&
+							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;

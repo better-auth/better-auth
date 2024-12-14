@@ -4,13 +4,12 @@ import type { OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { generateId } from "../../utils/id";
 import { createAuthEndpoint } from "../call";
 
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
-	errorMessage: z.string().optional(),
+	error_description: z.string().optional(),
 	state: z.string().optional(),
 });
 
@@ -39,22 +38,25 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 
-		const { code, error, state } = queryOrBody;
+		const { code, error, state, error_description } = queryOrBody;
 
 		if (!state) {
-			c.context.logger.error("State not found");
+			c.context.logger.error("State not found", error);
 			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
 		}
 
 		if (!code) {
 			c.context.logger.error("Code not found");
 			throw c.redirect(
-				`${c.context.baseURL}/error?error=${error || "no_code"}`,
+				`${c.context.baseURL}/error?error=${
+					error || "no_code"
+				}&error_description=${error_description}`,
 			);
 		}
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
 		);
+
 		if (!provider) {
 			c.context.logger.error(
 				"Oauth provider with id",
@@ -65,7 +67,9 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
+		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
+			await parseState(c);
+
 		let tokens: OAuth2Tokens;
 		try {
 			tokens = await provider.validateAuthorizationCode({
@@ -82,11 +86,6 @@ export const callbackOAuth = createAuthEndpoint(
 		const userInfo = await provider
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
-		const id = generateId();
-		const data = {
-			id,
-			...userInfo,
-		};
 
 		function redirectOnError(error: string) {
 			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
@@ -102,7 +101,7 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError("unable_to_get_user_info");
 		}
 
-		if (!data.email) {
+		if (!userInfo.email) {
 			c.context.logger.error(
 				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
 			);
@@ -116,7 +115,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== data.email.toLowerCase()) {
+			if (link.email !== userInfo.email.toLowerCase()) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
@@ -129,7 +128,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			let toRedirectTo: string;
 			try {
-				const url = new URL(callbackURL);
+				const url = callbackURL;
 				toRedirectTo = url.toString();
 			} catch {
 				toRedirectTo = callbackURL;
@@ -139,18 +138,15 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
-				email: data.email,
-				id: data.id,
-				name: data.name || "",
-				image: data.image,
-				emailVerified: data.emailVerified || false,
+				...userInfo,
+				email: userInfo.email,
+				name: userInfo.name || userInfo.email,
 			},
 			account: {
 				providerId: provider.id,
 				accountId: userInfo.id,
-				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
-				expiresAt: tokens.accessTokenExpiresAt,
+				...tokens,
+				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
 		});
@@ -165,10 +161,12 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 		let toRedirectTo: string;
 		try {
-			const url = new URL(callbackURL);
+			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
 			toRedirectTo = url.toString();
 		} catch {
-			toRedirectTo = callbackURL;
+			toRedirectTo = result.isRegister
+				? newUserURL || callbackURL
+				: callbackURL;
 		}
 		throw c.redirect(toRedirectTo);
 	},

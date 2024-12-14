@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "0.8.7-beta.1",
+  "version": "1.0.20",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -256,6 +256,156 @@
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
       }
+    },
+    "./plugins/admin": {
+      "import": {
+        "types": "./dist/plugins/admin.d.ts",
+        "default": "./dist/plugins/admin.js"
+      },
+      "require": {
+        "types": "./dist/plugins/admin.d.cts",
+        "default": "./dist/plugins/admin.cjs"
+      }
+    },
+    "./plugins/anonymous": {
+      "import": {
+        "types": "./dist/plugins/anonymous.d.ts",
+        "default": "./dist/plugins/anonymous.js"
+      },
+      "require": {
+        "types": "./dist/plugins/anonymous.d.cts",
+        "default": "./dist/plugins/anonymous.cjs"
+      }
+    },
+    "./plugins/bearer": {
+      "import": {
+        "types": "./dist/plugins/bearer.d.ts",
+        "default": "./dist/plugins/bearer.js"
+      },
+      "require": {
+        "types": "./dist/plugins/bearer.d.cts",
+        "default": "./dist/plugins/bearer.cjs"
+      }
+    },
+    "./plugins/custom-session": {
+      "import": {
+        "types": "./dist/plugins/custom-session.d.ts",
+        "default": "./dist/plugins/custom-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/custom-session.d.cts",
+        "default": "./dist/plugins/custom-session.cjs"
+      }
+    },
+    "./plugins/email-otp": {
+      "import": {
+        "types": "./dist/plugins/email-otp.d.ts",
+        "default": "./dist/plugins/email-otp.js"
+      },
+      "require": {
+        "types": "./dist/plugins/email-otp.d.cts",
+        "default": "./dist/plugins/email-otp.cjs"
+      }
+    },
+    "./plugins/generic-oauth": {
+      "import": {
+        "types": "./dist/plugins/generic-oauth.d.ts",
+        "default": "./dist/plugins/generic-oauth.js"
+      },
+      "require": {
+        "types": "./dist/plugins/generic-oauth.d.cts",
+        "default": "./dist/plugins/generic-oauth.cjs"
+      }
+    },
+    "./plugins/jwt": {
+      "import": {
+        "types": "./dist/plugins/jwt.d.ts",
+        "default": "./dist/plugins/jwt.js"
+      },
+      "require": {
+        "types": "./dist/plugins/jwt.d.cts",
+        "default": "./dist/plugins/jwt.cjs"
+      }
+    },
+    "./plugins/magic-link": {
+      "import": {
+        "types": "./dist/plugins/magic-link.d.ts",
+        "default": "./dist/plugins/magic-link.js"
+      },
+      "require": {
+        "types": "./dist/plugins/magic-link.d.cts",
+        "default": "./dist/plugins/magic-link.cjs"
+      }
+    },
+    "./plugins/multi-session": {
+      "import": {
+        "types": "./dist/plugins/multi-session.d.ts",
+        "default": "./dist/plugins/multi-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/multi-session.d.cts",
+        "default": "./dist/plugins/multi-session.cjs"
+      }
+    },
+    "./plugins/oauth-proxy": {
+      "import": {
+        "types": "./dist/plugins/oauth-proxy.d.ts",
+        "default": "./dist/plugins/oauth-proxy.js"
+      },
+      "require": {
+        "types": "./dist/plugins/oauth-proxy..d.cts",
+        "default": "./dist/plugins/oauth-proxy..cjs"
+      }
+    },
+    "./plugins/organization": {
+      "import": {
+        "types": "./dist/plugins/organization.d.ts",
+        "default": "./dist/plugins/organization.js"
+      },
+      "require": {
+        "types": "./dist/plugins/organization.d.cts",
+        "default": "./dist/plugins/organization.cjs"
+      }
+    },
+    "./plugins/passkey": {
+      "import": {
+        "types": "./dist/plugins/passkey.d.ts",
+        "default": "./dist/plugins/passkey.js"
+      },
+      "require": {
+        "types": "./dist/plugins/passkey.d.cts",
+        "default": "./dist/plugins/passkey.cjs"
+      }
+    },
+    "./plugins/phone-number": {
+      "import": {
+        "types": "./dist/plugins/phone-number.d.ts",
+        "default": "./dist/plugins/phone-number.js"
+      },
+      "require": {
+        "types": "./dist/plugins/phone-number.d.cts",
+        "default": "./dist/plugins/phone-number.cjs"
+      }
+    },
+    "./plugins/two-factor": {
+      "import": {
+        "types": "./dist/plugins/two-factor.d.ts",
+        "default": "./dist/plugins/two-factor.js"
+      },
+      "require": {
+        "types": "./dist/plugins/two-factor.d.cts",
+        "default": "./dist/plugins/two-factor.cjs"
+      }
+    },
+    "./plugins/username": {
+      "import": {
+        "types": "./dist/plugins/username.d.ts",
+        "default": "./dist/plugins/username.js"
+      },
+      "require": {
+        "types": "./dist/plugins/username.d.cts",
+        "default": "./dist/plugins/username.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -374,47 +524,50 @@
     }
   },
   "devDependencies": {
-    "@prisma/client": "^5.19.1",
+    "@prisma/client": "^5.22.0",
     "@simplewebauthn/types": "^10.0.0",
-    "@types/better-sqlite3": "^7.6.11",
-    "@types/pg": "^8.11.6",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
-    "@types/react": "^18.3.3",
-    "better-sqlite3": "^11.3.0",
-    "drizzle-orm": "^0.33.0",
-    "happy-dom": "^15.7.4",
-    "hono": "^4.5.4",
-    "listhen": "^1.7.2",
-    "mongodb": "^6.10.0",
-    "mysql2": "^3.11.0",
-    "next": "^15.0.3",
-    "oauth2-mock-server": "^7.1.2",
-    "pg": "^8.12.0",
-    "prisma": "^5.19.1",
+    "@types/react": "^18.3.14",
+    "better-sqlite3": "^11.6.0",
+    "drizzle-orm": "^0.35.3",
+    "happy-dom": "^15.11.7",
+    "hono": "^4.6.13",
+    "listhen": "^1.9.0",
+    "mongodb": "^6.11.0",
+    "mysql2": "^3.11.5",
+    "next": "^15.0.4",
+    "oauth2-mock-server": "^7.2.0",
+    "pg": "^8.13.1",
+    "prisma": "^5.22.0",
     "react": "^18.3.1",
     "react-native": "~0.74.6",
-    "solid-js": "^1.8.18",
-    "tsup": "^8.2.4",
+    "solid-js": "^1.9.3",
+    "tsup": "^8.3.5",
     "typescript": "5.6.1-rc",
     "vitest": "^1.6.0",
-    "vue": "^3.5.0"
+    "vue": "^3.5.13"
   },
   "dependencies": {
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
-    "@noble/hashes": "^1.5.0",
+    "@noble/hashes": "^1.6.1",
     "@simplewebauthn/browser": "^10.0.0",
     "@simplewebauthn/server": "^10.0.1",
-    "better-call": "0.2.15-beta.6",
+    "better-call": "0.3.3-beta.4",
     "consola": "^3.2.3",
     "defu": "^6.1.4",
-    "jose": "^5.9.4",
+    "jose": "^5.9.6",
     "kysely": "^0.27.4",
-    "nanoid": "^5.0.7",
-    "nanostores": "^0.11.2",
+    "nanoid": "^5.0.9",
+    "nanostores": "^0.11.3",
     "oslo": "^1.2.1",
     "uncrypto": "^0.1.3",
-    "zod": "^3.22.5"
+    "zod": "^3.23.8"
+  },
+  "overrides": {
+    "whatwg-url": "^14.0.0"
   },
   "files": [
     "dist"

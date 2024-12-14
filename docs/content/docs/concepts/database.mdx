@@ -3,7 +3,7 @@ title: Database
 description: Learn how to use a database with Better Auth.
 ---
 
-Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysley </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysely </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
 You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a Kysely instance in the database options.
 
@@ -151,7 +151,7 @@ import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const client = new MongoClient("mongodb://localhost:27017");
+const authClient =  new MongoClient("mongodb://localhost:27017");
 
 const db = client.db()
 
@@ -319,7 +319,7 @@ Table Name: `session`
     {
       name: "id",
       type: "string",
-      description: "Unique identifier for each session. This is used as the session token.",
+      description: "Unique identifier for each session",
       isPrimaryKey: true
     },
     {
@@ -327,6 +327,12 @@ Table Name: `session`
       type: "string",
       description: "The id of the user",
       isForeignKey: true
+    },
+    {
+      name:"token",
+      type: "string",
+      description: "The unique session token",
+      isUnique: true
     },
     {
       name: "expiresAt",
@@ -345,6 +351,16 @@ Table Name: `session`
       description: "The user agent information of the device",
       isOptional: true
     },
+      {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
   />
 
@@ -389,9 +405,21 @@ Table Name: `account`
       isOptional: true,
     },
     {
-      name: "expiresAt",
+      name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the access token expires",
+      description: "The time when the verification request expires",
+      isOptional: true,
+    },
+    {
+      name: "refreshTokenExpiresAt",
+      type: "Date",
+      description: "The time when the verification request expires",
+      isOptional: true,
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "The scope of the account. Returned by the provider",
       isOptional: true,
     },
     {
@@ -400,6 +428,16 @@ Table Name: `account`
       description: "The password of the account. Mainly used for email and password authentication",
       isOptional: true,
     },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
 />
 
@@ -435,6 +473,11 @@ Table Name: `verification`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
     }
   ]}
 />
@@ -547,24 +590,59 @@ res.user.lang // > "fr"
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
 
+If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+
+**Example: Mapping Profile to User For `firstName` and `lastName`**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   socialProviders: {
+      github: {
+         clientId: "YOUR_GITHUB_CLIENT_ID",
+         clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.name.split(" ")[0],
+                lastName: profile.name.split(" ")[1],
+              }
+          }
+      },
+      google: {
+          clientId: "YOUR_GOOGLE_CLIENT_ID",
+          clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.given_name,
+                lastName: profile.family_name,
+              }
+          }
+      }
+    }
+})
+```
+
 ### ID Generation
 
-Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can pass your own function through the adapter or database configuration.
+Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` section of the <Link href="/docs/reference/options">options</Link>.
 
 **Guidelines:**
 
 - IDs need to be in string format.
 - The ID should be unique for each entity type (like users, sessions, etc.).
-- Since the session ID acts as the token, it should be both unique and sufficiently long for security.
+- Since the session token acts as the token, it should be both unique and sufficiently long for security.
 
-**Example: Built In Kysley Adapter**
+**Example: Custom ID Generation**
 ```ts title="auth.ts" 
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
 export const auth = betterAuth({
    database: {
-      db: db,
+      db: db
+   },
+   advanced: {
       generateId: () => {
          // custom id generation logic
       }
@@ -572,21 +650,22 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Prisma Adapter**
-```ts title="auth.ts"
+You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
+
+**Example: Automatic Database IDs**
+```ts title="auth.ts" 
 import { betterAuth } from "better-auth";
+import { db } from "./db";
 
 export const auth = betterAuth({
-   database: prismaAdapter(prisma, {
-      provider: "sqlite",
-      generateId: () => {
-         // custom id generation logic
-      }
-   })
+   database: {
+      db: db
+   },
+   advanced: {
+      generateId: false,
+   },
 })
 ```
-
-You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
 
 ### Database Hooks
 
@@ -631,6 +710,35 @@ export const auth = betterAuth({
    }
 })
 ```
+
+#### Throwing Errors
+If you want to stop the database hook from proceeding, you can throw errors using the `APIError` class imported from `better-auth/api`.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (user.isAgreedToTerms === false) { // Your special condition.
+            // Send the API error.
+            throw new APIError("BAD_REQUEST", {
+              message: "User must agree to the TOS before signing up.",
+            });
+          }
+          return {
+            data: user
+          };
+        },
+      },
+    },
+  }
+})
+```
+
 
 ## Plugins Schema
 

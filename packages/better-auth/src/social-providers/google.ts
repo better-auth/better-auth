@@ -32,7 +32,7 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions {
+export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	accessType?: "offline" | "online";
 	prompt?: "none" | "consent" | "select_account";
 }
@@ -103,10 +103,14 @@ export const google = (options: GoogleOptions) => {
 			return isValid;
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}
 			const user = parseJWT(token.idToken)?.payload as GoogleProfile;
+			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
 					id: user.sub,
@@ -114,6 +118,7 @@ export const google = (options: GoogleOptions) => {
 					email: user.email,
 					image: user.picture,
 					emailVerified: user.email_verified,
+					...userMap,
 				},
 				data: user,
 			};

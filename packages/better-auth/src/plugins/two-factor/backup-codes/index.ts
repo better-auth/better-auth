@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 
 export interface BackupCodeOptions {
 	/**
@@ -121,7 +122,7 @@ export const backupCode2fa = (
 					});
 					if (!twoFactor) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes aren't enabled",
+							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
 					const validate = await verifyBackupCode(
@@ -133,7 +134,7 @@ export const backupCode2fa = (
 					);
 					if (!validate.status) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid backup code",
+							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						});
 					}
 					const updatedBackupCodes = await symmetricEncrypt({
@@ -141,7 +142,7 @@ export const backupCode2fa = (
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.update({
+					await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -156,7 +157,7 @@ export const backupCode2fa = (
 
 					if (!ctx.body.disableSession) {
 						await setSessionCookie(ctx, {
-							session: ctx.context.session,
+							session: ctx.context.session.session,
 							user,
 						});
 					}
@@ -179,7 +180,7 @@ export const backupCode2fa = (
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Two factor isn't enabled",
+							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						});
 					}
 					await ctx.context.password.checkPassword(user.id, ctx);
@@ -237,7 +238,7 @@ export const backupCode2fa = (
 					);
 					if (!backupCodes) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes aren't enabled",
+							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
 					return ctx.json({

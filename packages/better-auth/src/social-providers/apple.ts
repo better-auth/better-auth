@@ -65,7 +65,7 @@ export interface AppleNonConformUser {
 	email: string;
 }
 
-export interface AppleOptions extends ProviderOptions {}
+export interface AppleOptions extends ProviderOptions<AppleProfile> {}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -120,6 +120,9 @@ export const apple = (options: AppleOptions) => {
 			return !!jwtClaims;
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}
@@ -130,12 +133,14 @@ export const apple = (options: AppleOptions) => {
 			const name = profile.user
 				? `${profile.user.name.firstName} ${profile.user.name.lastName}`
 				: profile.email;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
 					name: name,
 					emailVerified: false,
 					email: profile.email,
+					...userMap,
 				},
 				data: profile,
 			};

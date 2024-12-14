@@ -12,7 +12,7 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId">;
+		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
 	},
 ) {
@@ -30,6 +30,7 @@ export async function handleOAuthUserInfo(
 			);
 		});
 	let user = dbUser?.user;
+	let isRegister = !user;
 
 	if (dbUser) {
 		const hasBeenLinked = dbUser.accounts.find(
@@ -59,12 +60,13 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
-					id: c.context.uuid(),
 					userId: dbUser.user.id,
 					accessToken: account.accessToken,
 					idToken: account.idToken,
 					refreshToken: account.refreshToken,
-					expiresAt: account.expiresAt,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
@@ -73,66 +75,74 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
-		} else {
-			await c.context.internalAdapter.updateAccount(hasBeenLinked.id, {
-				accessToken: account.accessToken,
-				idToken: account.idToken,
-				refreshToken: account.refreshToken,
-				expiresAt: account.expiresAt,
+			// Update user info
+			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...userInfo,
+				updatedAt: new Date(),
 			});
-		}
-	} else {
-		try {
-			const emailVerified = userInfo.emailVerified || false;
-			user = await c.context.internalAdapter
-				.createOAuthUser(
-					{
-						...userInfo,
-						id: c.context.uuid(),
-						emailVerified,
-						email: userInfo.email.toLowerCase(),
-					},
-					{
-						accessToken: account.accessToken,
-						idToken: account.idToken,
-						refreshToken: account.refreshToken,
-						expiresAt: account.expiresAt,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
-				)
-				.then((res) => res?.user);
-			if (
-				!emailVerified &&
-				user &&
-				c.context.options.emailVerification?.sendOnSignUp
-			) {
-				const token = await createEmailVerificationToken(
-					c.context.secret,
-					user.email,
-				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user,
-						url,
-						token,
-					},
-					c.request,
+		} else {
+			const updateData = Object.fromEntries(
+				Object.entries({
+					accessToken: account.accessToken,
+					idToken: account.idToken,
+					refreshToken: account.refreshToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				}).filter(([_, value]) => value !== undefined),
+			);
+
+			if (Object.keys(updateData).length > 0) {
+				await c.context.internalAdapter.updateAccount(
+					hasBeenLinked.id,
+					updateData,
 				);
 			}
-		} catch (e) {
-			logger.error("Unable to create user", e);
-			return {
-				error: "unable to create user",
-				data: null,
-			};
+		}
+	} else {
+		user = await c.context.internalAdapter
+			.createOAuthUser(
+				{
+					...userInfo,
+					email: userInfo.email.toLowerCase(),
+					id: undefined,
+				},
+				{
+					accessToken: account.accessToken,
+					idToken: account.idToken,
+					refreshToken: account.refreshToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
+					providerId: account.providerId,
+					accountId: userInfo.id.toString(),
+				},
+			)
+			.then((res) => res?.user);
+		if (
+			!userInfo.emailVerified &&
+			user &&
+			c.context.options.emailVerification?.sendOnSignUp
+		) {
+			const token = await createEmailVerificationToken(
+				c.context.secret,
+				user.email,
+			);
+			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+			await c.context.options.emailVerification?.sendVerificationEmail?.(
+				{
+					user,
+					url,
+					token,
+				},
+				c.request,
+			);
 		}
 	}
 	if (!user) {
 		return {
 			error: "unable to create user",
 			data: null,
+			isRegister: false,
 		};
 	}
 
@@ -144,6 +154,7 @@ export async function handleOAuthUserInfo(
 		return {
 			error: "unable to create session",
 			data: null,
+			isRegister: false,
 		};
 	}
 	return {
@@ -152,5 +163,6 @@ export async function handleOAuthUserInfo(
 			user,
 		},
 		error: null,
+		isRegister,
 	};
 }

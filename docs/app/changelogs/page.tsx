@@ -1,24 +1,66 @@
 import Link from "next/link";
 import { useId } from "react";
-
-import { changelog } from "@/app/source";
-import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { IconLink } from "./_components/changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "./_components/icons";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "./_components/stat-field";
+import { betterFetch } from "@better-fetch/fetch";
+import Markdown from "react-markdown";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import rehypeHighlight from "rehype-highlight";
+import "highlight.js/styles/dark.css";
 
-const ChangelogPage = () => {
-	// @ts-ignore
-	const page = changelog.getPage();
+export const dynamic = "force-static";
 
-	if (page == null) {
-		notFound();
+const ChangelogPage = async () => {
+	const { data: releases } = await betterFetch<
+		{
+			id: number;
+			tag_name: string;
+			name: string;
+			body: string;
+			html_url: string;
+			prerelease: boolean;
+			published_at: string;
+		}[]
+	>("https://api.github.com/repos/better-auth/better-auth/releases");
+
+	const messages = releases
+		?.filter((release) => !release.prerelease)
+		.map((release) => ({
+			tag: release.tag_name,
+			title: release.name,
+			content: getContent(release.body),
+			date: new Date(release.published_at).toLocaleDateString("en-US", {
+				year: "numeric",
+				month: "short",
+				day: "numeric",
+			}),
+			url: release.html_url,
+		}));
+
+	function getContent(content: string) {
+		const lines = content.split("\n");
+		const newContext = lines.map((line) => {
+			if (line.startsWith("- ")) {
+				const mainContent = line.split(";")[0];
+				const context = line.split(";")[2];
+				const mentions = context
+					.split(" ")
+					.filter((word) => word.startsWith("@"))
+					.map((mention) => {
+						const username = mention.replace("@", "");
+						const avatarUrl = `https://github.com/${username}.png`;
+						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
+					});
+				// Remove &nbsp
+				return mainContent.replace(/&nbsp/g, "") + " – " + mentions.join(" ");
+			}
+			return line;
+		});
+		return newContext.join("\n");
 	}
-
-	const MDX = page.data.body;
 
 	return (
 		<div className="grid md:grid-cols-2 items-start">
@@ -26,7 +68,7 @@ const ChangelogPage = () => {
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 
-				<div className="flex flex-col justify-center max-w-xl mx-auto h-full">
+				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
 					<h1 className="mt-14 font-sans font-semibold tracking-tighter text-5xl">
 						All of the changes made will be{" "}
 						<span className="">available here.</span>
@@ -37,7 +79,7 @@ const ChangelogPage = () => {
 						and more secure.
 					</p>
 					<hr className="h-px bg-gray-300 mt-5" />
-					<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300  justify-center gap-x-1 gap-y-3 sm:gap-x-2 lg:justify-start">
+					<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300 gap-x-1 gap-y-3 sm:gap-x-2">
 						<IconLink
 							href="/docs"
 							icon={BookIcon}
@@ -61,8 +103,7 @@ const ChangelogPage = () => {
 						</IconLink>
 					</div>
 					<p className="flex items-baseline absolute bottom-4 max-md:left-1/2 max-md:-translate-x-1/2 gap-x-2 text-[0.8125rem]/6 text-gray-500">
-						Brought to you by{" "}
-						<IconLink href="#" icon={XIcon} compact>
+						<IconLink href="https://x.com/better_auth" icon={XIcon} compact>
 							BETTER-AUTH.
 						</IconLink>
 					</p>
@@ -72,14 +113,22 @@ const ChangelogPage = () => {
 				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_5px] bg-repeat-y"></div>
 
 				<div className="max-w-2xl relative">
-					<MDX
+					<Markdown
+						rehypePlugins={[[rehypeHighlight]]}
 						components={{
+							pre: (props) => (
+								<defaultMdxComponents.pre
+									{...props}
+									className={cn(props.className, " ml-10 my-2")}
+								/>
+							),
 							h2: (props) => (
 								<h2
-									className="text-2xl relative mt-16 font-bold flex-col flex justify-center tracking-tighter"
+									id={props.children?.toString().split("date=")[0].trim()} // Extract ID dynamically
+									className="text-2xl relative mb-6 font-bold flex-col flex justify-center tracking-tighter before:content-[''] before:block before:h-[65px] before:-mt-[10px]"
 									{...props}
 								>
-									<div className="sticky top-0 left-[-9.9rem]">
+									<div className="sticky top-0 left-[-9.9rem] hidden md:block">
 										<time className="flex gap-2 items-center text-gray-500 dark:text-white/80 text-sm md:absolute md:left-[-9.8rem] font-normal tracking-normal">
 											{props.children?.toString().includes("date=") &&
 												props.children?.toString().split("date=")[1]}
@@ -87,32 +136,62 @@ const ChangelogPage = () => {
 											<div className="w-4 h-[1px] dark:bg-white/60 bg-black" />
 										</time>
 									</div>
-
-									{props.children?.toString().split("date=")[0].trim()}
+									<Link
+										href={
+											`#${props.children
+												?.toString()
+												.split("date=")[0]
+												.trim()}` || "#"
+										}
+									>
+										{props.children?.toString().split("date=")[0].trim()}
+									</Link>
+									<p className="text-xs font-normal opacity-60 hidden">
+										{props.children?.toString().includes("date=") &&
+											props.children?.toString().split("date=")[1]}
+									</p>
 								</h2>
 							),
 							h3: (props) => (
 								<h3 className="text-xl tracking-tighter" {...props} />
 							),
-							p: (props) => <p className="my-4" {...props} />,
+							p: (props) => <p className="my-0 ml-10 text-sm" {...props} />,
 							ul: (props) => (
 								<ul
-									className="list-disc ml-10 my-4 text-[0.855rem] text-gray-600 dark:text-gray-300"
+									className="list-disc ml-10 text-[0.855rem] text-gray-600 dark:text-gray-300"
 									{...props}
 								/>
 							),
-							li: (props) => <li className="my-px" {...props} />,
+							li: (props) => <li className="my-1" {...props} />,
 							a: ({ className, ...props }: any) => (
 								<Link
+									target="_blank"
 									className={cn("font-medium underline", className)}
 									{...props}
 								/>
 							),
-							Badge: (props) => (
-								<Badge variant="secondary" className="py-0" {...props} />
+							strong: (props) => (
+								<strong className="font-semibold" {...props} />
+							),
+							img: (props) => (
+								<img
+									className="rounded-full w-6 h-6 border opacity-70 inline-block"
+									{...props}
+									style={{ maxWidth: "100%" }}
+								/>
 							),
 						}}
-					/>
+					>
+						{messages
+							?.map((message) => {
+								return `
+## ${message.title} date=${message.date}
+
+${message.content}
+								`;
+							})
+							.join("\n")}
+					</Markdown>
 				</div>
 			</div>
 		</div>

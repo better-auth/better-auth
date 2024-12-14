@@ -4,22 +4,9 @@ import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
 
 describe("Admin plugin", async () => {
-	const { client, signInWithTestUser } = await getTestInstance(
+	const { client, signInWithTestUser, signInWithUser } = await getTestInstance(
 		{
-			plugins: [
-				admin({
-					schema: {
-						user: {
-							fields: {
-								role: "_role",
-							},
-						},
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
+			plugins: [admin()],
 			databaseHooks: {
 				user: {
 					create: {
@@ -62,6 +49,7 @@ describe("Admin plugin", async () => {
 			},
 		);
 		newUser = res.data?.user;
+
 		expect(newUser?.role).toBe("user");
 	});
 
@@ -199,7 +187,7 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user).toBeDefined();
 	});
 
 	it("should allow to unban user", async () => {
@@ -226,39 +214,59 @@ describe("Admin plugin", async () => {
 		expect(res.data?.sessions.length).toBe(1);
 	});
 
+	const data = {
+		email: "impersonate@mail.com",
+		password: "password",
+		name: "Impersonate User",
+	};
+
 	it("should allow admins to impersonate user", async () => {
+		const userToImpersonate = await client.signUp.email(data);
 		const res = await client.admin.impersonateUser(
 			{
-				userId: newUser?.id || "",
+				userId: userToImpersonate.data?.id || "",
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
 		expect(res.data?.session).toBeDefined();
-		expect(res.data?.user?.id).toBe(newUser?.id);
+		expect(res.data?.user?.id).toBe(userToImpersonate.data?.id);
+	});
+
+	it("should filter impersonated sessions", async () => {
+		const { headers } = await signInWithUser(data.email, data.password);
+		const res = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.length).toBe(2);
 	});
 
 	it("should allow admin to revoke user session", async () => {
+		const {
+			res: { user },
+		} = await signInWithUser(data.email, data.password);
 		const sessions = await client.admin.listUserSessions(
 			{
-				userId: newUser?.id || "",
+				userId: user.id,
 			},
 			{
 				headers: adminHeaders,
 			},
 		);
-		expect(sessions.data?.sessions.length).toBe(2);
+		expect(sessions.data?.sessions.length).toBe(4);
 		const res = await client.admin.revokeUserSession(
-			{ sessionId: sessions.data?.sessions[0].id || "" },
+			{ sessionToken: sessions.data?.sessions[0].token || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);
 		const sessions2 = await client.admin.listUserSessions(
-			{ userId: newUser?.id || "" },
+			{ userId: user?.id || "" },
 			{ headers: adminHeaders },
 		);
-		expect(sessions2.data?.sessions.length).toBe(1);
+		expect(sessions2.data?.sessions.length).toBe(3);
 	});
 
 	it("should allow admin to revoke user sessions", async () => {

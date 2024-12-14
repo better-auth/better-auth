@@ -1,5 +1,4 @@
 import { APIError } from "better-call";
-import { TOTPController } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { verifyTwoFactorMiddleware } from "../verify-middleware";
@@ -9,6 +8,8 @@ import type {
 	UserWithTwoFactor,
 } from "../types";
 import { TimeSpan } from "oslo";
+import { alphabet, generateRandomString } from "../../../crypto";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 
 export interface OTPOptions {
 	/**
@@ -18,6 +19,12 @@ export interface OTPOptions {
 	 * @default "3 mins"
 	 */
 	period?: number;
+	/**
+	 * Number of digits for the OTP code
+	 *
+	 * @default 6
+	 */
+	digits?: number;
 	/**
 	 * Send the otp to the user
 	 *
@@ -49,12 +56,9 @@ export interface OTPOptions {
 export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 	const opts = {
 		...options,
+		digits: options?.digits || 6,
 		period: new TimeSpan(options?.period || 3, "m"),
 	};
-	const totp = new TOTPController({
-		digits: 6,
-		period: opts.period,
-	});
 	/**
 	 * Generate OTP and send it to the user.
 	 */
@@ -63,6 +67,29 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Send two factor OTP",
+					description: "Send two factor OTP to the user",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			if (!options || !options.sendOTP) {
@@ -85,10 +112,15 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "OTP isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
 			}
-			const code = await totp.generate(Buffer.from(twoFactor.secret));
+			const code = generateRandomString(opts.digits, alphabet("0-9"));
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: code,
+				identifier: `2fa-otp-${user.id}`,
+				expiresAt: new Date(Date.now() + opts.period.milliseconds()),
+			});
 			await options.sendOTP({ user, otp: code }, ctx.request);
 			return ctx.json({ status: true });
 		},
@@ -99,9 +131,34 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string(),
+				code: z.string({
+					description: "The otp code to verify",
+				}),
 			}),
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Verify two factor OTP",
+					description: "Verify two factor OTP",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const user = ctx.context.session.user;
@@ -121,11 +178,19 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "OTP isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
 			}
-			const toCheckOtp = await totp.generate(Buffer.from(twoFactor.secret));
-			if (toCheckOtp === ctx.body.code) {
+			const toCheckOtp =
+				await ctx.context.internalAdapter.findVerificationValue(
+					`2fa-otp-${user.id}`,
+				);
+			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
+				throw new APIError("BAD_REQUEST", {
+					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+				});
+			}
+			if (toCheckOtp.value === ctx.body.code) {
 				return ctx.context.valid();
 			} else {
 				return ctx.context.invalid();
@@ -135,8 +200,8 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 	return {
 		id: "otp",
 		endpoints: {
-			send2FaOTP,
-			verifyOTP,
+			sendTwoFactorOTP: send2FaOTP,
+			verifyTwoFactorOTP: verifyOTP,
 		},
 	} satisfies TwoFactorProvider;
 };

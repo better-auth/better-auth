@@ -1,5 +1,8 @@
 import { getAuthTables } from "../../db";
+import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 
 interface PrismaConfig {
 	/**
@@ -12,15 +15,6 @@ interface PrismaConfig {
 		| "postgresql"
 		| "sqlserver"
 		| "mongodb";
-	/**
-	 * Custom generateId function.
-	 *
-	 * If not provided, nanoid will be used.
-	 * If set to false, the database's auto generated id will be used.
-	 *
-	 * @default nanoid
-	 */
-	generateId?: ((size?: number) => string) | false;
 }
 
 interface PrismaClient {}
@@ -61,20 +55,38 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 	function getModelName(model: string) {
 		return schema[model].modelName;
 	}
-	const shouldGenerateId = config?.generateId !== false;
+
+	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(data: Record<string, any>, model: string) {
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				data.id && shouldGenerateId
-					? {
-							id: config?.generateId ? config.generateId() : data.id,
-						}
-					: {};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = data[key];
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id: options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: data.id || generateId(),
+						};
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				if (
+					value === undefined &&
+					(!fields[field].defaultValue || action === "update")
+				) {
+					continue;
 				}
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					value,
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},
@@ -141,8 +153,8 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			});
 
 			return {
-				AND: andClause.length ? andClause : undefined,
-				OR: orClause.length ? orClause : undefined,
+				...(andClause.length ? { AND: andClause } : {}),
+				...(orClause.length ? { OR: orClause } : {}),
 			};
 		},
 		convertSelect: (select?: string[], model?: string) => {
@@ -175,7 +187,12 @@ export const prismaAdapter =
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -185,6 +202,11 @@ export const prismaAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const whereClause = convertWhereClause(model, where);
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const result = await db[getModelName(model)].findFirst({
 					where: whereClause,
 					select: convertSelect(select, model),
@@ -194,23 +216,36 @@ export const prismaAdapter =
 			async findMany(data) {
 				const { model, where, limit, offset, sortBy } = data;
 				const whereClause = convertWhereClause(model, where);
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
+
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
 					take: limit || 100,
 					skip: offset || 0,
-					orderBy: sortBy?.field
+					...(sortBy?.field
 						? {
-								[getField(model, sortBy.field)]:
-									sortBy.direction === "desc" ? "desc" : "asc",
+								orderBy: {
+									[getField(model, sortBy.field)]:
+										sortBy.direction === "desc" ? "desc" : "asc",
+								},
 							}
-						: undefined,
+						: {}),
 				})) as any[];
 				return result.map((r) => transformOutput(r, model));
 			},
 			async update(data) {
 				const { model, where, update } = data;
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
 					where: whereClause,
 					data: transformed,
@@ -220,7 +255,7 @@ export const prismaAdapter =
 			async updateMany(data) {
 				const { model, where, update } = data;
 				const whereClause = convertWhereClause(model, where);
-				const transformed = transformInput(update, model);
+				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
 					where: whereClause,
 					data: transformed,

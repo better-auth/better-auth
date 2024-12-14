@@ -12,7 +12,7 @@ describe("Password hashing and verification", () => {
 	it("should verify a correct password", async () => {
 		const password = "correctPassword123!";
 		const hash = await hashPassword(password);
-		const isValid = await verifyPassword(hash, password);
+		const isValid = await verifyPassword({ hash, password });
 		expect(isValid).toBe(true);
 	});
 
@@ -20,7 +20,7 @@ describe("Password hashing and verification", () => {
 		const correctPassword = "correctPassword123!";
 		const incorrectPassword = "wrongPassword456!";
 		const hash = await hashPassword(correctPassword);
-		const isValid = await verifyPassword(hash, incorrectPassword);
+		const isValid = await verifyPassword({ hash, password: incorrectPassword });
 		expect(isValid).toBe(false);
 	});
 
@@ -34,15 +34,21 @@ describe("Password hashing and verification", () => {
 	it("should handle long passwords", async () => {
 		const password = "a".repeat(1000);
 		const hash = await hashPassword(password);
-		const isValid = await verifyPassword(hash, password);
+		const isValid = await verifyPassword({ hash, password });
 		expect(isValid).toBe(true);
 	});
 
 	it("should be case-sensitive", async () => {
 		const password = "CaseSensitivePassword123!";
 		const hash = await hashPassword(password);
-		const isValidLower = await verifyPassword(hash, password.toLowerCase());
-		const isValidUpper = await verifyPassword(hash, password.toUpperCase());
+		const isValidLower = await verifyPassword({
+			hash,
+			password: password.toLowerCase(),
+		});
+		const isValidUpper = await verifyPassword({
+			hash,
+			password: password.toUpperCase(),
+		});
 		expect(isValidLower).toBe(false);
 		expect(isValidUpper).toBe(false);
 	});
@@ -50,7 +56,7 @@ describe("Password hashing and verification", () => {
 	it("should handle Unicode characters", async () => {
 		const password = "пароль123!";
 		const hash = await hashPassword(password);
-		const isValid = await verifyPassword(hash, password);
+		const isValid = await verifyPassword({ hash, password });
 		expect(isValid).toBe(true);
 	});
 });

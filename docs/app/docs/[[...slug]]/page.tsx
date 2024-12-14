@@ -1,4 +1,4 @@
-import { source } from "@/app/source";
+import { source, openapi } from "@/app/source";
 import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";
@@ -13,7 +13,10 @@ import { Features } from "@/components/blocks/features";
 import { ForkButton } from "@/components/fork-button";
 import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
-import { AutoTypeTable } from "fumadocs-typescript/ui";
+import { File, Folder, Files } from "fumadocs-ui/components/files";
+import { createTypeTable } from "fumadocs-typescript/ui";
+
+const { AutoTypeTable } = createTypeTable();
 
 export default async function Page({
 	params,
@@ -39,7 +42,7 @@ export default async function Page({
 			}}
 			tableOfContent={{
 				style: "clerk",
-				header: <div className="h-4 w-10"></div>,
+				header: <div className="w-10 h-4"></div>,
 			}}
 			footer={{
 				enabled: false,
@@ -64,6 +67,9 @@ export default async function Page({
 						),
 						Step,
 						Steps,
+						File,
+						Folder,
+						Files,
 						Tab,
 						Tabs,
 						AutoTypeTable,
@@ -87,7 +93,7 @@ export async function generateStaticParams() {
 	const res = source.getPages().map((page) => ({
 		slug: page.slugs,
 	}));
-	return res;
+	return source.generateParams();
 }
 
 export async function generateMetadata({

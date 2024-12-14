@@ -33,12 +33,12 @@ description: Discord provider setup and usage.
         To sign in with Discord, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `discord`.
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        const client = createAuthClient()
+        const authClient =  createAuthClient()
         
         const signIn = async () => {
-            const data = await client.signIn.social({
+            const data = await authClient.signIn.social({
                 provider: "discord"
             })
         }

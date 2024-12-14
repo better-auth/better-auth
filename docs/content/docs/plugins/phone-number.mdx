@@ -48,11 +48,11 @@ The phone number plugin extends the authentication system by allowing users to s
     <Step>
         ### Add the client plugin
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { phoneNumberClient } from "better-auth/client/plugins"
 
-        const client = createAuthClient({
+        const authClient =  createAuthClient({
             plugins: [ // [!code highlight]
                 phoneNumberClient() // [!code highlight]
             ] // [!code highlight]
@@ -67,8 +67,8 @@ The phone number plugin extends the authentication system by allowing users to s
 
 To send an OTP to a user's phone number for verification, you can use the `sendVerificationCode` endpoint.
 
-```ts title="client.ts"
-await client.phoneNumber.sendOtp({
+```ts title="auth-client.ts"
+await authClient.phoneNumber.sendOtp({
     phoneNumber: "+1234567890"
 })
 ```
@@ -77,8 +77,8 @@ await client.phoneNumber.sendOtp({
 
 After the OTP is sent, users can verify their phone number by providing the code.
 
-```ts title="client.ts"
-const isVerified = await client.phoneNumber.verify({
+```ts title="auth-client.ts"
+const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456"
 })
@@ -99,7 +99,7 @@ export const auth = betterAuth({
             },
             signUpOnVerification: {
                 getTempEmail: (phoneNumber) => {
-                    return `${phonNumber}@my-site.com`
+                    return `${phoneNumber}@my-site.com`
                 },
                 //optionally you can alos pass `getTempName` function to generate a temporary name for the user
                 getTempName: (phoneNumber) => {
@@ -128,16 +128,16 @@ await authClient.signIn.phoneNumber({
 Updating phone number uses the same process as verifying a phone number. The user will receive an OTP code to verify the new phone number.
 
 
-```ts title="client.ts"
-await client.phoneNumber.sendOtp({
+```ts title="auth-client.ts"
+await authClient.phoneNumber.sendOtp({
     phoneNumber: "+1234567890" // New phone number
 })
 ```
 
 Then verify the new phone number with the OTP code. 
 
-```ts title="client.ts"
-const isVerified = await client.phoneNumber.verify({
+```ts title="auth-client.ts"
+const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
     updatePhoneNumber: true // Set to true to update the phone number
@@ -151,8 +151,8 @@ if user session exist the phone number will be updated automatically
 
 By default, the plugin creates a session for the user after verifying the phone number. You can disable this behavior by passing `disableSession: true` to the `verify` method.
 
-```ts title="client.ts"
-const isVerified = await client.phoneNumber.verify({
+```ts title="auth-client.ts"
+const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
     disableSession: true

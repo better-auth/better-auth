@@ -5,6 +5,8 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
+import type { GenericEndpointContext, User } from "../../types";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -32,19 +34,104 @@ export async function createEmailVerificationToken(
 	return token;
 }
 
+/**
+ * A function to send a verification email to the user
+ */
+export async function sendVerificationEmailFn(
+	ctx: GenericEndpointContext,
+	user: User,
+) {
+	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		ctx.context.logger.error("Verification email isn't enabled.");
+		throw new APIError("BAD_REQUEST", {
+			message: "Verification email isn't enabled",
+		});
+	}
+	const token = await createEmailVerificationToken(
+		ctx.context.secret,
+		user.email,
+	);
+	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+		ctx.body.callbackURL || ctx.query?.currentURL || "/"
+	}`;
+	await ctx.context.options.emailVerification.sendVerificationEmail(
+		{
+			user: user,
+			url,
+			token,
+		},
+		ctx.request,
+	);
+}
+
 export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
 		query: z
 			.object({
-				currentURL: z.string().optional(),
+				currentURL: z
+					.string({
+						description: "The URL to use for email verification callback",
+					})
+					.optional(),
 			})
 			.optional(),
 		body: z.object({
-			email: z.string().email(),
-			callbackURL: z.string().optional(),
+			email: z
+				.string({
+					description: "The email to send the verification email to",
+				})
+				.email(),
+			callbackURL: z
+				.string({
+					description: "The URL to use for email verification callback",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Send a verification email to the user",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									email: {
+										type: "string",
+										description: "The email to send the verification email to",
+									},
+									callbackURL: {
+										type: "string",
+										description:
+											"The URL to use for email verification callback",
+									},
+								},
+								required: ["email"],
+							},
+						},
+					},
+				},
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
@@ -57,23 +144,10 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const user = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!user) {
 			throw new APIError("BAD_REQUEST", {
-				message: "User not found",
+				message: BASE_ERROR_CODES.USER_NOT_FOUND,
 			});
 		}
-		const token = await createEmailVerificationToken(ctx.context.secret, email);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${
-			ctx.body.callbackURL || ctx.query?.currentURL || "/"
-		}`;
-		await ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: user.user,
-				url,
-				token,
-			},
-			ctx.request,
-		);
+		await sendVerificationEmailFn(ctx, user.user);
 		return ctx.json({
 			status: true,
 		});
@@ -85,20 +159,61 @@ export const verifyEmail = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			token: z.string(),
-			callbackURL: z.string().optional(),
+			token: z.string({
+				description: "The token to verify the email",
+			}),
+			callbackURL: z
+				.string({
+					description: "The URL to redirect to after email verification",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Verify the email of the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										status: {
+											type: "boolean",
+										},
+									},
+									required: ["user", "status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
+		function redirectOnError(error: string) {
+			if (ctx.query.callbackURL) {
+				if (ctx.query.callbackURL.includes("?")) {
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+				}
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
+			}
+			throw new APIError("UNAUTHORIZED", {
+				message: error,
+			});
+		}
 		const { token } = ctx.query;
 		let jwt: JWT;
 		try {
 			jwt = await validateJWT("HS256", Buffer.from(ctx.context.secret), token);
 		} catch (e) {
 			ctx.context.logger.error("Failed to verify email", e);
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
-			});
+			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
 			email: z.string().email(),
@@ -109,9 +224,7 @@ export const verifyEmail = createAuthEndpoint(
 			parsed.email,
 		);
 		if (!user) {
-			throw new APIError("BAD_REQUEST", {
-				message: "User not found",
-			});
+			return redirectOnError("user_not_found");
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
@@ -119,32 +232,34 @@ export const verifyEmail = createAuthEndpoint(
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
-				throw new APIError("UNAUTHORIZED", {
-					message: "Session not found",
-				});
+				return redirectOnError("unauthorized");
 			}
 			if (session.user.email !== parsed.email) {
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
 				}
-				throw new APIError("UNAUTHORIZED", {
-					message: "Invalid session",
-				});
+				return redirectOnError("unauthorized");
 			}
 
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 				parsed.email,
 				{
 					email: parsed.updateTo,
+					emailVerified: false,
 				},
+			);
+
+			const newToken = await createEmailVerificationToken(
+				ctx.context.secret,
+				parsed.updateTo,
 			);
 
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${token}`,
-					token,
+					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					token: newToken,
 				},
 				ctx.request,
 			);

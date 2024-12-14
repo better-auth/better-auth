@@ -90,9 +90,9 @@ export const PaginationEllipsis = <T extends ValidComponent = "div">(
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0"
 				/>
 				<title>More pages</title>
@@ -139,9 +139,9 @@ export const PaginationPrevious = <T extends ValidComponent = "button">(
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="m15 6l-6 6l6 6"
 				/>
 				<title>Previous page</title>
@@ -182,9 +182,9 @@ export const PaginationNext = <T extends ValidComponent = "button">(
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="m9 6l6 6l-6 6"
 				/>
 				<title>Next page</title>

@@ -32,7 +32,7 @@ npx @better-auth/cli migrate
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/vue" // make sure to import from better-auth/vue
 
 export const authClient = createAuthClient({
@@ -67,6 +67,27 @@ const session = authClient.useSession()
     </div>
 </template>
 ```
+
+### Server Usage
+
+The `api` object exported from the auth instance contains all the actions that you can perform on the server. Every endpoint made inside Better Auth is a invocable as a function. Including plugins endpoints.
+
+**Example: Getting Session on a server API route**
+
+```tsx title="server/api/example.ts"
+import { auth } from "~/lib/auth";
+
+export default defineEventHandler((event) => {
+    const session = await auth.api.getSession({
+      headers: event.headers
+    });
+
+   if(session) {
+     // access the session.session && session.user
+   }
+});
+```
+
 
 ### SSR Usage
 
@@ -106,4 +127,5 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 ### Resources & Examples
 
 - [Nuxt and Nuxt Hub example](https://github.com/atinux/nuxthub-better-auth) on GitHub.
+- [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on github [preview](https://nuxt-better-auth.giessen.dev/)
 - [Nuxt example](https://stackblitz.com/github/better-auth/better-auth/tree/main/examples/nuxt-example) on StackBlitz.

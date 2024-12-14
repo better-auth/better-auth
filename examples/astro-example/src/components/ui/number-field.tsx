@@ -159,9 +159,9 @@ export const NumberFieldDecrementTrigger = <
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="M5 12h14"
 				/>
 				<title>Decreasing number</title>
@@ -202,9 +202,9 @@ export const NumberFieldIncrementTrigger = <
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="M12 5v14m-7-7h14"
 				/>
 				<title>Increase number</title>

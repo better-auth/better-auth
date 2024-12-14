@@ -7,12 +7,18 @@ import { createAccessControl } from "./access";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		user: {
+			modelName: "users",
+		},
 		plugins: [
 			organization({
 				async sendInvitationEmail(data, request) {},
 				schema: {
 					organization: {
 						modelName: "team",
+					},
+					member: {
+						modelName: "teamMembers",
 					},
 				},
 			}),
@@ -50,6 +56,34 @@ describe("organization", async (it) => {
 		expect(organization.data?.metadata).toBeDefined();
 		expect(organization.data?.members.length).toBe(1);
 		expect(organization.data?.members[0].role).toBe("owner");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			organizationId,
+		);
+	});
+
+	it("should create organization directly in the server without cookie", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const organization = await auth.api.createOrganization({
+			body: {
+				name: "test2",
+				slug: "test2",
+				userId: session.data?.session.userId,
+			},
+		});
+
+		expect(organization?.name).toBe("test2");
+		expect(organization?.members.length).toBe(1);
+		expect(organization?.members[0].role).toBe("owner");
 	});
 
 	it("should allow listing organizations", async () => {
@@ -58,7 +92,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(organizations.data?.length).toBe(1);
+		expect(organizations.data?.length).toBe(2);
 	});
 
 	it("should allow updating organization", async () => {
@@ -73,6 +107,22 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(organization.data?.name).toBe("test2");
+	});
+
+	it("should allow updating organization metadata", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.update({
+			organizationId,
+			data: {
+				metadata: {
+					test: "test2",
+				},
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.data?.metadata?.test).toBe("test2");
 	});
 
 	it("should allow activating organization and set session", async () => {
@@ -97,6 +147,16 @@ describe("organization", async (it) => {
 	it("should allow getting full org on server", async () => {
 		const org = await auth.api.getFullOrganization({
 			headers,
+		});
+		expect(org?.members.length).toBe(1);
+	});
+
+	it("should allow getting full org on server using slug", async () => {
+		const org = await auth.api.getFullOrganization({
+			headers,
+			query: {
+				organizationSlug: "test",
+			},
 		});
 		expect(org?.members.length).toBe(1);
 	});
@@ -295,6 +355,31 @@ describe("organization", async (it) => {
 	it("should have server side methods", async () => {
 		expectTypeOf(auth.api.createOrganization).toBeFunction();
 		expectTypeOf(auth.api.getInvitation).toBeFunction();
+	});
+
+	it("should add member on the server directly", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "new-member@email.com",
+				password: "password",
+				name: "new member",
+			},
+		});
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: newUser.id,
+				role: "admin",
+			},
+		});
+		expect(member?.role).toBe("admin");
 	});
 });
 

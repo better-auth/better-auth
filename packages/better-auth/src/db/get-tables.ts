@@ -121,6 +121,22 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.session?.fields?.expiresAt || "expiresAt",
 				},
+				token: {
+					type: "string",
+					required: true,
+					fieldName: options.session?.fields?.token || "token",
+					unique: true,
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					fieldName: options.session?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					fieldName: options.session?.fields?.updatedAt || "updatedAt",
+				},
 				ipAddress: {
 					type: "string",
 					required: false,
@@ -184,15 +200,39 @@ export const getAuthTables = (
 					required: false,
 					fieldName: options.account?.fields?.idToken || "idToken",
 				},
-				expiresAt: {
+				accessTokenExpiresAt: {
 					type: "date",
 					required: false,
-					fieldName: options.account?.fields?.expiresAt || "expiresAt",
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"accessTokenExpiresAt",
+				},
+				refreshTokenExpiresAt: {
+					type: "date",
+					required: false,
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"refreshTokenExpiresAt",
+				},
+				scope: {
+					type: "string",
+					required: false,
+					fieldName: options.account?.fields?.scope || "scope",
 				},
 				password: {
 					type: "string",
 					required: false,
 					fieldName: options.account?.fields?.password || "password",
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					fieldName: options.account?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					fieldName: options.account?.fields?.updatedAt || "updatedAt",
 				},
 				...account?.fields,
 			},
@@ -221,6 +261,12 @@ export const getAuthTables = (
 					required: false,
 					defaultValue: () => new Date(),
 					fieldName: options.verification?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: false,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
 				},
 			},
 			order: 4,

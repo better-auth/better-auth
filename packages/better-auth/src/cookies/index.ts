@@ -95,7 +95,7 @@ export type BetterAuthCookies = ReturnType<typeof getCookies>;
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
-		session: Session;
+		session: Session & Record<string, any>;
 		user: User;
 	},
 	dontRememberMe?: boolean,
@@ -107,7 +107,7 @@ export async function setSessionCookie(
 		: ctx.context.sessionConfig.expiresIn;
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
-		session.session.id,
+		session.session.token,
 		ctx.context.secret,
 		{
 			...options,
@@ -115,6 +115,7 @@ export async function setSessionCookie(
 			...overrides,
 		},
 	);
+
 	if (dontRememberMe) {
 		await ctx.setSignedCookie(
 			ctx.context.authCookies.dontRememberToken.name,
@@ -125,28 +126,39 @@ export async function setSessionCookie(
 	}
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
-	shouldStoreSessionDataInCookie &&
+
+	if (shouldStoreSessionDataInCookie) {
+		const data = base64url.encode(
+			new TextEncoder().encode(
+				JSON.stringify({
+					session: session,
+					expiresAt: getDate(
+						ctx.context.authCookies.sessionData.options.maxAge || 60,
+						"sec",
+					).getTime(),
+					signature: await hmac.sign({
+						value: JSON.stringify(session),
+						secret: ctx.context.secret,
+					}),
+				}),
+			),
+			{
+				includePadding: false,
+			},
+		);
+		if (data.length > 4093) {
+			throw new BetterAuthError(
+				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			);
+		}
 		ctx.setCookie(
 			ctx.context.authCookies.sessionData.name,
-			JSON.stringify(
-				base64url.encode(
-					new TextEncoder().encode(
-						JSON.stringify({
-							session: session,
-							expiresAt: getDate(
-								ctx.context.authCookies.sessionData.options.maxAge || 60,
-								"sec",
-							).getTime(),
-							signature: await hmac.sign({
-								value: JSON.stringify(session),
-								secret: ctx.context.secret,
-							}),
-						}),
-					),
-				),
-			),
+			data,
 			ctx.context.authCookies.sessionData.options,
 		);
+	}
+
+	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage
 	 * This is useful if the session got updated and we want to update the session data in the
@@ -154,12 +166,14 @@ export async function setSessionCookie(
 	 */
 	if (ctx.context.options.secondaryStorage) {
 		await ctx.context.secondaryStorage?.set(
-			session.session.id,
+			session.session.token,
 			JSON.stringify({
 				user: session.user,
 				session: session.session,
 			}),
-			session.session.expiresAt.getTime() - Date.now(), // set the expiry time to the same as the session
+			Math.floor(
+				(new Date(session.session.expiresAt).getTime() - Date.now()) / 1000,
+			),
 		);
 	}
 }

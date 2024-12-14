@@ -26,7 +26,10 @@ export const hashPassword = async (password: string) => {
 	return `${salt}:${encodeHex(key)}`;
 };
 
-export const verifyPassword = async (hash: string, password: string) => {
+export const verifyPassword = async ({
+	hash,
+	password,
+}: { hash: string; password: string }) => {
 	const [salt, key] = hash.split(":");
 	const targetKey = await generateKey(password, salt!);
 	return constantTimeEqual(targetKey, decodeHex(key!));

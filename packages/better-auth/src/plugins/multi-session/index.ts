@@ -6,6 +6,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import {
+	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
@@ -29,6 +30,10 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
 
+	const ERROR_CODES = {
+		INVALID_SESSION_TOKEN: "Invalid session token",
+	} as const;
+
 	return {
 		id: "multi-session",
 		endpoints: {
@@ -44,7 +49,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 					const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
-					const sessionIds = (
+					const sessionTokens = (
 						await Promise.all(
 							Object.entries(cookies)
 								.filter(([key]) => isMultiSessionCookie(key))
@@ -54,9 +59,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								),
 						)
 					).filter((v) => v !== undefined);
-					if (!sessionIds.length) return ctx.json([]);
+					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
-						await ctx.context.internalAdapter.findSessions(sessionIds);
+						await ctx.context.internalAdapter.findSessions(sessionTokens);
 
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
@@ -70,40 +75,59 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string({
+							description: "The session token to set as active",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Set the active session",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
-					const sessionId = ctx.body.sessionId;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
+					const sessionToken = ctx.body.sessionToken;
+					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
 					const session =
-						await ctx.context.internalAdapter.findSession(sessionId);
+						await ctx.context.internalAdapter.findSession(sessionToken);
 					if (!session || session.session.expiresAt < new Date()) {
 						ctx.setCookie(multiSessionCookieName, "", {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
-					await ctx.setSignedCookie(
-						ctx.context.authCookies.sessionToken.name,
-						sessionId,
-						ctx.context.secret,
-						ctx.context.authCookies.sessionToken.options,
-					);
+					await setSessionCookie(ctx, session);
 					return ctx.json(session);
 				},
 			),
@@ -112,38 +136,61 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					method: "POST",
 					body: z.object({
-						sessionId: z.string(),
+						sessionToken: z.string({
+							description: "The session token to revoke",
+						}),
 					}),
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Revoke a device session",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
-					const sessionId = ctx.body.sessionId;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionId}`;
+					const sessionToken = ctx.body.sessionToken;
+					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Invalid session id",
+							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteSession(sessionId);
+					await ctx.context.internalAdapter.deleteSession(sessionToken);
 					ctx.setCookie(multiSessionCookieName, "", {
 						...ctx.context.authCookies.sessionToken.options,
 						maxAge: 0,
 					});
-					const isActive = ctx.context.session?.session.id === sessionId;
+					const isActive = ctx.context.session?.session.token === sessionToken;
 					if (!isActive) return ctx.json({ success: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");
-					const authCookies = ctx.context.authCookies;
 					if (cookieHeader) {
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
 
-						const sessionIds = (
+						const sessionTokens = (
 							await Promise.all(
 								Object.entries(cookies)
 									.filter(([key]) => isMultiSessionCookie(key))
@@ -155,8 +202,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						).filter((v): v is string => v !== undefined);
 						const internalAdapter = ctx.context.internalAdapter;
 
-						if (sessionIds.length > 0) {
-							const sessions = await internalAdapter.findSessions(sessionIds);
+						if (sessionTokens.length > 0) {
+							const sessions =
+								await internalAdapter.findSessions(sessionTokens);
 							const validSessions = sessions.filter(
 								(session) => session && session.session.expiresAt > new Date(),
 							);
@@ -165,22 +213,13 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								const nextSession = validSessions[0];
 								await setSessionCookie(ctx, nextSession);
 							} else {
-								ctx.setCookie(authCookies.sessionToken.name, "", {
-									...authCookies.sessionToken.options,
-									maxAge: 0,
-								});
+								deleteSessionCookie(ctx);
 							}
 						} else {
-							ctx.setCookie(authCookies.sessionToken.name, "", {
-								...authCookies.sessionToken.options,
-								maxAge: 0,
-							});
+							deleteSessionCookie(ctx);
 						}
 					} else {
-						ctx.setCookie(authCookies.sessionToken.name, "", {
-							...authCookies.sessionToken.options,
-							maxAge: 0,
-						});
+						deleteSessionCookie(ctx);
 					}
 					return ctx.json({
 						success: true,
@@ -193,15 +232,8 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						if (
-							!ctx.context.returned ||
-							!(ctx.context.returned instanceof Response)
-						)
-							return;
-
-						const cookieString = ctx.context.returned.headers.get("set-cookie");
+						const cookieString = ctx.responseHeader.get("set-cookie");
 						if (!cookieString) return;
-
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 						const sessionToken = setCookies.get(
@@ -211,6 +243,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 						const rawSession = sessionToken.split(".")[0];
+						if (!rawSession) {
+							return;
+						}
 						const cookieName = `${sessionCookieConfig.name}_multi-${rawSession}`;
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
@@ -230,13 +265,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 							ctx.context.secret,
 							sessionCookieConfig.options,
 						);
-						const response = ctx.context.returned;
-						response.headers.append(
-							"Set-Cookie",
-							ctx.responseHeader.get("set-cookie")!,
-						);
-
-						return { response };
 					}),
 				},
 				{
@@ -244,35 +272,22 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
-
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
-						await Promise.all(
-							Object.entries(cookies).map(async ([key, value]) => {
+						const ids = Object.keys(cookies)
+							.map((key) => {
 								if (isMultiSessionCookie(key)) {
 									ctx.setCookie(key, "", { maxAge: 0 });
 									const id = key.split("_multi-")[1];
-									await ctx.context.internalAdapter.deleteSession(id);
+									return id;
 								}
-							}),
-						);
-
-						const response = ctx.context.returned;
-						if (response instanceof Response) {
-							response?.headers.append(
-								"Set-Cookie",
-								ctx.responseHeader.get("set-cookie")!,
-							);
-						} else {
-							ctx.responseHeader.set(
-								"set-cookie",
-								ctx.responseHeader.get("set-cookie")!,
-							);
-						}
-						return { response };
+								return null;
+							})
+							.filter((v): v is string => v !== null);
+						await ctx.context.internalAdapter.deleteSessions(ids);
 					}),
 				},
 			],
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

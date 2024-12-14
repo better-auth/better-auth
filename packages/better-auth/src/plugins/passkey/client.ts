@@ -207,7 +207,8 @@ export const passkeyClient = () => {
 				matcher(path) {
 					return (
 						path === "/passkey/verify-registration" ||
-						path === "/passkey/delete-passkey"
+						path === "/passkey/delete-passkey" ||
+						path === "/passkey/update-passkey"
 					);
 				},
 				signal: "_listPasskeys",

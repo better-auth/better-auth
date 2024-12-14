@@ -1,6 +1,6 @@
 interface CookieAttributes {
 	value: string;
-	"max-age"?: string;
+	"max-age"?: number;
 	expires?: Date;
 	domain?: string;
 	path?: string;
@@ -24,7 +24,6 @@ export function parseSetCookieHeader(
 		const value = valueParts.join("=");
 
 		if (!name || value === undefined) {
-			console.warn(`Malformed cookie: ${cookieString}`);
 			return;
 		}
 
@@ -34,12 +33,13 @@ export function parseSetCookieHeader(
 			const [attrName, ...attrValueParts] = attribute.split("=");
 			const attrValue = attrValueParts.join("=");
 
-			// Normalize the attribute name to camelCase
 			const normalizedAttrName = attrName.trim().toLowerCase();
 
 			switch (normalizedAttrName) {
 				case "max-age":
-					attrObj["max-age"] = attrValue;
+					attrObj["max-age"] = attrValue
+						? parseInt(attrValue.trim(), 10)
+						: undefined;
 					break;
 				case "expires":
 					attrObj.expires = attrValue ? new Date(attrValue.trim()) : undefined;

@@ -15,7 +15,7 @@ import { alphabet, generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import { getSessionFromCtx } from "../../api/routes";
+import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
@@ -23,8 +23,8 @@ import type {
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
-import { generateId } from "../../utils/id";
 import { env } from "../../utils/env";
+import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 
 interface WebAuthnChallengeValue {
@@ -107,6 +107,17 @@ export const passkey = (options?: PasskeyOptions) => {
 	const maxAgeInSeconds = Math.floor(
 		(expirationTime.getTime() - currentTime.getTime()) / 1000,
 	);
+
+	const ERROR_CODES = {
+		CHALLENGE_NOT_FOUND: "Challenge not found",
+		YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
+			"You are not allowed to register this passkey",
+		FAILED_TO_VERIFY_REGISTRATION: "Failed to verify registration",
+		PASSKEY_NOT_FOUND: "Passkey not found",
+		AUTHENTICATION_FAILED: "Authentication failed",
+		UNABLE_TO_CREATE_SESSION: "Unable to create session",
+		FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+	} as const;
 	return {
 		id: "passkey",
 		endpoints: {
@@ -114,9 +125,112 @@ export const passkey = (options?: PasskeyOptions) => {
 				"/passkey/generate-register-options",
 				{
 					method: "GET",
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
 					metadata: {
 						client: false,
+						openapi: {
+							description: "Generate registration options for a new passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													challenge: {
+														type: "string",
+													},
+													rp: {
+														type: "object",
+														properties: {
+															name: {
+																type: "string",
+															},
+															id: {
+																type: "string",
+															},
+														},
+													},
+													user: {
+														type: "object",
+														properties: {
+															id: {
+																type: "string",
+															},
+															name: {
+																type: "string",
+															},
+															displayName: {
+																type: "string",
+															},
+														},
+													},
+													pubKeyCredParams: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																type: {
+																	type: "string",
+																},
+																alg: {
+																	type: "number",
+																},
+															},
+														},
+													},
+													timeout: {
+														type: "number",
+													},
+													excludeCredentials: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																id: {
+																	type: "string",
+																},
+																type: {
+																	type: "string",
+																},
+																transports: {
+																	type: "array",
+																	items: {
+																		type: "string",
+																	},
+																},
+															},
+														},
+													},
+													authenticatorSelection: {
+														type: "object",
+														properties: {
+															authenticatorAttachment: {
+																type: "string",
+															},
+															requireResidentKey: {
+																type: "boolean",
+															},
+															userVerification: {
+																type: "string",
+															},
+														},
+													},
+													attestation: {
+														type: "string",
+													},
+
+													extensions: {
+														type: "object",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				async (ctx) => {
@@ -153,7 +267,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 					});
 
-					const id = generateId();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -186,9 +300,103 @@ export const passkey = (options?: PasskeyOptions) => {
 					method: "POST",
 					body: z
 						.object({
-							email: z.string().optional(),
+							email: z
+								.string({
+									description: "The email address of the user",
+								})
+								.optional(),
 						})
 						.optional(),
+					metadata: {
+						openapi: {
+							description: "Generate authentication options for a passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													challenge: {
+														type: "string",
+													},
+													rp: {
+														type: "object",
+														properties: {
+															name: {
+																type: "string",
+															},
+															id: {
+																type: "string",
+															},
+														},
+													},
+													user: {
+														type: "object",
+														properties: {
+															id: {
+																type: "string",
+															},
+															name: {
+																type: "string",
+															},
+															displayName: {
+																type: "string",
+															},
+														},
+													},
+													timeout: {
+														type: "number",
+													},
+													allowCredentials: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																id: {
+																	type: "string",
+																},
+																type: {
+																	type: "string",
+																},
+																transports: {
+																	type: "array",
+																	items: {
+																		type: "string",
+																	},
+																},
+															},
+														},
+													},
+													userVerification: {
+														type: "string",
+													},
+													authenticatorSelection: {
+														type: "object",
+														properties: {
+															authenticatorAttachment: {
+																type: "string",
+															},
+															requireResidentKey: {
+																type: "boolean",
+															},
+															userVerification: {
+																type: "string",
+															},
+														},
+													},
+													extensions: {
+														type: "object",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
@@ -224,7 +432,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							id: session?.user.id || "",
 						},
 					};
-					const id = generateId();
+					const id = generateId(32);
 					await ctx.setSignedCookie(
 						opts.advanced.webAuthnChallengeCookie,
 						id,
@@ -251,10 +459,36 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any(),
-						name: z.string().optional(),
+						response: z.any({
+							description: "The response from the authenticator",
+						}),
+						name: z
+							.string({
+								description: "Name of the passkey",
+							})
+							.optional(),
 					}),
-					use: [sessionMiddleware],
+					use: [freshSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Verify registration of a new passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												$ref: "#/components/schemas/Passkey",
+											},
+										},
+									},
+								},
+								400: {
+									description: "Bad request",
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
@@ -270,7 +504,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					);
 					if (!challengeId) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Challenge not found",
+							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 
@@ -289,7 +523,7 @@ export const passkey = (options?: PasskeyOptions) => {
 
 					if (userData.id !== ctx.context.session.user.id) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "You are not authorized to register this passkey",
+							message: ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 						});
 					}
 
@@ -314,11 +548,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							credentialBackedUp,
 						} = registrationInfo;
 						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
-						const userID = generateId();
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							webauthnUserID: userID,
+							webauthnUserID: ctx.context.generateId({ model: "passkey" }),
 							id: credentialID,
 							publicKey: pubKey,
 							counter,
@@ -337,7 +570,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					} catch (e) {
 						console.log(e);
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to verify registration",
+							message: ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 						});
 					}
 				},
@@ -349,6 +582,31 @@ export const passkey = (options?: PasskeyOptions) => {
 					body: z.object({
 						response: z.any(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Verify authentication of a passkey",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const origin = options?.origin || ctx.headers?.get("origin") || "";
@@ -364,7 +622,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					);
 					if (!challengeId) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Challenge not found",
+							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 
@@ -374,7 +632,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						);
 					if (!data) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Challenge not found",
+							message: ERROR_CODES.CHALLENGE_NOT_FOUND,
 						});
 					}
 					const { expectedChallenge } = JSON.parse(
@@ -391,7 +649,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 					if (!passkey) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Passkey not found",
+							message: ERROR_CODES.PASSKEY_NOT_FOUND,
 						});
 					}
 					try {
@@ -410,11 +668,12 @@ export const passkey = (options?: PasskeyOptions) => {
 									",",
 								) as AuthenticatorTransportFuture[],
 							},
+							requireUserVerification: false,
 						});
 						const { verified } = verification;
 						if (!verified)
 							throw new APIError("UNAUTHORIZED", {
-								message: "Authentication failed",
+								message: ERROR_CODES.AUTHENTICATION_FAILED,
 							});
 
 						await ctx.context.adapter.update<Passkey>({
@@ -435,7 +694,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						);
 						if (!s) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: "Unable to create session",
+								message: ERROR_CODES.UNABLE_TO_CREATE_SESSION,
 							});
 						}
 						const user = await ctx.context.internalAdapter.findUserById(
@@ -461,7 +720,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					} catch (e) {
 						ctx.context.logger.error("Failed to verify authentication", e);
 						throw new APIError("BAD_REQUEST", {
-							message: "Failed to verify authentication",
+							message: ERROR_CODES.AUTHENTICATION_FAILED,
 						});
 					}
 				},
@@ -506,8 +765,70 @@ export const passkey = (options?: PasskeyOptions) => {
 					});
 				},
 			),
+			updatePasskey: createAuthEndpoint(
+				"/passkey/update-passkey",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+						name: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const passkey = await ctx.context.adapter.findOne<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+					});
+
+					if (!passkey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.PASSKEY_NOT_FOUND,
+						});
+					}
+
+					if (passkey.userId !== ctx.context.session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+						});
+					}
+
+					const updatedPasskey = await ctx.context.adapter.update<Passkey>({
+						model: "passkey",
+						where: [
+							{
+								field: "id",
+								value: ctx.body.id,
+							},
+						],
+						update: {
+							name: ctx.body.name,
+						},
+					});
+
+					if (!updatedPasskey) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
+						});
+					}
+					return ctx.json(
+						{
+							passkey: updatedPasskey,
+						},
+						{
+							status: 200,
+						},
+					);
+				},
+			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 
@@ -552,7 +873,6 @@ const schema = {
 			},
 			createdAt: {
 				type: "date",
-				defaultValue: new Date(),
 				required: false,
 			},
 		},

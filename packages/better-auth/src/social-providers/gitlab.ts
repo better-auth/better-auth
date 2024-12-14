@@ -47,7 +47,7 @@ export interface GitlabProfile extends Record<string, any> {
 	extra_shared_runners_minutes_limit: number;
 }
 
-export interface GitlabOptions extends ProviderOptions {
+export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
 	issuer?: string;
 }
 
@@ -103,6 +103,9 @@ export const gitlab = (options: GitlabOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<GitlabProfile>(
 				userinfoEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
@@ -110,6 +113,7 @@ export const gitlab = (options: GitlabOptions) => {
 			if (error || profile.state !== "active" || profile.locked) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id.toString(),
@@ -117,6 +121,7 @@ export const gitlab = (options: GitlabOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: true,
+					...userMap,
 				},
 				data: profile,
 			};

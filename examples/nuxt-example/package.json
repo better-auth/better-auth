@@ -11,30 +11,30 @@
   },
   "dependencies": {
     "@radix-icons/vue": "^1.0.0",
+    "@types/better-sqlite3": "^7.6.12",
     "@unovis/ts": "1.4.3-beta.0",
     "@unovis/vue": "1.4.3-beta.0",
-    "@vee-validate/zod": "^4.13.2",
-    "@vueuse/core": "^11.1.0",
+    "@vee-validate/zod": "^4.14.7",
+    "@vueuse/core": "^11.3.0",
     "better-auth": "workspace:*",
-    "@types/better-sqlite3": "^7.6.11",
-    "better-sqlite3": "^11.3.0",
-    "class-variance-authority": "^0.7.0",
+    "better-sqlite3": "^11.6.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "embla-carousel-vue": "^8.3.0",
-    "nuxt": "^3.13.0",
-    "radix-vue": "^1.9.6",
+    "embla-carousel-vue": "^8.5.1",
+    "nuxt": "^3.14.1592",
+    "radix-vue": "^1.9.11",
     "shadcn-nuxt": "^0.10.4",
-    "tailwind-merge": "^2.5.2",
+    "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "v-calendar": "^3.1.2",
     "vaul-vue": "^0.2.0",
-    "vee-validate": "^4.13.2",
+    "vee-validate": "^4.14.7",
     "vue": "latest",
     "vue-router": "latest",
-    "vue-sonner": "^1.2.1",
+    "vue-sonner": "^1.3.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@nuxtjs/tailwindcss": "^6.12.1"
+    "@nuxtjs/tailwindcss": "^6.12.2"
   }
 }

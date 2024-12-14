@@ -50,7 +50,7 @@ The Admin plugin provides a set of administrative functions for user management 
   <Step>
     ### Add the client plugin
 
-    Next, include the anonymous client plugin in your authentication client instance.
+    Next, include the admin client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
@@ -164,7 +164,7 @@ const unbannedUser = await authClient.admin.unbanUser({
 Lists all sessions for a user.
 
 ```ts title="admin.ts"
-const sessions = await authClient.admin.listSessions({
+const sessions = await authClient.admin.listUserSessions({
   userId: "user_id_here"
 });
 ```
@@ -174,8 +174,8 @@ const sessions = await authClient.admin.listSessions({
 Revokes a specific session for a user.
 
 ```ts title="admin.ts"
-const revokedSessions = await authClient.admin.revokeSession({
- sessionId: "session_id_here"
+const revokedSession = await authClient.admin.revokeUserSession({
+ sessionToken: "session_token_here"
 });
 ```
 

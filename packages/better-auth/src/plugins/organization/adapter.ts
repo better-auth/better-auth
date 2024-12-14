@@ -1,10 +1,17 @@
 import type { Session, User } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
-import type { Invitation, Member, Organization } from "./schema";
+import type {
+	Invitation,
+	InvitationInput,
+	Member,
+	MemberInput,
+	Organization,
+	OrganizationInput,
+} from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
+import parseJSON from "../../client/parser";
 
 export const getOrgAdapter = (
 	context: AuthContext,
@@ -25,10 +32,13 @@ export const getOrgAdapter = (
 			return organization;
 		},
 		createOrganization: async (data: {
-			organization: Organization;
+			organization: OrganizationInput;
 			user: User;
 		}) => {
-			const organization = await adapter.create<Organization>({
+			const organization = await adapter.create<
+				OrganizationInput,
+				Organization
+			>({
 				model: "organization",
 				data: {
 					...data.organization,
@@ -37,10 +47,9 @@ export const getOrgAdapter = (
 						: undefined,
 				},
 			});
-			const member = await adapter.create<Member>({
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: {
-					id: generateId(),
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
@@ -70,7 +79,7 @@ export const getOrgAdapter = (
 			organizationId: string;
 		}) => {
 			const user = await adapter.findOne<User>({
-				model: context.tables.user.modelName,
+				model: "user",
 				where: [
 					{
 						field: "email",
@@ -126,7 +135,7 @@ export const getOrgAdapter = (
 					],
 				}),
 				await adapter.findOne<User>({
-					model: context.tables.user.modelName,
+					model: "user",
 					where: [
 						{
 							field: "id",
@@ -162,7 +171,7 @@ export const getOrgAdapter = (
 				return null;
 			}
 			const user = await adapter.findOne<User>({
-				model: context.tables.user.modelName,
+				model: "user",
 				where: [
 					{
 						field: "id",
@@ -183,8 +192,8 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		createMember: async (data: Member) => {
-			const member = await adapter.create<Member>({
+		createMember: async (data: MemberInput) => {
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: data,
 			});
@@ -229,9 +238,23 @@ export const getOrgAdapter = (
 						value: organizationId,
 					},
 				],
-				update: data,
+				update: {
+					...data,
+					metadata:
+						typeof data.metadata === "object"
+							? JSON.stringify(data.metadata)
+							: data.metadata,
+				},
 			});
-			return organization;
+			if (!organization) {
+				return null;
+			}
+			return {
+				...organization,
+				metadata: organization.metadata
+					? parseJSON<Record<string, any>>(organization.metadata)
+					: undefined,
+			};
 		},
 		deleteOrganization: async (organizationId: string) => {
 			await adapter.delete({
@@ -264,22 +287,16 @@ export const getOrgAdapter = (
 			return organizationId;
 		},
 		setActiveOrganization: async (
-			sessionId: string,
+			sessionToken: string,
 			organizationId: string | null,
 		) => {
-			const session = await adapter.update<Session>({
-				model: context.tables.session.modelName,
-				where: [
-					{
-						field: "id",
-						value: sessionId,
-					},
-				],
-				update: {
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
 					activeOrganizationId: organizationId,
 				},
-			});
-			return session;
+			);
+			return session as Session;
 		},
 		findOrganizationById: async (organizationId: string) => {
 			const organization = await adapter.findOne<Organization>({
@@ -296,19 +313,28 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (organizationId: string) => {
-			const [org, invitations, members] = await Promise.all([
-				adapter.findOne<Organization>({
-					model: "organization",
-					where: [{ field: "id", value: organizationId }],
-				}),
+		findFullOrganization: async ({
+			organizationId,
+			isSlug,
+		}: {
+			organizationId: string;
+			isSlug?: boolean;
+		}) => {
+			const org = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
+			});
+			if (!org) {
+				return null;
+			}
+			const [invitations, members] = await Promise.all([
 				adapter.findMany<Invitation>({
 					model: "invitation",
-					where: [{ field: "organizationId", value: organizationId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 				adapter.findMany<Member>({
 					model: "member",
-					where: [{ field: "organizationId", value: organizationId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 			]);
 
@@ -316,7 +342,7 @@ export const getOrgAdapter = (
 
 			const userIds = members.map((member) => member.userId);
 			const users = await adapter.findMany<User>({
-				model: context.tables.user.modelName,
+				model: "user",
 				where: [{ field: "id", value: userIds, operator: "in" }],
 			});
 
@@ -372,7 +398,6 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-
 			return organizations;
 		},
 		createInvitation: async ({
@@ -390,10 +415,9 @@ export const getOrgAdapter = (
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
 			);
-			const invite = await adapter.create<Invitation>({
+			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
 				data: {
-					id: generateId(),
 					email: invitation.email,
 					role: invitation.role,
 					organizationId: invitation.organizationId,

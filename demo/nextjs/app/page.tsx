@@ -53,7 +53,9 @@ export default async function Home() {
 							))}
 						</div>
 					</div>
+					{/* @ts-ignore */}
 					<Suspense fallback={<SignInFallback />}>
+						{/* @ts-ignore */}
 						<SignInButton />
 					</Suspense>
 				</div>

@@ -1,9 +1,10 @@
 import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
-import { type Atom, type WritableAtom } from "nanostores";
+import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
 import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
+import { parseJSON } from "./parser";
 
 export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	/* check if the credentials property is supported. Useful for cf workers */
@@ -17,6 +18,11 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
+		jsonParser(text) {
+			return parseJSON(text, {
+				strict: false,
+			});
+		},
 		...options?.fetchOptions,
 		plugins: options?.disableDefaultFetchPlugins
 			? [...(options?.fetchOptions?.plugins || []), ...pluginsFetchPlugins]
@@ -27,7 +33,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 					...pluginsFetchPlugins,
 				],
 	});
-	const { $sessionSignal, session } = getSessionAtom<O>($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
@@ -38,6 +44,7 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
+		"/delete-user": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{

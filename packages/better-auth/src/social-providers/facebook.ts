@@ -16,7 +16,7 @@ export interface FacebookProfile {
 		};
 	};
 }
-export interface FacebookOptions extends ProviderOptions {}
+export interface FacebookOptions extends ProviderOptions<FacebookProfile> {}
 export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
@@ -42,6 +42,9 @@ export const facebook = (options: FacebookOptions) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
 				"https://graph.facebook.com/me?fields=id,name,email,picture",
 				{
@@ -54,6 +57,7 @@ export const facebook = (options: FacebookOptions) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -61,6 +65,7 @@ export const facebook = (options: FacebookOptions) => {
 					email: profile.email,
 					image: profile.picture.data.url,
 					emailVerified: profile.email_verified,
+					...userMap,
 				},
 				data: profile,
 			};

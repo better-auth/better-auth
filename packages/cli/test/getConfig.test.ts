@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { test } from "vitest";
-import os from "node:os";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getConfig } from "../src/utils/get-config";

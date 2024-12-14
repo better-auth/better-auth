@@ -1,5 +1,7 @@
 import { getAuthTables } from "../../db";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import { generateId } from "../../utils";
+import { withApplyDefault } from "../utils";
 import type { KyselyDatabaseType } from "./types";
 import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 
@@ -8,32 +10,6 @@ interface KyselyAdapterConfig {
 	 * Database type.
 	 */
 	type?: KyselyDatabaseType;
-	/**
-	 * Custom generateId function.
-	 *
-	 * If not provided, nanoid will be used.
-	 * If set to false, the database's auto generated id will be used.
-	 *
-	 * @default nanoid
-	 */
-	generateId?: ((size?: number) => string) | false;
-}
-
-function formatDateForMySQL(date: Date): string {
-	const pad = (n: number) => (n < 10 ? "0" + n : n);
-	return (
-		date.getFullYear() +
-		"-" +
-		pad(date.getMonth() + 1) +
-		"-" +
-		pad(date.getDate()) +
-		" " +
-		pad(date.getHours()) +
-		":" +
-		pad(date.getMinutes()) +
-		":" +
-		pad(date.getSeconds())
-	);
 }
 
 const createTransform = (
@@ -57,14 +33,16 @@ const createTransform = (
 	function transformValueToDB(value: any, model: string, field: string) {
 		const { type = "sqlite" } = config || {};
 		const f = schema[model].fields[field];
-		if (f.type === "boolean" && type === "sqlite") {
+		if (
+			f.type === "boolean" &&
+			type === "sqlite" &&
+			value !== null &&
+			value !== undefined
+		) {
 			return value ? 1 : 0;
 		}
 		if (f.type === "date" && value && value instanceof Date) {
-			if (type === "mysql") {
-				return formatDateForMySQL(value);
-			}
-			return value.toISOString();
+			return type === "sqlite" ? value.toISOString() : value;
 		}
 		return value;
 	}
@@ -86,24 +64,31 @@ const createTransform = (
 		return schema[model].modelName;
 	}
 
-	const shouldGenerateId = config?.generateId !== false;
+	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(data: Record<string, any>, model: string) {
+		transformInput(
+			data: Record<string, any>,
+			model: string,
+			action: "create" | "update",
+		) {
 			const transformedData: Record<string, any> =
-				data.id && shouldGenerateId
-					? {
-							id: config?.generateId ? config.generateId() : data.id,
-						}
-					: {};
-			for (const key in data) {
-				const field = schema[model].fields[key];
-				if (field) {
-					transformedData[field.fieldName || key] = transformValueToDB(
-						data[key],
-						model,
-						key,
-					);
-				}
+				useDatabaseGeneratedId || action === "update"
+					? {}
+					: {
+							id: options.advanced?.generateId
+								? options.advanced.generateId({
+										model,
+									})
+								: data.id || generateId(),
+						};
+			const fields = schema[model].fields;
+			for (const field in fields) {
+				const value = data[field];
+				transformedData[fields[field].fieldName || field] = withApplyDefault(
+					transformValueToDB(value, model, field),
+					fields[field],
+					action,
+				);
 			}
 			return transformedData;
 		},
@@ -256,7 +241,7 @@ export const kyselyAdapter =
 			id: "kysely",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model);
+				const transformed = transformInput(values, model, "create");
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),
@@ -305,7 +290,8 @@ export const kyselyAdapter =
 			async update(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model);
+				const transformedData = transformInput(values, model, "update");
+
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
@@ -313,15 +299,16 @@ export const kyselyAdapter =
 				if (or) {
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
-				return transformOutput(
+				const res = await transformOutput(
 					await withReturning(transformedData, query, model, where),
 					model,
 				);
+				return res;
 			},
 			async updateMany(data) {
 				const { model, where, update: values } = data;
 				const { and, or } = convertWhereClause(model, where);
-				const transformedData = transformInput(values, model);
+				const transformedData = transformInput(values, model, "update");
 				let query = db.updateTable(getModelName(model)).set(transformedData);
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));

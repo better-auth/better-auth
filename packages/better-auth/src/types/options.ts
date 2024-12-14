@@ -2,11 +2,11 @@ import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
 import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { Adapter, AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
-import type { RateLimit } from "./models";
-import type { AuthContext, OmitId } from ".";
+import type { Models, RateLimit } from "./models";
+import type { AuthContext, LiteralUnion, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
@@ -66,7 +66,7 @@ export interface BetterAuthOptions {
 	/**
 	 * Database configuration
 	 */
-	database:
+	database?:
 		| PostgresPool
 		| MysqlPool
 		| Database
@@ -76,14 +76,11 @@ export interface BetterAuthOptions {
 				dialect: Dialect;
 				type: KyselyDatabaseType;
 				/**
-				 * Custom generateId function.
+				 * casing for table names
 				 *
-				 * If not provided, nanoid will be used.
-				 * If set to false, the database's auto generated id will be used.
-				 *
-				 * @default nanoid
+				 * @default "camel"
 				 */
-				generateId?: ((size?: number) => string) | false;
+				casing?: "snake" | "camel";
 		  }
 		| {
 				/**
@@ -95,14 +92,11 @@ export interface BetterAuthOptions {
 				 */
 				type: KyselyDatabaseType;
 				/**
-				 * Custom generateId function.
+				 * casing for table names
 				 *
-				 * If not provided, nanoid will be used.
-				 * If set to false, the database's auto generated id will be used.
-				 *
-				 * @default nanoid
+				 * @default "camel"
 				 */
-				generateId?: ((size?: number) => string) | false;
+				casing?: "snake" | "camel";
 		  };
 	/**
 	 * Secondary storage configuration
@@ -212,7 +206,7 @@ export interface BetterAuthOptions {
 		 */
 		password?: {
 			hash?: (password: string) => Promise<string>;
-			verify?: (password: string, hash: string) => Promise<boolean>;
+			verify?: (data: { hash: string; password: string }) => Promise<boolean>;
 		};
 		/**
 		 * Automatically sign in the user after sign up
@@ -265,6 +259,42 @@ export interface BetterAuthOptions {
 				},
 				request?: Request,
 			) => Promise<void>;
+		};
+		/**
+		 * User deletion configuration
+		 */
+		deleteUser?: {
+			/**
+			 * Enable user deletion
+			 */
+			enabled?: boolean;
+			/**
+			 * Send a verification email when the user deletes their account.
+			 *
+			 * if this is not set, the user will be deleted immediately.
+			 * @param data the data object
+			 * @param request the request object
+			 */
+			sendDeleteAccountVerification?: (
+				data: {
+					user: User;
+					url: string;
+					token: string;
+				},
+				request?: Request,
+			) => Promise<void>;
+			/**
+			 * A function that is called before a user is deleted.
+			 *
+			 * to interrupt with error you can throw `APIError`
+			 */
+			beforeDelete?: (user: User, request?: Request) => Promise<void>;
+			/**
+			 * A function that is called after a user is deleted.
+			 *
+			 * This is useful for cleaning up user data
+			 */
+			afterDelete?: (user: User, request?: Request) => Promise<void>;
 		};
 	};
 	session?: {
@@ -330,6 +360,20 @@ export interface BetterAuthOptions {
 			 */
 			enabled?: boolean;
 		};
+		/**
+		 * The age of the session to consider it fresh.
+		 *
+		 * This is used to check if the session is fresh
+		 * for sensitive operations. (e.g. deleting an account)
+		 *
+		 * If the session is not fresh, the user should be prompted
+		 * to sign in again.
+		 *
+		 * If set to 0, the session will be considered fresh every time. (⚠︎ not recommended)
+		 *
+		 * @default 5 minutes (5 * 60)
+		 */
+		freshAge?: number;
 	};
 	account?: {
 		modelName?: string;
@@ -344,7 +388,9 @@ export interface BetterAuthOptions {
 			/**
 			 * List of trusted providers
 			 */
-			trustedProviders?: Array<SocialProviderList[number] | "email-password">;
+			trustedProviders?: Array<
+				LiteralUnion<SocialProviderList[number] | "email-password", string>
+			>;
 		};
 	};
 	/**
@@ -385,16 +431,23 @@ export interface BetterAuthOptions {
 		 * specific paths.
 		 */
 		customRules?: {
-			[key: string]: {
-				/**
-				 * The window to use for the custom rule.
-				 */
-				window: number;
-				/**
-				 * The maximum number of requests allowed within the window.
-				 */
-				max: number;
-			};
+			[key: string]:
+				| {
+						/**
+						 * The window to use for the custom rule.
+						 */
+						window: number;
+						/**
+						 * The maximum number of requests allowed within the window.
+						 */
+						max: number;
+				  }
+				| ((request: Request) =>
+						| { window: number; max: number }
+						| Promise<{
+								window: number;
+								max: number;
+						  }>);
 		};
 		/**
 		 * Storage configuration
@@ -513,6 +566,20 @@ export interface BetterAuthOptions {
 		 * ```
 		 */
 		cookiePrefix?: string;
+		/**
+		 * Custom generateId function.
+		 *
+		 * If not provided, nanoid will be used.
+		 * If set to false, the database's auto generated id will be used.
+		 *
+		 * @default nanoid
+		 */
+		generateId?:
+			| ((options: {
+					model: LiteralUnion<Models, string>;
+					size?: number;
+			  }) => string)
+			| false;
 	};
 	logger?: Logger;
 	/**

@@ -6,6 +6,7 @@ import { socialProviderList } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
@@ -22,20 +23,50 @@ export const signInSocial = createAuthEndpoint(
 			.optional(),
 		body: z.object({
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to redirect to after the user
+			 * has signed in.
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to redirect to after the user has signed in",
+				})
+				.optional(),
+			/**
+			 * callback url to redirect if the user is newly registered.
+			 *
+			 * useful if you have different routes for existing users and new users
+			 */
+			newUserCallbackURL: z.string().optional(),
 			/**
 			 * Callback url to redirect to if an error happens
 			 *
 			 * If it's initiated from the client sdk this defaults to
 			 * the current url.
 			 */
-			errorCallbackURL: z.string().optional(),
+			errorCallbackURL: z
+				.string({
+					description: "Callback URL to redirect to if an error happens",
+				})
+				.optional(),
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList),
+			provider: z.enum(socialProviderList, {
+				description: "OAuth2 provider to use",
+			}),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
 			/**
 			 * ID token from the provider
 			 *
@@ -52,26 +83,80 @@ export const signInSocial = createAuthEndpoint(
 					/**
 					 * ID token from the provider
 					 */
-					token: z.string(),
+					token: z.string({
+						description: "ID token from the provider",
+					}),
 					/**
 					 * The nonce used to generate the token
 					 */
-					nonce: z.string().optional(),
+					nonce: z
+						.string({
+							description: "Nonce used to generate the token",
+						})
+						.optional(),
 					/**
 					 * Access token from the provider
 					 */
-					accessToken: z.string().optional(),
+					accessToken: z
+						.string({
+							description: "Access token from the provider",
+						})
+						.optional(),
 					/**
 					 * Refresh token from the provider
 					 */
-					refreshToken: z.string().optional(),
+					refreshToken: z
+						.string({
+							description: "Refresh token from the provider",
+						})
+						.optional(),
 					/**
 					 * Expiry date of the token
 					 */
-					expiresAt: z.number().optional(),
+					expiresAt: z
+						.number({
+							description: "Expiry date of the token",
+						})
+						.optional(),
 				}),
+				{
+					description:
+						"ID token from the provider to sign in the user with id token",
+				},
 			),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with a social provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										session: {
+											type: "string",
+										},
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -85,7 +170,7 @@ export const signInSocial = createAuthEndpoint(
 				},
 			);
 			throw new APIError("NOT_FOUND", {
-				message: "Provider not found",
+				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 			});
 		}
 
@@ -98,7 +183,7 @@ export const signInSocial = createAuthEndpoint(
 					},
 				);
 				throw new APIError("NOT_FOUND", {
-					message: "Provider does not support id token verification",
+					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
 				});
 			}
 			const { token, nonce } = c.body.idToken;
@@ -108,7 +193,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "Invalid id token",
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
 				});
 			}
 			const userInfo = await provider.getUserInfo({
@@ -121,7 +206,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "Failed to get user info",
+					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 				});
 			}
 			if (!userInfo.user.email) {
@@ -129,7 +214,7 @@ export const signInSocial = createAuthEndpoint(
 					provider: c.body.provider,
 				});
 				throw new APIError("UNAUTHORIZED", {
-					message: "User email not found",
+					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 				});
 			}
 			const data = await handleOAuthUserInfo(c, {
@@ -155,10 +240,8 @@ export const signInSocial = createAuthEndpoint(
 			return c.json({
 				session: data.data!.session,
 				user: data.data!.user,
-				url: `${
-					c.body.callbackURL || c.query?.currentURL || c.context.options.baseURL
-				}`,
-				redirect: true,
+				url: undefined,
+				redirect: false,
 			});
 		}
 
@@ -171,7 +254,7 @@ export const signInSocial = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -184,21 +267,66 @@ export const signInEmail = createAuthEndpoint(
 			/**
 			 * Email of the user
 			 */
-			email: z.string(),
+			email: z.string({
+				description: "Email of the user",
+			}),
 			/**
 			 * Password of the user
 			 */
-			password: z.string(),
+			password: z.string({
+				description: "Password of the user",
+			}),
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to use as a redirect for email
+			 * verification and for possible redirects
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to use as a redirect for email verification",
+				})
+				.optional(),
 			/**
 			 * If this is false, the session will not be remembered
 			 * @default true
 			 */
-			rememberMe: z.boolean().default(true).optional(),
+			rememberMe: z
+				.boolean({
+					description:
+						"If this is false, the session will not be remembered. Default is `true`.",
+				})
+				.default(true)
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with email and password",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
@@ -213,7 +341,7 @@ export const signInEmail = createAuthEndpoint(
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
+				message: BASE_ERROR_CODES.INVALID_EMAIL,
 			});
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
@@ -224,7 +352,7 @@ export const signInEmail = createAuthEndpoint(
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -234,24 +362,24 @@ export const signInEmail = createAuthEndpoint(
 		if (!credentialAccount) {
 			ctx.context.logger.error("Credential account not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
 			ctx.context.logger.error("Password not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Unexpected error",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
-		const validPassword = await ctx.context.password.verify(
-			currentPassword,
+		const validPassword = await ctx.context.password.verify({
+			hash: currentPassword,
 			password,
-		);
+		});
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -260,18 +388,17 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				ctx.context.logger.error(
-					"Email verification is required but no email verification handler is provided",
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "Email is not verified.",
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				user.user.email,
 			);
-			const url = `${ctx.context.baseURL}/verify-email?token=${token}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
 				{
 					user: user.user,
@@ -282,8 +409,7 @@ export const signInEmail = createAuthEndpoint(
 			);
 			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {
-				message:
-					"Email is not verified. Check your email for a verification link",
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
 		}
 
@@ -296,7 +422,7 @@ export const signInEmail = createAuthEndpoint(
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Failed to create session",
+				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
 
@@ -309,8 +435,15 @@ export const signInEmail = createAuthEndpoint(
 			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
-			user: user.user,
-			session,
+			user: {
+				id: user.user.id,
+				email: user.user.email,
+				name: user.user.name,
+				image: user.user.image,
+				emailVerified: user.user.emailVerified,
+				createdAt: user.user.createdAt,
+				updatedAt: user.user.updatedAt,
+			},
 			redirect: !!ctx.body.callbackURL,
 			url: ctx.body.callbackURL,
 		});

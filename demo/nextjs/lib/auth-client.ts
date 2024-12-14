@@ -13,8 +13,9 @@ export const client = createAuthClient({
 	plugins: [
 		organizationClient(),
 		twoFactorClient({
-			redirect: true,
-			twoFactorPage: "/two-factor",
+			onTwoFactorRedirect() {
+				window.location.href = "/two-factor";
+			},
 		}),
 		passkeyClient(),
 		adminClient(),

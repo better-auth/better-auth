@@ -6,6 +6,7 @@ export const user = pgTable("user", {
 	name: text("name").notNull(),
 	email_address: text("email_address").notNull().unique(),
 	emailVerified: boolean("emailVerified").notNull(),
+	test: text("test").notNull(),
 	image: text("image"),
 	createdAt: timestamp("createdAt").notNull(),
 	updatedAt: timestamp("updatedAt").notNull(),
@@ -16,6 +17,9 @@ export const sessions = pgTable("sessions", {
 	expiresAt: timestamp("expiresAt").notNull(),
 	ipAddress: text("ipAddress"),
 	userAgent: text("userAgent"),
+	token: text("token").notNull(),
+	createdAt: timestamp("createdAt").notNull(),
+	updatedAt: timestamp("updatedAt").notNull(),
 	userId: text("userId")
 		.notNull()
 		.references(() => user.id),
@@ -29,9 +33,13 @@ export const account = pgTable("account", {
 		.notNull()
 		.references(() => user.id),
 	accessToken: text("accessToken"),
+	createdAt: timestamp("createdAt").notNull(),
+	updatedAt: timestamp("updatedAt").notNull(),
 	refreshToken: text("refreshToken"),
 	idToken: text("idToken"),
-	expiresAt: timestamp("expiresAt"),
+	accessTokenExpiresAt: timestamp("accessTokenExpiresAt"),
+	refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+	scope: text("scope"),
 	password: text("password"),
 });
 
@@ -40,5 +48,6 @@ export const verification = pgTable("verification", {
 	identifier: text("identifier").notNull(),
 	value: text("value").notNull(),
 	expiresAt: timestamp("expiresAt").notNull(),
-	createdAt: timestamp("createdAt"),
+	createdAt: timestamp("createdAt").notNull(),
+	updatedAt: timestamp("updatedAt").notNull(),
 });

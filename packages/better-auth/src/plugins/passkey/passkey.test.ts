@@ -54,16 +54,48 @@ describe("passkey", async () => {
 	});
 
 	it("should list user passkeys", async () => {
+		const { headers, user, session } = await signInWithTestUser();
+		(await auth.$context).adapter.create({
+			model: "passkey",
+			data: {
+				id: "mockPasskeyId",
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "mockDeviceType",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				webauthnUserID: "mockWebAuthnUserID",
+			},
+		});
+
+		const passkeys = await auth.api.listPasskeys({
+			headers: headers,
+		});
+
+		expect(Array.isArray(passkeys)).toBe(true);
+		expect(passkeys[0]).toHaveProperty("id");
+		expect(passkeys[0]).toHaveProperty("userId");
+		expect(passkeys[0]).toHaveProperty("publicKey");
+	});
+
+	it("should update a passkey", async () => {
 		const { headers } = await signInWithTestUser();
 		const passkeys = await auth.api.listPasskeys({
 			headers: headers,
 		});
-		expect(Array.isArray(passkeys)).toBe(true);
-		if (passkeys.length > 0) {
-			expect(passkeys[0]).toHaveProperty("id");
-			expect(passkeys[0]).toHaveProperty("userId");
-			expect(passkeys[0]).toHaveProperty("publicKey");
-		}
+		const passkey = passkeys[0];
+		const updateResult = await auth.api.updatePasskey({
+			headers: headers,
+			body: {
+				id: passkey.id,
+				name: "newName",
+			},
+		});
+
+		expect(updateResult.passkey.name).toBe("newName");
 	});
 
 	it("should delete a passkey", async () => {
@@ -74,7 +106,6 @@ describe("passkey", async () => {
 				id: "mockPasskeyId",
 			},
 		});
-
 		expect(deleteResult).toBe(null);
 	});
 });

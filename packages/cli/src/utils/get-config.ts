@@ -16,6 +16,7 @@ let possiblePaths = ["auth.ts", "auth.tsx"];
 possiblePaths = [
 	...possiblePaths,
 	...possiblePaths.map((it) => `lib/server${it}`),
+	...possiblePaths.map((it) => `server${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
@@ -26,10 +27,11 @@ possiblePaths = [
 ];
 
 function stripJsonComments(jsonString: string): string {
-	return jsonString.replace(
-		/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
-		(m, g) => (g ? "" : m),
-	);
+	return jsonString
+		.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
+			g ? "" : m,
+		)
+		.replace(/,(?=\s*[}\]])/g, "");
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {

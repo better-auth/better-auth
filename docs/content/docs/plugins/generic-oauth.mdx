@@ -141,6 +141,27 @@ genericOAuth({
 })
 ```
 
+### Map User Info Fields
+
+If the user info returned by the provider does not match the expected format, or you need to map additional fields, you can use the `mapProfileToUser`:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      mapProfileToUser: async (profile) => {
+        return {
+          firstName: profile.given_name,
+          // ... map other fields as needed
+        };
+      }
+    }
+  ]
+})
+```
+
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.

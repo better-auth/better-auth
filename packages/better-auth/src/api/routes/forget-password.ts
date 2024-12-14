@@ -3,6 +3,8 @@ import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
 import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
+import { generateId } from "../../utils";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 function redirectError(
 	ctx: AuthContext,
@@ -36,15 +38,47 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.string().email(),
+			email: z
+				.string({
+					description:
+						"The email address of the user to send a password reset email to",
+				})
+				.email(),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
 			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
 			 * token=VALID_TOKEN
 			 */
-			redirectTo: z.string(),
+			redirectTo: z
+				.string({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Send a password reset email to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -81,9 +115,9 @@ export const forgetPassword = createAuthEndpoint(
 				defaultExpiresIn,
 			"sec",
 		);
-		const verificationToken = ctx.context.uuid();
+		const verificationToken = generateId(24);
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
+			value: user.user.id.toString(),
 			identifier: `reset-password:${verificationToken}`,
 			expiresAt,
 		});
@@ -107,8 +141,32 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z.string(),
+			callbackURL: z.string({
+				description: "The URL to redirect the user to reset their password",
+			}),
 		}),
+		metadata: {
+			openapi: {
+				description: "Redirects the user to the callback URL with the token",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										token: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { token } = ctx.params;
@@ -143,9 +201,37 @@ export const resetPassword = createAuthEndpoint(
 		),
 		method: "POST",
 		body: z.object({
-			newPassword: z.string(),
-			token: z.string().optional(),
+			newPassword: z.string({
+				description: "The new password to set",
+			}),
+			token: z
+				.string({
+					description: "The token to reset the password",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Reset the password for a user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const token =
@@ -156,19 +242,32 @@ export const resetPassword = createAuthEndpoint(
 				: "");
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Token not found",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 
 		const { newPassword } = ctx.body;
+
+		const minLength = ctx.context.password?.config.minPasswordLength;
+		const maxLength = ctx.context.password?.config.maxPasswordLength;
+		if (newPassword.length < minLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+			});
+		}
+		if (newPassword.length > maxLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+			});
+		}
+
 		const id = `reset-password:${token}`;
 
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
-
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
@@ -181,7 +280,7 @@ export const resetPassword = createAuthEndpoint(
 				userId,
 				providerId: "credential",
 				password: hashedPassword,
-				accountId: ctx.context.uuid(),
+				accountId: userId,
 			});
 			return ctx.json({
 				status: true,

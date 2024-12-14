@@ -63,8 +63,8 @@ import { cors } from "hono/cors";
  
 const app = new Hono<{
 	Variables: {
-		user: auth.$Infer.Session.user | null;
-		session: auth.$Infer.Session.session | null
+		user: typeof auth.$Infer.Session.user | null;
+		session: typeof auth.$Infer.Session.session | null
 	}
 }>();
 

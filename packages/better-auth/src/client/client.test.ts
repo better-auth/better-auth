@@ -181,9 +181,7 @@ describe("type", () => {
 				},
 			},
 		});
-		expectTypeOf(client.useComputedAtom).toEqualTypeOf<
-			() => Readonly<Ref<number>>
-		>();
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<Readonly<Ref<number>>>();
 	});
 	it("should infer resolved hooks svelte", () => {
 		const client = createSvelteClient({
@@ -230,8 +228,11 @@ describe("type", () => {
 				id: string;
 				userId: string;
 				expiresAt: Date;
+				token: string;
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
+				createdAt: Date;
+				updatedAt: Date;
 			};
 			user: {
 				id: string;
@@ -251,13 +252,7 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [
-				organizationClient(),
-				twoFactorClient({
-					twoFactorPage: "/two-factor",
-				}),
-				passkeyClient(),
-			],
+			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf($infer.user).toEqualTypeOf<{

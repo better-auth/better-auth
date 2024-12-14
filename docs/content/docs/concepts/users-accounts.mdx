@@ -100,6 +100,110 @@ await auth.api.setPassword({
 });
 ```
 
+## Delete User
+
+Better Auth provides a utility to hard delete a user from your database. It's disabled by default, but you can enable it easily by passing `enabled:true`
+
+```ts
+export const auth = betterAuth({
+    //...other config
+    user: {
+        deleteUser: {
+            enabled: true // [!Code Highlight]
+        }
+    }
+})
+```
+
+Once enabled, you can call `authClient.deleteUser` to permanently delete user data from your database.
+
+### Adding Verification Before Deletion
+
+For added security, you’ll likely want to confirm the user’s intent before deleting their account. A common approach is to send a verification email. Better Auth provides a `sendDeleteAccountVerification` utility for this purpose.
+
+Here’s how you can set it up:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            sendDeleteAccountVerification: async (
+                data: {
+                    user: User;      // The user object
+                    url: string;    // The auto-generated URL for deletion
+                    token: string;  // The verification token (also in the URL)
+                },
+                request?: Request,  // The original request object (optional)
+            ) => {
+                // Your email sending logic here
+                // Example: sendEmail(data.user.email, "Verify Deletion", data.url);
+            },
+        },
+    },
+});
+```
+
+**How the Verification Works**
+
+- Callback URL: The url provided in sendDeleteAccountVerification is a pre-generated link that deletes the user data when accessed.
+
+- Authentication Check: The user must be signed in to the account they’re attempting to delete.
+If they aren’t signed in, the deletion process will fail. 
+
+### Callbacks
+
+**beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
+
+```ts
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user) => {
+                // Perform any cleanup or additional checks here
+            },
+        },
+    },
+});
+```
+you can also throw `APIError` to interrupt the deletion process.
+
+```ts
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user, request) => {
+                if (user.email.includes("admin")) {
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Admin accounts can't be deleted",
+                    });
+                }
+            },
+        },
+    },
+});
+```
+
+**afterDelete**: This callback is called after the user is deleted. You can use this callback to perform any cleanup or additional actions after the user is deleted.
+
+```ts
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            afterDelete: async (user, request) => {
+                // Perform any cleanup or additional actions here
+            },
+        },
+    },
+});
+```
+
 ## Accounts
 
 Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.
@@ -165,7 +269,7 @@ Users already signed in can manually link their account to additional social pro
 - **Linking Social Accounts:** Use the `user.linkSocial` method on the client to link a social provider to the user's account.
 
   ```ts
-  await client.linkSocial({
+  await authClient.linkSocial({
       provider: "google", // Provider to link
       callbackURL: "/callback" // Callback URL after linking completes
   });

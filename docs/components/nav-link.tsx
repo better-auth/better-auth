@@ -6,15 +6,17 @@ import { useSelectedLayoutSegment } from "next/navigation";
 type Props = {
 	href: string;
 	children: React.ReactNode;
+	className?: string;
+	external?: boolean;
 };
 
-export const NavLink = ({ href, children }: Props) => {
+export const NavLink = ({ href, children, className, external }: Props) => {
 	const segment = useSelectedLayoutSegment();
 	const isActive =
 		segment === href.slice(1) || (segment === null && href === "/");
 
 	return (
-		<li className="relative group">
+		<li className={cn("relative group", className)}>
 			<Link
 				href={href}
 				className={cn(
@@ -22,6 +24,7 @@ export const NavLink = ({ href, children }: Props) => {
 					"group-hover:text-foreground",
 					isActive ? "text-foreground" : "text-muted-foreground",
 				)}
+				target={external ? "_blank" : "_parent"}
 			>
 				{children}
 			</Link>

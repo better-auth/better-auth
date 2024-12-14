@@ -7,13 +7,16 @@ import type {
 	ClientOptions,
 	InferActions,
 	InferClientAPI,
-	InferSessionFromClient,
-	InferUserFromClient,
+	InferErrorCodes,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
-import type { UnionToIntersection } from "../../types/helper";
-import type { BetterFetchError } from "@better-fetch/fetch";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { BASE_ERROR_CODES } from "../../error/codes";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -30,9 +33,7 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: () => DeepReadonly<
-							Ref<ReturnType<Atoms[key]["get"]>>
-						>;
+								: never]: DeepReadonly<Ref<ReturnType<Atoms[key]["get"]>>>;
 					}
 				: {}
 			: {}
@@ -55,14 +56,20 @@ export function createAuthClient<Option extends ClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
-	type Session = {
-		session: InferSessionFromClient<Option>;
-		user: InferUserFromClient<Option>;
-	};
+	type ClientAPI = InferClientAPI<Option>;
+	type Session = ClientAPI extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res extends Record<string, any>
+				? Res
+				: never
+		: never;
 
-	function useSession(): () => DeepReadonly<
+	function useSession(): DeepReadonly<
 		Ref<{
-			data: Session | null;
+			data: Session;
 			isPending: boolean;
 			isRefetching: boolean;
 			error: BetterFetchError | null;
@@ -114,14 +121,18 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
+
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			useSession: typeof useSession;
 			$Infer: {
-				Session: Session;
+				Session: NonNullable<Session>;
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
 		};
 }

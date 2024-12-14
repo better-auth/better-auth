@@ -46,7 +46,7 @@ type InferUserUpdateCtx<
 	ClientOpts extends ClientOptions,
 	FetchOptions extends BetterFetchOption,
 > = {
-	image?: string;
+	image?: string | null;
 	name?: string;
 	fetchOptions?: FetchOptions;
 } & Partial<
@@ -138,8 +138,15 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends {
 											]
 								) => Promise<
 									BetterFetchResponse<
-										InferReturn<Awaited<R>, COpts>,
-										unknown,
+										T["options"]["metadata"] extends {
+											CUSTOM_SESSION: boolean;
+										}
+											? NonNullable<Awaited<R>>
+											: InferReturn<Awaited<R>, COpts>,
+										{
+											code?: string;
+											message?: string;
+										},
 										FetchOptions["throw"] extends true
 											? true
 											: COpts["fetchOptions"] extends { throw: true }

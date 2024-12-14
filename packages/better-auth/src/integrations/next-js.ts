@@ -24,33 +24,33 @@ export const nextCookies = () => {
 		hooks: {
 			after: [
 				{
-					matcher() {
+					matcher(ctx) {
 						return true;
 					},
 					handler: async (ctx) => {
-						const returned = ctx.context.endpoint?.headers;
+						const returned = ctx.responseHeader;
+						if ("_flag" in ctx && ctx._flag === "router") {
+							return;
+						}
 						if (returned instanceof Headers) {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							const cookieHelper = await cookies();
 							parsed.forEach((value, key) => {
-								if (!value) return;
 								if (!key) return;
 								const opts = {
-									samesite: value.samesite,
+									sameSite: value.samesite,
 									secure: value.secure,
-									"max-age": value["max-age"],
-									httponly: value.httponly,
+									maxAge: value["max-age"],
+									httpOnly: value.httponly,
 									domain: value.domain,
 									path: value.path,
-								};
+								} as const;
 								try {
 									cookieHelper.set(key, decodeURIComponent(value.value), opts);
-								} catch {
-									if (process.env.NODE_ENV !== "development") {
-										return;
-									}
+								} catch (e) {
+									// this will fail if the cookie is being set on server component
 								}
 							});
 							return;

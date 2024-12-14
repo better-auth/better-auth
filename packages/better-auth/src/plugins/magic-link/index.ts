@@ -4,6 +4,7 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
 import { alphabet, generateRandomString } from "../../crypto";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 interface MagicLinkOptions {
 	/**
@@ -52,9 +53,39 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z.string().email(),
-						callbackURL: z.string().optional(),
+						email: z
+							.string({
+								description: "Email address to send the magic link",
+							})
+							.email(),
+						callbackURL: z
+							.string({
+								description: "URL to redirect after magic link verification",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with magic link",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
@@ -65,7 +96,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 						if (!user) {
 							throw new APIError("BAD_REQUEST", {
-								message: "User not found",
+								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 					}
@@ -86,21 +117,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}/magic-link/verify?token=${verificationToken}&callbackURL=${
 						ctx.body.callbackURL || "/"
 					}`;
-					try {
-						await options.sendMagicLink(
-							{
-								email,
-								url,
-								token: verificationToken,
-							},
-							ctx.request,
-						);
-					} catch (e) {
-						ctx.context.logger.error("Failed to send magic link", e);
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "Failed to send magic link",
-						});
-					}
+					await options.sendMagicLink(
+						{
+							email,
+							url,
+							token: verificationToken,
+						},
+						ctx.request,
+					);
 					return ctx.json({
 						status: true,
 					});
@@ -111,10 +135,42 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						token: z.string(),
-						callbackURL: z.string().optional(),
+						token: z.string({
+							description: "Verification token",
+						}),
+						callbackURL: z
+							.string({
+								description:
+									"URL to redirect after magic link verification, if not provided will return session",
+							})
+							.optional(),
 					}),
 					requireHeaders: true,
+					metadata: {
+						openapi: {
+							description: "Verify magic link",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													session: {
+														$ref: "#/components/schemas/Session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { token, callbackURL } = ctx.query;
@@ -150,10 +206,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 							});
 							userId = newUser.id;
 							if (!userId) {
-								throw ctx.redirect(`${toRedirectTo}?error=USER_NOT_CREATED`);
+								throw ctx.redirect(
+									`${toRedirectTo}?error=failed_to_create_user`,
+								);
 							}
 						} else {
-							throw ctx.redirect(`${toRedirectTo}?error=USER_NOT_FOUND`);
+							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
 						}
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -161,7 +219,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.headers,
 					);
 					if (!session) {
-						throw ctx.redirect(`${toRedirectTo}?error=SESSION_NOT_CREATED`);
+						throw ctx.redirect(
+							`${toRedirectTo}?error=failed_to_create_session`,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,

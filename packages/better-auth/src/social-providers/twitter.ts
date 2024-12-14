@@ -91,7 +91,7 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export interface TwitterOption extends ProviderOptions {}
+export interface TwitterOption extends ProviderOptions<TwitterProfile> {}
 
 export const twitter = (options: TwitterOption) => {
 	return {
@@ -125,6 +125,9 @@ export const twitter = (options: TwitterOption) => {
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<TwitterProfile>(
 				"https://api.x.com/2/users/me?user.fields=profile_image_url",
 				{
@@ -137,13 +140,15 @@ export const twitter = (options: TwitterOption) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.email || null,
+					email: profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
+					...userMap,
 				},
 				data: profile,
 			};
