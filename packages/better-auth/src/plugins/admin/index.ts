@@ -690,7 +690,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					deleteSessionCookie(ctx);
 					await ctx.setSignedCookie(
 						"admin_session",
-						ctx.context.session.session.id,
+						ctx.context.session.session.token,
 						ctx.context.secret,
 						authCookies.sessionToken.options,
 					);
@@ -720,6 +720,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							impersonatedBy: string;
 						}
 					>(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED");
+					}
 					if (!session.session.impersonatedBy) {
 						throw new APIError("BAD_REQUEST", {
 							message: "You are not impersonating anyone",
