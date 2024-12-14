@@ -89,6 +89,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 
 	test("update model", async () => {
 		const newEmail = "updated@email.com";
+
 		const res = await adapter.update<User>({
 			model: "user",
 			where: [

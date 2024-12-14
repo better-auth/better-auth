@@ -5,8 +5,6 @@ import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
-	InferSessionFromClient,
-	InferUserFromClient,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";
@@ -76,11 +74,12 @@ export function createAuthClient<Option extends ClientOptions>(
 
 	type ClientAPI = InferClientAPI<Option>;
 	type Session = ClientAPI extends {
-		getSession: () => Promise<BetterFetchResponse<infer D>>;
+		getSession: () => Promise<infer Res>;
 	}
-		? D
-		: ClientAPI;
-
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
@@ -99,5 +98,3 @@ export function createAuthClient<Option extends ClientOptions>(
 			>;
 		};
 }
-
-export const useAuthQuery = useStore;

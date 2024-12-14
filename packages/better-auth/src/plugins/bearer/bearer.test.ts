@@ -1,18 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { parseSetCookieHeader } from "../../cookies";
 
 describe("bearer", async () => {
-	const { client, signInWithTestUser, auth } = await getTestInstance({
+	const { client, auth, testUser } = await getTestInstance({
 		plugins: [bearer()],
 	});
 
 	let token: string;
-	let encryptedToken: string | undefined;
 	it("should get session", async () => {
-		const { session: _session, headers } = await signInWithTestUser();
-		token = headers.get("cookie")?.split("=")[1].split(".")[0] || "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: (ctx) => {
+					token = ctx.response.headers.get("set-auth-token") || "";
+				},
+			},
+		);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
@@ -20,7 +27,6 @@ describe("bearer", async () => {
 				},
 			},
 		});
-		encryptedToken = headers.get("cookie")?.split("=")[1] || "";
 		expect(session.data?.session).toBeDefined();
 	});
 
@@ -36,25 +42,22 @@ describe("bearer", async () => {
 	});
 
 	it("should work on server actions", async () => {
-		const { session: _session, headers } = await signInWithTestUser();
-		token = headers.get("cookie")?.split("=")[1].split(".")[0] || "";
-		headers.set("authorization", `Bearer ${token}`);
 		const session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${token}`,
 			}),
 		});
-		expect(session?.session.token).toBe(token);
+		expect(session?.session).toBeDefined();
 	});
 
-	it("should work with encrypted token", async () => {
+	it("shouldn't work with un signed token", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
-					authorization: `Bearer ${encryptedToken}`,
+					authorization: `Bearer ${token.split(".")[0]}`,
 				},
 			},
 		});
-		expect(session.data?.session).toBeDefined();
+		expect(session.data).toBeNull();
 	});
 });

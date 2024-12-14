@@ -198,6 +198,9 @@ export const verifyEmail = createAuthEndpoint(
 	async (ctx) => {
 		function redirectOnError(error: string) {
 			if (ctx.query.callbackURL) {
+				if (ctx.query.callbackURL.includes("?")) {
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+				}
 				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
 			}
 			throw new APIError("UNAUTHORIZED", {
@@ -246,12 +249,17 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			);
 
+			const newToken = await createEmailVerificationToken(
+				ctx.context.secret,
+				parsed.updateTo,
+			);
+
 			//send verification email to the new email
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${token}`,
-					token,
+					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					token: newToken,
 				},
 				ctx.request,
 			);

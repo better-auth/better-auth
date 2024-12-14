@@ -80,9 +80,9 @@ export const DatePickerViewControl = (props: DatePickerViewControlProps) => {
 					<path
 						fill="none"
 						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 						d="m15 6l-6 6l6 6"
 					/>
 					<title>Previous</title>
@@ -105,9 +105,9 @@ export const DatePickerViewControl = (props: DatePickerViewControlProps) => {
 					<path
 						fill="none"
 						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 						d="m9 6l6 6l-6 6"
 					/>
 					<title>Next</title>
@@ -256,9 +256,9 @@ export const DatePickerInput = (props: DatePickerInputProps) => {
 					<path
 						fill="none"
 						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 						d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm12-4v4M8 3v4m-4 4h16m-9 4h1m0 0v3"
 					/>
 					<title>Calendar</title>

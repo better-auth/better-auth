@@ -27,6 +27,20 @@ describe("forget password", async (it) => {
 		expect(token.length).toBeGreaterThan(10);
 	});
 
+	it("should fail on invalid password", async () => {
+		const res = await client.resetPassword(
+			{
+				newPassword: "short",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
 	it("should verify the token", async () => {
 		const newPassword = "new-password";
 		const res = await client.resetPassword(

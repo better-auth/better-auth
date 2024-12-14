@@ -9,7 +9,7 @@ import { createAuthEndpoint } from "../call";
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
-	errorMessage: z.string().optional(),
+	error_description: z.string().optional(),
 	state: z.string().optional(),
 });
 
@@ -38,17 +38,19 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 
-		const { code, error, state } = queryOrBody;
+		const { code, error, state, error_description } = queryOrBody;
 
 		if (!state) {
-			c.context.logger.error("State not found");
+			c.context.logger.error("State not found", error);
 			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
 		}
 
 		if (!code) {
 			c.context.logger.error("Code not found");
 			throw c.redirect(
-				`${c.context.baseURL}/error?error=${error || "no_code"}`,
+				`${c.context.baseURL}/error?error=${
+					error || "no_code"
+				}&error_description=${error_description}`,
 			);
 		}
 		const provider = c.context.socialProviders.find(
@@ -65,7 +67,8 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const { codeVerifier, callbackURL, link, errorURL } = await parseState(c);
+		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
+			await parseState(c);
 
 		let tokens: OAuth2Tokens;
 		try {
@@ -125,7 +128,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			let toRedirectTo: string;
 			try {
-				const url = new URL(callbackURL);
+				const url = callbackURL;
 				toRedirectTo = url.toString();
 			} catch {
 				toRedirectTo = callbackURL;
@@ -158,10 +161,12 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 		let toRedirectTo: string;
 		try {
-			const url = new URL(callbackURL);
+			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
 			toRedirectTo = url.toString();
 		} catch {
-			toRedirectTo = callbackURL;
+			toRedirectTo = result.isRegister
+				? newUserURL || callbackURL
+				: callbackURL;
 		}
 		throw c.redirect(toRedirectTo);
 	},

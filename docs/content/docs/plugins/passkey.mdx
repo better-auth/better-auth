@@ -7,7 +7,7 @@ Passkeys are a secure, passwordless authentication method using cryptographic ke
 
 The passkey plugin implementation is powered by [simple-web-authn](https://simplewebauthn.dev/) behind the scenes.
 
-## Installation 
+## Installation
 
 <Steps>
     <Step>
@@ -20,14 +20,13 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         `rpName`: Human-readable title for your website
 
-        `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid.Do NOT include any trailing /
+        `origin`: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do **NOT** include any trailing /
 
-        ```ts title="auth.ts" 
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { passkey } from "better-auth/plugins"
-        
+
         export const auth = betterAuth({
-           
             plugins: [ // [!code highlight]
                 passkey(), // [!code highlight]
             ], // [!code highlight]
@@ -53,13 +52,13 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
         </Tabs>
         See the [Schema](#schema) section to add the fields manually.
     </Step>
-    <Step>  
+    <Step>
         ### Add the client plugin
-        
-         ```ts title="auth-client.ts" 
+
+         ```ts title="auth-client.ts"
             import { createAuthClient } from "better-auth/client"
             import { passkeyClient } from "better-auth/client/plugins"
-            
+
             const authClient =  createAuthClient({
                 plugins: [ // [!code highlight]
                     passkeyClient() // [!code highlight]
@@ -67,8 +66,8 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
             })
             ```
     </Step>
-</Steps>
 
+</Steps>
 
 ## Usage
 
@@ -76,18 +75,20 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
 To add or register a passkey make sure a user is authenticated and then call the `passkey.addPasskey` function provided by the client.
 
-```ts title="auth-client.ts" 
-    import { createAuthClient } from "better-auth/client"
-    import { passkeyClient } from "better-auth/client/plugins"
-    
-    const authClient =  createAuthClient({
-        plugins: [ // [!code highlight]
-            passkeyClient() // [!code highlight]
-        ] // [!code highlight]
-    })
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { passkeyClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+  plugins: [
+    // [!code highlight]
+    passkeyClient(), // [!code highlight]
+  ], // [!code highlight]
+});
 // ---cut---
-const data = await authClient.passkey.addPasskey()
+const data = await authClient.passkey.addPasskey();
 ```
+
 This will prompt the user to register a passkey. And it'll add the passkey to the user's account.
 
 ### Signin with a passkey
@@ -100,18 +101,74 @@ Signin method accepts:
 
 `callbackURL`: The URL to redirect to after the user has signed in. (optional)
 
-```ts title="auth-client.ts" 
-    import { createAuthClient } from "better-auth/client"
-    import { passkeyClient } from "better-auth/client/plugins"
-    
-    const authClient =  createAuthClient({
-        plugins: [ // [!code highlight]
-            passkeyClient() // [!code highlight]
-        ] // [!code highlight]
-    })
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { passkeyClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+  plugins: [
+    // [!code highlight]
+    passkeyClient(), // [!code highlight]
+  ], // [!code highlight]
+});
 // ---cut---
-const data = await authClient.signIn.passkey()
+const data = await authClient.signIn.passkey();
 ```
+
+### Conditional UI
+
+The plugin supports conditional UI, which allows the browser to autofill the passkey if the user has already registered a passkey.
+
+There are two requirements for conditional UI to work:
+
+<Steps>
+    <Step>
+        #### Update input fields
+
+        Add the `autocomplete` attribute with the value `webauthn` to your input fields. You can add this attribute to multiple input fields, but at least one is required for conditional UI to work.
+
+        The `webauthn` value should also be the last entry of the `autocomplete` attribute.
+
+        ```html
+        <label for="name">Username:</label>
+        <input type="text" name="name" autocomplete="username webauthn">
+        <label for="password">Password:</label>
+        <input type="password" name="password" autocomplete="current-password webauthn">
+        ```
+    </Step>
+    <Step>
+        #### Preload the passkeys
+
+        When your component mounts, you can preload the user's passkeys by calling the `authClient.signIn.passkey` method with the `autoFill` option set to `true`.
+
+        To prevent unnecessary calls, we will also add a check to see if the browser supports conditional UI.
+
+        <Tabs items={["React"]}>
+            <Tab value="React">
+            ```ts
+            useEffect(() => {
+               if (!PublicKeyCredential.isConditionalMediationAvailable ||
+                   !PublicKeyCredential.isConditionalMediationAvailable()) {
+                 return;
+               }
+
+              void authClient.signIn.passkey({ autoFill: true })
+            }, [])
+            ```
+            </Tab>
+        </Tabs>
+
+    </Step>
+
+   </Steps>
+
+Depending on the browser, a prompt will appear to autofill the passkey. If the user has multiple passkeys, they can select the one they want to use.
+
+Some browsers also require the user to first interact with the input field before the autofill prompt appears.
+
+### Debugging
+
+To test your passkey implementation you can use [emulated authenticators](https://developer.chrome.com/docs/devtools/webauthn). This way you can test the registration and sign-in process without even owning a physical device.
 
 ## Schema
 
@@ -120,63 +177,62 @@ The plugin require a new table in the database to store passkey data.
 Table Name: `passkey`
 
 <DatabaseTable
-    fields={[
-        { 
-            name: "id", 
-            type: "string", 
-            description: "Unique identifier for each passkey",
-            isPrimaryKey: true
-        },
-        {
-            name: "name",
-            type: "string",
-            description: "The name of the passkey",
-            isOptional: true
-        },
-        { 
-            name: "publicKey", 
-            type: "string", 
-            description: "The public key of the passkey",
-        },
-        { 
-            name: "userId", 
-            type: "string", 
-            description: "The id of the user",
-            isForeignKey: true
-        },
-        {
-            name: "webauthnUserID",
-            type: "string",
-            description: "The user id for WebAuthn",
-        },
-        { 
-            name: "counter", 
-            type: "number", 
-            description: "The counter of the passkey",
-        },
-        {
-            name: "deviceType",
-            type: "string",
-            description: "The type of device used to register the passkey",
-        },
-        {
-            name: "backedUp",
-            type: "boolean",
-            description: "Whether the passkey is backed up",
-        },
-        {
-            name: "transports",
-            type: "string",
-            description: "The transports used to register the passkey",
-        },
-        { 
-            name: "createdAt", 
-            type: "Date", 
-            description: "The time when the passkey was created",
-        },
-    ]}
-    />
-
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each passkey",
+      isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the passkey",
+      isOptional: true,
+    },
+    {
+      name: "publicKey",
+      type: "string",
+      description: "The public key of the passkey",
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The id of the user",
+      isForeignKey: true,
+    },
+    {
+      name: "webauthnUserID",
+      type: "string",
+      description: "The user id for WebAuthn",
+    },
+    {
+      name: "counter",
+      type: "number",
+      description: "The counter of the passkey",
+    },
+    {
+      name: "deviceType",
+      type: "string",
+      description: "The type of device used to register the passkey",
+    },
+    {
+      name: "backedUp",
+      type: "boolean",
+      description: "Whether the passkey is backed up",
+    },
+    {
+      name: "transports",
+      type: "string",
+      description: "The transports used to register the passkey",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The time when the passkey was created",
+    },
+  ]}
+/>
 
 ## Options
 
@@ -185,4 +241,3 @@ Table Name: `passkey`
 **rpName**: Human-readable title for your website.
 
 **origin**: The URL at which registrations and authentications should occur. 'http://localhost' and 'http://localhost:PORT' are also valid. Do NOT include any trailing /.
-

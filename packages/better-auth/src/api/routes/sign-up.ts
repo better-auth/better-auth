@@ -6,12 +6,12 @@ import { APIError } from "better-call";
 import type {
 	AdditionalUserFieldsInput,
 	BetterAuthOptions,
-	InferUser,
 	User,
 } from "../../types";
 import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { isDevelopment } from "../../utils/env";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -162,7 +162,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				}
 			} catch (e) {
-				ctx.context.logger.error("Failed to create user", e);
+				if (isDevelopment) {
+					ctx.context.logger.error("Failed to create user", e);
+				}
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					details: e,

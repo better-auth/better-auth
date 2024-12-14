@@ -280,7 +280,12 @@ export function getEndpoints<
 							try {
 								const hookRes = await hook.handler(internalContext);
 								if (hookRes) {
-									internalContext.context.returned = hookRes;
+									if ("responseHeader" in hookRes) {
+										const headers = hookRes.responseHeader as Headers;
+										internalContext.responseHeader = headers;
+									} else {
+										internalContext.context.returned = hookRes;
+									}
 								}
 							} catch (e) {
 								if (e instanceof APIError) {
@@ -389,9 +394,6 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 						e.message.includes("does not exist")
 					) {
 						ctx.logger?.error(e.message);
-						ctx.logger?.error(
-							"If you are seeing this error, it is likely that you need to run the migrations for the database or you need to update your database schema. If you recently updated the package, make sure to run the migrations.",
-						);
 						return;
 					}
 				}

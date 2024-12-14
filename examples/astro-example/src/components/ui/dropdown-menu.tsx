@@ -184,9 +184,9 @@ export const DropdownMenuSubTrigger = <T extends ValidComponent = "div">(
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="m9 6l6 6l-6 6"
 				/>
 				<title>Arrow</title>
@@ -252,9 +252,9 @@ export const DropdownMenuCheckboxItem = <T extends ValidComponent = "div">(
 					<path
 						fill="none"
 						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 						d="m5 12l5 5L20 7"
 					/>
 					<title>Checkbox</title>
@@ -295,9 +295,9 @@ export const DropdownMenuRadioItem = <T extends ValidComponent = "div">(
 				>
 					<g
 						fill="none"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
 					>
 						<path d="M0 0h24v24H0z" />
 						<path
