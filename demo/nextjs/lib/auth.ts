@@ -46,7 +46,6 @@ export const auth = betterAuth({
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
 				to: to || user.email,
@@ -55,7 +54,6 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendOnSignUp: true,
 	},
 	account: {
 		accountLinking: {
@@ -127,7 +125,6 @@ export const auth = betterAuth({
 									}/accept-invitation/${data.id}`,
 					}),
 				});
-				console.log(res, data.email);
 			},
 		}),
 		twoFactor({

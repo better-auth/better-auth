@@ -4,7 +4,8 @@ import { wildcardMatch } from "../../utils/wildcard";
 import { getHost } from "../../utils/url";
 
 /**
- * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
+ * A middleware to validate callbackURL and origin against
+ * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST") {
@@ -16,6 +17,8 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const currentURL = query?.currentURL;
+	const errorCallbackURL = body?.errorCallbackURL;
+	const newUserCallbackURL = body?.newUserCallbackURL;
 	const trustedOrigins = context.trustedOrigins;
 	const usesCookies = ctx.headers?.has("cookie");
 
@@ -52,4 +55,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	currentURL && validateURL(currentURL, "currentURL");
+	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
+	newUserCallbackURL && validateURL(redirectURL, "newUserCallbackURL");
 });

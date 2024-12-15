@@ -76,6 +76,12 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			const fields = schema[model].fields;
 			for (const field in fields) {
 				const value = data[field];
+				if (
+					value === undefined &&
+					(!fields[field].defaultValue || action === "update")
+				) {
+					continue;
+				}
 				transformedData[fields[field].fieldName || field] = withApplyDefault(
 					value,
 					fields[field],
@@ -147,8 +153,8 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 			});
 
 			return {
-				AND: andClause.length ? andClause : undefined,
-				OR: orClause.length ? orClause : undefined,
+				...(andClause.length ? { AND: andClause } : {}),
+				...(orClause.length ? { OR: orClause } : {}),
 			};
 		},
 		convertSelect: (select?: string[], model?: string) => {
@@ -215,16 +221,19 @@ export const prismaAdapter =
 						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 					);
 				}
+
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
 					take: limit || 100,
 					skip: offset || 0,
-					orderBy: sortBy?.field
+					...(sortBy?.field
 						? {
-								[getField(model, sortBy.field)]:
-									sortBy.direction === "desc" ? "desc" : "asc",
+								orderBy: {
+									[getField(model, sortBy.field)]:
+										sortBy.direction === "desc" ? "desc" : "asc",
+								},
 							}
-						: undefined,
+						: {}),
 				})) as any[];
 				return result.map((r) => transformOutput(r, model));
 			},

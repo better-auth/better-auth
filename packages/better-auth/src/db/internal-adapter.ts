@@ -725,7 +725,7 @@ export const createInternalAdapter = (
 					field: "createdAt",
 					direction: "desc",
 				},
-				limit: 10,
+				limit: 1,
 			});
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
