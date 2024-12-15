@@ -223,6 +223,38 @@ You can use even more authentication methods like [passkey](/docs/plugins/passke
 </Step>
 
 <Step>
+
+### Plugins
+
+Plugins are the core of Better-Auth, allowing you to have any authentication or authorization logic built into your app easily.
+
+Later, as you extend Better-Auth to suit the needs of your app, you'll come across the need to add plugins here.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //...other options
+    plugins: []
+});
+```
+
+#### For Next.JS users
+
+Please make sure you have the `nextCookies` plugin in your plugin list, and make sure it's always at the **end** of the array.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { nextCookies } from "better-auth/next-js"
+
+export const auth = betterAuth({
+    //...other options
+    plugins: [nextCookies()] // make sure this is the last plugin in the array
+});
+```
+</Step>
+
+<Step>
 ### Mount Handler
 To handle api requests, you need to set up a route handler on your server.
 
