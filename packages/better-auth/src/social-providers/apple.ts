@@ -79,7 +79,7 @@ export const apple = (options: AppleOptions) => {
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
 				}&response_type=code&redirect_uri=${
-					redirectURI || options.redirectURI
+					options.redirectURI || redirectURI
 				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
 		},
