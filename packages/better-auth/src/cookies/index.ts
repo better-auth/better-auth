@@ -92,38 +92,13 @@ export function getCookies(options: BetterAuthOptions) {
 
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
-export async function setSessionCookie(
+export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe?: boolean,
-	overrides?: Partial<CookieOptions>,
 ) {
-	const options = ctx.context.authCookies.sessionToken.options;
-	const maxAge = dontRememberMe
-		? undefined
-		: ctx.context.sessionConfig.expiresIn;
-	await ctx.setSignedCookie(
-		ctx.context.authCookies.sessionToken.name,
-		session.session.token,
-		ctx.context.secret,
-		{
-			...options,
-			maxAge,
-			...overrides,
-		},
-	);
-
-	if (dontRememberMe) {
-		await ctx.setSignedCookie(
-			ctx.context.authCookies.dontRememberToken.name,
-			"true",
-			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.options,
-		);
-	}
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
 
@@ -157,7 +132,41 @@ export async function setSessionCookie(
 			ctx.context.authCookies.sessionData.options,
 		);
 	}
+}
 
+export async function setSessionCookie(
+	ctx: GenericEndpointContext,
+	session: {
+		session: Session & Record<string, any>;
+		user: User;
+	},
+	dontRememberMe?: boolean,
+	overrides?: Partial<CookieOptions>,
+) {
+	const options = ctx.context.authCookies.sessionToken.options;
+	const maxAge = dontRememberMe
+		? undefined
+		: ctx.context.sessionConfig.expiresIn;
+	await ctx.setSignedCookie(
+		ctx.context.authCookies.sessionToken.name,
+		session.session.token,
+		ctx.context.secret,
+		{
+			...options,
+			maxAge,
+			...overrides,
+		},
+	);
+
+	if (dontRememberMe) {
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.dontRememberToken.name,
+			"true",
+			ctx.context.secret,
+			ctx.context.authCookies.dontRememberToken.options,
+		);
+	}
+	await setCookieCache(ctx, session);
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage

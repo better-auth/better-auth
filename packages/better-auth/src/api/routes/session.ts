@@ -1,7 +1,11 @@
 import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	setCookieCache,
+	setSessionCookie,
+} from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
@@ -229,7 +233,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-
+				await setCookieCache(ctx, session);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
