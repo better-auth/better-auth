@@ -69,7 +69,9 @@ This plugin offers two main methods to do a second factor verification:
 
         const authClient = createAuthClient({
             plugins: [
-                twoFactorClient()
+                twoFactorClient({
+                    redirect: false,
+                })
             ]
         })
         ```
@@ -117,7 +119,7 @@ await authClient.signIn.email({
 })
 ```
 
-You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
+You can handle this in the `onSuccess` callback, when redirect is set to `false`.
 
 ```ts title="sign-in.ts"
 import { createAuthClient } from "better-auth/client";
@@ -125,9 +127,8 @@ import { twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
     plugins: [twoFactorClient({
-        onTwoFactorRedirect(){
-            // Handle the 2FA verification globally
-        }
+        twoFactorPage: "",
+        redirect: false,
     })]
 })
 ```
@@ -439,9 +440,8 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const authClient =  createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect(){
-                window.location.href = "/2fa" // Handle the 2FA verification redirect
-            }
+            twoFactorPage: "/two-factor",
+            redirect: true,
         }) // [!code highlight]
     ]
 })
@@ -450,4 +450,5 @@ const authClient =  createAuthClient({
 
 **Options**
 
-`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. This can be used to redirect the user to the 2FA page.
+`twoFactorPage`: The location of the 2FA page. This can be a relative path or a full URL.
+`redirect`: A boolean that determines whether the user should be redirected to the 2FA page after they have successfully verified their code. Default is `true`.
