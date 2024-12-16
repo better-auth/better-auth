@@ -100,7 +100,10 @@ export const init = async (options: BetterAuthOptions) => {
 					? options.session.updateAge
 					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
-			freshAge: options.session?.freshAge === undefined ? 5 * 60 : options.session.freshAge,
+			freshAge:
+				options.session?.freshAge === undefined
+					? 5 * 60
+					: options.session.freshAge,
 		},
 		secret,
 		rateLimit: {
