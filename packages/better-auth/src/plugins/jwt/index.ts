@@ -197,7 +197,10 @@ export const jwt = (options?: JwtOptions) => {
 					if (key === undefined) {
 						const { publicKey, privateKey } = await generateKeyPair(
 							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-							options?.jwks?.keyPairConfig ?? { crv: "Ed25519" },
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
 						);
 
 						const publicWebKey = await exportJWK(publicKey);
