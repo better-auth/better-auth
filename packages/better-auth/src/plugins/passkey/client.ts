@@ -213,6 +213,10 @@ export const passkeyClient = () => {
 				},
 				signal: "_listPasskeys",
 			},
+			{
+				matcher: (path) => path === "/passkey/verify-authentication",
+				signal: "$sessionSignal"
+			}
 		],
 	} satisfies BetterAuthClientPlugin;
 };
