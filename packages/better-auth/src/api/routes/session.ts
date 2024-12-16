@@ -297,7 +297,8 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated = session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
+	const lastUpdated =
+		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
