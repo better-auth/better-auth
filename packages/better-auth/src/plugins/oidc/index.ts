@@ -400,11 +400,12 @@ export const oidc = (options: OIDCOptions) => {
 						});
 					}
 
-					const challenge = value.codeChallengeMethod === "plain" ? 
-						code_verifier
-					: Buffer.from(
-						await sha256(new TextEncoder().encode(code_verifier || "")),
-					).toString("base64url");
+					const challenge =
+						value.codeChallengeMethod === "plain"
+							? code_verifier
+							: Buffer.from(
+									await sha256(new TextEncoder().encode(code_verifier || "")),
+								).toString("base64url");
 
 					if (challenge !== value.codeChallenge) {
 						throw new APIError("UNAUTHORIZED", {
@@ -596,8 +597,12 @@ export const oidc = (options: OIDCOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					const clientId = generateRandomString(32, alphabet("a-z", "A-Z"));
-					const clientSecret = generateRandomString(32, alphabet("a-z", "A-Z"));
+					const clientId =
+						options.generateClientId?.() ||
+						generateRandomString(32, alphabet("a-z", "A-Z"));
+					const clientSecret =
+						options.generateClientSecret?.() ||
+						generateRandomString(32, alphabet("a-z", "A-Z"));
 					const client = await ctx.context.adapter.create<Record<string, any>>({
 						model: modelName.oauthClient,
 						data: {

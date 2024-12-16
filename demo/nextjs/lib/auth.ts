@@ -9,8 +9,6 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
-	oidc,
-	genericOAuth,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";

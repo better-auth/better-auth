@@ -331,4 +331,5 @@ describe("oidc", async () => {
 		});
 		expect(callbackURL).toContain("/dashboard");
 	});
+
 });

@@ -90,6 +90,14 @@ export interface OIDCOptions {
 	 * @default true
 	 */
 	allowPlainCodeChallengeMethod?: boolean;
+	/**
+	 * Custom function to generate a client ID.
+	 */
+	generateClientId?: () => string;
+	/**
+	 * Custom function to generate a client secret.
+	 */
+	generateClientSecret?: () => string;
 }
 
 export interface AuthorizationQuery {
