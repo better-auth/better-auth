@@ -92,10 +92,13 @@ export function getCookies(options: BetterAuthOptions) {
 
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
-export async function setCookieCache(ctx: GenericEndpointContext, session: {
-	session: Session & Record<string, any>;
-	user: User;
-}) {
+export async function setCookieCache(
+	ctx: GenericEndpointContext,
+	session: {
+		session: Session & Record<string, any>;
+		user: User;
+	},
+) {
 	const shouldStoreSessionDataInCookie =
 		ctx.context.options.session?.cookieCache?.enabled;
 

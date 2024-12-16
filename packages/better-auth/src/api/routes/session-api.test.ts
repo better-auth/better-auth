@@ -499,7 +499,7 @@ describe("cookie cache", async () => {
 		expect(fn).toHaveBeenCalledTimes(3);
 	});
 
-	it("should reset cache when expires", async()=>{
+	it("should reset cache when expires", async () => {
 		expect(fn).toHaveBeenCalledTimes(3);
 		await client.getSession({
 			fetchOptions: {
@@ -512,7 +512,7 @@ describe("cookie cache", async () => {
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
-					cookieSetter(headers)(context)
+					cookieSetter(headers)(context);
 				},
 			},
 		});
@@ -521,10 +521,10 @@ describe("cookie cache", async () => {
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
-					cookieSetter(headers)(context)
+					cookieSetter(headers)(context);
 				},
 			},
 		});
 		expect(fn).toHaveBeenCalledTimes(5);
-	})
+	});
 });

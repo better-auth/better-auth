@@ -42,6 +42,22 @@ export const auth = betterAuth({
 		dialect,
 		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
 	},
+	databaseHooks: {
+		user: {
+			update: {
+				async before(user) {
+					if (user.emailVerified) {
+						return {
+							data: {
+								...user,
+								emailVerifiedAt: new Date().toISOString(),
+							},
+						};
+					}
+				},
+			},
+		},
+	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({

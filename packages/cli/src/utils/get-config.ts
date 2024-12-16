@@ -152,8 +152,18 @@ export async function getConfig({
 						break;
 					}
 				} catch (e) {
-					if(typeof e === "object" && e && "message" in e && typeof e.message === "string" && e.message.includes("This module cannot be imported from a Client Component module")) {
-						logger.error(`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`);
+					if (
+						typeof e === "object" &&
+						e &&
+						"message" in e &&
+						typeof e.message === "string" &&
+						e.message.includes(
+							"This module cannot be imported from a Client Component module",
+						)
+					) {
+						logger.error(
+							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+						);
 						process.exit(1);
 					}
 					logger.error("[#better-auth]: Couldn't read your auth config.", e);
@@ -163,8 +173,18 @@ export async function getConfig({
 		}
 		return configFile;
 	} catch (e) {
-		if(typeof e === "object" && e && "message" in e && typeof e.message === "string" && e.message.includes("This module cannot be imported from a Client Component module")) {
-			logger.error(`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`);
+		if (
+			typeof e === "object" &&
+			e &&
+			"message" in e &&
+			typeof e.message === "string" &&
+			e.message.includes(
+				"This module cannot be imported from a Client Component module",
+			)
+		) {
+			logger.error(
+				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+			);
 			process.exit(1);
 		}
 		logger.error("Couldn't read your auth config.", e);
