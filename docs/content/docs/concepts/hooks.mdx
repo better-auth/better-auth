@@ -1,87 +1,161 @@
 ---
 title: Hooks
-description: How to use hooks in BetterAuth
+description: Better Auth Hooks let you customize BetterAuth's behavior
 ---
 
-Hooks are functions that let you "hook into" the lifecycle of BetterAuth and execute custom logic. You can use hooks to customize the behavior of BetterAuth, such as adding custom authentication logic, handling redirects, or updating the UI based on the authentication state.
+Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin.
 
-## Hook Types
+## Before Hooks
 
-- [Database Hooks](#database-hooks)
-- [Middleware](#middleware)
+**Before hooks** run *before* an endpoint is executed. Use them to modify requests, pre validate data, or return early.
 
-## Database Hooks
+### Example: Enforce Email Domain Restriction
 
-Database hooks are used to hook into the lifecycle of database calls made by BetterAuth. This is useful cause hooking into different plugins route may not be ideal but you could hook into the database calls they made to customize the behavior.
-
-### `before`
-
-The `before` hook is called before a database call is made. You can use this hook to modify the database call, to add additional data, to validate the data, to stop the call, or to perform any other custom logic.
+This hook ensures that users can only sign up if their email ends with `@example.com`:
 
 ```ts title="auth.ts"
-import { betterAuth } from "betterauth";
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
-const auth = betterAuth({
+export const auth = betterAuth({
     hooks: {
-        database: {
-            before: (ctx)=>{
-
+        before: createAuthMiddleware(async (ctx) => {
+            if (ctx.path !== "/sign-up/email") {
+                return;
             }
-        }
-    }
+            if (!ctx.body?.email.endsWith("@example.com")) {
+                throw new APIError("BAD_REQUEST", {
+                    message: "Email must end with @example.com",
+                });
+            }
+        }),
+    },
 });
 ```
 
-the `ctx` object contains the following properties:
+### Example: Modify Request Context
 
-- `model`: The model that is being called.
-- `action`: the action that is going to be performed between `create`, `update`, `delete`, `findMany`, `findOne`.
-- `data`: the data that is going to be passed to the database call. (this isn't typed so you may need to cast it to the correct type).
-- `where`: the where clause that is going to be passed to the database call. It's an array of objects containing `field`, `value` and optional `operator`.
-- `request`: the request object that originated the call (this may be empty in the case of the server side invoked calls).
+To adjust the request context before proceeding:
 
-From the before hook you can return a new `ctx` object to modify the data that is going to be passed to the database call or false to stop the call.
+```ts
+import { betterAuth } from "better-auth";
 
-If you need to throw custom error you can throw `APIError`.
-
-```ts title="auth.ts"
-import { betterAuth, APIError } from "betterauth";
-
-const auth = betterAuth({
+export const auth = betterAuth({
     hooks: {
-        database: {
-            before: (ctx)=>{
-                if(ctx.action === "create" && ctx.model === "user"){
-                    if(ctx.data.password.length < 8){
-                        throw new APIError("BAD_REQUEST", {
-                            message: "Password must be at least 8 characters long"
-                        });
-                    }
-                }
+        before: createAuthMiddleware(async (ctx) => {
+            if (ctx.path === "/sign-up/email") {
+                return {
+                    ...ctx,
+                    body: {
+                        ...ctx.body,
+                        name: "John Doe",
+                    },
+                };
             }
-        }
-    }
+        }),
+    },
 });
 ```
 
+## After Hooks
 
-### `after`
+**After hooks** run *after* an endpoint is executed. Use them to modify responses.
 
-The `after` hook is called after a database call is made. This is mostly similar to the `before` hook but it's called after the database call is made and you can't stop the call.
+### Example: Add a Custom Header
 
-```ts title="auth.ts"
-import { betterAuth } from "betterauth";
+This hook adds a custom header to the response:
 
-const auth = betterAuth({
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
     hooks: {
-        database: {
-            after: (ctx)=>{
-
+        after: createAuthMiddleware(async (ctx) => {
+            ctx.response.headers.set("X-Custom-Header", "Hello World");
+            return {
+                responseHeader: ctx.responseHeader // return the updated response headers
             }
-        }
-    }
+        }),
+    },
 });
 ```
 
-the `ctx` object on top of the properties from the `before` hook also contains the following properties:
-- `result`: the result of the database call.
+## Context Object
+
+The `ctx` object provides:
+
+- **Path:** `ctx.path` to get the current endpoint path.
+- **Body:** `ctx.body` for parsed request body (available for POST requests).
+- **Headers:** `ctx.headers` to access request headers.
+- **Request:** `ctx.request` to access the request object (may not exist in server-only endpoints).
+- **Query Parameters:** `ctx.query` to access query parameters.
+
+and more.
+
+### JSON Responses
+
+Use `ctx.json` to send JSON responses:
+
+```ts
+const hook = createAuthMiddleware(async (ctx) => {
+    return ctx.json({
+        message: "Hello World",
+    });
+});
+```
+
+### Redirects
+
+Use `ctx.redirect` to redirect users:
+
+```ts
+const hook = createAuthMiddleware(async (ctx) => {
+    throw ctx.redirect("/sign-up/name");
+});
+```
+
+### Cookies
+
+- Set cookies: `ctx.setCookies` or `ctx.setSignedCookie`.
+- Get cookies: `ctx.getCookies` or `ctx.getSignedCookies`.
+
+Example:
+
+```ts
+const hook = createAuthMiddleware(async (ctx) => {
+    ctx.setCookies("my-cookie", "value");
+    await ctx.setSignedCookie("my-signed-cookie", "value", ctx.context.secret, {
+        maxAge: 1000,
+    });
+
+    const cookie = ctx.getCookies("my-cookie");
+    const signedCookie = await ctx.getSignedCookies("my-signed-cookie");
+});
+```
+
+### Predefined Auth Cookies
+
+Access BetterAuth’s predefined cookie properties:
+
+```ts
+const hook = createAuthMiddleware(async (ctx) => {
+    const cookieName = ctx.context.authCookies.sessionToken.name;
+});
+```
+
+### Errors
+
+Throw errors with `APIError` for a specific status code and message:
+
+```ts
+const hook = createAuthMiddleware(async (ctx) => {
+    throw new APIError("BAD_REQUEST", {
+        message: "Invalid request",
+    });
+});
+```
+
+## Reusable Hooks
+
+If you need to reuse a hook across multiple endpoints, consider creating a plugin. Learn more in the [Plugins Documentation](/docs/concepts/plugins).
+

@@ -228,7 +228,10 @@ export function getEndpoints<
 				const hookRes = await hook.handler(internalContext);
 				if (hookRes && "context" in hookRes) {
 					// modify the context with the response from the hook
-					internalContext = defu(internalContext, hookRes.context);
+					internalContext = {
+						...internalContext,
+						...hookRes.context,
+					};
 					continue;
 				}
 

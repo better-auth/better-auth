@@ -185,6 +185,16 @@ describe("call", async () => {
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/sign-up/email") {
+					return {
+						context: {
+							body: {
+								...ctx.body,
+								email: "changed@email.com",
+							},
+						},
+					};
+				}
 				if (ctx.query?.testBeforeGlobal) {
 					return ctx.json({ before: "global" });
 				}
@@ -378,6 +388,17 @@ describe("call", async () => {
 		expect(response).toMatchObject({
 			after: "global",
 		});
+	});
+
+	it("global before hook should change the context", async (ctx) => {
+		const response = await api.signUpEmail({
+			body: {
+				email: "my-email@test.com",
+				password: "password",
+				name: "test",
+			},
+		});
+		expect(response.email).toBe("changed@email.com");
 	});
 
 	it("should fetch using a client", async () => {
