@@ -435,7 +435,7 @@ describe("cookie cache", async () => {
 	};
 	const adapter = memoryAdapter(database);
 
-	const { client, testUser, auth } = await getTestInstance({
+	const { client, testUser, auth, cookieSetter } = await getTestInstance({
 		database: adapter,
 		session: {
 			cookieCache: {
@@ -498,4 +498,33 @@ describe("cookie cache", async () => {
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(3);
 	});
+
+	it("should reset cache when expires", async()=>{
+		expect(fn).toHaveBeenCalledTimes(3);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context)
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5);
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context)
+				},
+			},
+		});
+		expect(fn).toHaveBeenCalledTimes(5);
+	})
 });
