@@ -21,6 +21,16 @@
       "require": "./dist/client.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
