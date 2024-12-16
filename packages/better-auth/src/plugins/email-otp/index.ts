@@ -314,6 +314,29 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							emailVerified: true,
 						},
 					);
+
+					if (
+						ctx.context.options.emailVerification?.autoSignInAfterVerification
+					) {
+						const session = await ctx.context.internalAdapter.createSession(
+							updatedUser.id,
+							ctx.request,
+						);
+						await setSessionCookie(ctx, {
+							session,
+							user: updatedUser,
+						});
+						return ctx.json({
+							id: updatedUser.id,
+							email: updatedUser.email,
+							emailVerified: updatedUser.emailVerified,
+							name: updatedUser.name,
+							image: updatedUser.image,
+							createdAt: updatedUser.createdAt,
+							updatedAt: updatedUser.updatedAt,
+						});
+					}
+
 					return ctx.json({
 						id: updatedUser.id,
 						email: updatedUser.email,
@@ -595,7 +618,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						if (!response?.user) {
 							return;
 						}
-						if (response.user.email && response.user.emailVerified === false) {
+						if (response.user.email && !response.user.emailVerified) {
 							const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
