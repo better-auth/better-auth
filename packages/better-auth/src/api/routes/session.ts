@@ -297,9 +297,9 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const sessionAge = session.session.createdAt.valueOf();
+	const lastUpdated = session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
 	const now = Date.now();
-	const isFresh = sessionAge + freshAge * 1000 > now;
+	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
 		throw new APIError("FORBIDDEN", {
 			message: "Session is not fresh",
