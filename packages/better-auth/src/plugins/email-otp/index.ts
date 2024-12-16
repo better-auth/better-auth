@@ -595,7 +595,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						if (!response?.user) {
 							return;
 						}
-						if (response.user.email && response.user.emailVerified === false) {
+						if (response.user.email && !response.user.emailVerified) {
 							const otp = generateRandomString(opts.otpLength, alphabet("0-9"));
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
