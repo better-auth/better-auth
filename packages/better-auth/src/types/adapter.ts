@@ -26,14 +26,11 @@ export type Where = {
  */
 export interface Adapter {
 	id: string;
-	create: <T extends Record<string, any>, R = T>(
-		data: {
-			model: string;
-			data: T;
-			select?: string[];
-		},
-		ctx?: GenericEndpointContext,
-	) => Promise<R>;
+	create: <T extends Record<string, any>, R = T>(data: {
+		model: string;
+		data: T;
+		select?: string[];
+	}) => Promise<R>;
 	findOne: <T>(data: {
 		model: string;
 		where: Where[];
