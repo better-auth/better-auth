@@ -201,7 +201,7 @@ export const DocsNavBarMobile = () => {
 												</div>
 											) : (
 												<div className="flex items-center gap-2">
-													<child.icon />
+													<child.icon className="w-5 h-5"/>
 													{child.title}
 												</div>
 											)}
