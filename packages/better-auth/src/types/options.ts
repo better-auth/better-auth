@@ -569,10 +569,8 @@ export interface BetterAuthOptions {
 		/**
 		 * Custom generateId function.
 		 *
-		 * If not provided, nanoid will be used.
+		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @default nanoid
 		 */
 		generateId?:
 			| ((options: {
