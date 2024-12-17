@@ -872,6 +872,30 @@ export const contents: Content[] = [
 				href: "/docs/plugins/organization",
 			},
 			{
+				title: "Enterprise",
+				group: true,
+				href: "/docs/plugins/1st-party-plugins",
+				icon: () => <LucideAArrowDown className="w-4 h-4" />,
+			},
+			{
+				title: "OIDC Provider",
+				href: "/docs/plugins/oidc-provider",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="M16 2a8 8 0 1 0 8 8a8.01 8.01 0 0 0-8-8m5.91 7h-2.438a15.3 15.3 0 0 0-.791-4.36A6.01 6.01 0 0 1 21.91 9m-5.888 6.999h-.008c-.38-.12-1.309-1.821-1.479-4.999h2.93c-.17 3.176-1.094 4.877-1.443 4.999M14.535 9c.17-3.176 1.094-4.877 1.443-4.999h.008c.38.12 1.309 1.821 1.479 4.999zM13.32 4.64A15.3 15.3 0 0 0 12.528 9H10.09a6.01 6.01 0 0 1 3.23-4.36M10.09 11h2.437a15.3 15.3 0 0 0 .792 4.36A6.01 6.01 0 0 1 10.09 11m8.59 4.36a15.3 15.3 0 0 0 .792-4.36h2.438a6.01 6.01 0 0 1-3.23 4.36M28 30H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M4 22v6h24v-6z"
+						></path>
+						<circle cx="7" cy="25" r="1" fill="currentColor"></circle>
+					</svg>
+				),
+			},
+			{
 				title: "Utility",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
@@ -911,9 +935,13 @@ export const contents: Content[] = [
 					>
 						<path
 							fill="currentColor"
-							d="M16 2a8 8 0 1 0 8 8a8.01 8.01 0 0 0-8-8m5.91 7h-2.438a15.3 15.3 0 0 0-.791-4.36A6.01 6.01 0 0 1 21.91 9m-5.888 6.999h-.008c-.38-.12-1.309-1.821-1.479-4.999h2.93c-.17 3.176-1.094 4.877-1.443 4.999M14.535 9c.17-3.176 1.094-4.877 1.443-4.999h.008c.38.12 1.309 1.821 1.479 4.999zM13.32 4.64A15.3 15.3 0 0 0 12.528 9H10.09a6.01 6.01 0 0 1 3.23-4.36M10.09 11h2.437a15.3 15.3 0 0 0 .792 4.36A6.01 6.01 0 0 1 10.09 11m8.59 4.36a15.3 15.3 0 0 0 .792-4.36h2.438a6.01 6.01 0 0 1-3.23 4.36M28 30H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M4 22v6h24v-6z"
+							d="M6 30h20a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2m0-8h20v6H6Z"
 						></path>
-						<circle cx="7" cy="25" r="1" fill="currentColor"></circle>
+						<circle cx="9" cy="25" r="1" fill="currentColor"></circle>
+						<path
+							fill="currentColor"
+							d="m26 2l-1.41 1.41L27.17 6h-4.855A6.984 6.984 0 0 0 9.08 10H4.83l2.58-2.59L6 6l-5 5l5 5l1.41-1.41L4.83 12h4.855A6.984 6.984 0 0 0 22.92 8h4.25l-2.58 2.59L26 12l5-5Zm-5 7a4.983 4.983 0 0 1-8.974 3H16v-2h-4.899a4.985 4.985 0 0 1 8.874-4H16v2h4.899A5 5 0 0 1 21 9"
+						></path>
 					</svg>
 				),
 			},

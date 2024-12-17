@@ -1,0 +1,88 @@
+---
+title: OIDC Provider
+description: Open ID Connect plugin for Better Auth that allows you to have your own OIDC provider.
+---
+
+The **OIDC Provider Plugin** allows you to build and manage your own OpenID Connect (OIDC) provider, giving you full control over user authentication without relying on third-party providers like Okta or Azure AD. It also enables other services to authenticate users through your OIDC provider.
+
+**Key Features**:
+
+- **Client Registration**: Register clients to authenticate with your OIDC provider.
+- **Authorization Code Flow**: Support the Authorization Code Flow.
+- **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens.
+- **Refresh Tokens**: Issue refresh tokens and handles access token renewal using the `refresh_token` grant.  
+- **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
+- **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.  
+
+<Callout>
+This is an enterprise plugin, but it does not require an additional license and it's completely free. The "enterprise" tag simply indicates that it is a more advanced plugin.
+</Callout>
+
+<Steps>
+    <Step>
+        ### Mount the Plugin
+
+        Add the OIDC plugin to your auth config. See [OIDC Configuration](#oidc-configuration) on how to configure the plugin.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { oidc } from "better-auth/plugins/oidc";
+
+        const auth = betterAuth({
+            plugins: [oidc({
+                // Your OIDC configuration
+            })]
+        })
+        ```
+    </Step>
+
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+
+    <Step>
+        ### Add the client plugin
+
+        Add the OIDC client plugin to your auth client config.
+
+        ```ts
+        import { createAuthClient } from "better-auth/client";
+        import { oidcClient } from "better-auth/client/plugins"
+        const authClient = createAuthClient({
+            plugins: [oidcClient({
+                // Your OIDC configuration
+            })]
+        })
+        ```
+    </Step>
+</Steps>
+
+## OIDC Configuration
+
+### Metadata
+
+The metadata object contains information about your OIDC provider. This includes the issuer, authorization endpoint, token endpoint, JWKS URI, and other details.
+
+- **issuer**: The URL of your OIDC provider. This is used to validate the `iss` claim in the ID token. Defaults to the base URL of your application. (e.g. "https://example.com") can be configured with the `issuer` option.
+
+- **authorizationEndpoint**: The URL of the authorization endpoint where clients redirect users to authenticate and authorize access. By default, this is set to `/authorize`. If the base path for Better Auth is `/api/auth`, the authorization endpoint will resolve to `${baseURL}/api/auth/authorize`. You can customize this using the `authorizationEndpoint` option. Note that this applies after the base URL and the path of your Better Auth server.
+
+- **tokenEndpoint**: The URL of the token endpoint where clients exchange the authorization code for tokens. By default, this is set to `/token`.
+
+- **userinfoEndpoint**: The URL of the userinfo endpoint where clients can retrieve user information. By default, this is set to `/userinfo`.
