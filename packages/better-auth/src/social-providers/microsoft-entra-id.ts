@@ -2,8 +2,8 @@ import type { ProviderOptions } from "../oauth2";
 import { validateAuthorizationCode, createAuthorizationURL } from "../oauth2";
 import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { parseJWT } from "oslo/jwt";
 import { logger } from "../utils/logger";
+import { decodeJwt } from "jose";
 
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	sub: string;
@@ -67,7 +67,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = parseJWT(token.idToken)?.payload as MicrosoftEntraIDProfile;
+			const user = decodeJwt(token.idToken)?.payload as MicrosoftEntraIDProfile;
 			const profilePhotoSize = options.profilePhotoSize || 48;
 			await betterFetch<ArrayBuffer>(
 				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,

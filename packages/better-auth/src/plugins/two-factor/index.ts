@@ -1,46 +1,31 @@
-import { alphabet, generateRandomString } from "../../crypto/random";
+import { generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import { hs256, symmetricEncrypt } from "../../crypto";
+import { symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import { otp2fa } from "./otp";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { mergeSchema, type Session } from "../../db/schema";
+import { mergeSchema } from "../../db/schema";
 import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
 import { validatePassword } from "../../utils/password";
 import { APIError } from "better-call";
-import { createTOTPKeyURI } from "oslo/otp";
-import { TimeSpan } from "oslo";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { createOTP } from "@better-auth/utils/otp";
+import { base64 } from "@better-auth/utils/base64";
+import { createHMAC } from "@better-auth/utils/hmac";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
-	const totp = totp2fa(
-		{
-			issuer: options?.issuer,
-			...options?.totpOptions,
-		},
-		opts.twoFactorTable,
-	);
-	const backupCode = backupCode2fa(
-		{
-			...options?.backupCodeOptions,
-		},
-		opts.twoFactorTable,
-	);
-	const otp = otp2fa(
-		{
-			...options?.otpOptions,
-		},
-		opts.twoFactorTable,
-	);
+	const totp = totp2fa(options?.totpOptions);
+	const backupCode = backupCode2fa(options?.backupCodeOptions);
+	const otp = otp2fa(options?.otpOptions);
 
 	return {
 		id: "two-factor",
@@ -105,7 +90,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
-					const secret = generateRandomString(16, alphabet("a-z", "0-9", "-"));
+					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secret,
 						data: secret,
@@ -159,15 +144,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							userId: user.id,
 						},
 					});
-					const totpURI = createTOTPKeyURI(
-						options?.issuer || "BetterAuth",
-						user.email,
-						Buffer.from(secret),
-						{
-							digits: options?.totpOptions?.digits || 6,
-							period: new TimeSpan(options?.totpOptions?.period || 30, "s"),
-						},
-					);
+					const totpURI = createOTP(secret, {
+						digits: options?.totpOptions?.digits || 6,
+						period: options?.totpOptions?.period,
+					}).url(options?.issuer || "Better Auth", user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
@@ -282,17 +262,17 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						);
 						if (trustDeviceCookie) {
 							const [token, sessionToken] = trustDeviceCookie.split("!");
-							const expectedToken = await hs256(
-								ctx.context.secret,
-								`${data.user.id}!${sessionToken}`,
-							);
+							const expectedToken = await createHMAC(
+								"SHA-256",
+								"base64urlnopad",
+							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
-								const newToken = await hs256(
-									ctx.context.secret,
-									`${data.user.id}!${data.session.token}`,
-								);
+								const newToken = await createHMAC(
+									"SHA-256",
+									"base64urlnopad",
+								).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 								await ctx.setSignedCookie(
 									trustDeviceCookieName.name,
 									`${newToken}!${data.session.token}`,

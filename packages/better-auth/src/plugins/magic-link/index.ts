@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
-import { alphabet, generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
 interface MagicLinkOptions {
@@ -101,10 +101,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					const verificationToken = generateRandomString(
-						32,
-						alphabet("a-z", "A-Z"),
-					);
+					const verificationToken = generateRandomString(32, "a-z", "A-Z");
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
 						value: email,
