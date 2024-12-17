@@ -1,4 +1,9 @@
-import type { BetterAuthPlugin, InferOptionSchema, User } from "../../types";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	Session,
+	User,
+} from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
@@ -80,9 +85,10 @@ export interface JwtOptions {
 		 * @default 15m
 		 */
 		expirationTime?: number | string | Date;
-		definePayload?: (
-			user: User,
-		) => Promise<Record<string, any>> | Record<string, any>;
+		definePayload?: (session: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		}) => Promise<Record<string, any>> | Record<string, any>;
 	};
 	/**
 	 * Custom schema for the admin plugin
@@ -235,7 +241,7 @@ export const jwt = (options?: JwtOptions) => {
 
 					const payload = !options?.jwt?.definePayload
 						? ctx.context.session.user
-						: await options?.jwt.definePayload(ctx.context.session.user);
+						: await options?.jwt.definePayload(ctx.context.session);
 
 					const jwt = await new SignJWT({
 						...payload,
