@@ -1,7 +1,11 @@
 import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	setCookieCache,
+	setSessionCookie,
+} from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
@@ -232,7 +236,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-
+				await setCookieCache(ctx, session);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
@@ -284,7 +288,6 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
-
 	return {
 		session,
 	};
@@ -301,9 +304,10 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const sessionAge = session.session.createdAt.valueOf();
+	const lastUpdated =
+		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
 	const now = Date.now();
-	const isFresh = sessionAge + freshAge * 1000 > now;
+	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
 		throw new APIError("FORBIDDEN", {
 			message: "Session is not fresh",

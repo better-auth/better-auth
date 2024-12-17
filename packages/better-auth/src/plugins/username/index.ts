@@ -13,6 +13,7 @@ export const username = () => {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
 		EMAIL_NOT_VERIFIED: "email not verified",
 		UNEXPECTED_ERROR: "unexpected error",
+		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
 	};
 	return {
 		id: "username",
@@ -163,9 +164,42 @@ export const username = () => {
 						required: false,
 						unique: true,
 						returned: true,
+						transform: {
+							input(value) {
+								return value?.toString().toLowerCase();
+							},
+						},
 					},
 				},
 			},
+		},
+		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return context.path === "/sign-up/email";
+					},
+					async handler(ctx) {
+						const username = ctx.body.username;
+						if (username) {
+							const user = await ctx.context.adapter.findOne<User>({
+								model: "user",
+								where: [
+									{
+										field: "username",
+										value: username.toLowerCase(),
+									},
+								],
+							});
+							if (user) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+								});
+							}
+						}
+					},
+				},
+			],
 		},
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

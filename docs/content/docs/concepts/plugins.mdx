@@ -453,7 +453,7 @@ Better Auth uses <Link href="https://better-fetch.vercel.app"> Better fetch </Li
 ```ts title="client-plugin.ts"
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from "./plugin";
-import { BetteFetchOptions } from "better-fetch";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 const myPluginClient = {
     id: "my-plugin",
@@ -462,12 +462,12 @@ const myPluginClient = {
         return {
             myCustomAction: async (data: {
                 foo: string,
-            }, fetchOptions?: BetteFetchOptions)=>{
+            }, fetchOptions?: BetterFetchOption)=>{
                 const res = $fetch("/custom/action", {
                     method: "POST",
                     body: {
                         foo: data.foo
-                    }
+                    },
                     ...fetchOptions
                 })
                 return res

@@ -92,6 +92,46 @@ export function getCookies(options: BetterAuthOptions) {
 
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
 
+export async function setCookieCache(
+	ctx: GenericEndpointContext,
+	session: {
+		session: Session & Record<string, any>;
+		user: User;
+	},
+) {
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cookieCache?.enabled;
+
+	if (shouldStoreSessionDataInCookie) {
+		const data = base64Url.encode(
+			JSON.stringify({
+				session: session,
+				expiresAt: getDate(
+					ctx.context.authCookies.sessionData.options.maxAge || 60,
+					"sec",
+				).getTime(),
+				signature: await createHMAC("SHA-256").sign(
+					ctx.context.secret,
+					JSON.stringify(session),
+				),
+			}),
+			{
+				padding: false,
+			},
+		);
+		if (data.length > 4093) {
+			throw new BetterAuthError(
+				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			);
+		}
+		ctx.setCookie(
+			ctx.context.authCookies.sessionData.name,
+			data,
+			ctx.context.authCookies.sessionData.options,
+		);
+	}
+}
+
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
@@ -124,30 +164,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
-
-	const shouldStoreSessionDataInCookie =
-		ctx.context.options.session?.cookieCache?.enabled;
-	shouldStoreSessionDataInCookie &&
-		ctx.setCookie(
-			ctx.context.authCookies.sessionData.name,
-			base64Url.encode(
-				JSON.stringify({
-					session: session,
-					expiresAt: getDate(
-						ctx.context.authCookies.sessionData.options.maxAge || 60,
-						"sec",
-					).getTime(),
-					signature: await createHMAC("SHA-256", "base64urlnopad").sign(
-						ctx.context.secret,
-						JSON.stringify(session),
-					),
-				}),
-				{
-					padding: false,
-				},
-			),
-			ctx.context.authCookies.sessionData.options,
-		);
+	await setCookieCache(ctx, session);
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage

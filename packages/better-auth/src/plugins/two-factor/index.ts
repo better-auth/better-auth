@@ -327,3 +327,4 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 };
 
 export * from "./client";
+export * from "./types";

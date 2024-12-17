@@ -88,10 +88,10 @@ const data = await authClient.signIn.username({
 
 ### Update username
 
-To update the username of a user, you can use the `user.update` function provided by the client.
+To update the username of a user, you can use the `updateUser` function provided by the client.
 
 ```ts title="auth-client.ts"
-const data = await authClient.user.update({
+const data = await authClient.updateUser({
     username: "new-username"
 })
 ```

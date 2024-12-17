@@ -33,6 +33,12 @@ export const signInSocial = createAuthEndpoint(
 				})
 				.optional(),
 			/**
+			 * callback url to redirect if the user is newly registered.
+			 *
+			 * useful if you have different routes for existing users and new users
+			 */
+			newUserCallbackURL: z.string().optional(),
+			/**
 			 * Callback url to redirect to if an error happens
 			 *
 			 * If it's initiated from the client sdk this defaults to

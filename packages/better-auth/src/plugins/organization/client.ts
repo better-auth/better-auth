@@ -151,6 +151,9 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				activeMember,
 			};
 		},
+		pathMethods: {
+			"/organization/get-full-organization": "GET",
+		},
 		atomListeners: [
 			{
 				matcher(path) {

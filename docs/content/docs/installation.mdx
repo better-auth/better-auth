@@ -32,9 +32,7 @@ BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL (optional)**
-
-Not required if the `baseURL` property is set in the createAuthClient function described below.
+2. **Set Base URL**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
@@ -178,7 +176,11 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     ### Create Database Tables
     Better Auth includes a CLI tool to help manage the schema required by the library.
 
-    - **Generate**: This command generates an ORM schema or SQL migration file if you're using Kysely. You can also directly apply the migration using the CLI if you're using Kysely.
+    - **Generate**: This command generates an ORM schema or SQL migration file.
+
+    <Callout>
+    If you're using Kysely, you can apply the migration directly with `migrate` command below. Use `generate` only if you plan to apply the migration manually.
+    </Callout>
 
     ```bash title="Terminal"
     npx @better-auth/cli generate
@@ -234,7 +236,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack", "expo"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file

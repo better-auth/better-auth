@@ -83,35 +83,69 @@ describe("Social Providers", async () => {
 	let state = "";
 
 	const headers = new Headers();
-	it("should be able to add social providers", async () => {
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
+	describe("signin", async () => {
+		it("should be able to add social providers", async () => {
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				newUserCallbackURL: "/welcome",
+			});
+			expect(signInRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		});
-		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
-		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-	});
 
-	it("should be able to sign in with social providers", async () => {
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test",
-			},
-			method: "GET",
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toBeDefined();
-				expect(location).toContain("/callback");
-				const cookies = parseSetCookieHeader(
-					context.response.headers.get("set-cookie") || "",
-				);
-				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
-			},
+		it("should be able to sign in with social providers", async () => {
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/welcome");
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+				},
+			});
+		});
+
+		it("should use callback url if the user is already registered", async () => {
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				newUserCallbackURL: "/welcome",
+			});
+			expect(signInRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+				},
+			});
 		});
 	});
 

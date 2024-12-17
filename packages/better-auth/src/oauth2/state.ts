@@ -26,6 +26,7 @@ export async function generateState(
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body?.errorCallbackURL || c.query?.currentURL,
+		newUserURL: c.body?.newUserCallbackURL,
 		link,
 		/**
 		 * This is the actual expiry time of the state
@@ -69,6 +70,7 @@ export async function parseState(c: GenericEndpointContext) {
 			callbackURL: z.string(),
 			codeVerifier: z.string(),
 			errorURL: z.string().optional(),
+			newUserURL: z.string().optional(),
 			expiresAt: z.number(),
 			link: z
 				.object({
@@ -91,15 +93,6 @@ export async function parseState(c: GenericEndpointContext) {
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);
 	}
-
 	await c.context.internalAdapter.deleteVerificationValue(data.id);
-	return parsedData as {
-		callbackURL: string;
-		codeVerifier: string;
-		link?: {
-			email: string;
-			userId: string;
-		};
-		errorURL: string;
-	};
+	return parsedData;
 }
