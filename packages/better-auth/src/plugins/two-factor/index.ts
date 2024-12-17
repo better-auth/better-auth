@@ -136,14 +136,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						],
 					});
 
-					await ctx.context.adapter.create(
-						{
-							model: opts.twoFactorTable,
-							data: {
-								secret: encryptedSecret,
-								backupCodes: backupCodes.encryptedBackupCodes,
-								userId: user.id,
-							},
+					await ctx.context.adapter.create({
+						model: opts.twoFactorTable,
+						data: {
+							secret: encryptedSecret,
+							backupCodes: backupCodes.encryptedBackupCodes,
+							userId: user.id,
 						},
 					});
 					const totpURI = createOTP(secret, {
