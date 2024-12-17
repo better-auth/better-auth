@@ -16,7 +16,7 @@ import type {
 	User,
 } from "../../types";
 import { parseUserInput } from "../../db/schema";
-import { alphabet, generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
@@ -346,7 +346,7 @@ export const deleteUser = createAuthEndpoint(
 		const session = ctx.context.session;
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
-			const token = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
+			const token = generateRandomString(32, "0-9", "a-z");
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: session.user.id,
 				identifier: `delete-account-${token}`,

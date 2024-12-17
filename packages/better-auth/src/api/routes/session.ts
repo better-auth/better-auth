@@ -1,7 +1,11 @@
 import { APIError } from "better-call";
 import { createAuthEndpoint, createAuthMiddleware } from "../call";
 import { getDate } from "../../utils/date";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	setCookieCache,
+	setSessionCookie,
+} from "../../cookies";
 import { z } from "zod";
 import type {
 	BetterAuthOptions,
@@ -12,9 +16,11 @@ import type {
 	Session,
 	User,
 } from "../../types";
-import { hmac } from "../../crypto/hash";
 import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { base64 } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -103,14 +109,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							};
 							signature: string;
 							expiresAt: number;
-						}>(Buffer.from(sessionDataCookie, "base64").toString())
+						}>(binary.decode(base64.decode(sessionDataCookie)))
 					: null;
+
 				if (sessionDataPayload) {
-					const isValid = await hmac.verify({
-						value: JSON.stringify(sessionDataPayload.session),
-						signature: sessionDataPayload?.signature,
-						secret: ctx.context.secret,
-					});
+					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+						ctx.context.secret,
+						JSON.stringify(sessionDataPayload.session),
+						sessionDataPayload.signature,
+					);
 					if (!isValid) {
 						deleteSessionCookie(ctx);
 						return ctx.json(null);
@@ -229,7 +236,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: InferUser<Option>;
 					});
 				}
-
+				await setCookieCache(ctx, session);
 				return ctx.json(
 					session as unknown as {
 						session: InferSession<Option>;
@@ -281,7 +288,6 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
-
 	return {
 		session,
 	};
@@ -298,9 +304,10 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const sessionAge = session.session.createdAt.valueOf();
+	const lastUpdated =
+		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
 	const now = Date.now();
-	const isFresh = sessionAge + freshAge * 1000 > now;
+	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
 		throw new APIError("FORBIDDEN", {
 			message: "Session is not fresh",

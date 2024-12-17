@@ -1,11 +1,12 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../../api/call";
-import { hs256 } from "../../crypto";
 import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { base64 } from "@better-auth/utils/base64";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
@@ -65,7 +66,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						 * create a token that will be used to
 						 * verify the device
 						 */
-						const token = await hs256(
+						const token = await createHMAC("SHA-256", "base64urlnopad").sign(
 							ctx.context.secret,
 							`${user.id}!${session.token}`,
 						);

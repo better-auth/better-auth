@@ -30,6 +30,7 @@ export async function handleOAuthUserInfo(
 			);
 		});
 	let user = dbUser?.user;
+	let isRegister = !user;
 
 	if (dbUser) {
 		const hasBeenLinked = dbUser.accounts.find(
@@ -141,6 +142,7 @@ export async function handleOAuthUserInfo(
 		return {
 			error: "unable to create user",
 			data: null,
+			isRegister: false,
 		};
 	}
 
@@ -152,6 +154,7 @@ export async function handleOAuthUserInfo(
 		return {
 			error: "unable to create session",
 			data: null,
+			isRegister: false,
 		};
 	}
 	return {
@@ -160,5 +163,6 @@ export async function handleOAuthUserInfo(
 			user,
 		},
 		error: null,
+		isRegister,
 	};
 }

@@ -4,9 +4,9 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { anonymousClient } from "./client";
 import type { GoogleProfile } from "../../social-providers";
-import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
+import { signJWT } from "../../crypto/jwt";
 
 vi.mock("../../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -32,11 +32,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 					given_name: "First",
 					family_name: "Last",
 				};
-				const testIdToken = await createJWT(
-					"HS256",
-					Buffer.from(DEFAULT_SECRET),
-					data,
-				);
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
 				const tokens = getOAuth2Tokens({
 					access_token: "test",
 					refresh_token: "test",

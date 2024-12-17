@@ -4,6 +4,7 @@ import {
 	type ZodLiteral,
 	type ZodObject,
 	type ZodOptional,
+	ZodString,
 	z,
 } from "zod";
 import type { User } from "../../db/schema";
@@ -253,6 +254,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
+						organizationId: z.string().optional(),
 						permission: z.record(z.string(), z.array(z.string())),
 					}) as unknown as ZodObject<{
 						permission: ZodObject<{
@@ -261,6 +263,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ZodArray<ZodLiteral<Statements[key][number]>>
 							>;
 						}>;
+						organizationId: ZodOptional<ZodString>;
 					}>,
 					use: [orgSessionMiddleware],
 					metadata: {
@@ -307,7 +310,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					if (!ctx.context.session.session.activeOrganizationId) {
+					const activeOrganizationId =
+						ctx.body.organizationId ||
+						ctx.context.session.session.activeOrganizationId;
+					if (!activeOrganizationId) {
 						throw new APIError("BAD_REQUEST", {
 							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
@@ -315,8 +321,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					const adapter = getOrgAdapter(ctx.context);
 					const member = await adapter.findMemberByOrgId({
 						userId: ctx.context.session.user.id,
-						organizationId:
-							ctx.context.session.session.activeOrganizationId || "",
+						organizationId: activeOrganizationId,
 					});
 					if (!member) {
 						throw new APIError("UNAUTHORIZED", {

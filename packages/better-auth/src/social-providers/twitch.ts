@@ -1,7 +1,7 @@
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { logger } from "../utils";
-import { parseJWT } from "oslo/jwt";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { decodeJwt } from "jose";
 
 export interface TwitchProfile {
 	/**
@@ -64,7 +64,7 @@ export const twitch = (options: TwitchOptions) => {
 				logger.error("No idToken found in token");
 				return null;
 			}
-			const profile = parseJWT(idToken)?.payload as TwitchProfile;
+			const profile = decodeJwt(idToken)?.payload as TwitchProfile;
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {

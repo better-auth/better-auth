@@ -1,9 +1,9 @@
-import { parseJWT } from "oslo/jwt";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { BetterAuthError } from "../error";
 import { logger } from "../utils/logger";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
 
 export interface GoogleProfile {
 	aud: string;
@@ -109,7 +109,7 @@ export const google = (options: GoogleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = parseJWT(token.idToken)?.payload as GoogleProfile;
+			const user = decodeJwt(token.idToken) as GoogleProfile;
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {

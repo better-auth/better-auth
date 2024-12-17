@@ -7,9 +7,8 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { TimeSpan } from "oslo";
-import { alphabet, generateRandomString } from "../../../crypto";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { generateRandomString } from "../../../crypto";
 
 export interface OTPOptions {
 	/**
@@ -53,12 +52,13 @@ export interface OTPOptions {
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
+export const otp2fa = (options?: OTPOptions) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
-		period: new TimeSpan(options?.period || 3, "m"),
+		period: (options?.period || 3) * 60 * 1000,
 	};
+	const twoFactorTable = "twoFactor";
 	/**
 	 * Generate OTP and send it to the user.
 	 */
@@ -115,11 +115,11 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
 				});
 			}
-			const code = generateRandomString(opts.digits, alphabet("0-9"));
+			const code = generateRandomString(opts.digits, "0-9");
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: code,
 				identifier: `2fa-otp-${user.id}`,
-				expiresAt: new Date(Date.now() + opts.period.milliseconds()),
+				expiresAt: new Date(Date.now() + opts.period),
 			});
 			await options.sendOTP({ user, otp: code }, ctx.request);
 			return ctx.json({ status: true });
@@ -185,6 +185,7 @@ export const otp2fa = (options: OTPOptions, twoFactorTable: string) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${user.id}`,
 				);
+
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,

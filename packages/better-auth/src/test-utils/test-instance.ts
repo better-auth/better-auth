@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { alphabet, generateRandomString } from "../crypto/random";
+import { generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
@@ -34,7 +34,7 @@ export async function getTestInstance<
 	 * create db folder if not exists
 	 */
 	await fs.mkdir(".db", { recursive: true });
-	const randomStr = generateRandomString(4, alphabet("a-z"));
+	const randomStr = generateRandomString(4, "a-z");
 	const dbName = `./.db/test-${randomStr}.db`;
 
 	const postgres = new Kysely({
@@ -114,7 +114,7 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		await auth.api.signUpEmail({
+		const res = await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
@@ -167,7 +167,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data } = await client.signIn.email({
+		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 

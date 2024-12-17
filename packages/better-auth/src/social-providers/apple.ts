@@ -1,7 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { parseJWT } from "oslo/jwt";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
@@ -79,7 +78,7 @@ export const apple = (options: AppleOptions) => {
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
 				}&response_type=code&redirect_uri=${
-					redirectURI || options.redirectURI
+					options.redirectURI || redirectURI
 				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
 		},
@@ -126,7 +125,7 @@ export const apple = (options: AppleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const profile = parseJWT(token.idToken)?.payload as AppleProfile | null;
+			const profile = decodeJwt(token.idToken)?.payload as AppleProfile | null;
 			if (!profile) {
 				return null;
 			}
