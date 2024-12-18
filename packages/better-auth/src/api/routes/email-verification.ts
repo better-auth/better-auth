@@ -1,5 +1,3 @@
-import { TimeSpan } from "oslo";
-import { createJWT, validateJWT, type JWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
@@ -7,6 +5,8 @@ import { getSessionFromCtx } from "./session";
 import { setSessionCookie } from "../../cookies";
 import type { GenericEndpointContext, User } from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
+import { signJWT } from "../../crypto/jwt";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -16,20 +16,12 @@ export async function createEmailVerificationToken(
 	 */
 	updateTo?: string,
 ) {
-	const token = await createJWT(
-		"HS256",
-		Buffer.from(secret),
+	const token = await signJWT(
 		{
 			email: email.toLowerCase(),
 			updateTo,
 		},
-		{
-			expiresIn: new TimeSpan(1, "h"),
-			issuer: "better-auth",
-			subject: "verify-email",
-			audiences: [email],
-			includeIssuedTimestamp: true,
-		},
+		secret,
 	);
 	return token;
 }
@@ -208,9 +200,15 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 		const { token } = ctx.query;
-		let jwt: JWT;
+		let jwt: JWTVerifyResult<JWTPayload>;
 		try {
-			jwt = await validateJWT("HS256", Buffer.from(ctx.context.secret), token);
+			jwt = await jwtVerify(
+				token,
+				new TextEncoder().encode(ctx.context.secret),
+				{
+					algorithms: ["HS256"],
+				},
+			);
 		} catch (e) {
 			ctx.context.logger.error("Failed to verify email", e);
 			return redirectOnError("invalid_token");

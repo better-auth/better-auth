@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -550,6 +550,7 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
+    "@better-auth/utils": "^0.2.1",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
@@ -560,9 +561,7 @@
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
-    "nanoid": "^5.0.9",
     "nanostores": "^0.11.3",
-    "oslo": "^1.2.1",
     "uncrypto": "^0.1.3",
     "zod": "^3.23.8"
   },

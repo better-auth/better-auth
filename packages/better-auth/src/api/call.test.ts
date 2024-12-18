@@ -95,13 +95,11 @@ describe("call", async () => {
 							});
 						}
 						if (query.testContext) {
+							ctx.query = {
+								message: query.testContext,
+							};
 							return {
-								context: {
-									// change context
-									query: {
-										message: query.testContext,
-									},
-								},
+								context: ctx,
 							};
 						}
 					}),

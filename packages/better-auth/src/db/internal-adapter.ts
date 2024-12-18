@@ -57,32 +57,27 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			try {
-				const createdUser = await createWithHooks(
-					{
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
-					"user",
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser.id || user.id,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			} catch (e) {
-				console.log(e);
-				return null;
-			}
+			const createdUser = await createWithHooks(
+				{
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...user,
+				},
+				"user",
+			);
+			const createdAccount = await createWithHooks(
+				{
+					...account,
+					userId: createdUser.id || user.id,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				"account",
+			);
+			return {
+				user: createdUser,
+				account: createdAccount,
+			};
 		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &

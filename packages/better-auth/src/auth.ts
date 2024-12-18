@@ -55,7 +55,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				user: PrettifyDeep<InferUser<O>>;
 			};
 		} & InferPluginTypes<O>,
-		$ErrorCodes: {
+		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
 		} as InferPluginErrorCodes<O> & typeof BASE_ERROR_CODES,

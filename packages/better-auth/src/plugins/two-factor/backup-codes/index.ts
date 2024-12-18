@@ -1,4 +1,4 @@
-import { alphabet, generateRandomString } from "../../../crypto/random";
+import { generateRandomString } from "../../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
@@ -32,9 +32,7 @@ export interface BackupCodeOptions {
 function generateBackupCodesFn(options?: BackupCodeOptions) {
 	return Array.from({ length: options?.amount ?? 10 })
 		.fill(null)
-		.map(() =>
-			generateRandomString(options?.length ?? 10, alphabet("a-z", "0-9")),
-		)
+		.map(() => generateRandomString(options?.length ?? 10, "a-z", "0-9", "A-Z"))
 		.map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 }
 
@@ -88,10 +86,8 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 	return null;
 }
 
-export const backupCode2fa = (
-	options: BackupCodeOptions,
-	twoFactorTable: string,
-) => {
+export const backupCode2fa = (options?: BackupCodeOptions) => {
+	const twoFactorTable = "twoFactor";
 	return {
 		id: "backup_code",
 		endpoints: {

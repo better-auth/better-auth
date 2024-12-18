@@ -5,7 +5,7 @@ export type HookEndpointContext<C extends Record<string, any> = {}> =
 	ContextTools & {
 		context: AuthContext &
 			C & {
-				returned: APIError | Response | Record<string, any>;
+				returned?: APIError | Response | Record<string, any>;
 			};
 	} & {
 		body: any;

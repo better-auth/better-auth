@@ -1,7 +1,7 @@
-import { decodeHex, encodeHex } from "oslo/encoding";
 import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
 import { getRandomValues } from "uncrypto";
+import { hex } from "@better-auth/utils/hex";
 
 const config = {
 	N: 16384,
@@ -21,9 +21,9 @@ async function generateKey(password: string, salt: string) {
 }
 
 export const hashPassword = async (password: string) => {
-	const salt = encodeHex(getRandomValues(new Uint8Array(16)));
+	const salt = hex.encode(getRandomValues(new Uint8Array(16)));
 	const key = await generateKey(password, salt);
-	return `${salt}:${encodeHex(key)}`;
+	return `${salt}:${hex.encode(key)}`;
 };
 
 export const verifyPassword = async ({
@@ -32,5 +32,5 @@ export const verifyPassword = async ({
 }: { hash: string; password: string }) => {
 	const [salt, key] = hash.split(":");
 	const targetKey = await generateKey(password, salt!);
-	return constantTimeEqual(targetKey, decodeHex(key!));
+	return constantTimeEqual(targetKey, new Uint8Array(Buffer.from(key, "hex")));
 };

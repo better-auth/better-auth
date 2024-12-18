@@ -10,7 +10,7 @@ import type {
 } from "@simplewebauthn/types";
 import type { Session } from "inspector";
 import type { User } from "../../db/schema";
-import type { passkey as passkeyPl, Passkey } from "../../plugins";
+import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";

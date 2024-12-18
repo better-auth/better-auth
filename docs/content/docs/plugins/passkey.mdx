@@ -24,7 +24,7 @@ The passkey plugin implementation is powered by [simple-web-authn](https://simpl
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { passkey } from "better-auth/plugins"
+        import { passkey } from "better-auth/plugins/passkey" // [!code highlight]
 
         export const auth = betterAuth({
             plugins: [ // [!code highlight]

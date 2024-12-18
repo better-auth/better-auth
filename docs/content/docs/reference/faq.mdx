@@ -3,11 +3,11 @@ title: FAQ
 description: Frequently asked questions about Better-Auth.
 ---
 
-This page contains frequently asked questions about common bugs or questions around Better-Auth.
+This page contains frequently asked questions, common issues, and other helpful information about Better Auth.
 
 <Accordions>
-  <Accordion title="createAuthClient not working">
-  When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on enviroment.
+  <Accordion title="Auth client not working">
+  When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on environment.
 
 If you're using the auth client on react front-end, you'll need to import it from `/react`:
 
@@ -21,29 +21,35 @@ Where as if you're using the auth client in Next.js middelware, server-actions, 
 import { createAuthClient } from "better-auth/client";
 ```
 
-  </Accordion>
-  <Accordion title="getSession not working">
-If you're running `getSession` from the server side (such as in a React Server Component), you need to pass headers for it to work.
+</Accordion>
 
-```ts title="server.ts"
-const result = authClient.getSession({
-  fetchOptions: { headers: yourHeaders },
-});
-```
+<Accordion title="getSession not working">
+If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it. 
 
-If you're using Next.js, you're likely able to access `headers()` from `next/headers`: (<Link href="https://nextjs.org/docs/app/api-reference/functions/headers">Read more here</Link>)
-
-```ts title="server.ts"
+```tsx title="server.tsx"
+import { auth } from "./auth";
 import { headers } from "next/headers";
-//...
-const result = authClient.getSession({
-  fetchOptions: { headers: await headers() },
-});
+
+const session = await auth.api.getSession({
+    headers: await headers()
+})
 ```
 
-    </Accordion>
+if you need to use the auth client on the server for different purposes, you still can pass the request headers to it:
 
-    <Accordion title="Adding custom fields to the users table">
+```tsx title="server.tsx"
+import { authClient } from "./auth-client";
+import { headers } from "next/headers";
+
+const session = await authClient.getSession({
+    fetchOptions:{
+      headers: await headers()
+    }
+})
+```
+</Accordion>
+
+<Accordion title="Adding custom fields to the users table">
 
 Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
 
@@ -67,18 +73,15 @@ If you have UI you need to change based on user or session data, you can use thi
 For all other situations where you shouldn't use `useSession`, is when you should be using `getSession`.
 
 <Callout type="info">
-   `getSession` is avaliable on both server and client auth instances.
+   `getSession` is available on both server and client auth instances.
    Not just the latter.
 </Callout>
 </Accordion>
 
 <Accordion title="Common Typescript Errors">
-A common Typescript error we come across from users of Better Auth is due to their tsconfig.
-
-If you're facing Better-Auth related errors, ensure your tsconfig has `declarations` set to `false`, and `strict` set to `true`.
+If you're facing typescript errors, make sure your tsconfig has `declarations` set to `false`, and `strict` set to `true`.
 
 You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">Typescript docs</Link>.
-
 </Accordion>
 
 </Accordions>

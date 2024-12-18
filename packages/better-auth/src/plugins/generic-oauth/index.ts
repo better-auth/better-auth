@@ -1,6 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { parseJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -13,6 +12,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
+import { decodeJwt } from "jose";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -115,7 +115,7 @@ async function getUserInfo(
 	finalUserInfoUrl: string | undefined,
 ) {
 	if (tokens.idToken) {
-		const decoded = parseJWT(tokens.idToken) as {
+		const decoded = decodeJwt(tokens.idToken) as {
 			payload: {
 				sub: string;
 				email_verified: boolean;

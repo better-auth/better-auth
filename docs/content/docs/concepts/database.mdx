@@ -244,11 +244,15 @@ import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
 const redis = createClient();
+await redis.connect();
 
 export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
-		get: async (key) => await redis.get(key),
+		get: async (key) => {
+			const value = await redis.get(key);
+			return value ? JSON.parse(value) : null;
+		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, JSON.stringify(value), { EX: ttl });
 			else await redis.set(key, JSON.stringify(value));
@@ -625,30 +629,7 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` section of the <Link href="/docs/reference/options">options</Link>.
-
-**Guidelines:**
-
-- IDs need to be in string format.
-- The ID should be unique for each entity type (like users, sessions, etc.).
-- Since the session token acts as the token, it should be both unique and sufficiently long for security.
-
-**Example: Custom ID Generation**
-```ts title="auth.ts" 
-import { betterAuth } from "better-auth";
-import { db } from "./db";
-
-export const auth = betterAuth({
-   database: {
-      db: db
-   },
-   advanced: {
-      generateId: () => {
-         // custom id generation logic
-      }
-   }
-})
-```
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
 
 You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
 
