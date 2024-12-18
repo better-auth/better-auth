@@ -50,29 +50,33 @@ interface OIDCMetadata {
 	 *
 	 * @default `/oauth2/authorize`
 	 */
-	authorizationEndpoint: string;
+	authorization_endpoint: string;
 	/**
 	 * The URL of the token endpoint.
 	 *
 	 * @default `/oauth2/token`
 	 */
-	tokenEndpoint: string;
+	token_endpoint: string;
 	/**
 	 * The URL of the userinfo endpoint.
 	 *
 	 * @default `/oauth2/userinfo`
 	 */
-	userInfoEndpoint: string;
+	userInfo_endpoint: string;
 	/**
 	 * The URL of the jwks_uri endpoint.
 	 *
+	 * For JWKS to work, you must install the `jwt` plugin.
+	 *
+	 * This value is automatically set to `/jwks` if the `jwt` plugin is installed.
+	 *
 	 * @default `/jwks`
 	 */
-	jwksUri?: string;
+	jwks_uri?: string;
 	/**
 	 * The URL of the registration endpoint.
 	 *
 	 * @default `/register`
 	 */
-	registrationEndpoint?: string;
+	registration_endpoint?: string;
 }
