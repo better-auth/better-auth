@@ -1380,9 +1380,6 @@ importers:
       better-call:
         specifier: 0.3.3-beta.4
         version: 0.3.3-beta.4
-      consola:
-        specifier: ^3.2.3
-        version: 3.2.3
       defu:
         specifier: ^6.1.4
         version: 6.1.4
