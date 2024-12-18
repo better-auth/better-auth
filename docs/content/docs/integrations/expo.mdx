@@ -69,13 +69,15 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```ts title="src/auth-client.ts"
         import { createAuthClient } from "better-auth/react";
         import { expoClient } from "@better-auth/expo/client";
+        import * as SecureStore from "expo-secure-store";
 
         const authClient = createAuthClient({
             baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
             plugins: [
                 expoClient({
                     scheme: "myapp",
-                    storagePrefix: "myapp"
+                    storagePrefix: "myapp",
+                    storage: SecureStore,
                 })
             ]
         });
@@ -139,6 +141,16 @@ Expo is a popular framework for building cross-platform apps with React Native. 
 
         module.exports = config;
         ```
+
+        If you can't enable `unstable_enablePackageExports` option, you can use the following workaround when importing Better Auth.
+
+        ```ts title="src/auth-client.ts"
+        const { expoClient } =
+          require("@better-auth/expo/dist/client.js") as typeof import("@better-auth/expo/client")
+        const { createAuthClient } =
+          require("better-auth/dist/react.js") as typeof import("better-auth/react")
+        ```
+
     </Step>
 </Steps>
 
@@ -349,7 +361,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ## Options
 
-**storage**: on native you can pass a storage option to the client to change the storage mechanism. By default, the client will use SecureStore.
+**storage**: on native you need pass a storage option to the client to decide the storage mechanism.
 
 ```ts title="src/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
