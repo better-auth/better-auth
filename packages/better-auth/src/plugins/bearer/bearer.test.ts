@@ -60,4 +60,16 @@ describe("bearer", async () => {
 		});
 		expect(session.data).toBeNull();
 	});
+
+	it("should work if valid cookie is provided even if authorization header isn't valid", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer invalid.token`,
+					cookie: `better-auth.session_token=${token}`,
+				},
+			},
+		});
+		expect(session.data?.session).toBeDefined();
+	});
 });
