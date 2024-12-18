@@ -361,15 +361,15 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ## Options
 
-**storage**: on native you need pass a storage option to the client to decide the storage mechanism.
+**storage**: the storage mechanism used to cache the session data and cookies.
 
 ```ts title="src/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import SecureStorage from "expo-secure-store";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    storage: AsyncStorage
+    storage: SecureStorage
 });
 ```
 

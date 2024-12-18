@@ -47,7 +47,7 @@ export default async function Page({
 			}}
 			footer={{
 				enabled: true,
-				component: <div className="w-10 h-4"/>
+				component: <div className="w-10 h-4" />,
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
