@@ -3,7 +3,7 @@ import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
 import { schema } from "./schema";
-import { alphabet, generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -143,9 +143,10 @@ export async function authorize(
 	}
 
 	if (
-		!["s256", options.allowPlainCodeChallengeMethod ? "plain" : "s256"].includes(
-			query.code_challenge_method?.toLowerCase() || "",
-		)
+		![
+			"s256",
+			options.allowPlainCodeChallengeMethod ? "plain" : "s256",
+		].includes(query.code_challenge_method?.toLowerCase() || "")
 	) {
 		throw ctx.redirect(
 			redirectErrorURL(

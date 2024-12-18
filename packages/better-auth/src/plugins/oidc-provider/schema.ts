@@ -1,8 +1,8 @@
 import type { PluginSchema } from "../../types";
 
 export const schema = {
-	oauthClient: {
-		modelName: "oauthClient",
+	oauthApplication: {
+		modelName: "oauth_application",
 		fields: {
 			name: {
 				type: "string",
@@ -18,15 +18,21 @@ export const schema = {
 			clientId: {
 				type: "string",
 				unique: true,
+				fieldName: "client_id",
 			},
 			clientSecret: {
 				type: "string",
+				fieldName: "client_secret",
 			},
 			redirectURLs: {
 				type: "string",
 			},
 			type: {
 				type: "string",
+			},
+			authenticationScheme: {
+				type: "string",
+				fieldName: "authentication_scheme",
 			},
 			disabled: {
 				type: "boolean",
@@ -39,35 +45,35 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				fieldName: "user_id",
+				required: false,
 			},
 		},
 	},
 	oauthAccessToken: {
-		modelName: "oauthAccessToken",
+		modelName: "oauth_access_token",
 		fields: {
 			accessToken: {
 				type: "string",
 				unique: true,
+				fieldName: "access_token",
 			},
 			refreshToken: {
 				type: "string",
 				unique: true,
+				fieldName: "refresh_token",
 			},
 			accessTokenExpiresAt: {
 				type: "date",
+				fieldName: "access_token_expires_at",
 			},
 			refreshTokenExpiresAt: {
 				type: "date",
+				fieldName: "refresh_token_expires_at",
 			},
 			clientId: {
 				type: "string",
-			},
-			userId: {
-				type: "string",
-				references: {
-					model: "user",
-					field: "id",
-				},
+				fieldName: "client_id",
 			},
 			scopes: {
 				type: "string",
@@ -75,3 +81,8 @@ export const schema = {
 		},
 	},
 } satisfies PluginSchema;
+
+export const modelName = {
+	oauthApplication: "oauthApplication",
+	oauthAccessToken: "oauthAccessToken",
+};

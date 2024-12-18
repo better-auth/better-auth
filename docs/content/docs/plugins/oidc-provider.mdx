@@ -73,16 +73,101 @@ This is an enterprise plugin, but it does not require an additional license and 
     </Step>
 </Steps>
 
-## OIDC Configuration
+## OIDC Metadata Configuration
 
-### Metadata
+The OIDC provider in Better Auth supports dynamic client registration and discovery via OpenID Connect (OIDC) configuration. This is achieved through the metadata returned by the `/.well-known/openid-configuration` endpoint. The metadata allows clients to automatically discover the necessary configuration of the OIDC provider, including endpoints, supported scopes, response types, and authentication methods.
 
-The metadata object contains information about your OIDC provider. This includes the issuer, authorization endpoint, token endpoint, JWKS URI, and other details.
+### Configuration Overview
 
-- **issuer**: The URL of your OIDC provider. This is used to validate the `iss` claim in the ID token. Defaults to the base URL of your application. (e.g. "https://example.com") can be configured with the `issuer` option.
+The metadata is returned in the form of a JSON document containing essential information about the OIDC provider's configuration. Here's a breakdown of the key metadata fields:
 
-- **authorizationEndpoint**: The URL of the authorization endpoint where clients redirect users to authenticate and authorize access. By default, this is set to `/authorize`. If the base path for Better Auth is `/api/auth`, the authorization endpoint will resolve to `${baseURL}/api/auth/authorize`. You can customize this using the `authorizationEndpoint` option. Note that this applies after the base URL and the path of your Better Auth server.
+1. **Issuer (`issuer`)**
+   - **Description:** The `issuer` is the identifier for the OIDC provider. It is the URL used to verify the `iss` claim in the ID token.
+   - **Default:** The base URL of the server (e.g., `https://example.com`).
 
-- **tokenEndpoint**: The URL of the token endpoint where clients exchange the authorization code for tokens. By default, this is set to `/token`.
+2. **Authorization Endpoint (`authorization_endpoint`)**
+   - **Description:** The URL of the OIDC authorization endpoint, where clients can initiate the authentication flow.
+   - **Default:** `/oauth2/authorize`.
 
-- **userinfoEndpoint**: The URL of the userinfo endpoint where clients can retrieve user information. By default, this is set to `/userinfo`.
+3. **Token Endpoint (`token_endpoint`)**
+   - **Description:** The URL of the token endpoint, where clients can exchange an authorization code for tokens.
+   - **Default:** `/oauth2/token`.
+
+4. **User Info Endpoint (`userInfo_endpoint`)**
+   - **Description:** The URL of the user info endpoint, where clients can retrieve additional user information after authentication.
+   - **Default:** `/oauth2/userinfo`.
+
+5. **JWKS URI (`jwks_uri`)**
+   - **Description:** The URL of the JSON Web Key Set (JWKS) endpoint, used to fetch public keys to validate ID tokens.
+   - **Default:** `/jwks`.
+
+6. **Registration Endpoint (`registration_endpoint`)**
+   - **Description:** The URL of the dynamic client registration endpoint, allowing clients to dynamically register with the provider.
+   - **Default:** `/oauth2/register`.
+
+7. **Scopes Supported (`scopes_supported`)**
+   - **Description:** A list of supported scopes that the provider supports for authorization.
+   - **Default:** `["openid", "profile", "email", "offline_access"]`.
+
+8. **Response Types Supported (`response_types_supported`)**
+   - **Description:** A list of response types supported by the authorization endpoint.
+   - **Default:** `["code"]`.
+
+9. **Response Modes Supported (`response_modes_supported`)**
+   - **Description:** A list of response modes supported by the authorization endpoint.
+   - **Default:** `["query"]`.
+
+10. **Grant Types Supported (`grant_types_supported`)**
+   - **Description:** A list of supported grant types for the token endpoint.
+   - **Default:** `["authorization_code"]`.
+
+11. **ACR Values Supported (`acr_values_supported`)**
+   - **Description:** A list of Authentication Context Class Reference (ACR) values supported by the provider.
+   - **Default:** `["urn:mace:incommon:iap:silver", "urn:mace:incommon:iap:bronze"]`.
+
+12. **Subject Types Supported (`subject_types_supported`)**
+   - **Description:** The subject types supported by the provider.
+   - **Default:** `["public"]`.
+
+13. **ID Token Signing Algorithms Supported (`id_token_signing_alg_values_supported`)**
+   - **Description:** A list of supported signing algorithms for ID tokens.
+   - **Default:** `["RS256", "none"]`.
+
+14. **Token Endpoint Authentication Methods Supported (`token_endpoint_auth_methods_supported`)**
+   - **Description:** A list of supported authentication methods for the token endpoint.
+   - **Default:** `["client_secret_basic", "client_secret_post"]`.
+
+15. **Claims Supported (`claims_supported`)**
+   - **Description:** A list of supported claims that the provider can return in ID tokens and the userinfo response.
+   - **Default:** `["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name"]`.
+
+
+To change any of the default values, you can provide a custom configuration object when initializing the OIDC plugin. The configuration object should contain the desired values for the metadata fields you want to customize.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidc } from "better-auth/plugins/oidc";
+
+export const auth = betterAuth({
+    plugins: [odic({
+        metadata: {
+            // Custom OIDC metadata configuration
+        }
+    })]
+})
+```
+
+### Discovery Endpoint
+
+By default the open-id configuration endpoint is available at `{baseURL}/{basePath}/.well-known/openid-configuration` (e.g., `https://example.com/api/auth/.well-known/openid-configuration`). 
+
+To comply with the OIDC specification, you may need to expose the discovery endpoint at the root of your server (e.g., `https://example.com/.well-known/openid-configuration`). You can achieve this by adding a `proxy` route in your server or by call `auth.api.getOpenIdConfiguration()` to get the configuration and expose it at the desired endpoint.
+
+```ts title="server.ts"
+import { auth } from "./auth";
+
+// Expose the discovery endpoint at the root of the server
+app.get("/.well-known/openid-configuration", (req, res) => {
+    res.json(auth.api.getOpenIdConfiguration());
+});
+```
