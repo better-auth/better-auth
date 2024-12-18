@@ -1,4 +1,5 @@
 import {
+	APIError,
 	type Endpoint,
 	type EndpointResponse,
 	createEndpointCreator,
@@ -25,7 +26,7 @@ export const createAuthMiddleware = createMiddlewareCreator({
 		 */
 		createMiddleware(async () => {
 			return {} as {
-				returned?: unknown;
+				returned?: APIError | Response | Record<string, any>;
 				endpoint: Endpoint;
 			};
 		}),
