@@ -8,6 +8,8 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
+	oidc,
+	genericOAuth,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -40,7 +42,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+		type: "sqlite",
 	},
 	databaseHooks: {
 		user: {
@@ -71,7 +73,7 @@ export const auth = betterAuth({
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github"],
+			trustedProviders: ["google", "github", "demo-app"],
 		},
 	},
 	emailAndPassword: {
