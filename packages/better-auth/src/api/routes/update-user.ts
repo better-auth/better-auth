@@ -314,7 +314,23 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		use: [freshSessionMiddleware],
+		use: [sessionMiddleware],
+		body: z.object({
+			/**
+			 * The callback URL to redirect to after the user is deleted
+			 * this is only used on delete user callback
+			 */
+			callbackURL: z.string().optional(),
+			/**
+			 * The password of the user. If the password isn't provided, session freshness
+			 * will be checked.
+			 */
+			password: z.string().optional(),
+			/**
+			 * The token to delete the user. If the token is provided, the user will be deleted
+			 */
+			token: z.string().optional(),
+		}),
 		metadata: {
 			openapi: {
 				description: "Delete the user",
@@ -345,6 +361,54 @@ export const deleteUser = createAuthEndpoint(
 		}
 		const session = ctx.context.session;
 
+		if (ctx.body.password) {
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				session.user.id,
+			);
+			const account = accounts.find(
+				(account) => account.providerId === "credential" && account.password,
+			);
+			if (!account || !account.password) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+				});
+			}
+			const verify = await ctx.context.password.verify({
+				hash: account.password,
+				password: ctx.body.password,
+			});
+			if (!verify) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.INVALID_PASSWORD,
+				});
+			}
+		} else {
+			if (ctx.context.options.session?.freshAge) {
+				const currentAge = session.session.createdAt.getTime();
+				const freshAge = ctx.context.options.session.freshAge;
+				const now = Date.now();
+				if (now - currentAge > freshAge) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.SESSION_EXPIRED,
+					});
+				}
+			}
+		}
+
+		if (ctx.body.token) {
+			//@ts-expect-error
+			await deleteUserCallback({
+				query: {
+					token: ctx.body.token,
+				},
+				...ctx,
+			});
+			return ctx.json({
+				success: true,
+				message: "User deleted",
+			});
+		}
+
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
 			await ctx.context.internalAdapter.createVerificationValue({
@@ -352,7 +416,11 @@ export const deleteUser = createAuthEndpoint(
 				identifier: `delete-account-${token}`,
 				expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
 			});
-			const url = `${ctx.context.baseURL}/delete-user/callback?token=${token}`;
+			const url = `${
+				ctx.context.baseURL
+			}/delete-user/callback?token=${token}&callbackURL=${
+				ctx.body.callbackURL || "/"
+			}`;
 			await ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 				{
 					user: session.user,
@@ -391,6 +459,7 @@ export const deleteUserCallback = createAuthEndpoint(
 		method: "GET",
 		query: z.object({
 			token: z.string(),
+			callbackURL: z.string().optional(),
 		}),
 	},
 	async (ctx) => {
@@ -437,7 +506,9 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (afterDelete) {
 			await afterDelete(session.user, ctx.request);
 		}
-
+		if (ctx.query.callbackURL) {
+			throw ctx.redirect(ctx.query.callbackURL || "/");
+		}
 		return ctx.json({
 			success: true,
 			message: "User deleted",
