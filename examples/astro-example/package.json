@@ -22,7 +22,7 @@
     "@kobalte/core": "^0.13.7",
     "@oslojs/encoding": "^1.1.0",
     "@types/better-sqlite3": "^7.6.12",
-    "astro": "^4.16.17",
+    "astro": "^4.16.18",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
