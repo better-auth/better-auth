@@ -141,10 +141,12 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 
 <DatabaseTable
     fields={[
+        {
+            name: "id", type: "string", description: "The provider ID", isRequired: true, isPrimaryKey: true,
+        },
         { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
-        { name: "samlConfig", type: "string", description: "The SAML configuration", isRequired: false },
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
         { name: "providerId", type: "string", description: "The provider ID", isRequired: true, isUnique: true },
         { name: "organizationId", type: "string", description: "The organization ID", isRequired: false },
