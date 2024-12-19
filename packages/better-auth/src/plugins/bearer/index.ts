@@ -2,6 +2,7 @@ import { serializeSigned } from "better-call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { parseSetCookieHeader } from "../../cookies";
 import { createAuthMiddleware } from "../../api";
+import { createHMAC } from "@better-auth/utils/hmac";
 
 /**
  * Converts bearer token to session cookie
@@ -25,17 +26,31 @@ export const bearer = () => {
 						if (!token || !token.includes(".")) {
 							return;
 						}
+						const sessionToken = token.replace("=", "");
+						try {
+							const decodedToken = decodeURIComponent(sessionToken);
+							const isValid = await createHMAC(
+								"SHA-256",
+								"base64urlnopad",
+							).verify(
+								c.context.secret,
+								decodedToken.split(".")[0],
+								decodedToken.split(".")[1],
+							);
+							if (!isValid) {
+								return;
+							}
+						} catch (e) {
+							return;
+						}
 						if (c.request) {
-							c.request.headers.set(
+							c.request.headers.append(
 								"cookie",
-								`${c.context.authCookies.sessionToken.name}=${token.replace(
-									"=",
-									"",
-								)}`,
+								`${c.context.authCookies.sessionToken.name}=${sessionToken}`,
 							);
 						}
 						if (c.headers) {
-							c.headers.set(
+							c.headers.append(
 								"cookie",
 								`${c.context.authCookies.sessionToken.name}=${token.replace(
 									"=",

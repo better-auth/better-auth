@@ -75,11 +75,6 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
-			// Update user info
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...userInfo,
-				updatedAt: new Date(),
-			});
 		} else {
 			const updateData = Object.fromEntries(
 				Object.entries({
