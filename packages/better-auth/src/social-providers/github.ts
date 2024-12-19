@@ -92,26 +92,24 @@ export const github = (options: GithubOptions) => {
 				return null;
 			}
 			let emailVerified = false;
-			if (!profile.email) {
-				const { data, error } = await betterFetch<
-					{
-						email: string;
-						primary: boolean;
-						verified: boolean;
-						visibility: "public" | "private";
-					}[]
-				>("https://api.github.com/user/emails", {
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
-						"User-Agent": "better-auth",
-					},
-				});
-				if (!error) {
-					profile.email = (data.find((e) => e.primary) ?? data[0])
-						?.email as string;
-					emailVerified =
-						data.find((e) => e.email === profile.email)?.verified ?? false;
-				}
+			const { data } = await betterFetch<
+				{
+					email: string;
+					primary: boolean;
+					verified: boolean;
+					visibility: "public" | "private";
+				}[]
+			>("https://api.github.com/user/emails", {
+				headers: {
+					authorization: `Bearer ${token.accessToken}`,
+					"User-Agent": "better-auth",
+				},
+			});
+			if (data) {
+				profile.email = (data.find((e) => e.primary) ?? data[0])
+					?.email as string;
+				emailVerified =
+					data.find((e) => e.email === profile.email)?.verified ?? false;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
