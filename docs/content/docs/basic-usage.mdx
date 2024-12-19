@@ -401,7 +401,7 @@ The server provides a `session` object that you can use to access the session da
     import { auth } from "./auth";
     import { createAPIFileRoute } from "@tanstack/start/api";
 
-    export const Route = createAPIFileRoute("/api/$")({
+    export const APIRoute = createAPIFileRoute("/api/$")({
         GET: async ({ request }) => {
             const session = await auth.api.getSession({
                 headers: request.headers

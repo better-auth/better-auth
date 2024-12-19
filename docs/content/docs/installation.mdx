@@ -363,7 +363,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { auth } from '~/lib/server/auth'
     import { createAPIFileRoute } from '@tanstack/start/api'
 
-    export const Route = createAPIFileRoute('/api/auth/$')({
+    export const APIRoute = createAPIFileRoute('/api/auth/$')({
         GET: ({ request }) => {
             return auth.handler(request)
         },
