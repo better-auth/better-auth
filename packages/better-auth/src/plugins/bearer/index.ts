@@ -4,10 +4,19 @@ import { parseSetCookieHeader } from "../../cookies";
 import { createAuthMiddleware } from "../../api";
 import { createHMAC } from "@better-auth/utils/hmac";
 
+interface BearerOptions {
+	/**
+	 * Allow unsigned tokens to be used as session tokens
+	 *
+	 * @default false
+	 */
+	allowUnsignedToken?: boolean;
+}
+
 /**
  * Converts bearer token to session cookie
  */
-export const bearer = () => {
+export const bearer = (options?: BearerOptions) => {
 	return {
 		id: "bearer",
 		hooks: {
@@ -23,12 +32,23 @@ export const bearer = () => {
 						const token =
 							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
 							c.headers?.get("authorization")?.replace("Bearer ", "");
-						if (!token || !token.includes(".")) {
+						if (!token) {
 							return;
 						}
-						const sessionToken = token.replace("=", "");
+
+						let signedToken = "";
+						if (token.includes(".")) {
+							signedToken = token.replace("=", "");
+						} else {
+							if (!options?.allowUnsignedToken) {
+								return;
+							}
+							signedToken = (
+								await serializeSigned("", token, c.context.secret)
+							).replace("=", "");
+						}
 						try {
-							const decodedToken = decodeURIComponent(sessionToken);
+							const decodedToken = decodeURIComponent(signedToken);
 							const isValid = await createHMAC(
 								"SHA-256",
 								"base64urlnopad",
@@ -46,16 +66,13 @@ export const bearer = () => {
 						if (c.request) {
 							c.request.headers.append(
 								"cookie",
-								`${c.context.authCookies.sessionToken.name}=${sessionToken}`,
+								`${c.context.authCookies.sessionToken.name}=${signedToken}`,
 							);
 						}
 						if (c.headers) {
 							c.headers.append(
 								"cookie",
-								`${c.context.authCookies.sessionToken.name}=${token.replace(
-									"=",
-									"",
-								)}`,
+								`${c.context.authCookies.sessionToken.name}=${signedToken}`,
 							);
 						}
 						return {

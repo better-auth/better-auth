@@ -4,7 +4,11 @@ import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
 	const { client, auth, testUser } = await getTestInstance({
-		plugins: [bearer()],
+		plugins: [
+			bearer({
+				allowUnsignedToken: true,
+			}),
+		],
 	});
 
 	let token: string;
@@ -50,7 +54,7 @@ describe("bearer", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("shouldn't work with un signed token", async () => {
+	it("should work with ", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
@@ -58,7 +62,7 @@ describe("bearer", async () => {
 				},
 			},
 		});
-		expect(session.data).toBeNull();
+		expect(session.data?.session).toBeDefined();
 	});
 
 	it("should work if valid cookie is provided even if authorization header isn't valid", async () => {
