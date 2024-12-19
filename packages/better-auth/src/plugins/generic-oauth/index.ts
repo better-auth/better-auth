@@ -63,7 +63,7 @@ interface GenericOAuthConfig {
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: string;
+	prompt?: "none" | "login" | "consent" | "select_account";
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false
@@ -285,6 +285,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The URL to redirect to if an error occurs",
 							})
 							.optional(),
+						disableRedirect: z
+							.boolean({
+								description: "Disable redirect",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -387,7 +392,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return ctx.json({
 						url: authUrl.toString(),
-						redirect: true,
+						redirect: !ctx.body.disableRedirect,
 					});
 				},
 			),
@@ -406,9 +411,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
-						state: z.string({
-							description: "The state parameter from the OAuth2 request",
-						}),
+						state: z
+							.string({
+								description: "The state parameter from the OAuth2 request",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -436,7 +443,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.baseURL}?error=${
+							`${ctx.context.options.baseURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
 							}`,
 						);
@@ -532,6 +539,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							scope: tokens.scopes?.join(","),
 						},
 					});
+
 					function redirectOnError(error: string) {
 						throw ctx.redirect(
 							`${
