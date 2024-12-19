@@ -26,7 +26,7 @@ export interface BetterAuthOptions {
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
+	 * process.env.BETTER_AUTH_URL
 	 *
 	 * If not set it will throw an error.
 	 */
