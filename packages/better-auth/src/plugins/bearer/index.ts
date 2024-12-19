@@ -6,11 +6,13 @@ import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {
 	/**
-	 * Allow unsigned tokens to be used as session tokens
+	 * If true, only signed tokens
+	 * will be converted to session
+	 * cookies
 	 *
 	 * @default false
 	 */
-	allowUnsignedToken?: boolean;
+	requireSignature?: boolean;
 }
 
 /**
@@ -40,7 +42,7 @@ export const bearer = (options?: BearerOptions) => {
 						if (token.includes(".")) {
 							signedToken = token.replace("=", "");
 						} else {
-							if (!options?.allowUnsignedToken) {
+							if (options?.requireSignature) {
 								return;
 							}
 							signedToken = (

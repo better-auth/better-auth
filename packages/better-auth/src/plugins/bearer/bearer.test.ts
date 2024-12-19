@@ -4,11 +4,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
 	const { client, auth, testUser } = await getTestInstance({
-		plugins: [
-			bearer({
-				allowUnsignedToken: true,
-			}),
-		],
+		plugins: [bearer()],
 	});
 
 	let token: string;
