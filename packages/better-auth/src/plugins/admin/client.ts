@@ -7,6 +7,7 @@ export const adminClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof admin>,
 		pathMethods: {
 			"/admin/list-users": "GET",
+			"/admin/stop-impersonating": "POST",
 		},
 	} satisfies BetterAuthClientPlugin;
 };

@@ -4,6 +4,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
+	sessionMiddleware,
 } from "../../api";
 import {
 	type BetterAuthPlugin,
