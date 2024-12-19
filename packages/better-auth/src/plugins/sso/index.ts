@@ -78,7 +78,11 @@ export const sso = (options?: SSOOptions) => {
 						}),
 						issuer: z.string({
 							description:
-								"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login",
+								"The issuer url of the provider (e.g. https://idp.example.com)",
+						}),
+						domain: z.string({
+							description:
+								"The domain of the provider. This is used for email matching",
 						}),
 						clientId: z.string({
 							description: "The client ID",
@@ -154,7 +158,7 @@ export const sso = (options?: SSOOptions) => {
 						organizationId: z
 							.string({
 								description:
-									"If organization plugin is enabled, the organization ID to link the provider to. This will enable user to be added to the organization when they sign in with this provider",
+									"If organization plugin is enabled, the organization id to link the provider to",
 							})
 							.optional(),
 					}),
@@ -184,6 +188,7 @@ export const sso = (options?: SSOOptions) => {
 						model: "ssoProvider",
 						data: {
 							issuer: body.issuer,
+							domain: body.domain,
 							oidcConfig: JSON.stringify({
 								issuer: body.issuer,
 								clientId: body.clientId,
@@ -222,16 +227,14 @@ export const sso = (options?: SSOOptions) => {
 									"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
 							})
 							.optional(),
-						issuer: z
+						organizationSlug: z
 							.string({
-								description:
-									"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+								description: "The slug of the organization to sign in with",
 							})
 							.optional(),
-						providerId: z
+						domain: z
 							.string({
-								description:
-									"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+								description: "The domain of the provider.",
 							})
 							.optional(),
 						callbackURL: z.string({
@@ -299,31 +302,39 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					let { email, issuer, providerId } = body;
-					if (!email && !issuer) {
+					let { email, organizationSlug, domain } = body;
+					if (!email && !organizationSlug && !domain) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Either email or issuer must be provided",
+							message: "email, organizationSlug or domain is required",
 						});
 					}
-					issuer = issuer || `https://${email?.split("@")[1]}`;
-					if (!issuer && !providerId) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid email. Could not determine issuer",
-						});
+					domain = body.domain || email?.split("@")[1];
+					let orgId = "";
+					if (organizationSlug) {
+						orgId = await ctx.context.adapter
+							.findOne<{ id: string }>({
+								model: "organization",
+								where: [
+									{
+										field: "slug",
+										value: organizationSlug,
+									},
+								],
+							})
+							.then((res) => {
+								if (!res) {
+									return "";
+								}
+								return res.id;
+							});
 					}
-					if (issuer && z.string().url().safeParse(issuer).error) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid issuer. Must be a valid URL",
-						});
-					}
-
 					const provider = await ctx.context.adapter
 						.findOne<SSOProvider>({
 							model: "ssoProvider",
 							where: [
 								{
-									field: providerId ? "providerId" : "issuer",
-									value: providerId || issuer,
+									field: orgId ? "organizationId" : "domain",
+									value: orgId || domain!,
 								},
 							],
 						})
@@ -706,6 +717,10 @@ export const sso = (options?: SSOOptions) => {
 					organizationId: {
 						type: "string",
 						required: false,
+					},
+					domain: {
+						type: "string",
+						required: true,
 					},
 				},
 			},

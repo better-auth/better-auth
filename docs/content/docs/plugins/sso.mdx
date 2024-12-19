@@ -1,0 +1,204 @@
+---
+title: Single Sign-On (SSO)
+description: Integrate Single Sign-On (SSO) with your application.
+---
+
+`OIDC` `OAuth2` `SSO`
+
+Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC) and OAuth2 providers.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts" 
+        import { betterAuth } from "better-auth"
+        import { sso } from "better-auth/plugins"
+
+        const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                sso() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+        
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { ssoClient } from "better-auth/client/plugins"
+        
+        const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                ssoClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Register an OIDC Provider
+
+To register an OIDC provider, use the `createOIDCProvider` endpoint. This endpoint requires the provider's configuration details.
+
+```ts title="register-provider.ts"
+const { headers } = await signInWithTestUser();
+const provider = await auth.api.createOIDCProvider({
+    body: {
+        issuer: "https://example.com",
+        domain: "example.com",
+        clientId: "your-client-id",
+        clientSecret: "your-client-secret",
+        authorizationEndpoint: "https://example.com/authorize",
+        tokenEndpoint: "https://example.com/token",
+        jwksEndpoint: "https://example.com/jwks",
+        mapping: {
+            id: "sub",
+            email: "email",
+            emailVerified: "email_verified",
+            name: "name",
+            image: "picture",
+        },
+        providerId: "example-provider",
+    },
+    headers,
+});
+```
+
+### Sign In with SSO
+
+To sign in with an SSO provider, use the `signInSSO` endpoint. This endpoint redirects the user to the provider's authorization URL.
+
+You can sign in using the email with domain matching:
+
+```ts title="sign-in.ts"
+const res = await auth.api.signInSSO({
+    body: {
+        email: "user@example.com",
+        callbackURL: "/dashboard",
+    },
+});
+```
+
+or you can specify the domain:
+
+```ts title="sign-in-domain.ts"
+const res = await auth.api.signInSSO({
+    body: {
+        domain: "example.com",
+        callbackURL: "/dashboard",
+    },
+});
+```
+
+You can also sign in using the organization slug if a provider is associated with an organization:
+
+```ts title="sign-in-org.ts"
+const res = await auth.api.signInSSO({
+    body: {
+        organizationSlug: "example-org",
+        callbackURL: "/dashboard",
+    },
+});
+```
+
+### Callback URL
+
+The callback URL is used to handle the authorization code and exchange it for an access token. This endpoint is automatically called by the provider after the user authorizes the application.
+
+```ts title="callback.ts"
+const callbackURL = await simulateOAuthFlow(res.url, headers);
+expect(callbackURL).toContain("/dashboard");
+```
+
+## Schema
+
+The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
+
+<DatabaseTable
+    fields={[
+        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
+        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
+        { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
+        { name: "samlConfig", type: "string", description: "The SAML configuration", isRequired: false },
+        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
+        { name: "providerId", type: "string", description: "The provider ID", isRequired: true, isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization ID", isRequired: false },
+    ]}
+/>
+
+## Options
+
+### Server
+
+**provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
+
+**organizationProvisioning**: Options for provisioning users to an organization.
+
+<TypeTable
+  type={{
+    provisionUser: {
+        description: "A custom function to provision a user when they sign in with an SSO provider.",
+        type: "function",
+    },
+    organizationProvisioning: {
+        description: "Options for provisioning users to an organization.",
+        type: "object",
+        properties: {
+            disabled: {
+                description: "Disable organization provisioning.",
+                type: "boolean",
+                default: false,
+            },
+            defaultRole: {
+                description: "The default role for new users.",
+                type: "string",
+                enum: ["member", "admin"],
+                default: "member",
+            },
+            getRole: {
+                description: "A custom function to determine the role for new users.",
+                type: "function",
+            },
+        },
+    },
+  }}
+/>
+
+### Client
+
+To use the SSO plugin in the client, you need to add it to your plugins list.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { ssoClient } from "better-auth/client/plugins"
+
+const authClient = createAuthClient({
+    plugins: [
+        ssoClient() // [!code highlight]
+    ]
+})

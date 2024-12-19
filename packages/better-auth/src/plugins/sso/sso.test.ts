@@ -75,6 +75,7 @@ describe("SSO", async () => {
 		const provider = await auth.api.createOIDCProvider({
 			body: {
 				issuer: server.issuer.url!,
+				domain: "localhost.com",
 				clientId: "test",
 				clientSecret: "test",
 				authorizationEndpoint: `${server.issuer.url}/authorize`,
@@ -122,6 +123,7 @@ describe("SSO", async () => {
 			await auth.api.createOIDCProvider({
 				body: {
 					issuer: "invalid",
+					domain: "localhost",
 					clientId: "test",
 					clientSecret: "test",
 					providerId: "test",
@@ -138,11 +140,27 @@ describe("SSO", async () => {
 		}
 	});
 
-	it("should signin with SSO provider", async () => {
+	it("should signin with SSO provider with email matching", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				email: "my-email@localhost.com",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
+		);
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should signin with SSO provider with domain", async () => {
 		const res = await auth.api.signInSSO({
 			body: {
 				email: "my-email@test.com",
-				issuer: "http://localhost:8080",
+				domain: "localhost.com",
 				callbackURL: "/dashboard",
 			},
 		});
@@ -202,7 +220,7 @@ describe("provisioning", async (ctx) => {
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
 		userInfoResponse.body = {
-			email: "oauth2@test.com",
+			email: "test@localhost.com",
 			name: "OAuth2 Test",
 			sub: "oauth2",
 			picture: "https://test.com/picture.png",
@@ -222,14 +240,15 @@ describe("provisioning", async (ctx) => {
 		const { headers } = await signInWithTestUser();
 		const organization = await auth.api.createOrganization({
 			body: {
-				name: "test",
-				slug: "test",
+				name: "Localhost",
+				slug: "localhost",
 			},
 			headers,
 		});
 		const provider = await auth.api.createOIDCProvider({
 			body: {
 				issuer: server.issuer.url!,
+				domain: "localhost.com",
 				clientId: "test",
 				clientSecret: "test",
 				authorizationEndpoint: `${server.issuer.url}/authorize`,
@@ -253,8 +272,7 @@ describe("provisioning", async (ctx) => {
 
 		const res = await auth.api.signInSSO({
 			body: {
-				email: "my-email@test.com",
-				issuer: "http://localhost:8080",
+				email: "my-email@localhost.com",
 				callbackURL: "/dashboard",
 			},
 		});
@@ -283,5 +301,16 @@ describe("provisioning", async (ctx) => {
 				image: "https://test.com/picture.png",
 			},
 		});
+	});
+
+	it("should signin with SSO provide with org slug", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				organizationSlug: "localhost",
+				callbackURL: "/dashboard",
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
 });
