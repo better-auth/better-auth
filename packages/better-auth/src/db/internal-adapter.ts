@@ -222,7 +222,7 @@ export const createInternalAdapter = (
 			};
 			const res = await createWithHooks(
 				data,
-				"session",	
+				"session",
 				secondaryStorage
 					? {
 							fn: async () => {
