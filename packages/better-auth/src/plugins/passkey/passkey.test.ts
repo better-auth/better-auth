@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { passkey, passkeyClient } from ".";
+import { type Passkey, passkey, passkeyClient } from ".";
 import { createAuthClient } from "../../client";
 
 describe("passkey", async () => {
@@ -63,12 +63,12 @@ describe("passkey", async () => {
 				publicKey: "mockPublicKey",
 				name: "mockName",
 				counter: 0,
-				deviceType: "mockDeviceType",
+				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
-			},
+			} satisfies Passkey,
 		});
 
 		const passkeys = await auth.api.listPasskeys({
