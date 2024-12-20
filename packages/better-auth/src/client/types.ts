@@ -67,16 +67,22 @@ export interface ClientOptions {
 }
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<
-	Auth["api"] &
-		(O["plugins"] extends Array<BetterAuthClientPlugin>
-			? UnionToIntersection<
-					O["plugins"][number] extends {
-						$InferServerPlugin: BetterAuthPlugin;
-					}
-						? O["plugins"][number]["$InferServerPlugin"]["endpoints"]
-						: never
-				>
-			: {}),
+	O["plugins"] extends Array<any>
+		? Auth["api"] &
+				(O["plugins"] extends Array<infer Pl>
+					? UnionToIntersection<
+							Pl extends {
+								$InferServerPlugin: infer Plug;
+							}
+								? Plug extends {
+										endpoints: infer Endpoints;
+									}
+									? Endpoints
+									: {}
+								: {}
+						>
+					: {})
+		: Auth["api"],
 	O
 >;
 
