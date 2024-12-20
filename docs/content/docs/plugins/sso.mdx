@@ -7,6 +7,10 @@ description: Integrate Single Sign-On (SSO) with your application.
 
 Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC) and OAuth2 providers.
 
+<Callout>
+    SAML support is coming soon. Upvote the feature request on our [GitHub](https://github.com/better-auth/better-auth/issues/96)
+</Callout>
+
 ## Installation
 
 <Steps>
@@ -63,19 +67,54 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 ### Register an OIDC Provider
 
-To register an OIDC provider, use the `createOIDCProvider` endpoint. This endpoint requires the provider's configuration details.
+To register an OIDC provider, use the `createOIDCProvider` endpoint and provide the necessary configuration details for the provider.
 
+A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="register-provider.ts"
+import { authClient } from "@/lib/auth-client";
+
+// only with issuer if the provider supports discovery
+await authClient.oauth2.createOIDCProvider({
+    issuer: "https://idp.example.com",
+    providerId: "example-provider",
+});
+
+// with all fields
+await authClient.oauth2.createOIDCProvider({
+    issuer: "https://idp.example.com
+    domain: "example.com",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    authorizationEndpoint: "https://idp.example.com/authorize",
+    tokenEndpoint: "https://idp.example.com/token",
+    jwksEndpoint: "https://idp.example.com/jwks",
+    mapping: {
+        id: "sub",
+        email: "email",
+        emailVerified: "email_verified",
+        name: "name",
+        image: "picture",
+    },
+    providerId: "example-provider",
+});
+```
+    </Tab>
+
+    <Tab value="server">
 ```ts title="register-provider.ts"
 const { headers } = await signInWithTestUser();
-const provider = await auth.api.createOIDCProvider({
+await auth.api.createOIDCProvider({
     body: {
-        issuer: "https://example.com",
+        issuer: "https://idp.example.com",
         domain: "example.com",
         clientId: "your-client-id",
         clientSecret: "your-client-secret",
-        authorizationEndpoint: "https://example.com/authorize",
-        tokenEndpoint: "https://example.com/token",
-        jwksEndpoint: "https://example.com/jwks",
+        authorizationEndpoint: "https://idp.example.com/authorize",
+        tokenEndpoint: "https://idp.example.comtoken",
+        jwksEndpoint: "https://idp.example.com/jwks",
         mapping: {
             id: "sub",
             email: "email",
@@ -88,6 +127,8 @@ const provider = await auth.api.createOIDCProvider({
     headers,
 });
 ```
+    </Tab>
+</Tabs>
 
 ### Sign In with SSO
 
@@ -126,13 +167,26 @@ const res = await auth.api.signInSSO({
 });
 ```
 
-### Callback URL
+When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
-The callback URL is used to handle the authorization code and exchange it for an access token. This endpoint is automatically called by the provider after the user authorizes the application.
 
-```ts title="callback.ts"
-const callbackURL = await simulateOAuthFlow(res.url, headers);
-expect(callbackURL).toContain("/dashboard");
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({
+            provisionUser: async (user) => {
+                // provision user
+            },
+            organizationProvisioning: {
+                disabled: false,
+                defaultRole: "member",
+                getRole: async (user) => {
+                    // get role if needed
+                },
+            },
+        }),
+    ],
+});
 ```
 
 ## Schema
@@ -142,14 +196,14 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 <DatabaseTable
     fields={[
         {
-            name: "id", type: "string", description: "The provider ID", isRequired: true, isPrimaryKey: true,
+            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
         },
         { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
         { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
         { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
-        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider ID", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization ID", isRequired: false },
+        { name: "userId", type: "string", description: "The user id", isRequired: true, references: { model: "user", field: "id" } },
+        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect url.", isRequired: true, isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
     ]}
 />
 
@@ -190,17 +244,3 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
     },
   }}
 />
-
-### Client
-
-To use the SSO plugin in the client, you need to add it to your plugins list.
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { ssoClient } from "better-auth/client/plugins"
-
-const authClient = createAuthClient({
-    plugins: [
-        ssoClient() // [!code highlight]
-    ]
-})

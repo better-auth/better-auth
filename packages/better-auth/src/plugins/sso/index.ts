@@ -213,6 +213,7 @@ export const sso = (options?: SSOOptions) => {
 					return ctx.json({
 						...provider,
 						oidcConfig: JSON.parse(provider.oidcConfig) as OIDCConfig,
+						redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
 					});
 				},
 			),

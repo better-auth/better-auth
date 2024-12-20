@@ -327,6 +327,16 @@
         "default": "./dist/plugins/jwt.cjs"
       }
     },
+    "./plugins/sso": {
+      "import": {
+        "types": "./dist/plugins/sso.d.ts",
+        "default": "./dist/plugins/sso.js"
+      },
+      "require": {
+        "types": "./dist/plugins/sso.d.cts",
+        "default": "./dist/plugins/sso.cjs"
+      }
+    },
     "./plugins/magic-link": {
       "import": {
         "types": "./dist/plugins/magic-link.d.ts",
