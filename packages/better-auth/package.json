@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.0.18",
+  "version": "1.0.23-beta.6",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -11,7 +11,7 @@
   "scripts": {
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts --minify",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
-    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
+    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=16192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
     "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
     "test:adapters": "pnpm prisma:push && vitest adapters",
@@ -256,6 +256,166 @@
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
       }
+    },
+    "./plugins/admin": {
+      "import": {
+        "types": "./dist/plugins/admin.d.ts",
+        "default": "./dist/plugins/admin.js"
+      },
+      "require": {
+        "types": "./dist/plugins/admin.d.cts",
+        "default": "./dist/plugins/admin.cjs"
+      }
+    },
+    "./plugins/anonymous": {
+      "import": {
+        "types": "./dist/plugins/anonymous.d.ts",
+        "default": "./dist/plugins/anonymous.js"
+      },
+      "require": {
+        "types": "./dist/plugins/anonymous.d.cts",
+        "default": "./dist/plugins/anonymous.cjs"
+      }
+    },
+    "./plugins/bearer": {
+      "import": {
+        "types": "./dist/plugins/bearer.d.ts",
+        "default": "./dist/plugins/bearer.js"
+      },
+      "require": {
+        "types": "./dist/plugins/bearer.d.cts",
+        "default": "./dist/plugins/bearer.cjs"
+      }
+    },
+    "./plugins/custom-session": {
+      "import": {
+        "types": "./dist/plugins/custom-session.d.ts",
+        "default": "./dist/plugins/custom-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/custom-session.d.cts",
+        "default": "./dist/plugins/custom-session.cjs"
+      }
+    },
+    "./plugins/email-otp": {
+      "import": {
+        "types": "./dist/plugins/email-otp.d.ts",
+        "default": "./dist/plugins/email-otp.js"
+      },
+      "require": {
+        "types": "./dist/plugins/email-otp.d.cts",
+        "default": "./dist/plugins/email-otp.cjs"
+      }
+    },
+    "./plugins/generic-oauth": {
+      "import": {
+        "types": "./dist/plugins/generic-oauth.d.ts",
+        "default": "./dist/plugins/generic-oauth.js"
+      },
+      "require": {
+        "types": "./dist/plugins/generic-oauth.d.cts",
+        "default": "./dist/plugins/generic-oauth.cjs"
+      }
+    },
+    "./plugins/jwt": {
+      "import": {
+        "types": "./dist/plugins/jwt.d.ts",
+        "default": "./dist/plugins/jwt.js"
+      },
+      "require": {
+        "types": "./dist/plugins/jwt.d.cts",
+        "default": "./dist/plugins/jwt.cjs"
+      }
+    },
+    "./plugins/sso": {
+      "import": {
+        "types": "./dist/plugins/sso.d.ts",
+        "default": "./dist/plugins/sso.js"
+      },
+      "require": {
+        "types": "./dist/plugins/sso.d.cts",
+        "default": "./dist/plugins/sso.cjs"
+      }
+    },
+    "./plugins/magic-link": {
+      "import": {
+        "types": "./dist/plugins/magic-link.d.ts",
+        "default": "./dist/plugins/magic-link.js"
+      },
+      "require": {
+        "types": "./dist/plugins/magic-link.d.cts",
+        "default": "./dist/plugins/magic-link.cjs"
+      }
+    },
+    "./plugins/multi-session": {
+      "import": {
+        "types": "./dist/plugins/multi-session.d.ts",
+        "default": "./dist/plugins/multi-session.js"
+      },
+      "require": {
+        "types": "./dist/plugins/multi-session.d.cts",
+        "default": "./dist/plugins/multi-session.cjs"
+      }
+    },
+    "./plugins/oauth-proxy": {
+      "import": {
+        "types": "./dist/plugins/oauth-proxy.d.ts",
+        "default": "./dist/plugins/oauth-proxy.js"
+      },
+      "require": {
+        "types": "./dist/plugins/oauth-proxy..d.cts",
+        "default": "./dist/plugins/oauth-proxy..cjs"
+      }
+    },
+    "./plugins/organization": {
+      "import": {
+        "types": "./dist/plugins/organization.d.ts",
+        "default": "./dist/plugins/organization.js"
+      },
+      "require": {
+        "types": "./dist/plugins/organization.d.cts",
+        "default": "./dist/plugins/organization.cjs"
+      }
+    },
+    "./plugins/passkey": {
+      "import": {
+        "types": "./dist/plugins/passkey.d.ts",
+        "default": "./dist/plugins/passkey.js"
+      },
+      "require": {
+        "types": "./dist/plugins/passkey.d.cts",
+        "default": "./dist/plugins/passkey.cjs"
+      }
+    },
+    "./plugins/phone-number": {
+      "import": {
+        "types": "./dist/plugins/phone-number.d.ts",
+        "default": "./dist/plugins/phone-number.js"
+      },
+      "require": {
+        "types": "./dist/plugins/phone-number.d.cts",
+        "default": "./dist/plugins/phone-number.cjs"
+      }
+    },
+    "./plugins/two-factor": {
+      "import": {
+        "types": "./dist/plugins/two-factor.d.ts",
+        "default": "./dist/plugins/two-factor.js"
+      },
+      "require": {
+        "types": "./dist/plugins/two-factor.d.cts",
+        "default": "./dist/plugins/two-factor.cjs"
+      }
+    },
+    "./plugins/username": {
+      "import": {
+        "types": "./dist/plugins/username.d.ts",
+        "default": "./dist/plugins/username.js"
+      },
+      "require": {
+        "types": "./dist/plugins/username.d.cts",
+        "default": "./dist/plugins/username.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -400,19 +560,17 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
+    "@better-auth/utils": "^0.2.1",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
     "@simplewebauthn/browser": "^10.0.0",
     "@simplewebauthn/server": "^10.0.1",
     "better-call": "0.3.3-beta.4",
-    "consola": "^3.2.3",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
-    "nanoid": "^5.0.9",
     "nanostores": "^0.11.3",
-    "oslo": "^1.2.1",
     "uncrypto": "^0.1.3",
     "zod": "^3.23.8"
   },

@@ -15,6 +15,7 @@ import Link from "next/link";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { createTypeTable } from "fumadocs-typescript/ui";
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -45,7 +46,8 @@ export default async function Page({
 				header: <div className="w-10 h-4"></div>,
 			}}
 			footer={{
-				enabled: false,
+				enabled: true,
+				component: <div className="w-10 h-4" />,
 			}}
 		>
 			<DocsTitle>{page.data.title}</DocsTitle>
@@ -79,6 +81,8 @@ export default async function Page({
 						Features,
 						ForkButton,
 						DatabaseTable,
+						Accordion,
+						Accordions,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),

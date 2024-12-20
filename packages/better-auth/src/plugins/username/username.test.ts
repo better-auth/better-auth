@@ -65,4 +65,14 @@ describe("username", async (it) => {
 		});
 		expect(session?.user.username).toBe("new-username-2");
 	});
+
+	it("should fail on duplicate username", async () => {
+		const res = await client.signUp.email({
+			email: "new-email-2@gamil.com",
+			username: "New-username-2",
+			password: "new-password",
+			name: "new-name",
+		});
+		expect(res.error?.status).toBe(422);
+	});
 });

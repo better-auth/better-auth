@@ -1,4 +1,5 @@
 import {
+	CircleHelp,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
@@ -816,7 +817,6 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-
 			{
 				title: "One Tap",
 				href: "/docs/plugins/one-tap",
@@ -836,7 +836,6 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-
 			{
 				title: "Authorization",
 				group: true,
@@ -869,6 +868,33 @@ export const contents: Content[] = [
 				title: "Organization",
 				icon: () => <Users2 className="w-4 h-4" />,
 				href: "/docs/plugins/organization",
+			},
+			{
+				title: "Enterprise",
+				group: true,
+				href: "/docs/plugins/1st-party-plugins",
+				icon: () => <LucideAArrowDown className="w-4 h-4" />,
+			},
+			{
+				title: "SSO",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+					>
+						<path
+							fill="currentColor"
+							d="M8 8h2v4H8zm0 6h2v4H8zm6-6h2v4h-2zm0 6h2v4h-2zm-6 6h2v4H8zm6 0h2v4h-2z"
+						></path>
+						<path
+							fill="currentColor"
+							d="M30 14a2 2 0 0 0-2-2h-6V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v26h28ZM4 4h16v24H4Zm18 24V14h6v14Z"
+						></path>
+					</svg>
+				),
+				href: "/docs/plugins/sso",
 			},
 			{
 				title: "Utility",
@@ -1104,6 +1130,11 @@ export const contents: Content[] = [
 				title: "Security",
 				href: "/docs/reference/security",
 				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "FAQ",
+				href: "/docs/reference/faq",
+				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
 			},
 		],
 	},

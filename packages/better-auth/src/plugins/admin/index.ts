@@ -4,6 +4,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
+	sessionMiddleware,
 } from "../../api";
 import {
 	type BetterAuthPlugin,
@@ -13,7 +14,7 @@ import {
 	type User,
 	type Where,
 } from "../../types";
-import { setSessionCookie } from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
@@ -685,6 +686,14 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
+					const authCookies = ctx.context.authCookies;
+					deleteSessionCookie(ctx);
+					await ctx.setSignedCookie(
+						"admin_session",
+						ctx.context.session.session.token,
+						ctx.context.secret,
+						authCookies.sessionToken.options,
+					);
 					await setSessionCookie(
 						ctx,
 						{
@@ -697,6 +706,54 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						session: session,
 						user: targetUser,
 					});
+				},
+			),
+			stopImpersonating: createAuthEndpoint(
+				"/admin/stop-impersonating",
+				{
+					method: "POST",
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx<
+						{},
+						{
+							impersonatedBy: string;
+						}
+					>(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					if (!session.session.impersonatedBy) {
+						throw new APIError("BAD_REQUEST", {
+							message: "You are not impersonating anyone",
+						});
+					}
+					const user = await ctx.context.internalAdapter.findUserById(
+						session.session.impersonatedBy,
+					);
+					if (!user) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to find user",
+						});
+					}
+					const adminCookie = await ctx.getSignedCookie(
+						"admin_session",
+						ctx.context.secret,
+					);
+					if (!adminCookie) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to find admin session",
+						});
+					}
+					const adminSession =
+						await ctx.context.internalAdapter.findSession(adminCookie);
+					if (!adminSession || adminSession.session.userId !== user.id) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to find admin session",
+						});
+					}
+					await setSessionCookie(ctx, adminSession);
+					return ctx.json(adminSession);
 				},
 			),
 			revokeUserSession: createAuthEndpoint(

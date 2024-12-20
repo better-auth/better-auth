@@ -4,7 +4,6 @@ import {
 	admin,
 	multiSession,
 	organization,
-	passkey,
 	twoFactor,
 	oneTap,
 	oAuthProxy,
@@ -17,6 +16,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
+import { passkey } from "better-auth/plugins/passkey";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -42,9 +42,24 @@ export const auth = betterAuth({
 		dialect,
 		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
 	},
+	databaseHooks: {
+		user: {
+			update: {
+				async before(user) {
+					if (user.emailVerified) {
+						return {
+							data: {
+								...user,
+								emailVerifiedAt: new Date().toISOString(),
+							},
+						};
+					}
+				},
+			},
+		},
+	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
 				to: to || user.email,
@@ -53,7 +68,6 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendOnSignUp: true,
 	},
 	account: {
 		accountLinking: {
@@ -125,7 +139,6 @@ export const auth = betterAuth({
 									}/accept-invitation/${data.id}`,
 					}),
 				});
-				console.log(res, data.email);
 			},
 		}),
 		twoFactor({

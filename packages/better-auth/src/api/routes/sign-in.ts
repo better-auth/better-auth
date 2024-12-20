@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { socialProviderList } from "../../social-providers";
+import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -33,6 +33,12 @@ export const signInSocial = createAuthEndpoint(
 				})
 				.optional(),
 			/**
+			 * callback url to redirect if the user is newly registered.
+			 *
+			 * useful if you have different routes for existing users and new users
+			 */
+			newUserCallbackURL: z.string().optional(),
+			/**
 			 * Callback url to redirect to if an error happens
 			 *
 			 * If it's initiated from the client sdk this defaults to
@@ -46,9 +52,7 @@ export const signInSocial = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList, {
-				description: "OAuth2 provider to use",
-			}),
+			provider: SocialProviderListEnum,
 			/**
 			 * Disable automatic redirection to the provider
 			 *

@@ -11,7 +11,7 @@ import type {
 	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/types";
 import { APIError } from "better-call";
-import { alphabet, generateRandomString } from "../../crypto/random";
+import { generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
@@ -245,7 +245,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						],
 					});
 					const userID = new Uint8Array(
-						Buffer.from(generateRandomString(32, alphabet("a-z", "0-9"))),
+						Buffer.from(generateRandomString(32, "a-z", "0-9")),
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({

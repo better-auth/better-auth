@@ -1,13 +1,13 @@
 import type { CookieOptions } from "better-call";
-import { TimeSpan } from "oslo";
-import { base64url } from "oslo/encoding";
-import { hmac } from "../crypto/hash";
 import { BetterAuthError } from "../error";
 import type { Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { isProduction } from "../utils/env";
+import { base64, base64Url } from "@better-auth/utils/base64";
+import { createTime } from "../utils/time";
+import { createHMAC } from "@better-auth/utils/hmac";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -62,7 +62,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
 	const sessionMaxAge =
-		options.session?.expiresIn || new TimeSpan(7, "d").seconds();
+		options.session?.expiresIn || createTime(7, "d").toSeconds();
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});
@@ -91,6 +91,46 @@ export function getCookies(options: BetterAuthOptions) {
 }
 
 export type BetterAuthCookies = ReturnType<typeof getCookies>;
+
+export async function setCookieCache(
+	ctx: GenericEndpointContext,
+	session: {
+		session: Session & Record<string, any>;
+		user: User;
+	},
+) {
+	const shouldStoreSessionDataInCookie =
+		ctx.context.options.session?.cookieCache?.enabled;
+
+	if (shouldStoreSessionDataInCookie) {
+		const data = base64Url.encode(
+			JSON.stringify({
+				session: session,
+				expiresAt: getDate(
+					ctx.context.authCookies.sessionData.options.maxAge || 60,
+					"sec",
+				).getTime(),
+				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
+					ctx.context.secret,
+					JSON.stringify(session),
+				),
+			}),
+			{
+				padding: false,
+			},
+		);
+		if (data.length > 4093) {
+			throw new BetterAuthError(
+				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
+			);
+		}
+		ctx.setCookie(
+			ctx.context.authCookies.sessionData.name,
+			data,
+			ctx.context.authCookies.sessionData.options,
+		);
+	}
+}
 
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
@@ -124,40 +164,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.options,
 		);
 	}
-	const shouldStoreSessionDataInCookie =
-		ctx.context.options.session?.cookieCache?.enabled;
-
-	if (shouldStoreSessionDataInCookie) {
-		const data = base64url.encode(
-			new TextEncoder().encode(
-				JSON.stringify({
-					session: session,
-					expiresAt: getDate(
-						ctx.context.authCookies.sessionData.options.maxAge || 60,
-						"sec",
-					).getTime(),
-					signature: await hmac.sign({
-						value: JSON.stringify(session),
-						secret: ctx.context.secret,
-					}),
-				}),
-			),
-			{
-				includePadding: false,
-			},
-		);
-		if (data.length > 4093) {
-			throw new BetterAuthError(
-				"Session data is too large to store in the cookie. Please disable session cookie caching or reduce the size of the session data",
-			);
-		}
-		ctx.setCookie(
-			ctx.context.authCookies.sessionData.name,
-			data,
-			ctx.context.authCookies.sessionData.options,
-		);
-	}
-
+	await setCookieCache(ctx, session);
 	ctx.context.setNewSession(session);
 	/**
 	 * If secondary storage is enabled, store the session data in the secondary storage

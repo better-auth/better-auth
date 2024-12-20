@@ -247,6 +247,20 @@ export const resetPassword = createAuthEndpoint(
 		}
 
 		const { newPassword } = ctx.body;
+
+		const minLength = ctx.context.password?.config.minPasswordLength;
+		const maxLength = ctx.context.password?.config.maxPasswordLength;
+		if (newPassword.length < minLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+			});
+		}
+		if (newPassword.length > maxLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+			});
+		}
+
 		const id = `reset-password:${token}`;
 
 		const verification =

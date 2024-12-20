@@ -438,7 +438,8 @@ export const Icons = {
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			fill="currentColor" // Use currentColor here
-			className="w-full h-full"
+			width="1.2em"
+			height="1.2em"
 			viewBox="0 0 40 40"
 			{...props}
 		>

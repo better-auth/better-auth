@@ -1,8 +1,8 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../db/schema";
-import type { BetterAuthPlugin } from "./plugins";
+import type { BetterAuthPlugin } from ".";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance, SecondaryStorage } from ".";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
@@ -11,7 +11,7 @@ import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 
-export interface BetterAuthOptions {
+export type BetterAuthOptions = {
 	/**
 	 * The name of the application
 	 *
@@ -26,7 +26,7 @@ export interface BetterAuthOptions {
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
+	 * process.env.BETTER_AUTH_URL
 	 *
 	 * If not set it will throw an error.
 	 */
@@ -569,10 +569,8 @@ export interface BetterAuthOptions {
 		/**
 		 * Custom generateId function.
 		 *
-		 * If not provided, nanoid will be used.
+		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @default nanoid
 		 */
 		generateId?:
 			| ((options: {
@@ -687,4 +685,4 @@ export interface BetterAuthOptions {
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 	};
-}
+};

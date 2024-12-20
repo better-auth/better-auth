@@ -661,7 +661,7 @@ importers:
         specifier: ^7.6.12
         version: 7.6.12
       astro:
-        specifier: ^4.16.1
+        specifier: ^4.16.17
         version: 4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
       better-auth:
         specifier: workspace:*
@@ -1359,6 +1359,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/utils':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
@@ -1377,9 +1380,6 @@ importers:
       better-call:
         specifier: 0.3.3-beta.4
         version: 0.3.3-beta.4
-      consola:
-        specifier: ^3.2.3
-        version: 3.2.3
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1389,15 +1389,9 @@ importers:
       kysely:
         specifier: ^0.27.4
         version: 0.27.4
-      nanoid:
-        specifier: ^5.0.9
-        version: 5.0.9
       nanostores:
         specifier: ^0.11.3
         version: 0.11.3
-      oslo:
-        specifier: ^1.2.1
-        version: 1.2.1
       uncrypto:
         specifier: ^0.1.3
         version: 0.1.3
@@ -2451,6 +2445,9 @@ packages:
   '@babel/types@7.26.0':
     resolution: {integrity: sha512-Z/yiTPj+lDVnF7lWeKCIJzaIkI0vYO87dMpZ4bg4TDrFe4XXLFWL1TbXU27gBP3QccxV9mZICCrnjnYlJjXHOA==}
     engines: {node: '>=6.9.0'}
+
+  '@better-auth/utils@0.2.1':
+    resolution: {integrity: sha512-1PgLrNJY3FZfwz8g6puKrAS/WJW3LWuNlLSFFKrzDLrn69SPBCuCXUF3tY6c1gURLX6nHARH6yx3dVy9f298cg==}
 
   '@better-fetch/fetch@1.1.12':
     resolution: {integrity: sha512-B3bfloI/2UBQWIATRN6qmlORrvx3Mp0kkNjmXLv0b+DtbtR+pP4/I5kQA/rDUv+OReLywCCldf6co4LdDmh8JA==}
@@ -8417,10 +8414,6 @@ packages:
 
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
-    engines: {node: '>=8'}
-
-  ci-info@4.0.0:
-    resolution: {integrity: sha512-TdHqgGf9odd8SXNuxtUBVx8Nv+qZOejE6qyqiy5NtbYYQOeFa6zmHkxlPzmaLxWWHsU6nJmB7AETdVPi+2NBUg==}
     engines: {node: '>=8'}
 
   ci-info@4.1.0:
@@ -18536,6 +18529,10 @@ snapshots:
       '@babel/helper-string-parser': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
 
+  '@better-auth/utils@0.2.1':
+    dependencies:
+      uncrypto: 0.1.3
+
   '@better-fetch/fetch@1.1.12': {}
 
   '@biomejs/biome@1.7.3':
@@ -20721,7 +20718,7 @@ snapshots:
   '@nuxt/telemetry@2.6.0(magicast@0.3.5)(rollup@4.24.3)':
     dependencies:
       '@nuxt/kit': 3.14.1592(magicast@0.3.5)(rollup@4.24.3)
-      ci-info: 4.0.0
+      ci-info: 4.1.0
       consola: 3.2.3
       create-require: 1.1.1
       defu: 6.1.4
@@ -24463,7 +24460,7 @@ snapshots:
 
   '@vitest/snapshot@1.6.0':
     dependencies:
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       pathe: 1.1.2
       pretty-format: 29.7.0
 
@@ -24592,7 +24589,7 @@ snapshots:
       '@vue/compiler-ssr': 3.5.13
       '@vue/shared': 3.5.13
       estree-walker: 2.0.2
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       postcss: 8.4.49
       source-map-js: 1.2.1
 
@@ -26337,8 +26334,6 @@ snapshots:
   ci-info@2.0.0: {}
 
   ci-info@3.9.0: {}
-
-  ci-info@4.0.0: {}
 
   ci-info@4.1.0: {}
 
@@ -32336,7 +32331,7 @@ snapshots:
       klona: 2.0.6
       knitwork: 1.1.0
       listhen: 1.9.0
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       magicast: 0.3.5
       mime: 4.0.4
       mlly: 1.7.2
@@ -36107,7 +36102,7 @@ snapshots:
     dependencies:
       acorn: 8.14.0
       estree-walker: 3.0.3
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       unplugin: 1.15.0
     transitivePeerDependencies:
       - webpack-sources
@@ -36179,7 +36174,7 @@ snapshots:
       estree-walker: 3.0.3
       fast-glob: 3.3.2
       local-pkg: 0.5.0
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       mlly: 1.7.2
       pathe: 1.1.2
       pkg-types: 1.2.1

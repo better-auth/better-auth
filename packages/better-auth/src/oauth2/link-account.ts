@@ -1,4 +1,4 @@
-import { createEmailVerificationToken } from "../api";
+import { APIError, createEmailVerificationToken } from "../api";
 import type { Account } from "../db/schema";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
@@ -17,9 +17,11 @@ export async function handleOAuthUserInfo(
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
-		.findUserByEmail(userInfo.email.toLowerCase(), {
-			includeAccounts: true,
-		})
+		.findOAuthUser(
+			userInfo.email.toLowerCase(),
+			account.accountId,
+			account.providerId,
+		)
 		.catch((e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -30,6 +32,7 @@ export async function handleOAuthUserInfo(
 			);
 		});
 	let user = dbUser?.user;
+	let isRegister = !user;
 
 	if (dbUser) {
 		const hasBeenLinked = dbUser.accounts.find(
@@ -74,11 +77,6 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
-			// Update user info
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...userInfo,
-				updatedAt: new Date(),
-			});
 		} else {
 			const updateData = Object.fromEntries(
 				Object.entries({
@@ -98,49 +96,65 @@ export async function handleOAuthUserInfo(
 			}
 		}
 	} else {
-		user = await c.context.internalAdapter
-			.createOAuthUser(
-				{
-					...userInfo,
-					email: userInfo.email.toLowerCase(),
-					id: undefined,
-				},
-				{
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
-				},
-			)
-			.then((res) => res?.user);
-		if (
-			!userInfo.emailVerified &&
-			user &&
-			c.context.options.emailVerification?.sendOnSignUp
-		) {
-			const token = await createEmailVerificationToken(
-				c.context.secret,
-				user.email,
-			);
-			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-			await c.context.options.emailVerification?.sendVerificationEmail?.(
-				{
-					user,
-					url,
-					token,
-				},
-				c.request,
-			);
+		try {
+			user = await c.context.internalAdapter
+				.createOAuthUser(
+					{
+						...userInfo,
+						email: userInfo.email.toLowerCase(),
+						id: undefined,
+					},
+					{
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+						providerId: account.providerId,
+						accountId: userInfo.id.toString(),
+					},
+				)
+				.then((res) => res?.user);
+			if (
+				!userInfo.emailVerified &&
+				user &&
+				c.context.options.emailVerification?.sendOnSignUp
+			) {
+				const token = await createEmailVerificationToken(
+					c.context.secret,
+					user.email,
+				);
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				await c.context.options.emailVerification?.sendVerificationEmail?.(
+					{
+						user,
+						url,
+						token,
+					},
+					c.request,
+				);
+			}
+		} catch (e) {
+			if (e instanceof APIError) {
+				return {
+					error: e.message,
+					data: null,
+					isRegister: false,
+				};
+			}
+			return {
+				error: "unable to create user",
+				data: null,
+				isRegister: false,
+			};
 		}
 	}
 	if (!user) {
 		return {
 			error: "unable to create user",
 			data: null,
+			isRegister: false,
 		};
 	}
 
@@ -152,6 +166,7 @@ export async function handleOAuthUserInfo(
 		return {
 			error: "unable to create session",
 			data: null,
+			isRegister: false,
 		};
 	}
 	return {
@@ -160,5 +175,6 @@ export async function handleOAuthUserInfo(
 			user,
 		},
 		error: null,
+		isRegister,
 	};
 }

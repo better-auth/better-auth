@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.0.18",
+  "version": "1.0.23-beta.6",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -19,6 +19,16 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.mjs",
       "require": "./dist/client.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
     }
   },
   "keywords": [],
