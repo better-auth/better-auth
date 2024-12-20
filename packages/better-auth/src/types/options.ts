@@ -10,12 +10,7 @@ import type { AdapterInstance, SecondaryStorage, Where } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
-import type {
-	AuthContext,
-	GenericEndpointContext,
-	LiteralUnion,
-	OmitId,
-} from ".";
+import type { AuthContext, LiteralUnion, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
@@ -797,4 +792,4 @@ export type BetterAuthOptions = {
 		 */
 		after?: HookAfterHandler;
 	};
-}
+};
