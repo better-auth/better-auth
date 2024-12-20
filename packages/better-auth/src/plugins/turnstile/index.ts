@@ -1,9 +1,9 @@
-import { APIError } from "better-call";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "better-auth/plugins";
 import type { TurnstileResponse } from "./types";
 import { defaultEndpoints, defaultSiteVerify } from "./constants";
 import { TURNSTILE_ERROR_CODES } from "./error-codes";
+import { middlewareResponse } from "../../utils/middleware-response";
 
 /**
  * @param {string} secretKey - The Cloudflare Turnstile secret key
@@ -17,7 +17,6 @@ export const turnstile = (options: {
 }) =>
 	({
 		id: "turnstile",
-
 		onRequest: async (request) => {
 			try {
 				if (request.method !== "POST") return undefined;
@@ -27,15 +26,16 @@ export const turnstile = (options: {
 					: defaultEndpoints;
 
 				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
-					return undefined;
+					return;
 
 				const captchaResponse = request.headers.get(
 					"x-turnstile-captcha-response",
 				);
 
 				if (!captchaResponse) {
-					throw new APIError("BAD_REQUEST", {
+					return middlewareResponse({
 						message: TURNSTILE_ERROR_CODES.MISSING_CAPTCHA_RESPONSE,
+						status: 400,
 					});
 				}
 
@@ -51,21 +51,24 @@ export const turnstile = (options: {
 				});
 
 				if (!response.data || response.error) {
-					throw new APIError("SERVICE_UNAVAILABLE", {
+					return middlewareResponse({
 						message: TURNSTILE_ERROR_CODES.CAPTCHA_VERIFICATION_FAILED,
+						status: 503,
 					});
 				}
 
 				if (!response.data.success) {
-					throw new APIError("FORBIDDEN", {
+					return middlewareResponse({
 						message: TURNSTILE_ERROR_CODES.CAPTCHA_VERIFICATION_REJECTED,
+						status: 403,
 					});
 				}
 
 				return undefined;
 			} catch (_error) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				return middlewareResponse({
 					message: TURNSTILE_ERROR_CODES.UNKNOWN_ERROR,
+					status: 500,
 				});
 			}
 		},
