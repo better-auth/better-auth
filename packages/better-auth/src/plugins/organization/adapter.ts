@@ -1,4 +1,4 @@
-import type { Session, User } from "../../db/schema";
+import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import type { OrganizationOptions } from "./organization";
 import type {

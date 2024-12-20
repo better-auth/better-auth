@@ -1,5 +1,5 @@
 import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../db/schema";
+import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";

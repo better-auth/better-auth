@@ -1,4 +1,3 @@
-import type { User } from "../db/schema";
 import type { LiteralString } from "../types/helper";
 
 export interface OAuth2Tokens {

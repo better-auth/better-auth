@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { FieldAttribute } from ".";
-import type { BetterAuthOptions, PluginSchema } from "../types";
+import type { PluginSchema } from "../types/plugins";
+import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
+import type { Account, Session, User } from "src/types";
 
 export const accountSchema = z.object({
 	id: z.string(),
@@ -60,11 +62,6 @@ export const verificationSchema = z.object({
 	expiresAt: z.date(),
 	identifier: z.string(),
 });
-
-export type User = z.infer<typeof userSchema>;
-export type Account = z.infer<typeof accountSchema>;
-export type Session = z.infer<typeof sessionSchema>;
-export type Verification = z.infer<typeof verificationSchema>;
 
 export function parseOutputData<T extends Record<string, any>>(
 	data: T,

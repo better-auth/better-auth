@@ -4,7 +4,6 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import type { InferRolesFromOption, Member } from "../schema";
 import { APIError } from "better-call";
-import type { User } from "../../../db/schema";
 import { generateId } from "../../../utils";
 import type { OrganizationOptions } from "../organization";
 import { getSessionFromCtx } from "../../../api";
