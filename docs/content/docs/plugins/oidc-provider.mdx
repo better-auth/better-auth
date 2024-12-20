@@ -3,20 +3,24 @@ title: OIDC Provider
 description: Open ID Connect plugin for Better Auth that allows you to have your own OIDC provider.
 ---
 
-The **OIDC Provider Plugin** allows you to build and manage your own OpenID Connect (OIDC) provider, giving you full control over user authentication without relying on third-party providers like Okta or Azure AD. It also enables other services to authenticate users through your OIDC provider.
+The **OIDC Provider Plugin** enables you to build and manage your own OpenID Connect (OIDC) provider, granting full control over user authentication without relying on third-party services like Okta or Azure AD. It also allows other services to authenticate users through your OIDC provider.
 
 **Key Features**:
 
 - **Client Registration**: Register clients to authenticate with your OIDC provider.
 - **Authorization Code Flow**: Support the Authorization Code Flow.
 - **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens.
-- **Refresh Tokens**: Issue refresh tokens and handles access token renewal using the `refresh_token` grant.  
+- **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
 - **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
-- **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.  
+- **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
 
-<Callout>
-This is an enterprise plugin, but it does not require an additional license and it's completely free. The "enterprise" tag simply indicates that it is a more advanced plugin.
+<Callout type="warn">
+This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](
+https://github.com/better-auth/better-auth
+).
 </Callout>
+
+## Installation
 
 <Steps>
     <Step>
@@ -26,10 +30,10 @@ This is an enterprise plugin, but it does not require an additional license and 
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { oidc } from "better-auth/plugins/oidc";
+        import { oidcProvider } from "better-auth/plugins/oidc-provider";
 
         const auth = betterAuth({
-            plugins: [oidc({
+            plugins: [oidcProvider({
                 // Your OIDC configuration
             })]
         })
@@ -37,7 +41,7 @@ This is an enterprise plugin, but it does not require an additional license and 
     </Step>
 
     <Step>
-        ### Migrate the database
+        ### Migrate the Database
 
         Run the migration or generate the schema to add the necessary fields and tables to the database.
 
@@ -57,7 +61,7 @@ This is an enterprise plugin, but it does not require an additional license and 
     </Step>
 
     <Step>
-        ### Add the client plugin
+        ### Add the Client Plugin
 
         Add the OIDC client plugin to your auth client config.
 
@@ -73,101 +77,106 @@ This is an enterprise plugin, but it does not require an additional license and 
     </Step>
 </Steps>
 
-## OIDC Metadata Configuration
+## Usage
 
-The OIDC provider in Better Auth supports dynamic client registration and discovery via OpenID Connect (OIDC) configuration. This is achieved through the metadata returned by the `/.well-known/openid-configuration` endpoint. The metadata allows clients to automatically discover the necessary configuration of the OIDC provider, including endpoints, supported scopes, response types, and authentication methods.
+Once installed, you can utilize the OIDC Provider to manage authentication flows within your application.
 
-### Configuration Overview
+### Register an OIDC Client
 
-The metadata is returned in the form of a JSON document containing essential information about the OIDC provider's configuration. Here's a breakdown of the key metadata fields:
+To register a new OIDC client, use the `registerOAuth2Client` endpoint with the necessary configuration details.
 
-1. **Issuer (`issuer`)**
-   - **Description:** The `issuer` is the identifier for the OIDC provider. It is the URL used to verify the `iss` claim in the ID token.
-   - **Default:** The base URL of the server (e.g., `https://example.com`).
+```ts title="auth.ts"
+await auth.api.registerOAuth2Client({
+    name: "My Client",
+    redirectURLs: ["https://client.example.com/callback"],
+});
+```
 
-2. **Authorization Endpoint (`authorization_endpoint`)**
-   - **Description:** The URL of the OIDC authorization endpoint, where clients can initiate the authentication flow.
-   - **Default:** `/oauth2/authorize`.
+### Authorization Code Flow
 
-3. **Token Endpoint (`token_endpoint`)**
-   - **Description:** The URL of the token endpoint, where clients can exchange an authorization code for tokens.
-   - **Default:** `/oauth2/token`.
+Initiate the Authorization Code Flow by directing users to the authorization endpoint.
 
-4. **User Info Endpoint (`userInfo_endpoint`)**
-   - **Description:** The URL of the user info endpoint, where clients can retrieve additional user information after authentication.
-   - **Default:** `/oauth2/userinfo`.
+```ts title="auth.ts"
+const authorizationURL = `${baseURL}/oauth2/authorize?response_type=code&client_id=your_client_id&redirect_uri=https://client.example.com/callback&scope=openid email profile`;
+```
 
-5. **JWKS URI (`jwks_uri`)**
-   - **Description:** The URL of the JSON Web Key Set (JWKS) endpoint, used to fetch public keys to validate ID tokens.
-   - **Default:** `/jwks`.
+### Token Exchange
 
-6. **Registration Endpoint (`registration_endpoint`)**
-   - **Description:** The URL of the dynamic client registration endpoint, allowing clients to dynamically register with the provider.
-   - **Default:** `/oauth2/register`.
+Exchange the authorization code for access and ID tokens.
 
-7. **Scopes Supported (`scopes_supported`)**
-   - **Description:** A list of supported scopes that the provider supports for authorization.
-   - **Default:** `["openid", "profile", "email", "offline_access"]`.
+```ts title="auth.ts"
+const response = await fetch(`${baseURL}/oauth2/token`, {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authorizationCode,
+        redirect_uri: "https://client.example.com/callback",
+        client_id: "your_client_id",
+        client_secret: "your_client_secret",
+    }),
+});
+const tokens = await response.json();
+```
 
-8. **Response Types Supported (`response_types_supported`)**
-   - **Description:** A list of response types supported by the authorization endpoint.
-   - **Default:** `["code"]`.
+## Advanced Configuration
 
-9. **Response Modes Supported (`response_modes_supported`)**
-   - **Description:** A list of response modes supported by the authorization endpoint.
-   - **Default:** `["query"]`.
+### OIDC Metadata
 
-10. **Grant Types Supported (`grant_types_supported`)**
-   - **Description:** A list of supported grant types for the token endpoint.
-   - **Default:** `["authorization_code"]`.
-
-11. **ACR Values Supported (`acr_values_supported`)**
-   - **Description:** A list of Authentication Context Class Reference (ACR) values supported by the provider.
-   - **Default:** `["urn:mace:incommon:iap:silver", "urn:mace:incommon:iap:bronze"]`.
-
-12. **Subject Types Supported (`subject_types_supported`)**
-   - **Description:** The subject types supported by the provider.
-   - **Default:** `["public"]`.
-
-13. **ID Token Signing Algorithms Supported (`id_token_signing_alg_values_supported`)**
-   - **Description:** A list of supported signing algorithms for ID tokens.
-   - **Default:** `["RS256", "none"]`.
-
-14. **Token Endpoint Authentication Methods Supported (`token_endpoint_auth_methods_supported`)**
-   - **Description:** A list of supported authentication methods for the token endpoint.
-   - **Default:** `["client_secret_basic", "client_secret_post"]`.
-
-15. **Claims Supported (`claims_supported`)**
-   - **Description:** A list of supported claims that the provider can return in ID tokens and the userinfo response.
-   - **Default:** `["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name"]`.
-
-
-To change any of the default values, you can provide a custom configuration object when initializing the OIDC plugin. The configuration object should contain the desired values for the metadata fields you want to customize.
+Customize the OIDC metadata by providing a configuration object during initialization.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { oidc } from "better-auth/plugins/oidc";
 
 export const auth = betterAuth({
-    plugins: [odic({
+    plugins: [oidc({
         metadata: {
-            // Custom OIDC metadata configuration
+            issuer: "https://your-domain.com",
+            authorization_endpoint: "/custom/oauth2/authorize",
+            token_endpoint: "/custom/oauth2/token",
+            // ...other custom metadata
         }
     })]
 })
 ```
 
-### Discovery Endpoint
+### JWKS Endpoint
 
-By default the open-id configuration endpoint is available at `{baseURL}/{basePath}/.well-known/openid-configuration` (e.g., `https://example.com/api/auth/.well-known/openid-configuration`). 
-
-To comply with the OIDC specification, you may need to expose the discovery endpoint at the root of your server (e.g., `https://example.com/.well-known/openid-configuration`). You can achieve this by adding a `proxy` route in your server or by call `auth.api.getOpenIdConfiguration()` to get the configuration and expose it at the desired endpoint.
+Ensure clients can verify tokens by exposing the JWKS endpoint.
 
 ```ts title="server.ts"
 import { auth } from "./auth";
 
-// Expose the discovery endpoint at the root of the server
-app.get("/.well-known/openid-configuration", (req, res) => {
-    res.json(auth.api.getOpenIdConfiguration());
+app.get("/.well-known/jwks.json", (req, res) => {
+    res.json(auth.api.getJWKS());
 });
 ```
+
+### Dynamic Client Registration
+
+Enable dynamic client registration for automated client setup.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidc({
+        allowDynamicClientRegistration: true,
+    })]
+})
+```
+
+## Schema
+
+The OIDC Provider plugin adds the following tables to the database:
+
+## Options
+
+**allowDynamicClientRegistration**: `boolean` - Enable or disable dynamic client registration.  
+**metadata**: `OIDCMetadata` - Customize the OIDC provider metadata.  
+**generateClientId**: `() => string` - Function to generate client IDs.  
+**generateClientSecret**: `() => string` - Function to generate client secrets.  
+// ...existing code...
+
+````

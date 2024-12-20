@@ -222,15 +222,6 @@ export interface Client {
 	 */
 	clientSecret: string;
 	/**
-	 * The client authentication scheme
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.3
-	 *
-	 * if `client_secret_post` is used, the client must send the client ID and secret in the
-	 * request body.
-	 */
-	authenticationScheme: "client_secret_post";
-	/**
 	 * The client type
 	 *
 	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1

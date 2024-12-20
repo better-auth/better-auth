@@ -1,18 +1,16 @@
-import type { AuthContext, BetterAuthOptions } from "../types";
-import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
+import { parseSessionOutput, parseUserOutput } from "./schema";
 import {
-	parseSessionOutput,
-	parseUserOutput,
 	type Account,
 	type Session,
 	type User,
 	type Verification,
-} from "./schema";
+} from "../types";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
+import type { Adapter, AuthContext, BetterAuthOptions, Where } from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -538,6 +536,64 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+		},
+		findOAuthUser: async (
+			email: string,
+			accountId: string,
+			providerId: string,
+		) => {
+			let user: User | null = null;
+			user = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						value: email.toLowerCase(),
+						field: "email",
+					},
+				],
+			});
+			if (!user) {
+				const account = await adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{
+							value: accountId,
+							field: "accountId",
+						},
+						{
+							value: providerId,
+							field: "providerId",
+						},
+					],
+				});
+				if (!account) return null;
+				user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: account.userId,
+							field: "id",
+						},
+					],
+				});
+				return {
+					user: user!,
+					accounts: [account],
+				};
+			}
+			const accounts = await adapter.findMany<Account>({
+				model: "account",
+				where: [
+					{
+						value: user.id,
+						field: "userId",
+					},
+				],
+			});
+			return {
+				user: user!,
+				accounts: accounts || [],
+			};
 		},
 		findUserByEmail: async (
 			email: string,

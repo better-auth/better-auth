@@ -12,10 +12,17 @@
 		"moduleDetection": "force",
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
+		"composite": false,
+		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
 		"strict": true,
 		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
+		"noFallthroughCasesInSwitch": true,
+		"rootDir": ".",
+		"downlevelIteration": true,
+		"baseUrl": "."
 	},
-	"exclude": ["node_modules"],
-	"include": ["src"]
+	"exclude": ["**/dist", "node_modules"],
+	"references": [],
+	"include": ["src/**/*"]
 }

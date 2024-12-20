@@ -2,8 +2,9 @@ import type { APIError, Endpoint } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
-import type { HookEndpointContext } from "./context";
-import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
+import type { HookEndpointContext } from ".";
+import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
+
 import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
@@ -15,6 +16,32 @@ export type PluginSchema = {
 		modelName?: string;
 	};
 };
+
+export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
+	| void
+	| {
+			context?: Partial<HookEndpointContext>;
+	  }
+	| Response
+	| {
+			response: Record<string, any>;
+			body: any;
+			_flag: "json";
+	  }
+>;
+
+export type HookAfterHandler = (context: HookEndpointContext) => Promise<
+	| void
+	| {
+			responseHeader?: Headers;
+	  }
+	| Response
+	| {
+			response: Record<string, any>;
+			body: any;
+			_flag: "json";
+	  }
+>;
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
@@ -54,18 +81,7 @@ export type BetterAuthPlugin = {
 	hooks?: {
 		before?: {
 			matcher: (context: HookEndpointContext) => boolean;
-			handler: (context: HookEndpointContext) => Promise<
-				| void
-				| {
-						context?: Partial<HookEndpointContext>;
-				  }
-				| Response
-				| {
-						response: Record<string, any>;
-						body: any;
-						_flag: "json";
-				  }
-			>;
+			handler: HookBeforeHandler;
 		}[];
 		after?: {
 			matcher: (
@@ -74,18 +90,7 @@ export type BetterAuthPlugin = {
 					endpoint: Endpoint;
 				}>,
 			) => boolean;
-			handler: (context: HookEndpointContext) => Promise<
-				| void
-				| {
-						responseHeader?: Headers;
-				  }
-				| Response
-				| {
-						response: Record<string, any>;
-						body: any;
-						_flag: "json";
-				  }
-			>;
+			handler: HookAfterHandler;
 		}[];
 	};
 	/**

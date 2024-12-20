@@ -1,5 +1,5 @@
 import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../db/schema";
+import type { Account } from "../types";
 import type { GenericEndpointContext, User } from "../types";
 import { logger } from "../utils";
 import { isDevelopment } from "../utils/env";
@@ -17,9 +17,11 @@ export async function handleOAuthUserInfo(
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
-		.findUserByEmail(userInfo.email.toLowerCase(), {
-			includeAccounts: true,
-		})
+		.findOAuthUser(
+			userInfo.email.toLowerCase(),
+			account.accountId,
+			account.providerId,
+		)
 		.catch((e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",

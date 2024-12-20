@@ -1,7 +1,6 @@
 import { getAuthTables, type FieldAttribute } from ".";
 import { BetterAuthError } from "../error";
-import type { BetterAuthOptions } from "../types";
-import type { Adapter } from "../types/adapter";
+import type { Adapter, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
 import { memoryAdapter } from "../adapters/memory-adapter";

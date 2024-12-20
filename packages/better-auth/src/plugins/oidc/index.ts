@@ -14,6 +14,7 @@ import type {
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { sha256 } from "oslo/crypto";
+import type { Endpoint } from "better-call";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -495,14 +496,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					const secretKey = await crypto.subtle.generateKey(
-						{
-							name: "HMAC",
-							hash: "SHA-256",
-						},
-						true,
-						["sign", "verify"],
-					);
+					let secretKey = {
+						alg: "HS256",
+						key: await crypto.subtle.generateKey(
+							{
+								name: "HMAC",
+								hash: "SHA-256",
+							},
+							true,
+							["sign", "verify"],
+						),
+					};
 					const profile = {
 						given_name: user.name.split(" ")[0],
 						family_name: user.name.split(" ")[1],
@@ -518,6 +522,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("profile") ? profile : {}),
 						...(requestedScopes.includes("email") ? email : {}),
 					};
+
 					const idToken = await new SignJWT({
 						sub: user.id,
 						aud: client_id.toString(),
@@ -527,12 +532,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 					})
-						.setProtectedHeader({ alg: "HS256" })
+						.setProtectedHeader({ alg: secretKey.alg })
 						.setIssuedAt()
 						.setExpirationTime(
 							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
 						)
-						.sign(secretKey);
+						.sign(secretKey.key);
 
 					return ctx.json(
 						{
@@ -631,8 +636,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					return ctx.json(userClaims);
 				},
 			),
-			registerOAuth2Client: createAuthEndpoint(
-				"/oauth2/register-client",
+			createOAuthApplication: createAuthEndpoint(
+				"/oauth2/create-application",
 				{
 					method: "POST",
 					body: z.object({

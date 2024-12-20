@@ -64,7 +64,9 @@ export interface AppleNonConformUser {
 	email: string;
 }
 
-export interface AppleOptions extends ProviderOptions<AppleProfile> {}
+export interface AppleOptions extends ProviderOptions<AppleProfile> {
+	appBundleIdentifier?: string;
+}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -105,7 +107,7 @@ export const apple = (options: AppleOptions) => {
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
 				issuer: "https://appleid.apple.com",
-				audience: options.clientId,
+				audience: options.appBundleIdentifier || options.clientId,
 				maxTokenAge: "1h",
 			});
 			["email_verified", "is_private_email"].forEach((field) => {
@@ -125,7 +127,7 @@ export const apple = (options: AppleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const profile = decodeJwt(token.idToken)?.payload as AppleProfile | null;
+			const profile = decodeJwt<AppleProfile>(token.idToken);
 			if (!profile) {
 				return null;
 			}

@@ -10,7 +10,7 @@ import type {
 	Expand,
 } from "./types";
 import { getBaseURL } from "./utils/url";
-import type { FilterActions, InferAPI } from "./types/api";
+import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";
 
 export type WithJsDoc<T, D> = Expand<T & D>;

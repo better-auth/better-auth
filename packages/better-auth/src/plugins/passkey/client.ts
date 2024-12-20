@@ -9,7 +9,7 @@ import type {
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/types";
 import type { Session } from "inspector";
-import type { User } from "../../db/schema";
+import type { User } from "../../types";
 import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";

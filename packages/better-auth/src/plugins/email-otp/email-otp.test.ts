@@ -97,7 +97,7 @@ describe("email-otp", async () => {
 
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
-			email: "test@email.com",
+			email: "test8@email.com",
 			password: "password",
 			name: "test",
 		};
