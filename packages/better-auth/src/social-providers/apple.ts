@@ -127,7 +127,7 @@ export const apple = (options: AppleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const profile = decodeJwt(token.idToken) as AppleProfile | null;
+			const profile = decodeJwt<AppleProfile>(token.idToken);
 			if (!profile) {
 				return null;
 			}
