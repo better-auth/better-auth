@@ -155,6 +155,48 @@ export const jwt = (options?: JwtOptions) => {
 
 					const keySets = await adapter.getAllKeys();
 
+					if (keySets.length === 0) {
+						const { publicKey, privateKey } = await generateKeyPair(
+							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
+						);
+
+						const publicWebKey = await exportJWK(publicKey);
+						const privateWebKey = await exportJWK(privateKey);
+						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+						const privateKeyEncryptionEnabled =
+							!options?.jwks?.disablePrivateKeyEncryption;
+						let jwk: Partial<Jwk> = {
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
+							publicKey: JSON.stringify(publicWebKey),
+							privateKey: privateKeyEncryptionEnabled
+								? JSON.stringify(
+										await symmetricEncrypt({
+											key: ctx.context.options.secret!,
+											data: stringifiedPrivateWebKey,
+										}),
+									)
+								: stringifiedPrivateWebKey,
+							createdAt: new Date(),
+						};
+
+						await adapter.createJwk(jwk as Jwk);
+
+						return ctx.json({
+							keys: [
+								{
+									...publicWebKey,
+									kid: jwk.id,
+								},
+							],
+						});
+					}
+
 					return ctx.json({
 						keys: keySets.map((keySet) => ({
 							...JSON.parse(keySet.publicKey),
@@ -214,7 +256,9 @@ export const jwt = (options?: JwtOptions) => {
 						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 						let jwk: Partial<Jwk> = {
-							id: crypto.randomUUID(),
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
 							publicKey: JSON.stringify(publicWebKey),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(

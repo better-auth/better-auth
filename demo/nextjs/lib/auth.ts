@@ -8,6 +8,7 @@ import {
 	oneTap,
 	oAuthProxy,
 	openAPI,
+	oidcProvider,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -40,23 +41,7 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
-	},
-	databaseHooks: {
-		user: {
-			update: {
-				async before(user) {
-					if (user.emailVerified) {
-						return {
-							data: {
-								...user,
-								emailVerifiedAt: new Date().toISOString(),
-							},
-						};
-					}
-				},
-			},
-		},
+		type: "sqlite",
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -71,7 +56,7 @@ export const auth = betterAuth({
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github"],
+			trustedProviders: ["google", "github", "demo-app"],
 		},
 	},
 	emailAndPassword: {
@@ -161,5 +146,8 @@ export const auth = betterAuth({
 		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
+		oidcProvider({
+			loginPage: "/sign-in",
+		}),
 	],
 });

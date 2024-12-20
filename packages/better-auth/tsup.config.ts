@@ -41,6 +41,7 @@ export default defineConfig((env) => {
 			"plugins/one-tap": "./src/plugins/one-tap/index.ts",
 			"plugins/open-api": "./src/plugins/open-api/index.ts",
 			"plugins/organization": "./src/plugins/organization/index.ts",
+			"plugins/oidc-provider": "./src/plugins/oidc-provider/index.ts",
 			"plugins/passkey": "./src/plugins/passkey/index.ts",
 			"plugins/phone-number": "./src/plugins/phone-number/index.ts",
 			"plugins/sso": "./src/plugins/sso/index.ts",

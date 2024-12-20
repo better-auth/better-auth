@@ -67,7 +67,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = decodeJwt(token.idToken)?.payload as MicrosoftEntraIDProfile;
+			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
 			const profilePhotoSize = options.profilePhotoSize || 48;
 			await betterFetch<ArrayBuffer>(
 				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,

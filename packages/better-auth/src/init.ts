@@ -69,7 +69,7 @@ export const init = async (options: BetterAuthOptions) => {
 			if (value.enabled === false) {
 				return null;
 			}
-			if (!value.clientId || !value.clientSecret) {
+			if (!value.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);

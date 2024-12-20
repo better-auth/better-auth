@@ -323,6 +323,10 @@ export function getEndpoints<
 					}
 				});
 			}
+			if (response instanceof APIError) {
+				response.headers = endpoint.headers;
+				throw response;
+			}
 			return response;
 		};
 		api[key].path = endpoint.path;

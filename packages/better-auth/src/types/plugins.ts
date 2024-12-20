@@ -133,6 +133,9 @@ export type BetterAuthPlugin = {
 	 * The options of the plugin
 	 */
 	options?: Record<string, any>;
+	/**
+	 * types to be inferred
+	 */
 	$Infer?: Record<string, any>;
 	/**
 	 * The rate limit rules to apply to specific paths.

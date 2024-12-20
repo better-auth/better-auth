@@ -64,7 +64,7 @@ export const twitch = (options: TwitchOptions) => {
 				logger.error("No idToken found in token");
 				return null;
 			}
-			const profile = decodeJwt(idToken)?.payload as TwitchProfile;
+			const profile = decodeJwt(idToken) as TwitchProfile;
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {

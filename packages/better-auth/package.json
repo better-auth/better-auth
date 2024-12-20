@@ -337,6 +337,16 @@
         "default": "./dist/plugins/sso.cjs"
       }
     },
+    "./plugins/oidc-plugin": {
+      "import": {
+        "types": "./dist/plugins/oidc-plugin.d.ts",
+        "default": "./dist/plugins/oidc-plugin.js"
+      },
+      "require": {
+        "types": "./dist/plugins/oidc-plugin.d.cts",
+        "default": "./dist/plugins/oidc-plugin.cjs"
+      }
+    },
     "./plugins/magic-link": {
       "import": {
         "types": "./dist/plugins/magic-link.d.ts",
@@ -509,6 +519,15 @@
       ],
       "plugins/generic-oauth": [
         "./dist/plugins/generic-oauth.d.ts"
+      ],
+      "plugins/oauth-proxy": [
+        "./dist/plugins/oauth-proxy.d.ts"
+      ],
+      "plugins/sso": [
+        "./dist/plugins/sso.d.ts"
+      ],
+      "plugins/oidc-plugin": [
+        "./dist/plugins/oidc-plugin.d.ts"
       ],
       "plugins/jwt": [
         "./dist/plugins/jwt.d.ts"
