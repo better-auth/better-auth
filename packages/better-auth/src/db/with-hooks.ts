@@ -1,5 +1,4 @@
-import type { Adapter, Where } from "./../types/adapter";
-import type { BetterAuthOptions, Models } from "../types";
+import type { Adapter, BetterAuthOptions, Models, Where } from "../types";
 
 export function getWithHooks(
 	adapter: Adapter,

@@ -2,8 +2,9 @@ import type { APIError, Endpoint } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
-import type { HookEndpointContext } from "./context";
-import type { DeepPartial, LiteralString, UnionToIntersection } from "./helper";
+import type { HookEndpointContext } from ".";
+import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
+
 import type { AuthContext, BetterAuthOptions } from ".";
 
 export type PluginSchema = {
