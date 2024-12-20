@@ -504,6 +504,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
+							createdAt: new Date(),
+							updatedAt: new Date(),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -668,7 +670,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					const session = getSessionFromCtx(ctx);
+					const session = await getSessionFromCtx(ctx);
 					if (!session && !options.allowDynamicClientRegistration) {
 						throw new APIError("UNAUTHORIZED", {
 							message: "Unauthorized",
@@ -692,7 +694,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							type: "web",
 							authenticationScheme: "client_secret",
 							disabled: false,
-							userId: ctx.context.session?.user.id,
+							userId: session?.session.userId,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},

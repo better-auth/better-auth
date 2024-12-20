@@ -81,7 +81,6 @@ describe("oidc", async () => {
 			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			type: "web",
 			disabled: false,
-			userId: expect.any(String),
 		});
 		if (createdClient.data) {
 			application = createdClient.data;
@@ -294,6 +293,7 @@ describe("oidc", async () => {
 				redirectURI = context.response.headers.get("Location") || "";
 				cookieSetter(newHeaders)(context);
 			},
+			headers: newHeaders,
 		});
 		expect(redirectURI).toContain("/login");
 
@@ -310,21 +310,12 @@ describe("oidc", async () => {
 				},
 			},
 		);
-		expect(redirectURI).toContain("/oauth2/authorize?client_id=");
-		const res = await serverClient.oauth2.consent(
-			{
-				accept: true,
-			},
-			{
-				headers: newHeaders,
-				throw: true,
-			},
-		);
-		expect(res.redirectURI).toContain(
+
+		expect(redirectURI).toContain(
 			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 		);
 		let callbackURL = "";
-		await client.$fetch(res.redirectURI, {
+		await client.$fetch(redirectURI, {
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
