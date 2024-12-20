@@ -15,7 +15,7 @@ declare global {
 	}
 }
 
-interface GoogleOneTapOptions {
+export interface GoogleOneTapOptions {
 	/**
 	 * Google client ID
 	 */
@@ -34,7 +34,7 @@ interface GoogleOneTapOptions {
 	context?: "signin" | "signup" | "use";
 }
 
-interface GoogleOneTapActionOptions
+export interface GoogleOneTapActionOptions
 	extends Omit<GoogleOneTapOptions, "clientId"> {
 	fetchOptions?: BetterFetchOption;
 	callbackURL?: string;

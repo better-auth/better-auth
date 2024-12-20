@@ -20,7 +20,7 @@ import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 
-export interface BetterAuthOptions {
+export type BetterAuthOptions = {
 	/**
 	 * The name of the application
 	 *
@@ -35,7 +35,7 @@ export interface BetterAuthOptions {
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
+	 * process.env.BETTER_AUTH_URL
 	 *
 	 * If not set it will throw an error.
 	 */

@@ -6,3 +6,4 @@ export type * from "./helper";
 export type * from "./context";
 export type * from "./adapter";
 export * from "../client/types";
+export * from "./api";

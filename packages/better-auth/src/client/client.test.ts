@@ -9,8 +9,8 @@ import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
 import type { Session } from "../db/schema";
 import { BetterFetchError } from "@better-fetch/fetch";
-import { passkeyClient, twoFactorClient } from "../plugins";
-import { organizationClient } from "./plugins";
+import { twoFactorClient } from "../plugins";
+import { organizationClient, passkeyClient } from "./plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {

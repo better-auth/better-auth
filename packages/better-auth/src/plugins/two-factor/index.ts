@@ -240,7 +240,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					matcher(context) {
 						return (
 							context.path === "/sign-in/email" ||
-							context.path === "/sign-in/username"
+							context.path === "/sign-in/username" ||
+							context.path === "/sign-in/phone-number"
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {

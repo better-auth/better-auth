@@ -4,7 +4,6 @@ import {
 	admin,
 	multiSession,
 	organization,
-	passkey,
 	twoFactor,
 	oneTap,
 	oAuthProxy,
@@ -17,6 +16,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
+import { passkey } from "better-auth/plugins/passkey";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";

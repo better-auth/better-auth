@@ -21,7 +21,7 @@ export const Navbar = () => {
 					</div>
 				</Link>
 				<div className="md:col-span-10 flex items-center justify-end relative">
-					<ul className="md:flex items-center divide-x w-max border-r hidden shrink-0">
+					<ul className="md:flex items-center divide-x w-max hidden shrink-0">
 						{navMenu.map((menu, i) => (
 							<NavLink key={menu.name} href={menu.path}>
 								{menu.name}

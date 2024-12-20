@@ -65,6 +65,7 @@ exports[`init > should match config 1`] = `
     "findAccount": [Function],
     "findAccountByUserId": [Function],
     "findAccounts": [Function],
+    "findOAuthUser": [Function],
     "findSession": [Function],
     "findSessions": [Function],
     "findUserByEmail": [Function],
