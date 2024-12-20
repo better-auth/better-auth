@@ -615,20 +615,28 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					},
 					async handler(ctx) {
-						const response = ctx.context.newSession;
-						if (!response?.user) {
+						const response = ctx.context.returned;
+						if (response instanceof APIError) {
 							return;
 						}
-						if (response.user.email && response.user.emailVerified === false) {
+						const email =
+							response && "email" in response
+								? response.email
+								: response instanceof Response
+									? response.status === 200
+										? ctx.body.email
+										: null
+									: null;
+						if (email) {
 							const otp = generateRandomString(opts.otpLength, "0-9");
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
-								identifier: `email-verification-otp-${response.user.email}`,
+								identifier: `email-verification-otp-${email}`,
 								expiresAt: getDate(opts.expireIn, "sec"),
 							});
 							await options.sendVerificationOTP(
 								{
-									email: response.user.email,
+									email,
 									otp,
 									type: "email-verification",
 								},
