@@ -265,32 +265,6 @@ export default function SignIn() {
 								</g>
 							</svg>
 						</Button>
-						<Button
-							variant="outline"
-							className="gap-2"
-							onClick={async () => {
-								await signIn.oauth2({
-									providerId: "better-auth",
-								});
-							}}
-						>
-							<svg
-								width="1.2em"
-								height="1.2em"
-								viewBox="0 0 122 90"
-								fill="none"
-								xmlns="http://www.w3.org/2000/svg"
-							>
-								<path
-									d="M0 44.6667V89.3333H15.3333H30.6667V74.6667V60H45.3333H60V44.6667V29.3333H45.3333H30.6667V14.6667V5.51343e-06H15.3333H0V44.6667Z"
-									fill="#fff"
-								/>
-								<path
-									d="M61.3333 14.6667V29.3333H76H90.6667V44.6667V60H76H61.3333V74.6667V89.3333H91.3333H121.333V44.6667V5.51343e-06H91.3333H61.3333V14.6667Z"
-									fill="#fff"
-								/>
-							</svg>
-						</Button>
 					</div>
 					<Button
 						variant="outline"
