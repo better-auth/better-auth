@@ -17,7 +17,11 @@ export async function handleOAuthUserInfo(
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(userInfo.email.toLowerCase(), account.accountId)
+		.findOAuthUser(
+			userInfo.email.toLowerCase(),
+			account.accountId,
+			account.providerId,
+		)
 		.catch((e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",
