@@ -116,21 +116,19 @@ async function getUserInfo(
 ) {
 	if (tokens.idToken) {
 		const decoded = decodeJwt(tokens.idToken) as {
-			payload: {
-				sub: string;
-				email_verified: boolean;
-				email: string;
-				name: string;
-				picture: string;
-			};
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
 		};
-		if (decoded?.payload) {
-			if (decoded.payload.sub && decoded.payload.email) {
+		if (decoded) {
+			if (decoded.sub && decoded.email) {
 				return {
-					id: decoded.payload.sub,
-					emailVerified: decoded.payload.email_verified,
-					image: decoded.payload.picture,
-					...decoded.payload,
+					id: decoded.sub,
+					emailVerified: decoded.email_verified,
+					image: decoded.picture,
+					...decoded,
 				};
 			}
 		}

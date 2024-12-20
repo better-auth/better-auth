@@ -17,4 +17,4 @@ export * from "./one-tap";
 export * from "./oauth-proxy";
 export * from "./custom-session";
 export * from "./open-api";
-export * from "./oidc";
+export * from "./oidc-provider";

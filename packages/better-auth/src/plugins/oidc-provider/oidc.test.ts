@@ -49,7 +49,7 @@ describe("oidc", async () => {
 		await server.close();
 	});
 
-	let oauthClient: Client = {
+	let application: Client = {
 		clientId: "test-client-id",
 		clientSecret: "test-client-secret-oidc",
 		redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
@@ -60,11 +60,11 @@ describe("oidc", async () => {
 		name: "test",
 	};
 
-	it.only("should create oidc client", async ({ expect }) => {
-		const createdClient = await serverClient.oauth2.createApplication({
-			name: oauthClient.name,
-			redirectURLs: oauthClient.redirectURLs,
-			icon: oauthClient.icon,
+	it("should create oidc client", async ({ expect }) => {
+		const createdClient = await serverClient.oauth2.register({
+			name: application.name,
+			redirectURLs: application.redirectURLs,
+			icon: application.icon,
 			metadata: {
 				custom: "data",
 			},
@@ -84,11 +84,11 @@ describe("oidc", async () => {
 			userId: expect.any(String),
 		});
 		if (createdClient.data) {
-			oauthClient = createdClient.data;
+			application = createdClient.data;
 		}
 	});
 
-	it.only("should sign in the user with the provider", async ({ expect }) => {
+	it("should sign in the user with the provider", async ({ expect }) => {
 		// The RP (Relying Party) - the client application
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
@@ -101,8 +101,8 @@ describe("oidc", async () => {
 					config: [
 						{
 							providerId: "test",
-							clientId: oauthClient.clientId,
-							clientSecret: oauthClient.clientSecret,
+							clientId: application.clientId,
+							clientSecret: application.clientSecret,
 							authorizationUrl:
 								"http://localhost:3000/api/auth/oauth2/authorize",
 							tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -133,7 +133,7 @@ describe("oidc", async () => {
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
-		expect(data.url).toContain(`client_id=${oauthClient.clientId}`);
+		expect(data.url).toContain(`client_id=${application.clientId}`);
 
 		let redirectURI = "";
 		await serverClient.$fetch(data.url, {
@@ -152,8 +152,7 @@ describe("oidc", async () => {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
 		});
-		console.log({ callbackURL });
-		// expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).toContain("/dashboard");
 	});
 
 	it("should sign in after a consent flow", async ({ expect }) => {
@@ -170,8 +169,8 @@ describe("oidc", async () => {
 						config: [
 							{
 								providerId: "test",
-								clientId: oauthClient.clientId,
-								clientSecret: oauthClient.clientSecret,
+								clientId: application.clientId,
+								clientSecret: application.clientSecret,
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -203,7 +202,7 @@ describe("oidc", async () => {
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
-		expect(data.url).toContain(`client_id=${oauthClient.clientId}`);
+		expect(data.url).toContain(`client_id=${application.clientId}`);
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
@@ -252,8 +251,8 @@ describe("oidc", async () => {
 						config: [
 							{
 								providerId: "test",
-								clientId: oauthClient.clientId,
-								clientSecret: oauthClient.clientSecret,
+								clientId: application.clientId,
+								clientSecret: application.clientSecret,
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -285,7 +284,7 @@ describe("oidc", async () => {
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
-		expect(data.url).toContain(`client_id=${oauthClient.clientId}`);
+		expect(data.url).toContain(`client_id=${application.clientId}`);
 
 		let redirectURI = "";
 		const newHeaders = new Headers();

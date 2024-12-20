@@ -2,7 +2,7 @@ import type { PluginSchema } from "../../types";
 
 export const schema = {
 	oauthApplication: {
-		modelName: "oauth_application",
+		modelName: "oauthApplication",
 		fields: {
 			name: {
 				type: "string",
@@ -18,21 +18,15 @@ export const schema = {
 			clientId: {
 				type: "string",
 				unique: true,
-				fieldName: "client_id",
 			},
 			clientSecret: {
 				type: "string",
-				fieldName: "client_secret",
 			},
 			redirectURLs: {
 				type: "string",
 			},
 			type: {
 				type: "string",
-			},
-			authenticationScheme: {
-				type: "string",
-				fieldName: "authentication_scheme",
 			},
 			disabled: {
 				type: "boolean",
@@ -45,44 +39,71 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
-				fieldName: "user_id",
-				required: false,
+			},
+			createdAt: {
+				type: "date",
+			},
+			updatedAt: {
+				type: "date",
 			},
 		},
 	},
 	oauthAccessToken: {
-		modelName: "oauth_access_token",
+		modelName: "oauthAccessToken",
 		fields: {
 			accessToken: {
 				type: "string",
 				unique: true,
-				fieldName: "access_token",
 			},
 			refreshToken: {
 				type: "string",
 				unique: true,
-				fieldName: "refresh_token",
 			},
 			accessTokenExpiresAt: {
 				type: "date",
-				fieldName: "access_token_expires_at",
 			},
 			refreshTokenExpiresAt: {
 				type: "date",
-				fieldName: "refresh_token_expires_at",
 			},
 			clientId: {
 				type: "string",
-				fieldName: "client_id",
+			},
+			userId: {
+				type: "string",
+				required: false,
 			},
 			scopes: {
 				type: "string",
 			},
+			createdAt: {
+				type: "date",
+			},
+			updatedAt: {
+				type: "date",
+			},
+		},
+	},
+	oauthConsent: {
+		modelName: "oauthConsent",
+		fields: {
+			clientId: {
+				type: "string",
+			},
+			userId: {
+				type: "string",
+			},
+			scopes: {
+				type: "string",
+			},
+			createdAt: {
+				type: "date",
+			},
+			updatedAt: {
+				type: "date",
+			},
+			consentGiven: {
+				type: "boolean",
+			},
 		},
 	},
 } satisfies PluginSchema;
-
-export const modelName = {
-	oauthApplication: "oauthApplication",
-	oauthAccessToken: "oauthAccessToken",
-};

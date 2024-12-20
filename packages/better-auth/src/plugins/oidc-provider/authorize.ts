@@ -68,7 +68,7 @@ export async function authorize(
 
 	const client = await ctx.context.adapter
 		.findOne<Record<string, any>>({
-			model: schema.oauthClient.modelName,
+			model: "oauthApplication",
 			where: [
 				{
 					field: "clientId",
@@ -157,18 +157,6 @@ export async function authorize(
 		);
 	}
 
-	if (query.prompt === "login") {
-		await ctx.setSignedCookie(
-			"oidc_login_prompt",
-			JSON.stringify(query),
-			ctx.context.secret,
-			{
-				maxAge: 600,
-			},
-		);
-		throw ctx.redirect(`${opts.loginPage}`);
-	}
-
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const codeExpiresInMs = opts.codeExpiresIn * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
@@ -218,6 +206,28 @@ export async function authorize(
 	redirectURIWithCode.searchParams.set("state", ctx.query.state);
 
 	if (query.prompt !== "consent") {
+		throw ctx.redirect(redirectURIWithCode.toString());
+	}
+
+	const hasAlreadyConsented = await ctx.context.adapter
+		.findOne<{
+			consentGiven: boolean;
+		}>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: client.clientId,
+				},
+				{
+					field: "userId",
+					value: session.user.id,
+				},
+			],
+		})
+		.then((res) => !!res?.consentGiven);
+
+	if (hasAlreadyConsented) {
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 

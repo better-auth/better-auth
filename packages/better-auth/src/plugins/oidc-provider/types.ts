@@ -6,6 +6,10 @@ export interface OIDCOptions {
 	 */
 	accessTokenExpiresIn?: number;
 	/**
+	 * Allow dynamic client registration.
+	 */
+	allowDynamicClientRegistration?: boolean;
+	/**
 	 * The metadata for the OpenID Connect provider.
 	 */
 	metadata?: Partial<OIDCMetadata>;

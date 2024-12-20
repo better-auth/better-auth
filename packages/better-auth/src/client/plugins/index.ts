@@ -16,4 +16,4 @@ export * from "../../plugins/one-tap/client";
 export * from "../../plugins/custom-session/client";
 export * from "./infer-plugin";
 export * from "../../plugins/sso/client";
-export * from "../../plugins/oidc/client";
+export * from "../../plugins/oidc-provider/client";
