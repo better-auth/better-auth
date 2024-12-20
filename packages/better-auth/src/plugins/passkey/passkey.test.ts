@@ -45,7 +45,6 @@ describe("passkey", async () => {
 		const options = await auth.api.generatePasskeyAuthenticationOptions({
 			headers: headers,
 		});
-
 		expect(options).toBeDefined();
 		expect(options).toHaveProperty("challenge");
 		expect(options).toHaveProperty("rpId");
@@ -64,6 +63,7 @@ describe("passkey", async () => {
 				name: "mockName",
 				counter: 0,
 				deviceType: "mockDeviceType",
+				credentialID: "mockCredentialID",
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
