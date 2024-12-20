@@ -169,7 +169,7 @@ export async function authorize(
 		throw ctx.redirect(`${opts.loginPage}`);
 	}
 
-	const code = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
+	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const codeExpiresInMs = opts.codeExpiresIn * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 	try {

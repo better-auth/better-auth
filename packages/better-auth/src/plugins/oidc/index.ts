@@ -1,18 +1,62 @@
 import { base64url, SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types";
-import { alphabet, generateRandomString } from "../../crypto";
+import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+import { generateRandomString } from "../../crypto";
 import { schema } from "./schema";
 import type {
 	Client,
 	CodeVerificationValue,
 	OAuthAccessToken,
+	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { sha256 } from "oslo/crypto";
+
+const getMetadata = (
+	ctx: GenericEndpointContext,
+	options?: OIDCOptions,
+): OIDCMetadata => {
+	const issuer = ctx.context.options.baseURL as string;
+	const baseURL = ctx.context.baseURL;
+	return {
+		issuer,
+		authorization_endpoint: `${baseURL}/oauth2/authorize`,
+		token_endpoint: `${baseURL}/oauth2/token`,
+		userInfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		jwks_uri: `${baseURL}/jwks`,
+		registration_endpoint: `${baseURL}/oauth2/register`,
+		scopes_supported: ["openid", "profile", "email", "offline_access"],
+		response_types_supported: ["code"],
+		response_modes_supported: ["query"],
+		grant_types_supported: ["authorization_code"],
+		acr_values_supported: [
+			"urn:mace:incommon:iap:silver",
+			"urn:mace:incommon:iap:bronze",
+		],
+		subject_types_supported: ["public"],
+		id_token_signing_alg_values_supported: ["RS256", "none"],
+		token_endpoint_auth_methods_supported: [
+			"client_secret_basic",
+			"client_secret_post",
+		],
+		claims_supported: [
+			"sub",
+			"iss",
+			"aud",
+			"exp",
+			"nbf",
+			"iat",
+			"jti",
+			"email",
+			"email_verified",
+			"name",
+		],
+		...options?.metadata,
+	};
+};
 
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
@@ -22,7 +66,7 @@ import { sha256 } from "oslo/crypto";
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
  */
-export const oidc = (options: OIDCOptions) => {
+export const oidcProvider = (options: OIDCOptions) => {
 	const modelName = {
 		oauthClient: "oauthClient",
 		oauthAccessToken: "oauthAccessToken",
@@ -87,6 +131,16 @@ export const oidc = (options: OIDCOptions) => {
 			],
 		},
 		endpoints: {
+			getOpenIdConfig: createAuthEndpoint(
+				"/.well-known/openid-configuration",
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					const metadata = getMetadata(ctx, options);
+					return metadata;
+				},
+			),
 			oAuth2authorize: createAuthEndpoint(
 				"/oauth2/authorize",
 				{
@@ -150,7 +204,7 @@ export const oidc = (options: OIDCOptions) => {
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
 						});
 					}
-					const code = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
+					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 					const codeExpiresInMs = opts.codeExpiresIn * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationValue(
@@ -241,14 +295,8 @@ export const oidc = (options: OIDCOptions) => {
 								error: "invalid_grant",
 							});
 						}
-						const accessToken = generateRandomString(
-							32,
-							alphabet("a-z", "A-Z"),
-						);
-						const newRefreshToken = generateRandomString(
-							32,
-							alphabet("a-z", "A-Z"),
-						);
+						const accessToken = generateRandomString(32, "a-z", "A-Z");
+						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 						const accessTokenExpiresAt = new Date(
 							Date.now() + opts.accessTokenExpiresIn * 1000,
 						);
@@ -418,8 +466,8 @@ export const oidc = (options: OIDCOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						code.toString(),
 					);
-					const accessToken = generateRandomString(32, alphabet("a-z", "A-Z"));
-					const refreshToken = generateRandomString(32, alphabet("a-z", "A-Z"));
+					const accessToken = generateRandomString(32, "a-z", "A-Z");
+					const refreshToken = generateRandomString(32, "A-Z", "a-z");
 					const accessTokenExpiresAt = new Date(
 						Date.now() + opts.accessTokenExpiresIn * 1000,
 					);
@@ -599,10 +647,10 @@ export const oidc = (options: OIDCOptions) => {
 					const body = ctx.body;
 					const clientId =
 						options.generateClientId?.() ||
-						generateRandomString(32, alphabet("a-z", "A-Z"));
+						generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
 						options.generateClientSecret?.() ||
-						generateRandomString(32, alphabet("a-z", "A-Z"));
+						generateRandomString(32, "a-z", "A-Z");
 					const client = await ctx.context.adapter.create<Record<string, any>>({
 						model: modelName.oauthClient,
 						data: {

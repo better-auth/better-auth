@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { oidc } from ".";
+import { oidcProvider } from ".";
 import { genericOAuth } from "../generic-oauth";
 import type { Client } from "./types";
 import { createAuthClient } from "../../client";
@@ -18,7 +18,7 @@ describe("oidc", async () => {
 	} = await getTestInstance({
 		baseURL: "http://localhost:3000",
 		plugins: [
-			oidc({
+			oidcProvider({
 				loginPage: "/login",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
