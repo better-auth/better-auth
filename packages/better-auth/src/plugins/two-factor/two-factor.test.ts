@@ -105,7 +105,7 @@ describe("two factor", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.token).toBeDefined();
 	});
 
 	it("should require two factor", async () => {
@@ -159,7 +159,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		expect(verifyRes.data?.session).toBeDefined();
+		expect(verifyRes.data?.token).toBeDefined();
 	});
 
 	let backupCodes: string[] = [];

@@ -140,12 +140,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						user: newUser,
 					});
 					return ctx.json({
-						id: newUser.id,
-						email: newUser.email,
-						emailVerified: newUser.emailVerified,
-						name: newUser.name,
-						createdAt: newUser.createdAt,
-						updatedAt: newUser.updatedAt,
+						token: session.token,
 					});
 				},
 			),

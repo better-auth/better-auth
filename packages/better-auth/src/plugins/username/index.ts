@@ -145,13 +145,7 @@ export const username = () => {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
-						id: user.id,
-						email: user.email,
-						name: user.name,
-						image: user.image,
-						emailVerified: user.emailVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
+						token: session.token,
 					});
 				},
 			),

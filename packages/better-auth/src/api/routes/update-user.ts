@@ -2,11 +2,7 @@ import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import {
-	freshSessionMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "./session";
+import { getSessionFromCtx, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
@@ -94,14 +90,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				Object.keys(rest).length === 0
 			) {
 				return ctx.json({
-					id: session.user.id,
-					email: session.user.email,
-					name: session.user.name,
-					image: session.user.image,
-					emailVerified: session.user.emailVerified,
-					createdAt: session.user.createdAt,
-					updatedAt: session.user.updatedAt,
-				} as User);
+					status: true,
+				});
 			}
 			const additionalFields = parseUserInput(
 				ctx.context.options,
@@ -124,14 +114,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				user,
 			});
 			return ctx.json({
-				id: user.id,
-				email: user.email,
-				name: user.name,
-				image: user.image,
-				emailVerified: user.emailVerified,
-				createdAt: user.createdAt,
-				updatedAt: user.updatedAt,
-			} as User);
+				status: true,
+			});
 		},
 	);
 
@@ -231,6 +215,7 @@ export const changePassword = createAuthEndpoint(
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
 		});
+		let token = null;
 		if (revokeOtherSessions) {
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
@@ -247,9 +232,12 @@ export const changePassword = createAuthEndpoint(
 				session: newSession,
 				user: session.user,
 			});
+			token = newSession.token;
 		}
 
-		return ctx.json(session.user);
+		return ctx.json({
+			token,
+		});
 	},
 );
 
@@ -302,7 +290,9 @@ export const setPassword = createAuthEndpoint(
 				accountId: session.user.id,
 				password: passwordHash,
 			});
-			return ctx.json(session.user);
+			return ctx.json({
+				status: true,
+			});
 		}
 		throw new APIError("BAD_REQUEST", {
 			message: "user already has a password",
@@ -597,7 +587,6 @@ export const changeEmail = createAuthEndpoint(
 				},
 			);
 			return ctx.json({
-				user: updatedUser,
 				status: true,
 			});
 		}
@@ -632,7 +621,6 @@ export const changeEmail = createAuthEndpoint(
 			ctx.request,
 		);
 		return ctx.json({
-			user: null,
 			status: true,
 		});
 	},

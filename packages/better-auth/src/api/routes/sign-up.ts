@@ -210,11 +210,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
 				return ctx.json({
-					id: createdUser.id,
-					email: createdUser.email,
-					name: createdUser.name,
-					image: createdUser.image,
-					emailVerified: createdUser.emailVerified,
+					token: null,
 				});
 			}
 
@@ -232,13 +228,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				user: createdUser,
 			});
 			return ctx.json({
-				id: createdUser.id,
-				email: createdUser.email,
-				name: createdUser.name,
-				image: createdUser.image,
-				emailVerified: createdUser.emailVerified,
-				createdAt: createdUser.createdAt,
-				updatedAt: createdUser.updatedAt,
+				token: session.token,
 			});
 		},
 	);

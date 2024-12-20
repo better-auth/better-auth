@@ -266,7 +266,6 @@ export const verifyEmail = createAuthEndpoint(
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
 			return ctx.json({
-				user: updatedUser,
 				status: true,
 			});
 		}
@@ -294,7 +293,6 @@ export const verifyEmail = createAuthEndpoint(
 			throw ctx.redirect(ctx.query.callbackURL);
 		}
 		return ctx.json({
-			user: null,
 			status: true,
 		});
 	},

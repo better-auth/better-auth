@@ -365,6 +365,11 @@ describe("organization", async (it) => {
 				name: "new member",
 			},
 		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
 		const org = await auth.api.createOrganization({
 			body: {
 				name: "test",
@@ -375,7 +380,7 @@ describe("organization", async (it) => {
 		const member = await auth.api.addMember({
 			body: {
 				organizationId: org?.id,
-				userId: newUser.id,
+				userId: session?.user.id!,
 				role: "admin",
 			},
 		});

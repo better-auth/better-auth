@@ -10,6 +10,7 @@ import { init } from "../init";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { z } from "zod";
 import { createAuthClient } from "../client";
+import { bearer } from "src/plugins";
 
 describe("call", async () => {
 	const q = z.optional(
@@ -177,7 +178,7 @@ describe("call", async () => {
 	} satisfies BetterAuthPlugin;
 	const options = {
 		baseURL: "http://localhost:3000",
-		plugins: [testPlugin, testPlugin2],
+		plugins: [testPlugin, testPlugin2, bearer()],
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -396,7 +397,13 @@ describe("call", async () => {
 				name: "test",
 			},
 		});
-		expect(response.email).toBe("changed@email.com");
+
+		const session = await api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${response?.token}`,
+			}),
+		});
+		expect(session?.user.email).toBe("changed@email.com");
 	});
 
 	it("should fetch using a client", async () => {

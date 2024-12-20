@@ -238,8 +238,7 @@ export const phoneNumber = (options?: {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
-						user: user,
-						session,
+						token: session.token,
 					});
 				},
 			),
@@ -417,16 +416,13 @@ export const phoneNumber = (options?: {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
-						const user = await ctx.context.internalAdapter.updateUser(
-							session.user.id,
-							{
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-								[opts.phoneNumberVerified]: true,
-							},
-						);
+						await ctx.context.internalAdapter.updateUser(session.user.id, {
+							[opts.phoneNumber]: ctx.body.phoneNumber,
+							[opts.phoneNumberVerified]: true,
+						});
 						return ctx.json({
-							user: user as UserWithPhoneNumber,
-							session: session.session,
+							token: session.session.token,
+							status: true,
 						});
 					}
 
@@ -495,14 +491,14 @@ export const phoneNumber = (options?: {
 							user,
 						});
 						return ctx.json({
-							user,
-							session,
+							token: session.token,
+							status: true,
 						});
 					}
 
 					return ctx.json({
-						user,
-						session: null,
+						token: null,
+						status: true,
 					});
 				},
 			),

@@ -226,8 +226,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					});
 					if (!callbackURL) {
 						return ctx.json({
-							session,
-							user: user?.user!,
+							token: session.token,
 						});
 					}
 					throw ctx.redirect(callbackURL);

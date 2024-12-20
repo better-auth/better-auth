@@ -328,25 +328,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							user: updatedUser,
 						});
 						return ctx.json({
-							id: updatedUser.id,
-							email: updatedUser.email,
-							emailVerified: updatedUser.emailVerified,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
+							token: session.token,
+							status: true,
 						});
 					}
 
 					return ctx.json({
-						id: updatedUser.id,
-						email: updatedUser.email,
-						emailVerified: updatedUser.emailVerified,
-						name: updatedUser.name,
-						image: updatedUser.image,
-						createdAt: updatedUser.createdAt,
-						updatedAt: updatedUser.updatedAt,
-					} as User);
+						status: true,
+						token: null,
+					});
 				},
 			),
 			signInEmailOTP: createAuthEndpoint(
@@ -436,8 +426,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							user: newUser,
 						});
 						return ctx.json({
-							user: newUser,
-							session,
+							token: session.token,
 						});
 					}
 
@@ -456,8 +445,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						user: user.user,
 					});
 					return ctx.json({
-						session,
-						user,
+						token: session.token,
 					});
 				},
 			),
