@@ -1,12 +1,11 @@
 import { getDate } from "../utils/date";
+import { parseSessionOutput, parseUserOutput } from "./schema";
 import {
-	parseSessionOutput,
-	parseUserOutput,
 	type Account,
 	type Session,
 	type User,
 	type Verification,
-} from "./schema";
+} from "../types";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";

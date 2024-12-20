@@ -1,5 +1,5 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Account, Session, User, Verification } from "../db/schema";
+import type { Account, Session, User, Verification } from "../types";
 import type {
 	BetterAuthPlugin,
 	HookAfterHandler,

@@ -1,5 +1,5 @@
 import { type Context } from "better-call";
-import type { Session, User } from "../../db/schema";
+import type { Session, User } from "../../types";
 import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
 import type { Role, defaultRoles } from "./access";

@@ -6,12 +6,13 @@ import type {
 	PluginSchema,
 } from "../../types/plugins";
 import { APIError } from "better-call";
-import { mergeSchema, type User } from "../../db/schema";
+import { mergeSchema } from "../../db/schema";
 import { generateRandomString } from "../../crypto/random";
 import { getSessionFromCtx } from "../../api";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import type { User } from "../../types";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
