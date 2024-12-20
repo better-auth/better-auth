@@ -193,18 +193,13 @@ Table Name: `rateLimit`
         isPrimaryKey: true
         },
         { 
-        name: "window", 
+        name: "count", 
         type: "integer", 
         description: "Time window in seconds" 
         },
         { 
-        name: "max", 
+        name: "lastRequest", 
         type: "integer", 
         description: "Max requests in the window" 
-        },
-        { 
-        name: "count", 
-        type: "integer", 
-        description: "Number of requests made in the window" 
         }]}
     />
