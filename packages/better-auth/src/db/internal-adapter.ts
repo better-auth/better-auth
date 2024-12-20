@@ -1,5 +1,3 @@
-import type { AuthContext, BetterAuthOptions } from "../types";
-import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
 import {
 	parseSessionOutput,
@@ -13,6 +11,7 @@ import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
+import type { Adapter, AuthContext, BetterAuthOptions, Where } from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
