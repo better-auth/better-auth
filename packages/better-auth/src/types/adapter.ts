@@ -1,4 +1,5 @@
-import type { BetterAuthOptions } from ".";
+import type { GenericEndpointContext } from "./context";
+import type { BetterAuthOptions } from "./options";
 
 /**
  * Adapter where clause
