@@ -79,8 +79,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						);
 					}
 					return ctx.json({
-						session,
-						user,
+						token: session.token,
 					});
 				},
 				invalid: async () => {
@@ -97,8 +96,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 		return {
 			valid: async () => {
 				return ctx.json({
-					session,
-					user: session.user,
+					token: session.session.token,
 				});
 			},
 			invalid: async () => {

@@ -224,9 +224,16 @@ describe("Admin plugin", async () => {
 	const impersonateHeaders = new Headers();
 	it("should allow admins to impersonate user", async () => {
 		const userToImpersonate = await client.signUp.email(data);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: new Headers({
+					Authorization: `Bearer ${userToImpersonate.data?.token}`,
+				}),
+			},
+		});
 		const res = await client.admin.impersonateUser(
 			{
-				userId: userToImpersonate.data?.id || "",
+				userId: session.data?.user.id || "",
 			},
 			{
 				headers: adminHeaders,
@@ -236,7 +243,7 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.session).toBeDefined();
-		expect(res.data?.user?.id).toBe(userToImpersonate.data?.id);
+		expect(res.data?.user?.id).toBe(session.data?.user.id);
 	});
 
 	it("should filter impersonated sessions", async () => {

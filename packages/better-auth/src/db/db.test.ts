@@ -61,12 +61,20 @@ describe("db", async () => {
 			name: "test",
 			password: "password",
 		});
-		expect(res.data?.image).toBe("test-image");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${res.data?.token}`,
+				},
+				throw: true,
+			},
+		});
+		expect(session.user?.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
 
 	it("should work with custom field names", async () => {
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client } = await getTestInstance({
 			user: {
 				fields: {
 					email: "email_address",
@@ -78,16 +86,14 @@ describe("db", async () => {
 			password: "password",
 			name: "Test User",
 		});
-		expect(res.data?.email).toBe("test@email.com");
-		const { headers } = await signInWithTestUser();
-		const res2 = await client.updateUser(
-			{
-				name: "New Name",
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${res.data?.token}`,
+				},
+				throw: true,
 			},
-			{
-				headers,
-			},
-		);
-		expect(res2.data?.name).toBe("New Name");
+		});
+		expect(session.user.email).toBe("test@email.com");
 	});
 });

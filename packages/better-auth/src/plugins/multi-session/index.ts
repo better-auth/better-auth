@@ -153,7 +153,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 											schema: {
 												type: "object",
 												properties: {
-													success: {
+													status: {
 														type: "boolean",
 													},
 												},
@@ -184,7 +184,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						maxAge: 0,
 					});
 					const isActive = ctx.context.session?.session.token === sessionToken;
-					if (!isActive) return ctx.json({ success: true });
+					if (!isActive) return ctx.json({ status: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");
 					if (cookieHeader) {
@@ -222,7 +222,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						deleteSessionCookie(ctx);
 					}
 					return ctx.json({
-						success: true,
+						status: true,
 					});
 				},
 			),

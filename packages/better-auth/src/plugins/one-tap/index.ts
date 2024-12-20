@@ -122,8 +122,7 @@ export const oneTap = (options?: OneTapOptions) =>
 						session,
 					});
 					return c.json({
-						session,
-						user,
+						token: session.token,
 					});
 				},
 			),
