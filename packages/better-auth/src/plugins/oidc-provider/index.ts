@@ -18,8 +18,7 @@ import type {
 } from "./types";
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
-import { sha256 } from "oslo/crypto";
-import type { Endpoint } from "better-call";
+import { createHash } from "@better-auth/utils/hash";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -471,9 +470,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const challenge =
 						value.codeChallengeMethod === "plain"
 							? code_verifier
-							: Buffer.from(
-									await sha256(new TextEncoder().encode(code_verifier || "")),
-								).toString("base64url");
+							: await createHash("SHA-256", "base64urlnopad").digest(
+									code_verifier,
+								);
 
 					if (challenge !== value.codeChallenge) {
 						throw new APIError("UNAUTHORIZED", {
