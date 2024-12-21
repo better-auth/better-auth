@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { BetterAuthPlugin } from "better-auth/plugins";
-import type { TurnstileResponse } from "./types";
+import type { TurnstileSiteVerifyResponse } from "./types";
 import { defaultEndpoints, defaultSiteVerify } from "./constants";
 import { TURNSTILE_ERROR_CODES } from "./error-codes";
 import { middlewareResponse } from "../../utils/middleware-response";
@@ -10,13 +10,13 @@ import { middlewareResponse } from "../../utils/middleware-response";
  * @param {string[]} [protectedEndpoints] - *(optional)* overrides the default protected endpoints: `["/sign-up", "/sign-in", "/forget-password"]`
  * @param {string} [siteVerifyURL] - *(optional)* overrides the default site verify URL: `"https://challenges.cloudflare.com/turnstile/v0/siteverify"`
  */
-export const turnstile = (options: {
+export const cloudflareTurnstile = (options: {
 	secretKey: string;
 	endpoints?: string[];
 	siteVerifyURL?: string;
 }) =>
 	({
-		id: "turnstile",
+		id: "cloudflare-turnstile",
 		onRequest: async (request) => {
 			try {
 				if (request.method !== "POST") return undefined;
@@ -41,25 +41,28 @@ export const turnstile = (options: {
 
 				const siteVerifyURL = options.siteVerifyURL || defaultSiteVerify;
 
-				const response = await betterFetch<TurnstileResponse>(siteVerifyURL, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						secret: options.secretKey,
-						response: captchaResponse,
-					}),
-				});
+				const response = await betterFetch<TurnstileSiteVerifyResponse>(
+					siteVerifyURL,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							secret: options.secretKey,
+							response: captchaResponse,
+						}),
+					},
+				);
 
 				if (!response.data || response.error) {
 					return middlewareResponse({
-						message: TURNSTILE_ERROR_CODES.CAPTCHA_VERIFICATION_FAILED,
+						message: TURNSTILE_ERROR_CODES.CAPTCHA_SERVICE_UNAVAILABLE,
 						status: 503,
 					});
 				}
 
 				if (!response.data.success) {
 					return middlewareResponse({
-						message: TURNSTILE_ERROR_CODES.CAPTCHA_VERIFICATION_REJECTED,
+						message: TURNSTILE_ERROR_CODES.CAPTCHA_VERIFICATION_FAILED,
 						status: 403,
 					});
 				}

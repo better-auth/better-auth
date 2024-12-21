@@ -1,6 +1,6 @@
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { turnstile } from ".";
+import { cloudflareTurnstile } from ".";
 import * as betterFetchModule from "@better-fetch/fetch";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -17,7 +17,7 @@ describe("turnstile", async (it) => {
 	>;
 
 	const { client } = await getTestInstance({
-		plugins: [turnstile({ secretKey: "xx-secret-key" })],
+		plugins: [cloudflareTurnstile({ secretKey: "xx-secret-key" })],
 	});
 	const headers = new Headers();
 

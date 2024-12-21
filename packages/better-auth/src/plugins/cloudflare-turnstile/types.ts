@@ -1,4 +1,4 @@
-export type TurnstileResponse =
+export type TurnstileSiteVerifyResponse =
 	| {
 			success: true;
 			"error-codes"?: string[];
