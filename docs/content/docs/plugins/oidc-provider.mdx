@@ -29,7 +29,7 @@ This plugin is in active development and may not be suitable for production use.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { oidcProvider } from "better-auth/plugins/oidc-provider";
+        import { oidcProvider } from "better-auth/plugins";
 
         const auth = betterAuth({
             plugins: [oidcProvider({
@@ -142,7 +142,7 @@ Customize the OIDC metadata by providing a configuration object during initializ
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { oidcProvider } from "better-auth/plugins/oidc-provider";
+import { oidcProvider } from "better-auth/plugins";
 
 export const auth = betterAuth({
     plugins: [oidcProvider({
