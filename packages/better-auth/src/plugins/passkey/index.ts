@@ -580,7 +580,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any(),
+						response: z.record(z.any()),
 					}),
 					metadata: {
 						openapi: {
@@ -604,6 +604,11 @@ export const passkey = (options?: PasskeyOptions) => {
 										},
 									},
 								},
+							},
+						},
+						$Infer: {
+							body: {} as {
+								response: AuthenticationResponseJSON;
 							},
 						},
 					},
@@ -642,7 +647,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						model: "passkey",
 						where: [
 							{
-								field: "id",
+								field: "credentialID",
 								value: resp.id,
 							},
 						],
