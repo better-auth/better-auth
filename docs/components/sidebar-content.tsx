@@ -883,6 +883,29 @@ export const contents: Content[] = [
 				href: "/docs/plugins/bearer",
 			},
 			{
+				title: "Cloudflare Turnstile",
+				href: "/docs/plugins/cloudflare-turnstile",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="7.25 4.85 38.96 41.36"
+					>
+						<path
+							d="M27.315 7.261a19.45 19.45 0 0 0-13.518 4.917l1.23-6.743-3.193-.582-2.162 11.836 11.84 2.16.582-3.193-6.08-1.11a16.173 16.173 0 1 1-4.982 8.064l-3.142-.824A19.478 19.478 0 1 0 27.315 7.261z"
+							fill="#FFFFFF"
+						></path>
+						<path
+							fillRule="evenodd"
+							clipRule="evenodd"
+							d="M38.847 21.919 35.928 19 24.477 30.452 19.923 25.9 17 28.822l7.483 7.484 2.923-2.923-.011-.012L38.847 21.92z"
+							fill="#FFFFFF"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Multi Session",
 				icon: () => (
 					<svg

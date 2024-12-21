@@ -1,0 +1,100 @@
+---
+title: Cloudflare Turnstile
+description: Cloudflare Turnstile plugin
+---
+
+The **Cloudflare Turnstile Plugin** integrates bot protection into your Better Auth system by adding CAPTCHA verification for key endpoints. This plugin ensures that only human users can perform actions like signing up, signing in, or resetting passwords.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { turnstile } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+        plugins: [ // [!code highlight]
+            turnstile({ // [!code highlight]
+                secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+            }), // [!code highlight]
+        ], // [!code highlight]
+    });
+    ```
+
+  </Step>
+  <Step>
+    ### Add the CAPTCHA token to your request headers
+
+    Add the Turnstile CAPTCHA token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
+
+    ```ts
+    await authClient.signIn.email({
+        email: "user@example.com",
+        password: "secure-password",
+        fetchOptions: { // [!code highlight]
+            headers: { // [!code highlight]
+                "x-turnstile-captcha-response": turnstileToken, // [!code highlight]
+            }, // [!code highlight]
+        },
+    });
+    ```
+
+    To implement Cloudflare Turnstile on the client side, see the official [Cloudflare Turnstile documentation](https://developers.cloudflare.com/turnstile/) or use a library like [react-turnstile](https://www.npmjs.com/package/@marsidev/react-turnstile).
+
+  </Step>
+</Steps>
+
+## Plugin Options
+
+- **`secretKey` (required)**
+  Your Cloudflare Turnstile secret key used for the server-side validation of CAPTCHA tokens.
+- **`endpoints` (optional)**
+  An array of paths where CAPTCHA validation is enforced. Defaults to:
+  ```ts
+  ["/sign-up", "/sign-in", "/forget-password"];
+  ```
+- **`siteVerifyURL` (optional)**
+  The URL for the CAPTCHA verification request. Defaults to:
+  ```
+  https://challenges.cloudflare.com/turnstile/v0/siteverify
+  ```
+
+## Usage
+
+### Protect Authentication Endpoints
+
+The plugin automatically intercepts requests to the specified endpoints and validates the CAPTCHA token. If the token is invalid, missing, or the CAPTCHA service is unavailable, the plugin returns an error response.
+
+### Handling Errors
+
+The plugin uses the following error codes:
+
+- `MISSING_CAPTCHA_RESPONSE`
+  No CAPTCHA token was provided in the request headers.
+
+- `CAPTCHA_SERVICE_UNAVAILABLE`
+  The verification call to the Turnstile service failed.
+
+- `CAPTCHA_TOKEN_INVALID`
+  The CAPTCHA token was rejected as invalid.
+
+- `UNKNOWN_ERROR`
+  An unexpected error occurred.
+
+### Adding CAPTCHA to Additional Endpoints
+
+To protect additional endpoints, provide a custom `endpoints` option:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    turnstile({
+      secretKey: process.env.TURNSTILE_SECRET_KEY!,
+      endpoints: ["/custom-endpoint", "/another-endpoint"],
+    }),
+  ],
+});
+```
