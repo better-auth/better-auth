@@ -28,7 +28,7 @@ The **Cloudflare Turnstile Plugin** integrates bot protection into your Better A
   <Step>
     ### Add the CAPTCHA token to your request headers
 
-    Add the Turnstile CAPTCHA token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
+    Add the CAPTCHA token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
 
     ```ts
     await authClient.signIn.email({
@@ -47,6 +47,24 @@ The **Cloudflare Turnstile Plugin** integrates bot protection into your Better A
   </Step>
 </Steps>
 
+## How it works
+
+<Steps>
+  <Step>
+    The plugin acts as a middleware: it intercepts all `POST` requests to configured endpoints (see `endpoints`
+    in the [Plugin Options](#plugin-options) section).
+  </Step>
+  <Step>
+    it validates the CAPTCHA token on the server, by calling Turnstile's `/siteverify`.
+  </Step>
+  <Step>
+    - if the token is missing, gets rejected by Turnstile, or if the `/siteverify` endpoint is
+    unavailable, the plugin returns an error and interrupts the request.
+    - if the token is accepted by Turnstile, the request is allowed to proceed.
+
+  </Step>
+</Steps>
+
 ## Plugin Options
 
 - **`secretKey` (required)**
@@ -61,40 +79,3 @@ The **Cloudflare Turnstile Plugin** integrates bot protection into your Better A
   ```
   https://challenges.cloudflare.com/turnstile/v0/siteverify
   ```
-
-## Usage
-
-### Protect Authentication Endpoints
-
-The plugin automatically intercepts requests to the specified endpoints and validates the CAPTCHA token. If the token is invalid, missing, or the CAPTCHA service is unavailable, the plugin returns an error response.
-
-### Handling Errors
-
-The plugin uses the following error codes:
-
-- `MISSING_CAPTCHA_RESPONSE`
-  No CAPTCHA token was provided in the request headers.
-
-- `CAPTCHA_SERVICE_UNAVAILABLE`
-  The verification call to the Turnstile service failed.
-
-- `CAPTCHA_TOKEN_INVALID`
-  The CAPTCHA token was rejected as invalid.
-
-- `UNKNOWN_ERROR`
-  An unexpected error occurred.
-
-### Adding CAPTCHA to Additional Endpoints
-
-To protect additional endpoints, provide a custom `endpoints` option:
-
-```ts
-export const auth = betterAuth({
-  plugins: [
-    turnstile({
-      secretKey: process.env.TURNSTILE_SECRET_KEY!,
-      endpoints: ["/custom-endpoint", "/another-endpoint"],
-    }),
-  ],
-});
-```
