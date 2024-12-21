@@ -177,62 +177,62 @@ The plugin require a new table in the database to store passkey data.
 Table Name: `passkey`
 
 <DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Unique identifier for each passkey",
-      isPrimaryKey: true,
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "The name of the passkey",
-      isOptional: true,
-    },
-    {
-      name: "publicKey",
-      type: "string",
-      description: "The public key of the passkey",
-    },
-    {
-      name: "userId",
-      type: "string",
-      description: "The id of the user",
-      isForeignKey: true,
-    },
-    {
-      name: "webauthnUserID",
-      type: "string",
-      description: "The user id for WebAuthn",
-    },
-    {
-      name: "counter",
-      type: "number",
-      description: "The counter of the passkey",
-    },
-    {
-      name: "deviceType",
-      type: "string",
-      description: "The type of device used to register the passkey",
-    },
-    {
-      name: "backedUp",
-      type: "boolean",
-      description: "Whether the passkey is backed up",
-    },
-    {
-      name: "transports",
-      type: "string",
-      description: "The transports used to register the passkey",
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "The time when the passkey was created",
-    },
-  ]}
-/>
+    fields={[
+        { 
+            name: "id", 
+            type: "string", 
+            description: "Unique identifier for each passkey",
+            isPrimaryKey: true
+        },
+        {
+            name: "name",
+            type: "string",
+            description: "The name of the passkey",
+            isOptional: true
+        },
+        { 
+            name: "publicKey", 
+            type: "string", 
+            description: "The public key of the passkey",
+        },
+        { 
+            name: "userId", 
+            type: "string", 
+            description: "The id of the user",
+            isForeignKey: true
+        },
+        {
+            name: "credentialID",
+            type: "string",
+            description: "The unique identifier of the registered credential",
+        },
+        { 
+            name: "counter", 
+            type: "number", 
+            description: "The counter of the passkey",
+        },
+        {
+            name: "deviceType",
+            type: "string",
+            description: "The type of device used to register the passkey",
+        },
+        {
+            name: "backedUp",
+            type: "boolean",
+            description: "Whether the passkey is backed up",
+        },
+        {
+            name: "transports",
+            type: "string",
+            description: "The transports used to register the passkey",
+        },
+        { 
+            name: "createdAt", 
+            type: "Date", 
+            description: "The time when the passkey was created",
+        },
+    ]}
+    />
 
 ## Options
 
