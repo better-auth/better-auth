@@ -1,6 +1,7 @@
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
+
 async function getGitHubStars() {
 	try {
 		const response = await fetch(
@@ -21,6 +22,7 @@ async function getGitHubStars() {
 		return null;
 	}
 }
+
 export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
