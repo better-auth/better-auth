@@ -170,84 +170,83 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
 		init: (ctx) => {
+			const genericProviders = options.config.map((c) => {
+				let finalUserInfoUrl = c.userInfoUrl;
+				return {
+					id: c.providerId,
+					name: c.providerId,
+					createAuthorizationURL(data) {
+						return createAuthorizationURL({
+							id: c.providerId,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							authorizationEndpoint: c.authorizationUrl!,
+							state: data.state,
+							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							scopes: c.scopes || [],
+							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+						});
+					},
+					async validateAuthorizationCode(data) {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+								finalUserInfoUrl = discovery.data.userinfo_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return validateAuthorizationCode({
+							code: data.code,
+							codeVerifier: data.codeVerifier,
+							redirectURI: data.redirectURI,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+					async getUserInfo(tokens) {
+						if (!finalUserInfoUrl) {
+							return null;
+						}
+						const userInfo = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl);
+						if (!userInfo) {
+							return null;
+						}
+						return {
+							user: {
+								id: userInfo?.id,
+								email: userInfo?.email,
+								emailVerified: userInfo?.emailVerified,
+								image: userInfo?.image,
+								name: userInfo?.name,
+								...c.mapProfileToUser?.(userInfo),
+							},
+							data: userInfo,
+						};
+					},
+				} as OAuthProvider;
+			});
 			return {
 				context: {
-					socialProviders: options.config.map((c) => {
-						let finalTokenUrl = c.tokenUrl;
-						let finalUserInfoUrl = c.userInfoUrl;
-						return {
-							id: c.providerId,
-							name: c.providerId,
-							createAuthorizationURL(data) {
-								return createAuthorizationURL({
-									id: c.providerId,
-									options: {
-										clientId: c.clientId,
-										clientSecret: c.clientSecret,
-										redirectURI: c.redirectURI,
-									},
-									authorizationEndpoint: c.authorizationUrl!,
-									state: data.state,
-									codeVerifier: c.pkce ? data.codeVerifier : undefined,
-									scopes: c.scopes || [],
-									redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
-								});
-							},
-							async validateAuthorizationCode(data) {
-								let finalTokenUrl = c.tokenUrl;
-								if (c.discoveryUrl) {
-									const discovery = await betterFetch<{
-										token_endpoint: string;
-										userinfo_endpoint: string;
-									}>(c.discoveryUrl, {
-										method: "GET",
-									});
-									if (discovery.data) {
-										finalTokenUrl = discovery.data.token_endpoint;
-										finalUserInfoUrl = discovery.data.userinfo_endpoint;
-									}
-								}
-								if (!finalTokenUrl) {
-									throw new APIError("BAD_REQUEST", {
-										message:
-											"Invalid OAuth configuration. Token URL not found.",
-									});
-								}
-								return validateAuthorizationCode({
-									code: data.code,
-									codeVerifier: data.codeVerifier,
-									redirectURI: data.redirectURI,
-									options: {
-										clientId: c.clientId,
-										clientSecret: c.clientSecret,
-									},
-									tokenEndpoint: finalTokenUrl,
-								});
-							},
-							async getUserInfo(tokens) {
-								if (!finalUserInfoUrl) {
-									return null;
-								}
-								const userInfo = c.getUserInfo
-									? await c.getUserInfo(tokens)
-									: await getUserInfo(tokens, finalUserInfoUrl);
-								if (!userInfo) {
-									return null;
-								}
-								return {
-									user: {
-										id: userInfo?.id,
-										email: userInfo?.email,
-										emailVerified: userInfo?.emailVerified,
-										image: userInfo?.image,
-										name: userInfo?.name,
-										...c.mapProfileToUser?.(userInfo),
-									},
-									data: userInfo,
-								};
-							},
-						} as OAuthProvider;
-					}),
+					socialProviders: genericProviders.concat(ctx.socialProviders),
 				},
 			};
 		},
