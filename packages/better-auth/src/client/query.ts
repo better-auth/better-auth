@@ -44,12 +44,15 @@ export const useAuthQuery = <T>(
 		return $fetch<T>(path, {
 			...opts,
 			async onSuccess(context) {
-				value.set({
-					data: context.data,
-					error: null,
-					isPending: false,
-					isRefetching: false,
-				});
+				//to avoid hydration error
+				if (typeof window !== "undefined") {
+					value.set({
+						data: context.data,
+						error: null,
+						isPending: false,
+						isRefetching: false,
+					});
+				}
 				await opts?.onSuccess?.(context);
 			},
 			async onError(context) {
@@ -73,7 +76,6 @@ export const useAuthQuery = <T>(
 			},
 		});
 	};
-
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
