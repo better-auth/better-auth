@@ -4,6 +4,7 @@ import { createInternalAdapter } from "./db";
 import { getAuthTables } from "./db/get-tables";
 import { getAdapter } from "./db/utils";
 import type {
+	Account,
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
@@ -195,7 +196,7 @@ export type AuthContext = {
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (data: { password: string; hash: string }) => Promise<boolean>;
+		verify: (data: { password: string; hash: string, account: Account }) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
