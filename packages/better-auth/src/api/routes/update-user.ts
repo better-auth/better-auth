@@ -388,10 +388,10 @@ export const deleteUser = createAuthEndpoint(
 		if (ctx.body.token) {
 			//@ts-expect-error
 			await deleteUserCallback({
+				...ctx,
 				query: {
 					token: ctx.body.token,
 				},
-				...ctx,
 			});
 			return ctx.json({
 				success: true,
