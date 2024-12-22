@@ -276,10 +276,8 @@ describe("delete user", async () => {
 			},
 		});
 		expect(session.data).toBeDefined();
-		const deleteCallbackRes = await client.deleteUser.callback({
-			query: {
-				token,
-			},
+		const deleteCallbackRes = await client.deleteUser({
+			token,
 			fetchOptions: {
 				headers,
 			},
