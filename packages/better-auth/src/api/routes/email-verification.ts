@@ -274,7 +274,7 @@ export const verifyEmail = createAuthEndpoint(
 		});
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession) {
+			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
 					ctx.request,

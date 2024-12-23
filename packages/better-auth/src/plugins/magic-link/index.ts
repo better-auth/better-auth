@@ -191,8 +191,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						tokenValue.id,
 					);
 					const email = tokenValue.value;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					let userId: string = user?.user.id || "";
+					let user = await ctx.context.internalAdapter
+						.findUserByEmail(email)
+						.then((res) => res?.user);
 
 					if (!user) {
 						if (!options.disableSignUp) {
@@ -201,8 +202,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 								emailVerified: true,
 								name: email,
 							});
-							userId = newUser.id;
-							if (!userId) {
+							user = newUser;
+							if (!user) {
 								throw ctx.redirect(
 									`${toRedirectTo}?error=failed_to_create_user`,
 								);
@@ -211,18 +212,27 @@ export const magicLink = (options: MagicLinkOptions) => {
 							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
 						}
 					}
+
+					if (!user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
-						userId,
+						user.id,
 						ctx.headers,
 					);
+
 					if (!session) {
 						throw ctx.redirect(
 							`${toRedirectTo}?error=failed_to_create_session`,
 						);
 					}
+
 					await setSessionCookie(ctx, {
 						session,
-						user: user?.user!,
+						user,
 					});
 					if (!callbackURL) {
 						return ctx.json({
