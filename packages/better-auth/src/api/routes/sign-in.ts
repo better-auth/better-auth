@@ -404,7 +404,6 @@ export const signInEmail = createAuthEndpoint(
 				},
 				ctx.request,
 			);
-			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});

@@ -68,7 +68,7 @@ const formatMessage = (level: LogLevel, message: string): string => {
 	const timestamp = new Date().toISOString();
 	return `${colors.dim}${timestamp}${colors.reset} ${
 		levelColors[level]
-	}${level.toUpperCase()}${colors.reset} ${colors.bright}Better Auth${
+	}${level.toUpperCase()}${colors.reset} ${colors.bright}[Better Auth]:${
 		colors.reset
 	} ${message}`;
 };
