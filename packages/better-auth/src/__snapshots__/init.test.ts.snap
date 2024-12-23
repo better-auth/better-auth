@@ -126,7 +126,7 @@ exports[`init > should match config 1`] = `
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
-    "freshAge": 300,
+    "freshAge": 86400,
     "updateAge": 86400,
   },
   "setNewSession": [Function],
