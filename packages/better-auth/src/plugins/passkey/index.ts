@@ -9,7 +9,7 @@ import type {
 	AuthenticatorTransportFuture,
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
-} from "@simplewebauthn/types";
+} from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import { z } from "zod";
@@ -541,20 +541,22 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						const {
-							credentialID,
-							credentialPublicKey,
-							counter,
+							// credentialID,
+							// credentialPublicKey,
+							// counter,
 							credentialDeviceType,
 							credentialBackedUp,
+							credential,
+							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
+						const pubKey = Buffer.from(credential.publicKey).toString("base64");
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
 							id: ctx.context.generateId({ model: "passkey" }),
-							credentialID,
+							credentialID: credential.id,
 							publicKey: pubKey,
-							counter,
+							counter: credential.counter,
 							deviceType: credentialDeviceType,
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
@@ -663,9 +665,9 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedChallenge,
 							expectedOrigin: origin,
 							expectedRPID: opts.rpID,
-							authenticator: {
-								credentialID: passkey.credentialID,
-								credentialPublicKey: new Uint8Array(
+							credential: {
+								id: passkey.credentialID,
+								publicKey: new Uint8Array(
 									Buffer.from(passkey.publicKey, "base64"),
 								),
 								counter: passkey.counter,

@@ -168,12 +168,17 @@ export const totp2fa = (options?: TOTPOptions) => {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
+			const secret = await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: twoFactor.secret,
+			});
 			await ctx.context.password.checkPassword(user.id, ctx);
+			const totpURI = createOTP(secret, {
+				digits: opts.digits,
+				period: opts.period,
+			}).url(options?.issuer || ctx.context.appName, user.email);
 			return {
-				totpURI: createOTP(twoFactor.secret, {
-					digits: opts.digits,
-					period: opts.period,
-				}).url(options?.issuer || ctx.context.appName, user.email),
+				totpURI,
 			};
 		},
 	);
@@ -264,7 +269,6 @@ export const totp2fa = (options?: TOTPOptions) => {
 						ctx.context.session.session,
 					)
 					.catch((e) => {
-						console.log(e);
 						throw e;
 					});
 

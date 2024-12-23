@@ -63,4 +63,34 @@ describe("Email Verification", async () => {
 			},
 		);
 	});
+
+	it("should sign after verification", async () => {
+		const { testUser, signInWithUser, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				autoSignInAfterVerification: true,
+			},
+		});
+		await signInWithUser(testUser.email, testUser.password);
+
+		let sessionToken = "";
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess(context) {
+					sessionToken = context.response.headers.get("set-auth-token") || "";
+				},
+			},
+		});
+		expect(sessionToken.length).toBeGreaterThan(10);
+	});
 });

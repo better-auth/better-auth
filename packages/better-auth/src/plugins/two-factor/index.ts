@@ -16,7 +16,6 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
-import { base64 } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -147,7 +146,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || "Better Auth", user.email);
+					}).url(options?.issuer || ctx.context.appName, user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),

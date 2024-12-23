@@ -272,8 +272,11 @@ export default function SignIn() {
 						onClick={async () => {
 							await signIn.passkey({
 								fetchOptions: {
-									onResponse(context) {
+									onSuccess(context) {
 										router.push("/dashboard");
+									},
+									onError(context) {
+										toast.error(context.error.message);
 									},
 								},
 							});
