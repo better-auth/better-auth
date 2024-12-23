@@ -123,7 +123,7 @@ describe("adapter test", async () => {
 		});
 		expect(session.data?.session).toBeDefined();
 	});
-	it.only("should use hooks", async () => {
+	it("should use hooks", async () => {
 		await internalAdapter.createUser({
 			email: "email",
 			name: "name",
