@@ -11,6 +11,7 @@ describe("adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
 		database: new Database(":memory:"),
 	});
+	const map = new Map();
 	let id = 1;
 	const opts = {
 		database: {
@@ -21,6 +22,17 @@ describe("adapter test", async () => {
 			fields: {
 				email: "email_address",
 				emailVerified: "email_verified",
+			},
+		},
+		secondaryStorage: {
+			set(key, value, ttl) {
+				map.set(key, value);
+			},
+			get(key) {
+				return map.get(key);
+			},
+			delete(key) {
+				map.delete(key);
 			},
 		},
 		advanced: {
@@ -35,7 +47,22 @@ describe("adapter test", async () => {
 	const adapter = await getAdapter(opts);
 	const internalAdapter = createInternalAdapter(adapter, {
 		options: opts,
-		hooks: [],
+		hooks: [
+			{
+				session: {
+					create: {
+						before: async (session) => {
+							return {
+								data: {
+									...session,
+									activeOrganizationId: "1",
+								},
+							};
+						},
+					},
+				},
+			},
+		],
 		generateId() {
 			return opts.advanced.generateId();
 		},
@@ -95,5 +122,16 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(session.data?.session).toBeDefined();
+	});
+	it.only("should use hooks", async () => {
+		await internalAdapter.createUser({
+			email: "email",
+			name: "name",
+			emailVerified: false,
+		});
+		const res = await internalAdapter.createSession("1", undefined);
+		const sessionId = res.token;
+		const session = await internalAdapter.findSession(sessionId);
+		expect(session?.session?.activeOrganizationId).toBe("1");
 	});
 });

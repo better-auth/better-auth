@@ -225,7 +225,7 @@ export const createInternalAdapter = (
 				"session",
 				secondaryStorage
 					? {
-							fn: async () => {
+							fn: async (sessionData) => {
 								const user = await adapter.findOne<User>({
 									model: "user",
 									where: [{ field: "id", value: userId }],
@@ -233,7 +233,7 @@ export const createInternalAdapter = (
 								secondaryStorage.set(
 									data.token,
 									JSON.stringify({
-										session: data,
+										session: sessionData,
 										user,
 									}),
 									sessionExpiration,
@@ -276,8 +276,8 @@ export const createInternalAdapter = (
 		findSession: async (
 			token: string,
 		): Promise<{
-			session: Session;
-			user: User;
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
