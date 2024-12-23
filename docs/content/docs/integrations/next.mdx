@@ -26,17 +26,13 @@ export const { GET, POST } = toNextJsHandler(auth.handler);
 For `pages` route, you need to use `toNodeHandler` instead of `toNextJsHandler` and set `bodyParser` to `false` in the `config` object. Here is an example:
 
 ```ts title="pages/api/auth/[...all].ts"
-import { toNodeHandler } from "better-auth/node";
+import { toNodeHandler } from "better-auth/node"
+import { auth } from "@/lib/auth"
 
-export const config = {
-	api: {
-		bodyParser: false, // Disallow body parsing, we will parse it manually
-	},
-};
+// Disallow body parsing, we will parse it manually
+export const config = { api: { bodyParser: false } }
 
-export default function handler(req, res) {
-    toNodeHandler(auth.handler)(req, res)
-}
+export default toNodeHandler(auth.handler)
 ```
 
 ## Create a client
