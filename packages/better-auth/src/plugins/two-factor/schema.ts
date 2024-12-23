@@ -1,4 +1,4 @@
-import type { PluginSchema } from "../../types";
+import type { AuthPluginSchema } from "../../types";
 
 export const schema = {
 	user: {
@@ -34,4 +34,4 @@ export const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;

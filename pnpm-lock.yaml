@@ -1396,9 +1396,6 @@ importers:
         specifier: ^3.23.8
         version: 3.23.8
     devDependencies:
-      '@better-fetch/fetch':
-        specifier: 1.1.12
-        version: 1.1.12
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
