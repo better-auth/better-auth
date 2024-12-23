@@ -578,7 +578,7 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
-    "@better-auth/utils": "^0.2.1",
+    "@better-auth/utils": "0.2.2",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
