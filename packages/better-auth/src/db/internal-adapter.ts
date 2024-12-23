@@ -26,29 +26,6 @@ export const createInternalAdapter = (
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
-	const setSecondaryStorage = async (data: {
-		token: string;
-		user: User;
-		session: Session;
-	}) => {
-		await secondaryStorage?.set(
-			data.token,
-			JSON.stringify({
-				session: data.session,
-				user: data.user,
-			}),
-			data.session.expiresAt
-				? Math.floor(
-						((data.session.expiresAt instanceof Date
-							? data.session.expiresAt.getTime()
-							: new Date(data.session.expiresAt).getTime()) -
-							Date.now()) /
-							1000,
-					)
-				: sessionExpiration,
-		);
-	};
-
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
@@ -226,18 +203,6 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								const user = await adapter.findOne<User>({
-									model: "user",
-									where: [{ field: "id", value: userId }],
-								});
-								secondaryStorage.set(
-									data.token,
-									JSON.stringify({
-										session: sessionData,
-										user,
-									}),
-									sessionExpiration,
-								);
 								/**
 								 * store the session token for the user
 								 * so we can retrieve it later for listing sessions
@@ -283,7 +248,6 @@ export const createInternalAdapter = (
 				const sessionStringified = await secondaryStorage.get(token);
 				if (sessionStringified) {
 					const s = JSON.parse(sessionStringified);
-
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -335,11 +299,22 @@ export const createInternalAdapter = (
 				/**
 				 * Persists session data to secondary storage as it seems it has been evicted from it.
 				 */
-				await setSecondaryStorage({
+				await secondaryStorage?.set(
 					token,
-					user: parsedUser,
-					session: parsedSession,
-				});
+					JSON.stringify({
+						session: parsedSession,
+						user: parsedUser,
+					}),
+					parsedSession.expiresAt
+						? Math.floor(
+								((parsedSession.expiresAt instanceof Date
+									? parsedSession.expiresAt.getTime()
+									: new Date(parsedSession.expiresAt).getTime()) -
+									Date.now()) /
+									1000,
+							)
+						: sessionExpiration,
+				);
 			}
 
 			return {
@@ -435,11 +410,6 @@ export const createInternalAdapter = (
 										...parsedSession.session,
 										...data,
 									};
-									await setSecondaryStorage({
-										token: sessionToken,
-										user: parsedSession.user,
-										session: updatedSession,
-									});
 									return updatedSession;
 								} else {
 									return null;

@@ -123,15 +123,4 @@ describe("adapter test", async () => {
 		});
 		expect(session.data?.session).toBeDefined();
 	});
-	it("should use hooks", async () => {
-		await internalAdapter.createUser({
-			email: "email",
-			name: "name",
-			emailVerified: false,
-		});
-		const res = await internalAdapter.createSession("1", undefined);
-		const sessionId = res.token;
-		const session = await internalAdapter.findSession(sessionId);
-		expect(session?.session?.activeOrganizationId).toBe("1");
-	});
 });
