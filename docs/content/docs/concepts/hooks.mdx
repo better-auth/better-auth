@@ -37,8 +37,9 @@ export const auth = betterAuth({
 
 To adjust the request context before proceeding:
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export const auth = betterAuth({
     hooks: {
@@ -65,8 +66,9 @@ export const auth = betterAuth({
 
 This hook adds a custom header to the response:
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export const auth = betterAuth({
     hooks: {
