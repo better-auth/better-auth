@@ -184,7 +184,7 @@ await authClient.deleteUser({
 The user must have a `fresh` session token, meaning the user must have signed in recently. This is checked if the password is not provided.
 
 <Callout type="warn">
-If `session.freshAge` is set to `0`, this requirement is effectively bypassed.
+By default `session.freshAge` is set to `60 * 60 * 24` (1 day). You can change this value by passing the `session` object to the `auth` configuration. If it is set to `0`, the freshness check is disabled.
 </Callout>
 
 ```ts title="delete-user.ts"
