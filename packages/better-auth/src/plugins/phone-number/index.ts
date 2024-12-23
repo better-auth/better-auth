@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../../api/call";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	PluginSchema,
+	AuthPluginSchema,
 } from "../../types/plugins";
 import { APIError } from "better-call";
 import { mergeSchema } from "../../db/schema";
@@ -526,4 +526,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;

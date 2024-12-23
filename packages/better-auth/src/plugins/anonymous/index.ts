@@ -7,7 +7,7 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	PluginSchema,
+	AuthPluginSchema,
 	Session,
 	User,
 } from "../../types";
@@ -58,7 +58,7 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	const ERROR_CODES = {

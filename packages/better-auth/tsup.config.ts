@@ -53,5 +53,6 @@ export default defineConfig((env) => {
 		splitting: false,
 		cjsInterop: true,
 		skipNodeModulesBundle: true,
+		noExternal: ["@better-fetch/fetch", "nanostores", "@simplewebauthn/types"],
 	};
 });
