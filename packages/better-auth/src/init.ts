@@ -102,7 +102,7 @@ export const init = async (options: BetterAuthOptions) => {
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 			freshAge:
 				options.session?.freshAge === undefined
-					? 5 * 60
+					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
 		},
 		secret,
