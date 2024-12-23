@@ -554,7 +554,6 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
-    "@simplewebauthn/types": "^10.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
@@ -583,8 +582,8 @@
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
-    "@simplewebauthn/browser": "^10.0.0",
-    "@simplewebauthn/server": "^10.0.1",
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0",
     "better-call": "0.3.3-beta.4",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
