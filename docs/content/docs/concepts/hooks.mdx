@@ -73,7 +73,7 @@ import { createAuthMiddleware } from "better-auth/api";
 export const auth = betterAuth({
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
-            ctx.response.headers.set("X-Custom-Header", "Hello World");
+            ctx.responseHeader.set("X-Custom-Header", "Hello World");
             return {
                 responseHeader: ctx.responseHeader // return the updated response headers
             }
