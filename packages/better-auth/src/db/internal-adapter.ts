@@ -265,7 +265,7 @@ export const createInternalAdapter = (
 									sessionExpiration,
 								);
 
-								return data;
+								return sessionData;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -283,6 +283,7 @@ export const createInternalAdapter = (
 				const sessionStringified = await secondaryStorage.get(token);
 				if (sessionStringified) {
 					const s = JSON.parse(sessionStringified);
+
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
