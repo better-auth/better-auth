@@ -548,7 +548,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{
+							includeAccounts: true,
+						},
+					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.USER_NOT_FOUND,
@@ -583,10 +588,23 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.updatePassword(
-						user.user.id,
-						passwordHash,
+					const account = user.accounts.find(
+						(account) => account.providerId === "credential",
 					);
+					if (!account) {
+						await ctx.context.internalAdapter.createAccount({
+							userId: user.user.id,
+							providerId: "credential",
+							accountId: user.user.id,
+							password: passwordHash,
+						});
+					} else {
+						await ctx.context.internalAdapter.updatePassword(
+							user.user.id,
+							passwordHash,
+						);
+					}
+
 					return ctx.json({
 						success: true,
 					});

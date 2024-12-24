@@ -93,11 +93,7 @@ describe("email-otp", async () => {
 				},
 			},
 		);
-		// expect(newUser.data).toMatchObject({
-		// 	user: {
-		// 		email: testUser2.email,
-		// 	},
-		// });
+		expect(newUser.data?.token).toBeDefined();
 	});
 
 	it("should send verification otp on sign-up", async () => {
@@ -132,6 +128,42 @@ describe("email-otp", async () => {
 			password: "changed-password",
 		});
 		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password and create credential account", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+		await client.signIn.emailOtp(
+			{
+				email: testUser2.email,
+				otp,
+			},
+			{
+				onSuccess: (ctx) => {
+					const header = ctx.response.headers.get("set-cookie");
+					expect(header).toContain("better-auth.session_token");
+				},
+			},
+		);
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "forget-password",
+		});
+		await client.emailOtp.resetPassword({
+			email: testUser2.email,
+			otp,
+			password: "password",
+		});
+		const res = await client.signIn.email({
+			email: testUser2.email,
+			password: "password",
+		});
+		expect(res.data?.token).toBeDefined();
 	});
 
 	it("should fail on invalid email", async () => {

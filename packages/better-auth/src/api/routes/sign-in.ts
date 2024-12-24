@@ -440,6 +440,7 @@ export const signInEmail = createAuthEndpoint(
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
 			},
+			token: session.token,
 			redirect: !!ctx.body.callbackURL,
 			url: ctx.body.callbackURL,
 		});
