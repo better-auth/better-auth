@@ -100,8 +100,7 @@ export const vk = (options: VkOption) => {
 					emailVerified: profile.user.verified || false,
 					birthday: profile.user.birthday,
 					sex: profile.user.sex,
-				},
-				data: profile,
+				}
 			};
 		},
 	} satisfies OAuthProvider<VkProfile>;
