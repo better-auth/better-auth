@@ -656,9 +656,8 @@ export const contents: Content[] = [
 							clip-rule="evenodd"
 						/>
 					</svg>
-
 				),
-			}
+			},
 		],
 	},
 	{

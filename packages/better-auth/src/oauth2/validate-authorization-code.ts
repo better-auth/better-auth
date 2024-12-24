@@ -10,7 +10,7 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
-	deviceId
+	deviceId,
 }: {
 	code: string;
 	redirectURI: string;

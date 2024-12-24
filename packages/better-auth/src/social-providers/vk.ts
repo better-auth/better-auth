@@ -12,11 +12,11 @@ export interface VkProfile {
 		avatar?: string;
 		sex?: number;
 		verified?: boolean;
-		birthday: string
+		birthday: string;
 	};
 }
 
-export const enum LANG  {
+export const enum LANG {
 	RUS = 0,
 	UKR = 1,
 	ENG = 3,
@@ -24,23 +24,22 @@ export const enum LANG  {
 	GERMAN = 6,
 	POL = 15,
 	FRA = 16,
-	TURKEY = 82
+	TURKEY = 82,
 }
 
 export interface VkOption extends ProviderOptions {
 	lang_id?: LANG;
-	scheme?: 'light' | 'dark';
-
+	scheme?: "light" | "dark";
 }
 
 export const vk = (options: VkOption) => {
 	return {
 		id: "vk",
 		name: "VK",
-		async createAuthorizationURL({state, scopes, codeVerifier, redirectURI}) {
+		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = scopes || ["email", "phone"];
 			options.scope && _scopes.push(...options.scope);
-			const authorizationEndpoint = 'https://id.vk.com/authorize'
+			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({
 				id: "vk",
@@ -49,10 +48,15 @@ export const vk = (options: VkOption) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
-				codeVerifier
-			})
+				codeVerifier,
+			});
 		},
-		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI, deviceId }) => {
+		validateAuthorizationCode: async ({
+			code,
+			codeVerifier,
+			redirectURI,
+			deviceId,
+		}) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
@@ -60,12 +64,11 @@ export const vk = (options: VkOption) => {
 				options,
 				deviceId,
 				tokenEndpoint: "https://id.vk.com/oauth2/auth",
-			})
-
+			});
 		},
 		async getUserInfo(data) {
 			if (!data.accessToken) {
-				return null
+				return null;
 			}
 			const formBody = new URLSearchParams({
 				access_token: data.accessToken,
@@ -76,10 +79,9 @@ export const vk = (options: VkOption) => {
 				{
 					method: "POST",
 					headers: {
-						'Content-Type': 'application/x-www-form-urlencoded',
+						"Content-Type": "application/x-www-form-urlencoded",
 					},
 					body: formBody,
-
 				},
 			);
 			if (error) {

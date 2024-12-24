@@ -28,7 +28,7 @@ export const socialProviders = {
 	linkedin,
 	gitlab,
 	reddit,
-	vk
+	vk,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
