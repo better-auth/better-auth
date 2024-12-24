@@ -126,7 +126,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 										variant="outline"
 										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
 									>
-										<span className="uppercase font-mono">Join Discord</span>
+										<span className="uppercase font-mono">Ask Questions</span>
 										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
 									</Button>
 								</Link>
