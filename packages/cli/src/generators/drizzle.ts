@@ -2,6 +2,10 @@ import { getAuthTables, type FieldAttribute } from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
+export function convertToSnakeCase(str: string) {
+	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -26,6 +30,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			: tables[table].modelName;
 		const fields = tables[table].fields;
 		function getType(name: string, field: FieldAttribute) {
+			name = convertToSnakeCase(name);
 			const type = field.type;
 			const typeMap = {
 				string: {
@@ -59,7 +64,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			databaseType === "mysql"
 				? `varchar("id", { length: 36 }).primaryKey()`
 				: `text("id").primaryKey()`;
-		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
+		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+			modelName,
+		)}", {
 					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {
