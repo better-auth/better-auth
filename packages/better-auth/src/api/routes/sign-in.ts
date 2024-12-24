@@ -372,6 +372,7 @@ export const signInEmail = createAuthEndpoint(
 		const validPassword = await ctx.context.password.verify({
 			hash: currentPassword,
 			password,
+			account: credentialAccount
 		});
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
