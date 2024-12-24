@@ -97,10 +97,12 @@ export const vk = (options: VkOption) => {
 					last_name: profile.user.last_name,
 					email: profile.user.email,
 					image: profile.user.avatar,
-					emailVerified: profile.user.verified || false,
+					/** @note VK does not provide emailVerified*/
+					emailVerified: !!profile.user.email,
 					birthday: profile.user.birthday,
 					sex: profile.user.sex,
-				}
+				},
+				data: profile,
 			};
 		},
 	} satisfies OAuthProvider<VkProfile>;
