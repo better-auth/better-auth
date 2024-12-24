@@ -160,22 +160,6 @@ export const auth = betterAuth({
 })
 ```
 
-#### Use Plural Form
-
-If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { MongoClient } from "mongodb";
-import { mongoAdapter } from "better-auth/adapters/mongodb";
-
-export const auth = betterAuth({
-    database: mongoAdapter(client, {
-      usePlural: true
-    })
-})
-```
-
 ## CLI 
 
 
