@@ -1393,8 +1393,8 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3
       zod:
-        specifier: ^3.23.8
-        version: 3.23.8
+        specifier: ^3.24.1
+        version: 3.24.1
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
@@ -17292,6 +17292,9 @@ packages:
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
     engines: {node: '>=12.7.0'}
@@ -23303,7 +23306,7 @@ snapshots:
       '@tanstack/virtual-file-routes': 1.81.9
       prettier: 3.4.2
       tsx: 4.19.2
-      zod: 3.23.8
+      zod: 3.24.1
 
   '@tanstack/router-plugin@1.86.0(vite@6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -23324,7 +23327,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.6
       chokidar: 3.6.0
       unplugin: 1.16.0
-      zod: 3.23.8
+      zod: 3.24.1
     optionalDependencies:
       vite: 6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
     transitivePeerDependencies:
@@ -25764,8 +25767,8 @@ snapshots:
       chalk: 4.1.2
       invariant: 2.2.4
       pretty-format: 24.9.0
-      zod: 3.23.8
-      zod-validation-error: 2.1.0(zod@3.23.8)
+      zod: 3.24.1
+      zod-validation-error: 2.1.0(zod@3.24.1)
 
   babel-plugin-react-native-web@0.19.13: {}
 
@@ -25889,7 +25892,7 @@ snapshots:
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      zod: 3.23.8
+      zod: 3.24.1
 
   better-call@0.2.15-beta.6:
     dependencies:
@@ -25897,7 +25900,7 @@ snapshots:
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      zod: 3.23.8
+      zod: 3.24.1
 
   better-call@0.2.3-beta.2:
     dependencies:
@@ -25913,7 +25916,7 @@ snapshots:
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      zod: 3.23.8
+      zod: 3.24.1
 
   better-opn@3.0.2:
     dependencies:
@@ -35553,8 +35556,8 @@ snapshots:
       superstruct: 2.0.2
       valibot: 1.0.0-beta.9(typescript@5.7.2)
       yup: 1.4.0
-      zod: 3.23.8
-      zod-to-json-schema: 3.23.5(zod@3.23.8)
+      zod: 3.24.1
+      zod-to-json-schema: 3.23.5(zod@3.24.1)
     transitivePeerDependencies:
       - '@types/json-schema'
       - typescript
@@ -36752,7 +36755,7 @@ snapshots:
       unenv: 1.10.0
       unstorage: 1.13.1(ioredis@5.4.1)
       vite: 6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
-      zod: 3.23.8
+      zod: 3.24.1
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -37452,16 +37455,23 @@ snapshots:
     dependencies:
       zod: 3.23.8
 
+  zod-to-json-schema@3.23.5(zod@3.24.1):
+    dependencies:
+      zod: 3.24.1
+    optional: true
+
   zod-to-ts@1.2.0(typescript@5.7.2)(zod@3.23.8):
     dependencies:
       typescript: 5.7.2
       zod: 3.23.8
 
-  zod-validation-error@2.1.0(zod@3.23.8):
+  zod-validation-error@2.1.0(zod@3.24.1):
     dependencies:
-      zod: 3.23.8
+      zod: 3.24.1
 
   zod@3.23.8: {}
+
+  zod@3.24.1: {}
 
   zustand@3.7.2(react@18.3.1):
     optionalDependencies:
