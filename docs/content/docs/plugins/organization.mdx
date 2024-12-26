@@ -578,7 +578,7 @@ the plugin providers easy way to define your own set of permission for each role
       When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
-    import { createAccessControl, defaultStatement, adminAc } from "better-auth/plugins/access";
+    import { createAccessControl, defaultStatements, adminAc } from "better-auth/plugins/access";
 
     const statement = { 
         ...defaultStatements, // [!code highlight]
