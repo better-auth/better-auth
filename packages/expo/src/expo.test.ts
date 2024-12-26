@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/solid";
 import Database from "better-sqlite3";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
@@ -39,14 +39,6 @@ vi.mock("expo-constants", async () => {
 vi.mock("expo-linking", async () => {
 	return {
 		createURL: vi.fn((url) => `better-auth://${url}`),
-	};
-});
-
-vi.mock("expo-secure-store", async () => {
-	return {
-		getItemAsync: vi.fn(async (key) => null),
-		setItemAsync: vi.fn(),
-		deleteItemAsync: vi.fn(),
 	};
 });
 
@@ -115,6 +107,12 @@ describe("expo", async () => {
 			session: expect.any(Object),
 			user: expect.any(Object),
 		});
+		const s = client.useSession();
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2);
+		console.log(s());
+		const s2 = client.useSession();
+		console.log(s2());
 	});
 
 	it("should use the scheme to open the browser", async () => {
