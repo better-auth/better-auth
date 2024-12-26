@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/solid";
+import { createAuthClient } from "better-auth/client";
 import Database from "better-sqlite3";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
@@ -107,12 +107,6 @@ describe("expo", async () => {
 			session: expect.any(Object),
 			user: expect.any(Object),
 		});
-		const s = client.useSession();
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(2);
-		console.log(s());
-		const s2 = client.useSession();
-		console.log(s2());
 	});
 
 	it("should use the scheme to open the browser", async () => {
