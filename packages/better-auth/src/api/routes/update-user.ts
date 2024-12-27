@@ -605,6 +605,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.session.user.email,
 			ctx.body.newEmail,
+			ctx.context.options.emailVerification?.expiresIn,
 		);
 		const url = `${
 			ctx.context.baseURL
