@@ -19,10 +19,14 @@ interface EmailOTPOptions {
 	) => Promise<void>;
 	/**
 	 * Length of the OTP
+	 *
+	 * @default 6
 	 */
 	otpLength?: number;
 	/**
 	 * Expiry time of the OTP in seconds
+	 *
+	 * @default 300 (5 minutes)
 	 */
 	expiresIn?: number;
 	/**
@@ -44,7 +48,7 @@ const types = ["email-verification", "sign-in", "forget-password"] as const;
 
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
-		expireIn: 5 * 60,
+		expiresIn: 5 * 60,
 		otpLength: 6,
 		...options,
 	};
@@ -113,7 +117,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						.createVerificationValue({
 							value: otp,
 							identifier: `${ctx.body.type}-otp-${email}`,
-							expiresAt: getDate(opts.expireIn, "sec"),
+							expiresAt: getDate(opts.expiresIn, "sec"),
 						})
 						.catch(async (error) => {
 							// might be duplicate key error
@@ -124,7 +128,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
 								identifier: `${ctx.body.type}-otp-${email}`,
-								expiresAt: getDate(opts.expireIn, "sec"),
+								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
 						});
 					await options.sendVerificationOTP(
@@ -177,7 +181,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `${ctx.body.type}-otp-${email}`,
-						expiresAt: getDate(opts.expireIn, "sec"),
+						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
 					return otp;
 				},
@@ -493,7 +497,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `forget-password-otp-${email}`,
-						expiresAt: getDate(opts.expireIn, "sec"),
+						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
 					await options.sendVerificationOTP(
 						{
@@ -638,7 +642,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
 								identifier: `email-verification-otp-${email}`,
-								expiresAt: getDate(opts.expireIn, "sec"),
+								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
 							await options.sendVerificationOTP(
 								{

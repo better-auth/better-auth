@@ -236,6 +236,45 @@ describe("email-otp", async () => {
 			},
 		});
 	});
+
+	it("should work with custom options", async () => {
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					bearer(),
+					emailOTP({
+						async sendVerificationOTP({ email, otp: _otp, type }) {
+							otp = _otp;
+							otpFn(email, _otp, type);
+						},
+						sendVerificationOnSignUp: true,
+						expiresIn: 10,
+						otpLength: 8,
+					}),
+				],
+				emailVerification: {
+					autoSignInAfterVerification: true,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		await client.emailOtp.sendVerificationOtp({
+			type: "email-verification",
+			email: testUser.email,
+		});
+		expect(otp.length).toBe(8);
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(11 * 1000);
+		const verifyRes = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(verifyRes.error?.code).toBe("OTP_EXPIRED");
+	});
 });
 
 describe("email-otp-verify", async () => {
