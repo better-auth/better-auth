@@ -134,7 +134,7 @@ import { createAuthMiddleware } from "better-auth/plugins";
     const today = new Date();
     const fiveYearsAgo = new Date(today.setFullYear(today.getFullYear() - 5));
 
-    if(birthday <= fiveYearsAgo) {
+    if(birthday >= fiveYearsAgo) {
       throw new APIError("BAD_REQUEST", { message: "User must be above 5 years old." });
     }
 
