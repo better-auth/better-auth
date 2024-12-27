@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
@@ -107,6 +107,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
+					}
+					if (ctx.body.type === "forget-password") {
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+						if (!user) {
+							return ctx.json({
+								success: true,
+							});
+						}
 					}
 					const otp = generateRandomString(opts.otpLength, "0-9");
 					await ctx.context.internalAdapter
