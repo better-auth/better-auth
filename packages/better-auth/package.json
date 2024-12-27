@@ -561,12 +561,12 @@
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
     "drizzle-orm": "^0.35.3",
-    "nanostores": "^0.11.3",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
+    "nanostores": "^0.11.3",
     "next": "^15.0.4",
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
@@ -580,7 +580,7 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
-    "@better-auth/utils": "0.2.2",
+    "@better-auth/utils": "0.2.3",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
