@@ -533,6 +533,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedChallenge,
 							expectedOrigin: origin,
 							expectedRPID: options?.rpID,
+							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
 						if (!verified || !registrationInfo) {
