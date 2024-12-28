@@ -234,18 +234,22 @@ export const auth = betterAuth({
 	secondaryStorage: {
 		get: async (key) => {
 			const value = await redis.get(key);
-			return value ? JSON.parse(value) : null;
+			return value ? value : null;
 		},
 		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, JSON.stringify(value), { EX: ttl });
-			else await redis.set(key, JSON.stringify(value));
+			if (ttl) await redis.set(key, value, { EX: ttl });
+			// or for ioredis:
+			// if (ttl) await redis.set(key, value, 'EX', ttl)
+			else await redis.set(key, value);
 		},
-		delete: async (key) => await redis.del(key),
+		delete: async (key) => {
+			await redis.del(key),
+		}
 	}
 });
 ```
 
-This implementation allows Better Auth to use Redis for storing session data and rate limiting counters.
+This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
 
 ## Core Schema
 
