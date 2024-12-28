@@ -10,6 +10,7 @@ import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import { z } from "zod";
 
 type JWKOptions =
 	| {
@@ -205,8 +206,7 @@ export const jwt = (options?: JwtOptions) => {
 					});
 				},
 			),
-
-			getToken: createAuthEndpoint(
+			getJWTToken: createAuthEndpoint(
 				"/token",
 				{
 					method: "GET",
@@ -311,6 +311,140 @@ export const jwt = (options?: JwtOptions) => {
 					return ctx.json({
 						token: jwt,
 					});
+				},
+			),
+			signJWT: createAuthEndpoint(
+				"/jwt/sign-value",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+					body: z.object({
+						payload: z.record(z.any()),
+						subject: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const adapter = getJwksAdapter(ctx.context.adapter);
+
+					let key = await adapter.getLatestKey();
+					const privateKeyEncryptionEnabled =
+						!options?.jwks?.disablePrivateKeyEncryption;
+
+					if (key === undefined) {
+						const { publicKey, privateKey } = await generateKeyPair(
+							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
+						);
+
+						const publicWebKey = await exportJWK(publicKey);
+						const privateWebKey = await exportJWK(privateKey);
+						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+
+						let jwk: Partial<Jwk> = {
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
+							publicKey: JSON.stringify(publicWebKey),
+							privateKey: privateKeyEncryptionEnabled
+								? JSON.stringify(
+										await symmetricEncrypt({
+											key: ctx.context.options.secret!,
+											data: stringifiedPrivateWebKey,
+										}),
+									)
+								: stringifiedPrivateWebKey,
+							createdAt: new Date(),
+						};
+
+						key = await adapter.createJwk(jwk as Jwk);
+					}
+					let privateWebKey = privateKeyEncryptionEnabled
+						? await symmetricDecrypt({
+								key: ctx.context.options.secret!,
+								data: JSON.parse(key.privateKey),
+							})
+						: key.privateKey;
+
+					const privateKey = await importJWK(JSON.parse(privateWebKey));
+					const jwt = await new SignJWT({
+						...ctx.body.payload,
+					})
+						.setProtectedHeader({
+							alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							kid: key.id,
+						})
+						.setIssuedAt()
+						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
+						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
+						.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+						.sign(privateKey);
+					return ctx.json({ jwt });
+				},
+			),
+			getPrivateKey: createAuthEndpoint(
+				"/jwt/verify-value",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+					body: z.object({
+						payload: z.record(z.any()),
+						subject: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const adapter = getJwksAdapter(ctx.context.adapter);
+
+					let key = await adapter.getLatestKey();
+					const privateKeyEncryptionEnabled =
+						!options?.jwks?.disablePrivateKeyEncryption;
+
+					if (key === undefined) {
+						const { publicKey, privateKey } = await generateKeyPair(
+							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
+						);
+
+						const publicWebKey = await exportJWK(publicKey);
+						const privateWebKey = await exportJWK(privateKey);
+						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+
+						let jwk: Partial<Jwk> = {
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
+							publicKey: JSON.stringify(publicWebKey),
+							privateKey: privateKeyEncryptionEnabled
+								? JSON.stringify(
+										await symmetricEncrypt({
+											key: ctx.context.options.secret!,
+											data: stringifiedPrivateWebKey,
+										}),
+									)
+								: stringifiedPrivateWebKey,
+							createdAt: new Date(),
+						};
+
+						key = await adapter.createJwk(jwk as Jwk);
+					}
+					let privateWebKey = privateKeyEncryptionEnabled
+						? await symmetricDecrypt({
+								key: ctx.context.options.secret!,
+								data: JSON.parse(key.privateKey),
+							})
+						: key.privateKey;
+
+					const privateKey = await importJWK(JSON.parse(privateWebKey));
+					return ctx.json({ privateKey });
 				},
 			),
 		},
