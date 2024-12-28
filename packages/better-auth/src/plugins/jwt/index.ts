@@ -442,9 +442,7 @@ export const jwt = (options?: JwtOptions) => {
 								data: JSON.parse(key.privateKey),
 							})
 						: key.privateKey;
-
-					const privateKey = await importJWK(JSON.parse(privateWebKey));
-					return ctx.json({ privateKey });
+					return ctx.json({ privateKey: JSON.parse(privateWebKey) });
 				},
 			),
 		},
