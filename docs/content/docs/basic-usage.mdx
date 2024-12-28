@@ -378,7 +378,7 @@ The server provides a `session` object that you can use to access the session da
     const app = new Hono();
 
     app.get("/path", async (c) => {
-        const session = auth.api.getSession({
+        const session = await auth.api.getSession({
             headers: c.req.raw.headers
         })
     });
