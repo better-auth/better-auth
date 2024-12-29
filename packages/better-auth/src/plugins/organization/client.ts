@@ -16,6 +16,7 @@ import {
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
+import { BetterAuthError } from "src/error";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
@@ -87,11 +88,16 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 						: "admin" | "member" | "owner",
 				>(data: {
 					role: R;
-					permission: Partial<{
+					permission: {
 						//@ts-expect-error fix this later
-						[key in keyof Statements]: Statements[key][number][];
-					}>;
+						[key in keyof Statements]?: Statements[key][number][];
+					};
 				}) => {
+					if (Object.keys(data.permission).length > 1) {
+						throw new BetterAuthError(
+							"you can only check one resource permission at a time.",
+						);
+					}
 					const role = roles[data.role as unknown as "admin"];
 					if (!role) {
 						return false;
