@@ -458,6 +458,21 @@ export const createInternalAdapter = (
 				],
 			});
 		},
+		deleteAccount: async (providerId: string, userId: string) => {
+			await adapter.delete({
+				model: "account",
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+		},
 		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
