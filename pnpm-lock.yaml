@@ -1378,8 +1378,8 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0(encoding@0.1.13)
       better-call:
-        specifier: 0.3.3-beta.4
-        version: 0.3.3-beta.4
+        specifier: 0.3.3-beta.5
+        version: 0.3.3-beta.5
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -8095,8 +8095,8 @@ packages:
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
 
-  better-call@0.3.3-beta.4:
-    resolution: {integrity: sha512-txigUTFsjOlE4dfkfhDhu6Gk0I1Xo3S4Nye+nfMKJXknb+WsymcWtqoRUSUGdhOMumM3LT9R3QttTUxwny9lWQ==}
+  better-call@0.3.3-beta.5:
+    resolution: {integrity: sha512-j4kK25URT4rLXmR00drfGH/9nFWKgziGdzaMJ9AqWK0bBKazD+nwLtpiNagKGzn+SOJDzKTJxMR91CQxhF3+qw==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -25910,7 +25910,7 @@ snapshots:
       set-cookie-parser: 2.7.1
       typescript: 5.7.2
 
-  better-call@0.3.3-beta.4:
+  better-call@0.3.3-beta.5:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
