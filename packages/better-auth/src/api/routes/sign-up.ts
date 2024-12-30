@@ -231,6 +231,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				user: createdUser,
 			});
 			return ctx.json({
+				user: {
+					id: createdUser.id,
+					email: createdUser.email,
+					name: createdUser.name,
+					image: createdUser.image,
+					emailVerified: createdUser.emailVerified,
+					createdAt: createdUser.createdAt,
+					updatedAt: createdUser.updatedAt,
+				},
 				token: session.token,
 			});
 		},
