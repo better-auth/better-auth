@@ -1,4 +1,4 @@
-import { createFetch } from "@better-fetch/fetch";
+import { BetterFetchError, createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
@@ -22,6 +22,13 @@ export const getClientConfig = (options?: ClientOptions) => {
 			return parseJSON(text, {
 				strict: false,
 			});
+		},
+		customFetchImpl: async (input, init) => {
+			try {
+				return await fetch(input, init);
+			} catch (error) {
+				return Response.error();
+			}
 		},
 		...options?.fetchOptions,
 		plugins: options?.disableDefaultFetchPlugins
