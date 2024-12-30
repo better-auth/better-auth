@@ -2,15 +2,13 @@ import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
 import { wildcardMatch } from "../../utils/wildcard";
 import { getHost } from "../../utils/url";
+import type { GenericEndpointContext } from "src/types";
 
 /**
  * A middleware to validate callbackURL and origin against
  * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST") {
-		return;
-	}
 	const { body, query, context } = ctx;
 	const originHeader =
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
