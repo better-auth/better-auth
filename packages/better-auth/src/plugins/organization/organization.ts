@@ -16,7 +16,6 @@ import { shimContext } from "../../utils/shim";
 import {
 	type AccessControl,
 	type Role,
-	createAccessControl,
 	defaultRoles,
 	type defaultStatements,
 } from "./access";
@@ -198,13 +197,6 @@ export interface OrganizationOptions {
  * });
  * ```
  */
-
-const ac = createAccessControl({
-	name: ["action"],
-});
-const a = ac.newRole({
-	name: ["action"],
-});
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
