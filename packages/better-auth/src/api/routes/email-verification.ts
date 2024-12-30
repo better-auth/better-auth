@@ -7,6 +7,7 @@ import type { GenericEndpointContext, User } from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
+import { originCheck } from "../middlewares";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -160,6 +161,7 @@ export const verifyEmail = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
 				description: "Verify the email of the user",

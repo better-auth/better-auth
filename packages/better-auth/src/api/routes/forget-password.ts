@@ -5,6 +5,7 @@ import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../middlewares";
 
 function redirectError(
 	ctx: AuthContext,
@@ -145,6 +146,7 @@ export const forgetPasswordCallback = createAuthEndpoint(
 				description: "The URL to redirect the user to reset their password",
 			}),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
 				description: "Redirects the user to the callback URL with the token",
