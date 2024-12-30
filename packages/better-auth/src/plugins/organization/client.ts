@@ -16,7 +16,7 @@ import {
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
-import { BetterAuthError } from "src/error";
+import { BetterAuthError } from "../../error";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;

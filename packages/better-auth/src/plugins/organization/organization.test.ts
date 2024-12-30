@@ -5,7 +5,7 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 import { createAccessControl } from "./access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { BetterAuthError } from "src/error";
+import { BetterAuthError } from "../../error";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
