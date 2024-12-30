@@ -76,7 +76,7 @@ import { sendMessage } from "@/lib/notification"
 export const auth = betterAuth({
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
-            if(ctx.path.startWith("/sign-up")){
+            if(ctx.path.startsWith("/sign-up")){
                 const newSession = ctx.context.newSession;
                 if(newSession){
                     sendMessage({
