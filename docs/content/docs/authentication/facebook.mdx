@@ -6,7 +6,14 @@ description: Facebook provider setup and usage.
 <Steps>
     <Step> 
         ### Get your Facebook credentials
-        To use Facebook sign in, you need a client ID and client secret. You can get them from the [Facebook Developer Portal](https://developers.facebook.com/).   
+        To use Facebook sign in, you need a client ID and client Secret. You can get them from the [Facebook Developer Portal](https://developers.facebook.com/).
+        Select your app, navigate to **App Settings > Basic**, locate the following:  
+        - **App ID**: This is your `FACEBOOK_CLIENT_ID`
+        - **App Secret**: This is your `FACEBOOK_CLIENT_SECRET`.
+
+        <Callout type="warn">
+        Avoid exposing the `FACEBOOK_CLIENT_SECRET` in client-side code (e.g., frontend apps) because it’s sensitive information.
+        </Callout>
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/facebook` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
     </Step>
