@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export interface FacebookProfile {
 	id: string;
