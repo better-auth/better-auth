@@ -41,6 +41,39 @@ export const facebook = (options: FacebookOptions) => {
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});
 		},
+		async verifyIdToken(token, nonce) {
+			if (options.disableIdTokenSignIn) {
+		            return false;
+		        }
+			
+		        if (options.verifyIdToken) {
+		            return options.verifyIdToken(token, nonce);
+		        }
+					 
+			/* limited login */
+			if (token.split('.').length) {
+			  try {
+			    const { payload } = await jwtVerify(
+			      token,
+			      createRemoteJWKSet(
+				new URL(
+				  'https://www.facebook.com/.well-known/oauth/openid/jwks'
+				)
+			      ),
+			      {
+				algorithms: ['RS256'],
+				audience: options.clientId,
+				issuer: 'https://www.facebook.com',
+			      }
+			    )
+			  } catch (error) {
+			    return false
+			  }
+			}
+		
+			/* access_token */
+			return true
+		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
