@@ -36,6 +36,7 @@ import {
 	setPassword,
 	updateUser,
 	deleteUserCallback,
+	unlinkAccount,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -120,6 +121,7 @@ export function getEndpoints<
 		linkSocialAccount,
 		listUserAccounts,
 		deleteUserCallback,
+		unlinkAccount,
 	};
 	const endpoints = {
 		...baseEndpoints,
