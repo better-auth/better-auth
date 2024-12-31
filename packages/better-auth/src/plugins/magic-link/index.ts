@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../../api";
 
 interface MagicLinkOptions {
 	/**
@@ -142,6 +143,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							})
 							.optional(),
 					}),
+					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					requireHeaders: true,
 					metadata: {
 						openapi: {

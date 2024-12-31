@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
+import {
+	APIError,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	originCheck,
+} from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { BetterAuthPlugin } from "../../types";
 import { env } from "../../utils/env";
@@ -49,6 +54,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 							description: "The cookies to set after the proxy",
 						}),
 					}),
+					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
 							description: "OAuth Proxy Callback",
@@ -89,10 +95,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						data: cookies,
 					});
 					ctx.setHeader("set-cookie", decryptedCookies);
-					/**
-					 * Here the callback url will be already validated in against trusted origins
-					 * so we don't need to do that here
-					 */
 					throw ctx.redirect(ctx.query.callbackURL);
 				},
 			),

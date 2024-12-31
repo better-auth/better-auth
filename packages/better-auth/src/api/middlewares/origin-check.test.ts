@@ -1,6 +1,9 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
+import { createAuthEndpoint } from "../call";
+import { originCheck } from "./origin-check";
+import { z } from "zod";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -187,5 +190,63 @@ describe("Origin Check", async (it) => {
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
 		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should work with GET requests", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "https://sub-domain.my-site.com",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://google.com",
+					cookie: "value",
+				},
+			},
+		});
+		const res = await client.$fetch("/ok");
+		expect(res.data).toMatchObject({ ok: true });
+	});
+});
+
+describe("origin check middleware", async (it) => {
+	it("should return invalid origin", async () => {
+		const { client } = await getTestInstance({
+			trustedOrigins: ["https://trusted-site.com"],
+			plugins: [
+				{
+					id: "test",
+					endpoints: {
+						test: createAuthEndpoint(
+							"/test",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => {
+								return c.query.callbackURL;
+							},
+						),
+					},
+				},
+			],
+		});
+		const invalid = await client.$fetch(
+			"/test?callbackURL=https://malicious-site.com",
+		);
+		expect(invalid.error?.status).toBe(403);
+		const valid = await client.$fetch("/test?callbackURL=/dashboard");
+		expect(valid.data).toBe("/dashboard");
+		const validTrusted = await client.$fetch(
+			"/test?callbackURL=https://trusted-site.com/path",
+		);
+		expect(validTrusted.data).toBe("https://trusted-site.com/path");
+
+		const sampleInternalEndpointInvalid = await client.$fetch(
+			"/verify-email?callbackURL=https://malicious-site.com&token=xyz",
+		);
+		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
 });
