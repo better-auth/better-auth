@@ -280,7 +280,7 @@ describe("email-otp", async () => {
 describe("email-otp-verify", async () => {
 	const otpFn = vi.fn();
 	const otp = [""];
-	const { client, testUser } = await getTestInstance(
+	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
@@ -289,6 +289,7 @@ describe("email-otp-verify", async () => {
 						otpFn(email, _otp, type);
 					},
 					sendVerificationOnSignUp: true,
+					disableSignUp: true,
 				}),
 			],
 		},
@@ -298,6 +299,35 @@ describe("email-otp-verify", async () => {
 			},
 		},
 	);
+
+	it("should not create verification otp when disableSignUp and user not registered", async() => {
+		for (let param of [
+			{
+				email: "test-email@domain.com",
+				isNull: true,
+			},
+			{
+				email: testUser.email,
+				isNull: false,
+			},
+		]) {
+			await client.emailOtp.sendVerificationOtp({
+				email: param.email,
+				type: "email-verification",
+			});
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: param.email,
+					type: "email-verification",
+				},
+			});
+			if (param.isNull) {
+				expect(res.otp).toBeNull()
+			} else {
+				expect(res.otp).not.toBeNull()
+			}
+		}
+	})
 
 	it("should verify email with last otp", async () => {
 		await client.emailOtp.sendVerificationOtp({
