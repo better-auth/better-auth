@@ -112,7 +112,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
-					if (ctx.body.type === "forget-password") {
+					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
 						const user =
 							await ctx.context.internalAdapter.findUserByEmail(email);
 						if (!user) {
