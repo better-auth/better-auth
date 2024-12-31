@@ -300,7 +300,7 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should not create verification otp when disableSignUp and user not registered", async() => {
+	it("should not create verification otp when disableSignUp and user not registered", async () => {
 		for (let param of [
 			{
 				email: "test-email@domain.com",
@@ -322,12 +322,12 @@ describe("email-otp-verify", async () => {
 				},
 			});
 			if (param.isNull) {
-				expect(res.otp).toBeNull()
+				expect(res.otp).toBeNull();
 			} else {
-				expect(res.otp).not.toBeNull()
+				expect(res.otp).not.toBeNull();
 			}
 		}
-	})
+	});
 
 	it("should verify email with last otp", async () => {
 		await client.emailOtp.sendVerificationOtp({

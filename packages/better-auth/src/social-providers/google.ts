@@ -65,7 +65,7 @@ export const google = (options: GoogleOptions) => {
 				codeVerifier,
 				redirectURI,
 			});
-			
+
 			options.accessType &&
 				url.searchParams.set("access_type", options.accessType);
 			options.prompt && url.searchParams.set("prompt", options.prompt);
