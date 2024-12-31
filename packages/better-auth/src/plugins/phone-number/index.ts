@@ -240,6 +240,17 @@ export const phoneNumber = (options?: {
 					);
 					return ctx.json({
 						token: session.token,
+						user: {
+							id: user.id,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							name: user.name,
+							image: user.image,
+							phoneNumber: user.phoneNumber,
+							phoneNumberVerified: user.phoneNumberVerified,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						} as UserWithPhoneNumber,
 					});
 				},
 			),
@@ -417,13 +428,27 @@ export const phoneNumber = (options?: {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
-						await ctx.context.internalAdapter.updateUser(session.user.id, {
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: true,
-						});
+						let user = await ctx.context.internalAdapter.updateUser(
+							session.user.id,
+							{
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+						);
 						return ctx.json({
-							token: session.session.token,
 							status: true,
+							token: session.session.token,
+							user: {
+								id: user.id,
+								email: user.email,
+								emailVerified: user.emailVerified,
+								name: user.name,
+								image: user.image,
+								phoneNumber: user.phoneNumber,
+								phoneNumberVerified: user.phoneNumberVerified,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							} as UserWithPhoneNumber,
 						});
 					}
 
@@ -492,14 +517,36 @@ export const phoneNumber = (options?: {
 							user,
 						});
 						return ctx.json({
-							token: session.token,
 							status: true,
+							token: session.token,
+							user: {
+								id: user.id,
+								email: user.email,
+								emailVerified: user.emailVerified,
+								name: user.name,
+								image: user.image,
+								phoneNumber: user.phoneNumber,
+								phoneNumberVerified: user.phoneNumberVerified,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							} as UserWithPhoneNumber,
 						});
 					}
 
 					return ctx.json({
-						token: null,
 						status: true,
+						token: null,
+						user: {
+							id: user.id,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							name: user.name,
+							image: user.image,
+							phoneNumber: user.phoneNumber,
+							phoneNumberVerified: user.phoneNumberVerified,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						} as UserWithPhoneNumber,
 					});
 				},
 			),

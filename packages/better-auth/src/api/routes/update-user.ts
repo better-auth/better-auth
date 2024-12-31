@@ -237,6 +237,15 @@ export const changePassword = createAuthEndpoint(
 
 		return ctx.json({
 			token,
+			user: {
+				id: session.user.id,
+				email: session.user.email,
+				name: session.user.name,
+				image: session.user.image,
+				emailVerified: session.user.emailVerified,
+				createdAt: session.user.createdAt,
+				updatedAt: session.user.updatedAt,
+			},
 		});
 	},
 );

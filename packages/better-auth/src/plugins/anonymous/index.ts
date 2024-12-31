@@ -141,6 +141,14 @@ export const anonymous = (options?: AnonymousOptions) => {
 					});
 					return ctx.json({
 						token: session.token,
+						user: {
+							id: newUser.id,
+							email: newUser.email,
+							emailVerified: newUser.emailVerified,
+							name: newUser.name,
+							createdAt: newUser.createdAt,
+							updatedAt: newUser.updatedAt,
+						},
 					});
 				},
 			),
