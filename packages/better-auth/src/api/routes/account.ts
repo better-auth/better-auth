@@ -50,6 +50,9 @@ export const listUserAccounts = createAuthEndpoint(
 				return {
 					id: a.id,
 					provider: a.providerId,
+					createdAt: a.createdAt,
+					updatedAt: a.updatedAt,
+					accountId: a.accountId,
 				};
 			}),
 		);
