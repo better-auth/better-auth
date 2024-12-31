@@ -53,6 +53,7 @@ export const listUserAccounts = createAuthEndpoint(
 					createdAt: a.createdAt,
 					updatedAt: a.updatedAt,
 					accountId: a.accountId,
+					scopes: a.scope?.split(",") || [],
 				};
 			}),
 		);
