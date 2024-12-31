@@ -239,6 +239,15 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!callbackURL) {
 						return ctx.json({
 							token: session.token,
+							user: {
+								id: user.id,
+								email: user.email,
+								emailVerified: user.emailVerified,
+								name: user.name,
+								image: user.image,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							},
 						});
 					}
 					throw ctx.redirect(callbackURL);

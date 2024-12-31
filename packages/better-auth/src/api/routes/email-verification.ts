@@ -269,6 +269,15 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			return ctx.json({
 				status: true,
+				user: {
+					id: updatedUser.id,
+					email: updatedUser.email,
+					name: updatedUser.name,
+					image: updatedUser.image,
+					emailVerified: updatedUser.emailVerified,
+					createdAt: updatedUser.createdAt,
+					updatedAt: updatedUser.updatedAt,
+				},
 			});
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
@@ -295,6 +304,7 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		return ctx.json({
 			status: true,
+			user: null,
 		});
 	},
 );

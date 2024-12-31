@@ -341,14 +341,32 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							user: updatedUser,
 						});
 						return ctx.json({
-							token: session.token,
 							status: true,
+							token: session.token,
+							user: {
+								id: updatedUser.id,
+								email: updatedUser.email,
+								emailVerified: updatedUser.emailVerified,
+								name: updatedUser.name,
+								image: updatedUser.image,
+								createdAt: updatedUser.createdAt,
+								updatedAt: updatedUser.updatedAt,
+							},
 						});
 					}
 
 					return ctx.json({
 						status: true,
 						token: null,
+						user: {
+							id: updatedUser.id,
+							email: updatedUser.email,
+							emailVerified: updatedUser.emailVerified,
+							name: updatedUser.name,
+							image: updatedUser.image,
+							createdAt: updatedUser.createdAt,
+							updatedAt: updatedUser.updatedAt,
+						},
 					});
 				},
 			),
@@ -440,6 +458,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 						return ctx.json({
 							token: session.token,
+							user: {
+								id: newUser.id,
+								email: newUser.email,
+								emailVerified: newUser.emailVerified,
+								name: newUser.name,
+								image: newUser.image,
+								createdAt: newUser.createdAt,
+								updatedAt: newUser.updatedAt,
+							},
 						});
 					}
 
@@ -459,6 +486,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 					return ctx.json({
 						token: session.token,
+						user: {
+							id: user.user.id,
+							email: user.user.email,
+							emailVerified: user.user.emailVerified,
+							name: user.user.name,
+							image: user.user.image,
+							createdAt: user.user.createdAt,
+							updatedAt: user.user.updatedAt,
+						},
 					});
 				},
 			),
