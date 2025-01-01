@@ -171,7 +171,7 @@ export default function SignIn() {
 							variant="outline"
 							className="gap-2"
 							onClick={async () => {
-								await signIn.social({
+								const { data } = await signIn.social({
 									provider: "microsoft",
 									callbackURL: "/dashboard",
 								});
@@ -272,8 +272,11 @@ export default function SignIn() {
 						onClick={async () => {
 							await signIn.passkey({
 								fetchOptions: {
-									onResponse(context) {
+									onSuccess(context) {
 										router.push("/dashboard");
+									},
+									onError(context) {
+										toast.error(context.error.message);
 									},
 								},
 							});

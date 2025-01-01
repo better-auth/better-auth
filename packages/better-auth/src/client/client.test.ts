@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createReactClient } from "./react";
@@ -7,10 +9,10 @@ import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
 import type { Accessor } from "solid-js";
 import type { Ref } from "vue";
 import type { ReadableAtom } from "nanostores";
-import type { Session } from "../db/schema";
+import type { Session } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
-import { passkeyClient, twoFactorClient } from "../plugins";
-import { organizationClient } from "./plugins";
+import { twoFactorClient } from "../plugins";
+import { organizationClient, passkeyClient } from "./plugins";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {

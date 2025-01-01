@@ -1,18 +1,16 @@
-import type { AuthContext, BetterAuthOptions } from "../types";
-import type { Adapter, Where } from "../types/adapter";
 import { getDate } from "../utils/date";
+import { parseSessionOutput, parseUserOutput } from "./schema";
 import {
-	parseSessionOutput,
-	parseUserOutput,
 	type Account,
 	type Session,
 	type User,
 	type Verification,
-} from "./schema";
+} from "../types";
 import { getWithHooks } from "./with-hooks";
 import { getIp } from "../utils/get-request-ip";
 import { safeJSONParse } from "../utils/json";
 import { generateId } from "../utils";
+import type { Adapter, AuthContext, BetterAuthOptions, Where } from "../types";
 
 export const createInternalAdapter = (
 	adapter: Adapter,
@@ -28,61 +26,33 @@ export const createInternalAdapter = (
 	const { createWithHooks, updateWithHooks, updateManyWithHooks } =
 		getWithHooks(adapter, ctx);
 
-	const setSecondaryStorage = async (data: {
-		token: string;
-		user: User;
-		session: Session;
-	}) => {
-		await secondaryStorage?.set(
-			data.token,
-			JSON.stringify({
-				session: data.session,
-				user: data.user,
-			}),
-			data.session.expiresAt
-				? Math.floor(
-						((data.session.expiresAt instanceof Date
-							? data.session.expiresAt.getTime()
-							: new Date(data.session.expiresAt).getTime()) -
-							Date.now()) /
-							1000,
-					)
-				: sessionExpiration,
-		);
-	};
-
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			try {
-				const createdUser = await createWithHooks(
-					{
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-					},
-					"user",
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser.id || user.id,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			} catch (e) {
-				console.log(e);
-				return null;
-			}
+			const createdUser = await createWithHooks(
+				{
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...user,
+				},
+				"user",
+			);
+			const createdAccount = await createWithHooks(
+				{
+					...account,
+					userId: createdUser.id || user.id,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				"account",
+			);
+			return {
+				user: createdUser,
+				account: createdAccount,
+			};
 		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
@@ -232,19 +202,7 @@ export const createInternalAdapter = (
 				"session",
 				secondaryStorage
 					? {
-							fn: async () => {
-								const user = await adapter.findOne<User>({
-									model: "user",
-									where: [{ field: "id", value: userId }],
-								});
-								secondaryStorage.set(
-									data.token,
-									JSON.stringify({
-										session: data,
-										user,
-									}),
-									sessionExpiration,
-								);
+							fn: async (sessionData) => {
 								/**
 								 * store the session token for the user
 								 * so we can retrieve it later for listing sessions
@@ -272,7 +230,7 @@ export const createInternalAdapter = (
 									sessionExpiration,
 								);
 
-								return data;
+								return sessionData;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -283,8 +241,8 @@ export const createInternalAdapter = (
 		findSession: async (
 			token: string,
 		): Promise<{
-			session: Session;
-			user: User;
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
@@ -341,11 +299,22 @@ export const createInternalAdapter = (
 				/**
 				 * Persists session data to secondary storage as it seems it has been evicted from it.
 				 */
-				await setSecondaryStorage({
+				await secondaryStorage?.set(
 					token,
-					user: parsedUser,
-					session: parsedSession,
-				});
+					JSON.stringify({
+						session: parsedSession,
+						user: parsedUser,
+					}),
+					parsedSession.expiresAt
+						? Math.floor(
+								((parsedSession.expiresAt instanceof Date
+									? parsedSession.expiresAt.getTime()
+									: new Date(parsedSession.expiresAt).getTime()) -
+									Date.now()) /
+									1000,
+							)
+						: sessionExpiration,
+				);
 			}
 
 			return {
@@ -441,11 +410,6 @@ export const createInternalAdapter = (
 										...parsedSession.session,
 										...data,
 									};
-									await setSecondaryStorage({
-										token: sessionToken,
-										user: parsedSession.user,
-										session: updatedSession,
-									});
 									return updatedSession;
 								} else {
 									return null;
@@ -487,6 +451,21 @@ export const createInternalAdapter = (
 			await adapter.deleteMany({
 				model: "account",
 				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+		},
+		deleteAccount: async (providerId: string, userId: string) => {
+			await adapter.delete({
+				model: "account",
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
 					{
 						field: "userId",
 						value: userId,
@@ -543,6 +522,64 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+		},
+		findOAuthUser: async (
+			email: string,
+			accountId: string,
+			providerId: string,
+		) => {
+			let user: User | null = null;
+			user = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						value: email.toLowerCase(),
+						field: "email",
+					},
+				],
+			});
+			if (!user) {
+				const account = await adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{
+							value: accountId,
+							field: "accountId",
+						},
+						{
+							value: providerId,
+							field: "providerId",
+						},
+					],
+				});
+				if (!account) return null;
+				user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: account.userId,
+							field: "id",
+						},
+					],
+				});
+				return {
+					user: user!,
+					accounts: [account],
+				};
+			}
+			const accounts = await adapter.findMany<Account>({
+				model: "account",
+				where: [
+					{
+						value: user.id,
+						field: "userId",
+					},
+				],
+			});
+			return {
+				user: user!,
+				accounts: accounts || [],
+			};
 		},
 		findUserByEmail: async (
 			email: string,
@@ -725,7 +762,7 @@ export const createInternalAdapter = (
 					field: "createdAt",
 					direction: "desc",
 				},
-				limit: 10,
+				limit: 1,
 			});
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;

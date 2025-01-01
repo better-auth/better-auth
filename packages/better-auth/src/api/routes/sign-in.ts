@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { socialProviderList } from "../../social-providers";
+import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -52,9 +52,7 @@ export const signInSocial = createAuthEndpoint(
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList, {
-				description: "OAuth2 provider to use",
-			}),
+			provider: SocialProviderListEnum,
 			/**
 			 * Disable automatic redirection to the provider
 			 *
@@ -238,10 +236,18 @@ export const signInSocial = createAuthEndpoint(
 			}
 			await setSessionCookie(c, data.data!);
 			return c.json({
-				session: data.data!.session,
-				user: data.data!.user,
-				url: undefined,
 				redirect: false,
+				token: data.data!.session.token,
+				url: undefined,
+				user: {
+					id: data.data!.user.id,
+					email: data.data!.user.email,
+					name: data.data!.user.name,
+					image: data.data!.user.image,
+					emailVerified: data.data!.user.emailVerified,
+					createdAt: data.data!.user.createdAt,
+					updatedAt: data.data!.user.updatedAt,
+				},
 			});
 		}
 
@@ -407,7 +413,6 @@ export const signInEmail = createAuthEndpoint(
 				},
 				ctx.request,
 			);
-			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {
 				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
@@ -435,6 +440,9 @@ export const signInEmail = createAuthEndpoint(
 			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
+			redirect: !!ctx.body.callbackURL,
+			token: session.token,
+			url: ctx.body.callbackURL,
 			user: {
 				id: user.user.id,
 				email: user.user.email,
@@ -444,8 +452,6 @@ export const signInEmail = createAuthEndpoint(
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
 			},
-			redirect: !!ctx.body.callbackURL,
-			url: ctx.body.callbackURL,
 		});
 	},
 );

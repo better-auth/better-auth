@@ -661,7 +661,7 @@ importers:
         specifier: ^7.6.12
         version: 7.6.12
       astro:
-        specifier: ^4.16.1
+        specifier: ^4.16.17
         version: 4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
       better-auth:
         specifier: workspace:*
@@ -1359,6 +1359,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@better-auth/utils':
+        specifier: 0.2.3
+        version: 0.2.3
       '@better-fetch/fetch':
         specifier: 1.1.12
         version: 1.1.12
@@ -1369,17 +1372,14 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1
       '@simplewebauthn/browser':
-        specifier: ^10.0.0
-        version: 10.0.0
+        specifier: ^13.0.0
+        version: 13.0.0
       '@simplewebauthn/server':
-        specifier: ^10.0.1
-        version: 10.0.1(encoding@0.1.13)
+        specifier: ^13.0.0
+        version: 13.0.0(encoding@0.1.13)
       better-call:
-        specifier: 0.3.3-beta.4
-        version: 0.3.3-beta.4
-      consola:
-        specifier: ^3.2.3
-        version: 3.2.3
+        specifier: 0.3.3
+        version: 0.3.3
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1389,28 +1389,16 @@ importers:
       kysely:
         specifier: ^0.27.4
         version: 0.27.4
-      nanoid:
-        specifier: ^5.0.9
-        version: 5.0.9
-      nanostores:
-        specifier: ^0.11.3
-        version: 0.11.3
-      oslo:
-        specifier: ^1.2.1
-        version: 1.2.1
       uncrypto:
         specifier: ^0.1.3
         version: 0.1.3
       zod:
-        specifier: ^3.23.8
-        version: 3.23.8
+        specifier: ^3.24.1
+        version: 3.24.1
     devDependencies:
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
-      '@simplewebauthn/types':
-        specifier: ^10.0.0
-        version: 10.0.0
       '@types/better-sqlite3':
         specifier: ^7.6.12
         version: 7.6.12
@@ -1444,6 +1432,9 @@ importers:
       mysql2:
         specifier: ^3.11.5
         version: 3.11.5
+      nanostores:
+        specifier: ^0.11.3
+        version: 0.11.3
       next:
         specifier: ^15.0.4
         version: 15.0.4(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)
@@ -1551,8 +1542,8 @@ importers:
   packages/expo:
     dependencies:
       better-call:
-        specifier: ^0.2.15
-        version: 0.2.15
+        specifier: ^0.3.3
+        version: 0.3.3
       zod:
         specifier: ^3.23.8
         version: 3.23.8
@@ -2451,6 +2442,9 @@ packages:
   '@babel/types@7.26.0':
     resolution: {integrity: sha512-Z/yiTPj+lDVnF7lWeKCIJzaIkI0vYO87dMpZ4bg4TDrFe4XXLFWL1TbXU27gBP3QccxV9mZICCrnjnYlJjXHOA==}
     engines: {node: '>=6.9.0'}
+
+  '@better-auth/utils@0.2.3':
+    resolution: {integrity: sha512-Ap1GaSmo6JYhJhxJOpUB0HobkKPTNzfta+bLV89HfpyCAHN7p8ntCrmNFHNAVD0F6v0mywFVEUg1FUhNCc81Rw==}
 
   '@better-fetch/fetch@1.1.12':
     resolution: {integrity: sha512-B3bfloI/2UBQWIATRN6qmlORrvx3Mp0kkNjmXLv0b+DtbtR+pP4/I5kQA/rDUv+OReLywCCldf6co4LdDmh8JA==}
@@ -6335,8 +6329,15 @@ packages:
   '@simplewebauthn/browser@10.0.0':
     resolution: {integrity: sha512-hG0JMZD+LiLUbpQcAjS4d+t4gbprE/dLYop/CkE01ugU/9sKXflxV5s0DRjdz3uNMFecatRfb4ZLG3XvF8m5zg==}
 
+  '@simplewebauthn/browser@13.0.0':
+    resolution: {integrity: sha512-7d/+gxoFoDQxq2EkLl/PuTIQ/rnSrA3bmr8L2Ij7bRyicJoCJX/NDGUNExyctB9nSDrEkkcrJMDkwpCYOGU3Lg==}
+
   '@simplewebauthn/server@10.0.1':
     resolution: {integrity: sha512-djNWcRn+H+6zvihBFJSpG3fzb0NQS9c/Mw5dYOtZ9H+oDw8qn9Htqxt4cpqRvSOAfwqP7rOvE9rwqVaoGGc3hg==}
+    engines: {node: '>=20.0.0'}
+
+  '@simplewebauthn/server@13.0.0':
+    resolution: {integrity: sha512-Tb3hJRpeT4cgT2uPORc465qu9LGXcDoIegFmkIgqw7XNZtsaoHzn3xI1DiFH7ukzs6JbhfQBRyY4rlfCdTwkNw==}
     engines: {node: '>=20.0.0'}
 
   '@simplewebauthn/types@10.0.0':
@@ -8085,17 +8086,14 @@ packages:
   better-call@0.2.13:
     resolution: {integrity: sha512-Y1rOwUtTYeH4usW7XNqonoo+Dtcb2sXL6m6zcLsgTYSD2ANqyELxkeA8BkCTWonN1y+Pt9CMbcn5vILaPohdUg==}
 
-  better-call@0.2.15:
-    resolution: {integrity: sha512-IVT8Mraf+eu6hyCJNMyFVMWhvsmNyHjM4K2h7pZg1LEwZUkTpsfjIghjTq6YiGaooMUmTLK1C9eCEYMM2obW9w==}
-
   better-call@0.2.15-beta.6:
     resolution: {integrity: sha512-IIpVe7z7xW5pNOOhOj3u7cEde53v3Duzs4bstDJfLVqdmEiYRUCfy+1w2apf3MqYOHY8gYcd7DbTsvFeBqg4CA==}
 
   better-call@0.2.3-beta.2:
     resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
 
-  better-call@0.3.3-beta.4:
-    resolution: {integrity: sha512-txigUTFsjOlE4dfkfhDhu6Gk0I1Xo3S4Nye+nfMKJXknb+WsymcWtqoRUSUGdhOMumM3LT9R3QttTUxwny9lWQ==}
+  better-call@0.3.3:
+    resolution: {integrity: sha512-N4lDVm0NGmFfDJ0XMQ4O83Zm/3dPlvIQdxvwvgSLSkjFX5PM4GUYSVAuxNzXN27QZMHDkrJTWUqxBrm4tPC3eA==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -8417,10 +8415,6 @@ packages:
 
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
-    engines: {node: '>=8'}
-
-  ci-info@4.0.0:
-    resolution: {integrity: sha512-TdHqgGf9odd8SXNuxtUBVx8Nv+qZOejE6qyqiy5NtbYYQOeFa6zmHkxlPzmaLxWWHsU6nJmB7AETdVPi+2NBUg==}
     engines: {node: '>=8'}
 
   ci-info@4.1.0:
@@ -15585,12 +15579,15 @@ packages:
 
   sudo-prompt@8.2.5:
     resolution: {integrity: sha512-rlBo3HU/1zAJUrkY6jNxDOC9eVYliG6nS4JA8u8KAshITd07tafMc/Br7xQwCSseXwJ2iCcHCE8SNWX3q8Z+kw==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   sudo-prompt@9.1.1:
     resolution: {integrity: sha512-es33J1g2HjMpyAhz8lOR+ICmXXAqTuKbuXuUWLhOLew20oN9oUCgCJx615U/v7aioZg7IX5lIh9x34vwneu4pA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   sudo-prompt@9.2.1:
     resolution: {integrity: sha512-Mu7R0g4ig9TUuGSxJavny5Rv0egCEtpZRNMrZaYS1vxkiIxGiGUwoezU3LazIQ+KE04hTrTfNPgxU5gzi7F5Pw==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   supercluster@7.1.5:
     resolution: {integrity: sha512-EulshI3pGUM66o6ZdH3ReiFcvHpM3vAigyK+vcxdjpJyEbIIrtbmBdY23mGgnI24uXiGFvrGq9Gkum/8U7vJWg==}
@@ -17295,6 +17292,9 @@ packages:
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
     engines: {node: '>=12.7.0'}
@@ -18535,6 +18535,10 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
+
+  '@better-auth/utils@0.2.3':
+    dependencies:
+      uncrypto: 0.1.3
 
   '@better-fetch/fetch@1.1.12': {}
 
@@ -20721,7 +20725,7 @@ snapshots:
   '@nuxt/telemetry@2.6.0(magicast@0.3.5)(rollup@4.24.3)':
     dependencies:
       '@nuxt/kit': 3.14.1592(magicast@0.3.5)(rollup@4.24.3)
-      ci-info: 4.0.0
+      ci-info: 4.1.0
       consola: 3.2.3
       create-require: 1.1.1
       defu: 6.1.4
@@ -23068,6 +23072,8 @@ snapshots:
     dependencies:
       '@simplewebauthn/types': 10.0.0
 
+  '@simplewebauthn/browser@13.0.0': {}
+
   '@simplewebauthn/server@10.0.1(encoding@0.1.13)':
     dependencies:
       '@hexagon/base64': 1.1.28
@@ -23078,6 +23084,19 @@ snapshots:
       '@peculiar/asn1-schema': 2.3.13
       '@peculiar/asn1-x509': 2.3.13
       '@simplewebauthn/types': 10.0.0
+      cross-fetch: 4.0.0(encoding@0.1.13)
+    transitivePeerDependencies:
+      - encoding
+
+  '@simplewebauthn/server@13.0.0(encoding@0.1.13)':
+    dependencies:
+      '@hexagon/base64': 1.1.28
+      '@levischuck/tiny-cbor': 0.2.2
+      '@peculiar/asn1-android': 2.3.13
+      '@peculiar/asn1-ecc': 2.3.14
+      '@peculiar/asn1-rsa': 2.3.13
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       cross-fetch: 4.0.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
@@ -23287,7 +23306,7 @@ snapshots:
       '@tanstack/virtual-file-routes': 1.81.9
       prettier: 3.4.2
       tsx: 4.19.2
-      zod: 3.23.8
+      zod: 3.24.1
 
   '@tanstack/router-plugin@1.86.0(vite@6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -23308,7 +23327,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.6
       chokidar: 3.6.0
       unplugin: 1.16.0
-      zod: 3.23.8
+      zod: 3.24.1
     optionalDependencies:
       vite: 6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
     transitivePeerDependencies:
@@ -24463,7 +24482,7 @@ snapshots:
 
   '@vitest/snapshot@1.6.0':
     dependencies:
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       pathe: 1.1.2
       pretty-format: 29.7.0
 
@@ -24592,7 +24611,7 @@ snapshots:
       '@vue/compiler-ssr': 3.5.13
       '@vue/shared': 3.5.13
       estree-walker: 2.0.2
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       postcss: 8.4.49
       source-map-js: 1.2.1
 
@@ -25748,8 +25767,8 @@ snapshots:
       chalk: 4.1.2
       invariant: 2.2.4
       pretty-format: 24.9.0
-      zod: 3.23.8
-      zod-validation-error: 2.1.0(zod@3.23.8)
+      zod: 3.24.1
+      zod-validation-error: 2.1.0(zod@3.24.1)
 
   babel-plugin-react-native-web@0.19.13: {}
 
@@ -25867,21 +25886,13 @@ snapshots:
       rou3: 0.5.1
       uncrypto: 0.1.3
 
-  better-call@0.2.15:
-    dependencies:
-      '@better-fetch/fetch': 1.1.12
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.1
-      uncrypto: 0.1.3
-      zod: 3.23.8
-
   better-call@0.2.15-beta.6:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      zod: 3.23.8
+      zod: 3.24.1
 
   better-call@0.2.3-beta.2:
     dependencies:
@@ -25891,13 +25902,12 @@ snapshots:
       set-cookie-parser: 2.7.1
       typescript: 5.7.2
 
-  better-call@0.3.3-beta.4:
+  better-call@0.3.3:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
-      set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      zod: 3.23.8
+      zod: 3.24.1
 
   better-opn@3.0.2:
     dependencies:
@@ -26337,8 +26347,6 @@ snapshots:
   ci-info@2.0.0: {}
 
   ci-info@3.9.0: {}
-
-  ci-info@4.0.0: {}
 
   ci-info@4.1.0: {}
 
@@ -32336,7 +32344,7 @@ snapshots:
       klona: 2.0.6
       knitwork: 1.1.0
       listhen: 1.9.0
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       magicast: 0.3.5
       mime: 4.0.4
       mlly: 1.7.2
@@ -35539,8 +35547,8 @@ snapshots:
       superstruct: 2.0.2
       valibot: 1.0.0-beta.9(typescript@5.7.2)
       yup: 1.4.0
-      zod: 3.23.8
-      zod-to-json-schema: 3.23.5(zod@3.23.8)
+      zod: 3.24.1
+      zod-to-json-schema: 3.23.5(zod@3.24.1)
     transitivePeerDependencies:
       - '@types/json-schema'
       - typescript
@@ -36107,7 +36115,7 @@ snapshots:
     dependencies:
       acorn: 8.14.0
       estree-walker: 3.0.3
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       unplugin: 1.15.0
     transitivePeerDependencies:
       - webpack-sources
@@ -36179,7 +36187,7 @@ snapshots:
       estree-walker: 3.0.3
       fast-glob: 3.3.2
       local-pkg: 0.5.0
-      magic-string: 0.30.12
+      magic-string: 0.30.14
       mlly: 1.7.2
       pathe: 1.1.2
       pkg-types: 1.2.1
@@ -36738,7 +36746,7 @@ snapshots:
       unenv: 1.10.0
       unstorage: 1.13.1(ioredis@5.4.1)
       vite: 6.0.3(@types/node@22.10.1)(jiti@2.4.0)(lightningcss@1.27.0)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
-      zod: 3.23.8
+      zod: 3.24.1
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -37438,16 +37446,23 @@ snapshots:
     dependencies:
       zod: 3.23.8
 
+  zod-to-json-schema@3.23.5(zod@3.24.1):
+    dependencies:
+      zod: 3.24.1
+    optional: true
+
   zod-to-ts@1.2.0(typescript@5.7.2)(zod@3.23.8):
     dependencies:
       typescript: 5.7.2
       zod: 3.23.8
 
-  zod-validation-error@2.1.0(zod@3.23.8):
+  zod-validation-error@2.1.0(zod@3.24.1):
     dependencies:
-      zod: 3.23.8
+      zod: 3.24.1
 
   zod@3.23.8: {}
+
+  zod@3.24.1: {}
 
   zustand@3.7.2(react@18.3.1):
     optionalDependencies:

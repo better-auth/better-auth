@@ -4,11 +4,12 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
+	sessionMiddleware,
 } from "../../api";
 import {
 	type BetterAuthPlugin,
 	type InferOptionSchema,
-	type PluginSchema,
+	type AuthPluginSchema,
 	type Session,
 	type User,
 	type Where,
@@ -924,4 +925,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;

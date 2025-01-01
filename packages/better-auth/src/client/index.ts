@@ -10,3 +10,7 @@ export const InferPlugin = <T extends BetterAuthPlugin>() => {
 		$InferServerPlugin: {} as T,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "@better-fetch/fetch";
+//@ts-expect-error
+export type * from "zod";

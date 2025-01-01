@@ -1,8 +1,7 @@
 import { cn } from "@/lib/utils";
-import { useRef, useState } from "react";
 import { Icons } from "../icons";
 import Link from "next/link";
-import Image from "next/image";
+
 const testimonials = [
 	{
 		name: "Dev Ed",
@@ -81,13 +80,13 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Glenno",
+		name: "Tech Nerd",
 		profession: "Developer",
-		link: "https://x.com/ammostockpile/status/1854150422170354174",
+		link: "https://x.com/TechNerd556/status/1863523931614822784",
 		description:
-			"Someone has finally nailed auth for Typescript projects. I have been searching for something like this for years. Years. Anonymous auth, passcodes, 2fa, plugin architecture. Brilliant work @better_auth.",
+			"Using @better_auth with custom components feels like having someone hand you the remote while you're comfortably on the sofa. The ease I'm feeling rn is insane Auth done in under 5 minutes 🤌⚡️.",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1850320546702958592/05O2vFM9_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1826246307326902273/Ee4nlPjH_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},

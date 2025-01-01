@@ -1,8 +1,12 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Account, Session, User, Verification } from "../db/schema";
-import type { BetterAuthPlugin } from "./plugins";
+import type { Account, Session, User, Verification } from "../types";
+import type {
+	BetterAuthPlugin,
+	HookAfterHandler,
+	HookBeforeHandler,
+} from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage } from "./adapter";
+import type { AdapterInstance, SecondaryStorage, Where } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
@@ -11,7 +15,7 @@ import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
 
-export interface BetterAuthOptions {
+export type BetterAuthOptions = {
 	/**
 	 * The name of the application
 	 *
@@ -26,7 +30,7 @@ export interface BetterAuthOptions {
 	 * If not explicitly set,
 	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL || process.env.AUTH_URL
+	 * process.env.BETTER_AUTH_URL
 	 *
 	 * If not set it will throw an error.
 	 */
@@ -569,10 +573,8 @@ export interface BetterAuthOptions {
 		/**
 		 * Custom generateId function.
 		 *
-		 * If not provided, nanoid will be used.
+		 * If not provided, random ids will be generated.
 		 * If set to false, the database's auto generated id will be used.
-		 *
-		 * @default nanoid
 		 */
 		generateId?:
 			| ((options: {
@@ -588,8 +590,11 @@ export interface BetterAuthOptions {
 	 * operations.
 	 */
 	databaseHooks?: {
+		/**
+		 * User hooks
+		 */
 		user?: {
-			[key in "create" | "update"]?: {
+			create?: {
 				/**
 				 * Hook that is called before a user is created.
 				 * if the hook returns false, the user will not be created.
@@ -607,12 +612,33 @@ export interface BetterAuthOptions {
 				 */
 				after?: (user: User) => Promise<void>;
 			};
-		};
-		session?: {
-			[key in "create" | "update"]?: {
+			update?: {
 				/**
-				 * Hook that is called before a user is created.
-				 * if the hook returns false, the user will not be created.
+				 * Hook that is called before a user is updated.
+				 * if the hook returns false, the user will not be updated.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (user: Partial<User>) => Promise<
+					| boolean
+					| void
+					| {
+							data: User & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a user is updated.
+				 */
+				after?: (user: User) => Promise<void>;
+			};
+		};
+		/**
+		 * Session Hook
+		 */
+		session?: {
+			create?: {
+				/**
+				 * Hook that is called before a session is updated.
+				 * if the hook returns false, the session will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (session: Session) => Promise<
@@ -623,16 +649,40 @@ export interface BetterAuthOptions {
 					  }
 				>;
 				/**
-				 * Hook that is called after a user is created.
+				 * Hook that is called after a session is updated.
+				 */
+				after?: (session: Session) => Promise<void>;
+			};
+			/**
+			 * Update hook
+			 */
+			update?: {
+				/**
+				 * Hook that is called before a user is updated.
+				 * if the hook returns false, the session will not be updated.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (session: Partial<Session>) => Promise<
+					| boolean
+					| void
+					| {
+							data: Session & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a session is updated.
 				 */
 				after?: (session: Session) => Promise<void>;
 			};
 		};
+		/**
+		 * Account Hook
+		 */
 		account?: {
-			[key in "create" | "update"]?: {
+			create?: {
 				/**
-				 * Hook that is called before a user is created.
-				 * If the hook returns false, the user will not be created.
+				 * Hook that is called before a account is created.
+				 * If the hook returns false, the account will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (account: Account) => Promise<
@@ -643,16 +693,40 @@ export interface BetterAuthOptions {
 					  }
 				>;
 				/**
-				 * Hook that is called after a user is created.
+				 * Hook that is called after a account is created.
+				 */
+				after?: (account: Account) => Promise<void>;
+			};
+			/**
+			 * Update hook
+			 */
+			update?: {
+				/**
+				 * Hook that is called before a account is update.
+				 * If the hook returns false, the user will not be updated.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (account: Partial<Account>) => Promise<
+					| boolean
+					| void
+					| {
+							data: Account & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a account is updated.
 				 */
 				after?: (account: Account) => Promise<void>;
 			};
 		};
+		/**
+		 * Verification Hook
+		 */
 		verification?: {
-			[key in "create" | "update"]: {
+			create?: {
 				/**
-				 * Hook that is called before a user is created.
-				 * if the hook returns false, the user will not be created.
+				 * Hook that is called before a verification is created.
+				 * if the hook returns false, the verification will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
 				before?: (verification: Verification) => Promise<
@@ -663,7 +737,25 @@ export interface BetterAuthOptions {
 					  }
 				>;
 				/**
-				 * Hook that is called after a user is created.
+				 * Hook that is called after a verification is created.
+				 */
+				after?: (verification: Verification) => Promise<void>;
+			};
+			update?: {
+				/**
+				 * Hook that is called before a verification is updated.
+				 * if the hook returns false, the verification will not be updated.
+				 * If the hook returns an object, it'll be used instead of the original data
+				 */
+				before?: (verification: Partial<Verification>) => Promise<
+					| boolean
+					| void
+					| {
+							data: Verification & Record<string, any>;
+					  }
+				>;
+				/**
+				 * Hook that is called after a verification is updated.
 				 */
 				after?: (verification: Verification) => Promise<void>;
 			};
@@ -687,4 +779,17 @@ export interface BetterAuthOptions {
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
 	};
-}
+	/**
+	 * Hooks
+	 */
+	hooks?: {
+		/**
+		 * Before a request is processed
+		 */
+		before?: HookBeforeHandler;
+		/**
+		 * After a request is processed
+		 */
+		after?: HookAfterHandler;
+	};
+};

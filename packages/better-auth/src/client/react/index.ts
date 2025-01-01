@@ -98,3 +98,9 @@ export function createAuthClient<Option extends ClientOptions>(
 			>;
 		};
 }
+
+export type * from "@better-fetch/fetch";
+//@ts-expect-error
+export type * from "zod";
+
+export { useStore };

@@ -8,20 +8,6 @@ Better Auth is designed to be type-safe. Both the client and server are built wi
 
 ## Typescript Config
 
-### Declaration Files
-
-To avoid instantiation and reference errors, configure your TypeScript config file to disable declaration output:
-
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "declaration": false
-  }
-}
-```
-
-If you're using a monorepo and want to share the `auth` package across multiple projects, either export the TypeScript files as-is without compilation or use build tools like `tsup` to transpile the package.
-
 ### Strict Mode
 
 Better Auth is designed to work with TypeScript's strict mode. We recommend enabling strict mode in your TypeScript config file:
@@ -51,9 +37,9 @@ Both the client SDK and the server offer types that can be inferred using the `$
 ```ts title="auth-client.ts" 
 import { createAuthClient } from "better-auth/client"
 
-const authClient =  createAuthClient()
+const authClient = createAuthClient()
 
-export type Session = typeof client.$Infer.Session
+export type Session = typeof authClient.$Infer.Session
 ```
 
 The `Session` type includes both `session` and `user` properties. The user property represents the user object type, and the `session` property represents the `session` object type.

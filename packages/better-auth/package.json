@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.0.20",
+  "version": "1.1.8",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -11,7 +11,7 @@
   "scripts": {
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts --minify",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
-    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=8192' tsup --watch --dts",
+    "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=16192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
     "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
     "test:adapters": "pnpm prisma:push && vitest adapters",
@@ -327,6 +327,26 @@
         "default": "./dist/plugins/jwt.cjs"
       }
     },
+    "./plugins/sso": {
+      "import": {
+        "types": "./dist/plugins/sso.d.ts",
+        "default": "./dist/plugins/sso.js"
+      },
+      "require": {
+        "types": "./dist/plugins/sso.d.cts",
+        "default": "./dist/plugins/sso.cjs"
+      }
+    },
+    "./plugins/oidc-plugin": {
+      "import": {
+        "types": "./dist/plugins/oidc-plugin.d.ts",
+        "default": "./dist/plugins/oidc-plugin.js"
+      },
+      "require": {
+        "types": "./dist/plugins/oidc-plugin.d.cts",
+        "default": "./dist/plugins/oidc-plugin.cjs"
+      }
+    },
     "./plugins/magic-link": {
       "import": {
         "types": "./dist/plugins/magic-link.d.ts",
@@ -500,6 +520,15 @@
       "plugins/generic-oauth": [
         "./dist/plugins/generic-oauth.d.ts"
       ],
+      "plugins/oauth-proxy": [
+        "./dist/plugins/oauth-proxy.d.ts"
+      ],
+      "plugins/sso": [
+        "./dist/plugins/sso.d.ts"
+      ],
+      "plugins/oidc-plugin": [
+        "./dist/plugins/oidc-plugin.d.ts"
+      ],
       "plugins/jwt": [
         "./dist/plugins/jwt.d.ts"
       ],
@@ -524,8 +553,8 @@
     }
   },
   "devDependencies": {
+    "@better-fetch/fetch": "1.1.12",
     "@prisma/client": "^5.22.0",
-    "@simplewebauthn/types": "^10.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
     "@types/prompts": "^2.4.9",
@@ -537,6 +566,7 @@
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
+    "nanostores": "^0.11.3",
     "next": "^15.0.4",
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
@@ -550,21 +580,18 @@
     "vue": "^3.5.13"
   },
   "dependencies": {
+    "@better-auth/utils": "0.2.3",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
-    "@simplewebauthn/browser": "^10.0.0",
-    "@simplewebauthn/server": "^10.0.1",
-    "better-call": "0.3.3-beta.4",
-    "consola": "^3.2.3",
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0",
+    "better-call": "0.3.3",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
-    "nanoid": "^5.0.9",
-    "nanostores": "^0.11.3",
-    "oslo": "^1.2.1",
     "uncrypto": "^0.1.3",
-    "zod": "^3.23.8"
+    "zod": "^3.24.1"
   },
   "overrides": {
     "whatwg-url": "^14.0.0"

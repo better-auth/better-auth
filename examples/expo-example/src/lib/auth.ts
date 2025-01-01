@@ -16,4 +16,5 @@ export const auth = betterAuth({
 			clientSecret: process.env.GITHUB_CLIENT_SECRET!,
 		},
 	},
+	trustedOrigins: ["exp://"],
 });

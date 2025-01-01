@@ -151,28 +151,11 @@ import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const authClient =  new MongoClient("mongodb://localhost:27017");
-
+const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db()
 
 export const auth = betterAuth({
     database: mongodbAdapter(db)
-})
-```
-
-#### Use Plural Form
-
-If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { MongoClient } from "mongodb";
-import { mongoAdapter } from "better-auth/adapters/mongodb";
-
-export const auth = betterAuth({
-    database: mongoAdapter(client, {
-      usePlural: true
-    })
 })
 ```
 
@@ -244,21 +227,29 @@ import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
 const redis = createClient();
+await redis.connect();
 
 export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
-		get: async (key) => await redis.get(key),
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, JSON.stringify(value), { EX: ttl });
-			else await redis.set(key, JSON.stringify(value));
+		get: async (key) => {
+			const value = await redis.get(key);
+			return value ? value : null;
 		},
-		delete: async (key) => await redis.del(key),
+		set: async (key, value, ttl) => {
+			if (ttl) await redis.set(key, value, { EX: ttl });
+			// or for ioredis:
+			// if (ttl) await redis.set(key, value, 'EX', ttl)
+			else await redis.set(key, value);
+		},
+		delete: async (key) => {
+			await redis.del(key),
+		}
 	}
 });
 ```
 
-This implementation allows Better Auth to use Redis for storing session data and rate limiting counters.
+This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
 
 ## Core Schema
 
@@ -625,30 +616,7 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` section of the <Link href="/docs/reference/options">options</Link>.
-
-**Guidelines:**
-
-- IDs need to be in string format.
-- The ID should be unique for each entity type (like users, sessions, etc.).
-- Since the session token acts as the token, it should be both unique and sufficiently long for security.
-
-**Example: Custom ID Generation**
-```ts title="auth.ts" 
-import { betterAuth } from "better-auth";
-import { db } from "./db";
-
-export const auth = betterAuth({
-   database: {
-      db: db
-   },
-   advanced: {
-      generateId: () => {
-         // custom id generation logic
-      }
-   }
-})
-```
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
 
 You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
 

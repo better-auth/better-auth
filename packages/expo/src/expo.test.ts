@@ -42,14 +42,6 @@ vi.mock("expo-linking", async () => {
 	};
 });
 
-vi.mock("expo-secure-store", async () => {
-	return {
-		getItemAsync: vi.fn(async (key) => null),
-		setItemAsync: vi.fn(),
-		deleteItemAsync: vi.fn(),
-	};
-});
-
 const fn = vi.fn();
 
 describe("expo", async () => {

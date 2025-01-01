@@ -7,7 +7,7 @@ import {
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	PluginSchema,
+	AuthPluginSchema,
 	Session,
 	User,
 } from "../../types";
@@ -58,7 +58,7 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;
 
 export const anonymous = (options?: AnonymousOptions) => {
 	const ERROR_CODES = {
@@ -140,12 +140,15 @@ export const anonymous = (options?: AnonymousOptions) => {
 						user: newUser,
 					});
 					return ctx.json({
-						id: newUser.id,
-						email: newUser.email,
-						emailVerified: newUser.emailVerified,
-						name: newUser.name,
-						createdAt: newUser.createdAt,
-						updatedAt: newUser.updatedAt,
+						token: session.token,
+						user: {
+							id: newUser.id,
+							email: newUser.email,
+							emailVerified: newUser.emailVerified,
+							name: newUser.name,
+							createdAt: newUser.createdAt,
+							updatedAt: newUser.updatedAt,
+						},
 					});
 				},
 			),

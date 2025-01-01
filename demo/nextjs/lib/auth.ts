@@ -4,11 +4,11 @@ import {
 	admin,
 	multiSession,
 	organization,
-	passkey,
 	twoFactor,
 	oneTap,
 	oAuthProxy,
 	openAPI,
+	oidcProvider,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -17,6 +17,7 @@ import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
+import { passkey } from "better-auth/plugins/passkey";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -40,11 +41,13 @@ export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+		type: "sqlite",
+	},
+	session: {
+		freshAge: 0,
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			console.log("Sending verification email to", user.email);
 			const res = await resend.emails.send({
 				from,
 				to: to || user.email,
@@ -53,11 +56,10 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendOnSignUp: true,
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github"],
+			trustedProviders: ["google", "github", "demo-app"],
 		},
 	},
 	emailAndPassword: {
@@ -125,7 +127,6 @@ export const auth = betterAuth({
 									}/accept-invitation/${data.id}`,
 					}),
 				});
-				console.log(res, data.email);
 			},
 		}),
 		twoFactor({
@@ -148,5 +149,8 @@ export const auth = betterAuth({
 		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
+		oidcProvider({
+			loginPage: "/sign-in",
+		}),
 	],
 });

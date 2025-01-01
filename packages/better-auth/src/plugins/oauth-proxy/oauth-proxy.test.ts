@@ -2,9 +2,9 @@ import { describe, vi, it, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oAuthProxy } from ".";
 import type { GoogleProfile } from "../../social-providers";
-import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
+import { signJWT } from "../../crypto/jwt";
 
 vi.mock("../../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -30,11 +30,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 					given_name: "First",
 					family_name: "Last",
 				};
-				const testIdToken = await createJWT(
-					"HS256",
-					Buffer.from(DEFAULT_SECRET),
-					data,
-				);
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
 				const tokens = getOAuth2Tokens({
 					access_token: "test",
 					refresh_token: "test",
@@ -46,7 +42,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 });
 
 describe("oauth-proxy", async () => {
-	const { client, auth } = await getTestInstance({
+	const { client } = await getTestInstance({
 		plugins: [
 			oAuthProxy({
 				currentURL: "http://preview-localhost:3000",

@@ -3,8 +3,9 @@ import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../cookies";
-import { alphabet, generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../../api";
 
 interface MagicLinkOptions {
 	/**
@@ -101,10 +102,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					const verificationToken = generateRandomString(
-						32,
-						alphabet("a-z", "A-Z"),
-					);
+					const verificationToken = generateRandomString(32, "a-z", "A-Z");
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
 						value: email,
@@ -145,6 +143,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							})
 							.optional(),
 					}),
+					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					requireHeaders: true,
 					metadata: {
 						openapi: {
@@ -194,8 +193,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						tokenValue.id,
 					);
 					const email = tokenValue.value;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					let userId: string = user?.user.id || "";
+					let user = await ctx.context.internalAdapter
+						.findUserByEmail(email)
+						.then((res) => res?.user);
 
 					if (!user) {
 						if (!options.disableSignUp) {
@@ -204,8 +204,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 								emailVerified: true,
 								name: email,
 							});
-							userId = newUser.id;
-							if (!userId) {
+							user = newUser;
+							if (!user) {
 								throw ctx.redirect(
 									`${toRedirectTo}?error=failed_to_create_user`,
 								);
@@ -214,23 +214,40 @@ export const magicLink = (options: MagicLinkOptions) => {
 							throw ctx.redirect(`${toRedirectTo}?error=failed_to_create_user`);
 						}
 					}
+
+					if (!user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
-						userId,
+						user.id,
 						ctx.headers,
 					);
+
 					if (!session) {
 						throw ctx.redirect(
 							`${toRedirectTo}?error=failed_to_create_session`,
 						);
 					}
+
 					await setSessionCookie(ctx, {
 						session,
-						user: user?.user!,
+						user,
 					});
 					if (!callbackURL) {
 						return ctx.json({
-							session,
-							user: user?.user!,
+							token: session.token,
+							user: {
+								id: user.id,
+								email: user.email,
+								emailVerified: user.emailVerified,
+								name: user.name,
+								image: user.image,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							},
 						});
 					}
 					throw ctx.redirect(callbackURL);

@@ -185,7 +185,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				accountId: createdUser.id,
 				password: hash,
 			});
-			if (ctx.context.options.emailVerification?.sendOnSignUp) {
+			if (
+				ctx.context.options.emailVerification?.sendOnSignUp ||
+				ctx.context.options.emailAndPassword.requireEmailVerification
+			) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					createdUser.email,
@@ -210,11 +213,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
 				return ctx.json({
-					id: createdUser.id,
-					email: createdUser.email,
-					name: createdUser.name,
-					image: createdUser.image,
-					emailVerified: createdUser.emailVerified,
+					token: null,
+					user: {
+						id: createdUser.id,
+						email: createdUser.email,
+						name: createdUser.name,
+						image: createdUser.image,
+						emailVerified: createdUser.emailVerified,
+						createdAt: createdUser.createdAt,
+						updatedAt: createdUser.updatedAt,
+					},
 				});
 			}
 
@@ -232,13 +240,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				user: createdUser,
 			});
 			return ctx.json({
-				id: createdUser.id,
-				email: createdUser.email,
-				name: createdUser.name,
-				image: createdUser.image,
-				emailVerified: createdUser.emailVerified,
-				createdAt: createdUser.createdAt,
-				updatedAt: createdUser.updatedAt,
+				token: session.token,
+				user: {
+					id: createdUser.id,
+					email: createdUser.email,
+					name: createdUser.name,
+					image: createdUser.image,
+					emailVerified: createdUser.emailVerified,
+					createdAt: createdUser.createdAt,
+					updatedAt: createdUser.updatedAt,
+				},
 			});
 		},
 	);

@@ -12,6 +12,7 @@ import { dropbox } from "./dropbox";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { reddit } from "./reddit";
+import { z } from "zod";
 export const socialProviders = {
 	apple,
 	discord,
@@ -34,6 +35,12 @@ export const socialProviderList = Object.keys(socialProviders) as [
 ];
 
 export type SocialProviderList = typeof socialProviderList;
+
+export const SocialProviderListEnum = z.enum(socialProviderList, {
+	description: "OAuth2 provider to use",
+});
+
+export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
 	[K in SocialProviderList[number]]?: Prettify<

@@ -1,6 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { parseJWT } from "oslo/jwt";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -13,6 +12,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
+import { decodeJwt } from "jose";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -63,7 +63,7 @@ interface GenericOAuthConfig {
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: string;
+	prompt?: "none" | "login" | "consent" | "select_account";
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false
@@ -115,22 +115,20 @@ async function getUserInfo(
 	finalUserInfoUrl: string | undefined,
 ) {
 	if (tokens.idToken) {
-		const decoded = parseJWT(tokens.idToken) as {
-			payload: {
-				sub: string;
-				email_verified: boolean;
-				email: string;
-				name: string;
-				picture: string;
-			};
+		const decoded = decodeJwt(tokens.idToken) as {
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
 		};
-		if (decoded?.payload) {
-			if (decoded.payload.sub && decoded.payload.email) {
+		if (decoded) {
+			if (decoded.sub && decoded.email) {
 				return {
-					id: decoded.payload.sub,
-					emailVerified: decoded.payload.email_verified,
-					image: decoded.payload.picture,
-					...decoded.payload,
+					id: decoded.sub,
+					emailVerified: decoded.email_verified,
+					image: decoded.picture,
+					...decoded,
 				};
 			}
 		}
@@ -172,84 +170,83 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
 		init: (ctx) => {
+			const genericProviders = options.config.map((c) => {
+				let finalUserInfoUrl = c.userInfoUrl;
+				return {
+					id: c.providerId,
+					name: c.providerId,
+					createAuthorizationURL(data) {
+						return createAuthorizationURL({
+							id: c.providerId,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							authorizationEndpoint: c.authorizationUrl!,
+							state: data.state,
+							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							scopes: c.scopes || [],
+							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+						});
+					},
+					async validateAuthorizationCode(data) {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+								finalUserInfoUrl = discovery.data.userinfo_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return validateAuthorizationCode({
+							code: data.code,
+							codeVerifier: data.codeVerifier,
+							redirectURI: data.redirectURI,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+					async getUserInfo(tokens) {
+						if (!finalUserInfoUrl) {
+							return null;
+						}
+						const userInfo = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl);
+						if (!userInfo) {
+							return null;
+						}
+						return {
+							user: {
+								id: userInfo?.id,
+								email: userInfo?.email,
+								emailVerified: userInfo?.emailVerified,
+								image: userInfo?.image,
+								name: userInfo?.name,
+								...c.mapProfileToUser?.(userInfo),
+							},
+							data: userInfo,
+						};
+					},
+				} as OAuthProvider;
+			});
 			return {
 				context: {
-					socialProviders: options.config.map((c) => {
-						let finalTokenUrl = c.tokenUrl;
-						let finalUserInfoUrl = c.userInfoUrl;
-						return {
-							id: c.providerId,
-							name: c.providerId,
-							createAuthorizationURL(data) {
-								return createAuthorizationURL({
-									id: c.providerId,
-									options: {
-										clientId: c.clientId,
-										clientSecret: c.clientSecret,
-										redirectURI: c.redirectURI,
-									},
-									authorizationEndpoint: c.authorizationUrl!,
-									state: data.state,
-									codeVerifier: c.pkce ? data.codeVerifier : undefined,
-									scopes: c.scopes || [],
-									redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
-								});
-							},
-							async validateAuthorizationCode(data) {
-								let finalTokenUrl = c.tokenUrl;
-								if (c.discoveryUrl) {
-									const discovery = await betterFetch<{
-										token_endpoint: string;
-										userinfo_endpoint: string;
-									}>(c.discoveryUrl, {
-										method: "GET",
-									});
-									if (discovery.data) {
-										finalTokenUrl = discovery.data.token_endpoint;
-										finalUserInfoUrl = discovery.data.userinfo_endpoint;
-									}
-								}
-								if (!finalTokenUrl) {
-									throw new APIError("BAD_REQUEST", {
-										message:
-											"Invalid OAuth configuration. Token URL not found.",
-									});
-								}
-								return validateAuthorizationCode({
-									code: data.code,
-									codeVerifier: data.codeVerifier,
-									redirectURI: data.redirectURI,
-									options: {
-										clientId: c.clientId,
-										clientSecret: c.clientSecret,
-									},
-									tokenEndpoint: finalTokenUrl,
-								});
-							},
-							async getUserInfo(tokens) {
-								if (!finalUserInfoUrl) {
-									return null;
-								}
-								const userInfo = c.getUserInfo
-									? await c.getUserInfo(tokens)
-									: await getUserInfo(tokens, finalUserInfoUrl);
-								if (!userInfo) {
-									return null;
-								}
-								return {
-									user: {
-										id: userInfo?.id,
-										email: userInfo?.email,
-										emailVerified: userInfo?.emailVerified,
-										image: userInfo?.image,
-										name: userInfo?.name,
-										...c.mapProfileToUser?.(userInfo),
-									},
-									data: userInfo,
-								};
-							},
-						} as OAuthProvider;
-					}),
+					socialProviders: genericProviders.concat(ctx.socialProviders),
 				},
 			};
 		},
@@ -283,6 +280,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						errorCallbackURL: z
 							.string({
 								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						disableRedirect: z
+							.boolean({
+								description: "Disable redirect",
 							})
 							.optional(),
 					}),
@@ -387,7 +389,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return ctx.json({
 						url: authUrl.toString(),
-						redirect: true,
+						redirect: !ctx.body.disableRedirect,
 					});
 				},
 			),
@@ -406,9 +408,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
-						state: z.string({
-							description: "The state parameter from the OAuth2 request",
-						}),
+						state: z
+							.string({
+								description: "The state parameter from the OAuth2 request",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -436,7 +440,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.baseURL}?error=${
+							`${ctx.context.options.baseURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
 							}`,
 						);
@@ -532,6 +536,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							scope: tokens.scopes?.join(","),
 						},
 					});
+
 					function redirectOnError(error: string) {
 						throw ctx.redirect(
 							`${

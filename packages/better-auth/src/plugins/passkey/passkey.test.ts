@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { passkey, passkeyClient } from ".";
+import { type Passkey, passkey, passkeyClient } from ".";
 import { createAuthClient } from "../../client";
 
 describe("passkey", async () => {
@@ -45,7 +45,6 @@ describe("passkey", async () => {
 		const options = await auth.api.generatePasskeyAuthenticationOptions({
 			headers: headers,
 		});
-
 		expect(options).toBeDefined();
 		expect(options).toHaveProperty("challenge");
 		expect(options).toHaveProperty("rpId");
@@ -54,8 +53,9 @@ describe("passkey", async () => {
 	});
 
 	it("should list user passkeys", async () => {
-		const { headers, user, session } = await signInWithTestUser();
-		(await auth.$context).adapter.create({
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		await context.adapter.create({
 			model: "passkey",
 			data: {
 				id: "mockPasskeyId",
@@ -63,12 +63,12 @@ describe("passkey", async () => {
 				publicKey: "mockPublicKey",
 				name: "mockName",
 				counter: 0,
-				deviceType: "mockDeviceType",
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
 				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
-				webauthnUserID: "mockWebAuthnUserID",
-			},
+			} satisfies Passkey,
 		});
 
 		const passkeys = await auth.api.listPasskeys({
@@ -79,6 +79,7 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("id");
 		expect(passkeys[0]).toHaveProperty("userId");
 		expect(passkeys[0]).toHaveProperty("publicKey");
+		expect(passkeys[0]).toHaveProperty("credentialID");
 	});
 
 	it("should update a passkey", async () => {

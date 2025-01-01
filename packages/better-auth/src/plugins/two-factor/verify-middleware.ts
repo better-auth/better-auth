@@ -1,11 +1,12 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../../api/call";
-import { hs256 } from "../../crypto";
 import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
 import { setSessionCookie } from "../../cookies";
 import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { base64 } from "@better-auth/utils/base64";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
@@ -65,7 +66,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						 * create a token that will be used to
 						 * verify the device
 						 */
-						const token = await hs256(
+						const token = await createHMAC("SHA-256", "base64urlnopad").sign(
 							ctx.context.secret,
 							`${user.id}!${session.token}`,
 						);
@@ -78,8 +79,16 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 						);
 					}
 					return ctx.json({
-						session,
-						user,
+						token: session.token,
+						user: {
+							id: user.id,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							name: user.name,
+							image: user.image,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						},
 					});
 				},
 				invalid: async () => {
@@ -96,8 +105,16 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 		return {
 			valid: async () => {
 				return ctx.json({
-					session,
-					user: session.user,
+					token: session.session.token,
+					user: {
+						id: session.user.id,
+						email: session.user.email,
+						emailVerified: session.user.emailVerified,
+						name: session.user.name,
+						image: session.user.image,
+						createdAt: session.user.createdAt,
+						updatedAt: session.user.updatedAt,
+					},
 				});
 			},
 			invalid: async () => {

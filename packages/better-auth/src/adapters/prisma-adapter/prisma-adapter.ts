@@ -4,7 +4,7 @@ import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { generateId } from "../../utils";
 import { withApplyDefault } from "../utils";
 
-interface PrismaConfig {
+export interface PrismaConfig {
 	/**
 	 * Database provider.
 	 */

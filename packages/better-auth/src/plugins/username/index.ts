@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../db/schema";
+import type { Account, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
@@ -145,13 +145,16 @@ export const username = () => {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
-						id: user.id,
-						email: user.email,
-						name: user.name,
-						image: user.image,
-						emailVerified: user.emailVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
+						token: session.token,
+						user: {
+							id: user.id,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							name: user.name,
+							image: user.image,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						},
 					});
 				},
 			),

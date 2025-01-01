@@ -9,9 +9,9 @@ import type {
 	AuthenticatorTransportFuture,
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
-} from "@simplewebauthn/types";
+} from "@simplewebauthn/server";
 import { APIError } from "better-call";
-import { alphabet, generateRandomString } from "../../crypto/random";
+import { generateRandomString } from "../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import { sessionMiddleware } from "../../api";
@@ -19,7 +19,7 @@ import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	PluginSchema,
+	AuthPluginSchema,
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
 import { BetterAuthError } from "../../error";
@@ -74,7 +74,7 @@ export type Passkey = {
 	name?: string;
 	publicKey: string;
 	userId: string;
-	webauthnUserID: string;
+	credentialID: string;
 	counter: number;
 	deviceType: CredentialDeviceType;
 	backedUp: boolean;
@@ -245,7 +245,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						],
 					});
 					const userID = new Uint8Array(
-						Buffer.from(generateRandomString(32, alphabet("a-z", "0-9"))),
+						Buffer.from(generateRandomString(32, "a-z", "0-9")),
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
@@ -255,7 +255,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
 						excludeCredentials: userPasskeys.map((passkey) => ({
-							id: passkey.id,
+							id: passkey.credentialID,
 							transports: passkey.transports?.split(
 								",",
 							) as AuthenticatorTransportFuture[],
@@ -418,7 +418,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						...(userPasskeys.length
 							? {
 									allowCredentials: userPasskeys.map((passkey) => ({
-										id: passkey.id,
+										id: passkey.credentialID,
 										transports: passkey.transports?.split(
 											",",
 										) as AuthenticatorTransportFuture[],
@@ -533,6 +533,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedChallenge,
 							expectedOrigin: origin,
 							expectedRPID: options?.rpID,
+							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
 						if (!verified || !registrationInfo) {
@@ -541,20 +542,22 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						const {
-							credentialID,
-							credentialPublicKey,
-							counter,
+							// credentialID,
+							// credentialPublicKey,
+							// counter,
 							credentialDeviceType,
 							credentialBackedUp,
+							credential,
+							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
+						const pubKey = Buffer.from(credential.publicKey).toString("base64");
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							webauthnUserID: ctx.context.generateId({ model: "passkey" }),
-							id: credentialID,
+							id: ctx.context.generateId({ model: "passkey" }),
+							credentialID: credential.id,
 							publicKey: pubKey,
-							counter,
+							counter: credential.counter,
 							deviceType: credentialDeviceType,
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
@@ -580,7 +583,7 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "POST",
 					body: z.object({
-						response: z.any(),
+						response: z.record(z.any()),
 					}),
 					metadata: {
 						openapi: {
@@ -604,6 +607,11 @@ export const passkey = (options?: PasskeyOptions) => {
 										},
 									},
 								},
+							},
+						},
+						$Infer: {
+							body: {} as {
+								response: AuthenticationResponseJSON;
 							},
 						},
 					},
@@ -642,7 +650,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						model: "passkey",
 						where: [
 							{
-								field: "id",
+								field: "credentialID",
 								value: resp.id,
 							},
 						],
@@ -658,9 +666,9 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedChallenge,
 							expectedOrigin: origin,
 							expectedRPID: opts.rpID,
-							authenticator: {
-								credentialID: passkey.id,
-								credentialPublicKey: new Uint8Array(
+							credential: {
+								id: passkey.credentialID,
+								publicKey: new Uint8Array(
 									Buffer.from(passkey.publicKey, "base64"),
 								),
 								counter: passkey.counter,
@@ -851,7 +859,7 @@ const schema = {
 				},
 				required: true,
 			},
-			webauthnUserID: {
+			credentialID: {
 				type: "string",
 				required: true,
 			},
@@ -877,6 +885,6 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;
 
 export * from "./client";

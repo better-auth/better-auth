@@ -22,7 +22,6 @@ import { jwt, bearer } from "better-auth/plugins"
 export const auth = betterAuth({
     plugins: [ // [!code highlight]
         jwt(), // [!code highlight]
-        bearer() //this allows you to pass the session as a bearer token  // [!code highlight] 
     ] // [!code highlight]
 })
 ```

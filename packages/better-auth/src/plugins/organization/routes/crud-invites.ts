@@ -128,6 +128,16 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 				});
 			}
+
+			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
+
+			if (member.role !== creatorRole && ctx.body.role === creatorRole) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+				});
+			}
+
 			const alreadyMember = await adapter.findMemberByEmail({
 				email: ctx.body.email,
 				organizationId: organizationId,
@@ -148,6 +158,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
+
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: ctx.body.role as string,

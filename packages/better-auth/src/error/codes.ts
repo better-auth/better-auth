@@ -19,4 +19,7 @@ export const BASE_ERROR_CODES = {
 	USER_ALREADY_EXISTS: "User already exists",
 	EMAIL_CAN_NOT_BE_UPDATED: "Email can not be updated",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Credential account not found",
+	SESSION_EXPIRED: "Session expired. Re-authenticate to perform this action.",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "You can't unlink your last account",
+	ACCOUNT_NOT_FOUND: "Account not found",
 };

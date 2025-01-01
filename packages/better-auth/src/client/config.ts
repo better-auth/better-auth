@@ -1,4 +1,4 @@
-import { createFetch } from "@better-fetch/fetch";
+import { BetterFetchError, createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
@@ -6,7 +6,7 @@ import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
-export const getClientConfig = <O extends ClientOptions>(options?: O) => {
+export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL = getBaseURL(options?.baseURL);
@@ -22,6 +22,13 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 			return parseJSON(text, {
 				strict: false,
 			});
+		},
+		customFetchImpl: async (input, init) => {
+			try {
+				return await fetch(input, init);
+			} catch (error) {
+				return Response.error();
+			}
 		},
 		...options?.fetchOptions,
 		plugins: options?.disableDefaultFetchPlugins

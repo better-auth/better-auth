@@ -2,7 +2,7 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
+import { useStore } from "better-auth/react";
 import Constants from "expo-constants";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 
@@ -39,7 +39,7 @@ function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
 
 interface ExpoClientOptions {
 	scheme?: string;
-	storage?: {
+	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
 	};
@@ -90,11 +90,11 @@ function getOrigin(scheme: string) {
 	return schemeURI;
 }
 
-export const expoClient = (opts?: ExpoClientOptions) => {
+export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
 	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
 	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
-	const storage = opts?.storage || SecureStore;
+	const storage = opts?.storage;
 	const isWeb = Platform.OS === "web";
 
 	const rawScheme =
@@ -109,16 +109,6 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 	return {
 		id: "expo",
 		getActions(_, $store) {
-			if (Platform.OS !== "web") {
-				store = $store;
-				const localSession = storage.getItem(cookieName);
-				localSession &&
-					$store.atoms.session.set({
-						data: JSON.parse(localSession),
-						error: null,
-						isPending: false,
-					});
-			}
 			return {
 				/**
 				 * Get the stored cookie.
@@ -138,6 +128,19 @@ export const expoClient = (opts?: ExpoClientOptions) => {
 				getCookie: () => {
 					const cookie = storage.getItem(cookieName);
 					return getCookie(cookie || "{}");
+				},
+				useSession: () => {
+					if (Platform.OS !== "web" && !opts.disableCache) {
+						store = $store;
+						const localSession = storage.getItem(localCacheName);
+						localSession &&
+							$store.atoms.session.set({
+								data: JSON.parse(localSession),
+								error: null,
+								isPending: false,
+							});
+					}
+					return useStore($store.atoms.session);
 				},
 			};
 		},

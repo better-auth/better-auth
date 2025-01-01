@@ -10,13 +10,15 @@ import { init } from "../init";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { z } from "zod";
 import { createAuthClient } from "../client";
-import { convertSetCookieToCookie } from "../test-utils/headers";
+import { bearer } from "src/plugins";
 
 describe("call", async () => {
 	const q = z.optional(
 		z.object({
 			testBeforeHook: z.string().optional(),
+			testBeforeGlobal: z.string().optional(),
 			testAfterHook: z.string().optional(),
+			testAfterGlobal: z.string().optional(),
 			testContext: z.string().optional(),
 			message: z.string().optional(),
 		}),
@@ -95,13 +97,11 @@ describe("call", async () => {
 							});
 						}
 						if (query.testContext) {
+							ctx.query = {
+								message: query.testContext,
+							};
 							return {
-								context: {
-									// change context
-									query: {
-										message: query.testContext,
-									},
-								},
+								context: ctx,
 							};
 						}
 					}),
@@ -178,9 +178,31 @@ describe("call", async () => {
 	} satisfies BetterAuthPlugin;
 	const options = {
 		baseURL: "http://localhost:3000",
-		plugins: [testPlugin, testPlugin2],
+		plugins: [testPlugin, testPlugin2, bearer()],
 		emailAndPassword: {
 			enabled: true,
+		},
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/sign-up/email") {
+					return {
+						context: {
+							body: {
+								...ctx.body,
+								email: "changed@email.com",
+							},
+						},
+					};
+				}
+				if (ctx.query?.testBeforeGlobal) {
+					return ctx.json({ before: "global" });
+				}
+			}),
+			after: createAuthMiddleware(async (ctx) => {
+				if (ctx.query?.testAfterGlobal) {
+					return ctx.json({ after: "global" });
+				}
+			}),
 		},
 	} satisfies BetterAuthOptions;
 	const authContext = init(options);
@@ -343,6 +365,45 @@ describe("call", async () => {
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from chained hook 2");
 			});
+	});
+
+	it("should intercept on global before hook", async () => {
+		const response = await api.test({
+			query: {
+				testBeforeGlobal: "true",
+			},
+		});
+		expect(response).toMatchObject({
+			before: "global",
+		});
+	});
+
+	it("should intercept on global after hook", async () => {
+		const response = await api.test({
+			query: {
+				testAfterGlobal: "true",
+			},
+		});
+		expect(response).toMatchObject({
+			after: "global",
+		});
+	});
+
+	it("global before hook should change the context", async (ctx) => {
+		const response = await api.signUpEmail({
+			body: {
+				email: "my-email@test.com",
+				password: "password",
+				name: "test",
+			},
+		});
+
+		const session = await api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${response?.token}`,
+			}),
+		});
+		expect(session?.user.email).toBe("changed@email.com");
 	});
 
 	it("should fetch using a client", async () => {

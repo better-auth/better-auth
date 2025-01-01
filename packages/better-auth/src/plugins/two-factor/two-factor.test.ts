@@ -4,11 +4,10 @@ import { twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { TOTPController } from "oslo/otp";
-import { TimeSpan } from "oslo";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
+import { createOTP } from "@better-auth/utils/otp";
 
 describe("two factor", async () => {
 	let OTP = "";
@@ -80,10 +79,6 @@ describe("two factor", async () => {
 	});
 
 	it("should enable twoFactor", async () => {
-		const totp = new TOTPController({
-			digits: 6,
-			period: new TimeSpan(30, "s"),
-		});
 		const twoFactor = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",
 			where: [
@@ -101,7 +96,7 @@ describe("two factor", async () => {
 			key: DEFAULT_SECRET,
 			data: twoFactor.secret,
 		});
-		const code = await totp.generate(Buffer.from(decrypted));
+		const code = await createOTP(decrypted).totp();
 
 		const res = await client.twoFactor.verifyTotp({
 			code,
@@ -110,7 +105,7 @@ describe("two factor", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.token).toBeDefined();
 	});
 
 	it("should require two factor", async () => {
@@ -164,7 +159,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		expect(verifyRes.data?.session).toBeDefined();
+		expect(verifyRes.data?.token).toBeDefined();
 	});
 
 	let backupCodes: string[] = [];

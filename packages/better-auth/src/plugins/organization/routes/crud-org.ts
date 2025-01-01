@@ -481,9 +481,14 @@ export const setActiveOrganization = createAuthEndpoint(
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 			});
 		}
+		if (!organization) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			});
+		}
 		const updatedSession = await adapter.setActiveOrganization(
 			session.session.token,
-			organizationId,
+			organization.id,
 		);
 		await setSessionCookie(ctx, {
 			session: updatedSession,

@@ -48,7 +48,14 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		expect(updated.data?.name).toBe("newName");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(updated.data?.status).toBe(true);
+		expect(session.user.name).toBe("newName");
 	});
 
 	it("should unset image", async () => {
@@ -58,7 +65,13 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		expect(updated.data?.image).toBeNull();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.image).toBeNull();
 	});
 
 	it("should update user email", async () => {
@@ -69,7 +82,13 @@ describe("updateUser", async () => {
 				headers: headers,
 			},
 		});
-		expect(res.data?.user.email).toBe(newEmail);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.email).toBe(newEmail);
 	});
 
 	it("should send email verification before update", async () => {
@@ -257,10 +276,8 @@ describe("delete user", async () => {
 			},
 		});
 		expect(session.data).toBeDefined();
-		const deleteCallbackRes = await client.deleteUser.callback({
-			query: {
-				token,
-			},
+		const deleteCallbackRes = await client.deleteUser({
+			token,
 			fetchOptions: {
 				headers,
 			},

@@ -7,10 +7,10 @@ import {
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/types";
+} from "@simplewebauthn/browser";
 import type { Session } from "inspector";
-import type { User } from "../../db/schema";
-import type { passkey as passkeyPl, Passkey } from "../../plugins";
+import type { User } from "../../types";
+import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
@@ -44,10 +44,10 @@ export const getPasskeyActions = (
 			return response;
 		}
 		try {
-			const res = await startAuthentication(
-				response.data,
-				opts?.autoFill || false,
-			);
+			const res = await startAuthentication({
+				optionsJSON: response.data,
+				useBrowserAutofill: opts?.autoFill,
+			});
 			const verified = await $fetch<{
 				session: Session;
 				user: User;
@@ -82,6 +82,12 @@ export const getPasskeyActions = (
 			 * identify the passkey in the UI.
 			 */
 			name?: string;
+			/**
+			 * Try to silently create a passkey with the password manager that the user just signed
+			 * in with.
+			 * @default false
+			 */
+			useAutoRegister?: boolean;
 		},
 		fetchOpts?: BetterFetchOption,
 	) => {
@@ -95,7 +101,10 @@ export const getPasskeyActions = (
 			return options;
 		}
 		try {
-			const res = await startRegistration(options.data);
+			const res = await startRegistration({
+				optionsJSON: options.data,
+				useAutoRegister: opts?.useAutoRegister,
+			});
 			const verified = await $fetch<{
 				passkey: Passkey;
 			}>("/passkey/verify-registration", {

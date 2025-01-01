@@ -1,4 +1,4 @@
-import { type Session } from "./../../db/schema";
+import { type Session } from "./../../types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";

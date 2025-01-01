@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "./context";
 import type { BetterAuthOptions } from "./options";
 
 /**
@@ -23,7 +24,7 @@ export type Where = {
 /**
  * Adapter Interface
  */
-export interface Adapter {
+export type Adapter = {
 	id: string;
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
@@ -77,7 +78,7 @@ export interface Adapter {
 		overwrite?: boolean;
 	}>;
 	options?: Record<string, any>;
-}
+};
 
 export interface AdapterInstance {
 	(options: BetterAuthOptions): Adapter;

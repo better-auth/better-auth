@@ -35,7 +35,6 @@ describe("sign-up with custom fields", async (it) => {
 			disableTestUser: true,
 		},
 	);
-	let user: User | null = null;
 	it("should work with custom fields on account table", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -44,8 +43,7 @@ describe("sign-up with custom fields", async (it) => {
 				name: "Test Name",
 			},
 		});
-		user = res as User;
-		expect(user).toBeDefined();
+		expect(res.token).toBeDefined();
 		const accounts = await db.findMany({
 			model: "account",
 		});

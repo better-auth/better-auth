@@ -1,7 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
-import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { parseJWT } from "oslo/jwt";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
@@ -65,7 +64,9 @@ export interface AppleNonConformUser {
 	email: string;
 }
 
-export interface AppleOptions extends ProviderOptions<AppleProfile> {}
+export interface AppleOptions extends ProviderOptions<AppleProfile> {
+	appBundleIdentifier?: string;
+}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -79,7 +80,7 @@ export const apple = (options: AppleOptions) => {
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
 				}&response_type=code&redirect_uri=${
-					redirectURI || options.redirectURI
+					options.redirectURI || redirectURI
 				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
 		},
@@ -106,7 +107,7 @@ export const apple = (options: AppleOptions) => {
 			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 				algorithms: [jwtAlg],
 				issuer: "https://appleid.apple.com",
-				audience: options.clientId,
+				audience: options.appBundleIdentifier || options.clientId,
 				maxTokenAge: "1h",
 			});
 			["email_verified", "is_private_email"].forEach((field) => {
@@ -126,7 +127,7 @@ export const apple = (options: AppleOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const profile = parseJWT(token.idToken)?.payload as AppleProfile | null;
+			const profile = decodeJwt<AppleProfile>(token.idToken);
 			if (!profile) {
 				return null;
 			}

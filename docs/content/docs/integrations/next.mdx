@@ -22,6 +22,19 @@ export const { GET, POST } = toNextJsHandler(auth.handler);
  You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
+
+For `pages` route, you need to use `toNodeHandler` instead of `toNextJsHandler` and set `bodyParser` to `false` in the `config` object. Here is an example:
+
+```ts title="pages/api/auth/[...all].ts"
+import { toNodeHandler } from "better-auth/node"
+import { auth } from "@/lib/auth"
+
+// Disallow body parsing, we will parse it manually
+export const config = { api: { bodyParser: false } }
+
+export default toNodeHandler(auth.handler)
+```
+
 ## Create a client
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
@@ -104,8 +117,10 @@ import { auth } from "@/lib/auth"
 
 const signIn = async () => {
     await auth.api.signInEmail({
-        email: "user@email.com",
-        password: "password",
+        body: {
+            email: "user@email.com",
+            password: "password",
+        }
     })
 }
 ```
@@ -122,8 +137,10 @@ We're using `better-fetch` to make the request to the API route. You can use any
 
 ```ts
 import { betterFetch } from "@better-fetch/fetch";
-import type { Session } from "better-auth/types";
+import type { auth } from "@/lib/auth";
 import { NextResponse, type NextRequest } from "next/server";
+
+type Session = typeof auth.$Infer.Session;
  
 export default async function authMiddleware(request: NextRequest) {
 	const { data: session } = await betterFetch<Session>(

@@ -36,6 +36,7 @@ import {
 	setPassword,
 	updateUser,
 	deleteUserCallback,
+	unlinkAccount,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -120,6 +121,7 @@ export function getEndpoints<
 		linkSocialAccount,
 		listUserAccounts,
 		deleteUserCallback,
+		unlinkAccount,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -195,21 +197,49 @@ export function getEndpoints<
 			};
 
 			const plugins = options.plugins || [];
-			for (const plugin of plugins) {
-				const beforeHooks = plugin.hooks?.before ?? [];
-				for (const hook of beforeHooks) {
-					if (!hook.matcher(internalContext)) continue;
-					const hookRes = await hook.handler(internalContext);
-					if (hookRes && "context" in hookRes) {
-						// modify the context with the response from the hook
-						internalContext = defu(internalContext, hookRes.context);
-						continue;
+			const beforeHooks = plugins
+				.map((plugin) => {
+					if (plugin.hooks?.before) {
+						return plugin.hooks.before;
 					}
+				})
+				.filter((plugin) => plugin !== undefined)
+				.flat();
+			const afterHooks = plugins
+				.map((plugin) => {
+					if (plugin.hooks?.after) {
+						return plugin.hooks.after;
+					}
+				})
+				.filter((plugin) => plugin !== undefined)
+				.flat();
+			if (options.hooks?.before) {
+				beforeHooks.push({
+					matcher: () => true,
+					handler: options.hooks.before,
+				});
+			}
+			if (options.hooks?.after) {
+				afterHooks.push({
+					matcher: () => true,
+					handler: options.hooks.after,
+				});
+			}
+			for (const hook of beforeHooks) {
+				if (!hook.matcher(internalContext)) continue;
+				const hookRes = await hook.handler(internalContext);
+				if (hookRes && "context" in hookRes) {
+					// modify the context with the response from the hook
+					internalContext = {
+						...internalContext,
+						...hookRes.context,
+					};
+					continue;
+				}
 
-					if (hookRes) {
-						// return with the response from the hook
-						return hookRes;
-					}
+				if (hookRes) {
+					// return with the response from the hook
+					return hookRes;
 				}
 			}
 
@@ -225,25 +255,16 @@ export function getEndpoints<
 					internalContext.context.newSession = newSession;
 				}
 				if (e instanceof APIError) {
-					const afterPlugins = options.plugins
-						?.map((plugin) => {
-							if (plugin.hooks?.after) {
-								return plugin.hooks.after;
-							}
-						})
-						.filter((plugin) => plugin !== undefined)
-						.flat();
-
 					/**
 					 * If there are no after plugins, we can directly throw the error
 					 */
-					if (!afterPlugins?.length) {
+					if (!afterHooks?.length) {
 						e.headers = endpoint.headers;
 						throw e;
 					}
 					internalContext.context.returned = e;
 					internalContext.context.returned.headers = endpoint.headers;
-					for (const hook of afterPlugins || []) {
+					for (const hook of afterHooks || []) {
 						const match = hook.matcher(internalContext);
 						if (match) {
 							try {
@@ -272,29 +293,25 @@ export function getEndpoints<
 			}
 			internalContext.context.returned = endpointRes;
 			internalContext.responseHeader = endpoint.headers;
-			for (const plugin of options.plugins || []) {
-				if (plugin.hooks?.after) {
-					for (const hook of plugin.hooks.after) {
-						const match = hook.matcher(internalContext);
-						if (match) {
-							try {
-								const hookRes = await hook.handler(internalContext);
-								if (hookRes) {
-									if ("responseHeader" in hookRes) {
-										const headers = hookRes.responseHeader as Headers;
-										internalContext.responseHeader = headers;
-									} else {
-										internalContext.context.returned = hookRes;
-									}
-								}
-							} catch (e) {
-								if (e instanceof APIError) {
-									internalContext.context.returned = e;
-									continue;
-								}
-								throw e;
+			for (const hook of afterHooks) {
+				const match = hook.matcher(internalContext);
+				if (match) {
+					try {
+						const hookRes = await hook.handler(internalContext);
+						if (hookRes) {
+							if ("responseHeader" in hookRes) {
+								const headers = hookRes.responseHeader as Headers;
+								internalContext.responseHeader = headers;
+							} else {
+								internalContext.context.returned = hookRes;
 							}
 						}
+					} catch (e) {
+						if (e instanceof APIError) {
+							internalContext.context.returned = e;
+							continue;
+						}
+						throw e;
 					}
 				}
 			}
@@ -307,6 +324,10 @@ export function getEndpoints<
 						response.headers.set(key, value);
 					}
 				});
+			}
+			if (response instanceof APIError) {
+				response.headers = endpoint.headers;
+				throw response;
 			}
 			return response;
 		};

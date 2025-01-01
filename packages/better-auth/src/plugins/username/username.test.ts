@@ -47,7 +47,7 @@ describe("username", async (it) => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.id).toBeDefined();
+		expect(res.data?.token).toBeDefined();
 	});
 	it("should update username", async () => {
 		const res = await client.updateUser({
