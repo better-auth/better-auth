@@ -131,7 +131,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
-			if (member.role !== creatorRole || ctx.body.role === creatorRole) {
+			if (member.role !== creatorRole && ctx.body.role === creatorRole) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
