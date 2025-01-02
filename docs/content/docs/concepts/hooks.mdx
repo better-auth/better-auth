@@ -50,11 +50,13 @@ export const auth = betterAuth({
         before: createAuthMiddleware(async (ctx) => {
             if (ctx.path === "/sign-up/email") {
                 return {
-                    ...ctx,
-                    body: {
-                        ...ctx.body,
-                        name: "John Doe",
-                    },
+                    context: {
+                        ...ctx,
+                        body: {
+                            ...ctx.body,
+                            name: "John Doe",
+                        },
+                    }
                 };
             }
         }),

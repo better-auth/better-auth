@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	oidcProvider,
+	createAuthMiddleware,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
