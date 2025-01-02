@@ -8,6 +8,7 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
 import { originCheck } from "../middlewares";
+import { JWTExpired } from "jose/errors";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -219,7 +220,9 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			);
 		} catch (e) {
-			ctx.context.logger.error("Failed to verify email", e);
+			if (e instanceof JWTExpired) {
+				return redirectOnError("token_expired");
+			}
 			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
