@@ -16,6 +16,10 @@ export async function createEmailVerificationToken(
 	 * The email to update from
 	 */
 	updateTo?: string,
+	/**
+	 * The time in seconds for the token to expire
+	 */
+	expiresIn: number = 3600,
 ) {
 	const token = await signJWT(
 		{
@@ -23,6 +27,7 @@ export async function createEmailVerificationToken(
 			updateTo,
 		},
 		secret,
+		expiresIn,
 	);
 	return token;
 }
@@ -43,6 +48,8 @@ export async function sendVerificationEmailFn(
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
+		undefined,
+		ctx.context.options.emailVerification?.expiresIn,
 	);
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
 		ctx.body.callbackURL || ctx.query?.currentURL || "/"

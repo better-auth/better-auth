@@ -192,6 +192,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					createdUser.email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${
 					ctx.context.baseURL

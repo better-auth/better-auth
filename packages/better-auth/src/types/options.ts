@@ -146,6 +146,13 @@ export type BetterAuthOptions = {
 		 * Auto signin the user after they verify their email
 		 */
 		autoSignInAfterVerification?: boolean;
+
+		/**
+		 * Number of seconds the verification token is
+		 * valid for.
+		 * @default 3600 seconds (1 hour)
+		 */
+		expiresIn?: number;
 	};
 	/**
 	 * Email and password authentication
