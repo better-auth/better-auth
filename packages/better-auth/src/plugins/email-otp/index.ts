@@ -703,5 +703,28 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			],
 		},
 		$ERROR_CODES: ERROR_CODES,
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/send-verification-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/verify-email";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/sign-in/email-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+		],
 	} satisfies BetterAuthPlugin;
 };
