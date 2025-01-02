@@ -346,21 +346,9 @@ describe("email-otp-verify", async () => {
 });
 
 describe("custom rate limiting storage", async () => {
-	let store = new Map<string, string>();
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
-		},
-		secondaryStorage: {
-			set(key, value) {
-				store.set(key, value);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-			},
 		},
 		plugins: [
 			emailOTP({
