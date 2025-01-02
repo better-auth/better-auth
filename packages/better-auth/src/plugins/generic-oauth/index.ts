@@ -105,7 +105,7 @@ interface GenericOAuthConfig {
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?: Record<string, string>
+	authorizationUrlParams?: Record<string, string>;
 }
 
 interface GenericOAuthOptions {
@@ -341,7 +341,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						pkce,
 						prompt,
 						accessType,
-						authorizationUrlParams
+						authorizationUrlParams,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -366,12 +366,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
-					if (authorizationUrlParams){
+					if (authorizationUrlParams) {
 						const withAdditionalParams = new URL(finalAuthUrl);
-							for (const [paramName, paramValue] of Object.entries(authorizationUrlParams)) {
-								withAdditionalParams.searchParams.set(paramName, paramValue)
-							}
-							finalAuthUrl = withAdditionalParams.toString();
+						for (const [paramName, paramValue] of Object.entries(
+							authorizationUrlParams,
+						)) {
+							withAdditionalParams.searchParams.set(paramName, paramValue);
+						}
+						finalAuthUrl = withAdditionalParams.toString();
 					}
 
 					const { state, codeVerifier } = await generateState(ctx);
