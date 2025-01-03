@@ -1,4 +1,5 @@
 import {
+	Chrome,
 	CircleHelp,
 	Key,
 	LucideAArrowDown,
@@ -1132,6 +1133,11 @@ export const contents: Content[] = [
 						<path d="m15 5 4 4" />
 					</svg>
 				),
+			},
+			{
+				title: "Browser Extension Guide",
+				href: "/docs/guides/browser-extension-guide",
+				icon: () => <Chrome className="w-4 h-4"  />,
 			},
 		],
 	},
