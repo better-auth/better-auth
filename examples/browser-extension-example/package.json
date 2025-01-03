@@ -1,20 +1,32 @@
 {
-  "name": "better-auth-example",
-  "displayName": "Better auth example",
+  "name": "better-auth-browser-extension",
+  "displayName": "Better auth browser extension",
   "version": "0.0.1",
-  "description": "A basic BetterAuth browser extension example.",
-  "private": true,
+  "description": "A basic Plasmo extension.",
+  "author": "Plasmo Corp. <foss@plasmo.com>",
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
     "package": "plasmo package"
   },
   "dependencies": {
+    "@better-fetch/fetch": "^1.1.12",
+    "@plasmohq/storage": "^1.13.0",
+    "@radix-ui/react-checkbox": "^1.1.3",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-separator": "^1.1.1",
+    "@radix-ui/react-slot": "^1.1.1",
+    "better-auth": "^1.1.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.469.0",
     "plasmo": "0.89.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "sonner": "^1.7.1",
+    "tailwind-merge": "^2.6.0",
     "tailwindcss": "3.4.1",
-    "better-auth": "workspace:*"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.1.1",
@@ -28,7 +40,7 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*"
+      "http://localhost:3000/*"
     ]
   }
 }

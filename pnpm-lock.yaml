@@ -718,6 +718,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      better-sqlite3:
+        specifier: ^11.6.0
+        version: 11.6.0
       plasmo:
         specifier: 0.89.4
         version: 0.89.4(@swc/core@1.10.4(@swc/helpers@0.5.13))(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)
@@ -734,6 +737,9 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: 4.1.1
         version: 4.1.1(@vue/compiler-sfc@3.5.13)(prettier@3.2.4)
+      '@plasmohq/storage':
+        specifier: ^1.13.0
+        version: 1.13.0(react@18.2.0)
       '@types/chrome':
         specifier: 0.0.258
         version: 0.0.258
@@ -1511,6 +1517,25 @@ importers:
       vue:
         specifier: ^3.5.13
         version: 3.5.13(typescript@5.6.1-rc)
+
+  packages/browser-extension:
+    dependencies:
+      better-call:
+        specifier: ^0.3.3
+        version: 0.3.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.24.1
+    devDependencies:
+      '@better-fetch/fetch':
+        specifier: 1.1.12
+        version: 1.1.12
+      better-auth:
+        specifier: '*'
+        version: link:../better-auth
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.0(@types/node@22.10.1)(happy-dom@15.11.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.0)(terser@5.36.0)
 
   packages/cli:
     dependencies:
@@ -5572,6 +5597,14 @@ packages:
   '@plasmohq/parcel-transformer-vue@0.5.0':
     resolution: {integrity: sha512-/3oVbajt+DRqtbM0RkKFtfyZR8DVjcsYpj1jHqPParGVBiXwgP0D/8Bj5p5/5Iqihs08gzasTcjKcwQKKdj0og==}
     engines: {parcel: '>= 2.7.0'}
+
+  '@plasmohq/storage@1.13.0':
+    resolution: {integrity: sha512-ceFtWFDMXg6v9nePEVyTgMusFmnMK82eNBf9ac0nN0kjMZQ+5IVEaiAgnS/c+KS43b7W+NJPpCakh+flgLOpjg==}
+    peerDependencies:
+      react: ^16.8.6 || ^17 || ^18
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   '@pnpm/config.env-replace@1.1.0':
     resolution: {integrity: sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==}
@@ -15287,6 +15320,10 @@ packages:
     resolution: {integrity: sha512-uB80kBFb/tfd68bVleG9T5GGsGPjJrLAUpR5PZIrhBnIaRTQRjqdJSsIKkOP6OAIFbj7GOrcudc5pNjZ+geV2g==}
     engines: {node: '>=6'}
 
+  pify@6.1.0:
+    resolution: {integrity: sha512-KocF8ve28eFjjuBKKGvzOBGzG8ew2OqOOSxTTZhirkzH7h3BI1vyzqlR0qbfcDBve1Yzo3FVlWUAtCRrbVN8Fw==}
+    engines: {node: '>=14.16'}
+
   pirates@4.0.6:
     resolution: {integrity: sha512-saLsH7WeYYPiD25LDuLRRY/i+6HaPYr6G1OUlN39otzkSTxKnubR9RTxS3/Kk50s1g2JTgFwWQDQyplC5/SHZg==}
     engines: {node: '>= 6'}
@@ -23878,6 +23915,12 @@ snapshots:
       - velocityjs
       - walrus
       - whiskers
+
+  '@plasmohq/storage@1.13.0(react@18.2.0)':
+    dependencies:
+      pify: 6.1.0
+    optionalDependencies:
+      react: 18.2.0
 
   '@pnpm/config.env-replace@1.1.0': {}
 
@@ -36920,6 +36963,8 @@ snapshots:
   pify@3.0.0: {}
 
   pify@4.0.1: {}
+
+  pify@6.1.0: {}
 
   pirates@4.0.6: {}
 
