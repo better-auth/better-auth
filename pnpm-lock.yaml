@@ -641,7 +641,7 @@ importers:
         version: 4.4.4(@types/node@22.10.1)(lightningcss@1.27.0)(solid-js@1.9.3)(terser@5.36.0)
       '@astrojs/tailwind':
         specifier: ^5.1.3
-        version: 5.1.3(astro@4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2))(tailwindcss@3.4.16)
+        version: 5.1.3(astro@4.16.18(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2))(tailwindcss@3.4.16)
       '@corvu/drawer':
         specifier: ^0.2.2
         version: 0.2.2(solid-js@1.9.3)
@@ -661,8 +661,8 @@ importers:
         specifier: ^7.6.12
         version: 7.6.12
       astro:
-        specifier: ^4.16.17
-        version: 4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
+        specifier: ^4.16.18
+        version: 4.16.18(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
@@ -7937,8 +7937,8 @@ packages:
     resolution: {integrity: sha512-LElXdjswlqjWrPpJFg1Fx4wpkOCxj1TDHlSV4PlaRxHGWko024xICaa97ZkMfs6DRKlCguiAI+rbXv5GWwXIkg==}
     hasBin: true
 
-  astro@4.16.17:
-    resolution: {integrity: sha512-OuD+BP7U6OqQLKtZ/FJkU2S+TOlifxS/OKUbZOb5p6y+LLBa1J3zHRJrIl7DUSq6eXY+9wSWwbJpD9JS+lqhxA==}
+  astro@4.16.18:
+    resolution: {integrity: sha512-G7zfwJt9BDHEZwlaLNvjbInIw2hPryyD654314KV/XT34pJU6SfN1S+mWa8RAkALcZNJnJXCJmT3JXLQStD3Lw==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=21.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -17573,9 +17573,9 @@ snapshots:
       - supports-color
       - terser
 
-  '@astrojs/tailwind@5.1.3(astro@4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2))(tailwindcss@3.4.16)':
+  '@astrojs/tailwind@5.1.3(astro@4.16.18(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2))(tailwindcss@3.4.16)':
     dependencies:
-      astro: 4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
+      astro: 4.16.18(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2)
       autoprefixer: 10.4.20(postcss@8.4.49)
       postcss: 8.4.49
       postcss-load-config: 4.0.2(postcss@8.4.49)
@@ -25581,7 +25581,7 @@ snapshots:
 
   astring@1.9.0: {}
 
-  astro@4.16.17(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2):
+  astro@4.16.18(@types/node@22.10.1)(lightningcss@1.27.0)(rollup@4.24.3)(terser@5.36.0)(typescript@5.7.2):
     dependencies:
       '@astrojs/compiler': 2.10.3
       '@astrojs/internal-helpers': 0.4.1
