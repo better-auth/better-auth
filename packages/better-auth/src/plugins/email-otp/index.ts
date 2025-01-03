@@ -299,9 +299,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
@@ -420,9 +417,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
@@ -618,9 +612,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
