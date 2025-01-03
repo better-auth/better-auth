@@ -91,3 +91,5 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./generator";
