@@ -187,9 +187,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verification.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Code expired",
 							error: "invalid_grant",
@@ -373,9 +370,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "code expired",
 							error: "invalid_grant",
