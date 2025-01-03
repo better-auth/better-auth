@@ -408,8 +408,19 @@ export type BetterAuthOptions = {
 	 * Verification configuration
 	 */
 	verification?: {
+		/**
+		 * Change the modelName of the verification table
+		 */
 		modelName?: string;
+		/**
+		 * Map verification fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+		/**
+		 * disable cleaning up expired values when a verification value is
+		 * fetched
+		 */
+		disableCleanup?: boolean;
 	};
 	/**
 	 * List of trusted origins.
