@@ -52,3 +52,29 @@ description: Facebook provider setup and usage.
         ```
     </Step>
 </Steps>
+
+## Additional Configuration
+
+### Scopes
+By default, Facebook provides basic user information. If you need additional permissions, you can specify scopes in your auth configuration:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        facebook: {
+            clientId: process.env.FACEBOOK_CLIENT_ID as string,
+            clientSecret: process.env.FACEBOOK_CLIENT_ID as string,
+            scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
+            fields: ["user_friends"], // Extending list of fields
+        },
+    },
+})
+```
+
+Additional options:
+- `scopes`: Access basic account information (overwrites).
+    - Default: `"email", "public_profile"`
+- `fields`: Extend list of fields to retrieve from the Facebook user profile (assignment).
+    - Default: `"id", "name", "email", "picture"`
+
+For a complete list of available permissions, refer to the [Permissions Reference](https://developers.facebook.com/docs/permissions).
