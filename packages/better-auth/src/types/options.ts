@@ -799,4 +799,10 @@ export type BetterAuthOptions = {
 		 */
 		after?: HookAfterHandler;
 	};
+	/**
+	 * Disabled paths
+	 *
+	 * Paths you want to disable.
+	 */
+	disabledPaths?: string[];
 };
