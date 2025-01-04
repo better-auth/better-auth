@@ -101,11 +101,7 @@ export const createLogger = (
 			return;
 		}
 
-		options.log(
-			level === "success" ? "info" : level,
-			formattedMessage,
-			...args,
-		);
+		options.log(level === "success" ? "info" : level, message, ...args);
 	};
 
 	return Object.fromEntries(
