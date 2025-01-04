@@ -1,6 +1,10 @@
-import type { Auth } from "../auth";
-
-export function toSolidStartHandler(auth: Auth | Auth["handler"]) {
+export function toSolidStartHandler(
+	auth:
+		| {
+				handler: (request: Request) => Promise<Response>;
+		  }
+		| ((request: Request) => Promise<Response>),
+) {
 	const handler = async (event: {
 		request: Request;
 	}) => {
