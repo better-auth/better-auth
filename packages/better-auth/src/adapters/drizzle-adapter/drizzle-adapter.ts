@@ -32,7 +32,7 @@ const createTransform = (
 			);
 		}
 		const model = getModelName(modelName);
-		const schemaModel = schema[model];
+		const schemaModel: Record<string, any> = schema[model];
 		if (!schemaModel) {
 			throw new BetterAuthError(
 				`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
@@ -186,7 +186,7 @@ const createTransform = (
 				return c[0];
 			}
 			await builder;
-			const schemaModel = getSchema(getModelName(model));
+			const schemaModel = getSchema(model);
 			const res = await db
 				.select()
 				.from(schemaModel)
