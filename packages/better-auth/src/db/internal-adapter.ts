@@ -551,10 +551,14 @@ export const createInternalAdapter = (
 						},
 					],
 				});
-				return {
-					user,
-					accounts: [account],
-				};
+				if (user) {
+					return {
+						user,
+						accounts: [account],
+					};
+				} else {
+					return null;
+				}
 			} else {
 				const user = await adapter.findOne<User>({
 					model: "user",
