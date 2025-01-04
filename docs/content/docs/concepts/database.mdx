@@ -514,21 +514,22 @@ To customize table names and column name for plugins, you can use the `schema` p
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 
 export const auth = betterAuth({
-   plugins: {
-      twoFactor: {
-         schema: {
-            user: {
-               fields: {
-                  twoFactorEnabled: "two_factor_enabled",
-                  twoFactorSecret: "two_factor_secret"
-               }
-            }
-         }
-      }
-   }
-})
+    plugins: [
+      twoFactor({
+        schema: {
+          user: {
+            fields: {
+              twoFactorEnabled: "two_factor_enabled",
+              secret: "two_factor_secret",
+            },
+          },
+        },
+      }),
+    ],
+});
 ```
 
 
