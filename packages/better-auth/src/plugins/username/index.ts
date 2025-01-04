@@ -2,13 +2,19 @@ import { z } from "zod";
 import { createAuthEndpoint } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../types";
+import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
+import { mergeSchema } from "src/db/schema";
+import { schema } from "./schema";
 
-export const username = () => {
+export type UsernameOptions = {
+	schema?: InferOptionSchema<typeof schema>;
+};
+
+export const username = (options?: UsernameOptions) => {
 	const ERROR_CODES = {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
 		EMAIL_NOT_VERIFIED: "email not verified",
@@ -159,23 +165,7 @@ export const username = () => {
 				},
 			),
 		},
-		schema: {
-			user: {
-				fields: {
-					username: {
-						type: "string",
-						required: false,
-						unique: true,
-						returned: true,
-						transform: {
-							input(value) {
-								return value?.toString().toLowerCase();
-							},
-						},
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 		hooks: {
 			before: [
 				{
