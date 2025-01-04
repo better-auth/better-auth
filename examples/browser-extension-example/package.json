@@ -2,8 +2,7 @@
   "name": "better-auth-browser-extension",
   "displayName": "Better auth browser extension",
   "version": "0.0.1",
-  "description": "A basic Plasmo extension.",
-  "author": "Plasmo Corp. <foss@plasmo.com>",
+  "description": "A browser extension example for better-auth",
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
