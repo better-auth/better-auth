@@ -2,6 +2,7 @@
   "name": "better-auth-browser-extension",
   "displayName": "Better auth browser extension",
   "version": "0.0.1",
+  "private": true,
   "description": "A browser extension example for better-auth",
   "scripts": {
     "dev": "plasmo dev",
