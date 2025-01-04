@@ -182,76 +182,80 @@ This will allow clients to register using the `/register` endpoint to be publicl
 
 The OIDC Provider plugin adds the following tables to the database:
 
-### OAuth Client
+### OAuth Application
 
-Table Name: `oauthClient`
+Table Name: `oauthApplication`
 
 <DatabaseTable
   fields={[
-   {
+    {
       name: "id",
       type: "string",
       description: "Database ID of the OAuth client",
       isPrimaryKey: true
-   },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
     },
-    { 
-      name: "clientSecret", 
-      type: "string", 
+    {
+      name: "clientId",
+      type: "string",
+      description: "Unique identifier for each OAuth client",
+      isUnique: true,
+      isRequired: true
+    },
+    {
+      name: "clientSecret",
+      type: "string",
       description: "Secret key for the OAuth client",
       isRequired: true
     },
-    { 
-      name: "name", 
-      type: "string", 
+    {
+      name: "name",
+      type: "string",
       description: "Name of the OAuth client",
       isRequired: true
     },
-    { 
-      name: "redirectURLs", 
-      type: "string", 
+    {
+      name: "redirectURLs",
+      type: "string",
       description: "Comma-separated list of redirect URLs",
       isRequired: true
     },
-    { 
-      name: "metadata", 
+    {
+      name: "metadata",
       type: "string",
       description: "Additional metadata for the OAuth client",
       isOptional: true
     },
-    { 
-      name: "type", 
+    {
+      name: "type",
       type: "string",
       description: "Type of OAuth client (e.g., web, mobile)",
       isRequired: true
     },
-    { 
-      name: "disabled", 
-      type: "boolean", 
+    {
+      name: "disabled",
+      type: "boolean",
       description: "Indicates if the client is disabled",
-      isRequired: true
+      isRequired: true,
+      defaultValue: false
     },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who owns the client. (optional)",
+    {
+      name: "userId",
+      type: "string",
+      description: "ID of the user who owns the client",
       isOptional: true
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
+    {
+      name: "createdAt",
+      type: "date",
+      description: "Timestamp of when the OAuth client was created",
+      isRequired: true
     },
-   {
+    {
       name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
-   }
+      type: "date",
+      description: "Timestamp of when the OAuth client was last updated",
+      isRequired: true
+    }
   ]}
 />
 
