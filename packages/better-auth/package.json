@@ -478,12 +478,6 @@
       "db": [
         "./dist/db.d.ts"
       ],
-      "plugins": [
-        "./dist/plugins.d.ts"
-      ],
-      "plugins/access": [
-        "./dist/access.d.ts"
-      ],
       "svelte-kit": [
         "./dist/svelte-kit.d.ts"
       ],
@@ -504,6 +498,12 @@
       ],
       "adapters/memory": [
         "./dist/adapters/memory.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins.d.ts"
+      ],
+      "plugins/access": [
+        "./dist/access.d.ts"
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
