@@ -79,7 +79,23 @@ For all other situations where you shouldn't use `useSession`, is when you shoul
 </Accordion>
 
 <Accordion title="Common Typescript Errors">
-If you're facing typescript errors, make sure your tsconfig has `declarations` set to `false`, and `strict` set to `true`.
+If you're facing typescript errors, make sure your tsconfig has `strict` set to `true`:
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true,
+  }
+}
+```
+
+if you can't set strict to true, you can enable strictNullChecks:
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strictNullChecks": true,
+  }
+}
+```
 
 You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">Typescript docs</Link>.
 </Accordion>

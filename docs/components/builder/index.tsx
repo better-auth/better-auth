@@ -265,15 +265,7 @@ export function Builder() {
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>
 						Configure the sign in box to your liking and copy the code to your
-						application. For more advanced and iterative features you can use on{" "}
-						<Link
-							target="_blank"
-							className="underline underline-offset-4"
-							href="https://better-auth.farmui.com"
-						>
-							farmui
-						</Link>{" "}
-						.
+						application.
 					</DialogDescription>
 				</DialogHeader>
 

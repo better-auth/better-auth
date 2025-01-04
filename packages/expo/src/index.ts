@@ -34,7 +34,10 @@ export const expo: () => BetterAuthPlugin = () => {
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback");
+						return (
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
 					},
 					handler: async (ctx) => {
 						const headers = ctx.responseHeader;

@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.1.8",
+  "version": "1.1.10",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -255,6 +255,10 @@
       "import": {
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
+      },
+      "require": {
+        "types": "./dist/plugins/access.d.cts",
+        "default": "./dist/plugins/access.cjs"
       }
     },
     "./plugins/admin": {
@@ -478,12 +482,6 @@
       "db": [
         "./dist/db.d.ts"
       ],
-      "plugins": [
-        "./dist/plugins.d.ts"
-      ],
-      "plugins/access": [
-        "./dist/access.d.ts"
-      ],
       "svelte-kit": [
         "./dist/svelte-kit.d.ts"
       ],
@@ -504,6 +502,12 @@
       ],
       "adapters/memory": [
         "./dist/adapters/memory.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins.d.ts"
+      ],
+      "plugins/access": [
+        "./dist/access.d.ts"
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"

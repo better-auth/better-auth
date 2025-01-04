@@ -122,4 +122,9 @@ describe("expo", async () => {
 			"better-auth:///dashboard",
 		);
 	});
+
+	it("should get cookies", async () => {
+		const c = client.getCookie();
+		expect(c).includes("better-auth.session_token");
+	});
 });

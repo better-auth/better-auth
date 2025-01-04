@@ -71,7 +71,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         import { expoClient } from "@better-auth/expo/client";
         import * as SecureStore from "expo-secure-store";
 
-        const authClient = createAuthClient({
+        export const authClient = createAuthClient({
             baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
             plugins: [
                 expoClient({
@@ -119,7 +119,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```ts title="src/auth-client.ts"
         import { createAuthClient } from "better-auth/react";
 
-        const authClient = createAuthClient({
+        export const authClient = createAuthClient({
             baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
         });
         ```
@@ -142,13 +142,31 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         module.exports = config;
         ```
 
-        If you can't enable `unstable_enablePackageExports` option, you can use the following workaround when importing Better Auth.
+        If you can't enable `unstable_enablePackageExports` option, you can use [babel-plugin-module-resolver](https://github.com/tleunen/babel-plugin-module-resolver) to manually resolve the paths.
 
-        ```ts title="src/auth-client.ts"
-        const { expoClient } =
-          require("@better-auth/expo/dist/client.js") as typeof import("@better-auth/expo/client")
-        const { createAuthClient } =
-          require("better-auth/dist/react.js") as typeof import("better-auth/react")
+        ```ts title="babel.config.js"
+        module.exports = function (api) {
+            return {
+                plugins: [
+                    [
+                        "module-resolver",
+                        {
+                            alias: {
+                                "better-auth/react": "path/to/node_modules/better-auth/dist/react.js"
+                                "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.js",
+                            },
+                            extensions: [".js", ".jsx", ".ts", ".tsx"],
+                        },
+                    ],
+                ],
+            }
+        }
+        ```
+
+        Don't forget to clear the cache after making changes.
+
+        ```bash
+        npx expo start --clear
         ```
 
     </Step>
