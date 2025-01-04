@@ -2,7 +2,6 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import { createAuthClient, useStore } from "better-auth/react";
 import Constants from "expo-constants";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 
