@@ -261,16 +261,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: "platform",
 						},
 					});
-
 					const id = generateId(32);
-					await ctx.setSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					await ctx.setSignedCookie(
+						webAuthnCookie.name,
 						id,
 						ctx.context.secret,
 						{
-							secure: true,
-							httpOnly: true,
-							sameSite: "lax",
+							...webAuthnCookie.attributes,
 							maxAge: maxAgeInSeconds,
 						},
 					);
@@ -428,14 +428,15 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 					};
 					const id = generateId(32);
-					await ctx.setSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					await ctx.setSignedCookie(
+						webAuthnCookie.name,
 						id,
 						ctx.context.secret,
 						{
-							secure: true,
-							httpOnly: true,
-							sameSite: "lax",
+							...webAuthnCookie.attributes,
 							maxAge: maxAgeInSeconds,
 						},
 					);
@@ -493,8 +494,11 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeId = await ctx.getSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					const challengeId = await ctx.getSignedCookie(
+						webAuthnCookie.name,
 						ctx.context.secret,
 					);
 					if (!challengeId) {
@@ -619,8 +623,11 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeId = await ctx.getSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					const challengeId = await ctx.getSignedCookie(
+						webAuthnCookie.name,
 						ctx.context.secret,
 					);
 					if (!challengeId) {
