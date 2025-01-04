@@ -255,6 +255,10 @@
       "import": {
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
+      },
+      "require": {
+        "types": "./dist/plugins/access.d.cts",
+        "default": "./dist/plugins/access.cjs"
       }
     },
     "./plugins/admin": {
