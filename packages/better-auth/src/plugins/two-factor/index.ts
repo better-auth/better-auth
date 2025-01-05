@@ -116,7 +116,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await setSessionCookie(ctx, {
 							session: newSession,
-							user,
+							user: updatedUser,
 						});
 
 						//remove current session
@@ -199,7 +199,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: "Invalid password",
 						});
 					}
-					await ctx.context.internalAdapter.updateUser(user.id, {
+					const updatedUser = await ctx.context.internalAdapter.updateUser(user.id, {
 						twoFactorEnabled: false,
 					});
 					await ctx.context.adapter.delete({
@@ -207,12 +207,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						where: [
 							{
 								field: "userId",
-								value: user.id,
+								value: updatedUser.id,
 							},
 						],
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
+						updatedUser.id,
 						ctx.request,
 						false,
 						ctx.context.session.session,
@@ -222,7 +222,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					 */
 					await setSessionCookie(ctx, {
 						session: newSession,
-						user,
+						user: updatedUser,
 					});
 					//remove current session
 					await ctx.context.internalAdapter.deleteSession(
