@@ -1,4 +1,3 @@
-import type { GenericEndpointContext } from "./context";
 import type { BetterAuthOptions } from "./options";
 
 /**
