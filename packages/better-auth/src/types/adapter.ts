@@ -80,6 +80,7 @@ export type AdapterSchemaCreation = {
 	code: string;
 	/**
 	 * Path to the file, including the file name and extension.
+	 * Relative paths are supported.
 	 */
 	path: string;
 	/**
