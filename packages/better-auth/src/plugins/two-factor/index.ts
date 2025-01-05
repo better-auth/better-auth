@@ -199,9 +199,12 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: "Invalid password",
 						});
 					}
-					const updatedUser = await ctx.context.internalAdapter.updateUser(user.id, {
-						twoFactorEnabled: false,
-					});
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: false,
+						},
+					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
 						where: [
