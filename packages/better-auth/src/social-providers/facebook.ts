@@ -20,7 +20,7 @@ export interface FacebookProfile {
 export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	/**
 	 * Extend list of fields to retrieve from the Facebook user profile.
-	 * 
+	 *
 	 * @default ["id", "name", "email", "picture"]
 	 */
 	fields?: string[];
@@ -59,8 +59,8 @@ export const facebook = (options: FacebookOptions) => {
 				"name",
 				"email",
 				"picture",
-				...(options?.fields || [])
-			]
+				...(options?.fields || []),
+			];
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
 				"https://graph.facebook.com/me?fields=" + fields.join(","),
 				{
