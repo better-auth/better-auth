@@ -20,7 +20,9 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const currentURL = query?.currentURL;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
-	const trustedOrigins = context.trustedOrigins;
+	const trustedOrigins: string[] = Array.isArray(context.trustedOrigins)
+		? context.trustedOrigins
+		: context.trustedOrigins();
 	const usesCookies = ctx.headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
@@ -66,7 +68,9 @@ export const originCheck = (
 	createAuthMiddleware(async (ctx) => {
 		const { context } = ctx;
 		const callbackURL = getValue(ctx);
-		const trustedOrigins = context.trustedOrigins;
+		const trustedOrigins: string[] = Array.isArray(context.trustedOrigins)
+			? context.trustedOrigins
+			: context.trustedOrigins();
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
 			if (url.startsWith("/")) {
