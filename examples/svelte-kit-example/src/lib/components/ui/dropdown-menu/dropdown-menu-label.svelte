@@ -1,6 +1,5 @@
 <script lang="ts">
 import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-import { cn } from "$lib/utils.js";
 
 type $$Props = DropdownMenuPrimitive.LabelProps & {
 	inset?: boolean;

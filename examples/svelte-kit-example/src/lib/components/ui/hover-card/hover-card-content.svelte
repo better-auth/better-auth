@@ -1,6 +1,6 @@
 <script lang="ts">
 import { LinkPreview as HoverCardPrimitive } from "bits-ui";
-import { cn, flyAndScale } from "$lib/utils.js";
+import { flyAndScale } from "$lib/utils.js";
 
 type $$Props = HoverCardPrimitive.ContentProps;
 

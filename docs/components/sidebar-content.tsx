@@ -1,13 +1,10 @@
 import {
-	Chrome,
 	CircleHelp,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
 	Mail,
 	Mailbox,
-	MailboxIcon,
-	Mails,
 	Phone,
 	ScanFace,
 	ShieldCheck,

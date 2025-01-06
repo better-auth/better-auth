@@ -8,8 +8,7 @@ import {
 } from "@/components/ui/card";
 import { TextField, TextFieldLabel, TextFieldRoot } from "./ui/textfield";
 import { Button } from "./ui/button";
-import { Checkbox, CheckboxControl, CheckboxLabel } from "./ui/checkbox";
-import { signIn, signUp } from "@/libs/auth-client";
+import { signUp } from "@/libs/auth-client";
 import { createSignal } from "solid-js";
 import { convertImageToBase64 } from "@/libs/utils";
 

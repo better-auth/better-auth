@@ -6,11 +6,7 @@ import { getSessionFromCtx, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
 import type { toZod } from "../../types/to-zod";
-import type {
-	AdditionalUserFieldsInput,
-	BetterAuthOptions,
-	User,
-} from "../../types";
+import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";

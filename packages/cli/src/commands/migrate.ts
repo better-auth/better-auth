@@ -8,7 +8,6 @@ import prompts from "prompts";
 import { logger } from "better-auth";
 import { getAdapter, getMigrations } from "better-auth/db";
 import { getConfig } from "../utils/get-config";
-import { exec } from "tinyexec";
 
 export async function migrateAction(opts: any) {
 	const options = z

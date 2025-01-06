@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CollapsibleTrigger, type CollapsibleTriggerProps } from "radix-vue";
+import { type CollapsibleTriggerProps } from "radix-vue";
 
 const props = defineProps<CollapsibleTriggerProps>();
 </script>

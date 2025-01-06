@@ -1,4 +1,3 @@
-import type { NeverToUnknown } from "@prisma/client/runtime/library";
 import type { FieldAttribute } from "../../db";
 import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
 import type { BetterAuthPlugin } from "../../types";

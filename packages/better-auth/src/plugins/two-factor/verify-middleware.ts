@@ -6,7 +6,6 @@ import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { base64 } from "@better-auth/utils/base64";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
