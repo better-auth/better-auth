@@ -97,7 +97,7 @@ On top of normal methods, the client provides hooks to easily access different r
         import { createAuthClient } from "better-auth/react"
         const { useSession } = createAuthClient() // [!code highlight]
     
-        export function User(){
+        export function User() {
             const {
                 data: session,
                 isPending, //loading state
@@ -222,7 +222,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
 }, {
-    onSuccess(ctx){
+    onSuccess(ctx) {
             //      
     }
 })
@@ -233,7 +233,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
     fetchOptions: {
-        onSuccess(ctx){
+        onSuccess(ctx) {
             //      
         }
     },
@@ -257,7 +257,7 @@ const { data, error } = await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234"
 })
-if(error){
+if (error) {
     //handle error
 }
 ```
@@ -270,7 +270,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
 }, {
-    onError(ctx){
+    onError(ctx) {
         //handle error
     }
 })
@@ -280,7 +280,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
     fetchOptions: {
-        onError(ctx){
+        onError(ctx) {
             //handle error
         }
     }
@@ -291,7 +291,7 @@ Hooks like `useSession` also return an error object if there was an error fetchi
 
 ```ts title="auth-client.ts"
 const { data, error, isPending } = useSession()
-if(error){
+if (error) {
     //handle error
 }
 ```
