@@ -32,7 +32,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		}
 
 		const protocol = getProtocol(url);
-		return protocol === "http" || protocol === "https"
+		return protocol === "http" || protocol === "https" || !protocol
 			? pattern === getOrigin(url)
 			: url.startsWith(pattern);
 	};
