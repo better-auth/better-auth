@@ -77,13 +77,13 @@ A redirect URL will be automatically generated using the provider ID. For instan
 import { authClient } from "@/lib/auth-client";
 
 // only with issuer if the provider supports discovery
-await authClient.oauth2.createOIDCProvider({
+await authClient.oauth2.register({
     issuer: "https://idp.example.com",
     providerId: "example-provider",
 });
 
 // with all fields
-await authClient.oauth2.createOIDCProvider({
+await authClient.oauth2.register({
     issuer: "https://idp.example.com
     domain: "example.com",
     clientId: "client-id",
@@ -132,38 +132,43 @@ await auth.api.createOIDCProvider({
 
 ### Sign In with SSO
 
-To sign in with an SSO provider, use the `signInSSO` endpoint. This endpoint redirects the user to the provider's authorization URL.
+To sign in with an SSO provider, you can call `signIn.sso`
 
 You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
-const res = await auth.api.signInSSO({
-    body: {
-        email: "user@example.com",
-        callbackURL: "/dashboard",
-    },
+const res = await authClient.signIn.sso({
+    email: "user@example.com",
+    callbackURL: "/dashboard",
 });
 ```
 
 or you can specify the domain:
 
-```ts title="sign-in-domain.ts"
-const res = await auth.api.signInSSO({
-    body: {
-        domain: "example.com",
-        callbackURL: "/dashboard",
-    },
+```
+const res = await authClient.signIn.sso({
+    domain: "example.com",
+    callbackURL: "/dashboard",
 });
 ```
 
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ts title="sign-in-org.ts"
+const res = await authClient.signIn.sso({
+    organizationSlug: "example-org",
+    callbackURL: "/dashboard",
+});
+```
+
+To use the server api you can use `signInSSO`
+
+```ts title="sign-in-org.ts"
 const res = await auth.api.signInSSO({
     body: {
         organizationSlug: "example-org",
         callbackURL: "/dashboard",
-    },
+    }
 });
 ```
 
