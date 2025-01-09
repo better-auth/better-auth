@@ -30,7 +30,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		if (pattern.includes("*")) {
 			return wildcardMatch(pattern)(getHost(url));
 		}
-		return pattern === getOrigin(url);
+		return pattern === url || pattern === getOrigin(url);
 	};
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
