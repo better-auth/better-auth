@@ -77,13 +77,13 @@ A redirect URL will be automatically generated using the provider ID. For instan
 import { authClient } from "@/lib/auth-client";
 
 // only with issuer if the provider supports discovery
-await authClient.oauth2.register({
+await authClient.sso.register({
     issuer: "https://idp.example.com",
     providerId: "example-provider",
 });
 
 // with all fields
-await authClient.oauth2.register({
+await authClient.sso.register({
     issuer: "https://idp.example.com
     domain: "example.com",
     clientId: "client-id",
