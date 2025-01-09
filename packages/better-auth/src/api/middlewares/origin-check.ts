@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
 import { wildcardMatch } from "../../utils/wildcard";
-import { getHost } from "../../utils/url";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "src/types";
 
 /**
@@ -30,7 +30,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		if (pattern.includes("*")) {
 			return wildcardMatch(pattern)(getHost(url));
 		}
-		return url.startsWith(pattern);
+
+		const protocol = getProtocol(url);
+		return protocol === "http:" || protocol === "https:" || !protocol
+			? pattern === getOrigin(url)
+			: url.startsWith(pattern);
 	};
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {

@@ -52,6 +52,15 @@ export function getOrigin(url: string) {
 	}
 }
 
+export function getProtocol(url: string) {
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.protocol;
+	} catch (error) {
+		return null;
+	}
+}
+
 export const checkURLValidity = (url: string) => {
 	const urlPattern = url.includes("://");
 	return urlPattern;
