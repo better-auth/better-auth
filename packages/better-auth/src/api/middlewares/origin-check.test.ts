@@ -73,6 +73,24 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("shouldn't allow untrusted origin headers which start with trusted origin", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com.malicious.com",
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("shouldn't allow untrusted origin subdomains", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
