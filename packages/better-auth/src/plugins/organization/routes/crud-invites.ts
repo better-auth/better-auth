@@ -521,3 +521,91 @@ export const getInvitation = createAuthEndpoint(
 		});
 	},
 );
+
+export const listInvitation = createAuthEndpoint(
+	"/organization/list-invitations",
+	{
+		method: "GET",
+		use: [orgMiddleware],
+		requireHeaders: true,
+		query: z.object({
+			
+		}),
+		metadata: {
+			openapi: {
+			  description: "Get a list of invitations",
+			  responses: {
+				"200": {
+				  description: "Success",
+				  content: {
+					"application/json": {
+					  schema: {
+						type: "array",
+						items: {
+						  type: "object",
+						  properties: {
+							id: {
+							  type: "string",
+							},
+							email: {
+							  type: "string",
+							},
+							role: {
+							  type: "string",
+							},
+							organizationId: {
+							  type: "string",
+							},
+							inviterId: {
+							  type: "string",
+							},
+							status: {
+							  type: "string",
+							},
+							expiresAt: {
+							  type: "string",
+							},
+							organizationName: {
+							  type: "string",
+							},
+							organizationSlug: {
+							  type: "string",
+							},
+							inviterEmail: {
+							  type: "string",
+							},
+						  },
+						  required: [
+							"id",
+							"email",
+							"role",
+							"organizationId",
+							"inviterId",
+							"status",
+							"expiresAt",
+							"organizationName",
+							"organizationSlug",
+							"inviterEmail",
+						  ],
+						},
+					  },
+					},
+				  },
+				},
+			  },
+			},
+		  }
+	},
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				message: "Not authenticated",
+			});
+		}
+		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const invitations = await adapter.listInvitations(session.user.email);
+	
+		return ctx.json(invitations);
+	},
+);
