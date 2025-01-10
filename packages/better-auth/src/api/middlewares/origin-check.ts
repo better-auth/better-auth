@@ -57,7 +57,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	currentURL && validateURL(currentURL, "currentURL");
 	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
-	newUserCallbackURL && validateURL(redirectURL, "newUserCallbackURL");
+	newUserCallbackURL && validateURL(newUserCallbackURL, "newUserCallbackURL");
 });
 
 export const originCheck = (

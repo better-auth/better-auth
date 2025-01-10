@@ -283,12 +283,12 @@ export const resetPassword = createAuthEndpoint(
 				providerId: "credential",
 				password: hashedPassword,
 				accountId: userId,
-			});
+			}, ctx);
 			return ctx.json({
 				status: true,
 			});
 		}
-		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
+		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword, ctx);
 		return ctx.json({
 			status: true,
 		});

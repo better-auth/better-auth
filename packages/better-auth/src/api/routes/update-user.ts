@@ -101,7 +101,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					name,
 					image,
 					...additionalFields,
-				},
+				},ctx
 			);
 			/**
 			 * Update the session cookie with the new user data
@@ -295,7 +295,7 @@ export const setPassword = createAuthEndpoint(
 				providerId: "credential",
 				accountId: session.user.id,
 				password: passwordHash,
-			});
+			}, ctx);
 			return ctx.json({
 				status: true,
 			});
@@ -591,7 +591,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.session.user.email,
 				{
 					email: ctx.body.newEmail,
-				},
+				},ctx
 			);
 			return ctx.json({
 				status: true,

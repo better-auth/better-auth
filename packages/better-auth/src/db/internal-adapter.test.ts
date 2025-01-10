@@ -14,10 +14,10 @@ describe("adapter test", async () => {
 	});
 	const map = new Map();
 	let id = 1;
-	const pluginHookUserCreateBefore = vi.fn();
-	const pluginHookUserCreateAfter = vi.fn();
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const pluginHookUserCreateBefore = vi.fn();
+	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
 		database: {
 			dialect: sqliteDialect,
@@ -48,13 +48,12 @@ describe("adapter test", async () => {
 		databaseHooks: {
 			user: {
 				create: {
-					async before(user) {
-						hookUserCreateBefore(user);
+					async before(user, context) {
+						hookUserCreateBefore(user, context);
 						return { data: user };
 					},
-					async after(user) {
-						hookUserCreateAfter(user);
-						return;
+					async after(user, context) {
+						hookUserCreateAfter(user, context);
 					},
 				},
 			},
@@ -68,13 +67,12 @@ describe("adapter test", async () => {
 							databaseHooks: {
 								user: {
 									create: {
-										async before(user) {
-											pluginHookUserCreateBefore(user);
+										async before(user, context) {
+											pluginHookUserCreateBefore(user, context);
 											return { data: user };
 										},
-										async after(user) {
-											pluginHookUserCreateAfter(user);
-											return;
+										async after(user, context) {
+											pluginHookUserCreateAfter(user, context);
 										},
 									},
 								},

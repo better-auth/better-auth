@@ -128,7 +128,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						session: {
 							create: {
-								async before(session) {
+								async before(session, context) {
 									const user = (await ctx.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
@@ -142,7 +142,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 												banned: false,
 												banReason: null,
 												banExpires: null,
-											});
+											},context);
 											return;
 										}
 										return false;
@@ -220,7 +220,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							role: ctx.body.role,
-						},
+						},ctx
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
@@ -310,7 +310,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						providerId: "credential",
 						password: hashedPassword,
 						userId: user.id,
-					});
+					}, ctx);
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -536,7 +536,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							banned: false,
-						},
+						},ctx
 					);
 					return ctx.json({
 						user: user,
@@ -611,7 +611,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: options?.defaultBanExpiresIn
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
-						},
+						},ctx
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
