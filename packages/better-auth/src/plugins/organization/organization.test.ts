@@ -398,7 +398,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(org.error?.status).toBe(400);
+		expect(org.error?.status).toBe(403);
 	});
 
 	it("should have server side methods", async () => {
