@@ -17,10 +17,6 @@ import {
 } from "./ui/select";
 import { loglib } from "@loglib/tracker";
 import { cn } from "@/lib/utils";
-import { GitHubIcon } from "@/app/changelogs/_components/icons";
-import Link from "next/link";
-import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 
 export default function ArticleLayout() {
 	const [currentOpen, setCurrentOpen] = useState<number>(0);

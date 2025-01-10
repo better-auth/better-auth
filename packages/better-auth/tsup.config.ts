@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import { defineConfig } from "tsup";
 
 export default defineConfig((env) => {

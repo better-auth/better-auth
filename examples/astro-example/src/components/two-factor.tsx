@@ -4,7 +4,6 @@ import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "./ui/card";
@@ -12,7 +11,6 @@ import {
 	OTPField,
 	OTPFieldGroup,
 	OTPFieldInput,
-	OTPFieldSeparator,
 	OTPFieldSlot,
 } from "./ui/otp-field";
 import { twoFactorActions } from "@/libs/auth-client";

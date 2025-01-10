@@ -5,6 +5,7 @@ import type { GoogleProfile } from "../../social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
+import { BASE_ERROR_CODES } from "src/error/codes";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
@@ -131,5 +132,29 @@ describe("account", async () => {
 			},
 		);
 		expect(linkAccountRes.error?.status).toBe(400);
+	});
+
+	it("should unlink account", async () => {
+		const { headers } = await signInWithTestUser();
+		const unlinkRes = await client.unlinkAccount({
+			providerId: "google",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unlinkRes.data?.status).toBe(true);
+	});
+
+	it("should fail to unlink a user last account", async () => {
+		const { headers } = await signInWithTestUser();
+		const unlinkRes = await client.unlinkAccount({
+			providerId: "credential",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+		);
 	});
 });

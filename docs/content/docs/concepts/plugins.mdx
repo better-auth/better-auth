@@ -399,7 +399,7 @@ const myPlugin = ()=>{
         endpoints: {
             getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
                 method: "GET",
-                use: [sessionMiddleware], //[!code highlight]
+                use: [sessionMiddleware], // [!code highlight]
             }, async(ctx) => {
                 const session = ctx.context.session;
                 return ctx.json({

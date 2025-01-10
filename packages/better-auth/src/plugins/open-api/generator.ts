@@ -409,6 +409,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		info: {
 			title: "Better Auth",
 			description: "API Reference for your Better Auth Instance",
+			version: "1.1.0",
 		},
 		components,
 		security: [

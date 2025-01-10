@@ -5,7 +5,6 @@ import type {
 	CarouselProps,
 	WithClassAsProps,
 } from "./interface";
-import { cn } from "@/lib/utils";
 
 const props = withDefaults(defineProps<CarouselProps & WithClassAsProps>(), {
 	orientation: "horizontal",

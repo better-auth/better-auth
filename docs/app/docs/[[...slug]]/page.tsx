@@ -1,4 +1,4 @@
-import { source, openapi } from "@/app/source";
+import { source } from "@/app/source";
 import { DocsPage, DocsBody, DocsTitle } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/utils";

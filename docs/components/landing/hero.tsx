@@ -11,7 +11,6 @@ import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { Builder } from "../builder";
 import { Spotlight } from "./spotlight";
-import { DropdownMenu, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { GradientBG } from "./gradient-bg";
 
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [

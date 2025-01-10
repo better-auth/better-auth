@@ -192,6 +192,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					createdUser.email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${
 					ctx.context.baseURL
@@ -214,6 +216,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			) {
 				return ctx.json({
 					token: null,
+					user: {
+						id: createdUser.id,
+						email: createdUser.email,
+						name: createdUser.name,
+						image: createdUser.image,
+						emailVerified: createdUser.emailVerified,
+						createdAt: createdUser.createdAt,
+						updatedAt: createdUser.updatedAt,
+					},
 				});
 			}
 
@@ -232,6 +243,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			});
 			return ctx.json({
 				token: session.token,
+				user: {
+					id: createdUser.id,
+					email: createdUser.email,
+					name: createdUser.name,
+					image: createdUser.image,
+					emailVerified: createdUser.emailVerified,
+					createdAt: createdUser.createdAt,
+					updatedAt: createdUser.updatedAt,
+				},
 			});
 		},
 	);

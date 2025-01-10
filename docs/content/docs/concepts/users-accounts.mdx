@@ -96,7 +96,8 @@ If a user was registered using OAuth or other providers, they won't have a passw
 
 ```ts
 await auth.api.setPassword({
-    password,
+    newPassword: "password",
+    headers: //
 });
 ```
 
@@ -335,3 +336,15 @@ Users already signed in can manually link their account to additional social pro
 <Callout>
 `setPassword` can't be called from the client for security reasons.
 </Callout>
+
+### Account Unlinking
+
+You can unlink a user account by providing a `providerId`.
+
+```ts
+await authClient.unlinkAccount({
+    providerId: "google"
+});
+```
+
+If the `providerId` doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout.

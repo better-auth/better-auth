@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	NavigationMenuLink,
 	type NavigationMenuLinkEmits,
 	type NavigationMenuLinkProps,
 	useForwardPropsEmits,

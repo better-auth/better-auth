@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
-import { PaginationLast, type PaginationLastProps } from "radix-vue";
-import { DoubleArrowRightIcon } from "@radix-icons/vue";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { type PaginationLastProps } from "radix-vue";
 
 const props = withDefaults(
 	defineProps<PaginationLastProps & { class?: HTMLAttributes["class"] }>(),

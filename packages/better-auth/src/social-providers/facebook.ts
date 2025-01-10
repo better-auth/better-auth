@@ -17,7 +17,16 @@ export interface FacebookProfile {
 		};
 	};
 }
-export interface FacebookOptions extends ProviderOptions<FacebookProfile> {}
+
+export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
+	/**
+	 * Extend list of fields to retrieve from the Facebook user profile.
+	 *
+	 * @default ["id", "name", "email", "picture"]
+	 */
+	fields?: string[];
+}
+
 export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
@@ -101,8 +110,15 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			// access_token
+			const fields = [
+				"id",
+				"name",
+				"email",
+				"picture",
+				...(options?.fields || []),
+			];
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
-				"https://graph.facebook.com/me?fields=id,name,email,picture",
+				"https://graph.facebook.com/me?fields=" + fields.join(","),
 				{
 					auth: {
 						type: "Bearer",

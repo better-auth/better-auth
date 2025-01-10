@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe } from "vitest";
 import { runAdapterTest } from "../../test";
 import { getMigrations } from "../../../db/get-migration";
 import path from "path";

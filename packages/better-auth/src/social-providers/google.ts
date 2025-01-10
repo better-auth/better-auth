@@ -1,9 +1,9 @@
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { BetterAuthError } from "../error";
-import { logger } from "../utils/logger";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
+import { BetterAuthError } from "../error";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { logger } from "../utils/logger";
 
 export interface GoogleProfile {
 	aud: string;
@@ -35,6 +35,8 @@ export interface GoogleProfile {
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	accessType?: "offline" | "online";
 	prompt?: "none" | "consent" | "select_account";
+	display?: "page" | "popup" | "touch" | "wap";
+	hd?: string;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -63,9 +65,13 @@ export const google = (options: GoogleOptions) => {
 				codeVerifier,
 				redirectURI,
 			});
+
 			options.accessType &&
 				url.searchParams.set("access_type", options.accessType);
 			options.prompt && url.searchParams.set("prompt", options.prompt);
+			options.display && url.searchParams.set("display", options.display);
+			options.hd && url.searchParams.set("hd", options.hd);
+
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

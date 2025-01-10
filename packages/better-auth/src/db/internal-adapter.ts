@@ -458,6 +458,21 @@ export const createInternalAdapter = (
 				],
 			});
 		},
+		deleteAccount: async (providerId: string, userId: string) => {
+			await adapter.delete({
+				model: "account",
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			});
+		},
 		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
 				if (typeof userIdOrSessionTokens === "string") {
@@ -513,32 +528,21 @@ export const createInternalAdapter = (
 			accountId: string,
 			providerId: string,
 		) => {
-			let user: User | null = null;
-			user = await adapter.findOne<User>({
-				model: "user",
+			const account = await adapter.findOne<Account>({
+				model: "account",
 				where: [
 					{
-						value: email.toLowerCase(),
-						field: "email",
+						value: accountId,
+						field: "accountId",
+					},
+					{
+						value: providerId,
+						field: "providerId",
 					},
 				],
 			});
-			if (!user) {
-				const account = await adapter.findOne<Account>({
-					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-						{
-							value: providerId,
-							field: "providerId",
-						},
-					],
-				});
-				if (!account) return null;
-				user = await adapter.findOne<User>({
+			if (account) {
+				const user = await adapter.findOne<User>({
 					model: "user",
 					where: [
 						{
@@ -547,24 +551,42 @@ export const createInternalAdapter = (
 						},
 					],
 				});
-				return {
-					user: user!,
-					accounts: [account],
-				};
+				if (user) {
+					return {
+						user,
+						accounts: [account],
+					};
+				} else {
+					return null;
+				}
+			} else {
+				const user = await adapter.findOne<User>({
+					model: "user",
+					where: [
+						{
+							value: email.toLowerCase(),
+							field: "email",
+						},
+					],
+				});
+				if (user) {
+					const accounts = await adapter.findMany<Account>({
+						model: "account",
+						where: [
+							{
+								value: user.id,
+								field: "userId",
+							},
+						],
+					});
+					return {
+						user,
+						accounts: accounts || [],
+					};
+				} else {
+					return null;
+				}
 			}
-			const accounts = await adapter.findMany<Account>({
-				model: "account",
-				where: [
-					{
-						value: user.id,
-						field: "userId",
-					},
-				],
-			});
-			return {
-				user: user!,
-				accounts: accounts || [],
-			};
 		},
 		findUserByEmail: async (
 			email: string,

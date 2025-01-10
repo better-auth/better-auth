@@ -236,9 +236,18 @@ export const signInSocial = createAuthEndpoint(
 			}
 			await setSessionCookie(c, data.data!);
 			return c.json({
+				redirect: false,
 				token: data.data!.session.token,
 				url: undefined,
-				redirect: false,
+				user: {
+					id: data.data!.user.id,
+					email: data.data!.user.email,
+					name: data.data!.user.name,
+					image: data.data!.user.image,
+					emailVerified: data.data!.user.emailVerified,
+					createdAt: data.data!.user.createdAt,
+					updatedAt: data.data!.user.updatedAt,
+				},
 			});
 		}
 
@@ -392,6 +401,8 @@ export const signInEmail = createAuthEndpoint(
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				user.user.email,
+				undefined,
+				ctx.context.options.emailVerification?.expiresIn,
 			);
 			const url = `${
 				ctx.context.baseURL
@@ -431,6 +442,9 @@ export const signInEmail = createAuthEndpoint(
 			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
+			redirect: !!ctx.body.callbackURL,
+			token: session.token,
+			url: ctx.body.callbackURL,
 			user: {
 				id: user.user.id,
 				email: user.user.email,
@@ -440,9 +454,6 @@ export const signInEmail = createAuthEndpoint(
 				createdAt: user.user.createdAt,
 				updatedAt: user.user.updatedAt,
 			},
-			token: session.token,
-			redirect: !!ctx.body.callbackURL,
-			url: ctx.body.callbackURL,
 		});
 	},
 );

@@ -21,6 +21,9 @@
 			"complexity": {
 				"noUselessSwitchCase": "warn",
 				"noUselessTypeConstraint": "warn"
+			},
+			"correctness": {
+				"noUnusedImports": "warn"
 			}
 		}
 	},

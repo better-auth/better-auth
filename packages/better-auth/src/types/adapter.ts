@@ -1,4 +1,3 @@
-import type { GenericEndpointContext } from "./context";
 import type { BetterAuthOptions } from "./options";
 
 /**
@@ -66,18 +65,33 @@ export type Adapter = {
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user
-	 * @returns
 	 */
 	createSchema?: (
 		options: BetterAuthOptions,
 		file?: string,
-	) => Promise<{
-		code: string;
-		fileName: string;
-		append?: boolean;
-		overwrite?: boolean;
-	}>;
+	) => Promise<AdapterSchemaCreation>;
 	options?: Record<string, any>;
+};
+
+export type AdapterSchemaCreation = {
+	/**
+	 * Code to be inserted into the file
+	 */
+	code: string;
+	/**
+	 * Path to the file, including the file name and extension.
+	 * Relative paths are supported, with the current working directory of the developer's project as the base.
+	 */
+	path: string;
+	/**
+	 * Append the file if it already exists.
+	 * Note: This will not apply if `overwrite` is set to true.
+	 */
+	append?: boolean;
+	/**
+	 * Overwrite the file if it already exists
+	 */
+	overwrite?: boolean;
 };
 
 export interface AdapterInstance {

@@ -280,7 +280,7 @@ describe("email-otp", async () => {
 describe("email-otp-verify", async () => {
 	const otpFn = vi.fn();
 	const otp = [""];
-	const { client, testUser } = await getTestInstance(
+	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
@@ -289,6 +289,7 @@ describe("email-otp-verify", async () => {
 						otpFn(email, _otp, type);
 					},
 					sendVerificationOnSignUp: true,
+					disableSignUp: true,
 				}),
 			],
 		},
@@ -298,6 +299,35 @@ describe("email-otp-verify", async () => {
 			},
 		},
 	);
+
+	it("should not create verification otp when disableSignUp and user not registered", async () => {
+		for (let param of [
+			{
+				email: "test-email@domain.com",
+				isNull: true,
+			},
+			{
+				email: testUser.email,
+				isNull: false,
+			},
+		]) {
+			await client.emailOtp.sendVerificationOtp({
+				email: param.email,
+				type: "email-verification",
+			});
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: param.email,
+					type: "email-verification",
+				},
+			});
+			if (param.isNull) {
+				expect(res.otp).toBeNull();
+			} else {
+				expect(res.otp).not.toBeNull();
+			}
+		}
+	});
 
 	it("should verify email with last otp", async () => {
 		await client.emailOtp.sendVerificationOtp({
@@ -312,10 +342,59 @@ describe("email-otp-verify", async () => {
 			email: testUser.email,
 			type: "email-verification",
 		});
-		const verifiedUser = await client.emailOtp.verifyEmail({
-			email: testUser.email,
-			otp: otp[2],
+	});
+});
+
+describe("custom rate limiting storage", async () => {
+	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+		},
+		plugins: [
+			emailOTP({
+				async sendVerificationOTP(data, request) {},
+			}),
+		],
+	});
+
+	it.each([
+		{
+			path: "/email-otp/send-verification-otp",
+			body: {
+				email: "test@email.com",
+				type: "sign-in",
+			},
+		},
+		{
+			path: "/sign-in/email-otp",
+			body: {
+				email: "test@email.com",
+				otp: "12312",
+			},
+		},
+		{
+			path: "/email-otp/verify-email",
+			body: {
+				email: "test@email.com",
+				otp: "12312",
+			},
+		},
+	])("should rate limit send verification endpoint", async ({ path, body }) => {
+		for (let i = 0; i < 10; i++) {
+			const response = await client.$fetch(path, {
+				method: "POST",
+				body,
+			});
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			}
+		}
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 1000);
+		const response = await client.$fetch(path, {
+			method: "POST",
+			body,
 		});
-		// expect(verifiedUser.data?.emailVerified).toBe(true);
+		expect(response.error?.status).not.toBe(429);
 	});
 });
