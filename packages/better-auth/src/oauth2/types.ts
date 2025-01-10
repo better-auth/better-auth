@@ -39,6 +39,7 @@ export interface OAuthProvider<
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
 	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
+	disableImplicitSignUp?: boolean;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -105,4 +106,9 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 				emailVerified?: boolean;
 				[key: string]: any;
 		  }>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
 };

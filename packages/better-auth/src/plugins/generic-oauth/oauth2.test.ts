@@ -208,4 +208,113 @@ describe("oauth2", async () => {
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
+
+	it.only("should not create user when sign ups are disabled", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-signup-disabled@test.com",
+				name: "OAuth2 Test Signup Disabled",
+				sub: "oauth2-signup-disabled",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test2",
+							discoveryUrl:
+								"http://localhost:8080/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							disableImplicitSignUp: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test2",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+		});
+		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe(
+			"http://localhost:3000/error?error=signup_disabled",
+		);
+	});
+
+	it.only("should create user when sign ups are disabled and sign up is requested", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-signup-disabled-and-requested@test.com",
+				name: "OAuth2 Test Signup Disabled And Requested",
+				sub: "oauth2-signup-disabled-and-requested",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test2",
+							discoveryUrl:
+								"http://localhost:8080/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							disableImplicitSignUp: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test2",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+			requestSignUp: true,
+		});
+		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
 });

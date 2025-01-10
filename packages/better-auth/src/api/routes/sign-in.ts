@@ -122,6 +122,19 @@ export const signInSocial = createAuthEndpoint(
 						"ID token from the provider to sign in the user with id token",
 				},
 			),
+			/**
+			 * Explicitly request sign-up
+			 *
+			 * Should be used to allow sign up when
+			 * disableImplicitSignUp for this provider is
+			 * true
+			 */
+			requestSignUp: z
+				.boolean({
+					description:
+						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -228,6 +241,7 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				disableSignUp: provider.disableImplicitSignUp && !c.body.requestSignUp,
 			});
 			if (data.error) {
 				throw new APIError("UNAUTHORIZED", {

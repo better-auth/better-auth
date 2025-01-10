@@ -74,9 +74,14 @@ export const init = async (options: BetterAuthOptions) => {
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return socialProviders[key as (typeof socialProviderList)[number]](
+			const provider = socialProviders[
+				key as (typeof socialProviderList)[number]
+			](
 				value as any, // TODO: fix this
 			);
+			(provider as OAuthProvider).disableImplicitSignUp =
+				value.disableImplicitSignUp;
+			return provider;
 		})
 		.filter((x) => x !== null);
 

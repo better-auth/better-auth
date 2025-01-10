@@ -267,3 +267,88 @@ describe("Redirect URI", async () => {
 		);
 	});
 });
+
+describe("Disable implicit signup", async () => {
+	it("Should not create user when implicit sign up is disabled", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					disableImplicitSignUp: true,
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain(
+					"http://localhost:3000/api/auth/error?error=signup_disabled",
+				);
+			},
+		});
+	});
+
+	it("Should create user when implicit sign up is disabled but it is requested", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					disableImplicitSignUp: true,
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+			requestSignUp: true,
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
+});

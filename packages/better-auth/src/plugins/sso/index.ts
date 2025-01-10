@@ -61,6 +61,11 @@ interface SSOOptions {
 			provider: SSOProvider;
 		}) => Promise<"member" | "admin">;
 	};
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
 }
 
 export const sso = (options?: SSOOptions) => {
@@ -252,6 +257,12 @@ export const sso = (options?: SSOOptions) => {
 									"The URL to redirect to after login if the user is new",
 							})
 							.optional(),
+						requestSignUp: z
+							.boolean({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -407,7 +418,8 @@ export const sso = (options?: SSOOptions) => {
 							`${ctx.context.baseURL}/error?error=invalid_state`,
 						);
 					}
-					const { callbackURL, errorURL, newUserURL } = stateData;
+					const { callbackURL, errorURL, newUserURL, requestSignUp } =
+						stateData;
 					if (!code || error) {
 						throw ctx.redirect(
 							`${
@@ -620,6 +632,7 @@ export const sso = (options?: SSOOptions) => {
 							refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 							scope: tokenResponse.scopes?.join(","),
 						},
+						disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 					});
 					if (linked.error) {
 						throw ctx.redirect(

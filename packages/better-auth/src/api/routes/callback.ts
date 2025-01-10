@@ -67,8 +67,14 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
-			await parseState(c);
+		const {
+			codeVerifier,
+			callbackURL,
+			link,
+			errorURL,
+			newUserURL,
+			requestSignUp,
+		} = await parseState(c);
 
 		let tokens: OAuth2Tokens;
 		try {
@@ -149,6 +155,7 @@ export const callbackOAuth = createAuthEndpoint(
 				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
+			disableSignUp: provider.disableImplicitSignUp && !requestSignUp,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

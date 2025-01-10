@@ -10,10 +10,12 @@ export async function handleOAuthUserInfo(
 		userInfo,
 		account,
 		callbackURL,
+		disableSignUp,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
+		disableSignUp?: boolean;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -96,6 +98,13 @@ export async function handleOAuthUserInfo(
 			}
 		}
 	} else {
+		if (disableSignUp) {
+			return {
+				error: "signup disabled",
+				data: null,
+				isRegister: false,
+			};
+		}
 		try {
 			user = await c.context.internalAdapter
 				.createOAuthUser(
