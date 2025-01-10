@@ -198,6 +198,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							options.body.callbackURL = url;
 						}
 					}
+					if (options.body?.newUserCallbackURL) {
+						if (options.body.newUserCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.newUserCallbackURL, {
+								scheme,
+							});
+							options.body.newUserCallbackURL = url;
+						}
+					}
+					if (options.body?.errorCallbackURL) {
+						if (options.body.errorCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.errorCallbackURL, {
+								scheme,
+							});
+							options.body.errorCallbackURL = url;
+						}
+					}
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
