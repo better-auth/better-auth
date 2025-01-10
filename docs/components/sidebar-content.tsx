@@ -9,6 +9,7 @@ import {
 	LucideIcon,
 	Mail,
 	Mailbox,
+	NotebookPen,
 	Phone,
 	Plug,
 	ScanFace,
@@ -1227,6 +1228,11 @@ export const contents: Content[] = [
 				title: "Testing",
 				href: "/docs/contribute/testing",
 				icon: () => <FlaskConical className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Documenting",
+				href: "/docs/contribute/documenting",
+				icon: () => <NotebookPen className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "Security Issues",
