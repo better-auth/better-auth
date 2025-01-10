@@ -5,7 +5,14 @@ description: Testing Guide for Better-Auth
 
 ## Overview
 
-Better-Auth uses Vitest as our testing framework. Currently, we focus on unit tests, with plans to expand to integration testing before our v1 release. This guide will help you understand our testing philosophy and how to write effective tests.
+We use Vitest as our testing framework of choice. Currently, we focus on unit tests, with plans to expand to integration testing in the future.
+This guide will help you understand our testing philosophy and how to write effective tests.
+
+<Callout type="warn">
+  We expect you to have knowledge of Vitest before you start writing tests. If
+  you're new to Vitest, we recommend you read the [Vitest
+  documentation](https://vitest.dev/guide/) first.
+</Callout>
 
 ## Testing Philosophy
 
@@ -161,19 +168,6 @@ describe("User Authentication", () => {
 - Don't write brittle tests
 - Don't test external libraries
 
-## Async Testing
-
-```typescript
-describe("Async Operations", () => {
-  it("should handle async operations correctly", async () => {
-    const { auth } = getTestInstance();
-
-    await expect(auth.someAsyncOperation()).resolves.toBeDefined();
-    await expect(auth.someFailingOperation()).rejects.toThrow();
-  });
-});
-```
-
 ## Future Plans
 
 - Implement integration testing
@@ -191,7 +185,5 @@ When submitting a PR:
 - Update tests for modified features
 - Follow existing test patterns
 - Include meaningful assertions
-
-
 
 Need help? Feel free to reach out in our <Link href="https://discord.gg/GYC3W7tZzb">Discord server</Link>!
