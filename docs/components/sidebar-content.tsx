@@ -1219,11 +1219,11 @@ export const contents: Content[] = [
 				href: "/docs/contribute/areas-to-contribute",
 				icon: () => <HandHelping className="w-4 h-4 text-current" />,
 			},
-			{
-				title: "Database Adapters",
-				href: "/docs/contribute/db-adapters",
-				icon: () => <Plug className="w-4 h-4 text-current" />,
-			},
+			// {
+			// 	title: "Database Adapters",
+			// 	href: "/docs/contribute/database-adapters",
+			// 	icon: () => <Plug className="w-4 h-4 text-current" />,
+			// },
 			{
 				title: "Testing",
 				href: "/docs/contribute/testing",
