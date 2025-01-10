@@ -392,6 +392,15 @@ export const getFullOrganization = createAuthEndpoint(
 			organizationId,
 			isSlug: !!ctx.query?.organizationSlug,
 		});
+		const isMember = organization?.members.find(
+			(member) => member.userId === session.user.id,
+		);
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			});
+		}
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
