@@ -357,6 +357,16 @@ export type BetterAuthOptions = {
 		 */
 		storeSessionInDatabase?: boolean;
 		/**
+		 * By default, sessions are deleted from the database when secondary storage
+		 * is provided when session is revoked.
+		 *
+		 * Set this to true to preserve session records in the database,
+		 * even if they are deleted from the secondary storage.
+		 *
+		 * @default false
+		 */
+		preserveSessionInDatabase?: boolean;
+		/**
 		 * Enable caching session in cookie
 		 */
 		cookieCache?: {
