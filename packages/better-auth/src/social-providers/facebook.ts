@@ -61,26 +61,26 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			/* limited login */
-			if (token.split(".")?.length) {
-				try {
-					const { payload } = await jwtVerify(
-						token,
-						createRemoteJWKSet(
-							new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
-						),
-						{
-							algorithms: ["RS256"],
-							audience: options.clientId,
-							issuer: "https://www.facebook.com",
-						},
-					);
+			try {
+				const { payload: jwtClaims } = await jwtVerify(
+					token,
+					createRemoteJWKSet(
+						new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
+					),
+					{
+						algorithms: ["RS256"],
+						audience: options.clientId,
+						issuer: "https://www.facebook.com",
+					},
+				);
 
-					if (nonce && payload.nonce !== nonce) {
-						return false;
-					}
-				} catch (error) {
+				if (nonce && jwtClaims.nonce !== nonce) {
 					return false;
 				}
+
+				return !!jwtClaims;
+			} catch (error) {
+				return false;
 			}
 
 			/* access_token */
@@ -91,25 +91,45 @@ export const facebook = (options: FacebookOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			// limited
-			if (!token.accessToken && token.idToken) {
-				const profile = decodeJwt(token.idToken);
+
+			if (token.idToken) {
+				const profile = decodeJwt(token.idToken) as {
+					sub: string;
+					email: string;
+					name: string;
+					picture: string;
+				};
+
+				const user = {
+					id: profile.sub,
+					name: profile.name,
+					email: profile.email,
+					picture: {
+						data: {
+							url: profile.picture,
+							height: 100,
+							width: 100,
+							is_silhouette: false,
+						},
+					},
+				};
+
 				// https://developers.facebook.com/docs/facebook-login/limited-login/permissions
-				const userMap = await options.mapProfileToUser?.(profile);
+				const userMap = await options.mapProfileToUser?.({
+					...user,
+					email_verified: true,
+				});
+
 				return {
 					user: {
-						id: profile.sub,
-						name: profile.name,
-						email: profile.email,
-						image: profile.picture,
-						emailVerified: false,
+						...user,
+						emailVerified: true,
 						...userMap,
 					},
 					data: profile,
 				};
 			}
 
-			// access_token
 			const fields = [
 				"id",
 				"name",
