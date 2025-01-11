@@ -184,10 +184,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "boolean",
 			},
 			number: {
-				sqlite: "integer",
-				postgres: "integer",
-				mysql: "integer",
-				mssql: "integer",
+				sqlite: field.bigint ? "bigint" : "integer",
+				postgres: field.bigint ? "bigint" : "integer",
+				mysql: field.bigint ? "bigint" : "integer",
+				mssql: field.bigint ? "bigint" : "integer",
 			},
 			date: {
 				sqlite: "date",
