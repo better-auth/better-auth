@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { GenericEndpointContext } from "../types";
 import { APIError } from "better-call";
-import { getOrigin } from "../utils/url";
 import { generateRandomString } from "../crypto";
 
 export async function generateState(
@@ -11,10 +10,7 @@ export async function generateState(
 		userId: string;
 	},
 ) {
-	const callbackURL =
-		c.body?.callbackURL ||
-		(c.query?.currentURL ? getOrigin(c.query?.currentURL) : "") ||
-		c.context.options.baseURL;
+	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",
@@ -25,7 +21,7 @@ export async function generateState(
 	const data = JSON.stringify({
 		callbackURL,
 		codeVerifier,
-		errorURL: c.body?.errorCallbackURL || c.query?.currentURL,
+		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
 		/**
