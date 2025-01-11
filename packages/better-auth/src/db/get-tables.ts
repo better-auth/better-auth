@@ -63,7 +63,7 @@ export const getAuthTables = (
 				},
 				lastRequest: {
 					type: "number",
-          bigint: true,
+					bigint: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 				},
 			},
