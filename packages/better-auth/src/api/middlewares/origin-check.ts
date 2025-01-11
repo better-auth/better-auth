@@ -17,7 +17,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
-	const currentURL = query?.currentURL;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
 	const trustedOrigins = context.trustedOrigins;
@@ -59,7 +58,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
-	currentURL && validateURL(currentURL, "currentURL");
 	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
 	newUserCallbackURL && validateURL(newUserCallbackURL, "newUserCallbackURL");
 });
