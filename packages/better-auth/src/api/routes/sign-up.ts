@@ -18,11 +18,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		"/sign-up/email",
 		{
 			method: "POST",
-			query: z
-				.object({
-					currentURL: z.string().optional(),
-				})
-				.optional(),
 			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
 				name: ZodString;
 				email: ZodString;
@@ -197,9 +192,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					body.callbackURL || ctx.query?.currentURL || "/"
-				}`;
+				}/verify-email?token=${token}&callbackURL=${body.callbackURL || "/"}`;
 				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 					{
 						user: createdUser,
