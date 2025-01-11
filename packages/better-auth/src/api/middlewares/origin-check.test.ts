@@ -163,7 +163,7 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
-	it("should work with list of trusted origins ", async (ctx) => {
+	it("should work with list of trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
@@ -191,7 +191,7 @@ describe("Origin Check", async (it) => {
 		});
 		expect(res2.data?.user).toBeDefined();
 	});
-
+	
 	it("should work with wildcard trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "https://sub-domain.my-site.com",
