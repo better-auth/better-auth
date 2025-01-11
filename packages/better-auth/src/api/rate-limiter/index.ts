@@ -186,7 +186,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 				key,
 				{
 					...data,
-					count: Number(data.count) + 1,
+					count: data.count + 1,
 					lastRequest: now,
 				},
 				true,

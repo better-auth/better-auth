@@ -73,6 +73,7 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 			| "set default";
 	};
 	unique?: boolean;
+  bigint?: boolean;
 	/**
 	 * A zod schema to validate the value.
 	 */
