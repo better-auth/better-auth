@@ -260,6 +260,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				"/sign-in/oauth2",
 				{
 					method: "POST",
+					query: z
+						.object({
+							/**
+							 * Redirect to the current URL after the
+							 * user has signed in.
+							 */
+							currentURL: z
+								.string({
+									description: "Redirect to the current URL after sign in",
+								})
+								.optional(),
+						})
+						.optional(),
 					body: z.object({
 						providerId: z.string({
 							description: "The provider ID for the OAuth provider",

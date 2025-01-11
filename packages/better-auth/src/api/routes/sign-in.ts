@@ -12,6 +12,15 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
+		query: z
+			.object({
+				/**
+				 * Redirect to the current URL after the
+				 * user has signed in.
+				 */
+				currentURL: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user

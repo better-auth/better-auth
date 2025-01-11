@@ -517,6 +517,11 @@ export const changeEmail = createAuthEndpoint(
 	"/change-email",
 	{
 		method: "POST",
+		query: z
+			.object({
+				currentURL: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			newEmail: z
 				.string({
@@ -611,7 +616,9 @@ export const changeEmail = createAuthEndpoint(
 		);
 		const url = `${
 			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		}/verify-email?token=${token}&callbackURL=${
+			ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		}`;
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,

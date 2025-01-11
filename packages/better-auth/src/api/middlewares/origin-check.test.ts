@@ -126,6 +126,28 @@ describe("Origin Check", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	it("shouldn't allow untrusted currentURL", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				// @ts-expect-error - query is not defined in the type
+				query: {
+					currentURL: "http://malicious.com",
+				},
+			},
+		});
+		expect(res2.error?.status).toBe(403);
+		expect(res2.error?.message).toBe("Invalid currentURL");
+	});
+
 	it("shouldn't allow untrusted redirectTo", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -139,6 +161,35 @@ describe("Origin Check", async (it) => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid redirectURL");
+	});
+
+	it("should work with list of trusted origins ", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com",
+				},
+			},
+		});
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:5000/reset-password",
+		});
+		expect(res.data?.status).toBeTruthy();
+
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				// @ts-expect-error - query is not defined in the type
+				query: {
+					currentURL: "http://localhost:5000",
+				},
+			},
+		});
+		expect(res2.data?.user).toBeDefined();
 	});
 
 	it("should work with wildcard trusted origins", async (ctx) => {

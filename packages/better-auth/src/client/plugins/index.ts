@@ -16,4 +16,3 @@ export * from "../../plugins/custom-session/client";
 export * from "./infer-plugin";
 export * from "../../plugins/sso/client";
 export * from "../../plugins/oidc-provider/client";
-export type * from "@simplewebauthn/server";
