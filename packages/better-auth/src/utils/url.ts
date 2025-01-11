@@ -18,7 +18,7 @@ function withPath(url: string, path = "/api/auth") {
 		return url;
 	}
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${url}${path}`;
+	return `${url.replace(/\/+$/, "")}${path}`;
 }
 
 export function getBaseURL(url?: string, path?: string) {
