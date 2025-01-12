@@ -1,5 +1,6 @@
 import {
 	CircleHelp,
+	Gauge,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
@@ -1169,6 +1170,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Optimize for Performance",
+				href: "/docs/guides/optimizing-for-performance",
+				icon: () => <Gauge className="size-4" />,
 			},
 		],
 	},
