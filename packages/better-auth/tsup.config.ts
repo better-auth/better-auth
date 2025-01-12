@@ -48,10 +48,9 @@ export default defineConfig((env) => {
 			"plugins/username": "./src/plugins/username/index.ts",
 		},
 		format: ["esm", "cjs"],
-		bundle: true,
-		splitting: false,
+		splitting: true,
 		cjsInterop: true,
 		skipNodeModulesBundle: true,
-		noExternal: ["@better-fetch/fetch", "nanostores", "@simplewebauthn/types"],
+		treeshake: true,
 	};
 });
