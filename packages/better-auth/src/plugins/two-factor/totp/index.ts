@@ -259,7 +259,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 					user.id,
 					{
 						twoFactorEnabled: true,
-					},
+					},ctx
 				);
 				const newSession = await ctx.context.internalAdapter
 					.createSession(

@@ -113,7 +113,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						name: "Anonymous",
 						createdAt: new Date(),
 						updatedAt: new Date(),
-					});
+					}, ctx);
 					if (!newUser) {
 						return ctx.json(null, {
 							status: 500,

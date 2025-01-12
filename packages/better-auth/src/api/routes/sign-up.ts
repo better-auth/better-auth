@@ -150,7 +150,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					image,
 					...additionalData,
 					emailVerified: false,
-				});
+				}, ctx);
 				if (!createdUser) {
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -179,7 +179,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				providerId: "credential",
 				accountId: createdUser.id,
 				password: hash,
-			});
+			}, ctx);
 			if (
 				ctx.context.options.emailVerification?.sendOnSignUp ||
 				ctx.context.options.emailAndPassword.requireEmailVerification
