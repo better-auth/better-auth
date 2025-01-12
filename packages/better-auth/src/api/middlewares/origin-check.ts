@@ -2,7 +2,7 @@ import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
 import { wildcardMatch } from "../../utils/wildcard";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
-import type { GenericEndpointContext } from "src/types";
+import type { GenericEndpointContext } from "../../types";
 
 /**
  * A middleware to validate callbackURL and origin against

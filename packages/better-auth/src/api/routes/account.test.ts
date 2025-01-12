@@ -5,7 +5,7 @@ import type { GoogleProfile } from "../../social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
 import { signJWT } from "../../crypto/jwt";
-import { BASE_ERROR_CODES } from "src/error/codes";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
