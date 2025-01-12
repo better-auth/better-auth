@@ -7,8 +7,8 @@ import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
-import { mergeSchema } from "src/db/schema";
 import { schema } from "./schema";
+import { mergeSchema } from "../../db/schema";
 
 export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
