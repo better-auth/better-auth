@@ -442,7 +442,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							users: users as UserWithRole[],
 						});
 					} catch (e) {
-						console.log(e);
 						return ctx.json({
 							users: [],
 						});
