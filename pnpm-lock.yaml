@@ -194,7 +194,7 @@ importers:
         version: 11.13.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.0.0-rc.1(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -211,8 +211,8 @@ importers:
         specifier: ^3.11.5
         version: 3.11.5
       next:
-        specifier: 15.0.0-rc.1
-        version: 15.0.0-rc.1(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        specifier: 15.1.2
+        version: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -433,7 +433,7 @@ importers:
         version: 1.1.4(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@scalar/nextjs-api-reference':
         specifier: ^0.4.104
-        version: 0.4.104(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)
+        version: 0.4.104(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)
       '@tabler/icons-react':
         specifier: ^3.24.0
         version: 3.24.0(react@18.3.1)
@@ -490,22 +490,22 @@ importers:
         version: 1.3.2(typescript@5.7.2)
       fumadocs-mdx:
         specifier: 11.1.0
-        version: 11.1.0(acorn@8.14.0)(fumadocs-core@14.0.2(@types/react@18.3.14)(sass@1.83.1))(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 11.1.0(acorn@8.14.0)(fumadocs-core@14.0.2(@types/react@18.3.14)(sass@1.83.1))(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       fumadocs-openapi:
         specifier: ^5.8.1
-        version: 5.8.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16)
+        version: 5.8.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16)
       fumadocs-twoslash:
         specifier: ^1.1.3
-        version: 1.1.3(fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(shiki@1.24.0)(typescript@5.7.2)
+        version: 1.1.3(fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(shiki@1.24.0)(typescript@5.7.2)
       fumadocs-typescript:
         specifier: ^3.0.2
         version: 3.0.2(typescript@5.7.2)
       fumadocs-ui:
         specifier: 14.0.2
-        version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -525,8 +525,8 @@ importers:
         specifier: ^10.18.0
         version: 10.18.0
       next:
-        specifier: ^15.0.4
-        version: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        specifier: ^15.1.2
+        version: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -744,7 +744,7 @@ importers:
         version: 0.469.0(react@18.2.0)
       plasmo:
         specifier: 0.89.4
-        version: 0.89.4(@swc/core@1.10.4(@swc/helpers@0.5.13))(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)
+        version: 0.89.4(@swc/core@1.10.4(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)
       react:
         specifier: 18.2.0
         version: 18.2.0
@@ -1512,8 +1512,8 @@ importers:
         specifier: ^0.11.3
         version: 0.11.3
       next:
-        specifier: ^15.0.4
-        version: 15.0.4(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        specifier: ^15.1.2
+        version: 15.1.2(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       oauth2-mock-server:
         specifier: ^7.2.0
         version: 7.2.0
@@ -1534,7 +1534,7 @@ importers:
         version: 1.9.3
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.13))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0)
       typescript:
         specifier: 5.6.1-rc
         version: 5.6.1-rc
@@ -1607,7 +1607,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.13))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -4423,11 +4423,8 @@ packages:
   '@next/env@15.0.0':
     resolution: {integrity: sha512-Mcv8ZVmEgTO3bePiH/eJ7zHqQEs2gCqZ0UId2RxHmDDc7Pw6ngfSrOFlxG8XDpaex+n2G+TKPsQAf28MO+88Gw==}
 
-  '@next/env@15.0.0-rc.1':
-    resolution: {integrity: sha512-4neDwowyr+9DfgickGjNATp6Lm3rJ/Y83ulg8irVXUoN+mLikrInYSzFDnwpkflO/wokFR4z5A171RVPnapZ/Q==}
-
-  '@next/env@15.0.4':
-    resolution: {integrity: sha512-WNRvtgnRVDD4oM8gbUcRc27IAhaL4eXQ/2ovGbgLnPGUvdyDr8UdXP4Q/IBDdAdojnD2eScryIDirv0YUCjUVw==}
+  '@next/env@15.1.2':
+    resolution: {integrity: sha512-Hm3jIGsoUl6RLB1vzY+dZeqb+/kWPZ+h34yiWxW0dV87l8Im/eMOwpOA+a0L78U0HM04syEjXuRlCozqpwuojQ==}
 
   '@next/eslint-plugin-next@15.0.0-canary.149':
     resolution: {integrity: sha512-luututuveL0xzHMFfuyVyfctC/7jdNS/iGrVqGbEvHqvW7W4yydwieasELkC4uY10onGoKGxg1PV8QciqMJqWQ==}
@@ -4438,14 +4435,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@next/swc-darwin-arm64@15.0.0-rc.1':
-    resolution: {integrity: sha512-YqDdpE3vgcDSiq9oJcFp0YUsLXCfIa3BpAHOZnVfbXNPBz1JcDtIGFsoz2w6l5jmjU9+41l7oeagY8KAWtYdpA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@next/swc-darwin-arm64@15.0.4':
-    resolution: {integrity: sha512-QecQXPD0yRHxSXWL5Ff80nD+A56sUXZG9koUsjWJwA2Z0ZgVQfuy7gd0/otjxoOovPVHR2eVEvPMHbtZP+pf9w==}
+  '@next/swc-darwin-arm64@15.1.2':
+    resolution: {integrity: sha512-b9TN7q+j5/7+rGLhFAVZiKJGIASuo8tWvInGfAd8wsULjB1uNGRCj1z1WZwwPWzVQbIKWFYqc+9L7W09qwt52w==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -4456,14 +4447,8 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@next/swc-darwin-x64@15.0.0-rc.1':
-    resolution: {integrity: sha512-mM7rwGB9xuPM9dIAcInlmHpIOaFyBkOsUjj9ytUBANPNEqPkW8C06RITiPJ3toKAiocEcGdLuJeaYPS8MDgf6g==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@next/swc-darwin-x64@15.0.4':
-    resolution: {integrity: sha512-pb7Bye3y1Og3PlCtnz2oO4z+/b3pH2/HSYkLbL0hbVuTGil7fPen8/3pyyLjdiTLcFJ+ymeU3bck5hd4IPFFCA==}
+  '@next/swc-darwin-x64@15.1.2':
+    resolution: {integrity: sha512-caR62jNDUCU+qobStO6YJ05p9E+LR0EoXh1EEmyU69cYydsAy7drMcOlUlRtQihM6K6QfvNwJuLhsHcCzNpqtA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -4474,14 +4459,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-gnu@15.0.0-rc.1':
-    resolution: {integrity: sha512-4V3PSaqvjW00qac6Pd7rWAv+zE3HGXv02JAac7TpwOvNIYuneqUq82HLGZe9aZTDtT+zhOS2RnCUuXE7v3BO2Q==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-
-  '@next/swc-linux-arm64-gnu@15.0.4':
-    resolution: {integrity: sha512-12oSaBFjGpB227VHzoXF3gJoK2SlVGmFJMaBJSu5rbpaoT5OjP5OuCLuR9/jnyBF1BAWMs/boa6mLMoJPRriMA==}
+  '@next/swc-linux-arm64-gnu@15.1.2':
+    resolution: {integrity: sha512-fHHXBusURjBmN6VBUtu6/5s7cCeEkuGAb/ZZiGHBLVBXMBy4D5QpM8P33Or8JD1nlOjm/ZT9sEE5HouQ0F+hUA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -4492,14 +4471,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-musl@15.0.0-rc.1':
-    resolution: {integrity: sha512-0xUM0jRNgezRT0F/wCMs2HJ5uuV/WDajYWWeBDSSOLKB8zfTMho+QiZtLqsGG1OjALIPttpKr1E2IDNWoUgXZQ==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-
-  '@next/swc-linux-arm64-musl@15.0.4':
-    resolution: {integrity: sha512-QARO88fR/a+wg+OFC3dGytJVVviiYFEyjc/Zzkjn/HevUuJ7qGUUAUYy5PGVWY1YgTzeRYz78akQrVQ8r+sMjw==}
+  '@next/swc-linux-arm64-musl@15.1.2':
+    resolution: {integrity: sha512-9CF1Pnivij7+M3G74lxr+e9h6o2YNIe7QtExWq1KUK4hsOLTBv6FJikEwCaC3NeYTflzrm69E5UfwEAbV2U9/g==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -4510,14 +4483,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-gnu@15.0.0-rc.1':
-    resolution: {integrity: sha512-xCusIy4TN9tS5CoZVk1bs6XUqSy1H6/BMco71/LA64oPKO/MsnFv6tbmzVlBKmriASCdedrgPlREE6AXVANRaA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-
-  '@next/swc-linux-x64-gnu@15.0.4':
-    resolution: {integrity: sha512-Z50b0gvYiUU1vLzfAMiChV8Y+6u/T2mdfpXPHraqpypP7yIT2UV9YBBhcwYkxujmCvGEcRTVWOj3EP7XW/wUnw==}
+  '@next/swc-linux-x64-gnu@15.1.2':
+    resolution: {integrity: sha512-tINV7WmcTUf4oM/eN3Yuu/f8jQ5C6AkueZPKeALs/qfdfX57eNv4Ij7rt0SA6iZ8+fMobVfcFVv664Op0caCCg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -4528,14 +4495,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-musl@15.0.0-rc.1':
-    resolution: {integrity: sha512-eNiz8+boojGEVkTJYOC1BzuT2Wl9Nqoz91rHkZityAW2kd4KpeMEuxXj5Y+IPoRQXRFDfOi39hw7qpj+Nt0LXg==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-
-  '@next/swc-linux-x64-musl@15.0.4':
-    resolution: {integrity: sha512-7H9C4FAsrTAbA/ENzvFWsVytqRYhaJYKa2B3fyQcv96TkOGVMcvyS6s+sj4jZlacxxTcn7ygaMXUPkEk7b78zw==}
+  '@next/swc-linux-x64-musl@15.1.2':
+    resolution: {integrity: sha512-jf2IseC4WRsGkzeUw/cK3wci9pxR53GlLAt30+y+B+2qAQxMw6WAC3QrANIKxkcoPU3JFh/10uFfmoMDF9JXKg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -4546,14 +4507,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@next/swc-win32-arm64-msvc@15.0.0-rc.1':
-    resolution: {integrity: sha512-KcH0BWiFqinwfb8dBbIvAT51oWmZqiGHoPOP8yjkEzJK2pVxwKm4mk4WM4Y17EgCSmfAtdT0xklM9bcAm3cD3Q==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@next/swc-win32-arm64-msvc@15.0.4':
-    resolution: {integrity: sha512-Z/v3WV5xRaeWlgJzN9r4PydWD8sXV35ywc28W63i37G2jnUgScA4OOgS8hQdiXLxE3gqfSuHTicUhr7931OXPQ==}
+  '@next/swc-win32-arm64-msvc@15.1.2':
+    resolution: {integrity: sha512-wvg7MlfnaociP7k8lxLX4s2iBJm4BrNiNFhVUY+Yur5yhAJHfkS8qPPeDEUH8rQiY0PX3u/P7Q/wcg6Mv6GSAA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
@@ -4564,14 +4519,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@next/swc-win32-x64-msvc@15.0.0-rc.1':
-    resolution: {integrity: sha512-mkw4njN+kXYJo1/+V3BxogTwVXRDdHzxBO9gTEEZzZVnxXTdD5TMiPPQuH5hdkZxdcx3O0qhob3j7wdH7gaZ2A==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [win32]
-
-  '@next/swc-win32-x64-msvc@15.0.4':
-    resolution: {integrity: sha512-NGLchGruagh8lQpDr98bHLyWJXOBSmkEAfK980OiNBa7vNm6PsNoPvzTfstT78WyOeMRQphEQ455rggd7Eo+Dw==}
+  '@next/swc-win32-x64-msvc@15.1.2':
+    resolution: {integrity: sha512-D3cNA8NoT3aWISWmo7HF5Eyko/0OdOO+VagkoJuiTk7pyX3P/b+n8XA/MYvyR+xSVcbKn68B1rY9fgqjNISqzQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -7701,6 +7650,9 @@ packages:
 
   '@swc/helpers@0.5.13':
     resolution: {integrity: sha512-UoKGxQ3r5kYI9dALKJapMmuK+1zWM/H17Z1+iwnNmzcJRnfFuevZs375TA5rW31pu4BS4NoSy1fRsexDXfWn5w==}
+
+  '@swc/helpers@0.5.15':
+    resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
   '@swc/types@0.1.17':
     resolution: {integrity: sha512-V5gRru+aD8YVyCOMAjMpWR1Ui577DD5KSJsHP8RAxopAH22jFz6GZd/qxqjO6MJHQhcsjvjOFXyDhyLQUnMveQ==}
@@ -14675,37 +14627,16 @@ packages:
       sass:
         optional: true
 
-  next@15.0.0-rc.1:
-    resolution: {integrity: sha512-MUoMUM7u6lh5zx1fRbze2jGESj4VIqc0dplx03wN5cLbpW3RhrVD7I3+sDW1khJxi+bayAZuGx03R5qNV9y/EA==}
-    engines: {node: '>=18.18.0'}
-    hasBin: true
-    peerDependencies:
-      '@opentelemetry/api': ^1.1.0
-      '@playwright/test': ^1.41.2
-      babel-plugin-react-compiler: '*'
-      react: ^18.2.0 || 19.0.0-rc-cd22717c-20241013
-      react-dom: ^18.2.0 || 19.0.0-rc-cd22717c-20241013
-      sass: ^1.3.0
-    peerDependenciesMeta:
-      '@opentelemetry/api':
-        optional: true
-      '@playwright/test':
-        optional: true
-      babel-plugin-react-compiler:
-        optional: true
-      sass:
-        optional: true
-
-  next@15.0.4:
-    resolution: {integrity: sha512-nuy8FH6M1FG0lktGotamQDCXhh5hZ19Vo0ht1AOIQWrYJLP598TIUagKtvJrfJ5AGwB/WmDqkKaKhMpVifvGPA==}
+  next@15.1.2:
+    resolution: {integrity: sha512-nLJDV7peNy+0oHlmY2JZjzMfJ8Aj0/dd3jCwSZS8ZiO5nkQfcZRqDrRN3U5rJtqVTQneIOGZzb6LCNrk7trMCQ==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
       '@playwright/test': ^1.41.2
       babel-plugin-react-compiler: '*'
-      react: ^18.2.0 || 19.0.0-rc-66855b96-20241106 || ^19.0.0
-      react-dom: ^18.2.0 || 19.0.0-rc-66855b96-20241106 || ^19.0.0
+      react: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
+      react-dom: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
       sass: ^1.3.0
     peerDependenciesMeta:
       '@opentelemetry/api':
@@ -21683,7 +21614,7 @@ snapshots:
 
   '@internationalized/date@3.5.5':
     dependencies:
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
 
   '@internationalized/date@3.6.0':
     dependencies:
@@ -21691,11 +21622,11 @@ snapshots:
 
   '@internationalized/number@3.5.3':
     dependencies:
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
 
   '@internationalized/number@3.5.4':
     dependencies:
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
 
   '@ioredis/commands@1.2.0': {}
 
@@ -22297,9 +22228,7 @@ snapshots:
   '@next/env@15.0.0':
     optional: true
 
-  '@next/env@15.0.0-rc.1': {}
-
-  '@next/env@15.0.4': {}
+  '@next/env@15.1.2': {}
 
   '@next/eslint-plugin-next@15.0.0-canary.149':
     dependencies:
@@ -22308,73 +22237,49 @@ snapshots:
   '@next/swc-darwin-arm64@15.0.0':
     optional: true
 
-  '@next/swc-darwin-arm64@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-darwin-arm64@15.0.4':
+  '@next/swc-darwin-arm64@15.1.2':
     optional: true
 
   '@next/swc-darwin-x64@15.0.0':
     optional: true
 
-  '@next/swc-darwin-x64@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-darwin-x64@15.0.4':
+  '@next/swc-darwin-x64@15.1.2':
     optional: true
 
   '@next/swc-linux-arm64-gnu@15.0.0':
     optional: true
 
-  '@next/swc-linux-arm64-gnu@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-linux-arm64-gnu@15.0.4':
+  '@next/swc-linux-arm64-gnu@15.1.2':
     optional: true
 
   '@next/swc-linux-arm64-musl@15.0.0':
     optional: true
 
-  '@next/swc-linux-arm64-musl@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-linux-arm64-musl@15.0.4':
+  '@next/swc-linux-arm64-musl@15.1.2':
     optional: true
 
   '@next/swc-linux-x64-gnu@15.0.0':
     optional: true
 
-  '@next/swc-linux-x64-gnu@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-linux-x64-gnu@15.0.4':
+  '@next/swc-linux-x64-gnu@15.1.2':
     optional: true
 
   '@next/swc-linux-x64-musl@15.0.0':
     optional: true
 
-  '@next/swc-linux-x64-musl@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-linux-x64-musl@15.0.4':
+  '@next/swc-linux-x64-musl@15.1.2':
     optional: true
 
   '@next/swc-win32-arm64-msvc@15.0.0':
     optional: true
 
-  '@next/swc-win32-arm64-msvc@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-win32-arm64-msvc@15.0.4':
+  '@next/swc-win32-arm64-msvc@15.1.2':
     optional: true
 
   '@next/swc-win32-x64-msvc@15.0.0':
     optional: true
 
-  '@next/swc-win32-x64-msvc@15.0.0-rc.1':
-    optional: true
-
-  '@next/swc-win32-x64-msvc@15.0.4':
+  '@next/swc-win32-x64-msvc@15.1.2':
     optional: true
 
   '@noble/ciphers@0.6.0': {}
@@ -22950,7 +22855,7 @@ snapshots:
     transitivePeerDependencies:
       - '@parcel/core'
 
-  '@parcel/config-default@2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(postcss@8.4.33)(terser@5.36.0)(typescript@5.2.2)':
+  '@parcel/config-default@2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(postcss@8.4.33)(terser@5.36.0)(typescript@5.2.2)':
     dependencies:
       '@parcel/bundler-default': 2.9.3(@parcel/core@2.9.3)
       '@parcel/compressor-raw': 2.9.3(@parcel/core@2.9.3)
@@ -22960,7 +22865,7 @@ snapshots:
       '@parcel/optimizer-htmlnano': 2.9.3(@parcel/core@2.9.3)(cssnano@7.0.6(postcss@8.4.33))(postcss@8.4.33)(terser@5.36.0)(typescript@5.2.2)
       '@parcel/optimizer-image': 2.9.3(@parcel/core@2.9.3)
       '@parcel/optimizer-svgo': 2.9.3(@parcel/core@2.9.3)
-      '@parcel/optimizer-swc': 2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.13)
+      '@parcel/optimizer-swc': 2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.15)
       '@parcel/packager-css': 2.9.3(@parcel/core@2.9.3)
       '@parcel/packager-html': 2.9.3(@parcel/core@2.9.3)
       '@parcel/packager-js': 2.9.3(@parcel/core@2.9.3)
@@ -23166,13 +23071,13 @@ snapshots:
     transitivePeerDependencies:
       - '@parcel/core'
 
-  '@parcel/optimizer-swc@2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.13)':
+  '@parcel/optimizer-swc@2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.15)':
     dependencies:
       '@parcel/diagnostic': 2.9.3
       '@parcel/plugin': 2.9.3(@parcel/core@2.9.3)
       '@parcel/source-map': 2.1.1
       '@parcel/utils': 2.9.3
-      '@swc/core': 1.10.4(@swc/helpers@0.5.13)
+      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       nullthrows: 1.1.1
     transitivePeerDependencies:
       - '@parcel/core'
@@ -23400,7 +23305,7 @@ snapshots:
       '@parcel/source-map': 2.1.1
       '@parcel/utils': 2.9.3
       '@parcel/workers': 2.9.3(@parcel/core@2.9.3)
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
       browserslist: 4.24.2
       nullthrows: 1.1.1
       regenerator-runtime: 0.13.11
@@ -23739,10 +23644,10 @@ snapshots:
     transitivePeerDependencies:
       - '@parcel/core'
 
-  '@plasmohq/parcel-config@0.41.1(@swc/core@1.10.4(@swc/helpers@0.5.13))(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)(typescript@5.2.2)':
+  '@plasmohq/parcel-config@0.41.1(@swc/core@1.10.4(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)(typescript@5.2.2)':
     dependencies:
       '@parcel/compressor-raw': 2.9.3(@parcel/core@2.9.3)
-      '@parcel/config-default': 2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(postcss@8.4.33)(terser@5.36.0)(typescript@5.2.2)
+      '@parcel/config-default': 2.9.3(@parcel/core@2.9.3)(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(postcss@8.4.33)(terser@5.36.0)(typescript@5.2.2)
       '@parcel/core': 2.9.3
       '@parcel/optimizer-data-url': 2.9.3(@parcel/core@2.9.3)
       '@parcel/reporter-bundle-buddy': 2.9.3(@parcel/core@2.9.3)
@@ -23766,10 +23671,10 @@ snapshots:
       '@plasmohq/parcel-compressor-utf8': 0.1.1(@parcel/core@2.9.3)
       '@plasmohq/parcel-namer-manifest': 0.3.12
       '@plasmohq/parcel-optimizer-encapsulate': 0.0.8
-      '@plasmohq/parcel-optimizer-es': 0.4.1(@swc/helpers@0.5.13)
+      '@plasmohq/parcel-optimizer-es': 0.4.1(@swc/helpers@0.5.15)
       '@plasmohq/parcel-packager': 0.6.15
       '@plasmohq/parcel-resolver': 0.14.1
-      '@plasmohq/parcel-resolver-post': 0.4.5(@swc/core@1.10.4(@swc/helpers@0.5.13))(postcss@8.4.33)
+      '@plasmohq/parcel-resolver-post': 0.4.5(@swc/core@1.10.4(@swc/helpers@0.5.15))(postcss@8.4.33)
       '@plasmohq/parcel-runtime': 0.25.1
       '@plasmohq/parcel-transformer-inject-env': 0.2.12
       '@plasmohq/parcel-transformer-inline-css': 0.3.11
@@ -23870,13 +23775,13 @@ snapshots:
       '@parcel/source-map': 2.1.1
       '@parcel/types': 2.9.3(@parcel/core@2.9.3)
 
-  '@plasmohq/parcel-optimizer-es@0.4.1(@swc/helpers@0.5.13)':
+  '@plasmohq/parcel-optimizer-es@0.4.1(@swc/helpers@0.5.15)':
     dependencies:
       '@parcel/core': 2.9.3
       '@parcel/plugin': 2.9.3(@parcel/core@2.9.3)
       '@parcel/source-map': 2.1.1
       '@parcel/utils': 2.9.3
-      '@swc/core': 1.3.96(@swc/helpers@0.5.13)
+      '@swc/core': 1.3.96(@swc/helpers@0.5.15)
       nullthrows: 1.1.1
     transitivePeerDependencies:
       - '@swc/helpers'
@@ -23889,14 +23794,14 @@ snapshots:
       '@parcel/utils': 2.9.3
       nullthrows: 1.1.1
 
-  '@plasmohq/parcel-resolver-post@0.4.5(@swc/core@1.10.4(@swc/helpers@0.5.13))(postcss@8.4.33)':
+  '@plasmohq/parcel-resolver-post@0.4.5(@swc/core@1.10.4(@swc/helpers@0.5.15))(postcss@8.4.33)':
     dependencies:
       '@parcel/core': 2.9.3
       '@parcel/hash': 2.9.3
       '@parcel/plugin': 2.9.3(@parcel/core@2.9.3)
       '@parcel/types': 2.9.3(@parcel/core@2.9.3)
       '@parcel/utils': 2.9.3
-      tsup: 7.2.0(@swc/core@1.10.4(@swc/helpers@0.5.13))(postcss@8.4.33)(typescript@5.2.2)
+      tsup: 7.2.0(@swc/core@1.10.4(@swc/helpers@0.5.15))(postcss@8.4.33)(typescript@5.2.2)
       typescript: 5.2.2
     transitivePeerDependencies:
       - '@swc/core'
@@ -26099,10 +26004,10 @@ snapshots:
       - '@types/node'
     optional: true
 
-  '@scalar/nextjs-api-reference@0.4.104(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)':
+  '@scalar/nextjs-api-reference@0.4.104(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)':
     dependencies:
       '@scalar/types': 0.0.23
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       react: 18.3.1
 
   '@scalar/openapi-parser@0.8.10':
@@ -26546,7 +26451,7 @@ snapshots:
   '@swc/core-win32-x64-msvc@1.3.96':
     optional: true
 
-  '@swc/core@1.10.4(@swc/helpers@0.5.13)':
+  '@swc/core@1.10.4(@swc/helpers@0.5.15)':
     dependencies:
       '@swc/counter': 0.1.3
       '@swc/types': 0.1.17
@@ -26561,9 +26466,9 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.10.4
       '@swc/core-win32-ia32-msvc': 1.10.4
       '@swc/core-win32-x64-msvc': 1.10.4
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
 
-  '@swc/core@1.3.96(@swc/helpers@0.5.13)':
+  '@swc/core@1.3.96(@swc/helpers@0.5.15)':
     dependencies:
       '@swc/counter': 0.1.3
       '@swc/types': 0.1.17
@@ -26578,11 +26483,15 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.3.96
       '@swc/core-win32-ia32-msvc': 1.3.96
       '@swc/core-win32-x64-msvc': 1.3.96
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
 
   '@swc/counter@0.1.3': {}
 
   '@swc/helpers@0.5.13':
+    dependencies:
+      tslib: 2.8.1
+
+  '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
 
@@ -32566,7 +32475,7 @@ snapshots:
       - sass
       - supports-color
 
-  fumadocs-core@14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  fumadocs-core@14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@formatjs/intl-localematcher': 0.5.8
       '@orama/orama': 2.1.1
@@ -32584,7 +32493,7 @@ snapshots:
       unist-util-visit: 5.0.0
     optionalDependencies:
       algoliasearch: 4.24.0
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
     transitivePeerDependencies:
@@ -32604,7 +32513,7 @@ snapshots:
       - supports-color
       - typescript
 
-  fumadocs-mdx@11.1.0(acorn@8.14.0)(fumadocs-core@14.0.2(@types/react@18.3.14)(sass@1.83.1))(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  fumadocs-mdx@11.1.0(acorn@8.14.0)(fumadocs-core@14.0.2(@types/react@18.3.14)(sass@1.83.1))(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
       '@mdx-js/mdx': 3.1.0(acorn@8.14.0)
       chokidar: 4.0.1
@@ -32615,13 +32524,13 @@ snapshots:
       fumadocs-core: 14.0.2(@types/react@18.3.14)(sass@1.83.1)
       gray-matter: 4.0.3
       micromatch: 4.0.8
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       zod: 3.23.8
     transitivePeerDependencies:
       - acorn
       - supports-color
 
-  fumadocs-openapi@5.8.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16):
+  fumadocs-openapi@5.8.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16):
     dependencies:
       '@apidevtools/json-schema-ref-parser': 11.7.2
       '@fumari/json-schema-to-typescript': 1.1.2
@@ -32630,12 +32539,12 @@ snapshots:
       '@scalar/openapi-parser': 0.8.10
       class-variance-authority: 0.7.1
       fast-glob: 3.3.2
-      fumadocs-core: 14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      fumadocs-ui: 14.5.6(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16)
+      fumadocs-core: 14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      fumadocs-ui: 14.5.6(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16)
       github-slugger: 2.0.0
       hast-util-to-jsx-runtime: 2.3.2
       js-yaml: 4.1.0
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       openapi-sampler: 1.6.1
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
@@ -32651,10 +32560,10 @@ snapshots:
       - supports-color
       - tailwindcss
 
-  fumadocs-twoslash@1.1.3(fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(shiki@1.24.0)(typescript@5.7.2):
+  fumadocs-twoslash@1.1.3(fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(shiki@1.24.0)(typescript@5.7.2):
     dependencies:
       '@shikijs/twoslash': 1.22.2(typescript@5.7.2)
-      fumadocs-ui: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      fumadocs-ui: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       mdast-util-from-markdown: 2.0.2
       mdast-util-gfm: 3.0.0
       mdast-util-to-hast: 13.2.0
@@ -32677,7 +32586,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
+  fumadocs-ui@14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
     dependencies:
       '@radix-ui/react-accordion': 1.2.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-collapsible': 1.1.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -32692,7 +32601,7 @@ snapshots:
       class-variance-authority: 0.7.1
       cmdk: 1.0.0(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       fumadocs-core: 14.0.2(@types/react@18.3.14)(sass@1.83.1)
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
@@ -32714,7 +32623,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  fumadocs-ui@14.5.6(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16):
+  fumadocs-ui@14.5.6(@types/react-dom@18.3.2)(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwindcss@3.4.16):
     dependencies:
       '@radix-ui/react-accordion': 1.2.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-collapsible': 1.1.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -32726,10 +32635,10 @@ snapshots:
       '@radix-ui/react-slot': 1.1.1(@types/react@18.3.14)(react@18.3.1)
       '@radix-ui/react-tabs': 1.1.1(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       class-variance-authority: 0.7.1
-      fumadocs-core: 14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      fumadocs-core: 14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       lodash.merge: 4.6.2
       lucide-react: 0.465.0(react@18.3.1)
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes: 0.4.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       postcss-selector-parser: 7.0.0
       react: 18.3.1
@@ -32777,13 +32686,9 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.3.1(next@15.0.0-rc.1(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
-      next: 15.0.0-rc.1(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
-
-  geist@1.3.1(next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
-    dependencies:
-      next: 15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
   generate-function@2.3.1:
     dependencies:
@@ -36115,11 +36020,11 @@ snapshots:
       - babel-plugin-macros
     optional: true
 
-  next@15.0.0-rc.1(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
+  next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
     dependencies:
-      '@next/env': 15.0.0-rc.1
+      '@next/env': 15.1.2
       '@swc/counter': 0.1.3
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
       busboy: 1.6.0
       caniuse-lite: 1.0.30001676
       postcss: 8.4.31
@@ -36127,25 +36032,25 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       styled-jsx: 5.1.6(@babel/core@7.26.0)(react@18.3.1)
     optionalDependencies:
-      '@next/swc-darwin-arm64': 15.0.0-rc.1
-      '@next/swc-darwin-x64': 15.0.0-rc.1
-      '@next/swc-linux-arm64-gnu': 15.0.0-rc.1
-      '@next/swc-linux-arm64-musl': 15.0.0-rc.1
-      '@next/swc-linux-x64-gnu': 15.0.0-rc.1
-      '@next/swc-linux-x64-musl': 15.0.0-rc.1
-      '@next/swc-win32-arm64-msvc': 15.0.0-rc.1
-      '@next/swc-win32-x64-msvc': 15.0.0-rc.1
+      '@next/swc-darwin-arm64': 15.1.2
+      '@next/swc-darwin-x64': 15.1.2
+      '@next/swc-linux-arm64-gnu': 15.1.2
+      '@next/swc-linux-arm64-musl': 15.1.2
+      '@next/swc-linux-x64-gnu': 15.1.2
+      '@next/swc-linux-x64-musl': 15.1.2
+      '@next/swc-win32-arm64-msvc': 15.1.2
+      '@next/swc-win32-x64-msvc': 15.1.2
       sass: 1.83.1
       sharp: 0.33.5
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.0.4(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)(sass@1.83.1):
+  next@15.1.2(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)(sass@1.83.1):
     dependencies:
-      '@next/env': 15.0.4
+      '@next/env': 15.1.2
       '@swc/counter': 0.1.3
-      '@swc/helpers': 0.5.13
+      '@swc/helpers': 0.5.15
       busboy: 1.6.0
       caniuse-lite: 1.0.30001676
       postcss: 8.4.31
@@ -36153,40 +36058,14 @@ snapshots:
       react-dom: 19.0.0-rc-7771d3a7-20240827(react@18.3.1)
       styled-jsx: 5.1.6(@babel/core@7.26.0)(react@18.3.1)
     optionalDependencies:
-      '@next/swc-darwin-arm64': 15.0.4
-      '@next/swc-darwin-x64': 15.0.4
-      '@next/swc-linux-arm64-gnu': 15.0.4
-      '@next/swc-linux-arm64-musl': 15.0.4
-      '@next/swc-linux-x64-gnu': 15.0.4
-      '@next/swc-linux-x64-musl': 15.0.4
-      '@next/swc-win32-arm64-msvc': 15.0.4
-      '@next/swc-win32-x64-msvc': 15.0.4
-      sass: 1.83.1
-      sharp: 0.33.5
-    transitivePeerDependencies:
-      - '@babel/core'
-      - babel-plugin-macros
-
-  next@15.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
-    dependencies:
-      '@next/env': 15.0.4
-      '@swc/counter': 0.1.3
-      '@swc/helpers': 0.5.13
-      busboy: 1.6.0
-      caniuse-lite: 1.0.30001676
-      postcss: 8.4.31
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.6(@babel/core@7.26.0)(react@18.3.1)
-    optionalDependencies:
-      '@next/swc-darwin-arm64': 15.0.4
-      '@next/swc-darwin-x64': 15.0.4
-      '@next/swc-linux-arm64-gnu': 15.0.4
-      '@next/swc-linux-arm64-musl': 15.0.4
-      '@next/swc-linux-x64-gnu': 15.0.4
-      '@next/swc-linux-x64-musl': 15.0.4
-      '@next/swc-win32-arm64-msvc': 15.0.4
-      '@next/swc-win32-x64-msvc': 15.0.4
+      '@next/swc-darwin-arm64': 15.1.2
+      '@next/swc-darwin-x64': 15.1.2
+      '@next/swc-linux-arm64-gnu': 15.1.2
+      '@next/swc-linux-arm64-musl': 15.1.2
+      '@next/swc-linux-x64-gnu': 15.1.2
+      '@next/swc-linux-x64-musl': 15.1.2
+      '@next/swc-win32-arm64-msvc': 15.1.2
+      '@next/swc-win32-x64-msvc': 15.1.2
       sass: 1.83.1
       sharp: 0.33.5
     transitivePeerDependencies:
@@ -37234,7 +37113,7 @@ snapshots:
       mlly: 1.7.3
       pathe: 1.1.2
 
-  plasmo@0.89.4(@swc/core@1.10.4(@swc/helpers@0.5.13))(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0):
+  plasmo@0.89.4(@swc/core@1.10.4(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0):
     dependencies:
       '@expo/spawn-async': 1.7.2
       '@parcel/core': 2.9.3
@@ -37242,7 +37121,7 @@ snapshots:
       '@parcel/package-manager': 2.9.3(@parcel/core@2.9.3)
       '@parcel/watcher': 2.2.0
       '@plasmohq/init': 0.7.0
-      '@plasmohq/parcel-config': 0.41.1(@swc/core@1.10.4(@swc/helpers@0.5.13))(@swc/helpers@0.5.13)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)(typescript@5.2.2)
+      '@plasmohq/parcel-config': 0.41.1(@swc/core@1.10.4(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(cssnano@7.0.6(postcss@8.4.33))(lodash@4.17.21)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.36.0)(typescript@5.2.2)
       '@plasmohq/parcel-core': 0.1.10
       buffer: 6.0.3
       chalk: 5.3.0
@@ -40280,7 +40159,7 @@ snapshots:
 
   tsscmp@1.0.6: {}
 
-  tsup@7.2.0(@swc/core@1.10.4(@swc/helpers@0.5.13))(postcss@8.4.33)(typescript@5.2.2):
+  tsup@7.2.0(@swc/core@1.10.4(@swc/helpers@0.5.15))(postcss@8.4.33)(typescript@5.2.2):
     dependencies:
       bundle-require: 4.2.1(esbuild@0.18.20)
       cac: 6.7.14
@@ -40297,14 +40176,14 @@ snapshots:
       sucrase: 3.35.0
       tree-kill: 1.2.2
     optionalDependencies:
-      '@swc/core': 1.10.4(@swc/helpers@0.5.13)
+      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       postcss: 8.4.33
       typescript: 5.2.2
     transitivePeerDependencies:
       - supports-color
       - ts-node
 
-  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.13))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
+  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.24.0)
       cac: 6.7.14
@@ -40324,7 +40203,7 @@ snapshots:
       tree-kill: 1.2.2
     optionalDependencies:
       '@microsoft/api-extractor': 7.47.11(@types/node@22.10.1)
-      '@swc/core': 1.10.4(@swc/helpers@0.5.13)
+      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       postcss: 8.4.49
       typescript: 5.6.1-rc
     transitivePeerDependencies:
@@ -40333,7 +40212,7 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.13))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
+  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.1))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.24.0)
       cac: 6.7.14
@@ -40353,7 +40232,7 @@ snapshots:
       tree-kill: 1.2.2
     optionalDependencies:
       '@microsoft/api-extractor': 7.47.11(@types/node@22.10.1)
-      '@swc/core': 1.10.4(@swc/helpers@0.5.13)
+      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       postcss: 8.4.49
       typescript: 5.7.2
     transitivePeerDependencies:
