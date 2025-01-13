@@ -96,11 +96,11 @@ Here are examples of how you can do caching in different frameworks and envirome
 
 ## SSR Optimizations
 
-Server-side rendering (SSR) is a powerful technique that allows you to render your application on the server and deliver fully rendered HTML to the client, 
-significantly enhancing performance, especially for data-intensive or complex applications. 
-To optimize SSR, minimize client-side data fetching by offloading data gathering to the server, 
-which reduces initial load times. Implement caching strategies for frequently accessed data to decrease server load and improve response times. 
-Additionally, simplify your rendering logic to ensure efficient server-side processing, consider using streaming to send parts of the rendered HTML as they become available, 
+Server-side rendering (SSR) is a powerful technique that allows you to render your application on the server and deliver fully rendered HTML to the client,
+significantly enhancing performance, especially for data-intensive or complex applications.
+To optimize SSR, minimize client-side data fetching by offloading data gathering to the server,
+which reduces initial load times. Implement caching strategies for frequently accessed data to decrease server load and improve response times.
+Additionally, simplify your rendering logic to ensure efficient server-side processing, consider using streaming to send parts of the rendered HTML as they become available,
 and prioritize critical data for the initial render while loading less essential data asynchronously afterward.
 
 ## Database optimizations
@@ -139,7 +139,8 @@ You can read more about indexes in the <Link href="https://en.wikipedia.org/wiki
 ### Using a connection pool
 
 A connection pool is a critical component for optimizing database interactions in Better Auth, particularly in high-traffic scenarios where multiple authentication requests occur simultaneously.
-Here’s how to effectively implement connection pooling:
+
+Here are some benefits of using a connection pool and some configuration options to consider:
 
 1. **Benefits of Connection Pools**:
 
