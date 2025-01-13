@@ -243,7 +243,8 @@ It has the following properties:
             const { // [!code highlight]
                 data: session, // [!code highlight]
                 isPending, //loading state // [!code highlight]
-                error //error object // [!code highlight]
+                error, //error object // [!code highlight]
+                refetch //refetch the session
             } = authClient.useSession() // [!code highlight]
 
             return (
