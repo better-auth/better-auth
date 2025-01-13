@@ -4,13 +4,10 @@ export const expo: () => BetterAuthPlugin = () => {
 	return {
 		id: "expo",
 		init: (ctx) => {
-			const opt_trustedOrigins = Array.isArray(ctx.options.trustedOrigins)
-				? ctx.options.trustedOrigins
-				: ctx.options.trustedOrigins();
 			const trustedOrigins =
 				process.env.NODE_ENV === "development"
-					? [...(opt_trustedOrigins || []), "exp://"]
-					: opt_trustedOrigins;
+					? [...(ctx.trustedOrigins || []), "exp://"]
+					: ctx.trustedOrigins;
 			return {
 				options: {
 					trustedOrigins,
@@ -49,11 +46,9 @@ export const expo: () => BetterAuthPlugin = () => {
 						if (!location) {
 							return;
 						}
-						const trustedOrigins = (
-							Array.isArray(ctx.context.trustedOrigins)
-								? ctx.context.trustedOrigins
-								: ctx.context.trustedOrigins()
-						).filter((origin: string) => !origin.startsWith("http"));
+						const trustedOrigins = ctx.context.trustedOrigins.filter(
+							(origin: string) => !origin.startsWith("http"),
+						);
 						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
 							location?.startsWith(origin),
 						);
