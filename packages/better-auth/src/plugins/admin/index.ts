@@ -884,6 +884,29 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					});
 				},
 			),
+			setUserPassword: createAuthEndpoint(
+				"/admin/set-user-password",
+				{
+					method: "POST",
+					body: z.object({
+						newPassword: z.string(),
+						userId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.newPassword,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						ctx.body.userId,
+						hashedPassword,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
 		},
 		$ERROR_CODES: ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
