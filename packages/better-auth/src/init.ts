@@ -149,7 +149,7 @@ export type AuthContext = {
 	options: BetterAuthOptions;
 	appName: string;
 	baseURL: string;
-	trustedOrigins: string[] | (() => string[]);
+	trustedOrigins: string[];
 	/**
 	 * New session that will be set after the request
 	 * meaning: there is a `set-cookie` header that will set
@@ -254,8 +254,8 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 		return [];
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins) {
-		trustedOrigins.push(...(Array.isArray(options.trustedOrigins) ? options.trustedOrigins : options.trustedOrigins()));
+	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
+		trustedOrigins.push(...options.trustedOrigins);
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {

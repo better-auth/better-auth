@@ -414,7 +414,9 @@ export type BetterAuthOptions = {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[] | (() => string[]);
+	trustedOrigins?:
+		| string[]
+		| ((request: Request) => string[] | Promise<string[]>);
 	/**
 	 * Rate limiting configuration
 	 */

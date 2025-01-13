@@ -9,7 +9,7 @@ import type { GenericEndpointContext } from "src/types";
  * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST") {
+	if (ctx.request?.method !== "POST" || !ctx.request) {
 		return;
 	}
 	const { body, query, context } = ctx;
@@ -20,9 +20,12 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const currentURL = query?.currentURL;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
-	const trustedOrigins: string[] = Array.isArray(context.trustedOrigins)
+	const trustedOrigins: string[] = Array.isArray(context.options.trustedOrigins)
 		? context.trustedOrigins
-		: context.trustedOrigins();
+		: [
+				...context.trustedOrigins,
+				...((await context.options.trustedOrigins?.(ctx.request)) || []),
+			];
 	const usesCookies = ctx.headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
@@ -66,11 +69,19 @@ export const originCheck = (
 	getValue: (ctx: GenericEndpointContext) => string,
 ) =>
 	createAuthMiddleware(async (ctx) => {
+		if (!ctx.request) {
+			return;
+		}
 		const { context } = ctx;
 		const callbackURL = getValue(ctx);
-		const trustedOrigins: string[] = Array.isArray(context.trustedOrigins)
+		const trustedOrigins: string[] = Array.isArray(
+			context.options.trustedOrigins,
+		)
 			? context.trustedOrigins
-			: context.trustedOrigins();
+			: [
+					...context.trustedOrigins,
+					...((await context.options.trustedOrigins?.(ctx.request)) || []),
+				];
 
 		const matchesPattern = (url: string, pattern: string): boolean => {
 			if (url.startsWith("/")) {
