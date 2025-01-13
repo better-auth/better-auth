@@ -35,6 +35,7 @@ import {
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
+	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
@@ -210,6 +211,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),

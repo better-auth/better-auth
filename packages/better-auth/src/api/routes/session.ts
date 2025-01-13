@@ -293,6 +293,16 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	};
 });
 
+export const requestOnlySessionMiddleware = createAuthMiddleware(
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session?.session && (ctx.request || ctx.headers)) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		return { session };
+	},
+);
+
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
