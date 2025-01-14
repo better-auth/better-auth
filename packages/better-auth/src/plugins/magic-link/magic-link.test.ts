@@ -100,6 +100,39 @@ describe("magic link", async () => {
 			},
 		);
 	});
+
+	it("should signup with magic link", async () => {
+		const email = "new-email@email.com";
+		await client.signIn.magicLink({
+			email,
+			name: "test",
+		});
+		expect(verificationEmail).toMatchObject({
+			email,
+			url: expect.stringContaining(
+				"http://localhost:3000/api/auth/magic-link/verify",
+			),
+		});
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			name: "test",
+			email: "new-email@email.com",
+			emailVerified: true,
+		});
+	});
 });
 
 describe("magic link verify", async () => {
