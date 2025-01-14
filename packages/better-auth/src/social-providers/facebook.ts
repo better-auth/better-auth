@@ -61,26 +61,29 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			/* limited login */
-			try {
-				const { payload: jwtClaims } = await jwtVerify(
-					token,
-					createRemoteJWKSet(
-						new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
-					),
-					{
-						algorithms: ["RS256"],
-						audience: options.clientId,
-						issuer: "https://www.facebook.com",
-					},
-				);
-
-				if (nonce && jwtClaims.nonce !== nonce) {
+			// check is limited token 
+			if (token.split('.').length) {
+				try {
+					const { payload: jwtClaims } = await jwtVerify(
+						token,
+						createRemoteJWKSet(
+							new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
+						),
+						{
+							algorithms: ["RS256"],
+							audience: options.clientId,
+							issuer: "https://www.facebook.com",
+						},
+					);
+	
+					if (nonce && jwtClaims.nonce !== nonce) {
+						return false;
+					}
+	
+					return !!jwtClaims;
+				} catch (error) {
 					return false;
 				}
-
-				return !!jwtClaims;
-			} catch (error) {
-				return false;
 			}
 
 			/* access_token */
