@@ -61,8 +61,8 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			/* limited login */
-			// check is limited token 
-			if (token.split('.').length) {
+			// check is limited token
+			if (token.split(".").length) {
 				try {
 					const { payload: jwtClaims } = await jwtVerify(
 						token,
@@ -75,11 +75,11 @@ export const facebook = (options: FacebookOptions) => {
 							issuer: "https://www.facebook.com",
 						},
 					);
-	
+
 					if (nonce && jwtClaims.nonce !== nonce) {
 						return false;
 					}
-	
+
 					return !!jwtClaims;
 				} catch (error) {
 					return false;
