@@ -59,6 +59,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 								description: "Email address to send the magic link",
 							})
 							.email(),
+						name: z
+							.string({
+								description:
+									"User display name. Only used if the user is registering for the first time.",
+							})
+							.optional(),
 						callbackURL: z
 							.string({
 								description: "URL to redirect after magic link verification",
@@ -105,7 +111,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const verificationToken = generateRandomString(32, "a-z", "A-Z");
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
-						value: email,
+						value: JSON.stringify({ email, name: ctx.body.name }),
 						expiresAt: new Date(
 							Date.now() + (options.expiresIn || 60 * 5) * 1000,
 						),
@@ -192,7 +198,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
 					);
-					const email = tokenValue.value;
+					const { email, name } = JSON.parse(tokenValue.value) as {
+						email: string;
+						name?: string;
+					};
 					let user = await ctx.context.internalAdapter
 						.findUserByEmail(email)
 						.then((res) => res?.user);
@@ -202,7 +211,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
 								emailVerified: true,
-								name: email,
+								name: name || email,
 							});
 							user = newUser;
 							if (!user) {
