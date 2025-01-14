@@ -557,7 +557,6 @@
     }
   },
   "devDependencies": {
-    "@better-fetch/fetch": "1.1.12",
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
