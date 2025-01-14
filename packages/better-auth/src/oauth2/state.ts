@@ -28,6 +28,7 @@ export async function generateState(
 		 * This is the actual expiry time of the state
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
+		requestSignUp: c.body?.requestSignUp,
 	});
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
@@ -74,6 +75,7 @@ export async function parseState(c: GenericEndpointContext) {
 					userId: z.string(),
 				})
 				.optional(),
+			requestSignUp: z.boolean().optional(),
 		})
 		.parse(JSON.parse(data.value));
 
