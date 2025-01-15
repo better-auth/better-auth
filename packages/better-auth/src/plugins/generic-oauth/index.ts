@@ -492,7 +492,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						tokens = await validateAuthorizationCode({
 							code,
-							codeVerifier,
+							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
 							options: {
 								clientId: provider.clientId,
