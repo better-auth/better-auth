@@ -3,6 +3,7 @@ export * from "./types";
 export * from "./error";
 export * from "./cookies";
 export * from "./utils";
+export * from "./adapters/test"
 //@ts-expect-error
 export type * from "better-call";
 export type * from "zod";
