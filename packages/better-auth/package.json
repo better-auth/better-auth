@@ -251,6 +251,16 @@
         "default": "./dist/adapters/memory.cjs"
       }
     },
+    "./adapters/test": {
+      "import": {
+        "types": "./dist/adapters/test.d.ts",
+        "default": "./dist/adapters/test.js"
+      },
+      "require": {
+        "types": "./dist/adapters/test.d.cts",
+        "default": "./dist/adapters/test.cjs"
+      }
+    },
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access.d.ts",
