@@ -51,14 +51,14 @@
         "default": "./dist/client.cjs"
       }
     },
-    "./adapter": {
+    "./adapters": {
       "import": {
-        "types": "./dist/adapter.d.ts",
-        "default": "./dist/adapter.js"
+        "types": "./dist/adapters.d.ts",
+        "default": "./dist/adapters.js"
       },
       "require": {
-        "types": "./dist/adapter.d.cts",
-        "default": "./dist/adapter.cjs"
+        "types": "./dist/adapters.d.cts",
+        "default": "./dist/adapters.cjs"
       }
     },
     "./client/plugins": {
