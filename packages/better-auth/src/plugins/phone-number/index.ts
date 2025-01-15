@@ -178,7 +178,7 @@ export const phoneNumber = (options?: {
 						model: "user",
 						where: [
 							{
-								field: "phoneNumber",
+								field: opts.phoneNumber,
 								value: phoneNumber,
 							},
 						],
@@ -456,8 +456,8 @@ export const phoneNumber = (options?: {
 						model: "user",
 						where: [
 							{
-								value: ctx.body.phoneNumber,
 								field: opts.phoneNumber,
+								value: ctx.body.phoneNumber,
 							},
 						],
 					});
