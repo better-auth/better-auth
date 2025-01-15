@@ -109,15 +109,14 @@ To sign a user in, you can use the `signIn.email` function provided by the clien
 ```svelte title="signin.svelte"
 <script lang="ts">
 import { authClient } from "$lib/auth-client"; //import the auth client // [!code highlight]
-import { writable } from "svelte/store";
 
-const email = writable("");
-const password = writable("");
+const email = $state("");
+const password = $state("");
 
 const handleSignIn = async () => {
     await authClient.signIn.email({ // [!code highlight]
-        email: $email, // [!code highlight]
-        password: $password, // [!code highlight]
+        email // [!code highlight]
+        password // [!code highlight]
     }, { // [!code highlight]
         onRequest: () => { // [!code highlight]
             //show loading // [!code highlight]
@@ -133,8 +132,8 @@ const handleSignIn = async () => {
 </script>
 
 <div>
-    <input type="email" bind:value={$email} />
-    <input type="password" bind:value={$password} />
+    <input type="email" bind:value={email} />
+    <input type="password" bind:value={password} />
     <button on:click={handleSignIn}>
       Sign In
     </button>
