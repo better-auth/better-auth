@@ -51,16 +51,6 @@
         "default": "./dist/client.cjs"
       }
     },
-    "./adapters": {
-      "import": {
-        "types": "./dist/adapters.d.ts",
-        "default": "./dist/adapters.js"
-      },
-      "require": {
-        "types": "./dist/adapters.d.cts",
-        "default": "./dist/adapters.cjs"
-      }
-    },
     "./client/plugins": {
       "import": {
         "types": "./dist/client/plugins.d.ts",
@@ -259,6 +249,16 @@
       "require": {
         "types": "./dist/adapters/memory.d.cts",
         "default": "./dist/adapters/memory.cjs"
+      }
+    },
+    "./adapters/test": {
+      "import": {
+        "types": "./dist/adapters/test.d.ts",
+        "default": "./dist/adapters/test.js"
+      },
+      "require": {
+        "types": "./dist/adapters/test.d.cts",
+        "default": "./dist/adapters/test.cjs"
       }
     },
     "./plugins/access": {
