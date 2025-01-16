@@ -349,6 +349,33 @@ To get the full details of an organization, you can use the `getFullOrganization
 </Tabs>
 
 
+### Delete Organization
+
+To remove user owned organization, you can use `organization.delete`
+
+```ts title="org.ts"
+await authClient.organization.delete({
+  organizationId: "test"
+});
+```
+
+If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
+
+You can configure how organization deletion is handled through `organizationDeletion` option:
+
+```ts
+const auth = betterAuth({
+  organizationDeletion: {
+    disabled: true, //to disable it altogether
+    beforeDelete: async(data, request)=>{
+      // a callback to run before deleting org
+    },
+    afterDelete: async(data, request)=>{
+      // a callback to run after deleting org
+    }
+  }
+})
+```
 
 ## Invitations
 
