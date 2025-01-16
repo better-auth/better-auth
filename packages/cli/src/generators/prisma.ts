@@ -51,7 +51,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const originalTable = tables[table]?.modelName;
 			const modelName = capitalizeFirstLetter(originalTable || "");
 
-			function getType(type: FieldType, isOptional: boolean, isBigint: boolean) {
+			function getType(
+				type: FieldType,
+				isOptional: boolean,
+				isBigint: boolean,
+			) {
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
 				}
@@ -106,7 +110,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 				builder
 					.model(modelName)
-					.field(field, getType(attr.type, !attr?.required, attr?.bigint || false));
+					.field(
+						field,
+						getType(attr.type, !attr?.required, attr?.bigint || false),
+					);
 				if (attr.unique) {
 					builder.model(modelName).blockAttribute(`unique([${field}])`);
 				}
