@@ -237,18 +237,20 @@ const options = {
   ]
 } satisfies BetterAuthOptions;
 
+const { plugins: partialPlugins, ...rest } = options
+
 export const auth = betterAuth({
-    ...options,
-    plugins: [{
-        ...options.plugins,
+    ...rest,
+    plugins: [
+        ...partialPlugins,
         customSession(async ({ user, session }) => {
             // now both user and session will infer the fields added by plugins and your custom fields
             return {
                 user,
                 session
             }
-        }, options), // pass options here  // [!code highlight]
-    }]
+        }, rest), // pass options here  // [!code highlight]
+    ]
 })
 ```
 
