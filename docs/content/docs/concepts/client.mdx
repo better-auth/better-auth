@@ -303,21 +303,38 @@ The client instance contains $ERROR_CODES object that contains all the error cod
 ```ts title="auth-client.ts"
 const authClient = createAuthClient();
 
-const myCustomErrorCodes = {
-	[authClient.$ERROR_CODES.USER_ALREADY_EXISTS]: {
-		en: "User already exists",
-		es: "El usuario ya existe",
+type ErrorTypes = Partial<
+	Record<
+		keyof typeof client.$ERROR_CODES,
+		{
+			en: string;
+			es: string;
+		}
+	>
+>;
+
+const errorCodes = {
+	USER_ALREADY_EXISTS: {
+		en: "user already registered",
+		es: "usuario ya registrada",
 	},
+} satisfies ErrorTypes;
+
+const getErrorMessage = (code: string, lang: "en" | "es") => {
+	if (code in errorCodes) {
+		return errorCodes[code as keyof typeof errorCodes][lang];
+	}
+	return "";
 };
+
 
 const { error } = await authClient.signUp.email({
 	email: "user@email.com",
 	password: "password",
 	name: "User",
 });
-
-if (error?.message) {
-	alert(myCustomErrorCodes[error.message].en);
+if(error?.code){
+    alert(getErrorMessage(error.code), "en");
 }
 ```
 
