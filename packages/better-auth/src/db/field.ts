@@ -74,6 +74,10 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	};
 	unique?: boolean;
 	/**
+	 * If the field should be a bigint on the database instead of integer.
+	 */
+	bigint?: boolean;
+	/**
 	 * A zod schema to validate the value.
 	 */
 	validator?: {

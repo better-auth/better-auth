@@ -80,7 +80,7 @@ export type AdapterSchemaCreation = {
 	code: string;
 	/**
 	 * Path to the file, including the file name and extension.
-	 * Relative paths are supported, with the current working directory devs as the base.
+	 * Relative paths are supported, with the current working directory of the developer's project as the base.
 	 */
 	path: string;
 	/**

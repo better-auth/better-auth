@@ -15,7 +15,7 @@ import { Pool } from "pg";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters";
 import { createPool } from "mysql2/promise";
-import { bearer } from "src/plugins";
+import { bearer } from "../../src/plugins";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,

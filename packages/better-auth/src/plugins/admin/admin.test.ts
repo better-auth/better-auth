@@ -331,6 +331,24 @@ describe("Admin plugin", async () => {
 		expect(sessions2.data?.sessions.length).toBe(0);
 	});
 
+	it("should list with ne", async () => {
+		const response = await client.admin.listUsers({
+			query: {
+				sortBy: "createdAt",
+				sortDirection: "desc",
+				filterField: "role",
+				filterOperator: "ne",
+				filterValue: "user",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(response.data?.users.length).toBe(2);
+		const roles = response.data?.users.map((d) => d.role);
+		expect(roles).not.toContain("user");
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{

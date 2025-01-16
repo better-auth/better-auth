@@ -1,6 +1,6 @@
 import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
-import { getRandomValues } from "uncrypto";
+import { getRandomValues } from "@better-auth/utils";
 import { hex } from "@better-auth/utils/hex";
 
 const config = {

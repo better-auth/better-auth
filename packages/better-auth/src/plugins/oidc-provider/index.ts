@@ -736,3 +736,4 @@ export const oidcProvider = (options: OIDCOptions) => {
 		schema,
 	} satisfies BetterAuthPlugin;
 };
+export type * from "./types";

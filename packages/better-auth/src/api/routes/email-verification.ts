@@ -53,7 +53,7 @@ export async function sendVerificationEmailFn(
 		ctx.context.options.emailVerification?.expiresIn,
 	);
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		ctx.body.callbackURL || "/"
 	}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
@@ -69,15 +69,6 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
-		query: z
-			.object({
-				currentURL: z
-					.string({
-						description: "The URL to use for email verification callback",
-					})
-					.optional(),
-			})
-			.optional(),
 		body: z.object({
 			email: z
 				.string({

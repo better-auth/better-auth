@@ -17,22 +17,3 @@ export const redirectPlugin = {
 		},
 	},
 } satisfies BetterFetchPlugin;
-
-export const addCurrentURL = {
-	id: "add-current-url",
-	name: "Add current URL",
-	hooks: {
-		onRequest(context) {
-			if (typeof window !== "undefined" && window.location) {
-				if (window.location) {
-					try {
-						const url = new URL(context.url);
-						url.searchParams.set("currentURL", window.location.href);
-						context.url = url;
-					} catch {}
-				}
-			}
-			return context;
-		},
-	},
-} satisfies BetterFetchPlugin;

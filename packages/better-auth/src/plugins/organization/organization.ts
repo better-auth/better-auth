@@ -181,6 +181,45 @@ export interface OrganizationOptions {
 			};
 		};
 	};
+	/**
+	 * Configure how organization deletion is handled
+	 */
+	organizationDeletion?: {
+		/**
+		 * disable deleting organization
+		 */
+		disabled?: boolean;
+		/**
+		 * A callback that runs before the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		beforeDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+		/**
+		 * A callback that runs after the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		afterDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
