@@ -228,13 +228,13 @@ const { data: sessionData } = await authClient.getSession();
 However, as a workaround, you can pull up your auth options and pass it to the plugin to infer the fields.
 
 ```ts
-import { betterAuth, BetterAuthOptions } from "better-auth";
+import { betterAuth, BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 
 const options = {
   //...config options
   plugins: [
     //...plugins
-  ]
+  ] as Array<BetterAuthPlugin>
 } satisfies BetterAuthOptions;
 
 const { plugins: partialPlugins, ...rest } = options
