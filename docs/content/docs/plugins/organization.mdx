@@ -349,6 +349,25 @@ To get the full details of an organization, you can use the `getFullOrganization
 </Tabs>
 
 
+### Update Organization
+
+To update organization info, you can use `organization.update`
+
+
+```ts 
+await client.organization.update({
+  data: {
+    name: "updated-name",
+    logo: "new-logo.url",
+    metadata: {
+      customerId: "test"
+    },
+    slug: "updated-slug"
+  },
+  organizationId: 'org-id' //defaults to the current active organization
+})
+```
+
 ### Delete Organization
 
 To remove user owned organization, you can use `organization.delete`
