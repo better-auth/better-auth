@@ -6,3 +6,4 @@ export * from "./to-zod";
 export * from "./utils";
 export * from "./get-migration";
 export * from "./get-schema";
+export * from "./schema";
