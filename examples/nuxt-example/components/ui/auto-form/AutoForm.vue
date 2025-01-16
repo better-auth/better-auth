@@ -4,14 +4,12 @@ import type { ZodAny, z } from "zod";
 import { toTypedSchema } from "@vee-validate/zod";
 import type { FormContext, GenericObject } from "vee-validate";
 import {
-	type ZodObjectOrWrapped,
 	getBaseSchema,
 	getBaseType,
 	getDefaultValueInZodStack,
 	getObjectFormSchema,
 } from "./utils";
 import type { Config, ConfigItem, Dependency, Shape } from "./interface";
-import AutoFormField from "./AutoFormField.vue";
 import { provideDependencies } from "./dependencies";
 import { Form } from "@/components/ui/form";
 

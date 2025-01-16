@@ -9,7 +9,6 @@ import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
-import D from "path";
 
 let possiblePaths = ["auth.ts", "auth.tsx"];
 

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { init } from "./init";
 import Database from "better-sqlite3";
 import { betterAuth } from "./auth";

@@ -1,4 +1,4 @@
-import { ChevronLeft, Copy, Mail, Moon, PlusIcon, Sun } from "lucide-react";
+import { Moon, PlusIcon, Sun } from "lucide-react";
 import {
 	Dialog,
 	DialogContent,
@@ -28,8 +28,6 @@ import { useAtom } from "jotai";
 import { optionsAtom } from "./store";
 import { useTheme } from "next-themes";
 import { ScrollArea } from "../ui/scroll-area";
-import { Button } from "../ui/button";
-import Link from "next/link";
 const frameworks = [
 	{
 		title: "Next.js",

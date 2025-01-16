@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	MenubarRadioGroup,
 	type MenubarRadioGroupEmits,
 	type MenubarRadioGroupProps,
 	useForwardPropsEmits,

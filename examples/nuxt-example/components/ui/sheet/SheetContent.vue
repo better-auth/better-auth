@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
 import {
-	DialogClose,
-	DialogContent,
 	type DialogContentEmits,
 	type DialogContentProps,
-	DialogOverlay,
-	DialogPortal,
 	useForwardPropsEmits,
 } from "radix-vue";
-import { Cross2Icon } from "@radix-icons/vue";
-import { type SheetVariants, sheetVariants } from ".";
-import { cn } from "@/lib/utils";
+import { type SheetVariants } from ".";
 
 interface SheetContentProps extends DialogContentProps {
 	class?: HTMLAttributes["class"];

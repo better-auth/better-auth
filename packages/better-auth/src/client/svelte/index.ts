@@ -6,8 +6,6 @@ import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
-	InferSessionFromClient,
-	InferUserFromClient,
 	IsSignal,
 } from "../types";
 import { createDynamicPathProxy } from "../proxy";

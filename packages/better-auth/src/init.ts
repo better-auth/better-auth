@@ -215,10 +215,11 @@ function runPluginInit(ctx: AuthContext) {
 			const result = plugin.init(ctx);
 			if (typeof result === "object") {
 				if (result.options) {
-					if (result.options.databaseHooks) {
-						dbHooks.push(result.options.databaseHooks);
+					const { databaseHooks, ...restOpts } = result.options;
+					if (databaseHooks) {
+						dbHooks.push(databaseHooks);
 					}
-					options = defu(options, result.options);
+					options = defu(options, restOpts);
 				}
 				if (result.context) {
 					context = {

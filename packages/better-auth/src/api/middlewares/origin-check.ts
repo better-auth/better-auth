@@ -1,8 +1,8 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
 import { wildcardMatch } from "../../utils/wildcard";
-import { getHost } from "../../utils/url";
-import type { GenericEndpointContext } from "src/types";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
+import type { GenericEndpointContext } from "../../types";
 
 /**
  * A middleware to validate callbackURL and origin against
@@ -17,7 +17,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
-	const currentURL = query?.currentURL;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
 	const trustedOrigins = context.trustedOrigins;
@@ -30,7 +29,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		if (pattern.includes("*")) {
 			return wildcardMatch(pattern)(getHost(url));
 		}
-		return url.startsWith(pattern);
+
+		const protocol = getProtocol(url);
+		return protocol === "http:" || protocol === "https:" || !protocol
+			? pattern === getOrigin(url)
+			: url.startsWith(pattern);
 	};
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
@@ -55,9 +58,8 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
-	currentURL && validateURL(currentURL, "currentURL");
 	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
-	newUserCallbackURL && validateURL(redirectURL, "newUserCallbackURL");
+	newUserCallbackURL && validateURL(newUserCallbackURL, "newUserCallbackURL");
 });
 
 export const originCheck = (

@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Progress as ProgressPrimitive } from "bits-ui";
-import { cn } from "$lib/utils.js";
 
 type $$Props = ProgressPrimitive.Props;
 

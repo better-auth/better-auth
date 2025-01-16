@@ -6,7 +6,7 @@ import type {
 	HookBeforeHandler,
 } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AdapterInstance, SecondaryStorage, Where } from "./adapter";
+import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
@@ -356,6 +356,16 @@ export type BetterAuthOptions = {
 		 * @default false
 		 */
 		storeSessionInDatabase?: boolean;
+		/**
+		 * By default, sessions are deleted from the database when secondary storage
+		 * is provided when session is revoked.
+		 *
+		 * Set this to true to preserve session records in the database,
+		 * even if they are deleted from the secondary storage.
+		 *
+		 * @default false
+		 */
+		preserveSessionInDatabase?: boolean;
 		/**
 		 * Enable caching session in cookie
 		 */

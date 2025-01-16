@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import {
-	createAuthorizationURL,
-	getOAuth2Tokens,
-	validateAuthorizationCode,
-} from "../oauth2";
+import { createAuthorizationURL, getOAuth2Tokens } from "../oauth2";
 
 export interface RedditProfile {
 	id: string;
