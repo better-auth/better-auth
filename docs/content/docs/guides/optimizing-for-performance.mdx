@@ -8,9 +8,29 @@ In this guide, we’ll go over some of the ways you can optimize your applicatio
 ## Caching
 
 Caching is a powerful technique that can significantly improve the performance of your Better Auth application by reducing the number of database queries and speeding up response times.
-The choice between client side and server side caching depends on the framework and the specific use case.
 
-Here are examples of how you can do caching in different frameworks and enviroments:
+### Cookie Cache
+
+Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
+
+To turn on cookie caching, just set `session.cookieCache` in your auth config:
+
+```ts title="auth.ts"
+const auth = new BetterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60 // Cache duration in seconds
+        }
+    }
+});
+```
+
+Read more about [cookie caching](/docs/concepts/session-management#cookie-cache).
+
+### Framework Caching
+
+Here are examples of how you can do caching in different frameworks and environments:
 
 <Tabs items={["NextJs", "Remix", "Solid Start", "React Query"]}>
   <Tab value="NextJS">
