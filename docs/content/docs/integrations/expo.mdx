@@ -363,6 +363,8 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ## Options
 
+### Expo Client
+
 **storage**: the storage mechanism used to cache the session data and cookies.
 
 ```ts title="src/auth-client.ts"
@@ -396,3 +398,10 @@ const authClient = createAuthClient({
     disableCache: true
 });
 ```
+
+
+### Expo Servers
+
+Server plugin options:
+
+**overrideOrigin**: Override the origin for expo API routes (default: false). Enable this if you're facing cors origin issues with expo API routes.
