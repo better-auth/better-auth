@@ -44,7 +44,7 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 				where: [{ field: "key", value: key }],
 			});
 			const data = res[0];
-			
+
 			if (typeof data?.lastRequest === "bigint") {
 				data.lastRequest = Number(data.lastRequest);
 			}
