@@ -181,6 +181,7 @@ function getPageLinks(path: string) {
 	const current_category = contents.find(
 		(x) => x.list.find((x) => x.href === path)!,
 	)!;
+	if (!current_category) return { nextPage: undefined, prevPage: undefined };
 	const current_page = current_category.list.find((x) => x.href === path)!;
 	let next_page =
 		current_category.list[
