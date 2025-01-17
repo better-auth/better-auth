@@ -205,11 +205,9 @@ export const resetPassword = createAuthEndpoint(
 			newPassword: z.string({
 				description: "The new password to set",
 			}),
-			token: z
-				.string({
-					description: "The token to reset the password",
-				})
-				.optional(),
+			token: z.string({
+				description: "The token to reset the password",
+			}),
 		}),
 		metadata: {
 			openapi: {
