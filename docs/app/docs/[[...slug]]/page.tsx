@@ -189,8 +189,8 @@ function getPageLinks(path: string) {
 
 	// the next page in the array.
 	let next_page =
-		current_category.list[
-			current_category.list.findIndex((x) => x.href === current_page.href) + 1
+		current_category.list.filter(x => !x.group)[
+			current_category.list.filter(x => !x.group).findIndex((x) => x.href === current_page.href) + 1
 		];
 	//if there isn't a next page, then go to next cat's page.
 	if (!next_page) {
@@ -203,8 +203,8 @@ function getPageLinks(path: string) {
 	}
 	// the prev page in the array.
 	let prev_page =
-		current_category.list[
-			current_category.list.findIndex((x) => x.href === current_page.href) - 1
+		current_category.list.filter(x => !x.group)[
+			current_category.list.filter(x => !x.group).findIndex((x) => x.href === current_page.href) - 1
 		];
 	// if there isn't a prev page, then go to prev cat's page.
 	if (!prev_page) {
