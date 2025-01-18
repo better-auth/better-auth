@@ -324,12 +324,12 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to disable email matching in the account linking settings. 
+  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings. 
   ```ts title="auth.ts"
   const auth = new BetterAuth({
       account: {
           accountLinking: {
-              requireEmailMatch: false
+              allowDifferentEmails: true
           }
       },
   });
