@@ -178,16 +178,19 @@ export async function generateMetadata({
 }
 
 function getPageLinks(path: string) {
-	const current_category = contents.find(
+	const current_category_index = contents.findIndex(
 		(x) => x.list.find((x) => x.href === path)!,
 	)!;
+	const current_category = contents[current_category_index];
 	if (!current_category) return { nextPage: undefined, prevPage: undefined };
+	let next_category = contents[current_category_index + 1];
+	if(!next_category) next_category = contents[0];
 	const current_page = current_category.list.find((x) => x.href === path)!;
 	let next_page =
 		current_category.list[
 			current_category.list.findIndex((x) => x.href === current_page.href) + 1
 		];
-	if (!next_page) next_page = current_category.list[0];
+	if (!next_page) next_page = next_category.list[0];
 	let prev_page =
 		current_category.list[
 			current_category.list.findIndex((x) => x.href === current_page.href) - 1
