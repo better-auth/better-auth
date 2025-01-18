@@ -98,12 +98,11 @@ export const twitter = (options: TwitterOption) => {
 		id: "twitter",
 		name: "Twitter",
 		createAuthorizationURL(data) {
-			const _scopes = data.scopes || [
-				"users.read",
-				"tweet.read",
-				"offline.access",
-			];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["users.read", "tweet.read", "offline.access"];
 			options.scope && _scopes.push(...options.scope);
+			data.scopes && _scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "twitter",
 				options,
