@@ -183,20 +183,37 @@ function getPageLinks(path: string) {
 	)!;
 	const current_category = contents[current_category_index];
 	if (!current_category) return { nextPage: undefined, prevPage: undefined };
-	let next_category = contents[current_category_index + 1];
-	if(!next_category) next_category = contents[0];
+
+	// user's current page.
 	const current_page = current_category.list.find((x) => x.href === path)!;
+
+	// the next page in the array.
 	let next_page =
 		current_category.list[
 			current_category.list.findIndex((x) => x.href === current_page.href) + 1
 		];
-	if (!next_page) next_page = next_category.list[0];
+	//if there isn't a next page, then go to next cat's page.
+	if (!next_page) {
+		// get next cat
+		let next_category = contents[current_category_index + 1];
+		// if doesn't exist, return to first cat.
+		if (!next_category) next_category = contents[0];
+
+		next_page = next_category.list[0];
+	}
+	// the prev page in the array.
 	let prev_page =
 		current_category.list[
 			current_category.list.findIndex((x) => x.href === current_page.href) - 1
 		];
-	if (!prev_page)
-		prev_page = current_category.list[current_category.list.length - 1];
+	// if there isn't a prev page, then go to prev cat's page.
+	if (!prev_page) {
+		// get prev cat
+		let prev_category = contents[current_category_index - 1];
+		// if doesn't exist, return to last cat.
+		if (!prev_category) prev_category = contents[contents.length - 1];
+		prev_page = prev_category.list[prev_category.list.length - 1];
+	}
 
 	const pages = source.getPages();
 	const next_page2 = pages.find((x) => x.url === next_page.href);
