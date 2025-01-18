@@ -412,6 +412,12 @@ export type BetterAuthOptions = {
 			trustedProviders?: Array<
 				LiteralUnion<SocialProviderList[number] | "email-password", string>
 			>;
+			/**
+			 * If disabled (false), this will allow users to manually linking accounts with different email addresses than the main user.
+			 * 
+			 * @default true
+			 */
+			requireEmailMatch?: boolean;
 		};
 	};
 	/**
