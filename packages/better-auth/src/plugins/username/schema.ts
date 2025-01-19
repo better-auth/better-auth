@@ -14,6 +14,10 @@ export const schema = {
 					},
 				},
 			},
+			displayUsername: {
+				type: "string",
+				required: false,
+			},
 		},
 	},
 } satisfies AuthPluginSchema;
