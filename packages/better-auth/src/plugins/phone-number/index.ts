@@ -404,7 +404,6 @@ export const phoneNumber = (options?: {
 
 					if (!otp || otp.expiresAt < new Date()) {
 						if (otp && otp.expiresAt < new Date()) {
-							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 							throw new APIError("BAD_REQUEST", {
 								message: "OTP expired",
 							});

@@ -736,6 +736,18 @@ export const createInternalAdapter = (
 				},
 				limit: 1,
 			});
+			if (!options.verification?.disableCleanup) {
+				await adapter.deleteMany({
+					model: "verification",
+					where: [
+						{
+							field: "expiresAt",
+							value: new Date().toISOString(),
+							operator: "lt",
+						},
+					],
+				});
+			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
