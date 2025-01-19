@@ -285,6 +285,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -380,7 +386,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
