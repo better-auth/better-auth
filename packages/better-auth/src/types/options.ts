@@ -414,9 +414,9 @@ export type BetterAuthOptions = {
 			>;
 			/**
 			 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
-			 * 
+			 *
 			 * @default false
-			 * 
+			 *
 			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
 			 */
 			allowDifferentEmails?: boolean;

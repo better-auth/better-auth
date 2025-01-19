@@ -115,7 +115,11 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (c.context.options.account?.accountLinking?.allowDifferentEmails !== true && link.email !== userInfo.email.toLowerCase()) {
+			if (
+				c.context.options.account?.accountLinking?.allowDifferentEmails !==
+					true &&
+				link.email !== userInfo.email.toLowerCase()
+			) {
 				return redirectOnError("email_doesn't_match");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
