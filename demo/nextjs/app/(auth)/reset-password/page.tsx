@@ -29,6 +29,7 @@ export default function ResetPassword() {
 		setError("");
 		const res = await client.resetPassword({
 			newPassword: password,
+			token: new URLSearchParams(window.location.search).get("token")!,
 		});
 		if (res.error) {
 			toast.error(res.error.message);
