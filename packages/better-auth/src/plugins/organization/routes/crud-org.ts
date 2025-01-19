@@ -6,7 +6,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -131,6 +131,29 @@ export const createOrganization = createAuthEndpoint(
 			);
 		}
 		return ctx.json(organization);
+	},
+);
+
+export const checkOrganizationSlug = createAuthEndpoint(
+	"/organization/check-slug",
+	{
+		method: "POST",
+		body: z.object({
+			slug: z.string(),
+		}),
+		use: [requestOnlySessionMiddleware, orgMiddleware],
+	},
+	async (ctx) => {
+		const orgAdapter = getOrgAdapter(ctx.context);
+		const org = await orgAdapter.findOrganizationBySlug(ctx.body.slug);
+		if (!org) {
+			return ctx.json({
+				status: true,
+			});
+		}
+		throw new APIError("BAD_REQUEST", {
+			message: "slug is taken",
+		});
 	},
 );
 
