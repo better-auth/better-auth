@@ -31,7 +31,6 @@ describe("forget password", async (it) => {
 		const res = await client.resetPassword(
 			{
 				newPassword: "short",
-				token,
 			},
 			{
 				query: {
@@ -47,7 +46,6 @@ describe("forget password", async (it) => {
 		const res = await client.resetPassword(
 			{
 				newPassword,
-				token,
 			},
 			{
 				query: {
@@ -78,7 +76,6 @@ describe("forget password", async (it) => {
 		const res = await client.resetPassword(
 			{
 				newPassword,
-				token,
 			},
 			{
 				query: {
