@@ -34,9 +34,7 @@ interface WebAuthnChallengeValue {
 
 function getRpID(options: PasskeyOptions, baseURL?: string) {
 	return (
-		options.rpID ||
-		baseURL?.replace("http://", "").replace("https://", "").split(":")[0] ||
-		"localhost" // default rpID
+		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
 	);
 }
 
