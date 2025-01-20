@@ -330,14 +330,12 @@ export const socialProviders = {
 				viewBox="0 0 267 267"
 				{...props}
 			>
-				<g xmlns="http://www.w3.org/2000/svg" transform="matrix(4.968366, 0, 0, 4.967442, -229.836609, 0)">
-					<path 
-						fill="currentColor"
-						d="M 57.6 0 L 46.26 42.4 l 42.4 11.35 L 100 11.35 Z m 11.2 19.47 l 11.83 3.17 l -3.17 11.83 l -11.84 -3.17 z"
-					></path>
-				</g>
+				<path 
+					fill="currentColor"
+					d="M 56.926 0.986 L 1.01 210.05 L 210.073 266.014 L 265.989 56.951 L 56.926 0.986 Z M 112.15 96.988 L 170.481 112.619 L 154.849 170.95 L 96.47 155.318 L 112.15 96.988 Z"
+				></path>
 			</svg>
 		),
-		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 267 267"><g xmlns="http://www.w3.org/2000/svg" transform="matrix(4.968366, 0, 0, 4.967442, -229.836609, 0)"><path fill="currentColor" d="M 57.6 0 L 46.26 42.4 l 42.4 11.35 L 100 11.35 Z m 11.2 19.47 l 11.83 3.17 l -3.17 11.83 l -11.84 -3.17 z"/></g></svg>`
+		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 267 267"><path xmlns="http://www.w3.org/2000/svg" fill="currentColor" d="M 56.926 0.986 L 1.01 210.05 L 210.073 266.014 L 265.989 56.951 L 56.926 0.986 Z M 112.15 96.988 L 170.481 112.619 L 154.849 170.95 L 96.47 155.318 L 112.15 96.988 Z"/></svg>`
 	},
 };
