@@ -100,10 +100,6 @@ exports[`init > should match config 1`] = `
       "open": true,
       "readonly": false,
     },
-    "emailAndPassword": {
-      "autoSignIn": true,
-      "enabled": false,
-    },
     "plugins": [],
     "secret": "better-auth-secret-123456789",
   },
