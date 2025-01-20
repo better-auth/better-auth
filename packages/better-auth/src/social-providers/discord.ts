@@ -83,8 +83,9 @@ export const discord = (options: DiscordOptions) => {
 		id: "discord",
 		name: "Discord",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["identify", "email"];
+			let _scopes = scopes ? scopes : options?.scope ? options?.scope : ["identify", "email"];
 			options.scope && _scopes.push(...options.scope);
+			_scopes = Array.from(new Set(_scopes));
 			return new URL(
 				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
 					"+",
