@@ -134,8 +134,8 @@ describe("mssql", async () => {
 	const adapter = getAdapter(opts);
 
 	async function resetDB() {
-		await sql`DROP TABLE dbo.session;`.execute(mssql);
 		await sql`DROP TABLE dbo.users;`.execute(mssql);
+		await sql`DROP TABLE dbo.session;`.execute(mssql);
 	}
 
 	afterAll(async () => {
