@@ -45,6 +45,10 @@ export type Adapter = {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
+	count: (data: {
+		model: string;
+		where?: Where[];
+	}) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided

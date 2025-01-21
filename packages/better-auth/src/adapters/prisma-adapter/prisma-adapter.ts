@@ -237,6 +237,22 @@ export const prismaAdapter =
 				})) as any[];
 				return result.map((r) => transformOutput(r, model));
 			},
+			async count(data) {
+				const { model, where } = data;
+				const whereClause = convertWhereClause(model, where);
+				if (!db[getModelName(model)]) {
+					throw new BetterAuthError(
+						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+					);
+				}
+				const result = await db[getModelName(model)].findMany({
+					where: whereClause,
+					select: {
+						id: true,
+					},
+				});
+				return result.length;
+			},
 			async update(data) {
 				const { model, where, update } = data;
 				if (!db[getModelName(model)]) {

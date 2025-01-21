@@ -398,6 +398,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 															$ref: "#/components/schemas/User",
 														},
 													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													offset: {
+														type: ["number", "undefined"],
+													},
 												},
 											},
 										},
@@ -438,12 +447,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
+						const total = await ctx.context.internalAdapter.countTotalUsers();
 						return ctx.json({
 							users: users as UserWithRole[],
+							total: total,
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined,
 						});
 					} catch (e) {
 						return ctx.json({
 							users: [],
+							total: 0,
 						});
 					}
 				},

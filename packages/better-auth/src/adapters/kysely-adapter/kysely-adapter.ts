@@ -319,6 +319,19 @@ export const kyselyAdapter =
 				const res = await query.execute();
 				return res.length;
 			},
+			async count(data) {
+				const { model, where } = data;
+				const { and, or } = convertWhereClause(model, where);
+				let query = db.selectFrom(getModelName(model)).selectAll();
+				if (and) {
+					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+				}
+				if (or) {
+					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+				}
+				const res = await query.execute();
+				return res.length;
+			},
 			async delete(data) {
 				const { model, where } = data;
 				const { and, or } = convertWhereClause(model, where);

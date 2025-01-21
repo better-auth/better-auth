@@ -285,6 +285,16 @@ export const drizzleAdapter =
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
 			},
+			async count(data) {
+				const { model, where } = data;
+				const schemaModel = getSchema(model);
+				const clause = where ? convertWhereClause(where, model) : [];
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(...clause);
+				return res.length;
+			},
 			async update(data) {
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
