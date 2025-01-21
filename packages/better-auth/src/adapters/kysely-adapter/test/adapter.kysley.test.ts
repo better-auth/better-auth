@@ -134,8 +134,26 @@ describe("mssql", async () => {
 	const adapter = getAdapter(opts);
 
 	async function resetDB() {
-		await sql`DROP TABLE dbo.session;`.execute(mssql);
-		await sql`DROP TABLE dbo.users;`.execute(mssql);
+		await adapter.deleteMany({
+			model: "users",
+			where: [
+				{
+					field: "createdAt",
+					value: new Date().toISOString(),
+					operator: "lte",
+				},
+			],
+		});
+		await adapter.deleteMany({
+			model: "session",
+			where: [
+				{
+					field: "createdAt",
+					value: new Date().toISOString(),
+					operator: "lte",
+				},
+			],
+		});
 	}
 
 	afterAll(async () => {
