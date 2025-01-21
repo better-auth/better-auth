@@ -153,7 +153,7 @@ export type InferFieldsInput<Field> = Field extends Record<
 						? never
 						: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key as Field[key]["input"] extends false ? never : key]:
+			[key in Key as Field[key]["input"] extends false ? never : key]?:
 				| InferFieldInput<Field[key]>
 				| undefined
 				| null;
