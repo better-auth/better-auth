@@ -5,6 +5,7 @@ import type { AtomListener, ClientOptions } from "./types";
 import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
+import { BASE_ERROR_CODES } from "../error/codes";
 
 export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
@@ -92,17 +93,22 @@ export const getClientConfig = (options?: ClientOptions) => {
 		},
 		atoms: pluginsAtoms,
 	};
-
+	let $ERROR_CODES = BASE_ERROR_CODES;
 	for (const plugin of plugins) {
 		if (plugin.getActions) {
 			Object.assign(pluginsActions, plugin.getActions?.($fetch, $store));
 		}
+		if (plugin.$ERROR_CODES) {
+			Object.assign($ERROR_CODES, plugin.$ERROR_CODES);
+		}
 	}
+
 	return {
 		pluginsActions,
 		pluginsAtoms,
 		pluginPathMethods,
 		atomListeners,
+		$ERROR_CODES,
 		$fetch,
 		$store,
 	};

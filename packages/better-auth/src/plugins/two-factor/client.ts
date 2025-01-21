@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { twoFactor as twoFa } from "../../plugins/two-factor";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 
 export const twoFactorClient = (options?: {
 	/**
@@ -38,5 +39,6 @@ export const twoFactorClient = (options?: {
 				},
 			},
 		],
+		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

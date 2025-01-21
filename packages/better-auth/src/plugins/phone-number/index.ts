@@ -22,6 +22,12 @@ export interface UserWithPhoneNumber extends User {
 function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
+export const PHONE_NUMBER_ERROR_CODES = {
+	INVALID_PHONE_NUMBER: "Invalid phone number",
+	INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
+	UNEXPECTED_ERROR: "Unexpected error",
+	OTP_NOT_FOUND: "OTP not found",
+} as const;
 
 export const phoneNumber = (options?: {
 	/**
@@ -104,12 +110,6 @@ export const phoneNumber = (options?: {
 		createdAt: "createdAt",
 	};
 
-	const ERROR_CODES = {
-		INVALID_PHONE_NUMBER: "Invalid phone number",
-		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
-		UNEXPECTED_ERROR: "Unexpected error",
-		OTP_NOT_FOUND: "OTP not found",
-	} as const;
 	return {
 		id: "phone-number",
 		endpoints: {
@@ -169,7 +169,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_PHONE_NUMBER,
+								message: PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -185,7 +185,8 @@ export const phoneNumber = (options?: {
 					});
 					if (!user) {
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+							message:
+								PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const accounts =
@@ -198,14 +199,15 @@ export const phoneNumber = (options?: {
 							phoneNumber,
 						});
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+							message:
+								PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const currentPassword = credentialAccount?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", { phoneNumber });
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.UNEXPECTED_ERROR,
+							message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 						});
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -215,7 +217,8 @@ export const phoneNumber = (options?: {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+							message:
+								PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -301,7 +304,7 @@ export const phoneNumber = (options?: {
 						);
 						if (!isValidNumber) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_PHONE_NUMBER,
+								message: PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 							});
 						}
 					}
@@ -410,7 +413,7 @@ export const phoneNumber = (options?: {
 							});
 						}
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.OTP_NOT_FOUND,
+							message: PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
 						});
 					}
 					if (otp.value !== ctx.body.code) {
@@ -552,7 +555,7 @@ export const phoneNumber = (options?: {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
 

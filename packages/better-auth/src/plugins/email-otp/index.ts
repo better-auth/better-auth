@@ -46,18 +46,20 @@ interface EmailOTPOptions {
 
 const types = ["email-verification", "sign-in", "forget-password"] as const;
 
+export const EMAIL_OTP_ERROR_CODES = {
+	OTP_EXPIRED: "otp expired",
+	INVALID_OTP: "invalid otp",
+	INVALID_EMAIL: "invalid email",
+	USER_NOT_FOUND: "user not found",
+} as const;
+
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		otpLength: 6,
 		...options,
 	};
-	const ERROR_CODES = {
-		OTP_EXPIRED: "otp expired",
-		INVALID_OTP: "invalid otp",
-		INVALID_EMAIL: "invalid email",
-		USER_NOT_FOUND: "user not found",
-	} as const;
+
 	return {
 		id: "email-otp",
 		endpoints: {
@@ -109,7 +111,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_EMAIL,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					if (ctx.body.type === "forget-password" || opts.disableSignUp) {
@@ -285,7 +287,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_EMAIL,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_EMAIL,
 						});
 					}
 					const verificationValue =
@@ -295,7 +297,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
@@ -303,13 +305,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							verificationValue.id,
 						);
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.OTP_EXPIRED,
+							message: EMAIL_OTP_ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -318,7 +320,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: EMAIL_OTP_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -416,7 +418,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
@@ -424,13 +426,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							verificationValue.id,
 						);
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.OTP_EXPIRED,
+							message: EMAIL_OTP_ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -440,7 +442,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					if (!user) {
 						if (opts.disableSignUp) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.USER_NOT_FOUND,
+								message: EMAIL_OTP_ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
 						const newUser = await ctx.context.internalAdapter.createUser({
@@ -535,7 +537,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: EMAIL_OTP_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const otp = generateRandomString(opts.otpLength, "0-9");
@@ -605,7 +607,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_NOT_FOUND,
+							message: EMAIL_OTP_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
 					const verificationValue =
@@ -614,7 +616,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						);
 					if (!verificationValue) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
@@ -622,13 +624,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							verificationValue.id,
 						);
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.OTP_EXPIRED,
+							message: EMAIL_OTP_ERROR_CODES.OTP_EXPIRED,
 						});
 					}
 					const otp = ctx.body.otp;
 					if (verificationValue.value !== otp) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OTP,
+							message: EMAIL_OTP_ERROR_CODES.INVALID_OTP,
 						});
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -702,7 +704,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			],
 		},
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 		rateLimit: [
 			{
 				pathMatcher(path) {

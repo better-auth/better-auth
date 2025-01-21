@@ -17,6 +17,7 @@ import type { BetterAuthClientPlugin } from "../../client/types";
 import type { organization } from "./organization";
 import { useAuthQuery } from "../../client";
 import { BetterAuthError } from "../../error";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 
 interface OrganizationClientOptions {
 	ac: AccessControl;
@@ -184,5 +185,6 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				signal: "$activeMemberSignal",
 			},
 		],
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

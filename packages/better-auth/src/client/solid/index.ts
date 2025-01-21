@@ -49,6 +49,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		pluginsAtoms,
 		$fetch,
 		atomListeners,
+		$ERROR_CODES,
 	} = getClientConfig(options);
 	let resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
@@ -57,6 +58,7 @@ export function createAuthClient<Option extends ClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		getErrorCodes: () => $ERROR_CODES,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,
@@ -89,6 +91,9 @@ export function createAuthClient<Option extends ClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
+			getErrorCodes: () => PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
 		};

@@ -68,20 +68,20 @@ interface AdminOptions {
 	schema?: InferOptionSchema<typeof schema>;
 }
 
+export const ADMIN_ERROR_CODES = {
+	FAILED_TO_CREATE_USER: "Failed to create user",
+	USER_ALREADY_EXISTS: "User already exists",
+	USER_NOT_FOUND: "User not found",
+	YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
+	ONLY_ADMINS_CAN_ACCESS_THIS_ENDPOINT: "Only admins can access this endpoint",
+} as const;
+
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
 		defaultRole: "user",
 		adminRole: "admin",
 		...options,
 	};
-	const ERROR_CODES = {
-		FAILED_TO_CREATE_USER: "Failed to create user",
-		USER_ALREADY_EXISTS: "User already exists",
-		USER_NOT_FOUND: "User not found",
-		YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
-		ONLY_ADMINS_CAN_ACCESS_THIS_ENDPOINT:
-			"Only admins can access this endpoint",
-	} as const;
 	const adminMiddleware = createAuthMiddleware(async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session) {
@@ -286,7 +286,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (existUser) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.USER_ALREADY_EXISTS,
+							message: ADMIN_ERROR_CODES.USER_ALREADY_EXISTS,
 						});
 					}
 					const user =
@@ -299,7 +299,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_CREATE_USER,
+							message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const hashedPassword = await ctx.context.password.hash(
@@ -596,7 +596,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				async (ctx) => {
 					if (ctx.body.userId === ctx.context.session.user.id) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
+							message: ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 						});
 					}
 					const user = await ctx.context.internalAdapter.updateUser(
@@ -681,7 +681,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_CREATE_USER,
+							message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const authCookies = ctx.context.authCookies;
@@ -884,7 +884,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				},
 			),
 		},
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
 	} satisfies BetterAuthPlugin;
 };

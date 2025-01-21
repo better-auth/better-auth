@@ -301,40 +301,29 @@ if (error) {
 The client instance contains $ERROR_CODES object that contains all the error codes returned by the server. You can use this to handle error translations or custom error messages.
 
 ```ts title="auth-client.ts"
-const authClient = createAuthClient();
-
-type ErrorTypes = Partial<
-	Record<
-		keyof typeof client.$ERROR_CODES,
-		{
-			en: string;
-			es: string;
-		}
-	>
->;
+const ERROR_CODES = authClient.getErrorCodes();
 
 const errorCodes = {
-	USER_ALREADY_EXISTS: {
+	[ERROR_CODES.USER_ALREADY_EXISTS]: {
 		en: "user already registered",
 		es: "usuario ya registrada",
 	},
-} satisfies ErrorTypes;
-
-const getErrorMessage = (code: string, lang: "en" | "es") => {
-	if (code in errorCodes) {
-		return errorCodes[code as keyof typeof errorCodes][lang];
+} as Record<
+	string,
+	{
+		en: string;
+		es: string;
 	}
-	return "";
-};
-
+>;
 
 const { error } = await authClient.signUp.email({
 	email: "user@email.com",
 	password: "password",
 	name: "User",
 });
-if(error?.code){
-    alert(getErrorMessage(error.code), "en");
+
+if (error?.message) {
+	alert(errorCodes[error.message]);
 }
 ```
 
