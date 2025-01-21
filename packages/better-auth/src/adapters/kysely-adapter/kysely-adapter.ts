@@ -35,7 +35,7 @@ const createTransform = (
 		const f = schema[model].fields[field];
 		if (
 			f.type === "boolean" &&
-			type === "sqlite" &&
+			(type === "sqlite" || type === "mssql") &&
 			value !== null &&
 			value !== undefined
 		) {
@@ -51,7 +51,11 @@ const createTransform = (
 		const { type = "sqlite" } = config || {};
 
 		const f = schema[model].fields[field];
-		if (f.type === "boolean" && type === "sqlite" && value !== null) {
+		if (
+			f.type === "boolean" &&
+			(type === "sqlite" || type === "mssql") &&
+			value !== null
+		) {
 			return value === 1;
 		}
 		if (f.type === "date" && value) {
@@ -206,7 +210,7 @@ const createTransform = (
 			where: Where[],
 		) {
 			let res: any;
-			if (config?.type !== "mysql") {
+			if (config?.type !== "mysql" && config?.type !== "mssql") {
 				res = await builder.returningAll().executeTakeFirst();
 			} else {
 				//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
@@ -273,9 +277,12 @@ export const kyselyAdapter =
 				if (or) {
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
-				query = query.limit(limit || 100);
-				if (offset) {
-					query = query.offset(offset);
+				if (config?.type === "mssql") {
+					if (!offset) {
+						query = query.top(limit || 100);
+					}
+				} else {
+					query = query.limit(limit || 100);
 				}
 				if (sortBy) {
 					query = query.orderBy(
@@ -283,6 +290,17 @@ export const kyselyAdapter =
 						sortBy.direction,
 					);
 				}
+				if (offset) {
+					if (config?.type === "mssql") {
+						if (!sortBy) {
+							query = query.orderBy(getField(model, "id"));
+						}
+						query = query.offset(offset).fetch(limit || 100);
+					} else {
+						query = query.offset(offset);
+					}
+				}
+
 				const res = await query.selectAll().execute();
 				if (!res) return [];
 				return res.map((r) => transformOutput(r, model));
