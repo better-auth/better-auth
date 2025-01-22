@@ -14,6 +14,7 @@ import type { AuthContext, LiteralUnion, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
+import type { Member, Organization } from "../plugins/organization/schema";
 
 export type BetterAuthOptions = {
 	/**
@@ -783,6 +784,56 @@ export type BetterAuthOptions = {
 				 * Hook that is called after a verification is updated.
 				 */
 				after?: (verification: Verification) => Promise<void>;
+			};
+		};
+		/**
+		 * Organization Hook
+		 */
+		organization?: {
+			create?: {
+				before?: (organization: Organization) => Promise<
+					| boolean
+					| void
+					| {
+							data: Organization & Record<string, any>;
+					  }
+				>;
+				after?: (organization: Organization) => Promise<void>;
+			};
+			update?: {
+				before?: (organization: Partial<Organization>) => Promise<
+					| boolean
+					| void
+					| {
+							data: Organization & Record<string, any>;
+					  }
+				>;
+				after?: (organization: Organization) => Promise<void>;
+			};
+		};
+		/**
+		 * Member Hook
+		 */
+		member?: {
+			create?: {
+				before?: (member: Member) => Promise<
+					| boolean
+					| void
+					| {
+							data: Member & Record<string, any>;
+					  }
+				>;
+				after?: (member: Member) => Promise<void>;
+			};
+			update?: {
+				before?: (member: Partial<Member>) => Promise<
+					| boolean
+					| void
+					| {
+							data: Member & Record<string, any>;
+					  }
+				>;
+				after?: (member: Member) => Promise<void>;
 			};
 		};
 	};

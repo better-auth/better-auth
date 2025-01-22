@@ -12,6 +12,7 @@ import type {
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
 import parseJSON from "../../client/parser";
+import { getWithHooks } from "../../db";
 
 export const getOrgAdapter = (
 	context: AuthContext,
@@ -35,27 +36,33 @@ export const getOrgAdapter = (
 			organization: OrganizationInput;
 			user: User;
 		}) => {
-			const organization = await adapter.create<
-				OrganizationInput,
-				Organization
-			>({
-				model: "organization",
-				data: {
+			const { createWithHooks } = getWithHooks(adapter, {
+				options: context.options,
+				hooks: context.options.databaseHooks
+					? [context.options.databaseHooks]
+					: [],
+			});
+
+			const organization = await createWithHooks(
+				{
 					...data.organization,
 					metadata: data.organization.metadata
 						? JSON.stringify(data.organization.metadata)
 						: undefined,
 				},
-			});
-			const member = await adapter.create<MemberInput>({
-				model: "member",
-				data: {
+				"organization",
+			);
+
+			const member = await createWithHooks(
+				{
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
 					role: options?.creatorRole || "owner",
 				},
-			});
+				"member",
+			);
+
 			return {
 				...organization,
 				metadata: organization.metadata
