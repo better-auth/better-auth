@@ -80,7 +80,7 @@ describe("Social Providers", async () => {
 			disableTestUser: true,
 		},
 	);
-	
+
 	let state = "";
 	const headers = new Headers();
 
@@ -144,50 +144,53 @@ describe("Social Providers", async () => {
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.session_token")?.value).toBeUndefined();
+					expect(
+						cookies.get("better-auth.session_token")?.value,
+					).toBeUndefined();
 				},
 			});
 		});
 	});
 
-	const { client: mapProfileClient, cookieSetter: mapProfileCookieSetter } = await getTestInstance(
-		{
-			user: {
-				additionalFields: {
-					firstName: {
-						type: "string",
+	const { client: mapProfileClient, cookieSetter: mapProfileCookieSetter } =
+		await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						firstName: {
+							type: "string",
+						},
+						lastName: {
+							type: "string",
+						},
+						isOAuth: {
+							type: "boolean",
+						},
 					},
-					lastName: {
-						type: "string",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						mapProfileToUser(profile) {
+							return {
+								firstName: profile.given_name,
+								lastName: profile.family_name,
+								isOAuth: true,
+							};
+						},
 					},
-					isOAuth: {
-						type: "boolean",
+					apple: {
+						clientId: "test",
+						clientSecret: "test",
 					},
 				},
 			},
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
-					mapProfileToUser(profile) {
-						return {
-							firstName: profile.given_name,
-							lastName: profile.family_name,
-							isOAuth: true,
-						};
-					},
-				},
-				apple: {
-					clientId: "test",
-					clientSecret: "test",
-				},
+			{
+				disableTestUser: true,
 			},
-		},
-		{
-			disableTestUser: true,
-		},
-	);
+		);
 
 	it("should be able to map profile to user", async () => {
 		const signInRes = await mapProfileClient.signIn.social({

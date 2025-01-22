@@ -123,7 +123,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.info("An account with this accountId already exists");
 			return redirectOnError("account_already_linked");
 		}
-		
+
 		if (link) {
 			if (
 				c.context.options.account?.accountLinking?.allowDifferentEmails !==

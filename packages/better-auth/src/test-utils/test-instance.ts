@@ -164,7 +164,7 @@ export async function getTestInstance<
 			await fs.unlink(dbName);
 		} catch (error) {
 			// If file is still busy, wait a bit and try again
-			await new Promise(resolve => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 100));
 			await fs.unlink(dbName);
 		}
 	});
