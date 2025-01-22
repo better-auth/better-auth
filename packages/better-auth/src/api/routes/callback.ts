@@ -122,6 +122,15 @@ export const callbackOAuth = createAuthEndpoint(
 			) {
 				return redirectOnError("email_doesn't_match");
 			}
+			const existingAccount = await c.context.internalAdapter.findAccount(
+				userInfo.id,
+			);
+			if (existingAccount) {
+				if (existingAccount && existingAccount.userId !== link.userId) {
+					return redirectOnError("account_already_linked_to_different_user");
+				}
+				return redirectOnError("account_already_linked");
+			}
 			const newAccount = await c.context.internalAdapter.createAccount({
 				userId: link.userId,
 				providerId: provider.id,
