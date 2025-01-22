@@ -897,6 +897,32 @@ const auth = betterAuth({
 })
 ```
 
+## Database Hooks
+To extend the functionality of the Organization plugin, we provide before & after [Database Hooks](/docs/concepts/hooks).
+The example provided below prints the structure of an organization to console **before** and **after** it has been created.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [organization()],
+  databaseHooks: { // [!code highlight]
+    organization: { // [!code highlight]
+      create: { // [!code highlight]
+        before: async (organization) => { // [!code highlight]
+          console.log("Creating organization:", organization); // [!code highlight]
+        }, // [!code highlight]
+        after: async (organization) => { // [!code highlight]
+          console.log("Organization created:", organization); // [!code highlight]
+        }, // [!code highlight]
+      }, // [!code highlight]
+    }, // [!code highlight]
+  }, // [!code highlight]
+});
+```
+
+
 ## Options
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
