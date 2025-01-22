@@ -88,6 +88,13 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * The name of the field on the database.
 	 */
 	fieldName?: string;
+	/**
+	 * If the field should be sortable.
+	 *
+	 * applicable only for `text` type.
+	 * It's useful to mark fields varchar instead of text.
+	 */
+	sortable?: boolean;
 };
 
 export type FieldAttribute<T extends FieldType = FieldType> = {

@@ -563,6 +563,7 @@ const schema = {
 				type: "string",
 				required: false,
 				unique: true,
+				sortable: true,
 				returned: true,
 			},
 			phoneNumberVerified: {
