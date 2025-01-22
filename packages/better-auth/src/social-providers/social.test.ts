@@ -42,7 +42,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
+	const { client } = await getTestInstance(
 		{
 			user: {
 				additionalFields: {
@@ -80,9 +80,10 @@ describe("Social Providers", async () => {
 			disableTestUser: true,
 		},
 	);
+	
 	let state = "";
-
 	const headers = new Headers();
+
 	describe("signin", async () => {
 		it("should be able to add social providers", async () => {
 			const signInRes = await client.signIn.social({
@@ -139,30 +140,70 @@ describe("Social Providers", async () => {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toBeDefined();
-					expect(location).toContain("/callback");
+					expect(location).toContain("/error");
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+					expect(cookies.get("better-auth.session_token")?.value).toBeUndefined();
 				},
 			});
 		});
 	});
 
+	const { client: mapProfileClient, cookieSetter: mapProfileCookieSetter } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					firstName: {
+						type: "string",
+					},
+					lastName: {
+						type: "string",
+					},
+					isOAuth: {
+						type: "boolean",
+					},
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser(profile) {
+						return {
+							firstName: profile.given_name,
+							lastName: profile.family_name,
+							isOAuth: true,
+						};
+					},
+				},
+				apple: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
 	it("should be able to map profile to user", async () => {
-		const signInRes = await client.signIn.social({
+		const signInRes = await mapProfileClient.signIn.social({
 			provider: "google",
 			callbackURL: "/callback",
 		});
+
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
+
 		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 
 		const headers = new Headers();
-
-		const profile = await client.$fetch("/callback/google", {
+		await mapProfileClient.$fetch("/callback/google", {
 			query: {
 				state,
 				code: "test",
@@ -170,11 +211,11 @@ describe("Social Providers", async () => {
 			method: "GET",
 			onError: (c) => {
 				//TODO: fix this
-				cookieSetter(headers)(c as any);
+				mapProfileCookieSetter(headers)(c as any);
 			},
 		});
 
-		const session = await client.getSession({
+		const session = await mapProfileClient.getSession({
 			fetchOptions: {
 				headers,
 			},

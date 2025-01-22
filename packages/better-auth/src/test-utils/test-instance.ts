@@ -156,7 +156,17 @@ export async function getTestInstance<
 			return;
 		}
 
-		await fs.unlink(dbName);
+		// For SQLite, close the connection before deleting
+		if (opts.database instanceof Database) {
+			opts.database.close();
+		}
+		try {
+			await fs.unlink(dbName);
+		} catch (error) {
+			// If file is still busy, wait a bit and try again
+			await new Promise(resolve => setTimeout(resolve, 100));
+			await fs.unlink(dbName);
+		}
 	});
 
 	async function signInWithTestUser() {
