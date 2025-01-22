@@ -385,7 +385,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				throw new APIError("UNAUTHORIZED", {
+				throw new APIError("FORBIDDEN", {
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
