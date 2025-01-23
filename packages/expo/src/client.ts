@@ -51,9 +51,9 @@ interface StoredCookie {
 	expires: Date | null;
 }
 
-function getSetCookie(header: string) {
+function getSetCookie(header: string, prevCookie?: string) {
 	const parsed = parseSetCookieHeader(header);
-	const toSetCookie: Record<string, StoredCookie> = {};
+	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
@@ -67,6 +67,17 @@ function getSetCookie(header: string) {
 			expires,
 		};
 	});
+	if (prevCookie) {
+		try {
+			const prevCookieParsed = JSON.parse(prevCookie);
+			toSetCookie = {
+				...prevCookieParsed,
+				...toSetCookie,
+			};
+		} catch {
+			//
+		}
+	}
 	return JSON.stringify(toSetCookie);
 }
 
@@ -140,7 +151,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							const toSetCookie = getSetCookie(setCookie || "");
+							const prevCookie = await storage.getItem(cookieName);
+							const toSetCookie = getSetCookie(
+								setCookie || "",
+								prevCookie ?? undefined,
+							);
 							await storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
 						}
