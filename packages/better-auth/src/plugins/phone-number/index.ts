@@ -23,7 +23,7 @@ function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
 
-export interface PhoneNumberOptions = {
+export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
 	 * @default 6
