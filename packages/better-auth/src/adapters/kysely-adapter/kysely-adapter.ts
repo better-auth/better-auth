@@ -210,9 +210,7 @@ const createTransform = (
 			where: Where[],
 		) {
 			let res: any;
-			if (config?.type !== "mysql" && config?.type !== "mssql") {
-				res = await builder.returningAll().executeTakeFirst();
-			} else {
+			if (config?.type === "mysql") {
 				//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
 				await builder.execute();
 				const field = values.id ? "id" : where[0].field ? where[0].field : "id";
@@ -222,7 +220,13 @@ const createTransform = (
 					.selectAll()
 					.where(getField(model, field), "=", value)
 					.executeTakeFirst();
+				return res;
 			}
+			if (config?.type === "mssql") {
+				res = await builder.outputAll("inserted").executeTakeFirst();
+				return res;
+			}
+			res = await builder.returningAll().executeTakeFirst();
 			return res;
 		},
 		getModelName,
