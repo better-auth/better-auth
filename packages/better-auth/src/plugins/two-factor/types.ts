@@ -33,6 +33,18 @@ export interface TwoFactorOptions {
 	 * Custom schema for the two factor plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * Function to send email verification for 2FA changes
+	 * If not provided, will fallback to password verification
+	 */
+	sendVerificationOTP?: (
+		data: {
+			email: string;
+			otp: string;
+			type: "2fa-enable" | "2fa-disable";
+		},
+		request?: Request,
+	) => Promise<void>;
 }
 
 export interface UserWithTwoFactor extends User {
