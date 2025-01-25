@@ -18,6 +18,7 @@ describe("two factor", async () => {
 				twoFactor({
 					otpOptions: {
 						sendOTP({ otp }) {
+							console.log('New OTP generated:', otp);
 							OTP = otp;
 						},
 					},
@@ -47,11 +48,15 @@ describe("two factor", async () => {
 
 	it("should return uri and backup codes and shouldn't enable twoFactor yet", async () => {
 		const res = await client.twoFactor.enable({
-			password: testUser.password,
+			verification: {
+				type: 'password',
+				password: testUser.password
+			},
 			fetchOptions: {
 				headers,
 			},
 		});
+
 
 		expect(res.data?.backupCodes.length).toEqual(10);
 		expect(res.data?.totpURI).toBeDefined();
@@ -164,21 +169,33 @@ describe("two factor", async () => {
 
 	let backupCodes: string[] = [];
 	it("should generate backup codes", async () => {
-		await client.twoFactor.enable({
-			password: testUser.password,
+		const enableResponse = await client.twoFactor.enable({
+			verification: {
+				type: 'password',
+				password: testUser.password
+			},
 			fetchOptions: {
 				headers,
 			},
 		});
+		//log enableResponse
+		console.log("enableResponse", enableResponse);
+		expect(enableResponse.data?.backupCodes).toBeDefined();
 		const backupCodesRes = await client.twoFactor.generateBackupCodes({
 			fetchOptions: {
 				headers,
 			},
-			password: testUser.password,
+			verification: {
+				type: 'password',
+				password: testUser.password
+			},
 		});
+		//log backupCodesRes
+		console.log("backupCodesRes", backupCodesRes);
 		expect(backupCodesRes.data?.backupCodes).toBeDefined();
 		backupCodes = backupCodesRes.data?.backupCodes || [];
 	});
+	
 
 	it("should allow sign in with backup code", async () => {
 		const headers = new Headers();
@@ -309,7 +326,10 @@ describe("two factor", async () => {
 
 	it("should disable two factor", async () => {
 		const res = await client.twoFactor.disable({
-			password: testUser.password,
+			verification: {
+				type: 'password',
+				password: testUser.password
+			},
 			fetchOptions: {
 				headers,
 			},
@@ -333,6 +353,100 @@ describe("two factor", async () => {
 		});
 		expect(signInRes.data?.user).toBeDefined();
 	});
+
+	it("should enable two factor with email OTP", async () => {
+		// Start with a fresh session
+		const signInResult = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		console.log("Sign in result:", signInResult);
+	
+		// Send OTP
+		await client.twoFactor.sendOtp({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					const otpCounter = parsed.get("better-auth.otp_counter")?.value;
+					if (otpCounter) {
+						headers.append(
+							"cookie",
+							`better-auth.otp_counter=${otpCounter}`
+						);
+					}
+				},
+			},
+		});
+	
+		// Enable 2FA with OTP
+		const enableResult = await client.twoFactor.enable({
+			verification: {
+				type: 'email_otp',
+				otp: OTP
+			},
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					Object.entries(parsed).forEach(([key, value]) => {
+						if (value) {
+							headers.set(`cookie`, `${key}=${value.value}`);
+						}
+					});
+				}
+			},
+		});
+	
+		console.log("Enable Result:", enableResult);
+		expect(enableResult.data?.totpURI).toBeDefined();
+		expect(enableResult.data?.backupCodes.length).toEqual(10);
+	
+		// Now verify TOTP to complete the setup
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [
+				{
+					field: "userId",
+					value: signInResult.data?.user.id as string,
+				},
+			],
+		});
+	
+		if (!twoFactor) {
+			throw new Error("Two factor setup not found");
+		}
+	
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor.secret,
+		});
+		const totpCode = await createOTP(decrypted).totp();
+	
+		// Verify TOTP to complete 2FA setup
+		const verifyResult = await client.twoFactor.verifyTotp({
+			code: totpCode,
+			fetchOptions: {
+				headers,
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		console.log("TOTP Verify Result:", verifyResult);
+	
+		// Now check if 2FA is enabled
+		const sessionResult = await client.getSession({
+			fetchOptions: { headers }
+		});
+		console.log("Final session:", sessionResult);
+		expect(sessionResult.data?.user.twoFactorEnabled).toBe(true);
+	});
 });
 
 describe("two factor auth api", async () => {
@@ -354,10 +468,14 @@ describe("two factor auth api", async () => {
 	});
 	let { headers } = await signInWithTestUser();
 
+
 	it("enable two factor", async () => {
 		const res = await auth.api.enableTwoFactor({
 			body: {
-				password: testUser.password,
+				verification: {
+					type: 'password',
+					password: testUser.password
+				}
 			},
 			headers,
 			asResponse: true,
@@ -378,10 +496,36 @@ describe("two factor auth api", async () => {
 	});
 
 	it("should get totp uri", async () => {
+
 		const res = await auth.api.getTOTPURI({
 			headers,
 			body: {
-				password: testUser.password,
+				verification: {
+					type: 'password',
+					password: testUser.password
+				}
+			},
+		});
+		
+		expect(res.totpURI).toBeDefined();
+	});
+
+	it("should get totp uri with email OTP", async () => {
+		// First send the OTP
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				trustDevice: false,
+			},
+		});
+		// Then get TOTP URI with OTP verification
+		const res = await auth.api.getTOTPURI({
+			headers,
+			body: {
+				verification: {
+					type: 'email_otp',
+					otp: OTP
+				}
 			},
 		});
 		expect(res.totpURI).toBeDefined();
@@ -437,7 +581,10 @@ describe("two factor auth api", async () => {
 		const res = await auth.api.disableTwoFactor({
 			headers,
 			body: {
-				password: testUser.password,
+				verification: {
+					type: 'password',
+					password: testUser.password
+				}
 			},
 			asResponse: true,
 		});
