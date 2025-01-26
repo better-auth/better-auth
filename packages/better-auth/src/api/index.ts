@@ -3,11 +3,13 @@ import {
 	type CookieOptions,
 	type CookiePrefixOptions,
 	type Endpoint,
+	type Middleware,
+	createInternalContext,
 	createRouter,
-	getCookie,
-	getSignedCookie,
-	setCookie,
-	setSignedCookie,
+	// getCookie,
+	// getSignedCookie,
+	// setCookie,
+	// setSignedCookie,
 } from "better-call";
 import type { AuthContext } from "../init";
 import type { BetterAuthOptions, Session, User } from "../types";
@@ -83,10 +85,8 @@ export function getEndpoints<
 								...context.context,
 							},
 						});
-					}) as Endpoint;
-					middleware.path = m.path;
+					}) as Middleware;
 					middleware.options = m.middleware.options;
-					middleware.headers = m.middleware.headers;
 					return {
 						path: m.path,
 						middleware,
@@ -131,52 +131,58 @@ export function getEndpoints<
 	let api: Record<string, any> = {};
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
-			endpoint.headers = new Headers();
-			let internalCtx = {
-				setHeader(key: string, value: string) {
-					endpoint.headers.set(key, value);
-				},
-				setCookie(key: string, value: string, options?: CookieOptions) {
-					setCookie(endpoint.headers, key, value, options);
-				},
-				getCookie(key: string, prefix?: CookiePrefixOptions) {
-					const header = context.headers;
-					const cookieH = header?.get("cookie");
-					const cookie = getCookie(cookieH || "", key, prefix);
-					return cookie;
-				},
-				getSignedCookie(
-					key: string,
-					secret: string,
-					prefix?: CookiePrefixOptions,
-				) {
-					const header = context.headers;
-					if (!header) {
-						return null;
-					}
-					const cookie = getSignedCookie(header, secret, key, prefix);
-					return cookie;
-				},
-				async setSignedCookie(
-					key: string,
-					value: string,
-					secret: string | BufferSource,
-					options?: CookieOptions,
-				) {
-					await setSignedCookie(endpoint.headers, key, value, secret, options);
-				},
-				redirect(url: string) {
-					endpoint.headers.set("Location", url);
-					return new APIError("FOUND");
-				},
-				responseHeader: endpoint.headers,
-			};
+			const headers = new Headers();
+			// let internalCtx = {
+			// 	setHeader(key: string, value: string) {
+			// 		headers.set(key, value);
+			// 	},
+			// 	setCookie(key: string, value: string, options?: CookieOptions) {
+			// 		setCookie(headers, key, value, options);
+			// 	},
+			// 	getCookie(key: string, prefix?: CookiePrefixOptions) {
+			// 		const header = context.headers;
+			// 		const cookieH = header?.get("cookie");
+			// 		const cookie = getCookie(cookieH || "", key, prefix);
+			// 		return cookie;
+			// 	},
+			// 	getSignedCookie(
+			// 		key: string,
+			// 		secret: string,
+			// 		prefix?: CookiePrefixOptions,
+			// 	) {
+			// 		const header = context.headers;
+			// 		if (!header) {
+			// 			return null;
+			// 		}
+			// 		const cookie = getSignedCookie(header, secret, key, prefix);
+			// 		return cookie;
+			// 	},
+			// 	async setSignedCookie(
+			// 		key: string,
+			// 		value: string,
+			// 		secret: string | BufferSource,
+			// 		options?: CookieOptions,
+			// 	) {
+			// 		await setSignedCookie(headers, key, value, secret, options);
+			// 	},
+			// 	redirect(url: string) {
+			// 		headers.set("Location", url);
+			// 		return new APIError("FOUND");
+			// 	},
+			// 	responseHeader: headers,
+			// };
+
+			let internalCtx = await createInternalContext(context, {
+				path: endpoint.path,
+				options: endpoint.options,
+				headers,
+			});
 
 			let authCtx = await ctx;
-
 			let newSession = null;
 			let internalContext = {
 				...internalCtx,
+				responseHeader: headers,
 				...context,
 				path: endpoint.path,
 				context: {
@@ -258,11 +264,11 @@ export function getEndpoints<
 					 * If there are no after plugins, we can directly throw the error
 					 */
 					if (!afterHooks?.length) {
-						e.headers = endpoint.headers;
+						e.headers = headers;
 						throw e;
 					}
 					internalContext.context.returned = e;
-					internalContext.context.returned.headers = endpoint.headers;
+					internalContext.context.returned.headers = headers;
 					for (const hook of afterHooks || []) {
 						const match = hook.matcher(internalContext);
 						if (match) {
@@ -282,7 +288,7 @@ export function getEndpoints<
 					}
 					if (internalContext.context.returned instanceof APIError) {
 						// set the headers from the endpoint
-						internalContext.context.returned.headers = endpoint.headers;
+						internalContext.context.returned.headers = headers;
 						throw internalContext.context.returned;
 					}
 
@@ -291,12 +297,16 @@ export function getEndpoints<
 				throw e;
 			}
 			internalContext.context.returned = endpointRes;
-			internalContext.responseHeader = endpoint.headers;
+			internalContext.responseHeader = headers;
 			for (const hook of afterHooks) {
 				const match = hook.matcher(internalContext);
 				if (match) {
 					try {
-						const hookRes = await hook.handler(internalContext);
+						const hookRes = await hook.handler({
+							...internalContext,
+							returnHeaders: true,
+						});
+						console.log({ hookRes });
 						if (hookRes) {
 							if ("responseHeader" in hookRes) {
 								const headers = hookRes.responseHeader as Headers;
@@ -316,7 +326,7 @@ export function getEndpoints<
 			}
 			const response = internalContext.context.returned;
 			if (response instanceof Response) {
-				endpoint.headers.forEach((value, key) => {
+				headers.forEach((value, key) => {
 					if (key === "set-cookie") {
 						response.headers.append(key, value);
 					} else {
@@ -325,15 +335,13 @@ export function getEndpoints<
 				});
 			}
 			if (response instanceof APIError) {
-				response.headers = endpoint.headers;
+				response.headers = headers;
 				throw response;
 			}
 			return response;
 		};
 		api[key].path = endpoint.path;
-		api[key].method = endpoint.method;
 		api[key].options = endpoint.options;
-		api[key].headers = endpoint.headers;
 	}
 	return {
 		api: api as typeof endpoints & PluginEndpoint,

@@ -28,6 +28,7 @@ export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
 			body: any;
 			_flag: "json";
 	  }
+	| Record<string, any>
 >;
 
 export type HookAfterHandler = (context: HookEndpointContext) => Promise<
@@ -41,6 +42,7 @@ export type HookAfterHandler = (context: HookEndpointContext) => Promise<
 			body: any;
 			_flag: "json";
 	  }
+	| Record<string, any>
 >;
 
 export type BetterAuthPlugin = {
