@@ -7,6 +7,7 @@ import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { getSessionFromCtx } from "../../../api";
+import { hasPermission } from "../has-permission";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -218,19 +219,14 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
-			});
-		}
-		const canUpdateOrg = role.authorize({
-			organization: ["update"],
+		const canUpdateOrg = hasPermission({
+			permission: {
+				organization: ["update"],
+			},
+			role: member.role,
+			options: ctx.context.orgOptions,
 		});
-		if (canUpdateOrg.error) {
+		if (!canUpdateOrg) {
 			return ctx.json(null, {
 				body: {
 					message:
@@ -307,19 +303,14 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
-			});
-		}
-		const canDeleteOrg = role.authorize({
-			organization: ["delete"],
+		const canDeleteOrg = hasPermission({
+			role: member.role,
+			permission: {
+				organization: ["delete"],
+			},
+			options: ctx.context.orgOptions,
 		});
-		if (canDeleteOrg.error) {
+		if (!canDeleteOrg) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
