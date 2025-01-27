@@ -475,9 +475,6 @@ export const deleteUserCallback = createAuthEndpoint(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			if (token) {
-				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
-			}
 			throw new APIError("NOT_FOUND", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});

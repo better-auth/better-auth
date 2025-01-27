@@ -81,10 +81,6 @@ export async function parseState(c: GenericEndpointContext) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 	if (parsedData.expiresAt < Date.now()) {
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		c.context.logger.error("State expired.", {
-			state,
-		});
 		throw c.redirect(
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);
