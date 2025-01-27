@@ -46,7 +46,7 @@ export const facebook = (options: FacebookOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});
