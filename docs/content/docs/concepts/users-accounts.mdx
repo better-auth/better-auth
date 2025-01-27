@@ -53,9 +53,9 @@ export const auth = betterAuth({
             enabled: true,
             sendChangeEmailVerification: async ({ user, newEmail, url, token }, request) => {
                 await sendEmail({
-                    to: newEmail,
-                    subject: 'Verify your email change',
-                    text: `Click the link to verify: ${url}`
+                    to: user.email, // verification email must be sent to the current user email to approve the change
+                    subject: 'Approve email change',
+                    text: `Click the link to approve the change: ${url}`
                 })
             }
         }
@@ -96,7 +96,8 @@ If a user was registered using OAuth or other providers, they won't have a passw
 
 ```ts
 await auth.api.setPassword({
-    password,
+    newPassword: "password",
+    headers: //
 });
 ```
 
@@ -323,6 +324,17 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
+  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings. 
+  ```ts title="auth.ts"
+  const auth = betterAuth({
+      account: {
+          accountLinking: {
+              allowDifferentEmails: true
+          }
+      },
+  });
+  ```
+
 - **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server. 
 
   ```ts
@@ -335,3 +347,15 @@ Users already signed in can manually link their account to additional social pro
 <Callout>
 `setPassword` can't be called from the client for security reasons.
 </Callout>
+
+### Account Unlinking
+
+You can unlink a user account by providing a `providerId`.
+
+```ts
+await authClient.unlinkAccount({
+    providerId: "google"
+});
+```
+
+If the `providerId` doesn't exist, it will throw an error. Additionally, if the user only has one account, the unlinking process will fail to prevent account lockout.

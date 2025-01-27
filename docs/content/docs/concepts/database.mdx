@@ -151,8 +151,7 @@ import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const authClient =  new MongoClient("mongodb://localhost:27017");
-
+const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db()
 
 export const auth = betterAuth({
@@ -235,18 +234,22 @@ export const auth = betterAuth({
 	secondaryStorage: {
 		get: async (key) => {
 			const value = await redis.get(key);
-			return value ? JSON.parse(value) : null;
+			return value ? value : null;
 		},
 		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, JSON.stringify(value), { EX: ttl });
-			else await redis.set(key, JSON.stringify(value));
+			if (ttl) await redis.set(key, value, { EX: ttl });
+			// or for ioredis:
+			// if (ttl) await redis.set(key, value, 'EX', ttl)
+			else await redis.set(key, value);
 		},
-		delete: async (key) => await redis.del(key),
+		delete: async (key) => {
+			await redis.del(key),
+		}
 	}
 });
 ```
 
-This implementation allows Better Auth to use Redis for storing session data and rate limiting counters.
+This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
 
 ## Core Schema
 
@@ -411,6 +414,12 @@ Table Name: `account`
       isOptional: true,
     },
     {
+      name: "idToken",
+      type: "string",
+      description: "The id token returned from the provider",
+      isOptional: true,
+    },
+    {
       name: "password",
       type: "string",
       description: "The password of the account. Mainly used for email and password authentication",
@@ -505,21 +514,22 @@ To customize table names and column name for plugins, you can use the `schema` p
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 
 export const auth = betterAuth({
-   plugins: {
-      twoFactor: {
-         schema: {
-            user: {
-               fields: {
-                  twoFactorEnabled: "two_factor_enabled",
-                  twoFactorSecret: "two_factor_secret"
-               }
-            }
-         }
-      }
-   }
-})
+    plugins: [
+      twoFactor({
+        schema: {
+          user: {
+            fields: {
+              twoFactorEnabled: "two_factor_enabled",
+              secret: "two_factor_secret",
+            },
+          },
+        },
+      }),
+    ],
+});
 ```
 
 

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { VisBulletLegend } from "@unovis/vue";
 import type { BulletLegendItemInterface } from "@unovis/ts";
 import { BulletLegend } from "@unovis/ts";
 import { nextTick, onMounted, ref } from "vue";

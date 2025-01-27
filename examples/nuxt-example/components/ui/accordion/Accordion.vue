@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	AccordionRoot,
 	type AccordionRootEmits,
 	type AccordionRootProps,
 	useForwardPropsEmits,

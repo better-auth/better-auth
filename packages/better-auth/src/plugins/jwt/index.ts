@@ -281,7 +281,10 @@ export const jwt = (options?: JwtOptions) => {
 							})
 						: key.privateKey;
 
-					const privateKey = await importJWK(JSON.parse(privateWebKey));
+					const privateKey = await importJWK(
+						JSON.parse(privateWebKey),
+						options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+					);
 
 					const payload = !options?.jwt?.definePayload
 						? ctx.context.session.user

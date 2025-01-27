@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.1.4",
+  "version": "1.1.15-beta.6",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts --minify",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8000 tsup --clean --dts",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
     "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=16192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
@@ -251,10 +251,24 @@
         "default": "./dist/adapters/memory.cjs"
       }
     },
+    "./adapters/test": {
+      "import": {
+        "types": "./dist/adapters/test.d.ts",
+        "default": "./dist/adapters/test.js"
+      },
+      "require": {
+        "types": "./dist/adapters/test.d.cts",
+        "default": "./dist/adapters/test.cjs"
+      }
+    },
     "./plugins/access": {
       "import": {
         "types": "./dist/plugins/access.d.ts",
         "default": "./dist/plugins/access.js"
+      },
+      "require": {
+        "types": "./dist/plugins/access.d.cts",
+        "default": "./dist/plugins/access.cjs"
       }
     },
     "./plugins/admin": {
@@ -478,12 +492,6 @@
       "db": [
         "./dist/db.d.ts"
       ],
-      "plugins": [
-        "./dist/plugins.d.ts"
-      ],
-      "plugins/access": [
-        "./dist/access.d.ts"
-      ],
       "svelte-kit": [
         "./dist/svelte-kit.d.ts"
       ],
@@ -504,6 +512,12 @@
       ],
       "adapters/memory": [
         "./dist/adapters/memory.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins.d.ts"
+      ],
+      "plugins/access": [
+        "./dist/access.d.ts"
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
@@ -553,7 +567,6 @@
     }
   },
   "devDependencies": {
-    "@better-fetch/fetch": "1.1.12",
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
@@ -561,36 +574,37 @@
     "@types/react": "^18.3.14",
     "better-sqlite3": "^11.6.0",
     "drizzle-orm": "^0.35.3",
-    "nanostores": "^0.11.3",
     "happy-dom": "^15.11.7",
     "hono": "^4.6.13",
     "listhen": "^1.9.0",
     "mongodb": "^6.11.0",
     "mysql2": "^3.11.5",
-    "next": "^15.0.4",
+    "next": "^15.1.2",
     "oauth2-mock-server": "^7.2.0",
     "pg": "^8.13.1",
     "prisma": "^5.22.0",
     "react": "^18.3.1",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
+    "tarn": "^3.0.2",
+    "tedious": "^18.6.1",
     "tsup": "^8.3.5",
     "typescript": "5.6.1-rc",
     "vitest": "^1.6.0",
     "vue": "^3.5.13"
   },
   "dependencies": {
-    "@better-auth/utils": "0.2.2",
+    "@better-auth/utils": "0.2.3",
     "@better-fetch/fetch": "1.1.12",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
-    "better-call": "0.3.3-beta.4",
+    "better-call": "0.3.3",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
-    "uncrypto": "^0.1.3",
+    "nanostores": "^0.11.3",
     "zod": "^3.24.1"
   },
   "overrides": {

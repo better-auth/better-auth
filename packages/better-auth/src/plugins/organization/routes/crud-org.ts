@@ -322,8 +322,28 @@ export const deleteOrganization = createAuthEndpoint(
 			 */
 			await adapter.setActiveOrganization(session.session.token, null);
 		}
+		const option = ctx.context.orgOptions.organizationDeletion;
+		if (option?.disabled) {
+			throw new APIError("FORBIDDEN");
+		}
+		const org = await adapter.findOrganizationById(organizationId);
+		if (!org) {
+			throw new APIError("BAD_REQUEST");
+		}
+		if (option?.beforeDelete) {
+			await option.beforeDelete({
+				organization: org,
+				user: session.user,
+			});
+		}
 		await adapter.deleteOrganization(organizationId);
-		return ctx.json(organizationId);
+		if (option?.afterDelete) {
+			await option.afterDelete({
+				organization: org,
+				user: session.user,
+			});
+		}
+		return ctx.json(org);
 	},
 );
 
@@ -383,6 +403,15 @@ export const getFullOrganization = createAuthEndpoint(
 			organizationId,
 			isSlug: !!ctx.query?.organizationSlug,
 		});
+		const isMember = organization?.members.find(
+			(member) => member.userId === session.user.id,
+		);
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			});
+		}
 		if (!organization) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,

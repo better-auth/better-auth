@@ -2,7 +2,6 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import { useStore } from "better-auth/react";
 import Constants from "expo-constants";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 
@@ -52,9 +51,9 @@ interface StoredCookie {
 	expires: Date | null;
 }
 
-function getSetCookie(header: string) {
+function getSetCookie(header: string, prevCookie?: string) {
 	const parsed = parseSetCookieHeader(header);
-	const toSetCookie: Record<string, StoredCookie> = {};
+	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
@@ -68,6 +67,17 @@ function getSetCookie(header: string) {
 			expires,
 		};
 	});
+	if (prevCookie) {
+		try {
+			const prevCookieParsed = JSON.parse(prevCookie);
+			toSetCookie = {
+				...prevCookieParsed,
+				...toSetCookie,
+			};
+		} catch {
+			//
+		}
+	}
 	return JSON.stringify(toSetCookie);
 }
 
@@ -109,6 +119,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	return {
 		id: "expo",
 		getActions(_, $store) {
+			store = $store;
 			return {
 				/**
 				 * Get the stored cookie.
@@ -129,19 +140,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const cookie = storage.getItem(cookieName);
 					return getCookie(cookie || "{}");
 				},
-				useSession: () => {
-					if (Platform.OS !== "web" && !opts.disableCache) {
-						store = $store;
-						const localSession = storage.getItem(localCacheName);
-						localSession &&
-							$store.atoms.session.set({
-								data: JSON.parse(localSession),
-								error: null,
-								isPending: false,
-							});
-					}
-					return useStore($store.atoms.session);
-				},
 			};
 		},
 		fetchPlugins: [
@@ -153,7 +151,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							const toSetCookie = getSetCookie(setCookie || "");
+							const prevCookie = await storage.getItem(cookieName);
+							const toSetCookie = getSetCookie(
+								setCookie || "",
+								prevCookie ?? undefined,
+							);
 							await storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
 						}
@@ -209,6 +211,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								scheme,
 							});
 							options.body.callbackURL = url;
+						}
+					}
+					if (options.body?.newUserCallbackURL) {
+						if (options.body.newUserCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.newUserCallbackURL, {
+								scheme,
+							});
+							options.body.newUserCallbackURL = url;
+						}
+					}
+					if (options.body?.errorCallbackURL) {
+						if (options.body.errorCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.errorCallbackURL, {
+								scheme,
+							});
+							options.body.errorCallbackURL = url;
 						}
 					}
 					if (url.includes("/sign-out")) {

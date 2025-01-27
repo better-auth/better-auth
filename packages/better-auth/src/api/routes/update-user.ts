@@ -1,34 +1,30 @@
-import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getSessionFromCtx, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { toZod } from "../../types/to-zod";
-import type {
-	AdditionalUserFieldsInput,
-	BetterAuthOptions,
-	User,
-} from "../../types";
+import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../middlewares";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()) as unknown as toZod<
-				AdditionalUserFieldsInput<O>
-			> &
-				ZodObject<{
-					name: ZodOptional<ZodString>;
-					image: ZodOptional<ZodString | ZodNull>;
-				}>,
+			body: z.record(z.string(), z.any()),
 			use: [sessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as AdditionalUserFieldsInput<O> & {
+						name?: string;
+						image?: string | null;
+					},
+				},
 				openapi: {
 					description: "Update the current user",
 					requestBody: {
@@ -237,6 +233,15 @@ export const changePassword = createAuthEndpoint(
 
 		return ctx.json({
 			token,
+			user: {
+				id: session.user.id,
+				email: session.user.email,
+				name: session.user.name,
+				image: session.user.image,
+				emailVerified: session.user.emailVerified,
+				createdAt: session.user.createdAt,
+				updatedAt: session.user.updatedAt,
+			},
 		});
 	},
 );
@@ -451,6 +456,7 @@ export const deleteUserCallback = createAuthEndpoint(
 			token: z.string(),
 			callbackURL: z.string().optional(),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.user?.deleteUser?.enabled) {
@@ -510,11 +516,6 @@ export const changeEmail = createAuthEndpoint(
 	"/change-email",
 	{
 		method: "POST",
-		query: z
-			.object({
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			newEmail: z
 				.string({
@@ -605,12 +606,11 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.secret,
 			ctx.context.session.user.email,
 			ctx.body.newEmail,
+			ctx.context.options.emailVerification?.expiresIn,
 		);
 		const url = `${
 			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${
-			ctx.body.callbackURL || ctx.query?.currentURL || "/"
-		}`;
+		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,

@@ -34,7 +34,19 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
 
+  mssql:
+    image: mcr.microsoft.com/mssql/server:latest
+    container_name: mssql
+    environment:
+      SA_PASSWORD: "Password123!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+
 volumes:
   mongodb_data:
   postgres_data:
   mysql_data:
+  mssql_data:

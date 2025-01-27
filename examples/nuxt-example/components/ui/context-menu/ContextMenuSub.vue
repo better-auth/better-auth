@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	ContextMenuSub,
 	type ContextMenuSubEmits,
 	type ContextMenuSubProps,
 	useForwardPropsEmits,

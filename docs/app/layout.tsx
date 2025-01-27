@@ -7,7 +7,6 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import Loglib from "@loglib/tracker/react";
-import { BetaNotice } from "@/components/banner";
 
 export const metadata = createMetadata({
 	title: {

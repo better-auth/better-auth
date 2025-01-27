@@ -1,6 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
 
-export const expo: () => BetterAuthPlugin = () => {
+export interface ExpoOptions {
+	/**
+	 * Override origin header for expo api routes
+	 */
+	overrideOrigin?: boolean;
+}
+
+export const expo = (options?: ExpoOptions) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -15,7 +22,7 @@ export const expo: () => BetterAuthPlugin = () => {
 			};
 		},
 		async onRequest(request, ctx) {
-			if (request.headers.get("origin")) {
+			if (!options?.overrideOrigin || request.headers.get("origin")) {
 				return;
 			}
 			/**
@@ -25,16 +32,20 @@ export const expo: () => BetterAuthPlugin = () => {
 			if (!expoOrigin) {
 				return;
 			}
-			request.headers.set("origin", expoOrigin);
+			const req = request.clone();
+			req.headers.set("origin", expoOrigin);
 			return {
-				request,
+				request: req,
 			};
 		},
 		hooks: {
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback");
+						return (
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
 					},
 					handler: async (ctx) => {
 						const headers = ctx.responseHeader;
@@ -63,5 +74,5 @@ export const expo: () => BetterAuthPlugin = () => {
 				},
 			],
 		},
-	};
+	} satisfies BetterAuthPlugin;
 };

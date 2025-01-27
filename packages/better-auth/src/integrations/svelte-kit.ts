@@ -1,4 +1,3 @@
-import type { Auth } from "../auth";
 import type { BetterAuthOptions } from "../types";
 
 export const toSvelteKitHandler = (auth: {

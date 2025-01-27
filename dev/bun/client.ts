@@ -1,5 +1,3 @@
-import { createAuthClient } from "better-auth/client";
-
 await fetch("http://localhost:4000/api/auth/sign-up/email", {
 	method: "POST",
 	body: JSON.stringify({

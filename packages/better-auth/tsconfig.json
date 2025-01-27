@@ -18,9 +18,7 @@
 		"strict": true,
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true,
-		"rootDir": ".",
-		"downlevelIteration": true,
-		"baseUrl": "."
+		"downlevelIteration": true
 	},
 	"exclude": ["**/dist", "node_modules"],
 	"references": [],

@@ -1,6 +1,9 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
+import { createAuthEndpoint } from "../call";
+import { originCheck } from "./origin-check";
+import { z } from "zod";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -70,6 +73,24 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("shouldn't allow untrusted origin headers which start with trusted origin", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com.malicious.com",
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("shouldn't allow untrusted origin subdomains", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -105,28 +126,6 @@ describe("Origin Check", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
-	it("shouldn't allow untrusted currentURL", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
-
-		const res2 = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				// @ts-expect-error - query is not defined in the type
-				query: {
-					currentURL: "http://malicious.com",
-				},
-			},
-		});
-		expect(res2.error?.status).toBe(403);
-		expect(res2.error?.message).toBe("Invalid currentURL");
-	});
-
 	it("shouldn't allow untrusted redirectTo", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -140,35 +139,6 @@ describe("Origin Check", async (it) => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid redirectURL");
-	});
-
-	it("should work with list of trusted origins ", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://trusted.com",
-				},
-			},
-		});
-		const res = await client.forgetPassword({
-			email: testUser.email,
-			redirectTo: "http://localhost:5000/reset-password",
-		});
-		expect(res.data?.status).toBeTruthy();
-
-		const res2 = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				// @ts-expect-error - query is not defined in the type
-				query: {
-					currentURL: "http://localhost:5000",
-				},
-			},
-		});
-		expect(res2.data?.user).toBeDefined();
 	});
 
 	it("should work with wildcard trusted origins", async (ctx) => {
@@ -187,5 +157,63 @@ describe("Origin Check", async (it) => {
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
 		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should work with GET requests", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "https://sub-domain.my-site.com",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://google.com",
+					cookie: "value",
+				},
+			},
+		});
+		const res = await client.$fetch("/ok");
+		expect(res.data).toMatchObject({ ok: true });
+	});
+});
+
+describe("origin check middleware", async (it) => {
+	it("should return invalid origin", async () => {
+		const { client } = await getTestInstance({
+			trustedOrigins: ["https://trusted-site.com"],
+			plugins: [
+				{
+					id: "test",
+					endpoints: {
+						test: createAuthEndpoint(
+							"/test",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => {
+								return c.query.callbackURL;
+							},
+						),
+					},
+				},
+			],
+		});
+		const invalid = await client.$fetch(
+			"/test?callbackURL=https://malicious-site.com",
+		);
+		expect(invalid.error?.status).toBe(403);
+		const valid = await client.$fetch("/test?callbackURL=/dashboard");
+		expect(valid.data).toBe("/dashboard");
+		const validTrusted = await client.$fetch(
+			"/test?callbackURL=https://trusted-site.com/path",
+		);
+		expect(validTrusted.data).toBe("https://trusted-site.com/path");
+
+		const sampleInternalEndpointInvalid = await client.$fetch(
+			"/verify-email?callbackURL=https://malicious-site.com&token=xyz",
+		);
+		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
 });

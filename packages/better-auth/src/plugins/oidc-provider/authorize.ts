@@ -2,7 +2,6 @@ import { APIError } from "better-call";
 import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
 import type { AuthorizationQuery, Client, OIDCOptions } from "./types";
-import { schema } from "./schema";
 import { generateRandomString } from "../../crypto";
 
 function redirectErrorURL(url: string, error: string, description: string) {

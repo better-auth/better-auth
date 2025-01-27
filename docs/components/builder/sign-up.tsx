@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
-import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 export function SignUp() {

@@ -1,5 +1,3 @@
-import React from "react";
-
 export const ShipText = () => {
 	const voxels = [
 		// V

@@ -198,6 +198,13 @@ const impersonatedSession = await authClient.admin.impersonateUser({
   userId: "user_id_here"
 });
 ```
+### Stop Impersonating User
+
+To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
+
+```ts title="admin.ts"
+await authClient.admin.stopImpersonating();
+```  
 
 ### Remove User
 
