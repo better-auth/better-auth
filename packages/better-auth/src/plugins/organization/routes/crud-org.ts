@@ -35,6 +35,7 @@ export const createOrganization = createAuthEndpoint(
 					description: "The metadata of the organization",
 				})
 				.optional(),
+			keepCurrentActiveOrg: z.boolean().optional(),
 		}),
 		use: [orgMiddleware],
 		metadata: {
@@ -124,7 +125,7 @@ export const createOrganization = createAuthEndpoint(
 			},
 			user,
 		});
-		if (ctx.context.session) {
+		if (ctx.context.session && ctx.body.keepCurrentActiveOrg !== true) {
 			await adapter.setActiveOrganization(
 				ctx.context.session.session.token,
 				organization.id,
