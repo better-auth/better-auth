@@ -81,9 +81,9 @@ export const init = async (options: BetterAuthOptions) => {
 		})
 		.filter((x) => x !== null);
 
-	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
+	const generateIdFunc: AuthContext["generateId"] = async ({ model, size }) => {
 		if (typeof options?.advanced?.generateId === "function") {
-			return options.advanced.generateId({ model, size });
+			return await options.advanced.generateId({ model, size });
 		}
 		return generateId(size);
 	};
@@ -203,7 +203,7 @@ export type AuthContext = {
 	generateId: (options: {
 		model: LiteralUnion<Models, string>;
 		size?: number;
-	}) => string;
+	}) => Promise<string> | string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;

@@ -103,7 +103,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 				async (ctx) => {
 					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
 						options || {};
-					const id = ctx.context.generateId({ model: "user" });
+					const id = await ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{

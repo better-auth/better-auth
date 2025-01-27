@@ -581,7 +581,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
-							id: ctx.context.generateId({ model: "passkey" }),
+							id: await ctx.context.generateId({ model: "passkey" }),
 							credentialID: credential.id,
 							publicKey: pubKey,
 							counter: credential.counter,

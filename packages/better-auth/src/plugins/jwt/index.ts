@@ -126,7 +126,7 @@ export async function getJwtToken(
 		const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 		let jwk: Partial<Jwk> = {
-			id: ctx.context.generateId({
+			id: await ctx.context.generateId({
 				model: "jwks",
 			}),
 			publicKey: JSON.stringify(publicWebKey),
@@ -252,7 +252,7 @@ export const jwt = (options?: JwtOptions) => {
 						const privateKeyEncryptionEnabled =
 							!options?.jwks?.disablePrivateKeyEncryption;
 						let jwk: Partial<Jwk> = {
-							id: ctx.context.generateId({
+							id: await ctx.context.generateId({
 								model: "jwks",
 							}),
 							publicKey: JSON.stringify({ alg, ...publicWebKey }),
