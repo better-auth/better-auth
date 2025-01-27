@@ -131,46 +131,7 @@ export function getEndpoints<
 	let api: Record<string, any> = {};
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
-			const headers = new Headers();
-			// let internalCtx = {
-			// 	setHeader(key: string, value: string) {
-			// 		headers.set(key, value);
-			// 	},
-			// 	setCookie(key: string, value: string, options?: CookieOptions) {
-			// 		setCookie(headers, key, value, options);
-			// 	},
-			// 	getCookie(key: string, prefix?: CookiePrefixOptions) {
-			// 		const header = context.headers;
-			// 		const cookieH = header?.get("cookie");
-			// 		const cookie = getCookie(cookieH || "", key, prefix);
-			// 		return cookie;
-			// 	},
-			// 	getSignedCookie(
-			// 		key: string,
-			// 		secret: string,
-			// 		prefix?: CookiePrefixOptions,
-			// 	) {
-			// 		const header = context.headers;
-			// 		if (!header) {
-			// 			return null;
-			// 		}
-			// 		const cookie = getSignedCookie(header, secret, key, prefix);
-			// 		return cookie;
-			// 	},
-			// 	async setSignedCookie(
-			// 		key: string,
-			// 		value: string,
-			// 		secret: string | BufferSource,
-			// 		options?: CookieOptions,
-			// 	) {
-			// 		await setSignedCookie(headers, key, value, secret, options);
-			// 	},
-			// 	redirect(url: string) {
-			// 		headers.set("Location", url);
-			// 		return new APIError("FOUND");
-			// 	},
-			// 	responseHeader: headers,
-			// };
+			let headers = new Headers();
 
 			let internalCtx = await createInternalContext(context, {
 				path: endpoint.path,
@@ -241,7 +202,16 @@ export function getEndpoints<
 					};
 					continue;
 				}
-
+				if (
+					hookRes &&
+					"headers" in hookRes &&
+					hookRes.headers instanceof Headers
+				) {
+					hookRes.headers.forEach((value, key) => {
+						headers.set(value, key);
+					});
+					continue;
+				}
 				if (hookRes) {
 					// return with the response from the hook
 					return hookRes;
@@ -306,14 +276,23 @@ export function getEndpoints<
 							...internalContext,
 							returnHeaders: true,
 						});
-						console.log({ hookRes });
 						if (hookRes) {
-							if ("responseHeader" in hookRes) {
-								const headers = hookRes.responseHeader as Headers;
+							if ("headers" in hookRes && hookRes.headers instanceof Headers) {
+								hookRes.headers.forEach((value, key) => {
+									if (key === "set-cookie") {
+										headers.append(key, value);
+									} else {
+										headers.set(key, value);
+									}
+								});
 								internalContext.responseHeader = headers;
-							} else {
-								internalContext.context.returned = hookRes;
 							}
+							// if ("responseHeader" in hookRes) {
+							// 	const headers = hookRes.responseHeader as Headers;
+							//
+							// } else {
+							// 	internalContext.context.returned = hookRes;
+							// }
 						}
 					} catch (e) {
 						if (e instanceof APIError) {
@@ -325,7 +304,10 @@ export function getEndpoints<
 				}
 			}
 			const response = internalContext.context.returned;
-			if (response instanceof Response) {
+			if (
+				response instanceof Response ||
+				("headers" in response && response.headers instanceof Headers)
+			) {
 				headers.forEach((value, key) => {
 					if (key === "set-cookie") {
 						response.headers.append(key, value);
@@ -334,6 +316,7 @@ export function getEndpoints<
 					}
 				});
 			}
+
 			if (response instanceof APIError) {
 				response.headers = headers;
 				throw response;

@@ -89,25 +89,25 @@ export const bearer = (options?: BearerOptions) => {
 						return !!context.responseHeader.get("set-cookie");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const setCookie = ctx.responseHeader.get("set-cookie");
-						if (!setCookie) {
-							return;
-						}
-						const parsedCookies = parseSetCookieHeader(setCookie);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const sessionCookie = parsedCookies.get(cookieName);
-						if (
-							!sessionCookie ||
-							!sessionCookie.value ||
-							sessionCookie["max-age"] === 0
-						) {
-							return;
-						}
-						const token = sessionCookie.value;
-						ctx.responseHeader.set("set-auth-token", token);
-						return {
-							responseHeader: ctx.responseHeader,
-						};
+						// const setCookie = ctx.responseHeader.get("set-cookie");
+						// if (!setCookie) {
+						// 	return;
+						// }
+						// const parsedCookies = parseSetCookieHeader(setCookie);
+						// const cookieName = ctx.context.authCookies.sessionToken.name;
+						// const sessionCookie = parsedCookies.get(cookieName);
+						// if (
+						// 	!sessionCookie ||
+						// 	!sessionCookie.value ||
+						// 	sessionCookie["max-age"] === 0
+						// ) {
+						// 	return;
+						// }
+						// const token = sessionCookie.value;
+						// ctx.responseHeader.set("set-auth-token", token);
+						// return {
+						// 	responseHeader: ctx.responseHeader,
+						// };
 					}),
 				},
 			],

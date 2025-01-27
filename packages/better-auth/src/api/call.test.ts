@@ -297,8 +297,9 @@ describe("call", async () => {
 			},
 			returnHeaders: true,
 		});
+		console.log({ response });
 		const setCookies = response.headers.get("set-cookie");
-		console.log({ setCookies });
+		// console.log({ setCookies });
 		// expect(setCookies).toContain("after=test");
 		// expect(setCookies).toContain("test-cookie=test-value");
 	});
