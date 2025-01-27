@@ -1,13 +1,7 @@
 "use client";
-import { Menu, Sun, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import Link from "next/link";
-import {
-	Fragment,
-	createContext,
-	useContext,
-	useEffect,
-	useState,
-} from "react";
+import { Fragment, createContext, useContext, useState } from "react";
 import {
 	Accordion,
 	AccordionContent,
@@ -16,7 +10,7 @@ import {
 } from "@/components/ui/accordion";
 import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
 import { contents, examples } from "./sidebar-content";
-import { MobileThemeToggle, ThemeToggle } from "./theme-toggler";
+import { MobileThemeToggle } from "./theme-toggler";
 import { usePathname } from "next/navigation";
 
 interface NavbarMobileContextProps {

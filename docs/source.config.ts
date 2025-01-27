@@ -1,8 +1,4 @@
-import {
-	defineCollections,
-	defineDocs,
-	getDefaultMDXOptions,
-} from "fumadocs-mdx/config";
+import { defineCollections, defineDocs } from "fumadocs-mdx/config";
 import { defineConfig } from "fumadocs-mdx/config";
 import { remarkInstall } from "fumadocs-docgen";
 import { z } from "zod";

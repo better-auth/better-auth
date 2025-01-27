@@ -10,7 +10,7 @@ import { init } from "../init";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { z } from "zod";
 import { createAuthClient } from "../client";
-import { bearer } from "src/plugins";
+import { bearer } from "../plugins/bearer";
 
 describe("call", async () => {
 	const q = z.optional(

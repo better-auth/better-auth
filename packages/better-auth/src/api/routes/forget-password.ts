@@ -5,6 +5,7 @@ import type { AuthContext } from "../../init";
 import { getDate } from "../../utils/date";
 import { generateId } from "../../utils";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../middlewares";
 
 function redirectError(
 	ctx: AuthContext,
@@ -145,6 +146,7 @@ export const forgetPasswordCallback = createAuthEndpoint(
 				description: "The URL to redirect the user to reset their password",
 			}),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
 				description: "Redirects the user to the callback URL with the token",
@@ -193,13 +195,12 @@ export const forgetPasswordCallback = createAuthEndpoint(
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		query: z.optional(
-			z.object({
-				token: z.string().optional(),
-				currentURL: z.string().optional(),
-			}),
-		),
 		method: "POST",
+		query: z
+			.object({
+				token: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			newPassword: z.string({
 				description: "The new password to set",
@@ -234,12 +235,7 @@ export const resetPassword = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const token =
-			ctx.body.token ||
-			ctx.query?.token ||
-			(ctx.query?.currentURL
-				? new URL(ctx.query.currentURL).searchParams.get("token")
-				: "");
+		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,

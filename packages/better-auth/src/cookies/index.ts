@@ -5,7 +5,7 @@ import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { isProduction } from "../utils/env";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { base64Url } from "@better-auth/utils/base64";
 import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
 

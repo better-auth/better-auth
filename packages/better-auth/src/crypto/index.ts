@@ -34,6 +34,7 @@ export const symmetricDecrypt = async ({
 };
 
 export * from "./buffer";
+export * from "./hash";
+export * from "./jwt";
 export * from "./password";
 export * from "./random";
-export * from "./buffer";

@@ -56,6 +56,13 @@ export const useAuthQuery = <T>(
 				await opts?.onSuccess?.(context);
 			},
 			async onError(context) {
+				const { request } = context;
+				const retryAttempts =
+					typeof request.retry === "number"
+						? request.retry
+						: request.retry?.attempts;
+				const retryAttempt = request.retryAttempt || 0;
+				if (retryAttempts && retryAttempt < retryAttempts) return;
 				value.set({
 					error: context.error,
 					data: null,

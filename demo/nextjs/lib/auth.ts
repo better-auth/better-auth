@@ -109,7 +109,7 @@ export const auth = betterAuth({
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				const res = await resend.emails.send({
+				await resend.emails.send({
 					from,
 					to: data.email,
 					subject: "You've been invited to join an organization",

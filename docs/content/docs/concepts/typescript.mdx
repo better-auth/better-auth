@@ -37,9 +37,9 @@ Both the client SDK and the server offer types that can be inferred using the `$
 ```ts title="auth-client.ts" 
 import { createAuthClient } from "better-auth/client"
 
-const authClient =  createAuthClient()
+const authClient = createAuthClient()
 
-export type Session = typeof client.$Infer.Session
+export type Session = typeof authClient.$Infer.Session
 ```
 
 The `Session` type includes both `session` and `user` properties. The user property represents the user object type, and the `session` property represents the `session` object type.

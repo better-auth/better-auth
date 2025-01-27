@@ -2,7 +2,6 @@ import { beforeAll, describe } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { prismaAdapter } from "..";
 import { runAdapterTest } from "../../test";
-import type { BetterAuthOptions } from "../../../types";
 
 const db = new PrismaClient();
 describe("adapter test", async () => {

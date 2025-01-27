@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/client";
 import Database from "better-sqlite3";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { expo } from ".";
 import { expoClient } from "./client";
 import { betterAuth } from "better-auth";
@@ -42,17 +42,9 @@ vi.mock("expo-linking", async () => {
 	};
 });
 
-vi.mock("expo-secure-store", async () => {
-	return {
-		getItemAsync: vi.fn(async (key) => null),
-		setItemAsync: vi.fn(),
-		deleteItemAsync: vi.fn(),
-	};
-});
-
 const fn = vi.fn();
 
-describe("expo", async () => {
+function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 	const storage = new Map<string, string>();
 
 	const auth = betterAuth({
@@ -69,6 +61,7 @@ describe("expo", async () => {
 		},
 		plugins: [expo()],
 		trustedOrigins: ["better-auth://"],
+		...extraOpts,
 	});
 
 	const client = createAuthClient({
@@ -88,9 +81,20 @@ describe("expo", async () => {
 			}),
 		],
 	});
+
+	return { storage, auth, client };
+}
+
+describe("expo", async () => {
+	const { auth, client, storage } = testUtils();
+
 	beforeAll(async () => {
 		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
+		vi.useFakeTimers();
+	});
+	afterAll(() => {
+		vi.useRealTimers();
 	});
 
 	it("should store cookie with expires date", async () => {
@@ -104,7 +108,7 @@ describe("expo", async () => {
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
 		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
-			value: expect.any(String),
+			value: expect.stringMatching(/.+/),
 			expires: expect.any(String),
 		});
 	});
@@ -129,5 +133,86 @@ describe("expo", async () => {
 			expect.stringContaining("accounts.google"),
 			"better-auth:///dashboard",
 		);
+	});
+
+	it("should get cookies", async () => {
+		const c = client.getCookie();
+		expect(c).includes("better-auth.session_token");
+	});
+});
+
+describe("expo with cookieCache", async () => {
+	const { auth, client, storage } = testUtils({
+		session: {
+			expiresIn: 5,
+			cookieCache: {
+				enabled: true,
+				maxAge: 1,
+			},
+		},
+	});
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		vi.useFakeTimers();
+	});
+	afterAll(() => {
+		vi.useRealTimers();
+	});
+
+	it("should store cookie with expires date", async () => {
+		const testUser = {
+			email: "test@test.com",
+			password: "password",
+			name: "Test User",
+		};
+		await client.signUp.email(testUser);
+		const storedCookie = storage.get("better-auth_cookie");
+		expect(storedCookie).toBeDefined();
+		const parsedCookie = JSON.parse(storedCookie || "");
+		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
+			value: expect.stringMatching(/.+/),
+			expires: expect.any(String),
+		});
+		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
+			value: expect.stringMatching(/.+/),
+			expires: expect.any(String),
+		});
+	});
+	it("should refresh session_data when it expired without erasing session_token", async () => {
+		vi.advanceTimersByTime(1000);
+		const { data } = await client.getSession();
+		expect(data).toMatchObject({
+			session: expect.any(Object),
+			user: expect.any(Object),
+		});
+		const storedCookie = storage.get("better-auth_cookie");
+		expect(storedCookie).toBeDefined();
+		const parsedCookie = JSON.parse(storedCookie || "");
+		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
+			value: expect.stringMatching(/.+/),
+			expires: expect.any(String),
+		});
+		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
+			value: expect.stringMatching(/.+/),
+			expires: expect.any(String),
+		});
+	});
+
+	it("should erase both session_data and session_token when token expired", async () => {
+		vi.advanceTimersByTime(5000);
+		const { data } = await client.getSession();
+		expect(data).toBeNull();
+		const storedCookie = storage.get("better-auth_cookie");
+		expect(storedCookie).toBeDefined();
+		const parsedCookie = JSON.parse(storedCookie || "");
+		expect(parsedCookie["better-auth.session_token"]).toMatchObject({
+			value: expect.stringMatching(/^$/),
+			expires: expect.any(String),
+		});
+		expect(parsedCookie["better-auth.session_data"]).toMatchObject({
+			value: expect.stringMatching(/^$/),
+			expires: expect.any(String),
+		});
 	});
 });

@@ -12,7 +12,6 @@ import {
 	Tailwind,
 	Section,
 } from "@react-email/components";
-import * as React from "react";
 
 interface BetterAuthResetPasswordEmailProps {
 	username?: string;

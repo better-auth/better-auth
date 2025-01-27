@@ -117,8 +117,21 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		if (link) {
-			if (link.email !== userInfo.email.toLowerCase()) {
+			if (
+				c.context.options.account?.accountLinking?.allowDifferentEmails !==
+					true &&
+				link.email !== userInfo.email.toLowerCase()
+			) {
 				return redirectOnError("email_doesn't_match");
+			}
+			const existingAccount = await c.context.internalAdapter.findAccount(
+				userInfo.id,
+			);
+			if (existingAccount) {
+				if (existingAccount && existingAccount.userId !== link.userId) {
+					return redirectOnError("account_already_linked_to_different_user");
+				}
+				return redirectOnError("account_already_linked");
 			}
 			const newAccount = await c.context.internalAdapter.createAccount({
 				userId: link.userId,

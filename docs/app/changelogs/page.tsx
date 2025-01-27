@@ -47,13 +47,16 @@ const ChangelogPage = async () => {
 				const mainContent = line.split(";")[0];
 				const context = line.split(";")[2];
 				const mentions = context
-					.split(" ")
+					?.split(" ")
 					.filter((word) => word.startsWith("@"))
 					.map((mention) => {
 						const username = mention.replace("@", "");
 						const avatarUrl = `https://github.com/${username}.png`;
 						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
 					});
+				if (!mentions) {
+					return line;
+				}
 				// Remove &nbsp
 				return mainContent.replace(/&nbsp/g, "") + " – " + mentions.join(" ");
 			}

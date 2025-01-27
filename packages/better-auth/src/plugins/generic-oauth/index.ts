@@ -101,6 +101,11 @@ interface GenericOAuthConfig {
 				emailVerified?: boolean;
 				[key: string]: any;
 		  }>;
+	/**
+	 * Additional search-params to add to the authorizationUrl.
+	 * Warning: Search-params added here overwrite any default params.
+	 */
+	authorizationUrlParams?: Record<string, string>;
 }
 
 interface GenericOAuthOptions {
@@ -255,19 +260,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				"/sign-in/oauth2",
 				{
 					method: "POST",
-					query: z
-						.object({
-							/**
-							 * Redirect to the current URL after the
-							 * user has signed in.
-							 */
-							currentURL: z
-								.string({
-									description: "Redirect to the current URL after sign in",
-								})
-								.optional(),
-						})
-						.optional(),
 					body: z.object({
 						providerId: z.string({
 							description: "The provider ID for the OAuth provider",
@@ -280,6 +272,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						errorCallbackURL: z
 							.string({
 								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to after login if the user is new",
 							})
 							.optional(),
 						disableRedirect: z
@@ -336,6 +334,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						pkce,
 						prompt,
 						accessType,
+						authorizationUrlParams,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -360,6 +359,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
+					if (authorizationUrlParams) {
+						const withAdditionalParams = new URL(finalAuthUrl);
+						for (const [paramName, paramValue] of Object.entries(
+							authorizationUrlParams,
+						)) {
+							withAdditionalParams.searchParams.set(paramName, paramValue);
+						}
+						finalAuthUrl = withAdditionalParams.toString();
+					}
+
 					const { state, codeVerifier } = await generateState(ctx);
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
@@ -457,7 +466,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL } = parsedState;
+					const { callbackURL, codeVerifier, errorURL, newUserURL } =
+						parsedState;
 					const code = ctx.query.code;
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -482,7 +492,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						tokens = await validateAuthorizationCode({
 							code,
-							codeVerifier,
+							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
 							options: {
 								clientId: provider.clientId,
@@ -554,10 +564,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					});
 					let toRedirectTo: string;
 					try {
-						const url = new URL(callbackURL);
+						const url = result.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
 						toRedirectTo = url.toString();
 					} catch {
-						toRedirectTo = callbackURL;
+						toRedirectTo = result.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
 					}
 					throw ctx.redirect(toRedirectTo);
 				},

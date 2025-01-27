@@ -85,6 +85,7 @@ export async function handleOAuthUserInfo(
 					refreshToken: account.refreshToken,
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				}).filter(([_, value]) => value !== undefined),
 			);
 
@@ -124,6 +125,8 @@ export async function handleOAuthUserInfo(
 				const token = await createEmailVerificationToken(
 					c.context.secret,
 					user.email,
+					undefined,
+					c.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 				await c.context.options.emailVerification?.sendVerificationEmail?.(

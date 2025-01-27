@@ -1,4 +1,4 @@
-import { base64url, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { z } from "zod";
 import {
 	APIError,
@@ -8,6 +8,7 @@ import {
 } from "../../api";
 import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
 import { generateRandomString } from "../../crypto";
+import { subtle } from "@better-auth/utils";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -518,7 +519,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					let secretKey = {
 						alg: "HS256",
-						key: await crypto.subtle.generateKey(
+						key: await subtle.generateKey(
 							{
 								name: "HMAC",
 								hash: "SHA-256",
@@ -735,3 +736,4 @@ export const oidcProvider = (options: OIDCOptions) => {
 		schema,
 	} satisfies BetterAuthPlugin;
 };
+export type * from "./types";

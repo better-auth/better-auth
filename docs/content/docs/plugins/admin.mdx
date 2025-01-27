@@ -198,6 +198,13 @@ const impersonatedSession = await authClient.admin.impersonateUser({
   userId: "user_id_here"
 });
 ```
+### Stop Impersonating User
+
+To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
+
+```ts title="admin.ts"
+await authClient.admin.stopImpersonating();
+```  
 
 ### Remove User
 
@@ -260,11 +267,29 @@ And adds one field in the `session` table:
 
 ### Default Role
 
-The default role for a user created by the admin. Defaults to `user`.
+The default role for a user. Defaults to `user`.
+
+```ts title="auth.ts"
+admin({
+    defaultRole: "regular"
+})
+```
+
+you can pass `false` to disable assigning default role
 
 ```ts title="auth.ts"
 admin({
     defaultRole: false //pass false to disable default role assignment
+})
+```
+
+### Admin role
+
+You can specify what role should be consider admin. Default to `admin`
+
+```ts title="auth.ts"
+admin({
+    adminRole: ["admin", "superAdmin"]
 })
 ```
 
@@ -297,5 +322,3 @@ admin({
     defaultBanExpiresIn: 60 * 60 * 24 // 1 day
 })
 ```
-
-

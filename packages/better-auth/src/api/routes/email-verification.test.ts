@@ -93,4 +93,33 @@ describe("Email Verification", async () => {
 		});
 		expect(sessionToken.length).toBeGreaterThan(10);
 	});
+
+	it("should use custom expiresIn", async () => {
+		const { auth, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				expiresIn: 10,
+			},
+		});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(10 * 1000);
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+		expect(res.error?.code).toBe("TOKEN_EXPIRED");
+	});
 });

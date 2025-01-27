@@ -10,7 +10,7 @@ export default function CommunityPage() {
 			<div>
 				<div className="my-4">
 					<h1 className="text-3xl font-bold text-center">Join The Community</h1>
-					<p className="text-center text-white/70">
+					<p className="text-center dark:text-white/70">
 						join the community to get help, share ideas, and stay up-to-date
 						with
 					</p>

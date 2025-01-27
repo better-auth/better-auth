@@ -1,9 +1,7 @@
 <script lang="ts" setup>
 import { type HTMLAttributes, computed } from "vue";
 import type { StepperTitleProps } from "radix-vue";
-import { StepperTitle, useForwardProps } from "radix-vue";
-
-import { cn } from "@/lib/utils";
+import { useForwardProps } from "radix-vue";
 
 const props = defineProps<
 	StepperTitleProps & { class?: HTMLAttributes["class"] }
