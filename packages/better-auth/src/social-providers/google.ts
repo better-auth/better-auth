@@ -53,9 +53,11 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
-			const _scopes = scopes || ["email", "profile", "openid"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "profile", "openid"];
 			options.scope && _scopes.push(...options.scope);
-
+			scopes && _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
