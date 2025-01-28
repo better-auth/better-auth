@@ -234,11 +234,11 @@ export function getEndpoints<
 					 * If there are no after plugins, we can directly throw the error
 					 */
 					if (!afterHooks?.length) {
-						e.headers = headers;
+						// e.headers = headers;
 						throw e;
 					}
 					internalContext.context.returned = e;
-					internalContext.context.returned.headers = headers;
+
 					for (const hook of afterHooks || []) {
 						const match = hook.matcher(internalContext);
 						if (match) {
@@ -256,9 +256,8 @@ export function getEndpoints<
 							}
 						}
 					}
+
 					if (internalContext.context.returned instanceof APIError) {
-						// set the headers from the endpoint
-						internalContext.context.returned.headers = headers;
 						throw internalContext.context.returned;
 					}
 
@@ -276,6 +275,7 @@ export function getEndpoints<
 							...internalContext,
 							returnHeaders: true,
 						});
+						console.log({ hookRes });
 						if (hookRes) {
 							if ("headers" in hookRes && hookRes.headers instanceof Headers) {
 								hookRes.headers.forEach((value, key) => {
@@ -287,12 +287,9 @@ export function getEndpoints<
 								});
 								internalContext.responseHeader = headers;
 							}
-							// if ("responseHeader" in hookRes) {
-							// 	const headers = hookRes.responseHeader as Headers;
-							//
-							// } else {
-							// 	internalContext.context.returned = hookRes;
-							// }
+							if ("response" in hookRes && hookRes) {
+								internalContext.context.returned = hookRes.response;
+							}
 						}
 					} catch (e) {
 						if (e instanceof APIError) {
@@ -306,7 +303,9 @@ export function getEndpoints<
 			const response = internalContext.context.returned;
 			if (
 				response instanceof Response ||
-				("headers" in response && response.headers instanceof Headers)
+				(response &&
+					"headers" in response &&
+					response.headers instanceof Headers)
 			) {
 				headers.forEach((value, key) => {
 					if (key === "set-cookie") {
