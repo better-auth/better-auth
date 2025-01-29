@@ -248,6 +248,17 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		expect(res.length).toBe(3);
 	});
+	test("should find many with offset and limit", async () => {
+		// At this point, `user` contains 5 rows.
+		// offset of 2 returns 3 rows
+		// limit of 2 returns 2 rows
+		const res = await adapter.findMany({
+			model: "user",
+			offset: 2,
+			limit: 2,
+		});
+		expect(res.length).toBe(2);
+	});
 
 	test("should update with multiple where", async () => {
 		await adapter.updateMany({
