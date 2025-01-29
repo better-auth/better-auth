@@ -46,7 +46,7 @@ export const dropbox = (options: DropboxOptions) => {
 			return await validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});

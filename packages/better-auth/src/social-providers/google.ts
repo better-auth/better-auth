@@ -78,7 +78,7 @@ export const google = (options: GoogleOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
