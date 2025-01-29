@@ -105,7 +105,10 @@ export const bearer = (options?: BearerOptions) => {
 						}
 						const token = sessionCookie.value;
 						ctx.responseHeader.set("set-auth-token", token);
-						ctx.responseHeader.set("Access-Control-Expose-Headers", "set-auth-token" );
+						ctx.responseHeader.set(
+							"Access-Control-Expose-Headers",
+							"set-auth-token",
+						);
 						return {
 							responseHeader: ctx.responseHeader,
 						};

@@ -12,7 +12,6 @@ import {
 	Mailbox,
 	NotebookPen,
 	Phone,
-	Plug,
 	ScanFace,
 	ShieldCheck,
 	UserCircle,

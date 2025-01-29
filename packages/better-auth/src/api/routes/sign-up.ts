@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodString } from "zod";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
