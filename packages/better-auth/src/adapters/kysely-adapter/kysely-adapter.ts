@@ -322,7 +322,9 @@ export const kyselyAdapter =
 			async count(data) {
 				const { model, where } = data;
 				const { and, or } = convertWhereClause(model, where);
-				let query = db.selectFrom(getModelName(model)).select(db.fn.count('*').as('count'));
+				let query = db
+					.selectFrom(getModelName(model))
+					.select(db.fn.count("*").as("count"));
 				if (and) {
 					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 				}
