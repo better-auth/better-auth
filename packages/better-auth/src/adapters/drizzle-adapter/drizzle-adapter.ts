@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, or, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, like, or, SQL } from "drizzle-orm";
 import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
@@ -290,10 +290,10 @@ export const drizzleAdapter =
 				const schemaModel = getSchema(model);
 				const clause = where ? convertWhereClause(where, model) : [];
 				const res = await db
-					.select()
+					.select({ count: count() })
 					.from(schemaModel)
 					.where(...clause);
-				return res.length;
+				return res.count;
 			},
 			async update(data) {
 				const { model, where, update: values } = data;
