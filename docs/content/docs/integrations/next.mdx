@@ -115,11 +115,16 @@ Now, when you call functions that set cookies, they will be automatically set.
 "use server";
 import { auth } from "@/lib/auth"
 
-const signIn = async () => {
+type SignInProps = {
+    email: string;
+    password: string;
+}
+
+const signIn = async ({ email, password }: SignInProps) => {
     await auth.api.signInEmail({
         body: {
-            email: "user@email.com",
-            password: "password",
+            email,
+            password,
         }
     })
 }
