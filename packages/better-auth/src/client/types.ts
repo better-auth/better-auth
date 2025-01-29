@@ -57,6 +57,10 @@ export interface BetterAuthClientPlugin {
 	 * plugin or any plugin the user might have added.
 	 */
 	atomListeners?: AtomListener[];
+	/**
+	 * The error codes returned by the plugin
+	 */
+	$ERROR_CODES?: Record<string, string>;
 }
 
 export interface ClientOptions {
@@ -102,8 +106,8 @@ export type InferErrorCodes<O extends ClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
-					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
-						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+					? Plugin["$ERROR_CODES"] extends Record<string, any>
+						? Plugin["$ERROR_CODES"]
 						: {}
 					: {}
 			>

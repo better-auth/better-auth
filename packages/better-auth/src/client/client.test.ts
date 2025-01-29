@@ -13,6 +13,8 @@ import type { Session } from "../types";
 import { BetterFetchError } from "@better-fetch/fetch";
 import { twoFactorClient } from "../plugins";
 import { organizationClient, passkeyClient } from "./plugins";
+import { BASE_ERROR_CODES } from "../error/codes";
+import { ORGANIZATION_ERROR_CODES } from "../plugins/organization/error-codes";
 
 describe("run time proxy", async () => {
 	it("proxy api should be called", async () => {
@@ -112,6 +114,20 @@ describe("run time proxy", async () => {
 			},
 		);
 		expect(called).toBe(true);
+	});
+
+	it("should return error codes", async () => {
+		const client = createSolidClient({
+			plugins: [twoFactorClient(), organizationClient()],
+		});
+		const ErrorCodes = client.getErrorCodes();
+		const c = client.$ERROR_CODES;
+		expect(ErrorCodes.ACCOUNT_NOT_FOUND).toBe(
+			BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
+		);
+		expect(ErrorCodes.ORGANIZATION_ALREADY_EXISTS).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+		);
 	});
 });
 

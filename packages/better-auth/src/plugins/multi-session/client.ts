@@ -13,5 +13,8 @@ export const multiSessionClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: {
+			INVALID_SESSION_TOKEN: "Invalid session token",
+		} as const,
 	} satisfies BetterAuthClientPlugin;
 };

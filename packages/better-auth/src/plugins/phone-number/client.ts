@@ -1,4 +1,4 @@
-import type { phoneNumber } from ".";
+import { PHONE_NUMBER_ERROR_CODES, type phoneNumber } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const phoneNumberClient = () => {
@@ -15,5 +15,6 @@ export const phoneNumberClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

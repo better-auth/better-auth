@@ -1,4 +1,4 @@
-import type { anonymous } from ".";
+import { ANONYMOUS_ERROR_CODES, type anonymous } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const anonymousClient = () => {
@@ -8,5 +8,6 @@ export const anonymousClient = () => {
 		pathMethods: {
 			"/sign-in/anonymous": "POST",
 		},
+		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

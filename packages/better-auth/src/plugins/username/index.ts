@@ -6,7 +6,6 @@ import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
-import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
 import { schema } from "./schema";
 import { mergeSchema } from "../../db/schema";
 
@@ -14,13 +13,14 @@ export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
 };
 
+export const USERNAME_ERROR_CODES = {
+	INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
+	EMAIL_NOT_VERIFIED: "email not verified",
+	UNEXPECTED_ERROR: "unexpected error",
+	USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
+};
+
 export const username = (options?: UsernameOptions) => {
-	const ERROR_CODES = {
-		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
-		EMAIL_NOT_VERIFIED: "email not verified",
-		UNEXPECTED_ERROR: "unexpected error",
-		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
-	};
 	return {
 		id: "username",
 		endpoints: {
@@ -82,7 +82,7 @@ export const username = (options?: UsernameOptions) => {
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", { username });
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 
@@ -92,7 +92,7 @@ export const username = (options?: UsernameOptions) => {
 					) {
 						await sendVerificationEmailFn(ctx, user);
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 
@@ -111,14 +111,14 @@ export const username = (options?: UsernameOptions) => {
 					});
 					if (!account) {
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", { username });
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -128,7 +128,7 @@ export const username = (options?: UsernameOptions) => {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -186,7 +186,7 @@ export const username = (options?: UsernameOptions) => {
 							});
 							if (user) {
 								throw new APIError("UNPROCESSABLE_ENTITY", {
-									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									message: USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
 						}
@@ -194,6 +194,6 @@ export const username = (options?: UsernameOptions) => {
 				},
 			],
 		},
-		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
+		$ERROR_CODES: USERNAME_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

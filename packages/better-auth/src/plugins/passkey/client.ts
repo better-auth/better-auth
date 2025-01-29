@@ -10,7 +10,11 @@ import type {
 } from "@simplewebauthn/browser";
 import type { Session } from "inspector";
 import type { User } from "../../types";
-import type { passkey as passkeyPl, Passkey } from ".";
+import {
+	type passkey as passkeyPl,
+	type Passkey,
+	PASSKEY_ERROR_CODES,
+} from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
@@ -223,5 +227,6 @@ export const passkeyClient = () => {
 				signal: "_listPasskeys",
 			},
 		],
+		$ERROR_CODES: PASSKEY_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
