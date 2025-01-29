@@ -324,6 +324,17 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
+  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings. 
+  ```ts title="auth.ts"
+  const auth = betterAuth({
+      account: {
+          accountLinking: {
+              allowDifferentEmails: true
+          }
+      },
+  });
+  ```
+
 - **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server. 
 
   ```ts

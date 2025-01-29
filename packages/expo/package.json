@@ -1,12 +1,12 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.1.14",
+  "version": "1.1.15",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "scripts": {
     "test": "vitest",
-    "build": "tsup --dts --minify --clean",
+    "build": "tsup --dts --clean",
     "dev": "tsup --watch --sourcemap --dts"
   },
   "exports": {
@@ -51,5 +51,8 @@
   "dependencies": {
     "better-call": "^0.3.3",
     "zod": "^3.23.8"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

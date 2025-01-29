@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.1.14",
+  "version": "1.1.15",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -586,6 +586,8 @@
     "react": "^18.3.1",
     "react-native": "~0.74.6",
     "solid-js": "^1.9.3",
+    "tarn": "^3.0.2",
+    "tedious": "^18.6.1",
     "tsup": "^8.3.5",
     "typescript": "5.6.1-rc",
     "vitest": "^1.6.0",
@@ -600,9 +602,9 @@
     "@simplewebauthn/server": "^13.0.0",
     "better-call": "0.3.3",
     "defu": "^6.1.4",
-    "nanostores": "^0.11.3",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
+    "nanostores": "^0.11.3",
     "zod": "^3.24.1"
   },
   "overrides": {
