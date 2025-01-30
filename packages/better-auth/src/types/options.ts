@@ -165,17 +165,17 @@ export type BetterAuthOptions = {
 		 */
 		enabled: boolean;
 		/**
-		 * Require email verification before a session
-		 * can be created for the user.
+		 * Require email verification before creating a session.
 		 *
-		 * if the user is not verified, the user will not be able to sign in
-		 * and on sign in attempts, the user will be prompted to verify their email.
+		 * if enabled, the user must verify their email before they can signin.
+		 * And on sign in attempts, `sendVerificationEmail` will be called, to
+		 * send the user email verification token.
 		 */
 		requireEmailVerification?: boolean;
 		/**
 		 * The maximum length of the password.
 		 *
-		 * @default 128
+		 * @default 32
 		 */
 		maxPasswordLength?: number;
 		/**
@@ -204,6 +204,7 @@ export type BetterAuthOptions = {
 		/**
 		 * Number of seconds the reset password token is
 		 * valid for.
+		 *
 		 * @default 1 hour (60 * 60)
 		 */
 		resetPasswordTokenExpiresIn?: number;
@@ -240,19 +241,56 @@ export type BetterAuthOptions = {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
+		/**
+		 * Map core fields to different fields in your database.
+		 * It does not affect the actual type, it just changes the mapping
+		 * to your database.
+		 *
+		 * @example
+		 *
+		 * ```ts
+		 * fields: {
+		 * 	name: "display_name",
+		 * 	email: "email_address"
+		 * }
+		 * ```
+		 *
+		 * NB: If you're using adapter, you may want to provide they `key`
+		 * of the field in your orm rather than the actual field in your database.
+		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
 		 * Additional fields for the session
+		 *
+		 * @example
+		 * ```ts
+		 * additionalFields: {
+		 * 	plan: {
+		 * 		type: "string",
+		 * 		defaultValue: "free"
+		 * 	},
+		 * 	role: {
+		 * 		type: ["super-admin", "user"],
+		 * 		required: false,
+		 * 		input: false
+		 * 	}
+		 * }
+		 * ```
+		 *
+		 * @see https://www.better-auth.com/docs/concepts/database#extending-core-schema
 		 */
 		additionalFields?: {
 			[key: string]: FieldAttribute;
 		};
 		/**
 		 * Changing email configuration
+		 *
+		 * @see https://www.better-auth.com/docs/concepts/users-accounts#change-email
 		 */
 		changeEmail?: {
 			/**
 			 * Enable changing email
+			 *
 			 * @default false
 			 */
 			enabled: boolean;
@@ -316,7 +354,9 @@ export type BetterAuthOptions = {
 		 */
 		modelName?: string;
 		/**
-		 * Map fields
+		 * Map core fields to different fields in your database.
+		 * It does not affect the actual type, it just changes the mapping
+		 * to your database.
 		 *
 		 * @example
 		 * ```ts
@@ -396,9 +436,33 @@ export type BetterAuthOptions = {
 		 */
 		freshAge?: number;
 	};
+	/**
+	 * Account configuration
+	 */
 	account?: {
+		/**
+		 * Model name for account table
+		 *
+		 * @default "account"
+		 */
 		modelName?: string;
+		/**
+		 * Map core fields to different fields in your database.
+		 * It does not affect the actual type, it just changes the mapping
+		 * to your database.
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  userId: "user_id"
+		 * }
+		 */
 		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		/**
+		 * Account Linking Configuration
+		 *
+		 * @see https://www.better-auth.com/docs/concepts/users-accounts#account-linking
+		 */
 		accountLinking?: {
 			/**
 			 * Enable account linking
@@ -408,6 +472,14 @@ export type BetterAuthOptions = {
 			enabled?: boolean;
 			/**
 			 * List of trusted providers
+			 *
+			 * When a user logs in using a trusted provider, their account will be automatically
+			 * linked even if the provider doesn’t confirm the email verification status.
+			 *
+			 * @example
+			 * ```ts
+			 * trustedProviders: ["github", "google"]
+			 * ```
 			 */
 			trustedProviders?: Array<
 				LiteralUnion<SocialProviderList[number] | "email-password", string>
@@ -426,15 +498,42 @@ export type BetterAuthOptions = {
 	 * Verification configuration
 	 */
 	verification?: {
+		/**
+		 * Model name for verification table
+		 *
+		 * @default "verification"
+		 */
 		modelName?: string;
-		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+		/**
+		 * Map core fields to different fields in your database.
+		 * It does not affect the actual type, it just changes the mapping
+		 * to your database.
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  expiresAt: "expires"
+		 * }
+		 */
+		fields?: Partial<Record<keyof OmitId<Account>, string>>;
 	};
 	/**
 	 * List of trusted origins.
+	 *
+	 * Trusted origins prevent CSRF attacks and block open redirects. The server url is trusted
+	 * by default but any other request from a different origin, if it contains cookie or if it's
+	 * provided as a callback url the request will be blocked.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: ["http://localhost:3000", process.env.FRONTEND_URL]
+	 * ```
 	 */
 	trustedOrigins?: string[];
 	/**
 	 * Rate limiting configuration
+	 *
+	 * @see https://www.better-auth.com/docs/concepts/rate-limit
 	 */
 	rateLimit?: {
 		/**
@@ -584,6 +683,9 @@ export type BetterAuthOptions = {
 				attributes?: CookieOptions;
 			};
 		};
+		/**
+		 * Default cookie that's applied to all cookies assigned by Better Auth
+		 */
 		defaultCookieAttributes?: CookieOptions;
 		/**
 		 * Prefix for cookies. If a cookie name is provided
@@ -608,6 +710,9 @@ export type BetterAuthOptions = {
 			  }) => string)
 			| false;
 	};
+	/**
+	 * Customize Logger
+	 */
 	logger?: Logger;
 	/**
 	 * allows you to define custom hooks that can be
