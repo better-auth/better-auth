@@ -668,7 +668,19 @@ export const contents: Content[] = [
 	},
 	{
 		title: "Databases",
-		Icon: () => <DatabaseZap className="text-current size-4" />,
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="20px"
+				height="20px"
+				viewBox="0 0 24 24"
+			>
+				<path
+					fill="currentColor"
+					d="M12 11q-3.75 0-6.375-1.175T3 7q0-1.65 2.625-2.825Q8.25 3 12 3t6.375 1.175Q21 5.35 21 7q0 1.65-2.625 2.825Q15.75 11 12 11Zm0 5q-3.75 0-6.375-1.175T3 12V9.5q0 1.1 1.025 1.863q1.025.762 2.45 1.237q1.425.475 2.963.687q1.537.213 2.562.213t2.562-.213q1.538-.212 2.963-.687q1.425-.475 2.45-1.237Q21 10.6 21 9.5V12q0 1.65-2.625 2.825Q15.75 16 12 16Zm0 5q-3.75 0-6.375-1.175T3 17v-2.5q0 1.1 1.025 1.863q1.025.762 2.45 1.237q1.425.475 2.963.688q1.537.212 2.562.212t2.562-.212q1.538-.213 2.963-.688t2.45-1.237Q21 15.6 21 14.5V17q0 1.65-2.625 2.825Q15.75 21 12 21Z"
+				/>
+			</svg>
+		),
 		list: [
 			{
 				title: "MySQL",
@@ -1457,7 +1469,42 @@ export const contents: Content[] = [
 	},
 	{
 		title: "Contribute",
-		Icon: () => <GitFork className="text-current size-4" />,
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+			>
+				<g fill="none" stroke="currentColor" strokeWidth="2">
+					<circle
+						cx="6"
+						cy="6"
+						r="3"
+						fill="currentColor"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+					<circle
+						cx="18"
+						cy="6"
+						r="3"
+						fill="currentColor"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+					<circle
+						cx="12"
+						cy="18"
+						r="3"
+						fill="currentColor"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+					<path d="M6 9v1a2 2 0 0 0 2 2h4m6-3v1a2 2 0 0 1-2 2h-4m0 0v3" />
+				</g>
+			</svg>
+		),
 		list: [
 			{
 				title: "Getting Started",
