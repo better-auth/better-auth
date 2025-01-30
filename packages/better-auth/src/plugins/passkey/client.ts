@@ -1,19 +1,19 @@
 import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	PublicKeyCredentialCreationOptionsJSON,
+	PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
 import {
 	WebAuthnError,
 	startAuthentication,
 	startRegistration,
 } from "@simplewebauthn/browser";
-import type {
-	PublicKeyCredentialCreationOptionsJSON,
-	PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/browser";
 import type { Session } from "inspector";
-import type { User } from "../../types";
-import type { passkey as passkeyPl, Passkey } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
-import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
+import type { Passkey, passkey as passkeyPl } from ".";
+import { useAuthQuery } from "../../client";
+import type { BetterAuthClientPlugin } from "../../client/types";
+import type { User } from "../../types";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -59,7 +59,7 @@ export const getPasskeyActions = (
 				...options,
 				method: "POST",
 			});
-			if (!verified.data) {
+			if (verified.data) {
 				return verified;
 			}
 		} catch (e) {
@@ -116,7 +116,7 @@ export const getPasskeyActions = (
 				},
 				method: "POST",
 			});
-			if (!verified.data) {
+			if (verified.data) {
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
