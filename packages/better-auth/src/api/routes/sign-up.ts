@@ -141,7 +141,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 			const additionalData = parseUserInput(
 				ctx.context.options,
-				additionalFields as any,
+				{
+					email,
+					...additionalFields as any,
+				},
 			);
 			let createdUser: User;
 			try {
