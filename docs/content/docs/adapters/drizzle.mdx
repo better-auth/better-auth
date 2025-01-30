@@ -24,18 +24,37 @@ export const auth = betterAuth({
 });
 ```
 
-## Schema generaton
+## Schema generaton & migration
 
-✅ The [Better Auth CLI](/docs/concepts/cli) **supports** Drizzle ORM.
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
 
-```bash title="Terminal"
+<table>
+  <tr className="border-b">
+    <th>
+      <p className="font-bold text-[16px] mb-1">MS SQL Schema Generation</p>
+    </th>
+    <th>
+      <p className="font-bold text-[16px] mb-1">MS SQL Schema Migration</p>
+    </th>
+  </tr>
+  <tr className="h-10">
+    <td>✅ Supported</td>
+    <td>
+      ❌ Not Supported - Use Drizzle [migration
+      command](https://orm.drizzle.team/docs/migrations)
+    </td>
+  </tr>
+</table>
+
+```bash title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
-This will generate the right schema for your Drizzle ORM instance.
-
-Once you've ensured that all of your schema's are setup correctly, you can run the push command to apply the schema to your database.
-
-```bash title="Terminal"
-drizzle-kit push
+```bash title="Schema Migration"
+drizzle-kit migrate
 ```
+
+## Additional Information
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
