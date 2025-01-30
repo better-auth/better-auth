@@ -15,27 +15,39 @@ Then, you can use the mongodb adapter.
 import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
- 
+
 const client = new MongoClient("mongodb://localhost:27017/database");
-const db = client.db()
- 
+const db = client.db();
+
 export const auth = betterAuth({
-    database: mongodbAdapter(db)
-})
+  database: mongodbAdapter(db),
+});
 ```
 
-## Schema generaton
+## Schema generaton & migration
 
-✅ The [Better Auth CLI](/docs/concepts/cli) **supports** Drizzle ORM.
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration and plugins.
 
-```bash title="Terminal"
+<table>
+  <tr className="border-b">
+    <th>
+      <p className="font-bold text-[16px] mb-1">MongoDB Schema Generation</p>
+    </th>
+    <th>
+      <p className="font-bold text-[16px] mb-1">MongoDB Schema Migration</p>
+    </th>
+  </tr>
+  <tr className="h-10">
+    <td>✅ Supported</td>
+    <td>❌ Not Supported</td>
+  </tr>
+</table>
+
+```bash title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
-This will generate the right schema for your Drizzle ORM instance.
+## Additional Information
 
-Once you've ensured that all of your schema's are setup correctly, you can run the push command to apply the schema to your database.
-
-```bash title="Terminal"
-drizzle-kit push
-```
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
