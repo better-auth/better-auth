@@ -82,6 +82,13 @@ export const getPasskeyActions = (
 			 * identify the passkey in the UI.
 			 */
 			name?: string;
+
+			/**
+			 * The type of attachment for the passkey. This is used to
+			 * determine the type of attachment for the passkey.
+			 */
+			authenticatorAttachment?: "platform" | "cross-platform";
+
 			/**
 			 * Try to silently create a passkey with the password manager that the user just signed
 			 * in with.
@@ -95,6 +102,9 @@ export const getPasskeyActions = (
 			"/passkey/generate-register-options",
 			{
 				method: "GET",
+				query: {
+					authenticatorAttachment: opts?.authenticatorAttachment,
+				},
 			},
 		);
 		if (!options.data) {
