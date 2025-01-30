@@ -515,7 +515,7 @@ export type BetterAuthOptions = {
 		 *  expiresAt: "expires"
 		 * }
 		 */
-		fields?: Partial<Record<keyof OmitId<Account>, string>>;
+		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 	};
 	/**
 	 * List of trusted origins.
