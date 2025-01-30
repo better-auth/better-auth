@@ -103,7 +103,9 @@ export const getPasskeyActions = (
 			{
 				method: "GET",
 				query: {
-					authenticatorAttachment: opts?.authenticatorAttachment,
+					...(opts?.authenticatorAttachment && {
+						authenticatorAttachment: opts.authenticatorAttachment
+					})
 				},
 			},
 		);
