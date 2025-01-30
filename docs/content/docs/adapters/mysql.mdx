@@ -3,39 +3,58 @@ title: MySQL
 description: Integrate Better Auth with MySQL.
 ---
 
-MongoDB is a popular NoSQL database that is widely used for building scalable and flexible applications. It provides a flexible schema that allows for easy data modeling and querying.
-Read more here: [MongoDB](https://www.mongodb.com/).
+MySQL is a popular open-source relational database management system (RDBMS) that is widely used for building web applications and other types of software. It provides a flexible and scalable database solution that allows for efficient storage and retrieval of data.
+Read more here: [MySQL](https://www.mysql.com/).
 
 ## Example Usage
 
-Make sure you have MongoDB installed and configured.
-Then, you can use the mongodb adapter.
+Make sure you have MySQL installed and configured.
+Then, you can connect it straight into Better Auth.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "better-auth/adapters/mongodb";
- 
-const client = new MongoClient("mongodb://localhost:27017/database");
-const db = client.db()
- 
+import { createPool } from "mysql2/promise";
+
 export const auth = betterAuth({
-    database: mongodbAdapter(db)
-})
+  database: createPool({
+    host: "localhost",
+    user: "root",
+    password: "password",
+    database: "database",
+  }),
+});
 ```
 
-## Schema generaton
+## Schema generaton & migration
 
-✅ The [Better Auth CLI](/docs/concepts/cli) **supports** Drizzle ORM.
+The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
+your database schema based on your Better Auth configuration.
 
-```bash title="Terminal"
+<table>
+  <tr className="border-b">
+    <th>
+      <p className="font-bold text-[16px] mb-1">MySQL Schema Generation</p>
+    </th>
+    <th>
+      <p className="font-bold text-[16px] mb-1">MySQL Schema Migration</p>
+    </th>
+  </tr>
+  <tr className="h-10">
+    <td>✅ Supported</td>
+    <td>✅ Supported</td>
+  </tr>
+</table>
+
+```bash title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
-This will generate the right schema for your Drizzle ORM instance.
-
-Once you've ensured that all of your schema's are setup correctly, you can run the push command to apply the schema to your database.
-
-```bash title="Terminal"
-drizzle-kit push
+```bash title="Schema Migration"
+npx @better-auth/cli@latest migrate
 ```
+
+## Additional Information
+
+MySQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
