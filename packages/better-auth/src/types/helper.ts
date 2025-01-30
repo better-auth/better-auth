@@ -55,4 +55,5 @@ export type DeepPartial<T> = T extends Function
 	: T extends object
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
-export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+
+export type Expand<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
