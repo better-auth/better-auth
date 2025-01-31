@@ -145,8 +145,7 @@ const res = await authClient.signIn.sso({
 
 or you can specify the domain:
 
-
-```
+```ts title="sign-in-domain.ts"
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
