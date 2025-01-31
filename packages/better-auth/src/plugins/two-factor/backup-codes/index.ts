@@ -12,6 +12,7 @@ import type {
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { twoFactorVerificationSchema } from "..";
 
 export interface BackupCodeOptions {
 	/**
@@ -93,7 +94,6 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 		endpoints: {
 			verifyBackupCode: createAuthEndpoint(
 				"/two-factor/verify-backup-code",
-
 				{
 					method: "POST",
 					body: z.object({
@@ -164,38 +164,74 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 				},
 			),
 			generateBackupCodes: createAuthEndpoint(
-				"/two-factor/generate-backup-codes",
-				{
-					method: "POST",
-					body: z.object({
-						password: z.string(),
-					}),
-					use: [sessionMiddleware],
-				},
-				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
-					if (!user.twoFactorEnabled) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
-						});
-					}
-					await ctx.context.password.checkPassword(user.id, ctx);
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
-						options,
-					);
-					await ctx.context.adapter.update({
-						model: twoFactorTable,
-						update: {
-							backupCodes: backupCodes.encryptedBackupCodes,
-						},
-						where: [
-							{
-								field: "userId",
-								value: ctx.context.session.user.id,
-							},
-						],
-					});
+                "/two-factor/generate-backup-codes",
+                {
+                    method: "POST",
+                    body: twoFactorVerificationSchema,
+                    use: [sessionMiddleware],
+                },
+                async (ctx) => {
+                    const user = ctx.context.session.user as UserWithTwoFactor;
+                    if (!user.twoFactorEnabled) {
+                        throw new APIError("BAD_REQUEST", {
+                            message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+                        });
+                    }
+					// Handle verification based on type
+                    const { verification } = ctx.body;
+                    if (verification.type === "password") {
+						const contextWithPassword = {
+							...ctx,
+							body: {
+								...ctx.body,
+								password: verification.password
+							}
+						};
+                        await ctx.context.password.checkPassword(user.id, contextWithPassword);
+                    } else {
+                        // Email OTP verification - use the standard OTP verification
+                        const verificationValue = await ctx.context.internalAdapter.findVerificationValue(
+                            `sign-in-otp-${user.email}`  // Use the standard OTP identifier
+                        );
+                        if (!verificationValue) {
+                            throw new APIError("BAD_REQUEST", {
+                                message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
+                            });
+                        }
+                        if (verificationValue.expiresAt < new Date()) {
+                            await ctx.context.internalAdapter.deleteVerificationValue(
+                                verificationValue.id
+                            );
+                            throw new APIError("BAD_REQUEST", {
+                                message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+                            });
+                        }
+                        if (verificationValue.value !== verification.otp) {
+                            throw new APIError("BAD_REQUEST", {
+                                message: TWO_FACTOR_ERROR_CODES.INVALID_EMAIL_OTP,
+                            });
+                        }
+                        await ctx.context.internalAdapter.deleteVerificationValue(
+                            verificationValue.id
+                        );
+                    }
+
+                    const backupCodes = await generateBackupCodes(
+                        ctx.context.secret,
+                        options,
+                    );
+                    await ctx.context.adapter.update({
+                        model: twoFactorTable,
+                        update: {
+                            backupCodes: backupCodes.encryptedBackupCodes,
+                        },
+                        where: [
+                            {
+                                field: "userId",
+                                value: ctx.context.session.user.id,
+                            },
+                        ],
+                    });
 					return ctx.json({
 						status: true,
 						backupCodes: backupCodes.backupCodes,

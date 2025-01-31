@@ -80,11 +80,28 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password:
+
+To enable two-factor authentication, you can use either password verification or email OTP verification (useful for social login users):
 
 ```ts title="two-factor.ts"
+// Using password verification
 const { data } = await authClient.twoFactor.enable({
-    password: "password" // user password required
+    verification: {
+        type: 'password',
+        password: "user-password"
+    }
+})
+
+// Using email OTP verification (for social login users)
+// First send OTP
+await client.twoFactor.sendOtp()
+
+// Then enable 2FA with the received OTP
+const { data } = await authClient.twoFactor.enable({
+    verification: {
+        type: 'email_otp',
+        otp: "received-otp"
+    }
 })
 ```
 
@@ -266,13 +283,28 @@ const verifyOtp = async (code: string) => {
 
 Backup codes are generated and stored in the database. This can be used to recover access to the account if the user loses access to their phone or email.
 
+
 #### Generating Backup Codes
-Generate backup codes for account recovery:
+Generate backup codes for account recovery using either password or email OTP verification:
 
 ```ts
-const { data, error } = await authClient.twoFactor.generateBackupCodes({
-    password: "password" // user password required
+// Using password verification
+const { data } = await authClient.twoFactor.generateBackupCodes({
+    verification: {
+        type: 'password',
+        password: "user-password"
+    }
 })
+
+// Using email OTP verification
+await client.twoFactor.sendOtp()
+const { data } = await authClient.twoFactor.generateBackupCodes({
+    verification: {
+        type: 'email_otp',
+        otp: "received-otp"
+    }
+})
+
 if (data) {
     // Show the backup codes to the user
 }
@@ -446,6 +478,32 @@ const authClient =  createAuthClient({
     ]
 })
 ```
+
+### Verification Methods
+
+Better Auth supports two methods for verifying sensitive 2FA operations:
+
+1. **Password Verification**: Traditional password-based verification for users who signed up with email/password.
+2. **Email OTP Verification**: For social login users or as an alternative verification method.
+
+This applies to:
+- Enabling 2FA
+- Disabling 2FA
+- Generating new backup codes
+- Getting TOTP URI
+
+Example using email OTP verification:
+```ts
+// First, send the verification OTP
+await client.twoFactor.sendOtp()
+
+// Then use the OTP for the operation
+const result = await client.twoFactor.enable({
+    verification: {
+        type: 'email_otp',
+        otp: "received-otp"
+    }
+})
 
 
 **Options**

@@ -13,6 +13,7 @@ import type {
 import { setSessionCookie } from "../../../cookies";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { createOTP } from "@better-auth/utils/otp";
+import { twoFactorVerificationSchema } from "..";
 
 export type TOTPOptions = {
 	/**
@@ -115,11 +116,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 		{
 			method: "POST",
 			use: [sessionMiddleware],
-			body: z.object({
-				password: z.string({
-					description: "User password",
-				}),
-			}),
+			body: twoFactorVerificationSchema,
 			metadata: {
 				openapi: {
 					summary: "Get TOTP URI",
@@ -168,11 +165,38 @@ export const totp2fa = (options?: TOTPOptions) => {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
+	
 			const secret = await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: twoFactor.secret,
 			});
-			await ctx.context.password.checkPassword(user.id, ctx);
+	
+			// Handle verification based on type
+			const { verification } = ctx.body;
+			if (verification.type === 'password') {
+				const contextWithPassword = {
+					...ctx,
+					body: {
+						...ctx.body,
+						password: verification.password
+					}
+				};
+				await ctx.context.password.checkPassword(user.id, contextWithPassword);
+			} else {
+				const verificationValue = await ctx.context.internalAdapter.findVerificationValue(
+					`2fa-otp-${user.id}`,
+				);
+				if (!verificationValue || 
+					verificationValue.expiresAt < new Date() || 
+					verificationValue.value !== verification.otp
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: TWO_FACTOR_ERROR_CODES.INVALID_OTP,
+					});
+				}
+				await ctx.context.internalAdapter.deleteVerificationValue(verificationValue.id);
+			}
+	
 			const totpURI = createOTP(secret, {
 				digits: opts.digits,
 				period: opts.period,
