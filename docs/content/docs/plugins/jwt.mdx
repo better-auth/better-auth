@@ -77,7 +77,7 @@ await fetch("/api/auth/token", {
 
 ### Verifying the token
 The token can be verified in your own service, without the need for an additional verify call or database check.
-For this JWKS is used, the public key can be fetched from the `/jwks` endpoint.
+For this JWKS is used, the public key can be fetched from the `/api/auth/jwks` endpoint.
 
 Since this key is not subject to a frequent change, it can be cached indefinitely.
 The Key ID (kid) that was used to sign a JWT is included in the header of the token.
