@@ -35,7 +35,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
             github: {
                 clientId: "your-client-id",
                 clientSecret: "your-client-secret",
-                redirectURL: "https://my-main-app.com/api/auth/github/callback". // [!code highlight]
+                redirectURI: "https://my-main-app.com/api/auth/github/callback". // [!code highlight]
             }
        }
     })
@@ -51,7 +51,7 @@ The plugin adds an endpoint to your server that proxies OAuth requests. When you
 ```ts
 await authClient.signIn.social({
     provider: "github",
-    redirectURL: "/dashboard" // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"
+    callbackURL: "/dashboard" // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"
 })
 ```
 
