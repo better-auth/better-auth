@@ -605,7 +605,7 @@ export type BetterAuthOptions = {
 			| ((options: {
 					model: LiteralUnion<Models, string>;
 					size?: number;
-			  }) => string)
+			  }) => Promise<string> | string)
 			| false;
 	};
 	logger?: Logger;

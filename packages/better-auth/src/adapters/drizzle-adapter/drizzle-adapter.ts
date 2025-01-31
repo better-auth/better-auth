@@ -52,7 +52,7 @@ const createTransform = (
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		getSchema,
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -62,7 +62,7 @@ const createTransform = (
 					? {}
 					: {
 							id: options.advanced?.generateId
-								? options.advanced.generateId({
+								? await options.advanced.generateId({
 										model,
 									})
 								: data.id || generateId(),
@@ -249,7 +249,7 @@ export const drizzleAdapter =
 			id: "drizzle",
 			async create(data) {
 				const { model, data: values } = data;
-				const transformed = transformInput(values, model, "create");
+				const transformed = await transformInput(values, model, "create");
 				const schemaModel = getSchema(model);
 				checkMissingFields(schemaModel, getModelName(model), transformed);
 				const builder = db.insert(schemaModel).values(transformed);

@@ -70,7 +70,7 @@ const createTransform = (
 
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
-		transformInput(
+		async transformInput(
 			data: Record<string, any>,
 			model: string,
 			action: "create" | "update",
@@ -80,7 +80,7 @@ const createTransform = (
 					? {}
 					: {
 							id: options.advanced?.generateId
-								? options.advanced.generateId({
+								? await options.advanced.generateId({
 										model,
 									})
 								: data.id || generateId(),
@@ -249,7 +249,7 @@ export const kyselyAdapter =
 			id: "kysely",
 			async create(data) {
 				const { model, data: values, select } = data;
-				const transformed = transformInput(values, model, "create");
+				const transformed = await transformInput(values, model, "create");
 				const builder = db.insertInto(getModelName(model)).values(transformed);
 				return transformOutput(
 					await withReturning(transformed, builder, model, []),
