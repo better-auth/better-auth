@@ -230,6 +230,7 @@ Better Auth provides a `useSession` hook to easily access session data on the cl
 It has the following properties:
 - **data**: the actual session data which includes `session` and `user` object.
 - **isPending**: a boolean that indicates whether the session is being loaded.
+- **refetch**: a function that re-fetches the session and updates the value for all `useSession` usages.
 - **error**: an error object that contains any errors that occurred while loading the session.
 
 <Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="React">
@@ -242,7 +243,8 @@ It has the following properties:
             const { // [!code highlight]
                 data: session, // [!code highlight]
                 isPending, //loading state // [!code highlight]
-                error //error object // [!code highlight]
+                error, //error object // [!code highlight]
+                refetch //refetch the session
             } = authClient.useSession() // [!code highlight]
 
             return (
