@@ -201,9 +201,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "GET",
 					query: z.object({
 						email: z.string({
-							description: "Email address to get the OTP",
+							description: "Email address the OTP was sent to",
 						}),
-						type: z.enum(types),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
 					}),
 					metadata: {
 						SERVER_ONLY: true,
@@ -245,6 +247,80 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				},
 			),
+			checkVerificationOTP: createAuthEndpoint(
+				"/email-otp/check-verification-otp",
+				{
+					method: "POST",
+					body: z.object({
+						email: z.string({
+							description: "Email address the OTP was sent to",
+						}),
+						type: z.enum(types, {
+							description: "Type of the OTP",
+						}),
+						otp: z.string({
+							description: "OTP to verify",
+						}),
+					}),
+					metadata: {
+						openapi: {
+							description: "Check if a verification OTP is valid",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const email = ctx.body.email;
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+					const verificationValue =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`${ctx.body.type}-otp-${email}`,
+						);
+					if (!verificationValue) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					if (verificationValue.expiresAt < new Date()) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
+						});
+					}
+					const otp = ctx.body.otp;
+					if (verificationValue.value !== otp) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					return ctx.json({
+						success: true,
+					});
+				},
+			),
 			verifyEmailOTP: createAuthEndpoint(
 				"/email-otp/verify-email",
 				{
@@ -259,7 +335,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Verify email OTP",
+							description: "Verify email with OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -384,7 +460,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Sign in with email OTP",
+							description: "Sign in with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -509,7 +585,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Forget password with email OTP",
+							description: "Send a password reset OTP to the user",
 							responses: {
 								200: {
 									description: "Success",
@@ -574,7 +650,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Reset password with email OTP",
+							description: "Reset user password with OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -707,6 +783,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/send-verification-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/check-verification-otp";
 				},
 				window: 60,
 				max: 3,
