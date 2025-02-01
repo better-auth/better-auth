@@ -1,0 +1,20 @@
+{
+  "name": "@better-auth/stripe",
+  "author": "Bereket Engida",
+  "version": "1.0.0",
+  "description": "Stripe plugin for Better Auth",
+  "scripts": {
+    "dev": "tsup"
+  },
+  "keywords": [
+    "stripe",
+    "auth",
+    "stripe"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "better-auth": "workspace:^",
+    "stripe": "^17.6.0",
+    "zod": "^3.24.1"
+  }
+}
