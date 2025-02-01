@@ -32,9 +32,9 @@ To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key fo
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `SameSite` attribute to `LAX` by default to prevent cross-site request forgery attacks. And the `HttpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
 
-For Cross Sub Domain cookies, you can set the `crossSubDomain` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
+For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 
 ### Customizing Cookies
 
