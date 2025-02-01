@@ -1,0 +1,1151 @@
+---
+title: Create Your First Database Adapter
+description: A step-by-step guide to creating your first Better Auth database adapter.
+---
+
+Database adapters are core to BetterAuth. They allow you to connect to any database and use it with BetterAuth.
+
+In this guide, we'll walk you through the steps of creating your first Better Auth database adapter, and publishing it to npm.
+
+<Steps>
+    <Step>
+        ## Prerequisites
+
+        1. Make sure that there isn't already an adapter for the database you want to add. (Check [community adapters](/docs/database/community-adapters) or [official adapters](/docs/adapters/other-relational-databases))
+        2. Make sure the database of choice has enough support for BetterAuth's capabilities. For example, the database should support dynamic queries and mutations (Unlike Convex DB does - they must be predefined).
+        3. Some delicious snacks. 🍿
+    </Step>
+
+    <Step>
+        ## Create a new project
+
+        Start by creating a new project for your adapter, and run `git init`.
+
+        Make sure your project includes the following packages:
+
+        ```package-install
+        npm i --save-peer better-auth typescript
+        npm i --save-dev vitest @types/node
+        ```
+        <Callout>
+            We recommend you use <Link href="https://pnpm.io/">pnpm</Link>.
+        </Callout>
+
+        You'll also need to install the database driver for your database of choice. For example, if you're using Postgres, you'll need to run `npm i --save-dev pg`.
+    </Step>
+
+    <Step>
+        ## Preparing your file structure
+
+        Your file structure should look like this:
+
+        <Files>
+            <Folder name="src" defaultOpen>
+                <File name="index.ts" />
+                <File name="transformer.ts" />
+                <File name="schema.ts" />
+            </Folder>
+            <Folder name="test" defaultOpen>
+                <File name="adapter.test.ts" />
+                <File name="schema.test.ts" />
+            </Folder>
+            <File name="tsconfig.json" />
+            <File name=".npmignore" />
+            <File name=".gitignore" />
+            <File name="package.json" />
+            <File name="pnpm-lock.yaml" />
+            <File name="README.md" />
+            <File name="LICENSE" />
+        </Files>
+
+        Here are the contents of some of the files if you need it:
+
+        (I recommend you take a look at the `package.json` file)
+        <Accordions>
+                    <Accordion title="package.json">
+
+```json
+{
+  "name": "<adapter>-better-auth",
+  "version": "1.0.0",
+  "description": "Something Database Adapter for Better-Auth.",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<username>/<adapter>-better-auth.git"
+  },
+  "keywords": ["database", "adapter", "betterauth", "better-auth", "auth"],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "author": "<author>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "better-auth": "^1.1.14",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "better-auth": "^1.1.14",
+    "typescript": "^5.7.2"
+  }
+}
+```
+
+            </Accordion>
+            <Accordion title="tsconfig.json">
+                ```json
+                {
+                    "compilerOptions": {
+                        "esModuleInterop": true,
+                        "skipLibCheck": true,
+                        "target": "es2022",
+                        "allowJs": true,
+                        "resolveJsonModule": true,
+                        "module": "Preserve",
+                        "moduleResolution": "Bundler",
+                        "moduleDetection": "force",
+                        "isolatedModules": true,
+                        "verbatimModuleSyntax": true,
+                        "composite": false,
+                        "incremental": true,
+                        "strict": true,
+                        "noImplicitOverride": true,
+                        "noFallthroughCasesInSwitch": true,
+                        "rootDir": ".",
+                        "downlevelIteration": true,
+                        "baseUrl": ".",
+                        "outDir": "dist",
+                        "declaration": true
+                    },
+                    "exclude": ["**/dist", "node_modules"],
+                    "references": [],
+                    "include": ["src/index.ts"]
+                }
+                ```
+            </Accordion>
+            <Accordion title=".gitignore">
+                ```ts
+                node_modules
+                .env
+                .env.local
+                ```
+            </Accordion>
+            <Accordion title=".npmignore">
+                ```ts
+                node_modules
+                .env
+                .env.local
+                pnpm-lock.yaml
+                test
+                ```
+            </Accordion>
+            <Accordion title="adapter.test.ts & schema.test.ts">
+                We'll discuss test files [later](/docs/guides/your-first-adapter#testing-your-adapter)!
+            </Accordion>
+            <Accordion title="LICENSE">
+
+[MIT License](https://opensource.org/license/mit) to copy.
+
+```md
+Copyright <YEAR> <COPYRIGHT HOLDER>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+            </Accordion>
+        </Accordions>
+    </Step>
+
+    <Step>
+        ## index.ts
+
+        Let's start by writing our adapter code!
+
+        Head over to the `index.ts` file located under `src`.
+
+        We want to create our adapter instance as a function that takes in some options and returns an instance of the adapter.
+
+        ```ts title="src/index.ts"
+        import type { AdapterInstance } from "better-auth";
+
+        export type MyAdapterOptions = {
+            // Your adapter options
+        }
+
+        export type MyAdapter = (config: MyAdapterOptions) => AdapterInstance;
+
+        export const myAdapter: MyAdapter = (config) => {
+            // Your adapter implementation
+        }
+        ```
+
+</Step>
+
+<Step>
+    ### Adapter Options
+
+        Your `AdapterOptions` should contain information about your database connection, and any other configuration options you may need for the adapter.
+
+        For example, you might have something like this:
+
+        ```ts
+        export type MyAdapterOptions = {
+            database_url: string;
+        }
+        ```
+        If your database doesn't forcefully generate IDs, than you'll want to support the `generateId` option in the `advanced` object.
+        Make sure that this function **IS** under the `advanced` object, as this will be tested against in the adapter tests.
+
+```ts
+export type MyAdapterOptions = {
+  // other options
+  advanced: {// [!code highlight]
+    generateId: () => string; // [!code highlight]
+  }; // [!code highlight]
+};
+```
+
+</Step>
+
+<Step>
+## Preparing the Transformer
+
+We recommend you to create multiple handy transformer functions to help you during your adapter implementation.
+
+Some hany functions can include:
+
+- `transformInput`: Transforms the data to suit the needs of your database.
+- `transformOutput`: Transforms the data to suit the needs of the user.
+- `convertWhereClause`: Converts the `where` parameter to suit the needs of your database.
+- `withReturning`: Adds the `returning` clause to the query to get the data back from the database.
+- `getField`: Gets the field name from the `model` parameter.
+- `getModelName`: Gets the model name from the `model` parameter.
+- `getSchema`: Gets the schema from the `model` parameter.
+
+<Callout>
+    For now, you don't need to worry to much about implementing all of these straight away.
+    You can implement each as needed as you develop the adapter.
+</Callout>
+
+We highly recommend you checkout [Better Auth's existing transformer functions](https://github.com/better-auth/better-auth/blob/ec88ebabe978c89c13c974dfdb3d8212fb77c3c7/packages/better-auth/src/adapters/drizzle-adapter/drizzle-adapter.ts#L12C1-L200C1) to get an idea of how you could develop yours.
+
+Let's give you a quick base-line to get started:
+
+```ts title="src/transformer.ts"
+export function createTransform(
+    db: DB,
+    config: DrizzleAdapterConfig,
+    options: BetterAuthOptions,
+) {
+    const schema = getAuthTables(options);
+
+    return {};
+}
+```
+
+</Step>
+
+<Step>
+## The Adapter
+
+Now, we're ready to return the adapter. We'll do this by returning a function that takes in the `BetterAuthOptions` and returns an `Adapter`.
+
+The `options` paremeter is all of the information that's collected from the user's Better Auth config, this includes any plugin schemas as well.
+
+```ts
+import type { Adapter, AdapterInstance, BetterAuthOptions } from "better-auth";
+
+export const myAdapter: MyAdapter = (config) => {
+  return (options: BetterAuthOptions): Adapter => {// [!code highlight]
+    // Stuff // [!code highlight]
+  }; // [!code highlight]
+};
+```
+
+Let's make sure to get our transformer functions in here:
+```ts
+import { createTransform } from "./transformer"; 
+
+export const myAdapter: MyAdapter = (config) => {
+  return (options: BetterAuthOptions): Adapter => {
+    const { // [!code highlight]
+        transformInput, // [!code highlight]
+        transformOutput, // [!code highlight]
+        convertWhereClause, // [!code highlight]
+        getSchema, // [!code highlight]
+        withReturning, // [!code highlight]
+        getField, // [!code highlight]
+        getModelName, // [!code highlight]
+    } = createTransform(db, config, options); // [!code highlight]
+
+    return {};
+  }
+};
+```
+
+
+The `Adapter` type requires us to have an `id`, so let's fill that in first:
+
+```ts
+export const myAdapter: MyAdapter = (config) => {
+  return (options: BetterAuthOptions): Adapter => {
+    const {
+        transformInput,
+        transformOutput,
+        convertWhereClause,
+        getSchema,
+        withReturning,
+        getField,
+        getModelName,
+    } = createTransform(db, config, options);
+
+    return {
+        id: "my-adapter", // [!code highlight]
+    }
+  };
+};
+```
+
+From here, you've likely seen all of the parameters from your IDE that's required to implement the `Adapter` interface. Let's go through them one by one.
+
+<Steps>
+<Step>
+### Adapter: `create`
+
+This is the main function that's used to create a new record in your database.
+
+```ts
+create: <T extends Record<string, any>, R = T>(data: {
+  model: string;
+  data: T;
+  select?: string[]; // If provided, it would be an array representing the field to gather when returing the data from the newly created record.
+}) => Promise<R>;
+```
+
+<Callout type="warn">
+    It's up to the adapter code to throw if the `data` parameter is missing any required fields based on the schema.
+</Callout>
+
+<Accordions>
+<Accordion title="model parameter">
+This parameter is the name of the model you're creating. For example, if you're creating a user, the `model` parameter would be `"user"`.
+</Accordion>
+<Accordion title="data parameter">
+An example `data` object can look like this:
+
+```ts
+{
+    id: "some_id",
+    name: "John Doe",
+    email: "john@doe.com",
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+}
+```
+
+<Callout>
+  **Tip!** Not all databases support the JavaScript `Date` object. If you're using a
+  database that doesn't support it, you can convert it to a string value. Then,
+  when your adapter needs to return a model from the DB, you should check the
+  user's schema values to see if a field needs to be of type `Date`, and convert
+  the string back to date.
+</Callout>
+</Accordion>
+<Accordion title="select parameter">
+The `select` parameter is an array of strings that represent the fields you want to gather when returning the data from the newly created record. If this parameter isn't provided, it should return the entire record.
+
+For example, if `select` is `["name", "email"]`, the function would return an object that looks like this:
+
+```ts
+{
+    name: "John Doe",
+    email: "john@doe.com"
+}
+```
+</Accordion>
+</Accordions>
+
+```ts title="Example Implementation"
+async function create ({ model, data: values, select }) => {
+    // Transform the data to suit the needs of your database.
+    // For example, `Date` objects might need to be converted to strings.
+    const transformedData = transformInput(values, model, "create");
+
+    // We get the schema to check if the `values` are missing any required fields.
+    const schemaModel = getSchema(model);
+    checkMissingFields(schemaModel, getModelName(model), transformedData);
+
+    // Insert row into Database
+    const builder = db.insert(schemaModel).values(transformedData);
+
+    // Get the return value from the DB
+    const returned = await withReturning(model, builder, transformedData);
+
+    // Transform the returned value.
+    // For example, `strings` that may need to be `Date`s according to the 
+    // schema must be converted back to Dates.
+    return transformOutput(returned, model, select);
+}
+```
+</Step>
+
+<Step>
+### Adapter: `findOne`
+
+This function is used to find a single record in the database.
+
+```ts
+findOne: <T>(data: {
+    model: string;
+    where: Where[];
+    select?: string[];
+}) => Promise<T | null>
+```
+
+<Callout type="warn">
+    If the record was not found, do not throw. Simply return `null`.
+</Callout>
+
+
+<Accordions>
+<Accordion title="model parameter">
+This parameter is the name of the model you're quering. For example, if you're querying a user, the `model` parameter would be `"user"`.
+</Accordion>
+<Accordion title="where parameter">
+An example `where` object can look like this:
+
+```ts
+[
+    {
+        field: "id",
+        value: "1"
+    }
+]
+```
+
+This is the type for `Where`:
+```ts
+type Where = {
+    operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+    value: string | number | boolean | string[] | number[];
+    field: string;
+    connector?: "AND" | "OR";
+};
+```
+
+If the `operator` is not provided, default to `eq`.
+
+The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+
+<Callout type="warn">
+If your database doesn't support a specific operator, you can try to implement your own work-around solutions to query it, or just throw an error stating that the operator is not supported.
+
+For example, the `in` operator is not supported by ConvexDB, and since `in` is essentially multiple `eq` operators, we can just implement our own work-around solution to bind multiple `eq` to the query.
+</Callout>
+
+</Accordion>
+<Accordion title="select parameter">
+The `select` parameter is an array of strings that represent the fields you want to gather when returning the data from record. If this parameter isn't provided, it should return the entire record.
+
+For example, if `select` is `["name", "email"]`, the function would return an object that looks like this:
+
+```ts
+{
+    name: "John Doe",
+    email: "john@doe.com"
+}
+```
+</Accordion>
+</Accordions>
+
+```ts title="Example Implementation"
+async function findOne ({ model, where, select }) {
+    // Transform the where to suit the needs of your database.
+    const transformedWhere = transformWhere(where, model);
+
+    // Query the database
+    const builder = db
+        .select()
+        .from(schemaModel)
+        .where(...transformedWhere);
+
+    // Get the return value from the DB, and make sure it's limited to 1 result.
+    const res = await builder.limit(1);
+
+    // Transform the returned value.
+    // For example, `strings` that may need to be `Date`s according to the 
+    // schema must be converted back to Dates.
+    if (!res.length) return null;
+    return transformOutput(res[0], model, select);
+}
+```
+</Step>
+
+<Step>
+### Adapter: `findMany`
+
+This function is used to find multiple records in the database.
+
+```ts
+findMany: <T>(data: {
+    model: string;
+    where?: Where[];
+    limit?: number;
+    sortBy?: {
+        field: string;
+        direction: "asc" | "desc";
+    };
+    offset?: number;
+}) => Promise<T[]>
+```
+
+<Callout type="warn">
+    If the record was not found, do not throw. Simply return an empty array.
+</Callout>
+
+
+<Accordions>
+<Accordion title="model parameter">
+This parameter is the name of the model you're quering. For example, if you're querying a user, the `model` parameter would be `"user"`.
+</Accordion>
+<Accordion title="where parameter">
+An example `where` object can look like this:
+
+```ts
+[
+    {
+        field: "id",
+        value: "1"
+    }
+]
+```
+
+This is the type for `Where`:
+```ts
+type Where = {
+    operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+    value: string | number | boolean | string[] | number[];
+    field: string;
+    connector?: "AND" | "OR";
+};
+```
+
+If the `operator` is not provided, default to `eq`.
+
+The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+
+If this entire `where` parameter is not provided, it should return all records. (Or as much as the DB allows in one go.)
+
+<Callout type="warn">
+If your database doesn't support a specific operator, you can try to implement your own work-around solutions to query it, or just throw an error stating that the operator is not supported.
+
+For example, the `in` operator is not supported by ConvexDB, and since `in` is essentially multiple `eq` operators, we can just implement our own work-around solution to bind multiple `eq` to the query.
+</Callout>
+
+</Accordion>
+<Accordion title="limit parameter"> 
+The `limit` parameter is the maximum number of records to return. If this parameter isn't provided, default to 100.
+</Accordion>
+<Accordion title="sortBy parameter"> 
+The `sortBy` parameter is an object that represents the field to sort by and the direction to sort it in. If this parameter isn't provided, it should return all records in the order they were created. (ascending)
+
+<Callout type="warn">
+    If your database doesn't support field level sorting, you can try to implement your own work-around solutions to query it, or just throw an error stating that the operator is not supported.
+</Callout>
+</Accordion>
+<Accordion title="offset parameter">
+The `offset` parameter is the number of records to skip. If this parameter isn't provided, it should return all records.
+</Accordion>    
+</Accordions>
+
+```ts title="Example Implementation"
+async function findMany ({ model, where, limit, offset, sortBy }) {
+    // Transform the where to suit the needs of your database.
+    const transformedWhere = transformWhere(where, model);
+
+    // Query the database
+    const builder = db
+        .select()
+        .from(schemaModel)
+        .where(...transformedWhere);
+
+    // Get the return value from the DB. Set the default limit to 100 and offset to 0.
+    const res = await builder.limit(limit || 100).offset(offset || 0);
+
+    // Transform the returned value.
+    // For example, `strings` that may need to be `Date`s according to the 
+    // schema must be converted back to Dates.
+    return res.map((r) => transformOutput(r, model));
+}
+```
+
+</Step>
+
+
+<Step>
+### Adapter: `update`
+
+This function is used to update a record in the database.
+
+```ts
+update: <T>(data: {
+    model: string;
+    where: Where[];
+    update: Record<string, any>;
+}) => Promise<T | null>
+```
+<Callout type="warn">
+Update may not return the updated data if multiple where clauses are provided.
+</Callout>
+<Accordions>
+<Accordion title="model parameter">
+This parameter is the name of the model you're quering to update. For example, if you're updating a user, the `model` parameter would be `"user"`.
+</Accordion>
+<Accordion title="where parameter">
+An example `where` object can look like this:
+```ts
+[
+    {
+        field: "id",
+        value: "1"
+    }
+]
+```
+This is the type for `Where`:
+```ts
+type Where = {
+    operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+    value: string | number | boolean | string[] | number[];
+    field: string;
+    connector?: "AND" | "OR";
+};
+```
+If the `operator` is not provided, default to `eq`.
+The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+</Accordion>
+<Accordion title="update parameter">
+An example `update` object can look like this:
+```ts
+{
+    name: "John Doe",
+    email: "john@doe.com"
+}
+```
+</Accordion>
+</Accordions>
+```ts title="Example Implementation"
+async function update ({ model, where, update }) {
+    // Transform the where to suit the needs of your database.
+    const transformedWhere = transformWhere(where, model);
+
+    // Update the record in the database
+    const builder = db.update(schemaModel).where(transformedWhere).set(transformedData);
+
+    // Get the return value from the DB
+    const returned = await withReturning(model, builder, transformedData);
+
+    // Transform the returned value
+    return transformOutput(returned, model, select);
+}
+```
+</Step>
+
+
+<Step>
+### Adapter: `updateMany`
+
+This function is used to update multiple records in the database.
+
+```ts
+updateMany: <T>(data: {
+    model: string;
+    where: Where[];
+    update: Record<string, any>;
+}) => Promise<T | null>
+```
+<Callout type="warn">
+Update may not return the updated data if multiple where clauses are provided.
+</Callout>
+<Accordions>
+<Accordion title="model parameter">
+This parameter is the name of the model you're quering to update. For example, if you're updating a user, the `model` parameter would be `"user"`.
+</Accordion>
+<Accordion title="where parameter">
+An example `where` object can look like this:
+```ts
+[
+    {
+        field: "id",
+        value: "1"
+    }
+]
+```
+This is the type for `Where`:
+```ts
+type Where = {
+    operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+    value: string | number | boolean | string[] | number[];
+    field: string;
+    connector?: "AND" | "OR";
+};
+```
+If the `operator` is not provided, default to `eq`.
+The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+</Accordion>
+<Accordion title="update parameter">
+An example `update` object can look like this:
+```ts
+{
+    name: "John Doe",
+    email: "john@doe.com"
+}
+```
+</Accordion>
+</Accordions>
+```ts title="Example Implementation"
+async function updateMany ({ model, where, update }) {
+    // Transform the where to suit the needs of your database.    
+    const transformedWhere = transformWhere(where, model);
+
+    // Update the data in the database
+    const builder = db.update(model).where(transformedWhere).set(update);
+
+    // Get the return value from the DB
+    const returned = await withReturning(model, builder, update);
+
+    // Transform the returned value
+    return transformOutput(returned, model);
+}
+```
+</Step>
+<Step>
+    ### Adapter: `delete`
+
+    This function is used to delete a record in the database.
+    ```ts
+    delete: <T>(data: {
+        model: string;
+        where: Where[];
+    }) => Promise<void>
+    ```
+    <Accordions>
+    <Accordion title="model parameter">
+        This parameter is the name of the model you're quering to delete. For example, if you're delete a user, the `model` parameter would be `"user"`.
+    </Accordion>
+    <Accordion title="where parameter">
+        An example `where` object can look like this:
+        ```ts
+        [
+            {
+                field: "id",
+                value: "1"
+            }
+        ]
+        ```
+        This is the type for `Where`:
+        ```ts
+        type Where = {
+            operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+            value: string | number | boolean | string[] | number[];
+            field: string;
+            connector?: "AND" | "OR";
+        };
+        ```
+        If the `operator` is not provided, default to `eq`.
+        The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+    </Accordion>
+    </Accordions>
+
+    ```ts title="Example Implementation"
+    async function delete ({ model, where }) {
+        // Transform the where to suit the needs of your database.
+        const transformedWhere = transformWhere(where, model);
+    
+        // Delete the record in the database
+        const builder = db.delete(schemaModel).where(...transformedWhere);
+    }
+    ```
+</Step>
+
+<Step>
+### Adapter: `deleteMany`
+
+    This function is used to delete multiple records in the database.
+    ```ts
+    deleteMany: <T>(data: {
+        model: string;
+        where: Where[];
+    }) => Promise<number>
+    ```
+    <Callout>
+    Returns the number of items deleted.
+    </Callout>
+    <Accordions>
+    <Accordion title="model parameter">
+        This parameter is the name of the model you're quering to delete. For example, if you're delete a user, the `model` parameter would be `"user"`.
+    </Accordion>
+    <Accordion title="where parameter">
+        An example `where` object can look like this:
+        ```ts
+        [
+            {
+                field: "id",
+                value: "1"
+            }
+        ]
+        ```
+        This is the type for `Where`:
+        ```ts
+        type Where = {
+            operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "contains" | "starts_with" | "ends_with";
+            value: string | number | boolean | string[] | number[];
+            field: string;
+            connector?: "AND" | "OR";
+        };
+        ```
+        If the `operator` is not provided, default to `eq`.
+        The `connector` applies to the next `where` object in the array. If it's not provided, default to `AND`.
+    </Accordion>
+</Accordions>
+```ts title="Example Implementation"
+async function deleteMany ({ model, where }) {
+    // Transform the where to suit the needs of your database.    
+    const transformedWhere = transformWhere(where, model);
+    
+    // Delete the record in the database
+    const builder = db.delete(schemaModel).where(...transformedWhere);
+    
+    // Get the return value from the DB
+    const res = await builder;
+    return res.length;
+}
+```
+</Step>
+</Steps>
+
+### Current Progress
+
+This is what your `index.ts` file likely looks like:
+
+```ts title="src/index.ts"
+export const myAdapter: MyAdapter = (config) => {
+  return (options: BetterAuthOptions): Adapter => {
+    const { /* ... */ } = createTransform(db, config, options);
+
+    return {
+        id: "my-adapter",
+        create: async ({ data: values, model, select }) => {},
+        findOne: async ({ model, where, select }) => {},
+        findMany: async ({ model, where, limit, offset, sortBy }) => {},
+        update: async ({ model, where, update: values }) => {},
+        updateMany: async ({ model, where, update: values }) => {},
+        delete: async ({ model, where }) => {},
+        deleteMany: async ({ model, where }) => {},
+    }
+  };
+};
+```
+
+🎉 Congratulations, you've built 90% of the adapter! 🎉
+
+All that's left is to build the schema generation and the adapter should be ready to test and publish!
+
+<Step>
+## Schema generation
+
+The [Better Auth CLI](/docs/concepts/cli) relies on each database adapter to generate the schema.
+
+Add a new function in the adapter interface called `createSchema`:
+
+```ts title="src/index.ts"
+export const myAdapter: MyAdapter = (config) => {
+  return (options: BetterAuthOptions): Adapter => {
+    const { /* ... */ } = createTransform(db, config, options);
+
+    return {
+        // ...
+        createSchema: async (options, file) => {},
+    }
+  };
+};
+```
+
+The type of `createSchema` is:
+```ts
+((options: BetterAuthOptions, file?: string) => Promise<AdapterSchemaCreation>) | undefined
+```
+
+<Accordions>
+<Accordion title="options parameter">
+The `options` parameter is the same as the one you've defined earlier as part of your adapter options.
+They're the same type of `BetterAuthOptions`.
+
+We highly recommend you **DO NOT** use this option from the `createSchema` function, as this will be deprecated and removed in the future.
+</Accordion>
+<Accordion title="file parameter">
+The `file` parameter is the path to the file you want to write the schema to.
+</Accordion>
+</Accordions>
+<br />
+<Accordions>
+<Accordion title="Your return type should be">
+```ts
+type AdapterSchemaCreation = {
+    /**
+     * Code to be inserted into the file
+     */
+    code: string;
+    /**
+     * Path to the file, including the file name and extension.
+     * Relative paths are supported, with the current working directory of the developer's project as the base.
+     */
+    path: string;
+    /**
+     * Append the file if it already exists.
+     * Note: This will not apply if `overwrite` is set to true.
+     */
+    append?: boolean;
+    /**
+     * Overwrite the file if it already exists
+     */
+    overwrite?: boolean;
+};
+```
+</Accordion>
+</Accordions>
+
+If you followed our [file structure](/docs/guides/your-first-adapter#preparing-your-file-structure) you would had created a `schema.ts` file in the `src` directory.
+
+In there, you could export a function which generates the schema code.
+
+```ts title="Example Implementation"
+import { generateSchema } from "./schema";
+
+async function createSchema (options: BetterAuthOptions, file?: string) {
+    const schemaCode = generateSchema(options);
+
+    return {
+        code: schemaCode,
+        path: file || "schema.ts",
+        append: false,
+        overwrite: true,
+    };
+}
+```
+
+</Step>
+</Step>
+
+<Step>
+## Testing your adapter
+
+You've pretty much written everything for your adapter, and you're ready to test it out!
+
+<Callout>
+Better Auth's test suite utilizes [Vitest](https://vitest.dev/guide/) to run tests.
+</Callout>
+
+If you followed our [file structure](/docs/guides/your-first-adapter#preparing-your-file-structure) you would had created these files:
+<Files>
+<Folder name="test" defaultOpen>
+    <File name="adapter.test.ts" />
+    <File name="schema.test.ts" />
+</Folder>
+</Files>
+
+### Adapter Test
+
+This test file is used to test the adapter itself.
+
+Better Auth provides a `runAdapterTest` function that you can use to test your adapter.
+
+```ts title="adapter.test.ts"
+import { describe } from "vitest";
+import { myAdapter } from "./../src/index";
+import { runAdapterTest } from "better-auth/adapter/test"; // [!code highlight]
+
+describe("Adapter Tests", async () => {
+    await runAdapterTest({
+        getAdapter: async (customOptions = {}) => {
+            return myAdapter({ /* ... */ });
+        },
+    });
+});
+```
+
+    If your database dialect doesn't support a specific functionality, you can skip specific tests by passing a `testSkips` parameter to `runAdapterTest`, followed by the test names.
+    <Accordions>
+        <Accordion title="testSkip parameter">
+    ```ts
+    type testSkips = {
+		createModel?: boolean;
+		findModel?: boolean;
+		findModelWithoutId?: boolean;
+		findModelWithSelect?: boolean;
+		updateModel?: boolean;
+		findMany?: boolean;
+		shouldFindManyWithWhere?: boolean;
+		shouldFindManyWithOperators?: boolean;
+		shouldFindManyWithSortBy?: boolean;
+		shouldFindManyWithLimit?: boolean;
+		shouldFindManyWithOffsetAndLimit?: boolean;
+		shouldFindManyWithOffset?: boolean;
+		shouldUpdateWithMultipleWhere?: boolean;
+		deleteModel?: boolean;
+		shouldWorkWithReferenceFields?: boolean;
+		shouldDeleteMany?: boolean;
+		shouldNotThrowOnDeleteRecordNotFound?: boolean;
+		shouldFindManyWithContainsOperator?: boolean;
+		shouldSearchUsersWithStartsWith?: boolean;
+		shouldSearchUsersWithEndsWith?: boolean;
+		generateId?: boolean;
+	};
+    ```
+        </Accordion>
+        <Accordion title="testSkip Example Implementation">
+    ```ts
+    await runAdapterTest({
+        getAdapter: /* ... */,
+        testSkips: {
+            generateId: false // If you're database forcefully generates IDs, than you won't need to test this.
+        }
+    });
+    ```
+        </Accordion>
+    </Accordions>
+
+
+### Schema Test
+
+This test file is used to test the schema generation.
+
+Better Auth does not provide tests for schema generation as schema files varies from database to database. You'll want to implement your own tests for schema generation.
+
+Here's an example to get your started: 
+
+```ts title="schema.test.ts"
+import { describe, test, expect } from "vitest";
+import { generateSchema } from "./../src/schema";
+
+describe("Schema generation tests", async () => {
+    test("Should generate schema code based on predefined schema", async () => {
+         const generate_schema = await generateSchema(
+            [
+                {
+                    schema: {
+                        testTable: {
+                        fields: {
+                            hello: {
+                                type: "boolean",
+                                required: false,
+                            },
+                            hello2: {
+                                type: "string",
+                                required: true,
+                            },
+                        },
+                        },
+                    },
+                    id: "test",
+                },
+            ]);
+
+        expect(generate_schema).toEqual("YOUR_HARDCODED_SCHEMA");
+    });
+});
+```
+
+### Run your tests
+
+If you copied our `package.json` file from the [file structure](/docs/guides/your-first-adapter#preparing-your-file-structure) section, you should be able to run your tests with the following command:
+
+```bash
+npm run test
+```
+
+Otherwise, head into your `package.json` file and add the following script:
+
+```json
+{
+  "scripts": {
+    "test": "vitest",
+  }
+}
+```
+
+Then test away! 😎
+
+</Step>
+
+<Step>
+## Publishing your adapter
+
+Once you feel confident with your adapter, you can publish it to npm.
+
+<Callout>
+ By now, we expect that you have already publish your code to a repository.
+
+ If you haven't, you can follow the [GitHub guide](https://docs.github.com/en/get-started/quickstart/create-a-repo) to create a new repository.
+</Callout>
+
+First things first, you'll need to make sure your `package.json` file has the following:
+
+```json
+{
+    "name": "adapter-better-auth", // <- Make sure your name isn't already taken on npm!
+    "version": "1.0.0", // <- The version must be at minimum 1.0.0 before publishing on npm.
+    "description": "A description of your adapter.",
+    "main": "src/index.ts",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/<username>/<adapter-name>.git"
+    },
+    "keywords": ["a", "list", "of", "keywords"],
+    "exports": {
+        ".": {
+            "types": "./dist/src/index.d.ts",
+            "default": "./dist/src/index.js"
+        }
+    },
+    "author": "<author>",
+}
+```
+
+The above is the **bare minimum** required to publish your adapter to npm.
+
+### Publish away!
+
+Before publishing, make sure you've ran `npm run build` to build your code using `tsc`.
+
+Then, make sure your tests are all passing by running `npm run test`.
+
+Finally, you can publish your adapter to npm by running the following command:
+
+```bash
+pnpm publish
+```
+
+You may be prompted to log into your npm account, and you can follow the prompts to publish your package.
+
+<Callout>
+    The next time you want to update your adapter code, remember to update your `package.json` file's `version` field, run your build, and your tests, before running `pnpm publish`.
+</Callout>
+
+</Step>
+
+</Steps>
