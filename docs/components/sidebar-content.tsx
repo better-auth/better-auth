@@ -1157,8 +1157,8 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Your First Database Adapter",
-				href: "/docs/guides/your-first-adapter",
+				title: "Creating a Database Adapter",
+				href: "/docs/guides/creating-a-database-adapter",
 				icon: () => <Plug className="size-4" />,
 			},
 			{
