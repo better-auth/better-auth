@@ -36,6 +36,7 @@ import {
 	QrCode,
 	ShieldCheck,
 	ShieldOff,
+	Sparkles,
 	Trash,
 	X,
 } from "lucide-react";
@@ -54,6 +55,9 @@ import {
 } from "@/components/ui/table";
 import QRCode from "react-qr-code";
 import CopyButton from "@/components/ui/copy-button";
+import UpgradeButton from "./upgrade-button";
+import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 
 export default function UserCard(props: {
 	session: Session | null;
@@ -70,30 +74,82 @@ export default function UserCard(props: {
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
+	const { data: subscriptions } = useQuery({
+		queryKey: ["subscriptions"],
+		queryFn: async () => {
+			const res = await client.subscription.list({
+				fetchOptions: {
+					throw: true,
+				},
+			});
+			return res;
+		},
+	});
+	const isPro = subscriptions?.some(
+		(subscription) =>
+			subscription.plan === "pro" && subscription.status === "active",
+	);
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle>User</CardTitle>
 			</CardHeader>
 			<CardContent className="grid gap-8 grid-cols-1">
-				<div className="flex items-start justify-between">
-					<div className="flex items-center gap-4">
-						<Avatar className="hidden h-9 w-9 sm:flex ">
-							<AvatarImage
-								src={session?.user.image || "#"}
-								alt="Avatar"
-								className="object-cover"
-							/>
-							<AvatarFallback>{session?.user.name.charAt(0)}</AvatarFallback>
-						</Avatar>
-						<div className="grid gap-1">
-							<p className="text-sm font-medium leading-none">
-								{session?.user.name}
-							</p>
-							<p className="text-sm">{session?.user.email}</p>
+				<div className="flex flex-col gap-2">
+					<div className="flex items-start justify-between">
+						<div className="flex items-center gap-4">
+							<Avatar className="hidden h-9 w-9 sm:flex ">
+								<AvatarImage
+									src={session?.user.image || "#"}
+									alt="Avatar"
+									className="object-cover"
+								/>
+								<AvatarFallback>{session?.user.name.charAt(0)}</AvatarFallback>
+							</Avatar>
+							<div className="grid">
+								<div className="flex items-center gap-1">
+									<p className="text-sm font-medium leading-none">
+										{session?.user.name}
+									</p>
+									{isPro && (
+										<Badge
+											className="w-min p-px rounded-full"
+											variant="outline"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="1.2em"
+												height="1.2em"
+												viewBox="0 0 24 24"
+											>
+												<path
+													fill="currentColor"
+													d="m9.023 21.23l-1.67-2.814l-3.176-.685l.312-3.277L2.346 12L4.49 9.546L4.177 6.27l3.177-.685L9.023 2.77L12 4.027l2.977-1.258l1.67 2.816l3.176.684l-.312 3.277L21.655 12l-2.142 2.454l.311 3.277l-3.177.684l-1.669 2.816L12 19.973zm1.927-6.372L15.908 9.9l-.708-.72l-4.25 4.25l-2.15-2.138l-.708.708z"
+												></path>
+											</svg>
+										</Badge>
+									)}
+								</div>
+								<p className="text-sm">{session?.user.email}</p>
+							</div>
 						</div>
+						<EditUserDialog />
 					</div>
-					<EditUserDialog />
+					<Button
+						className="w-min"
+						variant="outline"
+						size="sm"
+						onClick={async () => {
+							const { data, error } = await client.subscription.upgrade({
+								plan: "pro",
+							});
+							error && toast.error(error.message);
+							data?.url && window.open(data.url, "_blank");
+						}}
+					>
+						<Sparkles className="w-3 h-3 mr-2" />
+						Upgrade to Pro
+					</Button>
 				</div>
 
 				{session?.user.emailVerified ? null : (
@@ -418,7 +474,7 @@ export default function UserCard(props: {
 						) : (
 							<div className="flex items-center gap-2">
 								<LogOut size={16} />
-								Sign Out
+								Sign Ou t
 							</div>
 						)}
 					</span>

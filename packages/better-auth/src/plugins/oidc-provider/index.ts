@@ -142,6 +142,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					metadata: {
+						isAction: false,
+					},
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);

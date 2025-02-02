@@ -18,6 +18,9 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
+import { stripe } from "@better-auth/stripe";
+import { Stripe } from "stripe";
+import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -39,10 +42,7 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: {
-		dialect,
-		type: "sqlite",
-	},
+	database: new Database("./better-auth-demo.sqlite"),
 	session: {
 		freshAge: 0,
 	},
@@ -151,6 +151,24 @@ export const auth = betterAuth({
 		nextCookies(),
 		oidcProvider({
 			loginPage: "/sign-in",
+		}),
+		stripe({
+			stripeClient: new Stripe(
+				"sk_test_51JMg84EerAovSgjdOLL46HBBuHUlf28mHn0v7rWkY3Z8H9suzVCcvLKg8GHzW8ikpMyY9afUCCu5h1DbItg9uEgI00npUsqL4X",
+			),
+			subscription: {
+				enabled: true,
+				defaultPlan: "free",
+				plans: [
+					{
+						name: "free",
+					},
+					{
+						name: "pro",
+						priceId: "price_1QnwtXEerAovSgjdM5mpWuOO",
+					},
+				],
+			},
 		}),
 	],
 });
