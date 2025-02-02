@@ -14,6 +14,7 @@ interface AdapterTestOptions {
 	 */
 	testSkips?: {
 		createModel?: boolean;
+		createModelWithSelect?: boolean;
 		findModel?: boolean;
 		findModelWithoutId?: boolean;
 		findModelWithSelect?: boolean;
@@ -63,6 +64,25 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 		});
 		user.id = res.id;
 	});
+
+	test.skipIf(testSkips.createModelWithSelect)(
+		"create model with select",
+		async () => {
+			const id = generateId();
+			const res = await adapter.create<User>({
+				model: "user",
+				select: ["id"],
+				data: {
+					...user,
+					id,
+				},
+			});
+
+			expect(res).toEqual({
+				id: id,
+			});
+		},
+	);
 
 	test.skipIf(testSkips.findModel)("find model", async () => {
 		const res = await adapter.findOne<User>({
@@ -298,7 +318,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				model: "user",
 				offset: 2,
 			});
-			expect(res.length).toBe(3);
+			expect(res.length).toBe(4);
 		},
 	);
 	test.skipIf(testSkips.shouldFindManyWithOffsetAndLimit)(
