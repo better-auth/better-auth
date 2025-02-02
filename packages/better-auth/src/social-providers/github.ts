@@ -111,7 +111,7 @@ export const github = (options: GithubOptions) => {
 				emailVerified =
 					data.find((e) => e.email === profile.email)?.verified ?? false;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, extraData);
 			return {
 				user: {
 					id: profile.id.toString(),

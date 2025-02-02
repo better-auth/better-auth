@@ -26,7 +26,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string;
 	}) => Promise<OAuth2Tokens>;
-	getUserInfo: (token: OAuth2Tokens) => Promise<{
+	getUserInfo: (token: OAuth2Tokens, additionalData?: Record<string, unknown>) => Promise<{
 		user: {
 			id: string;
 			name?: string;
@@ -73,7 +73,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * Custom function to get user info from the provider
 	 */
-	getUserInfo?: (token: OAuth2Tokens) => Promise<{
+	getUserInfo?: (token: OAuth2Tokens, additionalData?: Record<string, unknown>) => Promise<{
 		user: {
 			id: string;
 			name?: string;
@@ -88,7 +88,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
-	mapProfileToUser?: (profile: Profile) =>
+	mapProfileToUser?: (profile: Profile, additionalData?: Record<string, unknown>) =>
 		| {
 				id?: string;
 				name?: string;

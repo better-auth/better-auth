@@ -45,6 +45,13 @@ export const signInSocial = createAuthEndpoint(
 			 */
 			provider: SocialProviderListEnum,
 			/**
+			 * Additional data to be passed to createOauthUser
+			 * 
+			 * useful if you want to pass additional data when creating an OAuth user
+			 * such as a user role for instance
+			 */
+			additionalData: z.record(z.string()).optional(),
+			/**
 			 * Disable automatic redirection to the provider
 			 *
 			 * This is useful if you want to handle the redirection
