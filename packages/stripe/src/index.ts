@@ -195,6 +195,7 @@ interface StripeOptions {
 		event: Stripe.Event,
 		subscription?: Subscription | null,
 	) => Promise<void>;
+	onEvent?: (event: Stripe.Event) => Promise<void>;
 }
 
 async function checkoutSessionCompleted(
@@ -204,7 +205,6 @@ async function checkoutSessionCompleted(
 ) {
 	const client = options.stripeClient;
 	const checkoutSession = event.data.object as Stripe.Checkout.Session;
-	console.log({ checkoutSession });
 	if (checkoutSession.mode === "setup") {
 		return;
 	}
@@ -262,7 +262,7 @@ const STRIPE_ERROR_CODES = {
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
 	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
 	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-};
+} as const;
 
 export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 	const client = options.stripeClient;
@@ -286,7 +286,6 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 					cloneRequest: true,
 				},
 				async (ctx) => {
-					console.log("Webhook");
 					if (!ctx.request) {
 						throw new APIError("INTERNAL_SERVER_ERROR");
 					}
@@ -310,6 +309,9 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						switch (event.type) {
 							case "checkout.session.completed":
 								await checkoutSessionCompleted(ctx.context, options, event);
+								break;
+							default:
+								await options.onEvent?.(event);
 								break;
 						}
 					} catch (e: any) {
