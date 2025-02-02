@@ -1,7 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { IconLink } from "../changelogs/_components/changelog-layout";
-import { GitHubIcon, XIcon } from "../changelogs/_components/icons";
 import CommunityHeader from "./_components/header";
 import Stats from "./_components/stats";
 import Section from "@/components/landing/section";

@@ -1,13 +1,8 @@
 "use client";
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
-import { ArrowUpRight, Disc, DownloadIcon } from "lucide-react";
-import { Github } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import DiscordLogoIcon from "@radix-ui/react-icons";
-import { motion } from "framer-motion";
-import { cn, kFormatter } from "@/lib/utils";
-import { Mail } from "lucide-react";
+import { kFormatter } from "@/lib/utils";
 export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 	return (
 		<div className="relative">

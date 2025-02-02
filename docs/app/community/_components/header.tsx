@@ -1,7 +1,3 @@
-import Link from "next/link";
-import { Github } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { IconLink } from "@/app/changelogs/_components/changelog-layout";
 import { GitHubIcon, XIcon } from "@/app/changelogs/_components/icons";
 export default function CommunityHeader() {
