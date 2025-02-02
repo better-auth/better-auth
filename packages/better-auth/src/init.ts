@@ -55,11 +55,6 @@ export const init = async (options: BetterAuthOptions) => {
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
-		emailAndPassword: {
-			...options.emailAndPassword,
-			enabled: options.emailAndPassword?.enabled ?? false,
-			autoSignIn: options.emailAndPassword?.autoSignIn ?? true,
-		},
 	};
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
@@ -102,7 +97,7 @@ export const init = async (options: BetterAuthOptions) => {
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 			freshAge:
 				options.session?.freshAge === undefined
-					? 5 * 60
+					? 60 * 60 * 24 // 24 hours
 					: options.session.freshAge,
 		},
 		secret,
@@ -215,10 +210,11 @@ function runPluginInit(ctx: AuthContext) {
 			const result = plugin.init(ctx);
 			if (typeof result === "object") {
 				if (result.options) {
-					if (result.options.databaseHooks) {
-						dbHooks.push(result.options.databaseHooks);
+					const { databaseHooks, ...restOpts } = result.options;
+					if (databaseHooks) {
+						dbHooks.push(databaseHooks);
 					}
-					options = defu(options, result.options);
+					options = defu(options, restOpts);
 				}
 				if (result.context) {
 					context = {

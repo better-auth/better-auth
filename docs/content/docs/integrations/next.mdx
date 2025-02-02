@@ -117,8 +117,10 @@ import { auth } from "@/lib/auth"
 
 const signIn = async () => {
     await auth.api.signInEmail({
-        email: "user@email.com",
-        password: "password",
+        body: {
+            email: "user@email.com",
+            password: "password",
+        }
     })
 }
 ```
@@ -135,8 +137,10 @@ We're using `better-fetch` to make the request to the API route. You can use any
 
 ```ts
 import { betterFetch } from "@better-fetch/fetch";
-import type { Session } from "better-auth/types";
+import type { auth } from "@/lib/auth";
 import { NextResponse, type NextRequest } from "next/server";
+
+type Session = typeof auth.$Infer.Session;
  
 export default async function authMiddleware(request: NextRequest) {
 	const { data: session } = await betterFetch<Session>(

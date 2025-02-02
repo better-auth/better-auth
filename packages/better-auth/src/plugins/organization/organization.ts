@@ -16,7 +16,6 @@ import { shimContext } from "../../utils/shim";
 import {
 	type AccessControl,
 	type Role,
-	createAccessControl,
 	defaultRoles,
 	type defaultStatements,
 } from "./access";
@@ -182,6 +181,45 @@ export interface OrganizationOptions {
 			};
 		};
 	};
+	/**
+	 * Configure how organization deletion is handled
+	 */
+	organizationDeletion?: {
+		/**
+		 * disable deleting organization
+		 */
+		disabled?: boolean;
+		/**
+		 * A callback that runs before the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		beforeDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+		/**
+		 * A callback that runs after the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		afterDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
@@ -198,13 +236,6 @@ export interface OrganizationOptions {
  * });
  * ```
  */
-
-const ac = createAccessControl({
-	name: ["action"],
-});
-const a = ac.newRole({
-	name: ["action"],
-});
 export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
@@ -310,6 +341,15 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
+					if (
+						!ctx.body.permission ||
+						Object.keys(ctx.body.permission).length > 1
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"invalid permission check. you can only check one resource permission at a time.",
+						});
+					}
 					const activeOrganizationId =
 						ctx.body.organizationId ||
 						ctx.context.session.session.activeOrganizationId;
@@ -365,11 +405,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					name: {
 						type: "string",
 						required: true,
+						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.name,
 					},
 					slug: {
 						type: "string",
 						unique: true,
+						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
 					},
 					logo: {
@@ -413,6 +455,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					role: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
@@ -438,16 +481,19 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					email: {
 						type: "string",
 						required: true,
+						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
 					},
 					role: {
 						type: "string",
 						required: false,
+						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.role,
 					},
 					status: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "pending",
 						fieldName: options?.schema?.invitation?.fields?.status,
 					},

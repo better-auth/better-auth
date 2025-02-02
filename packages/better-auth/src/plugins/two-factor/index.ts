@@ -16,7 +16,6 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { schema } from "./schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
-import { base64 } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 export const twoFactor = (options?: TwoFactorOptions) => {
@@ -117,7 +116,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						 */
 						await setSessionCookie(ctx, {
 							session: newSession,
-							user,
+							user: updatedUser,
 						});
 
 						//remove current session
@@ -147,7 +146,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(options?.issuer || "Better Auth", user.email);
+					}).url(options?.issuer || ctx.context.appName, user.email);
 					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
 				},
 			),
@@ -200,20 +199,23 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							message: "Invalid password",
 						});
 					}
-					await ctx.context.internalAdapter.updateUser(user.id, {
-						twoFactorEnabled: false,
-					});
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: false,
+						},
+					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
 						where: [
 							{
 								field: "userId",
-								value: user.id,
+								value: updatedUser.id,
 							},
 						],
 					});
 					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
+						updatedUser.id,
 						ctx.request,
 						false,
 						ctx.context.session.session,
@@ -223,7 +225,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 					 */
 					await setSessionCookie(ctx, {
 						session: newSession,
-						user,
+						user: updatedUser,
 					});
 					//remove current session
 					await ctx.context.internalAdapter.deleteSession(

@@ -33,7 +33,9 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: DeepReadonly<Ref<ReturnType<Atoms[key]["get"]>>>;
+								: never]: () => DeepReadonly<
+							Ref<ReturnType<Atoms[key]["get"]>>
+						>;
 					}
 				: {}
 			: {}
@@ -92,7 +94,9 @@ export function createAuthClient<Option extends ClientOptions>(
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal);
 			const baseURL = options?.fetchOptions?.baseURL || options?.baseURL;
-			const authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
+			let authPath = baseURL ? new URL(baseURL).pathname : "/api/auth";
+			authPath = authPath === "/" ? "/api/auth" : authPath; //fix for root path
+			authPath = authPath.endsWith("/") ? authPath.slice(0, -1) : authPath; //fix for trailing slash
 			return useFetch(`${authPath}/get-session`, {
 				ref,
 			}).then((res: any) => {

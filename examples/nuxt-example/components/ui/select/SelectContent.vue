@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
 import {
-	SelectContent,
 	type SelectContentEmits,
 	type SelectContentProps,
-	SelectPortal,
-	SelectViewport,
 	useForwardPropsEmits,
 } from "radix-vue";
-import { SelectScrollDownButton, SelectScrollUpButton } from ".";
-import { cn } from "@/lib/utils";
 
 defineOptions({
 	inheritAttrs: false,

@@ -63,4 +63,63 @@ describe("Email Verification", async () => {
 			},
 		);
 	});
+
+	it("should sign after verification", async () => {
+		const { testUser, signInWithUser, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				autoSignInAfterVerification: true,
+			},
+		});
+		await signInWithUser(testUser.email, testUser.password);
+
+		let sessionToken = "";
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess(context) {
+					sessionToken = context.response.headers.get("set-auth-token") || "";
+				},
+			},
+		});
+		expect(sessionToken.length).toBeGreaterThan(10);
+	});
+
+	it("should use custom expiresIn", async () => {
+		const { auth, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				expiresIn: 10,
+			},
+		});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(10 * 1000);
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+		expect(res.error?.code).toBe("TOKEN_EXPIRED");
+	});
 });

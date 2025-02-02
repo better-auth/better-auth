@@ -14,12 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
-import {
-	DiscordLogoIcon,
-	GitHubLogoIcon,
-	TwitterLogoIcon,
-} from "@radix-ui/react-icons";
-import { Key, Loader2, TwitchIcon } from "lucide-react";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -272,8 +268,11 @@ export default function SignIn() {
 						onClick={async () => {
 							await signIn.passkey({
 								fetchOptions: {
-									onResponse(context) {
+									onSuccess(context) {
 										router.push("/dashboard");
+									},
+									onError(context) {
+										toast.error(context.error.message);
 									},
 								},
 							});

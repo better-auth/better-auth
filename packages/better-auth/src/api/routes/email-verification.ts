@@ -7,6 +7,8 @@ import type { GenericEndpointContext, User } from "../../types";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
 import { signJWT } from "../../crypto/jwt";
+import { originCheck } from "../middlewares";
+import { JWTExpired } from "jose/errors";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -15,6 +17,10 @@ export async function createEmailVerificationToken(
 	 * The email to update from
 	 */
 	updateTo?: string,
+	/**
+	 * The time in seconds for the token to expire
+	 */
+	expiresIn: number = 3600,
 ) {
 	const token = await signJWT(
 		{
@@ -22,6 +28,7 @@ export async function createEmailVerificationToken(
 			updateTo,
 		},
 		secret,
+		expiresIn,
 	);
 	return token;
 }
@@ -42,9 +49,11 @@ export async function sendVerificationEmailFn(
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
+		undefined,
+		ctx.context.options.emailVerification?.expiresIn,
 	);
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		ctx.body.callbackURL || "/"
 	}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
@@ -60,15 +69,6 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
-		query: z
-			.object({
-				currentURL: z
-					.string({
-						description: "The URL to use for email verification callback",
-					})
-					.optional(),
-			})
-			.optional(),
 		body: z.object({
 			email: z
 				.string({
@@ -160,6 +160,7 @@ export const verifyEmail = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
 				description: "Verify the email of the user",
@@ -210,7 +211,9 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			);
 		} catch (e) {
-			ctx.context.logger.error("Failed to verify email", e);
+			if (e instanceof JWTExpired) {
+				return redirectOnError("token_expired");
+			}
 			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
@@ -267,15 +270,23 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			return ctx.json({
 				status: true,
+				user: {
+					id: updatedUser.id,
+					email: updatedUser.email,
+					name: updatedUser.name,
+					image: updatedUser.image,
+					emailVerified: updatedUser.emailVerified,
+					createdAt: updatedUser.createdAt,
+					updatedAt: updatedUser.updatedAt,
+				},
 			});
 		}
 		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 			emailVerified: true,
 		});
-
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession) {
+			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
 					ctx.request,
@@ -294,6 +305,7 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		return ctx.json({
 			status: true,
+			user: null,
 		});
 	},
 );

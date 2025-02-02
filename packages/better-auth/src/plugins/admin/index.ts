@@ -4,12 +4,11 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getSessionFromCtx,
-	sessionMiddleware,
 } from "../../api";
 import {
 	type BetterAuthPlugin,
 	type InferOptionSchema,
-	type PluginSchema,
+	type AuthPluginSchema,
 	type Session,
 	type User,
 	type Where,
@@ -30,7 +29,7 @@ export interface SessionWithImpersonatedBy extends Session {
 	impersonatedBy?: string;
 }
 
-interface AdminOptions {
+export interface AdminOptions {
 	/**
 	 * The default role for a user created by the admin
 	 *
@@ -443,7 +442,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							users: users as UserWithRole[],
 						});
 					} catch (e) {
-						console.log(e);
 						return ctx.json({
 							users: [],
 						});
@@ -925,4 +923,4 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;

@@ -2,6 +2,10 @@ import { getAuthTables, type FieldAttribute } from "better-auth/db";
 import { existsSync } from "fs";
 import type { SchemaGenerator } from "./types";
 
+export function convertToSnakeCase(str: string) {
+	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -14,8 +18,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
+	const hasBigint = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.bigint),
+	);
+	const bigint = databaseType !== "sqlite" ? "bigint" : "";
 	const text = databaseType === "mysql" ? "varchar, text" : "text";
-	let code = `import { ${databaseType}Table, ${text}, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+	let code = `import { ${databaseType}Table, ${text}, ${int}${
+		hasBigint ? `, ${bigint}` : ""
+	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
 			`;
 
 	const fileExist = existsSync(filePath);
@@ -26,6 +36,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			: tables[table].modelName;
 		const fields = tables[table].fields;
 		function getType(name: string, field: FieldAttribute) {
+			name = convertToSnakeCase(name);
 			const type = field.type;
 			const typeMap = {
 				string: {
@@ -44,8 +55,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 				number: {
 					sqlite: `integer('${name}')`,
-					pg: `integer('${name}')`,
-					mysql: `int('${name}')`,
+					pg: field.bigint
+						? `bigint('${name}', { mode: 'number' })`
+						: `integer('${name}')`,
+					mysql: field.bigint
+						? `bigint('${name}', { mode: 'number' })`
+						: `int('${name}')`,
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp' })`,
@@ -59,7 +74,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			databaseType === "mysql"
 				? `varchar("id", { length: 36 }).primaryKey()`
 				: `text("id").primaryKey()`;
-		const schema = `export const ${modelName} = ${databaseType}Table("${modelName}", {
+		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+			modelName,
+		)}", {
 					id: ${id},
 					${Object.keys(fields)
 						.map((field) => {

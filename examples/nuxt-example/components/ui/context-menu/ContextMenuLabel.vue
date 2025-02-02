@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
-import { ContextMenuLabel, type ContextMenuLabelProps } from "radix-vue";
-import { cn } from "@/lib/utils";
+import { type ContextMenuLabelProps } from "radix-vue";
 
 const props = defineProps<
 	ContextMenuLabelProps & { class?: HTMLAttributes["class"]; inset?: boolean }

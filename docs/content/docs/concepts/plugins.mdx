@@ -24,7 +24,7 @@ export const auth = betterAuth({
 ```
 
 Client plugins are added when creating the client. Most plugin require both server and client plugins to work correctly.
-The Better-Auth auth client on the frontend uses the `createAuthClient` function provided by `better-auth/client`.
+The Better Auth auth client on the frontend uses the `createAuthClient` function provided by `better-auth/client`.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -399,7 +399,7 @@ const myPlugin = ()=>{
         endpoints: {
             getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
                 method: "GET",
-                use: [sessionMiddleware], //[!code highlight]
+                use: [sessionMiddleware], // [!code highlight]
             }, async(ctx) => {
                 const session = ctx.context.session;
                 return ctx.json({

@@ -1,12 +1,16 @@
 import {
+	BookOpenCheck,
 	CircleHelp,
+	FlaskConical,
+	GitFork,
+	HandHelping,
+	Gauge,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
 	Mail,
 	Mailbox,
-	MailboxIcon,
-	Mails,
+	NotebookPen,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -639,6 +643,24 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Spotify",
+				href: "/docs/authentication/spotify",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 256 256"
+						preserveAspectRatio="xMidYMid"
+					>
+						<path
+							d="M128 0C57.308 0 0 57.309 0 128c0 70.696 57.309 128 128 128 70.697 0 128-57.304 128-128C256 57.314 198.697.007 127.998.007l.001-.006Zm58.699 184.614c-2.293 3.76-7.215 4.952-10.975 2.644-30.053-18.357-67.885-22.515-112.44-12.335a7.981 7.981 0 0 1-9.552-6.007 7.968 7.968 0 0 1 6-9.553c48.76-11.14 90.583-6.344 124.323 14.276 3.76 2.308 4.952 7.215 2.644 10.975Zm15.667-34.853c-2.89 4.695-9.034 6.178-13.726 3.289-34.406-21.148-86.853-27.273-127.548-14.92-5.278 1.594-10.852-1.38-12.454-6.649-1.59-5.278 1.386-10.842 6.655-12.446 46.485-14.106 104.275-7.273 143.787 17.007 4.692 2.89 6.175 9.034 3.286 13.72v-.001Zm1.345-36.293C162.457 88.964 94.394 86.71 55.007 98.666c-6.325 1.918-13.014-1.653-14.93-7.978-1.917-6.328 1.65-13.012 7.98-14.935C93.27 62.027 168.434 64.68 215.929 92.876c5.702 3.376 7.566 10.724 4.188 16.405-3.362 5.69-10.73 7.565-16.4 4.187h-.006Z"
+							fill="currentColor"
+						/>
+					</svg>
+				),
+			},
 		],
 	},
 	{
@@ -1051,9 +1073,9 @@ export const contents: Content[] = [
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
 						className="lucide lucide-users"
 					>
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -1133,6 +1155,32 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Browser Extension Guide",
+				href: "/docs/guides/browser-extension-guide",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 512 512"
+					>
+						<path
+							fill="none"
+							stroke="currentColor"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="32"
+							d="M413.66 246.1H386a2 2 0 0 1-2-2v-77.24A38.86 38.86 0 0 0 345.14 128H267.9a2 2 0 0 1-2-2V98.34c0-27.14-21.5-49.86-48.64-50.33a49.53 49.53 0 0 0-50.4 49.51V126a2 2 0 0 1-2 2H87.62A39.74 39.74 0 0 0 48 167.62V238a2 2 0 0 0 2 2h26.91c29.37 0 53.68 25.48 54.09 54.85c.42 29.87-23.51 57.15-53.29 57.15H50a2 2 0 0 0-2 2v70.38A39.74 39.74 0 0 0 87.62 464H158a2 2 0 0 0 2-2v-20.93c0-30.28 24.75-56.35 55-57.06c30.1-.7 57 20.31 57 50.28V462a2 2 0 0 0 2 2h71.14A38.86 38.86 0 0 0 384 425.14v-78a2 2 0 0 1 2-2h28.48c27.63 0 49.52-22.67 49.52-50.4s-23.2-48.64-50.34-48.64"
+						></path>
+					</svg>
+				),
+			},
+			{
+				title: "Optimize for Performance",
+				href: "/docs/guides/optimizing-for-performance",
+				icon: () => <Gauge className="size-4" />,
+			},
 		],
 	},
 	{
@@ -1177,6 +1225,42 @@ export const contents: Content[] = [
 				title: "FAQ",
 				href: "/docs/reference/faq",
 				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
+			},
+		],
+	},
+	{
+		title: "Contribute",
+		Icon: () => <GitFork className="text-current size-4" />,
+		list: [
+			{
+				title: "Getting Started",
+				href: "/docs/contribute/getting-started",
+				icon: () => <BookOpenCheck className="text-current size-4" />,
+			},
+			{
+				title: "Areas to Contribute",
+				href: "/docs/contribute/areas-to-contribute",
+				icon: () => <HandHelping className="w-4 h-4 text-current" />,
+			},
+			// {
+			// 	title: "Database Adapters",
+			// 	href: "/docs/contribute/database-adapters",
+			// 	icon: () => <Plug className="w-4 h-4 text-current" />,
+			// },
+			{
+				title: "Testing",
+				href: "/docs/contribute/testing",
+				icon: () => <FlaskConical className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Documenting",
+				href: "/docs/contribute/documenting",
+				icon: () => <NotebookPen className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Security Issues",
+				href: "/docs/contribute/security-issues",
+				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
 			},
 		],
 	},

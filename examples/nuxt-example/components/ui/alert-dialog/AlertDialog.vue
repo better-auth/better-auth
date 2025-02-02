@@ -2,7 +2,6 @@
 import {
 	type AlertDialogEmits,
 	type AlertDialogProps,
-	AlertDialogRoot,
 	useForwardPropsEmits,
 } from "radix-vue";
 

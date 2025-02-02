@@ -59,8 +59,8 @@ export const oneTap = (options?: OneTapOptions) =>
 						},
 					},
 				},
-				async (c) => {
-					const { idToken } = c.body;
+				async (ctx) => {
+					const { idToken } = ctx.body;
 					const { data, error } = await betterFetch<{
 						email: string;
 						email_verified: string;
@@ -69,11 +69,11 @@ export const oneTap = (options?: OneTapOptions) =>
 						sub: string;
 					}>("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken);
 					if (error) {
-						return c.json({
+						return ctx.json({
 							error: "Invalid token",
 						});
 					}
-					const user = await c.context.internalAdapter.findUserByEmail(
+					const user = await ctx.context.internalAdapter.findUserByEmail(
 						data.email,
 					);
 					if (!user) {
@@ -82,7 +82,7 @@ export const oneTap = (options?: OneTapOptions) =>
 								message: "User not found",
 							});
 						}
-						const user = await c.context.internalAdapter.createOAuthUser(
+						const user = await ctx.context.internalAdapter.createOAuthUser(
 							{
 								email: data.email,
 								emailVerified: toBoolean(data.email_verified),
@@ -99,30 +99,47 @@ export const oneTap = (options?: OneTapOptions) =>
 								message: "Could not create user",
 							});
 						}
-						const session = await c.context.internalAdapter.createSession(
+						const session = await ctx.context.internalAdapter.createSession(
 							user?.user.id,
-							c.request,
+							ctx.request,
 						);
-						await setSessionCookie(c, {
+						await setSessionCookie(ctx, {
 							user: user.user,
 							session,
 						});
-						return c.json({
-							session,
-							user,
+						return ctx.json({
+							token: session.token,
+							user: {
+								id: user.user.id,
+								email: user.user.email,
+								emailVerified: user.user.emailVerified,
+								name: user.user.name,
+								image: user.user.image,
+								createdAt: user.user.createdAt,
+								updatedAt: user.user.updatedAt,
+							},
 						});
 					}
-					const session = await c.context.internalAdapter.createSession(
+					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						c.request,
+						ctx.request,
 					);
 
-					await setSessionCookie(c, {
+					await setSessionCookie(ctx, {
 						user: user.user,
 						session,
 					});
-					return c.json({
+					return ctx.json({
 						token: session.token,
+						user: {
+							id: user.user.id,
+							email: user.user.email,
+							emailVerified: user.user.emailVerified,
+							name: user.user.name,
+							image: user.user.image,
+							createdAt: user.user.createdAt,
+							updatedAt: user.user.updatedAt,
+						},
 					});
 				},
 			),

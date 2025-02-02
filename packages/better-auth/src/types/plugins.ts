@@ -7,7 +7,7 @@ import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
 
 import type { AuthContext, BetterAuthOptions } from ".";
 
-export type PluginSchema = {
+export type AuthPluginSchema = {
 	[table in string]: {
 		fields: {
 			[field in string]: FieldAttribute;
@@ -117,10 +117,10 @@ export type BetterAuthPlugin = {
 	 * 			},
 	 * 		},
 	 * 	}
-	 * } as PluginSchema
+	 * } as AuthPluginSchema
 	 * ```
 	 */
-	schema?: PluginSchema;
+	schema?: AuthPluginSchema;
 	/**
 	 * The migrations of the plugin. If you define schema that will automatically create
 	 * migrations for you.
@@ -151,7 +151,7 @@ export type BetterAuthPlugin = {
 	$ERROR_CODES?: Record<string, string>;
 };
 
-export type InferOptionSchema<S extends PluginSchema> = S extends Record<
+export type InferOptionSchema<S extends AuthPluginSchema> = S extends Record<
 	string,
 	{ fields: infer Fields }
 >

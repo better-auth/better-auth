@@ -33,6 +33,35 @@ export const auth = betterAuth({
 })
 ```
 
+## Session Freshness
+
+Some endpoints in Better Auth require the session to be **fresh**. A session is considered fresh if its `createdAt` is within the `freshAge` limit. By default, the `freshAge` is set to **1 day** (60 * 60 * 24).  
+
+You can customize the `freshAge` value by passing a `session` object in the `auth` configuration:  
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        freshAge: 60 * 5 // 5 minutes (the session is fresh if created within the last 5 minutes)
+    }
+})
+```
+
+To **disable the freshness check**, set `freshAge` to `0`:  
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        freshAge: 0 // Disable freshness check
+    }
+})
+```
 ## Session Management
 
 Better Auth provides a set of functions to manage sessions.
@@ -99,13 +128,13 @@ await authClient.revokeSessions()
 
 ### Revoking Sessions on Password Change
 
-You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` true on `changePassword` function.
+You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` as true on `changePassword` function.
 
 ```ts title="auth.ts"
 await authClient.changePassword({
     newPassword: newPassword,
     currentPassword: currentPassword,
-    revokeOtherSessions: signOutDevices,
+    revokeOtherSessions: true,
 })
 ```
 
@@ -150,7 +179,7 @@ auth.api.getSession({
 ```
 
 
-### Customizing Session Response
+## Customizing Session Response
 
 When you call `getSession` or `useSession`, the session data is returned as a `user` and `session` object. You can customize this response using the `customSession` plugin.
 

@@ -56,6 +56,7 @@ exports[`init > should match config 1`] = `
     "createSession": [Function],
     "createUser": [Function],
     "createVerificationValue": [Function],
+    "deleteAccount": [Function],
     "deleteAccounts": [Function],
     "deleteSession": [Function],
     "deleteSessions": [Function],
@@ -99,10 +100,6 @@ exports[`init > should match config 1`] = `
       "open": true,
       "readonly": false,
     },
-    "emailAndPassword": {
-      "autoSignIn": true,
-      "enabled": false,
-    },
     "plugins": [],
     "secret": "better-auth-secret-123456789",
   },
@@ -126,7 +123,7 @@ exports[`init > should match config 1`] = `
   "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
-    "freshAge": 300,
+    "freshAge": 86400,
     "updateAge": 86400,
   },
   "setNewSession": [Function],
@@ -261,6 +258,7 @@ exports[`init > should match config 1`] = `
         "email": {
           "fieldName": "email",
           "required": true,
+          "sortable": true,
           "type": "string",
           "unique": true,
         },
@@ -278,6 +276,7 @@ exports[`init > should match config 1`] = `
         "name": {
           "fieldName": "name",
           "required": true,
+          "sortable": true,
           "type": "string",
         },
         "updatedAt": {

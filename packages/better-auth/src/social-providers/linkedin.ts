@@ -41,7 +41,7 @@ export const linkedin = (options: LinkedInOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return await validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});

@@ -1,8 +1,7 @@
-import { beforeAll, expect, it, describe } from "vitest";
-import type { BetterAuthOptions } from "../types";
+import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import Database from "better-sqlite3";
-import { createInternalAdapter } from "./internal-adapter";
-import { getAdapter } from "./utils";
+import { init } from "../init";
 import { getMigrations } from "./get-migration";
 import { SqliteDialect } from "kysely";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -13,6 +12,10 @@ describe("adapter test", async () => {
 	});
 	const map = new Map();
 	let id = 1;
+	const pluginHookUserCreateBefore = vi.fn();
+	const pluginHookUserCreateAfter = vi.fn();
+	const hookUserCreateBefore = vi.fn();
+	const hookUserCreateAfter = vi.fn();
 	const opts = {
 		database: {
 			dialect: sqliteDialect,
@@ -40,33 +43,67 @@ describe("adapter test", async () => {
 				return (id++).toString();
 			},
 		},
+		databaseHooks: {
+			user: {
+				create: {
+					async before(user) {
+						hookUserCreateBefore(user);
+						return { data: user };
+					},
+					async after(user) {
+						hookUserCreateAfter(user);
+						return;
+					},
+				},
+			},
+		},
+		plugins: [
+			{
+				id: "test-plugin",
+				init(ctx) {
+					return {
+						options: {
+							databaseHooks: {
+								user: {
+									create: {
+										async before(user) {
+											pluginHookUserCreateBefore(user);
+											return { data: user };
+										},
+										async after(user) {
+											pluginHookUserCreateAfter(user);
+											return;
+										},
+									},
+								},
+								session: {
+									create: {
+										before: async (session) => {
+											return {
+												data: {
+													...session,
+													activeOrganizationId: "1",
+												},
+											};
+										},
+									},
+								},
+							},
+						},
+					};
+				},
+			} satisfies BetterAuthPlugin,
+		],
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
 		(await getMigrations(opts)).runMigrations();
 	});
-	const adapter = await getAdapter(opts);
-	const internalAdapter = createInternalAdapter(adapter, {
-		options: opts,
-		hooks: [
-			{
-				session: {
-					create: {
-						before: async (session) => {
-							return {
-								data: {
-									...session,
-									activeOrganizationId: "1",
-								},
-							};
-						},
-					},
-				},
-			},
-		],
-		generateId() {
-			return opts.advanced.generateId();
-		},
+	afterEach(async () => {
+		vi.clearAllMocks();
 	});
+	const ctx = await init(opts);
+	const internalAdapter = ctx.internalAdapter;
+
 	it("should create oauth user with custom generate id", async () => {
 		const user = await internalAdapter.createOAuthUser(
 			{
@@ -83,7 +120,6 @@ describe("adapter test", async () => {
 				updatedAt: new Date(),
 			},
 		);
-
 		expect(user).toMatchObject({
 			user: {
 				id: "1",
@@ -106,6 +142,10 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(user?.user.id).toBe(user?.account.userId);
+		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
+		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
+		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
+		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
 	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
@@ -122,16 +162,5 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(session.data?.session).toBeDefined();
-	});
-	it("should use hooks", async () => {
-		await internalAdapter.createUser({
-			email: "email",
-			name: "name",
-			emailVerified: false,
-		});
-		const res = await internalAdapter.createSession("1", undefined);
-		const sessionId = res.token;
-		const session = await internalAdapter.findSession(sessionId);
-		expect(session?.session?.activeOrganizationId).toBe("1");
 	});
 });

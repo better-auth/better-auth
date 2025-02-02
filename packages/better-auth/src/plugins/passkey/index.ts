@@ -9,7 +9,7 @@ import type {
 	AuthenticatorTransportFuture,
 	CredentialDeviceType,
 	PublicKeyCredentialCreationOptionsJSON,
-} from "@simplewebauthn/types";
+} from "@simplewebauthn/server";
 import { APIError } from "better-call";
 import { generateRandomString } from "../../crypto/random";
 import { z } from "zod";
@@ -19,11 +19,9 @@ import { freshSessionMiddleware, getSessionFromCtx } from "../../api/routes";
 import type {
 	BetterAuthPlugin,
 	InferOptionSchema,
-	PluginSchema,
+	AuthPluginSchema,
 } from "../../types/plugins";
 import { setSessionCookie } from "../../cookies";
-import { BetterAuthError } from "../../error";
-import { env } from "../../utils/env";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
 
@@ -32,6 +30,12 @@ interface WebAuthnChallengeValue {
 	userData: {
 		id: string;
 	};
+}
+
+function getRpID(options: PasskeyOptions, baseURL?: string) {
+	return (
+		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
+	);
 }
 
 export interface PasskeyOptions {
@@ -83,20 +87,9 @@ export type Passkey = {
 };
 
 export const passkey = (options?: PasskeyOptions) => {
-	const baseURL = env.BETTER_AUTH_URL;
-	const rpID =
-		options?.rpID ||
-		baseURL?.replace("http://", "").replace("https://", "").split(":")[0] ||
-		"localhost";
-	if (!rpID) {
-		throw new BetterAuthError(
-			"passkey rpID not found. Please provide a rpID in the options or set the BETTER_AUTH_URL environment variable.",
-		);
-	}
 	const opts = {
 		origin: null,
 		...options,
-		rpID,
 		advanced: {
 			webAuthnChallengeCookie: "better-auth-passkey",
 			...options?.advanced,
@@ -250,7 +243,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
 						rpName: opts.rpName || ctx.context.appName,
-						rpID: opts.rpID,
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
@@ -266,16 +259,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							authenticatorAttachment: "platform",
 						},
 					});
-
 					const id = generateId(32);
-					await ctx.setSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					await ctx.setSignedCookie(
+						webAuthnCookie.name,
 						id,
 						ctx.context.secret,
 						{
-							secure: true,
-							httpOnly: true,
-							sameSite: "lax",
+							...webAuthnCookie.attributes,
 							maxAge: maxAgeInSeconds,
 						},
 					);
@@ -413,7 +406,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const options = await generateAuthenticationOptions({
-						rpID: opts.rpID,
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userVerification: "preferred",
 						...(userPasskeys.length
 							? {
@@ -433,14 +426,15 @@ export const passkey = (options?: PasskeyOptions) => {
 						},
 					};
 					const id = generateId(32);
-					await ctx.setSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					await ctx.setSignedCookie(
+						webAuthnCookie.name,
 						id,
 						ctx.context.secret,
 						{
-							secure: true,
-							httpOnly: true,
-							sameSite: "lax",
+							...webAuthnCookie.attributes,
 							maxAge: maxAgeInSeconds,
 						},
 					);
@@ -498,8 +492,11 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeId = await ctx.getSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					const challengeId = await ctx.getSignedCookie(
+						webAuthnCookie.name,
 						ctx.context.secret,
 					);
 					if (!challengeId) {
@@ -532,7 +529,8 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: options?.rpID,
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
+							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
 						if (!verified || !registrationInfo) {
@@ -541,20 +539,22 @@ export const passkey = (options?: PasskeyOptions) => {
 							});
 						}
 						const {
-							credentialID,
-							credentialPublicKey,
-							counter,
+							// credentialID,
+							// credentialPublicKey,
+							// counter,
 							credentialDeviceType,
 							credentialBackedUp,
+							credential,
+							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credentialPublicKey).toString("base64");
+						const pubKey = Buffer.from(credential.publicKey).toString("base64");
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
 							id: ctx.context.generateId({ model: "passkey" }),
-							credentialID,
+							credentialID: credential.id,
 							publicKey: pubKey,
-							counter,
+							counter: credential.counter,
 							deviceType: credentialDeviceType,
 							transports: resp.response.transports.join(","),
 							backedUp: credentialBackedUp,
@@ -621,8 +621,11 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const resp = ctx.body.response;
-					const challengeId = await ctx.getSignedCookie(
+					const webAuthnCookie = ctx.context.createAuthCookie(
 						opts.advanced.webAuthnChallengeCookie,
+					);
+					const challengeId = await ctx.getSignedCookie(
+						webAuthnCookie.name,
 						ctx.context.secret,
 					);
 					if (!challengeId) {
@@ -662,10 +665,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: opts.rpID,
-							authenticator: {
-								credentialID: passkey.credentialID,
-								credentialPublicKey: new Uint8Array(
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
+							credential: {
+								id: passkey.credentialID,
+								publicKey: new Uint8Array(
 									Buffer.from(passkey.publicKey, "base64"),
 								),
 								counter: passkey.counter,
@@ -882,6 +885,6 @@ const schema = {
 			},
 		},
 	},
-} satisfies PluginSchema;
+} satisfies AuthPluginSchema;
 
 export * from "./client";

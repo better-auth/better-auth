@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	ContextMenuRadioGroup,
 	type ContextMenuRadioGroupEmits,
 	type ContextMenuRadioGroupProps,
 	useForwardPropsEmits,

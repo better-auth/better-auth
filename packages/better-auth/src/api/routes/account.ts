@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "../call";
 import { socialProviderList } from "../../social-providers";
 import { APIError } from "better-call";
 import { generateState } from "../../oauth2";
-import { sessionMiddleware } from "./session";
+import { freshSessionMiddleware, sessionMiddleware } from "./session";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
 export const listUserAccounts = createAuthEndpoint(
@@ -50,6 +50,10 @@ export const listUserAccounts = createAuthEndpoint(
 				return {
 					id: a.id,
 					provider: a.providerId,
+					createdAt: a.createdAt,
+					updatedAt: a.updatedAt,
+					accountId: a.accountId,
+					scopes: a.scope?.split(",") || [],
 				};
 			}),
 		);
@@ -61,15 +65,6 @@ export const linkSocialAccount = createAuthEndpoint(
 	{
 		method: "POST",
 		requireHeaders: true,
-		query: z
-			.object({
-				/**
-				 * Redirect to the current URL after the
-				 * user has signed in.
-				 */
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user has signed in.
@@ -154,6 +149,42 @@ export const linkSocialAccount = createAuthEndpoint(
 		return c.json({
 			url: url.toString(),
 			redirect: true,
+		});
+	},
+);
+
+export const unlinkAccount = createAuthEndpoint(
+	"/unlink-account",
+	{
+		method: "POST",
+		body: z.object({
+			providerId: z.string(),
+		}),
+		use: [freshSessionMiddleware],
+	},
+	async (ctx) => {
+		const accounts = await ctx.context.internalAdapter.findAccounts(
+			ctx.context.session.user.id,
+		);
+		if (accounts.length === 1) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+			});
+		}
+		const accountExist = accounts.find(
+			(account) => account.providerId === ctx.body.providerId,
+		);
+		if (!accountExist) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
+			});
+		}
+		await ctx.context.internalAdapter.deleteAccount(
+			ctx.body.providerId,
+			ctx.context.session.user.id,
+		);
+		return ctx.json({
+			status: true,
 		});
 	},
 );

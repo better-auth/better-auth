@@ -36,6 +36,7 @@ import {
 	setPassword,
 	updateUser,
 	deleteUserCallback,
+	unlinkAccount,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -43,7 +44,6 @@ import { error } from "./routes/error";
 import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
-import defu from "defu";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -120,6 +120,7 @@ export function getEndpoints<
 		linkSocialAccount,
 		listUserAccounts,
 		deleteUserCallback,
+		unlinkAccount,
 	};
 	const endpoints = {
 		...baseEndpoints,

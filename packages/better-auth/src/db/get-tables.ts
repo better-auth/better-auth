@@ -63,6 +63,7 @@ export const getAuthTables = (
 				},
 				lastRequest: {
 					type: "number",
+					bigint: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 				},
 			},
@@ -78,12 +79,14 @@ export const getAuthTables = (
 					type: "string",
 					required: true,
 					fieldName: options.user?.fields?.name || "name",
+					sortable: true,
 				},
 				email: {
 					type: "string",
 					unique: true,
 					required: true,
 					fieldName: options.user?.fields?.email || "email",
+					sortable: true,
 				},
 				emailVerified: {
 					type: "boolean",
