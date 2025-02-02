@@ -21,7 +21,7 @@ describe("team", async (it) => {
             modelName: "team",
           },
           team: {
-            modelName: "teamOrg",
+            modelName: "teamsOrg",
           },
           member: {
             modelName: "teamMembers",
@@ -64,12 +64,12 @@ describe("team", async (it) => {
     organizationId = createOrganizationResponse.data?.id as string;
     expect(createOrganizationResponse.data?.name).toBe("Test Organization");
     expect(createOrganizationResponse.data?.slug).toBe("test-org");
+    expect(createOrganizationResponse.data?.members.length).toBe(1);
     expect(createOrganizationResponse.data?.metadata?.test).toBe(
       "organization-metadata",
     );
 
     // Create a team in the newly created organization
-
     const createTeamResponse = await client.organization?.createTeam({
       organizationId,
       data: {
@@ -79,14 +79,13 @@ describe("team", async (it) => {
       },
       fetchOptions: { headers },
     });
-    console.log({ createTeamResponse });
     teamId = createTeamResponse.data?.id as string;
     expect(createTeamResponse.data?.name).toBe("Development Team");
     expect(createTeamResponse.data?.status).toBe("active");
     expect(createTeamResponse.data?.organizationId).toBe(organizationId);
   });
 
-  it("should get a team", async () => {
+  it("should get a team by teamId", async () => {
     // Fetch the team we just created
     const team = await client.organization?.getTeam({
       query: {
@@ -94,10 +93,12 @@ describe("team", async (it) => {
       },
       fetchOptions: { headers },
     });
+    console.log({ team });
     expect(team.data?.id).toBe(teamId);
     expect(team.data?.name).toBe("Development Team");
     expect(team.data?.status).toBe("active");
   });
+
   it("should get all teams", async () => {
     const team = await client.organization?.getTeams({
       fetchOptions: { headers },

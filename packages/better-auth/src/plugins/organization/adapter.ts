@@ -470,19 +470,6 @@ export const getOrgAdapter = (
       });
       return teams;
     },
-    getTeamsByOrganizationId: async (organizationId: string) => {
-      const teams = await adapter.findMany({
-        model: "team",
-        where: [
-          {
-            field: "organizationId",
-            value: organizationId,
-          },
-        ],
-      });
-
-      return teams;
-    },
 
     createTeamInvitation: async ({
       email,

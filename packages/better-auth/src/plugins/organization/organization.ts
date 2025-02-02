@@ -309,14 +309,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
         fieldName: options?.schema?.team?.fields?.description,
       },
       status: {
-        type: "boolean",
+        type: "string",
         required: true,
         fieldName: options?.schema?.team?.fields?.status,
       },
     },
   };
-  const team = teamSupport ? teamSchemaTree : teamSchemaTree;
-  console.log({ team });
   const api = shimContext(endpoints, {
     orgOptions: options || {},
     roles,
@@ -583,35 +581,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
           },
         },
       },
-      team: {
-        modelName: options?.schema?.team?.modelName,
-        fields: {
-          organizationId: {
-            type: "string",
-            required: true,
-            references: {
-              model: "organization",
-              field: "id",
-            },
-            fieldName: options?.schema?.invitation?.fields?.organizationId,
-          },
-          name: {
-            type: "string",
-            required: true,
-            fieldName: options?.schema?.team?.fields?.name,
-          },
-          description: {
-            type: "string",
-            required: false,
-            fieldName: options?.schema?.team?.fields?.description,
-          },
-          status: {
-            type: "string",
-            required: true,
-            fieldName: options?.schema?.team?.fields?.status,
-          },
-        },
-      },
+      ...(teamSupport
+        ? {
+            team: teamSchemaTree,
+          }
+        : {}),
     },
     $Infer: {
       Organization: {} as Organization,

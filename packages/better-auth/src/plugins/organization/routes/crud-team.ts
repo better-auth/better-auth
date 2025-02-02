@@ -168,7 +168,6 @@ export const getTeam = createAuthEndpoint(
     }
 
     const { teamId } = ctx.query;
-
     if (!teamId) {
       return ctx.json(null, {
         status: 400,
@@ -181,7 +180,6 @@ export const getTeam = createAuthEndpoint(
     const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
     const team = await adapter.findTeamById(teamId);
-
     if (!team || team.organizationId !== organizationId) {
       return ctx.json(null, {
         status: 404,
@@ -215,7 +213,7 @@ export const getTeams = createAuthEndpoint(
     }
 
     const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-    const teams = await adapter.getTeamsByOrganizationId(organizationId);
+    const teams = await adapter.listTeams(organizationId);
 
     return ctx.json(teams);
   },
