@@ -70,7 +70,6 @@ describe("team", async (it) => {
 
     // Create a team in the newly created organization
 
-    // const createTeamResponse = await client.organization?.createTeam()
     const createTeamResponse = await client.organization?.createTeam({
       organizationId,
       data: {
