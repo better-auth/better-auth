@@ -232,7 +232,10 @@ export const username = (options?: UsernameOptions) => {
 			before: [
 				{
 					matcher(context) {
-						return context.path === "/sign-up/email";
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
 					async handler(ctx) {
 						const username = ctx.body.username;
