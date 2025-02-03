@@ -28,16 +28,6 @@ export default function CommunityHeader() {
 							GitHub
 						</IconLink>
 					</div>
-					{/* <div className="flex items-center justify-center gap-8 mt-8">
-            <Button variant="link" className="text-gray-400 hover:text-white">
-              <Github className="w-5 h-5 mr-2" />
-              How to contribute
-            </Button>
-            <Button variant="link" className="text-gray-400 hover:text-white">
-              <Github className="w-5 h-5 mr-2" />
-              Code of Conduct
-            </Button>
-          </div> */}
 				</div>
 			</div>
 		</div>

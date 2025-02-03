@@ -39,7 +39,6 @@ async function getGitHubStars() {
 	}
 }
 export default async function CommunityPage() {
-	const stars = await getGitHubStars();
 	const npmDownloads = await getNPMPackageDownloads();
 	return (
 		<Section
