@@ -53,6 +53,12 @@ import type { Invitation, Member, Organization, Team } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 
+type Schema<T> = {
+  modelName?: string;
+  fields?: {
+    [key in keyof Omit<T, "id">]?: string;
+  };
+};
 export interface OrganizationOptions {
   /**
    * Configure whether new users are able to create new organizations.
@@ -164,6 +170,7 @@ export interface OrganizationOptions {
      */
     request?: Request,
   ) => Promise<void>;
+
   /**
    * The schema for the organization plugin.
    */
@@ -191,6 +198,7 @@ export interface OrganizationOptions {
         [key in keyof Omit<Invitation, "id">]?: string;
       };
     };
+
     team?: {
       modelName?: string;
       fields?: {
@@ -286,35 +294,39 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
     ...defaultRoles,
     ...options?.roles,
   };
-  const teamSchemaTree = {
-    modelName: options?.schema?.team?.modelName,
-    fields: {
-      organizationId: {
-        type: "string",
-        required: true,
-        references: {
-          model: "organization",
-          field: "id",
+
+  const teamSchemaTree = teamSupport
+    ? {
+        modelName: options?.schema?.team?.modelName,
+        fields: {
+          organizationId: {
+            type: "string",
+            required: true,
+            references: {
+              model: "organization",
+              field: "id",
+            },
+            fieldName: options?.schema?.team?.fields?.organizationId,
+          },
+          name: {
+            type: "string",
+            required: true,
+            fieldName: options?.schema?.team?.fields?.name,
+          },
+          description: {
+            type: "string",
+            required: false,
+            fieldName: options?.schema?.team?.fields?.description,
+          },
+          status: {
+            type: "string",
+            required: true,
+            fieldName: options?.schema?.team?.fields?.status,
+          },
         },
-        fieldName: options?.schema?.invitation?.fields?.organizationId,
-      },
-      name: {
-        type: "string",
-        required: true,
-        fieldName: options?.schema?.team?.fields?.name,
-      },
-      description: {
-        type: "string",
-        required: false,
-        fieldName: options?.schema?.team?.fields?.description,
-      },
-      status: {
-        type: "string",
-        required: true,
-        fieldName: options?.schema?.team?.fields?.status,
-      },
-    },
-  };
+      }
+    : undefined;
+
   const api = shimContext(endpoints, {
     orgOptions: options || {},
     roles,
@@ -591,7 +603,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
       Organization: {} as Organization,
       Invitation: {} as Invitation,
       Member: {} as Member,
-      Team: {} as Team,
+      Team: teamSupport ? ({} as Team) : ({} as any),
       ActiveOrganization: {} as Prettify<
         Organization & {
           members: Prettify<

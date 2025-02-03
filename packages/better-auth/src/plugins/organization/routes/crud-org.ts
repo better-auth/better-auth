@@ -144,7 +144,7 @@ export const createOrganization = createAuthEndpoint(
         role: "admin",
         createdAt: new Date(),
       });
-      const invitation = await adapter.createInvitation({
+      await adapter.createInvitation({
         invitation: {
           role: "member",
           email: user.email,

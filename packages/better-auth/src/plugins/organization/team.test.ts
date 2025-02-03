@@ -21,7 +21,7 @@ describe("team", async (it) => {
             modelName: "team",
           },
           team: {
-            modelName: "teamsOrg",
+            modelName: "teamOrg",
           },
           member: {
             modelName: "teamMembers",
@@ -49,7 +49,6 @@ describe("team", async (it) => {
   let teamId: string;
 
   it("should create an organization and a team", async () => {
-    // Create an organization first
     const createOrganizationResponse = await client.organization.create({
       name: "Test Organization",
       slug: "test-org",
@@ -69,7 +68,6 @@ describe("team", async (it) => {
       "organization-metadata",
     );
 
-    // Create a team in the newly created organization
     const createTeamResponse = await client.organization?.createTeam({
       organizationId,
       data: {
@@ -86,7 +84,6 @@ describe("team", async (it) => {
   });
 
   it("should get a team by teamId", async () => {
-    // Fetch the team we just created
     const team = await client.organization?.getTeam({
       query: {
         teamId,
