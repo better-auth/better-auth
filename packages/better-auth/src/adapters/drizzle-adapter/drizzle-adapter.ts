@@ -186,7 +186,7 @@ const createTransform = (
 				return c[0];
 			}
 			await builder;
-			const schemaModel = getSchema(getModelName(model));
+			const schemaModel = getSchema(model);
 			const res = await db
 				.select()
 				.from(schemaModel)

@@ -23,7 +23,7 @@ function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
 
-export const phoneNumber = (options?: {
+export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
 	 * @default 6
@@ -93,7 +93,9 @@ export const phoneNumber = (options?: {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
-}) => {
+}
+
+export const phoneNumber = (options?: PhoneNumberOptions) => {
 	const opts = {
 		expiresIn: options?.expiresIn || 300,
 		otpLength: options?.otpLength || 6,
