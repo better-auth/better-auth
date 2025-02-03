@@ -114,7 +114,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 							<div className="flex items-end w-full gap-2 mt-4 text-gray-400">
 								<Link
 									className="w-full"
-									href="https://www.npmjs.com/package/better-auth"
+									href="https://reddit.com/r/better-auth"
 									target="_blank"
 								>
 									<Button
