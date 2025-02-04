@@ -97,7 +97,7 @@ If you are using Nuxt with SSR, you can use the `useSession` function in the `se
 <script setup lang="ts">
 import { authClient } from "~/lib/auth-client";
 
-const { data: session } = authClient.useSession(useFetch);
+const { data: session } = await authClient.useSession(useFetch);
 </script>
 
 <template>
