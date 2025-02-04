@@ -164,6 +164,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						return (
 							!!hasSessionToken &&
 							(context.path.startsWith("/sign-in") ||
+								context.path.startsWith("/sign-up") ||
 								context.path.startsWith("/callback") ||
 								context.path.startsWith("/oauth2/callback") ||
 								context.path.startsWith("/magic-link/verify") ||
