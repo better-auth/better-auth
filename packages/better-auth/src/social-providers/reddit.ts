@@ -63,9 +63,9 @@ export const reddit = (options: RedditOptions) => {
 
 			return getOAuth2Tokens(data);
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 
 			const { data: profile, error } = await betterFetch<RedditProfile>(
@@ -82,7 +82,7 @@ export const reddit = (options: RedditOptions) => {
 				return null;
 			}
 
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 
 			return {
 				user: {

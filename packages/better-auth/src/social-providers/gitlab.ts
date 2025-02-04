@@ -102,9 +102,9 @@ export const gitlab = (options: GitlabOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const { data: profile, error } = await betterFetch<GitlabProfile>(
 				userinfoEndpoint,
@@ -113,7 +113,7 @@ export const gitlab = (options: GitlabOptions) => {
 			if (error || profile.state !== "active" || profile.locked) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.id.toString(),

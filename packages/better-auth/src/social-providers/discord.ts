@@ -103,9 +103,9 @@ export const discord = (options: DiscordOptions) => {
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
 				"https://discord.com/api/users/@me",
@@ -129,7 +129,7 @@ export const discord = (options: DiscordOptions) => {
 				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
 				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.id,

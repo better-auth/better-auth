@@ -109,15 +109,15 @@ export const google = (options: GoogleOptions) => {
 					tokenInfo.iss === "accounts.google.com");
 			return isValid;
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			if (!token.idToken) {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as GoogleProfile;
-			const userMap = await options.mapProfileToUser?.(user);
+			const userMap = await options.mapProfileToUser?.(user, additionalData);
 			return {
 				user: {
 					id: user.sub,

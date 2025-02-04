@@ -39,9 +39,9 @@ export const spotify = (options: SpotifyOptions) => {
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const { data: profile, error } = await betterFetch<SpotifyProfile>(
 				"https://api.spotify.com/v1/me",
@@ -55,7 +55,7 @@ export const spotify = (options: SpotifyOptions) => {
 			if (error) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.id,

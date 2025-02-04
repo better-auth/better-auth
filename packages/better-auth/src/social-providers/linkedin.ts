@@ -46,7 +46,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			const { data: profile, error } = await betterFetch<LinkedInProfile>(
 				"https://api.linkedin.com/v2/userinfo",
 				{
@@ -61,7 +61,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				return null;
 			}
 
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.sub,
