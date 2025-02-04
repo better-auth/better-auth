@@ -1490,9 +1490,6 @@ importers:
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.6.0
-      drizzle-orm:
-        specifier: ^0.35.3
-        version: 0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
       happy-dom:
         specifier: ^15.11.7
         version: 15.11.7
@@ -1537,7 +1534,7 @@ importers:
         version: 18.6.1
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0)
       typescript:
         specifier: 5.6.1-rc
         version: 5.6.1-rc
@@ -20109,7 +20106,7 @@ snapshots:
       '@azure/core-util': 1.11.0
       '@azure/logger': 1.1.4
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.5(supports-color@9.4.0)
+      https-proxy-agent: 7.0.5
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
@@ -20244,8 +20241,8 @@ snapshots:
 
   '@babel/helper-builder-binary-assignment-operator-visitor@7.25.9':
     dependencies:
-      '@babel/traverse': 7.25.9
-      '@babel/types': 7.26.0
+      '@babel/traverse': 7.26.5
+      '@babel/types': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -20395,7 +20392,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/traverse': 7.25.9
+      '@babel/traverse': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -20422,7 +20419,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/traverse': 7.25.9
+      '@babel/traverse': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -20630,7 +20627,7 @@ snapshots:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
       '@babel/helper-remap-async-to-generator': 7.25.9(@babel/core@7.26.0)
-      '@babel/traverse': 7.25.9
+      '@babel/traverse': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -20793,7 +20790,7 @@ snapshots:
       '@babel/helper-module-transforms': 7.26.0(@babel/core@7.26.0)
       '@babel/helper-plugin-utils': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
-      '@babel/traverse': 7.25.9
+      '@babel/traverse': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -21097,7 +21094,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/types': 7.26.0
+      '@babel/types': 7.26.5
       esutils: 2.0.3
 
   '@babel/preset-react@7.26.3(@babel/core@7.26.0)':
@@ -21163,7 +21160,7 @@ snapshots:
       '@babel/parser': 7.26.5
       '@babel/template': 7.25.9
       '@babel/types': 7.26.5
-      debug: 4.4.0(supports-color@9.4.0)
+      debug: 4.4.0
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
@@ -22832,6 +22829,7 @@ snapshots:
     dependencies:
       '@libsql/core': 0.14.0
       js-base64: 3.7.7
+    optional: true
 
   '@libsql/client@0.12.0':
     dependencies:
@@ -22862,6 +22860,7 @@ snapshots:
   '@libsql/core@0.14.0':
     dependencies:
       js-base64: 3.7.7
+    optional: true
 
   '@libsql/core@0.8.1':
     dependencies:
@@ -27672,6 +27671,23 @@ snapshots:
   '@swc/core-win32-x64-msvc@1.3.96':
     optional: true
 
+  '@swc/core@1.10.4':
+    dependencies:
+      '@swc/counter': 0.1.3
+      '@swc/types': 0.1.17
+    optionalDependencies:
+      '@swc/core-darwin-arm64': 1.10.4
+      '@swc/core-darwin-x64': 1.10.4
+      '@swc/core-linux-arm-gnueabihf': 1.10.4
+      '@swc/core-linux-arm64-gnu': 1.10.4
+      '@swc/core-linux-arm64-musl': 1.10.4
+      '@swc/core-linux-x64-gnu': 1.10.4
+      '@swc/core-linux-x64-musl': 1.10.4
+      '@swc/core-win32-arm64-msvc': 1.10.4
+      '@swc/core-win32-ia32-msvc': 1.10.4
+      '@swc/core-win32-x64-msvc': 1.10.4
+    optional: true
+
   '@swc/core@1.10.4(@swc/helpers@0.5.15)':
     dependencies:
       '@swc/counter': 0.1.3
@@ -29850,6 +29866,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  agent-base@7.1.1:
+    dependencies:
+      debug: 4.4.0
+    transitivePeerDependencies:
+      - supports-color
+
   agent-base@7.1.1(supports-color@9.4.0):
     dependencies:
       debug: 4.4.0(supports-color@9.4.0)
@@ -31969,6 +31991,10 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
+  debug@4.4.0:
+    dependencies:
+      ms: 2.1.3
+
   debug@4.4.0(supports-color@9.4.0):
     dependencies:
       ms: 2.1.3
@@ -32217,6 +32243,7 @@ snapshots:
       pg: 8.13.1
       prisma: 5.22.0
       react: 18.3.1
+    optional: true
 
   dset@3.1.4: {}
 
@@ -34733,8 +34760,8 @@ snapshots:
 
   http-proxy-agent@7.0.2:
     dependencies:
-      agent-base: 7.1.1(supports-color@9.4.0)
-      debug: 4.4.0(supports-color@9.4.0)
+      agent-base: 7.1.1
+      debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -34764,6 +34791,13 @@ snapshots:
     dependencies:
       agent-base: 6.0.2
       debug: 4.4.0(supports-color@9.4.0)
+    transitivePeerDependencies:
+      - supports-color
+
+  https-proxy-agent@7.0.5:
+    dependencies:
+      agent-base: 7.1.1
+      debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -41932,35 +41966,6 @@ snapshots:
       - supports-color
       - ts-node
 
-  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
-    dependencies:
-      bundle-require: 5.0.0(esbuild@0.24.0)
-      cac: 6.7.14
-      chokidar: 4.0.1
-      consola: 3.2.3
-      debug: 4.3.7
-      esbuild: 0.24.0
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(yaml@2.6.0)
-      resolve-from: 5.0.0
-      rollup: 4.24.3
-      source-map: 0.8.0-beta.0
-      sucrase: 3.35.0
-      tinyexec: 0.3.1
-      tinyglobby: 0.2.10
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@microsoft/api-extractor': 7.47.11(@types/node@22.10.7)
-      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
-      postcss: 8.4.49
-      typescript: 5.6.1-rc
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
-
   tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.24.0)
@@ -41984,6 +41989,35 @@ snapshots:
       '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       postcss: 8.4.49
       typescript: 5.7.2
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
+
+  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
+    dependencies:
+      bundle-require: 5.0.0(esbuild@0.24.0)
+      cac: 6.7.14
+      chokidar: 4.0.1
+      consola: 3.2.3
+      debug: 4.3.7
+      esbuild: 0.24.0
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(yaml@2.6.0)
+      resolve-from: 5.0.0
+      rollup: 4.24.3
+      source-map: 0.8.0-beta.0
+      sucrase: 3.35.0
+      tinyexec: 0.3.1
+      tinyglobby: 0.2.10
+      tree-kill: 1.2.2
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.47.11(@types/node@22.10.7)
+      '@swc/core': 1.10.4
+      postcss: 8.4.49
+      typescript: 5.6.1-rc
     transitivePeerDependencies:
       - jiti
       - supports-color
