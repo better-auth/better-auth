@@ -340,7 +340,7 @@ export const drizzleAdapter =
       async deleteMany(data) {
         const { model, where } = data;
         const schemaModel = getSchema(model);
-        const clause = convertWhereClause(where, model);
+        const clause = convertWhereClause(where, model);//con
         const builder = db.delete(schemaModel).where(...clause);
         const res = await builder;
         return res ? res.length : 0;
