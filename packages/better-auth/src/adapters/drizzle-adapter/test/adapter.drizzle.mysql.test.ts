@@ -52,12 +52,10 @@ describe("Drizzle Adapter Tests (MySQL)", async () => {
   const { runMigrations } = await getMigrations(opts);
   await runMigrations();
 
-  const mysql2 = createPool(TEST_DB_MYSQL_URL);
   afterAll(async () => {
     await cleanupDatabase(pool);
   });
 
-  console.log({ pool });
   const db = drizzle({
     client: pool,
   });
