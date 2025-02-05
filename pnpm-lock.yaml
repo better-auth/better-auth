@@ -155,7 +155,7 @@ importers:
         version: 0.0.25(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@react-three/fiber':
         specifier: ^8.17.10
-        version: 8.17.10(fz3wlz6iiuc7plam4jzikw4eie)
+        version: 8.17.10(expo-asset@11.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(expo-file-system@18.0.7(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1)))(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)(three@0.168.0)
       '@tanstack/react-query':
         specifier: ^5.62.3
         version: 5.62.3(react@18.3.1)
@@ -212,7 +212,7 @@ importers:
         version: 3.11.5
       next:
         specifier: 15.1.2
-        version: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        version: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -328,7 +328,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.1.18
+        version: 1.2.2
 
   docs:
     dependencies:
@@ -526,7 +526,7 @@ importers:
         version: 10.18.0
       next:
         specifier: ^15.1.2
-        version: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+        version: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -962,7 +962,7 @@ importers:
         version: 8.5.1(vue@3.5.13(typescript@5.7.2))
       nuxt:
         specifier: ^3.14.1592
-        version: 3.14.1592(@azure/identity@4.6.0)(@biomejs/biome@1.9.4)(@libsql/client@0.12.0)(@parcel/watcher@2.4.1)(@types/node@22.10.7)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(eslint@8.57.1)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(magicast@0.3.5)(mysql2@3.11.5)(optionator@0.9.4)(rollup@4.24.3)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))
+        version: 3.14.1592(@azure/identity@4.6.0)(@biomejs/biome@1.9.4)(@libsql/client@0.12.0)(@parcel/watcher@2.4.1)(@types/node@22.10.7)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(better-sqlite3@11.6.0)(mysql2@3.11.5))(encoding@0.1.13)(eslint@8.57.1)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(magicast@0.3.5)(mysql2@3.11.5)(optionator@0.9.4)(rollup@4.24.3)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))
       radix-vue:
         specifier: ^1.9.11
         version: 1.9.11(vue@3.5.13(typescript@5.7.2))
@@ -1343,13 +1343,13 @@ importers:
         version: 1.1.0(@types/react@18.3.14)(react@18.3.1)
       '@rn-primitives/dialog':
         specifier: ^1.1.0
-        version: 1.1.0(@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+        version: 1.1.0(@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       '@tanstack/react-router':
         specifier: ^1.86.1
         version: 1.86.1(@tanstack/router-generator@1.86.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tanstack/start':
         specifier: ^1.86.1
-        version: 1.86.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))(yaml@2.6.0)
+        version: 1.86.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))(yaml@2.6.0)
       '@types/ua-parser-js':
         specifier: ^0.7.39
         version: 0.7.39
@@ -1397,7 +1397,7 @@ importers:
         version: 0.7.39
       vinxi:
         specifier: ^0.4.3
-        version: 0.4.3(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)
+        version: 0.4.3(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.4
@@ -1407,7 +1407,7 @@ importers:
         version: 7.6.12
       '@types/bun':
         specifier: latest
-        version: 1.1.18
+        version: 1.2.2
       '@types/node':
         specifier: ^22.10.1
         version: 22.10.1
@@ -1490,6 +1490,9 @@ importers:
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.6.0
+      drizzle-orm:
+        specifier: ^0.38.2
+        version: 0.38.4(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.2.2)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
       happy-dom:
         specifier: ^15.11.7
         version: 15.11.7
@@ -1585,7 +1588,7 @@ importers:
         version: 16.4.7
       drizzle-orm:
         specifier: ^0.33.0
-        version: 0.33.0(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
+        version: 0.33.0(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.2.2)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
       get-tsconfig:
         specifier: ^4.8.1
         version: 4.8.1
@@ -1607,7 +1610,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -8363,8 +8366,8 @@ packages:
   '@types/braces@3.0.4':
     resolution: {integrity: sha512-0WR3b8eaISjEW7RpZnclONaLFDf7buaowRHdqLp4vLj54AsSAYWfh3DRbfiYJY9XDxMgx1B4sE1Afw2PGpuHOA==}
 
-  '@types/bun@1.1.18':
-    resolution: {integrity: sha512-gtw6cIv/8Q530D0BmoYnjEzR65SjVq2SaUE0NeU6tbm7QBMsTZ61/NBNERtK/FUJaoi7PiteUohK7JcrXBCkvw==}
+  '@types/bun@1.2.2':
+    resolution: {integrity: sha512-tr74gdku+AEDN5ergNiBnplr7hpDp3V1h7fqI2GcR/rsUaM39jpSeKH0TFibRvU0KwniRx5POgaYnaXbk0hU+w==}
 
   '@types/chrome@0.0.258':
     resolution: {integrity: sha512-vicJi6cg2zaFuLmLY7laG6PHBknjKFusPYlaKQ9Zlycskofy71rStlGvW07MUuqUIVorZf8k5KH+zeTTGcH2dQ==}
@@ -8584,9 +8587,6 @@ packages:
 
   '@types/node@20.11.5':
     resolution: {integrity: sha512-g557vgQjUUfN76MZAN/dt1z3dzcUsimuysco0KeluHgrPdJXkP/XdAURgyO2W9fZWHRtRBiVKzKn8vyOAwlG+w==}
-
-  '@types/node@20.12.14':
-    resolution: {integrity: sha512-scnD59RpYD91xngrQQLGkE+6UrHUPzeKZWhhjBSa3HSkwjbQc38+q3RoIVEwxQGRw3M+j5hpNAM+lgV3cVormg==}
 
   '@types/node@20.17.9':
     resolution: {integrity: sha512-0JOXkRyLanfGPE2QRCwgxhzlBAvaRdCNMcvbd7jFfpmD4eEXll7LRwy5ymJmyeZqk7Nh7eD2LeUyQ68BbndmXw==}
@@ -9996,8 +9996,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  bun-types@1.1.44:
-    resolution: {integrity: sha512-jtcekoZeSINgEcHSISzhR13w/cyE+Fankw2Cpl4c0fN3lRmKVAX0i9ay4FyK4lOxUK1HG4HkuIlrPvXKz4Y7sw==}
+  bun-types@1.2.2:
+    resolution: {integrity: sha512-RCbMH5elr9gjgDGDhkTTugA21XtJAy/9jkKe/G3WR2q17VPGhcquf9Sir6uay9iW+7P/BV0CAHA1XlHXMAVKHg==}
 
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
@@ -11355,15 +11355,15 @@ packages:
       sqlite3:
         optional: true
 
-  drizzle-orm@0.35.3:
-    resolution: {integrity: sha512-Uv6N+b36x4BaZlxc96e+ag7RnMapBLGhc4SSi2F7RDwqYJipWjaU/P68RUp1FbW9r+mxoDp8nMz2Eece8PJxfA==}
+  drizzle-orm@0.38.4:
+    resolution: {integrity: sha512-s7/5BpLKO+WJRHspvpqTydxFob8i1vo2rEx4pY6TGY7QSMuUfWUuzaY0DIpXCkgHOo37BaFC+SJQb99dDUXT3Q==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
-      '@cloudflare/workers-types': '>=3'
-      '@electric-sql/pglite': '>=0.1.1'
+      '@cloudflare/workers-types': '>=4'
+      '@electric-sql/pglite': '>=0.2.0'
       '@libsql/client': '>=0.10.0'
       '@libsql/client-wasm': '>=0.10.0'
-      '@neondatabase/serverless': '>=0.1'
+      '@neondatabase/serverless': '>=0.10.0'
       '@op-engineering/op-sqlite': '>=2'
       '@opentelemetry/api': ^1.4.1
       '@planetscale/database': '>=1'
@@ -11377,7 +11377,7 @@ packages:
       '@xata.io/client': '*'
       better-sqlite3: '>=7'
       bun-types: '*'
-      expo-sqlite: '>=13.2.0'
+      expo-sqlite: '>=14.0.0'
       knex: '*'
       kysely: '*'
       mysql2: '>=2'
@@ -11395,6 +11395,8 @@ packages:
       '@electric-sql/pglite':
         optional: true
       '@libsql/client':
+        optional: true
+      '@libsql/client-wasm':
         optional: true
       '@neondatabase/serverless':
         optional: true
@@ -20106,7 +20108,7 @@ snapshots:
       '@azure/core-util': 1.11.0
       '@azure/logger': 1.1.4
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.5
+      https-proxy-agent: 7.0.5(supports-color@9.4.0)
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
@@ -20241,8 +20243,8 @@ snapshots:
 
   '@babel/helper-builder-binary-assignment-operator-visitor@7.25.9':
     dependencies:
-      '@babel/traverse': 7.26.5
-      '@babel/types': 7.26.5
+      '@babel/traverse': 7.25.9
+      '@babel/types': 7.26.0
     transitivePeerDependencies:
       - supports-color
 
@@ -20392,7 +20394,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/traverse': 7.26.5
+      '@babel/traverse': 7.25.9
     transitivePeerDependencies:
       - supports-color
 
@@ -20419,7 +20421,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/traverse': 7.26.5
+      '@babel/traverse': 7.25.9
     transitivePeerDependencies:
       - supports-color
 
@@ -20627,7 +20629,7 @@ snapshots:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
       '@babel/helper-remap-async-to-generator': 7.25.9(@babel/core@7.26.0)
-      '@babel/traverse': 7.26.5
+      '@babel/traverse': 7.25.9
     transitivePeerDependencies:
       - supports-color
 
@@ -20790,7 +20792,7 @@ snapshots:
       '@babel/helper-module-transforms': 7.26.0(@babel/core@7.26.0)
       '@babel/helper-plugin-utils': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
-      '@babel/traverse': 7.26.5
+      '@babel/traverse': 7.25.9
     transitivePeerDependencies:
       - supports-color
 
@@ -21094,7 +21096,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.26.0
       '@babel/helper-plugin-utils': 7.25.9
-      '@babel/types': 7.26.5
+      '@babel/types': 7.26.0
       esutils: 2.0.3
 
   '@babel/preset-react@7.26.3(@babel/core@7.26.0)':
@@ -21160,7 +21162,7 @@ snapshots:
       '@babel/parser': 7.26.5
       '@babel/template': 7.25.9
       '@babel/types': 7.26.5
-      debug: 4.4.0
+      debug: 4.4.0(supports-color@9.4.0)
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
@@ -22639,7 +22641,7 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       jest-mock: 29.7.0
 
   '@jest/expect-utils@29.7.0':
@@ -22650,7 +22652,7 @@ snapshots:
     dependencies:
       '@jest/types': 29.6.3
       '@sinonjs/fake-timers': 10.3.0
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       jest-message-util: 29.7.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
@@ -22692,7 +22694,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
@@ -26536,6 +26538,26 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.14
 
+  '@react-native/virtualized-lists@0.76.6(@types/react@18.3.14)(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      invariant: 2.2.4
+      nullthrows: 1.1.1
+      react: 18.3.1
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.14
+    optional: true
+
+  '@react-native/virtualized-lists@0.76.6(@types/react@18.3.14)(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      invariant: 2.2.4
+      nullthrows: 1.1.1
+      react: 18.3.1
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.14
+    optional: true
+
   '@react-navigation/bottom-tabs@7.2.0(@react-navigation/native@7.0.14(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-safe-area-context@4.12.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-screens@4.4.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@react-navigation/elements': 2.2.5(@react-navigation/native@7.0.14(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-safe-area-context@4.12.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
@@ -26616,7 +26638,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.8
 
-  '@react-three/fiber@8.17.10(fz3wlz6iiuc7plam4jzikw4eie)':
+  '@react-three/fiber@8.17.10(expo-asset@11.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(expo-file-system@18.0.7(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1)))(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)(three@0.168.0)':
     dependencies:
       '@babel/runtime': 7.26.0
       '@types/debounce': 1.2.4
@@ -26633,11 +26655,11 @@ snapshots:
       three: 0.168.0
       zustand: 3.7.2(react@18.3.1)
     optionalDependencies:
-      expo: 52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      expo-asset: 11.0.2(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      expo-file-system: 18.0.7(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      expo-asset: 11.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      expo-file-system: 18.0.7(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))
       react-dom: 18.3.1(react@18.3.1)
-      react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
 
   '@redocly/ajv@8.11.2':
     dependencies:
@@ -26866,16 +26888,16 @@ snapshots:
       react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@rn-primitives/dialog@1.1.0(@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+  '@rn-primitives/dialog@1.1.0(@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@radix-ui/react-dialog': 1.1.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@rn-primitives/hooks': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      '@rn-primitives/portal': 1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      '@rn-primitives/slot': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      '@rn-primitives/types': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      '@rn-primitives/hooks': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      '@rn-primitives/portal': 1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      '@rn-primitives/slot': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      '@rn-primitives/types': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       react: 18.3.1
     optionalDependencies:
-      react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     transitivePeerDependencies:
       - '@types/react'
@@ -26890,12 +26912,20 @@ snapshots:
       react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+  '@rn-primitives/hooks@1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@rn-primitives/types': 1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
+    optionalDependencies:
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+
+  '@rn-primitives/portal@1.1.0(@types/react@18.3.14)(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
     dependencies:
       react: 18.3.1
       zustand: 4.5.6(@types/react@18.3.14)(react@18.3.1)
     optionalDependencies:
-      react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     transitivePeerDependencies:
       - '@types/react'
@@ -26922,11 +26952,25 @@ snapshots:
       react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
+  '@rn-primitives/slot@1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+    optionalDependencies:
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+
   '@rn-primitives/types@1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
     dependencies:
       react: 18.3.1
     optionalDependencies:
       react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
+      react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+
+  '@rn-primitives/types@1.1.0(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+    optionalDependencies:
+      react-native: 0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)
       react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   '@rnx-kit/chromium-edge-launcher@1.0.0':
@@ -27227,7 +27271,7 @@ snapshots:
   '@scalar/nextjs-api-reference@0.4.104(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)':
     dependencies:
       '@scalar/types': 0.0.23
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       react: 18.3.1
 
   '@scalar/openapi-parser@0.8.10':
@@ -27671,23 +27715,6 @@ snapshots:
   '@swc/core-win32-x64-msvc@1.3.96':
     optional: true
 
-  '@swc/core@1.10.4':
-    dependencies:
-      '@swc/counter': 0.1.3
-      '@swc/types': 0.1.17
-    optionalDependencies:
-      '@swc/core-darwin-arm64': 1.10.4
-      '@swc/core-darwin-x64': 1.10.4
-      '@swc/core-linux-arm-gnueabihf': 1.10.4
-      '@swc/core-linux-arm64-gnu': 1.10.4
-      '@swc/core-linux-arm64-musl': 1.10.4
-      '@swc/core-linux-x64-gnu': 1.10.4
-      '@swc/core-linux-x64-musl': 1.10.4
-      '@swc/core-win32-arm64-msvc': 1.10.4
-      '@swc/core-win32-ia32-msvc': 1.10.4
-      '@swc/core-win32-x64-msvc': 1.10.4
-    optional: true
-
   '@swc/core@1.10.4(@swc/helpers@0.5.15)':
     dependencies:
       '@swc/counter': 0.1.3
@@ -27841,7 +27868,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/start@1.86.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))(yaml@2.6.0)':
+  '@tanstack/start@1.86.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))(yaml@2.6.0)':
     dependencies:
       '@tanstack/react-cross-context': 1.85.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tanstack/react-router': 1.86.1(@tanstack/router-generator@1.86.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -27850,8 +27877,8 @@ snapshots:
       '@tanstack/start-vite-plugin': 1.85.3
       '@vinxi/react': 0.2.5
       '@vinxi/react-server-dom': 0.0.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
-      '@vinxi/server-components': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
-      '@vinxi/server-functions': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
+      '@vinxi/server-components': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
+      '@vinxi/server-functions': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
       '@vitejs/plugin-react': 4.3.4(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
       import-meta-resolve: 4.1.0
       isbot: 5.1.17
@@ -27859,7 +27886,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       tiny-invariant: 1.3.3
-      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
       zod: 3.23.8
     transitivePeerDependencies:
       - '@azure/app-configuration'
@@ -28152,9 +28179,9 @@ snapshots:
 
   '@types/braces@3.0.4': {}
 
-  '@types/bun@1.1.18':
+  '@types/bun@1.2.2':
     dependencies:
-      bun-types: 1.1.44
+      bun-types: 1.2.2
 
   '@types/chrome@0.0.258':
     dependencies:
@@ -28359,7 +28386,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.3.0
+      '@types/node': 22.10.7
 
   '@types/leaflet@1.7.6':
     dependencies:
@@ -28404,10 +28431,6 @@ snapshots:
       undici-types: 5.26.5
 
   '@types/node@20.11.5':
-    dependencies:
-      undici-types: 5.26.5
-
-  '@types/node@20.12.14':
     dependencies:
       undici-types: 5.26.5
 
@@ -28487,7 +28510,7 @@ snapshots:
 
   '@types/readable-stream@4.0.18':
     dependencies:
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       safe-buffer: 5.1.2
 
   '@types/resize-observer-browser@0.1.11': {}
@@ -28496,7 +28519,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.3.0
+      '@types/node': 22.10.7
 
   '@types/scheduler@0.23.0': {}
 
@@ -28504,7 +28527,7 @@ snapshots:
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
 
   '@types/stack-utils@2.0.3': {}
 
@@ -28577,7 +28600,7 @@ snapshots:
 
   '@types/ws@8.5.13':
     dependencies:
-      '@types/node': 20.12.14
+      '@types/node': 22.10.7
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -28922,7 +28945,7 @@ snapshots:
       untun: 0.1.3
       uqr: 0.1.2
 
-  '@vinxi/plugin-directives@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
+  '@vinxi/plugin-directives@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
     dependencies:
       '@babel/parser': 7.26.2
       acorn: 8.14.0
@@ -28933,7 +28956,7 @@ snapshots:
       magicast: 0.2.11
       recast: 0.23.9
       tslib: 2.8.1
-      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
 
   '@vinxi/react-server-dom@0.0.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -28944,27 +28967,27 @@ snapshots:
 
   '@vinxi/react@0.2.5': {}
 
-  '@vinxi/server-components@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
+  '@vinxi/server-components@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
     dependencies:
-      '@vinxi/plugin-directives': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
+      '@vinxi/plugin-directives': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
       acorn: 8.14.0
       acorn-loose: 8.4.0
       acorn-typescript: 1.4.13(acorn@8.14.0)
       astring: 1.9.0
       magicast: 0.2.11
       recast: 0.23.9
-      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
 
-  '@vinxi/server-functions@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
+  '@vinxi/server-functions@0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))':
     dependencies:
-      '@vinxi/plugin-directives': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
+      '@vinxi/plugin-directives': 0.5.0(vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0))
       acorn: 8.14.0
       acorn-loose: 8.4.0
       acorn-typescript: 1.4.13(acorn@8.14.0)
       astring: 1.9.0
       magicast: 0.2.11
       recast: 0.23.9
-      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
+      vinxi: 0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0)
 
   '@vitejs/plugin-react@4.3.4(vite@6.0.11(@types/node@22.10.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -29863,12 +29886,6 @@ snapshots:
   agent-base@6.0.2:
     dependencies:
       debug: 4.4.0(supports-color@9.4.0)
-    transitivePeerDependencies:
-      - supports-color
-
-  agent-base@7.1.1:
-    dependencies:
-      debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -30792,9 +30809,9 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  bun-types@1.1.44:
+  bun-types@1.2.2:
     dependencies:
-      '@types/node': 20.12.14
+      '@types/node': 22.10.7
       '@types/ws': 8.5.13
 
   bundle-name@4.1.0:
@@ -31966,11 +31983,11 @@ snapshots:
 
   dayjs@1.11.13: {}
 
-  db0@0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(mysql2@3.11.5):
+  db0@0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(mysql2@3.11.5):
     optionalDependencies:
       '@libsql/client': 0.12.0
       better-sqlite3: 11.6.0
-      drizzle-orm: 0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
+      drizzle-orm: 0.38.4(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.2.2)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1)
       mysql2: 3.11.5
 
   debounce@1.2.1: {}
@@ -31988,10 +32005,6 @@ snapshots:
       ms: 2.1.3
 
   debug@4.3.7:
-    dependencies:
-      ms: 2.1.3
-
-  debug@4.4.0:
     dependencies:
       ms: 2.1.3
 
@@ -32212,7 +32225,7 @@ snapshots:
 
   dotenv@7.0.0: {}
 
-  drizzle-orm@0.33.0(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1):
+  drizzle-orm@0.33.0(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.2.2)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1):
     optionalDependencies:
       '@libsql/client': 0.12.0
       '@prisma/client': 5.22.0(prisma@5.22.0)
@@ -32220,30 +32233,28 @@ snapshots:
       '@types/pg': 8.11.10
       '@types/react': 18.3.14
       better-sqlite3: 11.6.0
-      bun-types: 1.1.44
+      bun-types: 1.2.2
       kysely: 0.27.4
       mysql2: 3.11.5
       pg: 8.13.1
       prisma: 5.22.0
       react: 18.3.1
 
-  drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1):
-    dependencies:
-      '@libsql/client-wasm': 0.14.0
+  drizzle-orm@0.38.4(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.2.2)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1):
     optionalDependencies:
       '@libsql/client': 0.12.0
+      '@libsql/client-wasm': 0.14.0
       '@prisma/client': 5.22.0(prisma@5.22.0)
       '@types/better-sqlite3': 7.6.12
       '@types/pg': 8.11.10
       '@types/react': 18.3.14
       better-sqlite3: 11.6.0
-      bun-types: 1.1.44
+      bun-types: 1.2.2
       kysely: 0.27.4
       mysql2: 3.11.5
       pg: 8.13.1
       prisma: 5.22.0
       react: 18.3.1
-    optional: true
 
   dset@3.1.4: {}
 
@@ -32771,7 +32782,7 @@ snapshots:
       debug: 4.3.7
       enhanced-resolve: 5.17.1
       eslint: 8.57.1
-      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3)(eslint@8.57.1)
+      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-plugin-import@2.31.0)(eslint@8.57.1))(eslint@8.57.1)
       fast-glob: 3.3.2
       get-tsconfig: 4.8.1
       is-bun-module: 1.2.1
@@ -32800,7 +32811,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3)(eslint@8.57.1):
+  eslint-module-utils@2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-plugin-import@2.31.0)(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
@@ -32811,7 +32822,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.7.0)(eslint@8.57.1):
+  eslint-module-utils@2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.7.0(eslint-plugin-import@2.31.0)(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
@@ -32833,7 +32844,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3)(eslint@8.57.1)
+      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.3(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-plugin-import@2.31.0)(eslint@8.57.1))(eslint@8.57.1)
       hasown: 2.0.2
       is-core-module: 2.15.1
       is-glob: 4.0.3
@@ -32862,7 +32873,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.7.0)(eslint@8.57.1)
+      eslint-module-utils: 2.12.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.7.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.7.0(eslint-plugin-import@2.31.0)(eslint@8.57.1))(eslint@8.57.1)
       hasown: 2.0.2
       is-core-module: 2.15.1
       is-glob: 4.0.3
@@ -33200,6 +33211,19 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  expo-asset@11.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@expo/image-utils': 0.6.4
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      expo-constants: 17.0.4(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))
+      invariant: 2.2.4
+      md5-file: 3.2.3
+      react: 18.3.1
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   expo-constants@16.0.2(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)):
     dependencies:
       '@expo/config': 9.0.4
@@ -33226,6 +33250,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  expo-constants@17.0.4(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1)):
+    dependencies:
+      '@expo/config': 10.0.8
+      '@expo/env': 0.4.1
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   expo-crypto@13.0.2(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)):
     dependencies:
       base64-js: 1.5.1
@@ -33243,6 +33277,13 @@ snapshots:
       react-native: 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827)
       web-streams-polyfill: 3.3.3
 
+  expo-file-system@18.0.7(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1)):
+    dependencies:
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
+      web-streams-polyfill: 3.3.3
+    optional: true
+
   expo-font@13.0.3(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react@18.3.1):
     dependencies:
       expo: 52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
@@ -33255,6 +33296,13 @@ snapshots:
       fontfaceobserver: 2.3.0
       react: 19.0.0-rc-7771d3a7-20240827
 
+  expo-font@13.0.3(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react@18.3.1):
+    dependencies:
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      fontfaceobserver: 2.3.0
+      react: 18.3.1
+    optional: true
+
   expo-keep-awake@14.0.2(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react@18.3.1):
     dependencies:
       expo: 52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
@@ -33264,6 +33312,12 @@ snapshots:
     dependencies:
       expo: 52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)
       react: 19.0.0-rc-7771d3a7-20240827
+
+  expo-keep-awake@14.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react@18.3.1):
+    dependencies:
+      expo: 52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
+    optional: true
 
   expo-linking@6.3.1(expo@52.0.25(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@expo/metro-runtime@4.0.0(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827)))(encoding@0.1.13)(graphql@15.8.0)(react-native@0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(@types/react@18.3.14)(encoding@0.1.13)(react@19.0.0-rc-7771d3a7-20240827))(react@19.0.0-rc-7771d3a7-20240827)):
     dependencies:
@@ -33437,6 +33491,40 @@ snapshots:
       - react-compiler-runtime
       - supports-color
       - utf-8-validate
+
+  expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@babel/runtime': 7.26.0
+      '@expo/cli': 0.22.9(encoding@0.1.13)(graphql@15.8.0)
+      '@expo/config': 10.0.8
+      '@expo/config-plugins': 9.0.14
+      '@expo/fingerprint': 0.11.7
+      '@expo/metro-config': 0.19.9
+      '@expo/vector-icons': 14.0.4
+      babel-preset-expo: 12.0.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))
+      expo-asset: 11.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      expo-constants: 17.0.4(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))
+      expo-file-system: 18.0.7(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))
+      expo-font: 13.0.3(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react@18.3.1)
+      expo-keep-awake: 14.0.2(expo@52.0.25(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1))(react@18.3.1)
+      expo-modules-autolinking: 2.0.5
+      expo-modules-core: 2.1.3
+      fbemitter: 3.0.0(encoding@0.1.13)
+      react: 18.3.1
+      react-native: 0.76.6(@types/react@18.3.14)(react@18.3.1)
+      web-streams-polyfill: 3.3.3
+      whatwg-url-without-unicode: 8.0.0-3
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@babel/preset-env'
+      - babel-plugin-react-compiler
+      - bufferutil
+      - encoding
+      - graphql
+      - react-compiler-runtime
+      - supports-color
+      - utf-8-validate
+    optional: true
 
   exponential-backoff@3.1.1: {}
 
@@ -33902,7 +33990,7 @@ snapshots:
       unist-util-visit: 5.0.0
     optionalDependencies:
       algoliasearch: 4.24.0
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
     transitivePeerDependencies:
@@ -33933,7 +34021,7 @@ snapshots:
       fumadocs-core: 14.0.2(@types/react@18.3.14)(sass@1.83.1)
       gray-matter: 4.0.3
       micromatch: 4.0.8
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       zod: 3.23.8
     transitivePeerDependencies:
       - acorn
@@ -33953,7 +34041,7 @@ snapshots:
       github-slugger: 2.0.0
       hast-util-to-jsx-runtime: 2.3.2
       js-yaml: 4.1.0
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       openapi-sampler: 1.6.1
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
@@ -34010,7 +34098,7 @@ snapshots:
       class-variance-authority: 0.7.1
       cmdk: 1.0.0(@types/react-dom@18.3.2)(@types/react@18.3.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       fumadocs-core: 14.0.2(@types/react@18.3.14)(sass@1.83.1)
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
@@ -34047,7 +34135,7 @@ snapshots:
       fumadocs-core: 14.5.6(@types/react@18.3.14)(algoliasearch@4.24.0)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       lodash.merge: 4.6.2
       lucide-react: 0.465.0(react@18.3.1)
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       next-themes: 0.4.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       postcss-selector-parser: 7.0.0
       react: 18.3.1
@@ -34097,7 +34185,7 @@ snapshots:
 
   geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
-      next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      next: 15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
   generate-function@2.3.1:
     dependencies:
@@ -34760,8 +34848,8 @@ snapshots:
 
   http-proxy-agent@7.0.2:
     dependencies:
-      agent-base: 7.1.1
-      debug: 4.4.0
+      agent-base: 7.1.1(supports-color@9.4.0)
+      debug: 4.4.0(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -34791,13 +34879,6 @@ snapshots:
     dependencies:
       agent-base: 6.0.2
       debug: 4.4.0(supports-color@9.4.0)
-    transitivePeerDependencies:
-      - supports-color
-
-  https-proxy-agent@7.0.5:
-    dependencies:
-      agent-base: 7.1.1
-      debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -35339,7 +35420,7 @@ snapshots:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       jest-mock: 29.7.0
       jest-util: 29.7.0
 
@@ -35383,7 +35464,7 @@ snapshots:
   jest-mock@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 22.10.1
+      '@types/node': 22.10.7
       jest-util: 29.7.0
 
   jest-regex-util@29.6.3: {}
@@ -37647,32 +37728,6 @@ snapshots:
       - babel-plugin-macros
     optional: true
 
-  next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
-    dependencies:
-      '@next/env': 15.1.2
-      '@swc/counter': 0.1.3
-      '@swc/helpers': 0.5.15
-      busboy: 1.6.0
-      caniuse-lite: 1.0.30001676
-      postcss: 8.4.31
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.6(@babel/core@7.26.0)(react@18.3.1)
-    optionalDependencies:
-      '@next/swc-darwin-arm64': 15.1.2
-      '@next/swc-darwin-x64': 15.1.2
-      '@next/swc-linux-arm64-gnu': 15.1.2
-      '@next/swc-linux-arm64-musl': 15.1.2
-      '@next/swc-linux-x64-gnu': 15.1.2
-      '@next/swc-linux-x64-musl': 15.1.2
-      '@next/swc-win32-arm64-msvc': 15.1.2
-      '@next/swc-win32-x64-msvc': 15.1.2
-      sass: 1.83.1
-      sharp: 0.33.5
-    transitivePeerDependencies:
-      - '@babel/core'
-      - babel-plugin-macros
-
   next@15.1.2(@babel/core@7.26.0)(react-dom@19.0.0-rc-7771d3a7-20240827(react@18.3.1))(react@18.3.1)(sass@1.83.1):
     dependencies:
       '@next/env': 15.1.2
@@ -37699,9 +37754,35 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
+  next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1):
+    dependencies:
+      '@next/env': 15.1.2
+      '@swc/counter': 0.1.3
+      '@swc/helpers': 0.5.15
+      busboy: 1.6.0
+      caniuse-lite: 1.0.30001676
+      postcss: 8.4.31
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      styled-jsx: 5.1.6(@babel/core@7.26.0)(react@18.3.1)
+    optionalDependencies:
+      '@next/swc-darwin-arm64': 15.1.2
+      '@next/swc-darwin-x64': 15.1.2
+      '@next/swc-linux-arm64-gnu': 15.1.2
+      '@next/swc-linux-arm64-musl': 15.1.2
+      '@next/swc-linux-x64-gnu': 15.1.2
+      '@next/swc-linux-x64-musl': 15.1.2
+      '@next/swc-win32-arm64-msvc': 15.1.2
+      '@next/swc-win32-x64-msvc': 15.1.2
+      sass: 1.83.1
+      sharp: 0.33.5
+    transitivePeerDependencies:
+      - '@babel/core'
+      - babel-plugin-macros
+
   nice-try@1.0.5: {}
 
-  nitropack@2.10.0(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2):
+  nitropack@2.10.0(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.3.4
       '@netlify/functions': 2.8.2
@@ -37725,7 +37806,7 @@ snapshots:
       cookie-es: 1.2.2
       croner: 9.0.0
       crossws: 0.3.1
-      db0: 0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(mysql2@3.11.5)
+      db0: 0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(mysql2@3.11.5)
       defu: 6.1.4
       destr: 2.0.3
       dot-prop: 9.0.0
@@ -37794,7 +37875,7 @@ snapshots:
       - typescript
       - webpack-sources
 
-  nitropack@2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2):
+  nitropack@2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.3.4
       '@netlify/functions': 2.8.2
@@ -37818,7 +37899,7 @@ snapshots:
       cookie-es: 1.2.2
       croner: 9.0.0
       crossws: 0.3.1
-      db0: 0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(mysql2@3.11.5)
+      db0: 0.2.1(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(mysql2@3.11.5)
       defu: 6.1.4
       destr: 2.0.3
       dot-prop: 9.0.0
@@ -38060,7 +38141,7 @@ snapshots:
 
   nuxi@3.15.0: {}
 
-  nuxt@3.14.1592(@azure/identity@4.6.0)(@biomejs/biome@1.9.4)(@libsql/client@0.12.0)(@parcel/watcher@2.4.1)(@types/node@22.10.7)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(eslint@8.57.1)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(magicast@0.3.5)(mysql2@3.11.5)(optionator@0.9.4)(rollup@4.24.3)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)):
+  nuxt@3.14.1592(@azure/identity@4.6.0)(@biomejs/biome@1.9.4)(@libsql/client@0.12.0)(@parcel/watcher@2.4.1)(@types/node@22.10.7)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(better-sqlite3@11.6.0)(mysql2@3.11.5))(encoding@0.1.13)(eslint@8.57.1)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(magicast@0.3.5)(mysql2@3.11.5)(optionator@0.9.4)(rollup@4.24.3)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)):
     dependencies:
       '@nuxt/devalue': 2.0.2
       '@nuxt/devtools': 1.6.0(rollup@4.24.3)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))(vue@3.5.13(typescript@5.7.2))
@@ -38097,7 +38178,7 @@ snapshots:
       magic-string: 0.30.14
       mlly: 1.7.3
       nanotar: 0.1.1
-      nitropack: 2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
+      nitropack: 2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
       nuxi: 3.15.0
       nypm: 0.3.12
       ofetch: 1.4.1
@@ -39950,6 +40031,112 @@ snapshots:
       - encoding
       - supports-color
       - utf-8-validate
+
+  react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1):
+    dependencies:
+      '@jest/create-cache-key-function': 29.7.0
+      '@react-native/assets-registry': 0.76.6
+      '@react-native/codegen': 0.76.6(@babel/preset-env@7.26.0(@babel/core@7.26.0))
+      '@react-native/community-cli-plugin': 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(encoding@0.1.13)
+      '@react-native/gradle-plugin': 0.76.6
+      '@react-native/js-polyfills': 0.76.6
+      '@react-native/normalize-colors': 0.76.6
+      '@react-native/virtualized-lists': 0.76.6(@types/react@18.3.14)(react-native@0.76.6(@babel/core@7.26.0)(@types/react@18.3.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      abort-controller: 3.0.0
+      anser: 1.4.10
+      ansi-regex: 5.0.1
+      babel-jest: 29.7.0(@babel/core@7.26.0)
+      babel-plugin-syntax-hermes-parser: 0.23.1
+      base64-js: 1.5.1
+      chalk: 4.1.2
+      commander: 12.1.0
+      event-target-shim: 5.0.1
+      flow-enums-runtime: 0.0.6
+      glob: 7.2.3
+      invariant: 2.2.4
+      jest-environment-node: 29.7.0
+      jsc-android: 250231.0.0
+      memoize-one: 5.2.1
+      metro-runtime: 0.81.0
+      metro-source-map: 0.81.0
+      mkdirp: 0.5.6
+      nullthrows: 1.1.1
+      pretty-format: 29.7.0
+      promise: 8.3.0
+      react: 18.3.1
+      react-devtools-core: 5.3.2
+      react-refresh: 0.14.2
+      regenerator-runtime: 0.13.11
+      scheduler: 0.24.0-canary-efb381bbf-20230505
+      semver: 7.6.3
+      stacktrace-parser: 0.1.10
+      whatwg-fetch: 3.6.20
+      ws: 6.2.3
+      yargs: 17.7.2
+    optionalDependencies:
+      '@types/react': 18.3.14
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@babel/preset-env'
+      - '@react-native-community/cli-server-api'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+    optional: true
+
+  react-native@0.76.6(@types/react@18.3.14)(react@18.3.1):
+    dependencies:
+      '@jest/create-cache-key-function': 29.7.0
+      '@react-native/assets-registry': 0.76.6
+      '@react-native/codegen': 0.76.6(@babel/preset-env@7.26.0(@babel/core@7.26.0))
+      '@react-native/community-cli-plugin': 0.76.6(@babel/core@7.26.0)(@babel/preset-env@7.26.0(@babel/core@7.26.0))(@react-native-community/cli-server-api@13.6.9(encoding@0.1.13))(encoding@0.1.13)
+      '@react-native/gradle-plugin': 0.76.6
+      '@react-native/js-polyfills': 0.76.6
+      '@react-native/normalize-colors': 0.76.6
+      '@react-native/virtualized-lists': 0.76.6(@types/react@18.3.14)(react-native@0.76.6(@types/react@18.3.14)(react@18.3.1))(react@18.3.1)
+      abort-controller: 3.0.0
+      anser: 1.4.10
+      ansi-regex: 5.0.1
+      babel-jest: 29.7.0(@babel/core@7.26.0)
+      babel-plugin-syntax-hermes-parser: 0.23.1
+      base64-js: 1.5.1
+      chalk: 4.1.2
+      commander: 12.1.0
+      event-target-shim: 5.0.1
+      flow-enums-runtime: 0.0.6
+      glob: 7.2.3
+      invariant: 2.2.4
+      jest-environment-node: 29.7.0
+      jsc-android: 250231.0.0
+      memoize-one: 5.2.1
+      metro-runtime: 0.81.0
+      metro-source-map: 0.81.0
+      mkdirp: 0.5.6
+      nullthrows: 1.1.1
+      pretty-format: 29.7.0
+      promise: 8.3.0
+      react: 18.3.1
+      react-devtools-core: 5.3.2
+      react-refresh: 0.14.2
+      regenerator-runtime: 0.13.11
+      scheduler: 0.24.0-canary-efb381bbf-20230505
+      semver: 7.6.3
+      stacktrace-parser: 0.1.10
+      whatwg-fetch: 3.6.20
+      ws: 6.2.3
+      yargs: 17.7.2
+    optionalDependencies:
+      '@types/react': 18.3.14
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@babel/preset-env'
+      - '@react-native-community/cli-server-api'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+    optional: true
 
   react-node-resolver@1.0.1: {}
 
@@ -41966,7 +42153,36 @@ snapshots:
       - supports-color
       - ts-node
 
-  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
+  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
+    dependencies:
+      bundle-require: 5.0.0(esbuild@0.24.0)
+      cac: 6.7.14
+      chokidar: 4.0.1
+      consola: 3.2.3
+      debug: 4.3.7
+      esbuild: 0.24.0
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(yaml@2.6.0)
+      resolve-from: 5.0.0
+      rollup: 4.24.3
+      source-map: 0.8.0-beta.0
+      sucrase: 3.35.0
+      tinyexec: 0.3.1
+      tinyglobby: 0.2.10
+      tree-kill: 1.2.2
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.47.11(@types/node@22.10.7)
+      '@swc/core': 1.10.4(@swc/helpers@0.5.15)
+      postcss: 8.4.49
+      typescript: 5.6.1-rc
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
+
+  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.24.0)
       cac: 6.7.14
@@ -41989,35 +42205,6 @@ snapshots:
       '@swc/core': 1.10.4(@swc/helpers@0.5.15)
       postcss: 8.4.49
       typescript: 5.7.2
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
-
-  tsup@8.3.5(@microsoft/api-extractor@7.47.11(@types/node@22.10.7))(@swc/core@1.10.4)(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(typescript@5.6.1-rc)(yaml@2.6.0):
-    dependencies:
-      bundle-require: 5.0.0(esbuild@0.24.0)
-      cac: 6.7.14
-      chokidar: 4.0.1
-      consola: 3.2.3
-      debug: 4.3.7
-      esbuild: 0.24.0
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.4.0)(postcss@8.4.49)(tsx@4.19.2)(yaml@2.6.0)
-      resolve-from: 5.0.0
-      rollup: 4.24.3
-      source-map: 0.8.0-beta.0
-      sucrase: 3.35.0
-      tinyexec: 0.3.1
-      tinyglobby: 0.2.10
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@microsoft/api-extractor': 7.47.11(@types/node@22.10.7)
-      '@swc/core': 1.10.4
-      postcss: 8.4.49
-      typescript: 5.6.1-rc
     transitivePeerDependencies:
       - jiti
       - supports-color
@@ -42742,7 +42929,7 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vinxi@0.4.3(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2):
+  vinxi@0.4.3(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(typescript@5.7.2):
     dependencies:
       '@babel/core': 7.26.0
       '@babel/plugin-syntax-jsx': 7.25.9(@babel/core@7.26.0)
@@ -42764,7 +42951,7 @@ snapshots:
       hookable: 5.5.3
       http-proxy: 1.18.1
       micromatch: 4.0.8
-      nitropack: 2.10.0(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
+      nitropack: 2.10.0(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
       node-fetch-native: 1.6.4
       path-to-regexp: 6.3.0
       pathe: 1.1.2
@@ -42813,7 +43000,7 @@ snapshots:
       - webpack-sources
       - xml2js
 
-  vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
+  vinxi@0.5.1(@azure/identity@4.6.0)(@libsql/client@0.12.0)(@types/node@22.10.1)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(ioredis@5.4.1)(jiti@2.4.0)(less@4.2.1)(lightningcss@1.27.0)(mysql2@3.11.5)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(typescript@5.7.2)(yaml@2.6.0):
     dependencies:
       '@babel/core': 7.26.0
       '@babel/plugin-syntax-jsx': 7.25.9(@babel/core@7.26.0)
@@ -42835,7 +43022,7 @@ snapshots:
       hookable: 5.5.3
       http-proxy: 1.18.1
       micromatch: 4.0.8
-      nitropack: 2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.35.3(@libsql/client-wasm@0.14.0)(@libsql/client@0.12.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.12)(@types/pg@8.11.10)(@types/react@18.3.14)(better-sqlite3@11.6.0)(bun-types@1.1.44)(kysely@0.27.4)(mysql2@3.11.5)(pg@8.13.1)(prisma@5.22.0)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
+      nitropack: 2.10.4(@azure/identity@4.6.0)(@libsql/client@0.12.0)(better-sqlite3@11.6.0)(drizzle-orm@0.38.4(@libsql/client@0.12.0)(@types/better-sqlite3@7.6.12)(@types/react@18.3.14)(better-sqlite3@11.6.0)(mysql2@3.11.5)(react@18.3.1))(encoding@0.1.13)(mysql2@3.11.5)(typescript@5.7.2)
       node-fetch-native: 1.6.4
       path-to-regexp: 6.3.0
       pathe: 1.1.2
