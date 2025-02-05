@@ -42,6 +42,10 @@ interface MagicLinkOptions {
 		window: number;
 		max: number;
 	};
+	/**
+	 * Custom function to generate a token
+	 */
+	generateToken? : (email?: string) => Promise<string> | string;
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
