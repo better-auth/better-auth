@@ -18,7 +18,7 @@ const createKyselyInstance = (pool: any) =>
     dialect: new MysqlDialect({ pool }),
   });
 
-const cleanupDatabase = async (mysql: any) => {
+const cleanupDatabase = async (mysql: Pool) => {
   await mysql.query("DROP DATABASE IF EXISTS better_auth");
   await mysql.query("CREATE DATABASE better_auth");
   await mysql.end();
@@ -95,7 +95,7 @@ describe("Authentication Flow Tests (MySQL)", async () => {
   });
 
   afterAll(async () => {
-    await cleanupDatabase(mysql);
+    await cleanupDatabase(pool);
   });
 
   it("should successfully sign up a new user", async () => {
