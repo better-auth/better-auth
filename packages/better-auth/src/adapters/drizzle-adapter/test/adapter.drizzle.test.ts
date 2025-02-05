@@ -11,7 +11,6 @@ import { betterAuth } from "../../../auth";
 
 const TEST_DB_URL = "postgres://user:password@localhost:5432/better_auth";
 
-const TEST_DB_MYSQL_URL = "postgres://user:password@localhost:5432/better_auth";
 
 const createTestPool = () => new Pool({ connectionString: TEST_DB_URL });
 
