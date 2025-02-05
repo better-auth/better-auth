@@ -314,7 +314,6 @@ export const drizzleAdapter =
 					.update(schemaModel)
 					.set(transformed)
 					.where(...clause);
-				console.log({ builder });
 				const returned = await withReturning(model, builder, transformed);
 				return transformOutput(returned, model);
 			},
