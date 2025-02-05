@@ -140,9 +140,9 @@ describe("magic link", async () => {
 		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				magicLink({
-  				async sendMagicLink(data) {
-  					verificationEmail = data;
-  				},
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
 					generateToken: customGenerateToken,
 				}),
 			],
