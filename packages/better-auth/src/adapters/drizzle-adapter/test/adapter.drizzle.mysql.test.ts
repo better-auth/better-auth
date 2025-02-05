@@ -45,7 +45,6 @@ describe("Drizzle Adapter Tests (MySQL)", async () => {
   let mysql: Kysely<any>;
   let opts: BetterAuthOptions;
 
-  console.log("Creating pool");
   pool = createTestPool();
   mysql = createKyselyInstance(pool);
   opts = createTestOptions(pool);
