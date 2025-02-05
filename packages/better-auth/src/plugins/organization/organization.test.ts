@@ -195,7 +195,7 @@ describe("organization", async (it) => {
 			const invite = await client.organization.inviteMember({
 				organizationId: organizationId,
 				email: newUser.email,
-				role: role,
+				role: role as "owner",
 				fetchOptions: {
 					headers,
 				},
