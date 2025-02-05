@@ -35,7 +35,7 @@ export const spotify = (options: SpotifyOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});

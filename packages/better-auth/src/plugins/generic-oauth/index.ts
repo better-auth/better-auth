@@ -221,6 +221,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
+								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 						});
@@ -505,6 +506,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							options: {
 								clientId: provider.clientId,
 								clientSecret: provider.clientSecret,
+								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 						});

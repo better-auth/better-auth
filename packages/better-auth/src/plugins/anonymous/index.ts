@@ -31,12 +31,12 @@ export interface AnonymousOptions {
 	 */
 	onLinkAccount?: (data: {
 		anonymousUser: {
-			user: UserWithAnonymous;
-			session: Session;
+			user: UserWithAnonymous & Record<string, any>;
+			session: Session & Record<string, any>;
 		};
 		newUser: {
-			user: User;
-			session: Session;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 		};
 	}) => Promise<void> | void;
 	/**
@@ -164,6 +164,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						return (
 							!!hasSessionToken &&
 							(context.path.startsWith("/sign-in") ||
+								context.path.startsWith("/sign-up") ||
 								context.path.startsWith("/callback") ||
 								context.path.startsWith("/oauth2/callback") ||
 								context.path.startsWith("/magic-link/verify") ||

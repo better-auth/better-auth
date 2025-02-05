@@ -97,7 +97,7 @@ export const gitlab = (options: GitlabOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				codeVerifier,
 				tokenEndpoint,

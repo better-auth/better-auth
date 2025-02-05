@@ -836,6 +836,12 @@ Table Name: `invitation`
       description: "The email address of the user" 
     },
     { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
+    },
+    { 
       name: "organizationId", 
       type: "string", 
       description: "The id of the organization",
