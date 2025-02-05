@@ -5,7 +5,7 @@ import { drizzleAdapter } from "..";
 import { getMigrations } from "../../../db/get-migration";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { BetterAuthOptions } from "../../../types";
-import { createPool } from "mysql2/promise";
+import { createPool, type Pool } from "mysql2/promise";
 import { Kysely, MysqlDialect } from "kysely";
 import { betterAuth } from "../../../auth";
 
