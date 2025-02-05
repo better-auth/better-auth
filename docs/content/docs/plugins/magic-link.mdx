@@ -97,3 +97,9 @@ and a `request` object as the second parameter.
 **generateToken**: The `generateToken` function is called to generate a token which is used to uniquely identify the user. The default value is a random string. There is one parameter:
 
 - `email`: The email address of the user.
+
+<Callout type="warn">
+  When using `generateToken`, ensure that the returned string is hard to guess
+  because it is used to verify who someone actually is in a confidential way. By
+  default, we return a long and cryptographically secure string.
+</Callout>
