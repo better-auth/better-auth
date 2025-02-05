@@ -2,150 +2,174 @@ import { APIError } from "better-call";
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { SocialProviderListEnum } from "../../social-providers";
+import type {
+	AdditionalUserFieldsInput,
+	BetterAuthOptions,
+} from "../../types";
+import { type SocialProviderList, SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
 import { generateState } from "../../utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { BASE_ERROR_CODES } from "../../error/codes";
 
-export const signInSocial = createAuthEndpoint(
-	"/sign-in/social",
-	{
-		method: "POST",
-		body: z.object({
-			/**
-			 * Callback URL to redirect to after the user
-			 * has signed in.
-			 */
-			callbackURL: z
-				.string({
-					description:
-						"Callback URL to redirect to after the user has signed in",
-				})
-				.optional(),
-			/**
-			 * callback url to redirect if the user is newly registered.
-			 *
-			 * useful if you have different routes for existing users and new users
-			 */
-			newUserCallbackURL: z.string().optional(),
-			/**
-			 * Callback url to redirect to if an error happens
-			 *
-			 * If it's initiated from the client sdk this defaults to
-			 * the current url.
-			 */
-			errorCallbackURL: z
-				.string({
-					description: "Callback URL to redirect to if an error happens",
-				})
-				.optional(),
-			/**
-			 * OAuth2 provider to use`
-			 */
-			provider: SocialProviderListEnum,
-			/**
-			 * Additional data to be passed to createOauthUser
-			 * 
-			 * useful if you want to pass additional data when creating an OAuth user
-			 * such as a user role for instance
-			 */
-			additionalData: z.record(z.string()).optional(),
-			/**
-			 * Disable automatic redirection to the provider
-			 *
-			 * This is useful if you want to handle the redirection
-			 * yourself like in a popup or a different tab.
-			 */
-			disableRedirect: z
-				.boolean({
-					description:
-						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-				})
-				.optional(),
-			/**
-			 * ID token from the provider
-			 *
-			 * This is used to sign in the user
-			 * if the user is already signed in with the
-			 * provider in the frontend.
-			 *
-			 * Only applicable if the provider supports
-			 * it. Currently only `apple` and `google` is
-			 * supported out of the box.
-			 */
-			idToken: z.optional(
-				z.object({
-					/**
-					 * ID token from the provider
-					 */
-					token: z.string({
-						description: "ID token from the provider",
+export const signInSocial = <O extends BetterAuthOptions>() => 
+	createAuthEndpoint(
+		"/sign-in/social",
+		{
+			method: "POST",
+			body: z.object({
+				/**
+				 * Callback URL to redirect to after the user
+				 * has signed in.
+				 */
+				callbackURL: z
+					.string({
+						description:
+							"Callback URL to redirect to after the user has signed in",
+					})
+					.optional(),
+				/**
+				 * callback url to redirect if the user is newly registered.
+				 *
+				 * useful if you have different routes for existing users and new users
+				 */
+				newUserCallbackURL: z.string().optional(),
+				/**
+				 * Callback url to redirect to if an error happens
+				 *
+				 * If it's initiated from the client sdk this defaults to
+				 * the current url.
+				 */
+				errorCallbackURL: z
+					.string({
+						description: "Callback URL to redirect to if an error happens",
+					})
+					.optional(),
+				/**
+				 * OAuth2 provider to use`
+				 */
+				provider: SocialProviderListEnum,
+				/**
+				 * Additional data to be passed to createOauthUser
+				 * 
+				 * useful if you want to pass additional data when creating an OAuth user
+				 * such as a user role for instance
+				 */
+				additionalData: z.record(z.string()).optional(),
+				/**
+				 * Disable automatic redirection to the provider
+				 *
+				 * This is useful if you want to handle the redirection
+				 * yourself like in a popup or a different tab.
+				 */
+				disableRedirect: z
+					.boolean({
+						description:
+							"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+					})
+					.optional(),
+				/**
+				 * ID token from the provider
+				 *
+				 * This is used to sign in the user
+				 * if the user is already signed in with the
+				 * provider in the frontend.
+				 *
+				 * Only applicable if the provider supports
+				 * it. Currently only `apple` and `google` is
+				 * supported out of the box.
+				 */
+				idToken: z.optional(
+					z.object({
+						/**
+						 * ID token from the provider
+						 */
+						token: z.string({
+							description: "ID token from the provider",
+						}),
+						/**
+						 * The nonce used to generate the token
+						 */
+						nonce: z
+							.string({
+								description: "Nonce used to generate the token",
+							})
+							.optional(),
+						/**
+						 * Access token from the provider
+						 */
+						accessToken: z
+							.string({
+								description: "Access token from the provider",
+							})
+							.optional(),
+						/**
+						 * Refresh token from the provider
+						 */
+						refreshToken: z
+							.string({
+								description: "Refresh token from the provider",
+							})
+							.optional(),
+						/**
+						 * Expiry date of the token
+						 */
+						expiresAt: z
+							.number({
+								description: "Expiry date of the token",
+							})
+							.optional(),
 					}),
-					/**
-					 * The nonce used to generate the token
-					 */
-					nonce: z
-						.string({
-							description: "Nonce used to generate the token",
-						})
-						.optional(),
-					/**
-					 * Access token from the provider
-					 */
-					accessToken: z
-						.string({
-							description: "Access token from the provider",
-						})
-						.optional(),
-					/**
-					 * Refresh token from the provider
-					 */
-					refreshToken: z
-						.string({
-							description: "Refresh token from the provider",
-						})
-						.optional(),
-					/**
-					 * Expiry date of the token
-					 */
-					expiresAt: z
-						.number({
-							description: "Expiry date of the token",
-						})
-						.optional(),
-				}),
-				{
-					description:
-						"ID token from the provider to sign in the user with id token",
+					{
+						description:
+							"ID token from the provider to sign in the user with id token",
+					},
+				),
+			}),
+			metadata: {
+				$Infer: {
+					body: {} as {
+						callbackURL?: string;
+						newUserCallbackURL?: string;
+						errorCallbackURL?: string;
+						provider: SocialProviderList[number];
+						additionalData: AdditionalUserFieldsInput<O>;
+						disableRedirect?: boolean;
+						idToken?: {
+							token: string;
+							nonce?: string;
+							accessToken?: string;
+							refreshToken?: string;
+							expiresAt?: number;
+							
+						}
+					},
 				},
-			),
-		}),
-		metadata: {
-			openapi: {
-				description: "Sign in with a social provider",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										session: {
-											type: "string",
+				openapi: {
+					description: "Sign in with a social provider",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											session: {
+												type: "string",
+											},
+											user: {
+												type: "object",
+											},
+											url: {
+												type: "string",
+											},
+											redirect: {
+												type: "boolean",
+											},
 										},
-										user: {
-											type: "object",
-										},
-										url: {
-											type: "string",
-										},
-										redirect: {
-											type: "boolean",
-										},
+										required: ["session", "user", "url", "redirect"],
 									},
-									required: ["session", "user", "url", "redirect"],
 								},
 							},
 						},
@@ -153,115 +177,114 @@ export const signInSocial = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (c) => {
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.body.provider,
-		);
-		if (!provider) {
-			c.context.logger.error(
-				"Provider not found. Make sure to add the provider in your auth config",
-				{
-					provider: c.body.provider,
-				},
+		async (c) => {
+			const provider = c.context.socialProviders.find(
+				(p) => p.id === c.body.provider,
 			);
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
-			});
-		}
-
-		if (c.body.idToken) {
-			if (!provider.verifyIdToken) {
+			if (!provider) {
 				c.context.logger.error(
-					"Provider does not support id token verification",
+					"Provider not found. Make sure to add the provider in your auth config",
 					{
 						provider: c.body.provider,
 					},
 				);
 				throw new APIError("NOT_FOUND", {
-					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+					message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 				});
 			}
-			const { token, nonce } = c.body.idToken;
-			const valid = await provider.verifyIdToken(token, nonce);
-			if (!valid) {
-				c.context.logger.error("Invalid id token", {
-					provider: c.body.provider,
-				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.INVALID_TOKEN,
-				});
-			}
-			const userInfo = await provider.getUserInfo({
-				idToken: token,
-				accessToken: c.body.idToken.accessToken,
-				refreshToken: c.body.idToken.refreshToken,
-			});
-			if (!userInfo || !userInfo?.user) {
-				c.context.logger.error("Failed to get user info", {
-					provider: c.body.provider,
-				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
-				});
-			}
-			if (!userInfo.user.email) {
-				c.context.logger.error("User email not found", {
-					provider: c.body.provider,
-				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
-				});
-			}
-			const data = await handleOAuthUserInfo(c, {
-				userInfo: {
-					email: userInfo.user.email,
-					id: userInfo.user.id,
-					name: userInfo.user.name || "",
-					image: userInfo.user.image,
-					emailVerified: userInfo.user.emailVerified || false,
-				},
-				account: {
-					providerId: provider.id,
-					accountId: userInfo.user.id,
+	
+			if (c.body.idToken) {
+				if (!provider.verifyIdToken) {
+					c.context.logger.error(
+						"Provider does not support id token verification",
+						{
+							provider: c.body.provider,
+						},
+					);
+					throw new APIError("NOT_FOUND", {
+						message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+					});
+				}
+				const { token, nonce } = c.body.idToken;
+				const valid = await provider.verifyIdToken(token, nonce);
+				if (!valid) {
+					c.context.logger.error("Invalid id token", {
+						provider: c.body.provider,
+					});
+					throw new APIError("UNAUTHORIZED", {
+						message: BASE_ERROR_CODES.INVALID_TOKEN,
+					});
+				}
+				const userInfo = await provider.getUserInfo({
+					idToken: token,
 					accessToken: c.body.idToken.accessToken,
-				},
-			});
-			if (data.error) {
-				throw new APIError("UNAUTHORIZED", {
-					message: data.error,
+					refreshToken: c.body.idToken.refreshToken,
+				});
+				if (!userInfo || !userInfo?.user) {
+					c.context.logger.error("Failed to get user info", {
+						provider: c.body.provider,
+					});
+					throw new APIError("UNAUTHORIZED", {
+						message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+					});
+				}
+				if (!userInfo.user.email) {
+					c.context.logger.error("User email not found", {
+						provider: c.body.provider,
+					});
+					throw new APIError("UNAUTHORIZED", {
+						message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
+					});
+				}
+				const data = await handleOAuthUserInfo(c, {
+					userInfo: {
+						email: userInfo.user.email,
+						id: userInfo.user.id,
+						name: userInfo.user.name || "",
+						image: userInfo.user.image,
+						emailVerified: userInfo.user.emailVerified || false,
+					},
+					account: {
+						providerId: provider.id,
+						accountId: userInfo.user.id,
+						accessToken: c.body.idToken.accessToken,
+					},
+				});
+				if (data.error) {
+					throw new APIError("UNAUTHORIZED", {
+						message: data.error,
+					});
+				}
+				await setSessionCookie(c, data.data!);
+				return c.json({
+					redirect: false,
+					token: data.data!.session.token,
+					url: undefined,
+					user: {
+						id: data.data!.user.id,
+						email: data.data!.user.email,
+						name: data.data!.user.name,
+						image: data.data!.user.image,
+						emailVerified: data.data!.user.emailVerified,
+						createdAt: data.data!.user.createdAt,
+						updatedAt: data.data!.user.updatedAt,
+					},
 				});
 			}
-			await setSessionCookie(c, data.data!);
-			return c.json({
-				redirect: false,
-				token: data.data!.session.token,
-				url: undefined,
-				user: {
-					id: data.data!.user.id,
-					email: data.data!.user.email,
-					name: data.data!.user.name,
-					image: data.data!.user.image,
-					emailVerified: data.data!.user.emailVerified,
-					createdAt: data.data!.user.createdAt,
-					updatedAt: data.data!.user.updatedAt,
-				},
+	
+			const { codeVerifier, state } = await generateState(c);
+			const url = await provider.createAuthorizationURL({
+				state,
+				codeVerifier,
+				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
-		}
-
-		const { codeVerifier, state } = await generateState(c);
-		const url = await provider.createAuthorizationURL({
-			state,
-			codeVerifier,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
-		});
-
-		return c.json({
-			url: url.toString(),
-			redirect: !c.body.disableRedirect,
-		});
-	},
-);
+	
+			return c.json({
+				url: url.toString(),
+				redirect: !c.body.disableRedirect,
+			});
+		},
+	);
 
 export const signInEmail = createAuthEndpoint(
 	"/sign-in/email",
