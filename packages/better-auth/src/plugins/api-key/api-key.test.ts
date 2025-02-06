@@ -6,7 +6,14 @@ import { apiKeyClient } from "./client";
 describe("apiKey plugin", async () => {
 	const { client, signInWithTestUser, auth, db } = await getTestInstance(
 		{
-			plugins: [apiKey()],
+			plugins: [
+				apiKey({
+					rateLimit: {
+						algorithm: "none",
+						rateLimitBy: "apiKey",
+					},
+				}),
+			],
 		},
 		{
 			clientOptions: {
@@ -221,7 +228,7 @@ describe("apiKey plugin", async () => {
 			expect(r.data.success).toEqual(true);
 
 			const result = await db.findOne({
-				model: "apiKeys",
+				model: "apiKey",
 				where: [
 					{
 						field: "id",
@@ -582,5 +589,28 @@ describe("apiKey plugin", async () => {
 
 		expect(result.data).toBeDefined();
 		expect(result.data?.name).toEqual("test");
+	});
+
+	it(`Should hit the rate-limit`, async () => {
+		const { client, signInWithTestUser, auth, db } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						valid_identifiers: ["test"],
+						rateLimit: {
+							algorithm: "token_bucket",
+							rateLimitBy: "apiKey",
+							bucketSize: 10,
+							refilRate: 1,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
 	});
 });

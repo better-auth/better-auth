@@ -1,21 +1,67 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
-import {
-	type Adapter,
-	type AuthContext,
-	type BetterAuthPlugin,
-} from "../../types";
+import { type AuthContext, type BetterAuthPlugin } from "../../types";
 
+export type RateLimitBy = "apiKey" | "user";
+
+export type RateLimitAlgorithmTypes =
+	| "token_bucket"
+	| "leaky_bucket"
+	| "fixed_window_counter"
+	| "sliding_window_log"
+	| "siding_window_counter"
+	| "none";
 interface RateLimitAlgorithm_base {
-	algo:
-		| "token_bucket"
-		| "leaky_bucket"
-		| "fixed_window_counter"
-		| "sliding_window_log"
-		| "siding_window_counter";
+	/**
+	 * The algorithm type to use
+	 */
+	algorithm: RateLimitAlgorithmTypes;
+	/**
+	 * Either rate limit by apiKey or user.
+	 *
+	 * If you have a group of users who are using the same apiKey, and you set this to `apiKey`, then the rate limit will be applied to the apiKey and will effect all users using the same apiKey.
+	 *
+	 */
+	rateLimitBy: RateLimitBy;
 }
 
-export type RateLimitAlgorithm = RateLimitAlgorithm_base;
+interface RateLimitAlgorithm_tokenBucket extends RateLimitAlgorithm_base {
+	algorithm: "token_bucket";
+	bucketSize: number;
+	refilRate: number;
+}
+interface RateLimitAlgorithm_leakyBucket extends RateLimitAlgorithm_base {
+	algorithm: "leaky_bucket";
+	bucketSize: number;
+	outflowRate: number;
+}
+
+interface RateLimitAlgorithm_fixedWindowCounter
+	extends RateLimitAlgorithm_base {
+	algorithm: "fixed_window_counter";
+	capacity: number;
+	timeWindow: number;
+}
+
+interface RateLimitAlgorithm_slidingWindowLog extends RateLimitAlgorithm_base {
+	algorithm: "sliding_window_log";
+	capacity: number;
+}
+
+interface RateLimitAlgorithm_sidingWindowCounter
+	extends RateLimitAlgorithm_base {
+	algorithm: "siding_window_counter";
+	window: number;
+	max: number;
+}
+
+export type RateLimitAlgorithm =
+	| RateLimitAlgorithm_tokenBucket
+	| RateLimitAlgorithm_leakyBucket
+	| RateLimitAlgorithm_fixedWindowCounter
+	| RateLimitAlgorithm_slidingWindowLog
+	| RateLimitAlgorithm_sidingWindowCounter
+	| RateLimitAlgorithm_base;
 
 export type ApiKeyIdentifier = string | RegExp;
 
@@ -31,9 +77,9 @@ export type ApiKeyOptions = {
 		modelName: string;
 	};
 	/**
-	 * Apply rate-limits based on a given api key `identifier`
+	 * Apply default rate limit coonfigurations
 	 */
-	rateLimits?: Record<string, RateLimitAlgorithm>;
+	rateLimit?: RateLimitAlgorithm;
 	/**
 	 * A list of trusted `identifier`s which allow users to create API keys based on.
 	 *
@@ -82,6 +128,7 @@ export type ApiKey = {
 	name: string | undefined;
 	isEnabled: boolean;
 	lastVerifiedAt: Date | null;
+	rateLimitAlgorithm: RateLimitAlgorithmTypes;
 };
 
 const DEFAULT_KEY_LENGTH = 64;
@@ -122,6 +169,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		}
 		return prefix ? prefix + "_" + apiKey : apiKey;
 	}
+
 
 	return {
 		id: "apiKey",
@@ -222,7 +270,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 
 					const newKey = await ctx.context.adapter.create<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						data: {
 							createdAt: new Date(),
 							updatedAt: new Date(),
@@ -238,6 +286,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							name: ctx.body.name,
 							isEnabled: ctx.body.enabled ?? true,
 							lastVerifiedAt: null,
+							rateLimitAlgorithm: "none"
 						},
 					});
 
@@ -258,7 +307,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "key",
@@ -294,7 +343,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 					if (apiKey.expires && apiKey.expires < new Date().getTime()) {
 						ctx.context.adapter.delete<ApiKey>({
-							model: "apiKeys",
+							model: "apiKey",
 							where: [
 								{
 									field: "id",
@@ -311,7 +360,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					if (apiKey.remaining !== null) {
 						if (apiKey.remaining - 1 === 0) {
 							ctx.context.adapter.delete<ApiKey>({
-								model: "apiKeys",
+								model: "apiKey",
 								where: [
 									{
 										field: "id",
@@ -322,7 +371,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							});
 						} else {
 							ctx.context.adapter.update<ApiKey>({
-								model: "apiKeys",
+								model: "apiKey",
 								where: [
 									{
 										field: "id",
@@ -363,7 +412,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -430,7 +479,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -455,7 +504,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					const result = await ctx.context.adapter.update<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -509,7 +558,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -525,7 +574,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 
 					const result = await ctx.context.adapter.update<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -574,7 +623,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -603,7 +652,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						prefix: ctx.body.prefix,
 					});
 					await ctx.context.adapter.update<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -647,7 +696,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -667,7 +716,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						prefix: ctx.body.prefix,
 					});
 					await ctx.context.adapter.update<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -702,7 +751,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -722,7 +771,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					await ctx.context.adapter.delete<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -752,7 +801,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -769,7 +818,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 
 					await ctx.context.adapter.delete<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "id",
@@ -801,7 +850,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						});
 					}
 					const apiKey = await ctx.context.adapter.findMany<ApiKey>({
-						model: "apiKeys",
+						model: "apiKey",
 						where: [
 							{
 								field: "identifier",
@@ -833,8 +882,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			),
 		},
 		schema: {
-			apiKeys: {
-				modelName: options?.schema?.modelName || "apiKeys",
+			apiKey: {
+				modelName: options?.schema?.modelName || "apiKey",
 				fields: {
 					createdAt: {
 						type: "date",
@@ -892,6 +941,32 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						required: false,
 						input: true,
 					},
+					rateLimitAlgorithm: {
+						type: "string",
+						required: true,
+						input: true,
+					}
+				},
+			},
+			apiKeyLimit: {
+				fields: {
+					api_key_id: {
+						type: "string",
+						required: true,
+						input: true,
+					},
+					request_count: {
+						type: "number",
+						required: true,
+						input: true,
+						defaultValue: 0,
+					},
+					last_request: {
+						type: "date",
+						required: true,
+						input: true,
+						defaultValue: new Date(),
+					},
 				},
 			},
 		},
@@ -914,7 +989,7 @@ function deleteAllExpiredApiKeys(
 	lastChecked = new Date();
 	try {
 		return ctx.adapter.deleteMany({
-			model: "apiKeys",
+			model: "apiKey",
 			where: [
 				{
 					field: "expires",
