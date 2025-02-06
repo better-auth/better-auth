@@ -485,6 +485,7 @@ describe("apiKey plugin", async () => {
 			{
 				identifier: "test",
 				withoutOwner: true,
+				expires: new Date().getTime() + 1000,
 			},
 			{},
 		);
@@ -499,4 +500,32 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.valid).toEqual(true);
 	});
 
+	it(`Should forcefully reroll an apiKey`, async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		await auth.api.forceRerollApiKey({
+			body: {
+				keyId: apiKey?.id as string,
+			},
+		});
+
+		const result = await client.apiKey.get(
+			{
+				query: {
+					keyId: apiKey?.id as string,
+				},
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.key).toBeDefined();
+		//@ts-ignore
+		expect(result.data.key).not.toEqual(apiKey?.key);
+	});
 });

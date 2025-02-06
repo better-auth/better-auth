@@ -509,9 +509,9 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							},
 							{
 								field: "ownerId",
-								operator: "eq",		
+								operator: "eq",
 								value: session.user.id,
-							}
+							},
 						],
 					});
 					if (!apiKey) {
@@ -524,6 +524,70 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
 						});
 					}
+					const new_key = generateApiKey({
+						length: ctx.body.length,
+						prefix: ctx.body.prefix,
+					});
+					await ctx.context.adapter.update<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+						update: {
+							key: new_key,
+						},
+					});
+					return ctx.json({ key: new_key });
+				},
+			),
+			forceRerollApiKey: createAuthEndpoint(
+				"/api-key/force-reroll",
+
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+						prefix: z
+							.string({
+								description:
+									'A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah"',
+							})
+							.optional(),
+						length: z
+							.number({
+								description: `The length of the API key. Longer is better. Default is ${DEFAULT_KEY_LENGTH}.`,
+							})
+							.optional(),
+					}),
+				},
+				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
+
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						});
+					}
+
 					const new_key = generateApiKey({
 						length: ctx.body.length,
 						prefix: ctx.body.prefix,

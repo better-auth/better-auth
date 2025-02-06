@@ -5,7 +5,6 @@ description: API Key plugin for Better Auth.
 
 The API Key plugin allows you to create and manage API keys for your application. It provides a way to authenticate and authorize API requests by verifying API keys.
 
-
 ## Installation
 
 <Steps>
@@ -136,6 +135,13 @@ Additional properties can allow you to configure the rerolled API key:
 - `prefix`: The prefix of the API key. (Default `undefined`)
 - `length`: The length of the API key. (Default `64`)
 
+<Callout>
+  If the API key was created without an owner, then you cannot reroll it as it
+  requires authorization to reroll the API key. However, you can look into the
+  server-side [force reroll
+  function](/docs/plugins/api-key#force-rerolling-an-api-key).
+</Callout>
+
 ```ts
 await client.apiKey.reroll({
   keyId: "my-key-id",
@@ -167,6 +173,46 @@ const data = await authClient.apiKey.get({
   query: {
     keyId: "my-key-id",
   },
+});
+```
+
+## Server only functions
+
+### Delete all expired API keys
+
+To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
+This function will delete all API keys that have an expiration date and are expired.
+
+<Callout>
+  We automatically delete expired API keys every time any apiKey plugin
+  functions were called, however they are rate-limited to a 10 second cooldown
+  each call.
+</Callout>
+
+```ts
+await auth.api.apiKey.deleteAllExpiredApiKeys();
+```
+
+### Force rerolling an API key
+
+You can pass an API key ID to the `apiKey.forceReroll` function to force reroll the API key.
+
+The traditional rerolling process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic rerolling process for your API, or if the API key was created without an owner,
+then this function is able of rerolling the key as needed.
+
+Additional properties can allow you to configure the ne API key:
+
+- `prefix`: The prefix of the API key. (Default `undefined`)
+- `length`: The length of the API key. (Default `64`)
+
+```ts
+await auth.api.apiKey.forceReroll({
+  keyId: "my-key-id",
+  prefix: "test",
+  length: 64,
 });
 ```
 
@@ -243,18 +289,12 @@ Table: `apiKeys`
   ]}
 />
 
-## Server only functions
+## Additional Information
 
-### Delete all expired API keys
+There can be a scenario where an API key has no owner and no expiration date but still has a remaining number of requests.
 
-To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
-This function will delete all API keys that have an expiration date and are expired.
+In this case, if the API key was abandoned and never used again, it would be a waste or resources on your Database.
 
-<Callout>
-    We automatically delete expired API keys every time any apiKey plugin functions were called, however they are rate-limited to a 10 second cooldown each call.
-</Callout>
+To prevent this, we have added a `lastVerifiedAt` field to the API key table. This field will be updated every time an API key is verified.
 
-```ts
-await auth.api.apiKey.deleteAllExpiredApiKeys();
-```
-
+Using this field, you can query and delete any keys that have not been verified in a certain time period.
