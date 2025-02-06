@@ -84,8 +84,10 @@ export const ERROR_CODES = {
 	FAILED_TO_CREATE_API_KEY: "Failed to create apiKey",
 	UNAUTHORIZED_TO_CREATE_API_KEY: "Unauthorized to create apiKey",
 	UNAUTHORIZED_TO_VERIFY_API_KEY: "Unauthorized to verify apiKey",
-    UNAUTHORIZED_TO_GET_API_KEY: "Unauthorized to get apiKey",
+	UNAUTHORIZED_TO_GET_API_KEY: "Unauthorized to get apiKey",
 	API_KEY_NOT_FOUND: "ApiKey not found",
+	UNAUTHORIZED_TO_UPDATE_API_KEY: "Unauthorized to update apiKey",
+	UNAUTHORIZED_TO_DELETE_API_KEY: "Unauthorized to delete apiKey",
 	// RATE_LIMIT_EXCEEDED: "Rate limit exceeded",
 	// API_KEY_EXPIRED: "ApiKey expired",
 };
@@ -252,57 +254,220 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					});
 				},
 			),
-			getApiKey: createAuthEndpoint("/api-key/get", {
-				method: "GET",
-				query: z.object({
-					keyId: z.string({
-						description: "The apiKey id",
+			getApiKey: createAuthEndpoint(
+				"/api-key/get",
+				{
+					method: "GET",
+					query: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
 					}),
-				}),
-			}, async (ctx) => {
-                const session = await getSessionFromCtx(ctx);
-                if (!session) {
-                    throw new APIError("UNAUTHORIZED", {
-                        message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
-                    });
-                }
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
+						});
+					}
 
-                const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-                    model: "apiKeys",
-                    where: [
-                        {
-                            field: "id",
-                            operator: "eq",
-                            value: ctx.query.keyId,
-                        },
-                    ],
-                });
-                if (!apiKey) {
-                    throw new APIError("NOT_FOUND", {
-                        message: ERROR_CODES.API_KEY_NOT_FOUND,
-                    });
-                }
-                if (apiKey.ownerId !== session.user.id) {
-                    throw new APIError("UNAUTHORIZED", {
-                        message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
-                    });
-                }
-                return ctx.json(apiKey);
-            }),
-			// updateApiKey: createAuthEndpoint("/api-key/update", {
-			// 	method: "POST",
-			// 	body: z.object({
-			// 		keyId: z.string({
-			// 			description: "The apiKey id",
-			// 		}),
-			// 		name: z
-			// 			.string({
-			// 				description: "The name of the apiKey.",
-			// 			})
-			// 			.optional(),
-			// 	}),
-			// },
-			// deleteApiKey: createAuthEndpoint(),
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.query.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						});
+					}
+					if (apiKey.ownerId !== session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
+						});
+					}
+					return ctx.json(apiKey);
+				},
+			),
+			updateApiKey: createAuthEndpoint(
+				"/api-key/update",
+				{
+					method: "POST",
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+						name: z
+							.string({
+								description: "The name of the apiKey.",
+							})
+							.optional(),
+						remaining: z
+							.number({
+								description: "The number of requests remaining.",
+							})
+							.optional(),
+						prefix: z
+							.string({
+								description:
+									'A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah"',
+							})
+							.optional(),
+						length: z
+							.number({
+								description: `The length of the API key. Longer is better. Default is ${DEFAULT_KEY_LENGTH}.`,
+							})
+							.optional(),
+						expires: z
+							.number({
+								description:
+									"UNIX timestamp of when the API key expires. When it expires, the key is automatically deleted and becomes invalid.",
+							})
+							.optional(),
+					}),
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
+						});
+					}
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						});
+					}
+					if (apiKey.ownerId !== session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
+						});
+					}
+					const result = await ctx.context.adapter.update<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+						update: {
+							name: ctx.body.name,
+							remaining: ctx.body.remaining,
+							prefix: ctx.body.prefix,
+							length: ctx.body.length,
+							expires: ctx.body.expires,
+						},
+					});
+					return ctx.json(result);
+				},
+			),
+			deleteApiKey: createAuthEndpoint(
+				"/api-key/delete",
+				{
+					method: "POST",
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_DELETE_API_KEY,
+							success: false,
+						});
+					}
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+							success: false,
+						});
+					}
+					if (apiKey.ownerId !== session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_DELETE_API_KEY,
+							success: false,
+						});
+					}
+					await ctx.context.adapter.delete<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+
+					return ctx.json({ success: true });
+				},
+			),
+			listApiKey: createAuthEndpoint(
+				"/api-key/list",
+				{
+					method: "GET",
+					query: z.object({
+						identifier: z.string({
+							description: "The apiKey identifier",
+						}),
+					}),
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
+						});
+					}
+					const apiKey = await ctx.context.adapter.findMany<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "identifier",
+								operator: "eq",
+								value: ctx.query.identifier,
+							},
+							{
+								field: "ownerId",
+								operator: "eq",
+								value: session.user.id,
+							}
+						],
+					});
+					return ctx.json(apiKey);
+				},
+			),
 		},
 		schema: {
 			apiKeys: {
