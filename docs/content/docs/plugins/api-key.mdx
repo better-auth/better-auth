@@ -3,8 +3,6 @@ title: API Key
 description: API Key plugin for Better Auth.
 ---
 
-
-
 The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
 
 ## Installation
@@ -13,7 +11,7 @@ The username plugin wraps the email and password authenticator and adds username
     <Step>
         ### Add Plugin to the server
 
-        ```ts title="auth.ts" 
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { apiKey } from "better-auth/plugins"
 
@@ -45,33 +43,35 @@ The username plugin wraps the email and password authenticator and adds username
     </Step>
     <Step>
         ### Add the client plugin
-        
+
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { usernameClient } from "better-auth/client/plugins"
-        
+        import { apiKeyClient } from "better-auth/client/plugins"
+
         const authClient = createAuthClient({
             plugins: [ // [!code highlight]
-                usernameClient() // [!code highlight]
+                apiKeyClient() // [!code highlight]
             ] // [!code highlight]
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
 
-### Signup with username
+### Getting information on an API key
 
-To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
+You can pass an API key ID to the `apiKey.get` function to get information on the API key including the key itself.
+
+If an API key was created without an owner, then you cannot get it's information as it requires authorization to get the information.
 
 ```ts title="auth-client.ts"
-const data = await authClient.signUp.email({
-    email: "email@domain.com",
-    name: "Test User",
-    password: "password1234",
-    username: "test"
-})
+const data = await authClient.apiKey.get({
+  query: {
+    keyId: myApiKeyID,
+  },
+});
 ```
 
 ### Signin with username
@@ -81,11 +81,11 @@ To signin a user with username, you can use the `signIn.username` function provi
 - `username`: The username of the user.
 - `password`: The password of the user.
 
-```ts title="auth-client.ts" 
+```ts title="auth-client.ts"
 const data = await authClient.signIn.username({
-    username: "test",
-    password: "password1234",
-})
+  username: "test",
+  password: "password1234",
+});
 ```
 
 ### Update username
@@ -94,8 +94,8 @@ To update the username of a user, you can use the `updateUser` function provided
 
 ```ts title="auth-client.ts"
 const data = await authClient.updateUser({
-    username: "new-username"
-})
+  username: "new-username",
+});
 ```
 
 ## Schema
@@ -103,63 +103,64 @@ const data = await authClient.updateUser({
 Table: `apiKeys`
 
 <DatabaseTable
-    fields={[
-        { 
-            name: "id", 
-            type: "string", 
-            description: "The ID of the api key",
-            isUnique: true,
-            isPrimaryKey: true
-        },
-        {
-            name: "createdAt",
-            type: "Date",
-            description: "The date and time the API key was created",
-        },
-        {
-            name: "updatedAt",
-            type: "Date",
-            description: "The date and time the API key was updated",
-        },
-        {
-            name: "remaining",
-            type: "number",
-            description: "The number of requests remaining",
-            isOptional: true,
-        },
-        {
-            name: "key",
-            type: "string",
-            description: "The API key itself",
-        },
-        {
-            name: "identifier",
-            type: "string",
-            description: "The identifier of the API key",
-        },
-        {
-            name: "ownerId",
-            type: "string",
-            description: "The ID of the user who owns the API key",
-            isForeignKey: true,
-            isOptional: true,
-        },
-        {
-            name: "expires",
-            type: "number",
-            description: "The expiration date of the API key in Unix timestamp format",
-            isOptional: true
-        },
-        {
-            name: "name",
-            type: "string",
-            description: "The name of the API key",
-            isOptional: true
-        },
-        {
-            name: "isEnabled",
-            type: "boolean",
-            description: "Whether the API key is enabled",
-        }
-    ]}
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "The ID of the api key",
+      isUnique: true,
+      isPrimaryKey: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated",
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining",
+      isOptional: true,
+    },
+    {
+      name: "key",
+      type: "string",
+      description: "The API key itself",
+    },
+    {
+      name: "identifier",
+      type: "string",
+      description: "The identifier of the API key",
+    },
+    {
+      name: "ownerId",
+      type: "string",
+      description: "The ID of the user who owns the API key",
+      isForeignKey: true,
+      isOptional: true,
+    },
+    {
+      name: "expires",
+      type: "number",
+      description:
+        "The expiration date of the API key in Unix timestamp format",
+      isOptional: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the API key",
+      isOptional: true,
+    },
+    {
+      name: "isEnabled",
+      type: "boolean",
+      description: "Whether the API key is enabled",
+    },
+  ]}
 />

@@ -90,6 +90,8 @@ export const ERROR_CODES = {
 	UNAUTHORIZED_TO_UPDATE_API_KEY: "Unauthorized to update apiKey",
 	UNAUTHORIZED_TO_DELETE_API_KEY: "Unauthorized to delete apiKey",
 	API_KEY_DISABLED: "ApiKey is disabled",
+	API_KEY_WITHOUT_OWNER_WITHOUT_EXPIRES_AND_REMAINING:
+		"ApiKey without owner must have expires or remaining",
 	// RATE_LIMIT_EXCEEDED: "Rate limit exceeded",
 	// API_KEY_EXPIRED: "ApiKey expired",
 };
@@ -200,6 +202,17 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					if (!session && !ctx.body.withoutOwner) {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_CREATE_API_KEY,
+						});
+					}
+
+					if (
+						ctx.body.withoutOwner &&
+						!ctx.body.expires &&
+						!ctx.body.remaining
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								ERROR_CODES.API_KEY_WITHOUT_OWNER_WITHOUT_EXPIRES_AND_REMAINING,
 						});
 					}
 
@@ -350,6 +363,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								operator: "eq",
 								value: ctx.query.keyId,
 							},
+							{
+								field: "ownerId",
+								operator: "eq",
+								value: session.user.id,
+							},
 						],
 					});
 					if (!apiKey) {
@@ -411,6 +429,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								field: "id",
 								operator: "eq",
 								value: ctx.body.keyId,
+							},
+							{
+								field: "ownerId",
+								operator: "eq",
+								value: session.user.id,
 							},
 						],
 					});
