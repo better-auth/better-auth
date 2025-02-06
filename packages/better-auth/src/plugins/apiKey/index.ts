@@ -70,7 +70,7 @@ export type ApiKey = {
 	id: string;
 	createdAt: Date;
 	updatedAt: Date;
-	remaining: number;
+	remaining: number | null;
 	key: string;
 	identifier: string;
 	ownerId: string;
@@ -202,7 +202,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							createdAt: new Date(),
 							updatedAt: new Date(),
 							id: ctx.context.generateId({ model: "apiKeys" }),
-							remaining: ctx.body.remaining ?? 0,
+							remaining: ctx.body.remaining || null,
 							key: generateApiKey({
 								length: ctx.body.length,
 								prefix: ctx.body.prefix,
@@ -246,6 +246,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							},
 						],
 					});
+
 					if (!apiKey) {
 						return ctx.json({
 							valid: false,
@@ -256,6 +257,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							valid: false,
 						});
 					}
+
 					if (apiKey.isEnabled === false) {
 						return ctx.json({
 							valid: false,
@@ -272,9 +274,38 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								},
 							],
 						});
+
 						return ctx.json({
 							valid: false,
 						});
+					}
+					if (apiKey.remaining !== null) {
+						if (apiKey.remaining - 1 === 0) {
+							ctx.context.adapter.delete<ApiKey>({
+								model: "apiKeys",
+								where: [
+									{
+										field: "id",
+										operator: "eq",
+										value: apiKey.id,
+									},
+								],
+							});
+						} else {
+							ctx.context.adapter.update<ApiKey>({
+								model: "apiKeys",
+								where: [
+									{
+										field: "id",
+										operator: "eq",
+										value: apiKey.id,
+									},
+								],
+								update: {
+									remaining: apiKey.remaining - 1,
+								},
+							});
+						}
 					}
 
 					return ctx.json({
@@ -394,7 +425,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						],
 						update: {
 							name: ctx.body.name,
-							remaining: ctx.body.remaining,
+							remaining: ctx.body.remaining ?? null,
 							expires: ctx.body.expires,
 							isEnabled: ctx.body.enabled,
 						} satisfies Partial<ApiKey>,
@@ -592,9 +623,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					},
 					remaining: {
 						type: "number",
+						required: false,
 						input: true,
-						defaultValue: 0,
-						required: true,
 					},
 					key: {
 						type: "string",

@@ -25,7 +25,7 @@ describe("apiKey plugin", async () => {
 			{ headers: userHeaders },
 		);
 		expect(apiKey.data).toBeDefined();
-		expect(apiKey.data?.remaining).toEqual(0);
+		expect(apiKey.data?.remaining).toEqual(null);
 		expect(apiKey.data?.identifier).toEqual("test");
 		expect(apiKey.data?.name).toBeNull();
 		expect(apiKey.data?.createdAt).toBeDefined();
@@ -418,7 +418,6 @@ describe("apiKey plugin", async () => {
 
 		const result = await auth.api.deleteAllExpiredApiKeys();
 
-
 		const { data: allKeys2 } = await client.apiKey.list(
 			{
 				query: {
@@ -434,5 +433,50 @@ describe("apiKey plugin", async () => {
 		expect(allKeys2.length).toEqual(1);
 		//@ts-ignore
 		expect(allKeys2[0].name).toEqual("Soon to expire! but not yet!");
+	});
+
+	it(`Should only use the apiKey the remaining 3 times`, async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+				remaining: 3,
+			},
+			{ headers: userHeaders },
+		);
+		const result = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{ headers: userHeaders },
+		);
+		expect(result.data).toBeDefined();
+		expect(result.data?.valid).toEqual(true);
+
+		const result2 = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{ headers: userHeaders },
+		);
+		expect(result2.data).toBeDefined();
+		expect(result2.data?.valid).toEqual(true);
+
+		const result3 = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{ headers: userHeaders },
+		);
+		expect(result3.data).toBeDefined();
+		expect(result3.data?.valid).toEqual(true);
+
+		const result4 = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{ headers: userHeaders },
+		);
+		expect(result4.data).toBeDefined();
+		expect(result4.data?.valid).toEqual(false);
 	});
 });
