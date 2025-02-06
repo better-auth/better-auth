@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
-import { type BetterAuthPlugin } from "../../types";
+import { type Adapter, type BetterAuthPlugin } from "../../types";
 
 interface RateLimitAlgorithm_base {
 	algo:
@@ -188,6 +188,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -229,6 +230,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_VERIFY_API_KEY,
@@ -247,19 +249,31 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					if (!apiKey) {
 						return ctx.json({
 							valid: false,
-							message: ERROR_CODES.API_KEY_NOT_FOUND,
 						});
 					}
 					if (apiKey.ownerId !== session.user.id) {
 						return ctx.json({
 							valid: false,
-							message: ERROR_CODES.UNAUTHORIZED_TO_VERIFY_API_KEY,
 						});
 					}
 					if (apiKey.isEnabled === false) {
 						return ctx.json({
 							valid: false,
-							message: ERROR_CODES.API_KEY_DISABLED,
+						});
+					}
+					if (apiKey.expires && apiKey.expires < new Date().getTime()) {
+						ctx.context.adapter.delete<ApiKey>({
+							model: "apiKeys",
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: apiKey.id,
+								},
+							],
+						});
+						return ctx.json({
+							valid: false,
 						});
 					}
 
@@ -279,6 +293,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -341,6 +356,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -408,6 +424,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -465,6 +482,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -483,14 +501,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						],
 					});
 					if (!apiKey) {
-						throw new APIError("NOT_FOUND", {
-							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						return ctx.json({
 							success: false,
 						});
 					}
 					if (apiKey.ownerId !== session.user.id) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.UNAUTHORIZED_TO_DELETE_API_KEY,
+						return ctx.json({
 							success: false,
 						});
 					}
@@ -519,6 +535,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -552,16 +569,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					await ctx.context.adapter.deleteMany({
-						model: "apiKeys",
-						where: [
-							{
-								field: "expires",
-								operator: "lt",
-								value: new Date().getTime(),
-							},
-						],
-					});
+					await deleteAllExpiredApiKeys(ctx.context.adapter, true);
 					return ctx.json({ success: true });
 				},
 			),
@@ -627,3 +635,29 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+let lastChecked: Date | null = null;
+
+function deleteAllExpiredApiKeys(
+	adapter: Adapter,
+	byPassLastCheckTime = false,
+) {
+	if (lastChecked && !byPassLastCheckTime) {
+		const now = new Date();
+		const diff = now.getTime() - lastChecked.getTime();
+		if (diff < 10000) {
+			return;
+		}
+	}
+	lastChecked = new Date();
+	return adapter.deleteMany({
+		model: "apiKeys",
+		where: [
+			{
+				field: "expires",
+				operator: "lt",
+				value: new Date().getTime(),
+			},
+		],
+	});
+}
