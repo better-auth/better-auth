@@ -661,6 +661,53 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					return ctx.json({ success: true });
 				},
 			),
+			forceRevokeApiKey: createAuthEndpoint(
+				"/api-key/force-revoke",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+					}),
+				},
+				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
+
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+							success: false
+						});
+					}
+
+					await ctx.context.adapter.delete<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+
+					return ctx.json({ success: true });
+				},
+			),
 			listApiKey: createAuthEndpoint(
 				"/api-key/list",
 				{

@@ -216,6 +216,22 @@ await auth.api.apiKey.forceReroll({
 });
 ```
 
+### Force revoking an API key
+
+You can pass an API key ID to the `apiKey.forceRevoke` function to force revoke the API key.
+
+The traditional revoking process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic revoking process for your API, or if the API key was created without an owner,
+then this function is able of revoking the key as needed.
+
+```ts
+await auth.api.apiKey.forceRevoke({
+  keyId: "my-key-id",
+});
+```
+
 ## Schema
 
 Table: `apiKeys`

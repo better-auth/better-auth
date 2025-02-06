@@ -528,4 +528,31 @@ describe("apiKey plugin", async () => {
 		//@ts-ignore
 		expect(result.data.key).not.toEqual(apiKey?.key);
 	});
+
+	it(`Should forcefully revoke an apiKey`, async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		await auth.api.forceRevokeApiKey({
+			body: {
+				keyId: apiKey?.id as string,
+			},
+		});
+
+		const result = await client.apiKey.get(
+			{
+				query: {
+					keyId: apiKey?.id as string,
+				},
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeNull();
+		expect(result.error).not.toBeNull();
+	});
 });
