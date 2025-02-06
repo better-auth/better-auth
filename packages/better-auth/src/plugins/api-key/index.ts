@@ -470,6 +470,77 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					return ctx.json(result);
 				},
 			),
+			forceUpdateApiKey: createAuthEndpoint(
+				"/api-key/force-update",
+				{
+					method: "POST",
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+						name: z
+							.string({
+								description: "The name of the apiKey.",
+							})
+							.optional(),
+						remaining: z
+							.number({
+								description: "The number of requests remaining.",
+							})
+							.optional(),
+						expires: z
+							.number({
+								description:
+									"UNIX timestamp of when the API key expires. When it expires, the key is automatically deleted and becomes invalid.",
+							})
+							.optional(),
+						enabled: z
+							.boolean({
+								description: "Whether the apiKey is enabled or not.",
+							})
+							.optional(),
+					}),
+				},
+				async (ctx) => {
+					deleteAllExpiredApiKeys(ctx.context.adapter);
+
+
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						});
+					}
+
+					const result = await ctx.context.adapter.update<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+						update: {
+							name: ctx.body.name,
+							remaining: ctx.body.remaining ?? null,
+							expires: ctx.body.expires,
+							isEnabled: ctx.body.enabled,
+							updatedAt: new Date(),
+						} satisfies Partial<ApiKey>,
+					});
+					return ctx.json(result);
+				},
+			),
 			rerollApiKey: createAuthEndpoint(
 				"/api-key/reroll",
 				{

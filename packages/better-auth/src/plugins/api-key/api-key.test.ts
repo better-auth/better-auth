@@ -555,4 +555,32 @@ describe("apiKey plugin", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).not.toBeNull();
 	});
+
+	it(`Should forcefully update an apiKey`, async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		await auth.api.forceUpdateApiKey({
+			body: {
+				keyId: apiKey?.id as string,
+				name: "test",
+			},
+		});
+
+		const result = await client.apiKey.get(
+			{
+				query: {
+					keyId: apiKey?.id as string,
+				},
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.name).toEqual("test");
+	});
 });

@@ -232,6 +232,33 @@ await auth.api.apiKey.forceRevoke({
 });
 ```
 
+### Force updating an API key
+
+You can pass an API key ID to the `apiKey.forceUpdate` function to force update information on the API key.
+
+The traditional updating process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic updating process for your API, or if the API key was created without an owner,
+then this function is able of updating the key as needed.
+
+Properties that can be updated:
+
+- `name`: The name of the API key.
+- `remaining`: The number of requests remaining.
+- `expires`: The expiration date of the API key in Unix timestamp format.
+- `enabled`: Whether the API key is enabled or not.
+
+```ts
+await auth.api.apiKey.forceUpdate({
+  keyId: "my-key-id",
+  name: "new-name",
+  remaining: 10,
+  expires: 1679012000,
+  enabled: true,
+});
+```
+
 ## Schema
 
 Table: `apiKeys`
