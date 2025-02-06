@@ -6,7 +6,7 @@ import { apiKeyClient } from "./client";
 describe("apiKey plugin", async () => {
 	const { client, signInWithTestUser, auth, db } = await getTestInstance(
 		{
-			plugins: [apiKey({})],
+			plugins: [apiKey()],
 		},
 		{
 			clientOptions: {
@@ -94,6 +94,26 @@ describe("apiKey plugin", async () => {
 		expect(result.data).toBeDefined();
 		expect(result.data?.valid).toEqual(true);
 	});
+
+	it("Shouldn't verify a disabled apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+				enabled: false,
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{ headers: userHeaders },
+		);
+		expect(result.data).toBeDefined();
+		expect(result.data?.valid).toEqual(false);
+	});
+
 	it("Should require authorization to verify an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -242,7 +262,7 @@ describe("apiKey plugin", async () => {
 			{ headers: userHeaders },
 		);
 		//@ts-ignore
-		expect(result.data.length).toEqual(11);
+		expect(result.data.length).toEqual(12);
 		expect(result.error).toBeNull();
 		if (result.data) {
 			for await (const apiKey of result.data) {
@@ -265,5 +285,88 @@ describe("apiKey plugin", async () => {
 			expect(result2.data.length).toEqual(0);
 			expect(result2.error).toBeNull();
 		}
+	});
+	it("Should reroll an apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.reroll(
+			{
+				keyId: apiKey?.id as string,
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.key).toBeDefined();
+		expect(result.data?.key.length).toEqual(64);
+		//@ts-ignore
+		expect(result.data.key).not.toEqual(apiKey?.key);
+	});
+
+	it("Should require authorization to reroll an apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.reroll({
+			keyId: apiKey?.id as string,
+		});
+		expect(result.data).toBeNull();
+		expect(result.error).not.toBeNull();
+	});
+
+	it("Should add new prefix to rerolled apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.reroll(
+			{
+				keyId: apiKey?.id as string,
+				prefix: "hello_world",
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.key).toBeDefined();
+		expect(result.data?.key.length).toEqual(64 + "hello_world_".length);
+		//@ts-ignore
+		expect(result.data.key).not.toEqual(apiKey?.key);
+		expect(result.data?.key).toContain("hello_world_");
+	});
+
+	it("Should add new length to rerolled apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.reroll(
+			{
+				keyId: apiKey?.id as string,
+				length: 10,
+			},
+			{ headers: userHeaders },
+		);
+
+		expect(result.data).toBeDefined();
+		expect(result.data?.key).toBeDefined();
+		expect(result.data?.key.length).toEqual(10);
+		//@ts-ignore
+		expect(result.data.key).not.toEqual(apiKey?.key);
 	});
 });

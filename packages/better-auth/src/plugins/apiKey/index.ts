@@ -75,7 +75,8 @@ export type ApiKey = {
 	identifier: string;
 	ownerId: string;
 	expires: number | undefined;
-	name?: string;
+	name: string | undefined;
+	isEnabled: boolean;
 };
 
 const DEFAULT_KEY_LENGTH = 64;
@@ -88,6 +89,7 @@ export const ERROR_CODES = {
 	API_KEY_NOT_FOUND: "ApiKey not found",
 	UNAUTHORIZED_TO_UPDATE_API_KEY: "Unauthorized to update apiKey",
 	UNAUTHORIZED_TO_DELETE_API_KEY: "Unauthorized to delete apiKey",
+	API_KEY_DISABLED: "ApiKey is disabled",
 	// RATE_LIMIT_EXCEEDED: "Rate limit exceeded",
 	// API_KEY_EXPIRED: "ApiKey expired",
 };
@@ -153,6 +155,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									"UNIX timestamp of when the API key expires. When it expires, the key is automatically deleted and becomes invalid.",
 							})
 							.optional(),
+						enabled: z
+							.boolean({
+								description: "Whether the apiKey is enabled or not.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -203,6 +210,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							identifier: ctx.body.identifier,
 							ownerId: session.user.id,
 							name: ctx.body.name,
+							isEnabled: ctx.body.enabled ?? true,
 						},
 					});
 
@@ -246,6 +254,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						return ctx.json({
 							valid: false,
 							message: ERROR_CODES.UNAUTHORIZED_TO_VERIFY_API_KEY,
+						});
+					}
+					if (apiKey.isEnabled === false) {
+						return ctx.json({
+							valid: false,
+							message: ERROR_CODES.API_KEY_DISABLED,
 						});
 					}
 
@@ -313,21 +327,15 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								description: "The number of requests remaining.",
 							})
 							.optional(),
-						prefix: z
-							.string({
-								description:
-									'A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah"',
-							})
-							.optional(),
-						length: z
-							.number({
-								description: `The length of the API key. Longer is better. Default is ${DEFAULT_KEY_LENGTH}.`,
-							})
-							.optional(),
 						expires: z
 							.number({
 								description:
 									"UNIX timestamp of when the API key expires. When it expires, the key is automatically deleted and becomes invalid.",
+							})
+							.optional(),
+						enabled: z
+							.boolean({
+								description: "Whether the apiKey is enabled or not.",
 							})
 							.optional(),
 					}),
@@ -371,12 +379,79 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						update: {
 							name: ctx.body.name,
 							remaining: ctx.body.remaining,
-							prefix: ctx.body.prefix,
-							length: ctx.body.length,
 							expires: ctx.body.expires,
-						},
+							isEnabled: ctx.body.enabled,
+						} satisfies Partial<ApiKey>,
 					});
 					return ctx.json(result);
+				},
+			),
+			rerollApiKey: createAuthEndpoint(
+				"/api-key/reroll",
+				{
+					method: "POST",
+					body: z.object({
+						keyId: z.string({
+							description: "The apiKey id",
+						}),
+						prefix: z
+							.string({
+								description:
+									'A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah"',
+							})
+							.optional(),
+						length: z
+							.number({
+								description: `The length of the API key. Longer is better. Default is ${DEFAULT_KEY_LENGTH}.`,
+							})
+							.optional(),
+					}),
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
+						});
+					}
+					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+					});
+					if (!apiKey) {
+						throw new APIError("NOT_FOUND", {
+							message: ERROR_CODES.API_KEY_NOT_FOUND,
+						});
+					}
+					if (apiKey.ownerId !== session.user.id) {
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
+						});
+					}
+					const new_key = generateApiKey({
+						length: ctx.body.length,
+						prefix: ctx.body.prefix,
+					});
+					await ctx.context.adapter.update<ApiKey>({
+						model: "apiKeys",
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: ctx.body.keyId,
+							},
+						],
+						update: {
+							key: new_key,
+						},
+					});
+					return ctx.json({ key: new_key });
 				},
 			),
 			deleteApiKey: createAuthEndpoint(
@@ -462,7 +537,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								field: "ownerId",
 								operator: "eq",
 								value: session.user.id,
-							}
+							},
 						],
 					});
 					return ctx.json(apiKey);
@@ -518,6 +593,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					name: {
 						type: "string",
 						required: false,
+					},
+					isEnabled: {
+						type: "boolean",
+						required: false,
+						input: true,
+						defaultValue: true,
 					},
 				},
 			},
