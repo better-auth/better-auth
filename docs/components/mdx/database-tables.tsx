@@ -50,7 +50,7 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 							<TableCell className="font-mono text-sm">
 								<Badge variant="outline">{field.type}</Badge>
 							</TableCell>
-							<TableCell>
+							<TableCell className="flex">
 								{field.isPrimaryKey && (
 									<TooltipProvider delayDuration={0}>
 										<Tooltip>
@@ -73,7 +73,7 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 											<TooltipTrigger>
 												<Badge
 													variant="secondary"
-													className="mr-1 rounded-sm bg-blue-500"
+													className="mr-1 bg-blue-500 rounded-sm"
 												>
 													<Link className="w-3 h-3 mr-1" size={14} />
 													FK
@@ -86,7 +86,7 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 								{!field.isPrimaryKey &&
 									!field.isForeignKey &&
 									!field.isOptional && (
-										<span className="text-muted text-center">-</span>
+										<span className="text-center text-muted">-</span>
 									)}
 								{field.isOptional && (
 									<TooltipProvider delayDuration={0}>

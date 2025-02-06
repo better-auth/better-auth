@@ -607,7 +607,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		},
 		schema: {
 			apiKeys: {
-				modelName: options?.schema?.modelName || "apiKey",
+				modelName: options?.schema?.modelName || "apiKeys",
 				fields: {
 					createdAt: {
 						type: "date",
