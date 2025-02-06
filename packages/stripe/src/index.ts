@@ -9,7 +9,7 @@ import {
 import { createAuthEndpoint } from "better-auth/plugins";
 import Stripe from "stripe";
 import { z } from "zod";
-import { sessionMiddleware, APIError } from "better-auth/api";
+import { sessionMiddleware, APIError, originCheck } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 
 export const stripeClient = new Stripe(`${process.env.STRIPE_SECRET_KEY}`, {
@@ -171,7 +171,7 @@ interface StripeOptions {
 		/**
 		 * parameters for session create params
 		 *
-		 * @param data - data containing user, session and subscription if enabled
+		 * @param data - data containing user, session and plan
 		 * @param request - Request Object
 		 */
 		getCheckoutSessionParams?: (
@@ -309,6 +309,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						switch (event.type) {
 							case "checkout.session.completed":
 								await checkoutSessionCompleted(ctx.context, options, event);
+								await options.onEvent?.(event);
 								break;
 							default:
 								await options.onEvent?.(event);
@@ -333,15 +334,20 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						plan: z.string(),
 						referenceId: z.string().optional(),
 						metadata: z.record(z.string(), z.any()).optional(),
+						successURL: z.string().optional(),
 					}),
-					use: [sessionMiddleware],
+					use: [
+						sessionMiddleware,
+						originCheck((c) => {
+							return c.body.successURL;
+						}),
+					],
 				},
 				async (ctx) => {
 					const { user, session } = ctx.context.session;
 					const referenceId =
 						ctx.body.referenceId || ctx.context.session.user.id;
 					const plan = await getPlanByName(options, ctx.body.plan);
-					console.log({ plan, planF: ctx.body.plan });
 					if (!plan) {
 						throw new APIError("BAD_REQUEST", {
 							message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
