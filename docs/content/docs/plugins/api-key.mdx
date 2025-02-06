@@ -3,7 +3,8 @@ title: API Key
 description: API Key plugin for Better Auth.
 ---
 
-The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
+The API Key plugin allows you to create and manage API keys for your application. It provides a way to authenticate and authorize API requests by verifying API keys.
+
 
 ## Installation
 
@@ -241,3 +242,19 @@ Table: `apiKeys`
     },
   ]}
 />
+
+## Server only functions
+
+### Delete all expired API keys
+
+To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
+This function will delete all API keys that have an expiration date and are expired.
+
+<Callout>
+    We automatically delete expired API keys every time any apiKey plugin functions were called, however they are rate-limited to a 10 second cooldown each call.
+</Callout>
+
+```ts
+await auth.api.apiKey.deleteAllExpiredApiKeys();
+```
+
