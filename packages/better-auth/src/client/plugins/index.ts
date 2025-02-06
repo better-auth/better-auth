@@ -13,6 +13,7 @@ export * from "../../plugins/multi-session/client";
 export * from "../../plugins/email-otp/client";
 export * from "../../plugins/one-tap/client";
 export * from "../../plugins/custom-session/client";
+export * from "../../plugins/api-key/client";
 export * from "./infer-plugin";
 export * from "../../plugins/sso/client";
 export * from "../../plugins/oidc-provider/client";
