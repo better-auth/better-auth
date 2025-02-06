@@ -454,8 +454,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					return ctx.json({ key: new_key });
 				},
 			),
-			deleteApiKey: createAuthEndpoint(
-				"/api-key/delete",
+			revokeApiKey: createAuthEndpoint(
+				"/api-key/revoke",
 				{
 					method: "POST",
 					body: z.object({
@@ -541,6 +541,28 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						],
 					});
 					return ctx.json(apiKey);
+				},
+			),
+			deleteAllExpiredApiKeys: createAuthEndpoint(
+				"/api-key/delete-all-expired",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					await ctx.context.adapter.deleteMany({
+						model: "apiKeys",
+						where: [
+							{
+								field: "expires",
+								operator: "lt",
+								value: new Date().getTime(),
+							},
+						],
+					});
+					return ctx.json({ success: true });
 				},
 			),
 		},

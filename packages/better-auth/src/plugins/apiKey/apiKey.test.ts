@@ -201,7 +201,7 @@ describe("apiKey plugin", async () => {
 		expect(result.error).not.toBeNull();
 	});
 
-	it("Should delete an apiKey", async () => {
+	it("Should revoke an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
 				identifier: "test",
@@ -211,7 +211,7 @@ describe("apiKey plugin", async () => {
 		expect(apiKey).not.toBeNull();
 
 		if (apiKey) {
-			const r = await client.apiKey.delete(
+			const r = await client.apiKey.revoke(
 				{
 					keyId: apiKey.id as string,
 				},
@@ -235,7 +235,7 @@ describe("apiKey plugin", async () => {
 		}
 	});
 
-	it("Should require authorization to delete an apiKey", async () => {
+	it("Should require authorization to revoke an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
 				identifier: "test",
@@ -243,7 +243,7 @@ describe("apiKey plugin", async () => {
 			{ headers: userHeaders },
 		);
 
-		const result = await client.apiKey.delete({
+		const result = await client.apiKey.revoke({
 			keyId: apiKey?.id as string,
 		});
 		expect(result.data).toBeNull();
@@ -266,7 +266,7 @@ describe("apiKey plugin", async () => {
 		expect(result.error).toBeNull();
 		if (result.data) {
 			for await (const apiKey of result.data) {
-				await client.apiKey.delete(
+				await client.apiKey.revoke(
 					{
 						keyId: apiKey.id as string,
 					},
@@ -368,5 +368,71 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.key.length).toEqual(10);
 		//@ts-ignore
 		expect(result.data.key).not.toEqual(apiKey?.key);
+	});
+
+	it(`Should delete all expired apiKeys`, async () => {
+		const list = await client.apiKey.list(
+			{
+				query: {
+					identifier: "test",
+				},
+			},
+			{ headers: userHeaders },
+		);
+
+		//@ts-ignore
+		for await (const apiKey of list.data) {
+			await client.apiKey.revoke(
+				{
+					keyId: apiKey.id as string,
+				},
+				{ headers: userHeaders },
+			);
+		}
+
+		await client.apiKey.create(
+			{
+				identifier: "test",
+				name: "Soon to expire! but not yet!",
+				expires: new Date().getTime() + 2000,
+			},
+			{ headers: userHeaders },
+		);
+
+		await client.apiKey.create(
+			{
+				identifier: "test",
+				name: "Should had expired!",
+				expires: new Date().getTime() - 2000,
+			},
+			{ headers: userHeaders },
+		);
+		await client.apiKey.create(
+			{
+				identifier: "test",
+				name: "Should had expired as well!",
+				expires: new Date().getTime() - 1,
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await auth.api.deleteAllExpiredApiKeys();
+
+
+		const { data: allKeys2 } = await client.apiKey.list(
+			{
+				query: {
+					identifier: "test",
+				},
+			},
+			{ headers: userHeaders },
+		);
+
+		//@ts-ignore
+		expect(result.success).toEqual(true);
+		//@ts-ignore
+		expect(allKeys2.length).toEqual(1);
+		//@ts-ignore
+		expect(allKeys2[0].name).toEqual("Soon to expire! but not yet!");
 	});
 });
