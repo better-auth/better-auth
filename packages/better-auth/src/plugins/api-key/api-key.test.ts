@@ -479,4 +479,24 @@ describe("apiKey plugin", async () => {
 		expect(result4.data).toBeDefined();
 		expect(result4.data?.valid).toEqual(false);
 	});
+
+	it(`Should verify an apiKey without owner`, async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+				withoutOwner: true,
+			},
+			{},
+		);
+
+		const result = await client.apiKey.verify(
+			{
+				key: apiKey?.key as string,
+			},
+			{},
+		);
+		expect(result.data).toBeDefined();
+		expect(result.data?.valid).toEqual(true);
+	});
+
 });

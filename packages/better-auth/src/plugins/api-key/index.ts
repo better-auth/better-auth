@@ -73,7 +73,7 @@ export type ApiKey = {
 	remaining: number | null;
 	key: string;
 	identifier: string;
-	ownerId: string;
+	ownerId: string | null;
 	expires: number | undefined;
 	name: string | undefined;
 	isEnabled: boolean;
@@ -133,9 +133,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						identifier: z.string({
 							description: "A predetermined identifier for the key.",
 						}),
-						withoutOwner: z.boolean({
-							description: "Whether to create the apiKey without an owner.",
-						}),
+						withoutOwner: z
+							.boolean({
+								description: "Whether to create the apiKey without an owner.",
+							})
+							.optional(),
 						remaining: z
 							.number({
 								description: "The number of requests remaining.",
@@ -190,10 +192,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					const session = await getSessionFromCtx(ctx);
 					deleteAllExpiredApiKeys(ctx.context.adapter);
+					const session = ctx.body.withoutOwner
+						? null
+						: await getSessionFromCtx(ctx);
 
-					if (!session) {
+					if (!session && !ctx.body.withoutOwner) {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_CREATE_API_KEY,
 						});
@@ -212,7 +216,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							}),
 							expires: ctx.body.expires,
 							identifier: ctx.body.identifier,
-							ownerId: session.user.id,
+							ownerId: session ? session.user.id : null,
 							name: ctx.body.name,
 							isEnabled: ctx.body.enabled ?? true,
 						},
@@ -232,13 +236,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					const session = await getSessionFromCtx(ctx);
 					deleteAllExpiredApiKeys(ctx.context.adapter);
-					if (!session) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.UNAUTHORIZED_TO_VERIFY_API_KEY,
-						});
-					}
+
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 						model: "apiKeys",
 						where: [
@@ -255,10 +254,18 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							valid: false,
 						});
 					}
-					if (apiKey.ownerId !== session.user.id) {
-						return ctx.json({
-							valid: false,
-						});
+					if (apiKey.ownerId !== null) {
+						const session = await getSessionFromCtx(ctx);
+						if (!session) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.UNAUTHORIZED_TO_VERIFY_API_KEY,
+							});
+						}
+						if (apiKey.ownerId !== session.user.id) {
+							return ctx.json({
+								valid: false,
+							});
+						}
 					}
 
 					if (apiKey.isEnabled === false) {
