@@ -15,11 +15,11 @@ The username plugin wraps the email and password authenticator and adds username
 
         ```ts title="auth.ts" 
         import { betterAuth } from "better-auth"
-        import { username } from "better-auth/plugins"
+        import { apiKey } from "better-auth/plugins"
 
         const auth = betterAuth({
             plugins: [ // [!code highlight]
-                username() // [!code highlight]
+                apiKey() // [!code highlight]
             ] // [!code highlight]
         })
         ```

@@ -133,6 +133,9 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						identifier: z.string({
 							description: "A predetermined identifier for the key.",
 						}),
+						withoutOwner: z.boolean({
+							description: "Whether to create the apiKey without an owner.",
+						}),
 						remaining: z
 							.number({
 								description: "The number of requests remaining.",
@@ -643,7 +646,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							field: "id",
 							onDelete: "cascade",
 						},
-						required: true,
+						required: false,
 						input: true,
 					},
 					expires: {
