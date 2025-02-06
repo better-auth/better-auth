@@ -178,21 +178,6 @@ const data = await authClient.apiKey.get({
 
 ## Server only functions
 
-### Delete all expired API keys
-
-To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
-This function will delete all API keys that have an expiration date and are expired.
-
-<Callout>
-  We automatically delete expired API keys every time any apiKey plugin
-  functions were called, however they are rate-limited to a 10 second cooldown
-  each call.
-</Callout>
-
-```ts
-await auth.api.apiKey.deleteAllExpiredApiKeys();
-```
-
 ### Force rerolling an API key
 
 You can pass an API key ID to the `apiKey.forceReroll` function to force reroll the API key.
@@ -258,6 +243,22 @@ await auth.api.apiKey.forceUpdate({
   enabled: true,
 });
 ```
+
+### Delete all expired API keys
+
+To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
+This function will delete all API keys that have an expiration date and are expired.
+
+<Callout>
+  We automatically delete expired API keys every time any apiKey plugin
+  functions were called, however they are rate-limited to a 10 second cooldown
+  each call.
+</Callout>
+
+```ts
+await auth.api.apiKey.deleteAllExpiredApiKeys();
+```
+
 
 ## Schema
 

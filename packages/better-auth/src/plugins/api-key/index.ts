@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../api";
-import { type Adapter, type BetterAuthPlugin } from "../../types";
+import {
+	type Adapter,
+	type AuthContext,
+	type BetterAuthPlugin,
+} from "../../types";
 
 interface RateLimitAlgorithm_base {
 	algo:
@@ -195,7 +199,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = ctx.body.withoutOwner
 						? null
 						: await getSessionFromCtx(ctx);
@@ -251,7 +255,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 						model: "apiKeys",
@@ -350,7 +354,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -418,7 +422,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -502,8 +506,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
-
+					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 						model: "apiKeys",
@@ -563,7 +566,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -641,7 +644,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 						model: "apiKeys",
@@ -690,7 +693,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -746,7 +749,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 
 					const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 						model: "apiKeys",
@@ -761,7 +764,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					if (!apiKey) {
 						throw new APIError("NOT_FOUND", {
 							message: ERROR_CODES.API_KEY_NOT_FOUND,
-							success: false
+							success: false,
 						});
 					}
 
@@ -790,7 +793,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					deleteAllExpiredApiKeys(ctx.context.adapter);
+					deleteAllExpiredApiKeys(ctx.context);
 					const session = await getSessionFromCtx(ctx);
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
@@ -824,7 +827,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					await deleteAllExpiredApiKeys(ctx.context.adapter, true);
+					await deleteAllExpiredApiKeys(ctx.context, true);
 					return ctx.json({ success: true });
 				},
 			),
@@ -898,7 +901,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 let lastChecked: Date | null = null;
 
 function deleteAllExpiredApiKeys(
-	adapter: Adapter,
+	ctx: AuthContext,
 	byPassLastCheckTime = false,
 ) {
 	if (lastChecked && !byPassLastCheckTime) {
@@ -909,14 +912,18 @@ function deleteAllExpiredApiKeys(
 		}
 	}
 	lastChecked = new Date();
-	return adapter.deleteMany({
-		model: "apiKeys",
-		where: [
-			{
-				field: "expires",
-				operator: "lt",
-				value: new Date().getTime(),
-			},
-		],
-	});
+	try {
+		return ctx.adapter.deleteMany({
+			model: "apiKeys",
+			where: [
+				{
+					field: "expires",
+					operator: "lt",
+					value: new Date().getTime(),
+				},
+			],
+		});
+	} catch (error) {
+		ctx.logger.error(`Failed to delete expired API keys:`, error);
+	}
 }
