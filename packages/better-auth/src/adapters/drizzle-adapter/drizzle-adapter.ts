@@ -185,13 +185,33 @@ const createTransform = (
 				const c = await builder.returning();
 				return c[0];
 			}
-			await builder;
-			const schemaModel = getSchema(model);
-			const res = await db
-				.select()
-				.from(schemaModel)
-				.where(eq(schemaModel.id, data.id));
-			return res[0];
+			const result = await builder.execute();
+			const updatedResult = builder.config?.where;
+			const builderVal = builder.config?.values;
+			if (updatedResult) {
+				const upId = updatedResult?.queryChunks[3]?.value;
+				const schemaModel = getSchema(model);
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(eq(schemaModel.id, upId));
+				return res[0];
+			} else if (builderVal) {
+				const tId = builderVal[0]?.id.value;
+				const schemaModel = getSchema(model);
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(eq(schemaModel.id, tId));
+				return res[0];
+			} else if (data.id) {
+				const schemaModel = getSchema(model);
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(eq(schemaModel.id, data.id));
+				return res[0];
+			}
 		},
 		getField,
 		getModelName,
@@ -319,7 +339,7 @@ export const drizzleAdapter =
 			async deleteMany(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(where, model); //con
 				const builder = db.delete(schemaModel).where(...clause);
 				const res = await builder;
 				return res ? res.length : 0;
