@@ -129,6 +129,23 @@ describe("apiKey plugin", async () => {
 		expect(result.data).toEqual(apiKey);
 	});
 
+	it("Should require authorization to get an apiKey", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				identifier: "test",
+			},
+			{ headers: userHeaders },
+		);
+
+		const result = await client.apiKey.get({
+			query: {
+				keyId: apiKey?.id as string,
+			},
+		});
+		expect(result.data).toBeNull();
+		expect(result.error).not.toBeNull();
+	});
+
 	it("Should update an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -225,7 +242,7 @@ describe("apiKey plugin", async () => {
 			{ headers: userHeaders },
 		);
 		//@ts-ignore
-		expect(result.data.length).toEqual(10);
+		expect(result.data.length).toEqual(11);
 		expect(result.error).toBeNull();
 		if (result.data) {
 			for await (const apiKey of result.data) {
