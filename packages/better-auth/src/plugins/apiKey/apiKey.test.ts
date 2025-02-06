@@ -347,7 +347,7 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.key).toContain("hello_world_");
 	});
 
-	it("Should add new length to rerolled apiKey", async () => {
+	it("Should apply new length to rerolled apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
 				identifier: "test",
