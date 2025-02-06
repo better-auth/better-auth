@@ -77,6 +77,7 @@ export type ApiKey = {
 	expires: number | undefined;
 	name: string | undefined;
 	isEnabled: boolean;
+	lastVerifiedAt: Date | null;
 };
 
 const DEFAULT_KEY_LENGTH = 64;
@@ -232,6 +233,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							ownerId: session ? session.user.id : null,
 							name: ctx.body.name,
 							isEnabled: ctx.body.enabled ?? true,
+							lastVerifiedAt: null,
 						},
 					});
 
@@ -326,6 +328,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								],
 								update: {
 									remaining: apiKey.remaining - 1,
+									lastVerifiedAt: new Date(),
 								},
 							});
 						}
@@ -461,6 +464,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							remaining: ctx.body.remaining ?? null,
 							expires: ctx.body.expires,
 							isEnabled: ctx.body.enabled,
+							updatedAt: new Date(),
 						} satisfies Partial<ApiKey>,
 					});
 					return ctx.json(result);
@@ -503,6 +507,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 								operator: "eq",
 								value: ctx.body.keyId,
 							},
+							{
+								field: "ownerId",
+								operator: "eq",		
+								value: session.user.id,
+							}
 						],
 					});
 					if (!apiKey) {
@@ -692,6 +701,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						required: false,
 						input: true,
 						defaultValue: true,
+					},
+					lastVerifiedAt: {
+						type: "date",
+						required: false,
+						input: true,
 					},
 				},
 			},

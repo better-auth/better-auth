@@ -60,41 +60,112 @@ The username plugin wraps the email and password authenticator and adds username
 
 ## Usage
 
+### Create an API key
+
+To create an API key, you can use the `apiKey.create` function provided by the client. The `apiKey.create` function takes an object with the following properties:
+
+- `identifier`: The identifier of the API key.
+- `withoutOwner`: Whether to create the API key without an owner. (Default `false`)
+- `remaining`: The number of requests remaining. (Default `null`)
+- `prefix`: The prefix of the API key. (Default `undefined`)
+- `length`: The length of the API key. (Default `64`)
+- `expires`: The expiration date of the API key in Unix timestamp format. (Default `null`)
+- `enabled`: Whether the API key is enabled or not. (Default `true`)
+
+<Callout>
+  If you're creating an API key without an owner, you must provide the `expires`
+  or `remaining` properties.
+</Callout>
+
+```ts
+const data = await authClient.apiKey.create({
+  identifier: "test",
+  withoutOwner: true,
+  remaining: 10,
+  prefix: "test",
+  length: 64,
+  expires: 1679012000,
+  enabled: true,
+});
+```
+
+### Verifying an API key
+
+```ts
+const { valid } = await client.apiKey.verify({
+  key: "my-api-key",
+});
+```
+
+### Updating an API key
+
+You can pass an API key ID to the `apiKey.update` function to update information on the API key.
+
+Properties that can be updated:
+
+- `name`: The name of the API key.
+- `remaining`: The number of requests remaining.
+- `expires`: The expiration date of the API key in Unix timestamp format.
+- `enabled`: Whether the API key is enabled or not.
+
+```ts
+await client.apiKey.update({
+  keyId: "my-key-id",
+  name: "new-name",
+  remaining: 10,
+  expires: 1679012000,
+  enabled: true,
+});
+```
+
+### Revoking an API key
+
+```ts
+await client.apiKey.revoke({
+  keyId: "my-key-id",
+});
+```
+
+### Rerolling an API key
+
+You can pass an API key ID to the `apiKey.reroll` function to reroll the API key.
+
+Additional properties can allow you to configure the rerolled API key:
+
+- `prefix`: The prefix of the API key. (Default `undefined`)
+- `length`: The length of the API key. (Default `64`)
+
+```ts
+await client.apiKey.reroll({
+  keyId: "my-key-id",
+  prefix: "test",
+  length: 64,
+});
+```
+
+### Listing API keys
+
+You can pass an identifier to the `apiKey.list` function to list API keys.
+
+```ts
+const data = await authClient.apiKey.list({
+  query: {
+    identifier: "test",
+  },
+});
+```
+
 ### Getting information on an API key
 
 You can pass an API key ID to the `apiKey.get` function to get information on the API key including the key itself.
 
 If an API key was created without an owner, then you cannot get it's information as it requires authorization to get the information.
 
-```ts title="auth-client.ts"
+```ts
 const data = await authClient.apiKey.get({
   query: {
-    keyId: myApiKeyID,
+    keyId: "my-key-id",
   },
-});
-```
-
-### Signin with username
-
-To signin a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
-
-- `username`: The username of the user.
-- `password`: The password of the user.
-
-```ts title="auth-client.ts"
-const data = await authClient.signIn.username({
-  username: "test",
-  password: "password1234",
-});
-```
-
-### Update username
-
-To update the username of a user, you can use the `updateUser` function provided by the client.
-
-```ts title="auth-client.ts"
-const data = await authClient.updateUser({
-  username: "new-username",
 });
 ```
 
@@ -120,6 +191,12 @@ Table: `apiKeys`
       name: "updatedAt",
       type: "Date",
       description: "The date and time the API key was updated",
+    },
+    {
+      name: "lastVerifiedAt",
+      type: "Date",
+      description: "The date and time the API key was last verified",
+      isOptional: true,
     },
     {
       name: "remaining",
