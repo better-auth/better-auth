@@ -338,20 +338,14 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
     <Tab value="elysia">
     ```ts
-    import { Elysia, Context } from "elysia";
+    import { Elysia } from "elysia";
     import { auth } from "./auth";
 
-    const betterAuthView = (context: Context) => {
-        const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
-        // validate request method
-        if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
-            return auth.handler(context.request);
-        } else {
-            context.error(405)
-        }
-    }
+    export const betterAuthPlugin = new Elysia({ prefix: "/api/auth/*" })
+        .post("/", ({ request }) => auth.handler(request))
+        .get("/", ({ request }) => auth.handler(request));
 
-    const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
+    const app = new Elysia().use(betterAuthPlugin).listen(3000);
 
     console.log(
     `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
