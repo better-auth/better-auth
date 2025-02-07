@@ -15,18 +15,11 @@ We need to mount the handler to Elysia endpoint.
 import { Elysia } from "elysia";
 import { auth } from "./auth";
 
-const betterAuthView = (context: Context) => {
-  const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
-  // validate request method
-  if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
-    return auth.handler(context.request);
-  }
-  else {
-    context.error(405)
-  }
-}
+export const betterAuthPlugin = new Elysia({ prefix: "/api/auth/*" })
+	.post("/", ({ request }) => auth.handler(request))
+	.get("/", ({ request }) => auth.handler(request));
 
-const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
+const app = new Elysia().use(betterAuthPlugin).listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
@@ -35,49 +28,51 @@ console.log(
 
 ### Middleware
 
-You can use [derive](https://elysiajs.com/essential/handler.html#derive) to provide session and user information before pass to view.
+With Elysia you can use [derive](https://elysiajs.com/essential/handler.html#derive) and [macro](https://elysiajs.com/patterns/macro.html#macro) resolve to create a custom middleware plugin for retrieving the session and user information and adding it to the context for following request.
 
 ```ts
 import { Elysia } from "elysia";
 import { auth } from "./auth";
 
-// user middleware (compute user and session and pass to routes)
-const userMiddleware = async (request: Request) => {
-  const session = await auth.api.getSession({ headers: request.headers });
+// Creates an isUser flag for subsequent routes.
+// When enabled, the middleware is run and User and Session are available in the subsequent context
+export const isUserMiddleware = new Elysia()
+	.macro({
+		isUser: {
+			async resolve({ request }) {
+				const session = await auth.api.getSession({ headers: request.headers })
 
-  if (!session) {
-    return {
-      user: null,
-      session: null
-    }
-  }
+				if (!session) {
+					return error("Unauthorized") // Switch out with your own error handling.
+				}
 
-  return {
-    user: session.user,
-    session: session.session
-  }
-}
+				return {
+					user: session.user,
+					session: session.session,
+				}
+			},
+		},
+	})
+	.as("plugin");
 
-// user info view
-// type User can be export from `typeof auth.$Infer.Session.user`
-// type Session can be export from `typeof auth.$Infer.Session.session`
-const userInfo = (user: User | null, session: Session | null) => {
-  return {
-    user: user,
-    session: session
-  }
-}
-
+// Example usage
 const app = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
-  // about betterAuthView code, please check `Mount the handler` topic 
-  .all("/api/auth/*", betterAuthView)
-  // Example custom endpoint
-  .get("/user", ({ user, session }) => userInfo(user, session))
-  .listen(3000);
+	.use(betterAuthPlugin)
+	.use(isUserMiddleware)
+	// isUserMiddleware is false by default and won't run unless specified.
+	.get("/", "Front page")
+	// To enable it pass a third argument and set isUser to true. User and Session will now be present in the context fully typed
+	.get("/user", ({ user }) => user, { isUser: true })
+	// If you do not enable it, then you will get the type error: Property 'user' does not exist
+	.get("/user", ({ user }) => user)
+	// To change the default behavior you can set isUser to true for the subsequent routes
+	.guard({ isUser: true })
+	// User and Session will now be available in the context.
+	.get("/user", ({ user }) => user)
+	.listen(3000);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+	`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
 );
 
 ```
