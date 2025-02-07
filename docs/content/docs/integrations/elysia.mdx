@@ -63,7 +63,7 @@ Example usage
 ```ts
 const app = new Elysia()
 	.use(betterAuthPlugin)
-  // Enable the middleware
+  	// Enable the middleware
 	.use(isUserMiddleware)
 	// isUserMiddleware is false by default and won't run unless specified.
 	.get("/", "Front page")
