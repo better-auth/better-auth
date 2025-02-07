@@ -259,7 +259,6 @@ This function will delete all API keys that have an expiration date and are expi
 await auth.api.apiKey.deleteAllExpiredApiKeys();
 ```
 
-
 ## Schema
 
 Table: `apiKey`
@@ -290,6 +289,12 @@ Table: `apiKey`
       isOptional: true,
     },
     {
+        name: "createdBy",
+        type: "string",
+        description: "The id of the user who created the API key",
+      isForeignKey: true,
+    },
+    {
       name: "remaining",
       type: "number",
       description: "The number of requests remaining",
@@ -301,16 +306,9 @@ Table: `apiKey`
       description: "The API key itself",
     },
     {
-      name: "identifier",
+      name: "reference",
       type: "string",
-      description: "The identifier of the API key",
-    },
-    {
-      name: "ownerId",
-      type: "string",
-      description: "The ID of the user who owns the API key",
-      isForeignKey: true,
-      isOptional: true,
+      description: "A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)",
     },
     {
       name: "expires",
@@ -326,7 +324,7 @@ Table: `apiKey`
       isOptional: true,
     },
     {
-      name: "isEnabled",
+      name: "enabled",
       type: "boolean",
       description: "Whether the API key is enabled",
     },

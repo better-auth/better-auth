@@ -4,13 +4,14 @@ import { apiKey } from ".";
 import { apiKeyClient } from "./client";
 
 describe("apiKey plugin", async () => {
+	let user_id = "";
 	const { client, signInWithTestUser, auth, db } = await getTestInstance(
 		{
 			plugins: [
 				apiKey({
-					rateLimit: {
-						algorithm: "none",
-						rateLimitBy: "apiKey",
+					verifyAction({ user }) {
+						if (user.id === user_id) return true;
+						return false;
 					},
 				}),
 			],
@@ -23,17 +24,16 @@ describe("apiKey plugin", async () => {
 	);
 
 	const { headers: userHeaders, user } = await signInWithTestUser();
+	user_id = user.id;
 
 	it("should create an apiKey", async () => {
 		const apiKey = await client.apiKey.create(
-			{
-				identifier: "test",
-			},
+			{ reference: user.id },
 			{ headers: userHeaders },
 		);
 		expect(apiKey.data).toBeDefined();
 		expect(apiKey.data?.remaining).toEqual(null);
-		expect(apiKey.data?.identifier).toEqual("test");
+		expect(apiKey.data?.reference).toEqual(user.id);
 		expect(apiKey.data?.name).toBeNull();
 		expect(apiKey.data?.createdAt).toBeDefined();
 		expect(apiKey.data?.updatedAt).toBeDefined();
@@ -41,7 +41,7 @@ describe("apiKey plugin", async () => {
 
 	it("Should require authorization to create an apiKey", async () => {
 		const apiKey = await client.apiKey.create({
-			identifier: "test",
+			reference: "test",
 		});
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).not.toBeNull();
@@ -50,7 +50,7 @@ describe("apiKey plugin", async () => {
 	it("Should create an apiKey with name", async () => {
 		const apiKey = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				name: "test",
 			},
 			{ headers: userHeaders },
@@ -62,7 +62,7 @@ describe("apiKey plugin", async () => {
 	it("Should create an apiKey with prefix", async () => {
 		const apiKey = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				prefix: "test",
 			},
 			{ headers: userHeaders },
@@ -74,7 +74,7 @@ describe("apiKey plugin", async () => {
 	it("Should create an apiKey with length", async () => {
 		const apiKey = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				length: 10,
 			},
 			{ headers: userHeaders },
@@ -87,7 +87,7 @@ describe("apiKey plugin", async () => {
 	it("Should verify an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -105,7 +105,7 @@ describe("apiKey plugin", async () => {
 	it("Shouldn't verify a disabled apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				enabled: false,
 			},
 			{ headers: userHeaders },
@@ -121,25 +121,10 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.valid).toEqual(false);
 	});
 
-	it("Should require authorization to verify an apiKey", async () => {
-		const { data: apiKey } = await client.apiKey.create(
-			{
-				identifier: "test",
-			},
-			{ headers: userHeaders },
-		);
-
-		const result = await client.apiKey.verify({
-			key: apiKey?.key as string,
-		});
-		expect(result.data).toBeNull();
-		expect(result.error).not.toBeNull();
-	});
-
 	it("Should get an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -159,7 +144,7 @@ describe("apiKey plugin", async () => {
 	it("Should require authorization to get an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -176,7 +161,7 @@ describe("apiKey plugin", async () => {
 	it("Should update an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -195,7 +180,7 @@ describe("apiKey plugin", async () => {
 	it("Should require authorization to update an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -211,7 +196,7 @@ describe("apiKey plugin", async () => {
 	it("Should revoke an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -245,7 +230,7 @@ describe("apiKey plugin", async () => {
 	it("Should require authorization to revoke an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -263,16 +248,17 @@ describe("apiKey plugin", async () => {
 		const result = await client.apiKey.list(
 			{
 				query: {
-					identifier: "test",
+					reference: "test",
 				},
 			},
 			{ headers: userHeaders },
 		);
 		//@ts-ignore
-		expect(result.data.length).toEqual(12);
+		expect(result.data.length).toEqual(10);
 		expect(result.error).toBeNull();
 		if (result.data) {
-			for await (const apiKey of result.data) {
+			for await (const { apiKey } of result.data) {
+				if (!apiKey) continue;
 				await client.apiKey.revoke(
 					{
 						keyId: apiKey.id as string,
@@ -283,7 +269,7 @@ describe("apiKey plugin", async () => {
 			const result2 = await client.apiKey.list(
 				{
 					query: {
-						identifier: "test",
+						reference: "test",
 					},
 				},
 				{ headers: userHeaders },
@@ -296,7 +282,7 @@ describe("apiKey plugin", async () => {
 	it("Should reroll an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -318,7 +304,7 @@ describe("apiKey plugin", async () => {
 	it("Should require authorization to reroll an apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -333,7 +319,7 @@ describe("apiKey plugin", async () => {
 	it("Should add new prefix to rerolled apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -357,7 +343,7 @@ describe("apiKey plugin", async () => {
 	it("Should apply new length to rerolled apiKey", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -381,14 +367,16 @@ describe("apiKey plugin", async () => {
 		const list = await client.apiKey.list(
 			{
 				query: {
-					identifier: "test",
+					reference: "test",
 				},
 			},
 			{ headers: userHeaders },
 		);
 
 		//@ts-ignore
-		for await (const apiKey of list.data) {
+		for await (const { apiKey } of list.data) {
+			if (!apiKey) continue;
+
 			await client.apiKey.revoke(
 				{
 					keyId: apiKey.id as string,
@@ -399,7 +387,7 @@ describe("apiKey plugin", async () => {
 
 		await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				name: "Soon to expire! but not yet!",
 				expires: new Date().getTime() + 2000,
 			},
@@ -408,7 +396,7 @@ describe("apiKey plugin", async () => {
 
 		await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				name: "Should had expired!",
 				expires: new Date().getTime() - 2000,
 			},
@@ -416,7 +404,7 @@ describe("apiKey plugin", async () => {
 		);
 		await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				name: "Should had expired as well!",
 				expires: new Date().getTime() - 1,
 			},
@@ -428,7 +416,7 @@ describe("apiKey plugin", async () => {
 		const { data: allKeys2 } = await client.apiKey.list(
 			{
 				query: {
-					identifier: "test",
+					reference: "test",
 				},
 			},
 			{ headers: userHeaders },
@@ -439,13 +427,13 @@ describe("apiKey plugin", async () => {
 		//@ts-ignore
 		expect(allKeys2.length).toEqual(1);
 		//@ts-ignore
-		expect(allKeys2[0].name).toEqual("Soon to expire! but not yet!");
+		expect(allKeys2[0].apiKey.name).toEqual("Soon to expire! but not yet!");
 	});
 
 	it(`Should only use the apiKey the remaining 3 times`, async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 				remaining: 3,
 			},
 			{ headers: userHeaders },
@@ -487,30 +475,10 @@ describe("apiKey plugin", async () => {
 		expect(result4.data?.valid).toEqual(false);
 	});
 
-	it(`Should verify an apiKey without owner`, async () => {
-		const { data: apiKey } = await client.apiKey.create(
-			{
-				identifier: "test",
-				withoutOwner: true,
-				expires: new Date().getTime() + 1000,
-			},
-			{},
-		);
-
-		const result = await client.apiKey.verify(
-			{
-				key: apiKey?.key as string,
-			},
-			{},
-		);
-		expect(result.data).toBeDefined();
-		expect(result.data?.valid).toEqual(true);
-	});
-
 	it(`Should forcefully reroll an apiKey`, async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -539,7 +507,7 @@ describe("apiKey plugin", async () => {
 	it(`Should forcefully revoke an apiKey`, async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -566,7 +534,7 @@ describe("apiKey plugin", async () => {
 	it(`Should forcefully update an apiKey`, async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{
-				identifier: "test",
+				reference: "test",
 			},
 			{ headers: userHeaders },
 		);
@@ -591,26 +559,37 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.name).toEqual("test");
 	});
 
-	it(`Should hit the rate-limit`, async () => {
-		const { client, signInWithTestUser, auth, db } = await getTestInstance(
-			{
-				plugins: [
-					apiKey({
-						valid_identifiers: ["test"],
-						rateLimit: {
-							algorithm: "token_bucket",
-							rateLimitBy: "apiKey",
-							bucketSize: 10,
-							refilRate: 1,
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
-				},
-			},
-		);
-	});
+	// it(`Should hit the rate-limit`, async () => {
+	// 	const { client, signInWithTestUser, auth, db } = await getTestInstance(
+	// 		{
+	// 			plugins: [
+	// 				organization(),
+	// 				apiKey({
+	// 					async verifyAction({ user, headers, action, apiKey, session }) {
+	// 						if (apiKey.reference.startsWith("org-keys:")) {
+	// 							// reference for org keys would be: `org-keys:<org-slug>:<org-id>:<user-id>`
+	// 							const [, orgSlug, orgId, userId] = apiKey.reference.split(":");
+
+	// 							const org = await auth.api.getFullOrganization({
+	// 								query: { organizationId: orgId, organizationSlug: orgSlug },
+	// 								headers,
+	// 							});
+	// 							if (!org) return false;
+	// 							const hasUser = org.members.find((x) => x.userId === userId);
+	// 							if (!hasUser) return false;
+	// 							return true;
+	// 						} else {
+	// 							return apiKey.reference === user.id;
+	// 						}
+	// 					},
+	// 				}),
+	// 			],
+	// 		},
+	// 		{
+	// 			clientOptions: {
+	// 				plugins: [apiKeyClient()],
+	// 			},
+	// 		},
+	// 	);
+	// });
 });
