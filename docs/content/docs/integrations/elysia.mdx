@@ -31,8 +31,7 @@ console.log(
 With Elysia you can use the [plugin](https://elysiajs.com/essential/plugin.html#plugin) and [macro](https://elysiajs.com/patterns/macro.html#macro) patterns to create a custom middleware for retrieving the session and user information.
 
 ```ts
-import { Elysia } from "elysia";
-import { auth } from "./auth";
+import { Elysia, error } from "elysia";
 
 // Creates an isUser flag for subsequent routes.
 // When enabled, the middleware is run and User and Session are available in the subsequent context
