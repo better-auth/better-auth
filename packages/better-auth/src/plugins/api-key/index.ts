@@ -133,7 +133,7 @@ export type ApiKeyOptions = {
 	 *			}
 	 *		},
 	 */
-	verifyAction: (props: VerifyAction) => Promise<boolean> | boolean;
+	verifyAction?: (props: VerifyAction) => Promise<boolean> | boolean;
 };
 
 export type ApiKey = {
@@ -174,7 +174,7 @@ export const ERROR_CODES = {
 	RATE_LIMIT_EXCEEDED: "Rate limit exceeded",
 };
 
-export const apiKey = (options: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions) => {
 	const key_config = {
 		defaultKeyLength:
 			options?.keyConfig?.defaultKeyLength ?? DEFAULT_KEY_LENGTH,
@@ -196,7 +196,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 		return prefix ? prefix + "_" + apiKey : apiKey;
 	}
 
-	const model_name = options.schema?.modelName ?? "apiKey";
+	const model_name = options?.schema?.modelName ?? "apiKey";
 
 	return {
 		id: "apiKey",
@@ -298,13 +298,13 @@ export const apiKey = (options: ApiKeyOptions) => {
 						});
 					}
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "create",
 						headers: ctx.headers,
 						session: session.session,
 					});
-					if (!isValid)
+					if (isValid === false)
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_CREATE_API_KEY,
 						});
@@ -328,15 +328,15 @@ export const apiKey = (options: ApiKeyOptions) => {
 							lastVerifiedAt: null,
 							rateLimitEnabled:
 								ctx.body.rateLimit?.enabled ??
-								options.rateLimitConfig?.enabled ??
+								options?.rateLimitConfig?.enabled ??
 								true,
 							rateLimitTimeWindow:
 								ctx.body.rateLimit?.timeWindow ??
-								options.rateLimitConfig?.timeWindow ??
+								options?.rateLimitConfig?.timeWindow ??
 								DEFAULT_RATE_LIMIT_TIME_WINDOW,
 							rateLimitCount:
 								ctx.body.rateLimit?.limit ??
-								options.rateLimitConfig?.limit ??
+								options?.rateLimitConfig?.limit ??
 								DEFAULT_RATE_LIMIT_LIMIT,
 							requestCount: 1,
 							lastRequest: new Date(),
@@ -506,7 +506,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 					);
 					if (!success) throw new APIError("UNAUTHORIZED", { message });
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "get",
 						apiKey,
@@ -514,7 +514,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						session: session.session,
 					});
 
-					if (!isValid)
+					if (isValid === false)
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_GET_API_KEY,
 						});
@@ -590,7 +590,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						],
 					);
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "update",
 						apiKey,
@@ -598,7 +598,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						session: session.session,
 					});
 
-					if (!isValid)
+					if (isValid === false)
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_UPDATE_API_KEY,
 						});
@@ -754,7 +754,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 					);
 					if (!success) throw new APIError("UNAUTHORIZED", { message });
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "reroll",
 						apiKey,
@@ -762,7 +762,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						session: session.session,
 					});
 
-					if (!isValid)
+					if (isValid === false)
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_REROLL_API_KEY,
 						});
@@ -900,7 +900,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 					);
 					if (!success) throw new APIError("UNAUTHORIZED", { message });
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "revoke",
 						apiKey,
@@ -908,7 +908,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						session: session.session,
 					});
 
-					if (!isValid)
+					if (isValid === false)
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.UNAUTHORIZED_TO_REVOKE_API_KEY,
 						});
@@ -1037,14 +1037,14 @@ export const apiKey = (options: ApiKeyOptions) => {
 						}
 					}
 
-					const isValid = await options.verifyAction({
+					const isValid = await options?.verifyAction?.({
 						user: session.user,
 						action: "list",
 						apiKey: newApiKeys.map((x) => x.apiKey).filter((x) => x !== null),
 						headers: ctx.headers,
 						session: session.session,
 					});
-					if (!isValid) throw new APIError("UNAUTHORIZED");
+					if (isValid === false) throw new APIError("UNAUTHORIZED");
 
 					return ctx.json(newApiKeys);
 				},
