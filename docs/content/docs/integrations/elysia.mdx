@@ -70,7 +70,7 @@ const app = new Elysia()
 	// To enable it pass a third argument and set isUser to true. User and Session will now be present in the context fully typed
 	.get("/user", ({ user }) => user, { isUser: true })
 	// If you do not enable it, then you will get the type error: Property 'user' does not exist
-	.get("/user", ({ user }) => user)
+	.get("/user", ({ user }) => user) // Expect this to error!!
 	// To change the default behavior you can set isUser to true for the subsequent routes
 	.guard({ isUser: true })
 	// User and Session will now be available in the context.
