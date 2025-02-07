@@ -12,19 +12,19 @@ export type RateLimitConfiguration = {
 	/**
 	 * Whether to enable rate limit or not.
 	 */
-	enabled: boolean;
+	enabled?: boolean;
 	/**
 	 * The time window in milliseconds
 	 *
 	 * @default 60000 (1 minute)
 	 */
-	timeWindow: number;
+	timeWindow?: number;
 	/**
 	 * The maximum number of requests allowed in the time window
 	 *
 	 * @default 60
 	 */
-	limit: number;
+	limit?: number;
 };
 
 interface VerifyAction_base {
@@ -150,7 +150,7 @@ export type ApiKey = {
 	enabled: boolean;
 	rateLimitEnabled: boolean;
 	rateLimitTimeWindow: number;
-	rateLimitLimit: number;
+	rateLimitCount: number;
 	requestCount: number;
 	lastRequest: Date;
 };
@@ -326,12 +326,15 @@ export const apiKey = (options: ApiKeyOptions) => {
 							name: ctx.body.name,
 							enabled: ctx.body.enabled ?? true,
 							lastVerifiedAt: null,
-							rateLimitEnabled: ctx.body.rateLimit?.enabled ?? true,
+							rateLimitEnabled: ctx.body.rateLimit?.enabled ?? (options.rateLimitConfig?.enabled ?? true),
 							rateLimitTimeWindow:
 								ctx.body.rateLimit?.timeWindow ??
+								options.rateLimitConfig?.timeWindow ??
 								DEFAULT_RATE_LIMIT_TIME_WINDOW,
-							rateLimitLimit:
-								ctx.body.rateLimit?.limit ?? DEFAULT_RATE_LIMIT_LIMIT,
+							rateLimitCount:
+								ctx.body.rateLimit?.limit ??
+								options.rateLimitConfig?.limit ??
+								DEFAULT_RATE_LIMIT_LIMIT,
 							requestCount: 1,
 							lastRequest: new Date(),
 						},
@@ -647,6 +650,9 @@ export const apiKey = (options: ApiKeyOptions) => {
 							})
 							.optional(),
 					}),
+					metadata: {
+						SERVER_ONLY: true,
+					},
 				},
 				async (ctx) => {
 					deleteAllExpiredApiKeys(ctx.context);
@@ -1031,7 +1037,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 					const isValid = await options.verifyAction({
 						user: session.user,
 						action: "list",
-						apiKey: newApiKeys.map(x => x.apiKey).filter(x => x !== null),
+						apiKey: newApiKeys.map((x) => x.apiKey).filter((x) => x !== null),
 						headers: ctx.headers,
 						session: session.session,
 					});
@@ -1127,7 +1133,7 @@ export const apiKey = (options: ApiKeyOptions) => {
 						input: true,
 						defaultValue: DEFAULT_RATE_LIMIT_TIME_WINDOW,
 					},
-					rateLimitLimit: {
+					rateLimitCount: {
 						type: "number",
 						required: false,
 						input: true,

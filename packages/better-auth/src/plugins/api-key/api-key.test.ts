@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { apiKey } from ".";
+import { apiKey, ERROR_CODES, type ApiKey } from ".";
 import { apiKeyClient } from "./client";
+import Database from "better-sqlite3";
 
 describe("apiKey plugin", async () => {
 	let user_id = "";
@@ -9,6 +10,9 @@ describe("apiKey plugin", async () => {
 		{
 			plugins: [
 				apiKey({
+					rateLimitConfig: {
+						enabled: false,
+					},
 					verifyAction({ user }) {
 						if (user.id === user_id) return true;
 						return false;
@@ -559,37 +563,56 @@ describe("apiKey plugin", async () => {
 		expect(result.data?.name).toEqual("test");
 	});
 
-	// it(`Should hit the rate-limit`, async () => {
-	// 	const { client, signInWithTestUser, auth, db } = await getTestInstance(
-	// 		{
-	// 			plugins: [
-	// 				organization(),
-	// 				apiKey({
-	// 					async verifyAction({ user, headers, action, apiKey, session }) {
-	// 						if (apiKey.reference.startsWith("org-keys:")) {
-	// 							// reference for org keys would be: `org-keys:<org-slug>:<org-id>:<user-id>`
-	// 							const [, orgSlug, orgId, userId] = apiKey.reference.split(":");
+	let rateLimitedApiKey: ApiKey;
 
-	// 							const org = await auth.api.getFullOrganization({
-	// 								query: { organizationId: orgId, organizationSlug: orgSlug },
-	// 								headers,
-	// 							});
-	// 							if (!org) return false;
-	// 							const hasUser = org.members.find((x) => x.userId === userId);
-	// 							if (!hasUser) return false;
-	// 							return true;
-	// 						} else {
-	// 							return apiKey.reference === user.id;
-	// 						}
-	// 					},
-	// 				}),
-	// 			],
-	// 		},
-	// 		{
-	// 			clientOptions: {
-	// 				plugins: [apiKeyClient()],
-	// 			},
-	// 		},
-	// 	);
-	// });
+	it("should be rate-limited to verify the apiKey with rate limit", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{
+				reference: "test",
+				rateLimit: {
+					enabled: true,
+					timeWindow: 1000,
+					limit: 4,
+					// This is 4 requests per second
+					// it takes 1 request to create the key.
+					// then 3 more requests to verify the key
+					// so on the 4th request it will fail. (equivalent to index 3 on the for loop to fail.)
+				},
+			},
+			{ headers: userHeaders },
+		);
+		if (!apiKey) return;
+		rateLimitedApiKey = apiKey;
+		for (let i = 0; i < 5; i++) {
+			const response = await client.apiKey.verify(
+				{
+					key: apiKey.key,
+				},
+				{ headers: userHeaders },
+			);
+			if (i >= 3) {
+				expect(response.error?.message).toBe(ERROR_CODES.RATE_LIMIT_EXCEEDED);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
+
+	it("should reset the limit after the 1 second window period", async () => {
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		for (let i = 0; i < 5; i++) {
+			const response = await client.apiKey.verify(
+				{
+					key: rateLimitedApiKey.key,
+				},
+				{ headers: userHeaders },
+			);
+			if (i >= 4) {
+				expect(response.error?.message).toBe(ERROR_CODES.RATE_LIMIT_EXCEEDED);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
 });

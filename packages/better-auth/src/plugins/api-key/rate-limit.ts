@@ -10,31 +10,33 @@ export async function updateRateLimit(
 	if (currentRecord.rateLimitEnabled === false)
 		return { success: true, message: null };
 
-	const { requestCount, lastRequest, rateLimitLimit, rateLimitTimeWindow } =
-		currentRecord;
-
 	const now = new Date();
-	const windowStart = new Date(now.getTime() - rateLimitTimeWindow);
+	const windowStart = new Date(
+		now.getTime() - currentRecord.rateLimitTimeWindow,
+	);
 
-	// Check if the last request was within the time window
-	if (lastRequest < windowStart) {
-		// Reset the count if outside the window
-		await adapter.update({
-			model: model,
-			where: whereClause,
-			update: {
-				requestCount: 1,
-				lastRequest: now,
-			},
-		});
-		return { success: true, message: null };
-	} else {
-		// Check if the request count exceeds the limit
-		if (requestCount >= rateLimitLimit) {
-			return { success: false, message: ERROR_CODES["RATE_LIMIT_EXCEEDED"] };
-		} else {
+	if (currentRecord) {
+		const { requestCount, lastRequest } = currentRecord;
+
+		// Check if the last request was within the time window
+		if (lastRequest < windowStart) {
+			console.log(lastRequest < windowStart);
+			// Reset the count if outside the window
+			await adapter.update<ApiKey>({
+				model: model,
+				where: whereClause,
+				update: {
+					requestCount: 1,
+					lastRequest: now,
+				},
+			});
+			return { success: true, message: null }; // Allowed
+		}
+
+		if (requestCount < currentRecord.rateLimitCount) {
+			console.log(`incrementing`)
 			// Increment the count if within the window
-			await adapter.update({
+			await adapter.update<ApiKey>({
 				model: model,
 				where: whereClause,
 				update: {
@@ -42,7 +44,13 @@ export async function updateRateLimit(
 					lastRequest: now,
 				},
 			});
-			return { success: true, message: null };
+			return { success: true, message: null }; // Allowed
 		}
+		console.log(`hit!`)
+		return { success: false, message: ERROR_CODES.RATE_LIMIT_EXCEEDED }; // Rate limit exceeded
+	} else {
+		// If no record exists
+
+		return { success: true, message: null }; // Allowed
 	}
 }

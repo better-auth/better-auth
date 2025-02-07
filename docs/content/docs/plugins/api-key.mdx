@@ -64,117 +64,91 @@ The API Key plugin allows you to create and manage API keys for your application
 
 To create an API key, you can use the `apiKey.create` function provided by the client. The `apiKey.create` function takes an object with the following properties:
 
-- `identifier`: The identifier of the API key.
-- `withoutOwner`: Whether to create the API key without an owner. (Default `false`)
-- `remaining`: The number of requests remaining. (Default `null`)
-- `prefix`: The prefix of the API key. (Default `undefined`)
-- `length`: The length of the API key. (Default `64`)
-- `expires`: The expiration date of the API key in Unix timestamp format. (Default `null`)
-- `enabled`: Whether the API key is enabled or not. (Default `true`)
+- `name`: The name of the API key.
+- `reference`: A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)
+- `remaining`: The number of requests remaining.
+- `prefix`: A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah".
+- `length`: The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
+- `expires`: UNIX timestamp of when the API key expires.
+- `enabled`: Whether the key is enabled or not.
+- `rateLimit`: An object containing rate limit configurations.
+    - `rateLimit.enabled`: Whether rate limiting is enabled for the API key.
+    - `rateLimit.timeWindow`: The time window in milliseconds for rate limiting.
+    - `rateLimit.limit`: The maximum number of requests allowed in the time window.
 
-<Callout>
-  If you're creating an API key without an owner, you must provide the `expires`
-  or `remaining` properties.
-</Callout>
 
 ```ts
 const data = await authClient.apiKey.create({
-  identifier: "test",
-  withoutOwner: true,
-  remaining: 10,
-  prefix: "test",
+  reference: "my_user_id",
+  name: "My API Key",
+  prefix: "my_app",
   length: 64,
-  expires: 1679012000,
+  expires: new Date().getTime() + 1000 * 60 * 60 * 24, // 1 day
   enabled: true,
+  rateLimit: {
+    enabled: true,
+    timeWindow: 1000 * 60, // 1 minute
+    limit: 10, // with a limit of 10 requests per minute
+  },
 });
 ```
 
-### Verifying an API key
+### Verify an API key
+
+To verify an API key, you can use the `apiKey.verify` function provided by the client. The `apiKey.verify` function takes an object with the following properties:
+
+- `key`: The API key to verify.
 
 ```ts
-const { valid } = await client.apiKey.verify({
-  key: "my-api-key",
+const isValid = await authClient.apiKey.verify({
+  key: "your_api_key_here",
 });
 ```
 
-### Updating an API key
+### Get an API key
 
-You can pass an API key ID to the `apiKey.update` function to update information on the API key.
+To get an API key, you can use the `apiKey.get` function provided by the client. The `apiKey.get` function takes an object with the following properties:
 
-Properties that can be updated:
+- `keyId`: The ID of the API key to get.
 
-- `name`: The name of the API key.
-- `remaining`: The number of requests remaining.
-- `expires`: The expiration date of the API key in Unix timestamp format.
+```ts
+const apiKey = await authClient.apiKey.get({
+  keyId: "your_api_key_id_here",
+});
+```
+
+### Update an API key
+
+To update an API key, you can use the `apiKey.update` function provided by the client. The `apiKey.update` function takes an object with the following properties:
+
+- `keyId`: The ID of the API key to update.
+- `name`: The new name for the API key.
+- `remaining`: The new number of requests remaining.
+- `expires`: The new expiration date for the API key.
 - `enabled`: Whether the API key is enabled or not.
 
 ```ts
-await client.apiKey.update({
-  keyId: "my-key-id",
-  name: "new-name",
-  remaining: 10,
-  expires: 1679012000,
+const updatedApiKey = await authClient.apiKey.update({
+  keyId: "your_api_key_id_here",
+  name: "New API Key Name",
+  remaining: 100,
+  expires: new Date().getTime() + 1000 * 60 * 60 * 24 * 7, // 1 week from now
   enabled: true,
 });
 ```
 
-### Revoking an API key
+### List API keys
+
+To list all API keys associated with a reference, you can use the `apiKey.list` function provided by the client. The `apiKey.list` function takes an object with the following properties:
+
+- `reference`: The reference to list API keys for.
 
 ```ts
-await client.apiKey.revoke({
-  keyId: "my-key-id",
+const apiKeys = await authClient.apiKey.list({
+  reference: "your_reference_here",
 });
 ```
 
-### Rerolling an API key
-
-You can pass an API key ID to the `apiKey.reroll` function to reroll the API key.
-
-Additional properties can allow you to configure the rerolled API key:
-
-- `prefix`: The prefix of the API key. (Default `undefined`)
-- `length`: The length of the API key. (Default `64`)
-
-<Callout>
-  If the API key was created without an owner, then you cannot reroll it as it
-  requires authorization to reroll the API key. However, you can look into the
-  server-side [force reroll
-  function](/docs/plugins/api-key#force-rerolling-an-api-key).
-</Callout>
-
-```ts
-await client.apiKey.reroll({
-  keyId: "my-key-id",
-  prefix: "test",
-  length: 64,
-});
-```
-
-### Listing API keys
-
-You can pass an identifier to the `apiKey.list` function to list API keys.
-
-```ts
-const data = await authClient.apiKey.list({
-  query: {
-    identifier: "test",
-  },
-});
-```
-
-### Getting information on an API key
-
-You can pass an API key ID to the `apiKey.get` function to get information on the API key including the key itself.
-
-If an API key was created without an owner, then you cannot get it's information as it requires authorization to get the information.
-
-```ts
-const data = await authClient.apiKey.get({
-  query: {
-    keyId: "my-key-id",
-  },
-});
-```
 
 ## Server only functions
 
@@ -239,7 +213,7 @@ await auth.api.apiKey.forceUpdate({
   keyId: "my-key-id",
   name: "new-name",
   remaining: 10,
-  expires: 1679012000,
+  expires: new Date().getTime + 1000 * 60 * 60 * 24 * 7, // 1 week from now
   enabled: true,
 });
 ```
@@ -285,13 +259,14 @@ Table: `apiKey`
     {
       name: "lastVerifiedAt",
       type: "Date",
-      description: "The date and time the API key was last verified",
+      description:
+        "The date and time the API key was last verified. (Excluding failed requests)",
       isOptional: true,
     },
     {
-        name: "createdBy",
-        type: "string",
-        description: "The id of the user who created the API key",
+      name: "createdBy",
+      type: "string",
+      description: "The id of the user who created the API key",
       isForeignKey: true,
     },
     {
@@ -308,7 +283,8 @@ Table: `apiKey`
     {
       name: "reference",
       type: "string",
-      description: "A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)",
+      description:
+        "A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)",
     },
     {
       name: "expires",
@@ -328,15 +304,32 @@ Table: `apiKey`
       type: "boolean",
       description: "Whether the API key is enabled",
     },
+    {
+      name: "rateLimitEnabled",
+      type: "boolean",
+      description: "Whether the API key has rate limiting enabled",
+    },
+    {
+      name: "rateLimitTimeWindow",
+      type: "number",
+      description: "The time window in milliseconds for rate limiting",
+    },
+    {
+      name: "rateLimitCount",
+      type: "number",
+      description: "The number of requests allowed in the time window",
+    },
+    {
+      name: "requestCount",
+      type: "number",
+      description:
+        "The number of requests made using this API key for the rate-limiter",
+    },
+    {
+      name: "lastRequest",
+      type: "Date",
+      description:
+        "The last time a request was made to this key. Used for the rate-limiter",
+    },
   ]}
 />
-
-## Additional Information
-
-There can be a scenario where an API key has no owner and no expiration date but still has a remaining number of requests.
-
-In this case, if the API key was abandoned and never used again, it would be a waste or resources on your Database.
-
-To prevent this, we have added a `lastVerifiedAt` field to the API key table. This field will be updated every time an API key is verified.
-
-Using this field, you can query and delete any keys that have not been verified in a certain time period.
