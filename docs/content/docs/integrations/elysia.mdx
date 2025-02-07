@@ -28,7 +28,7 @@ console.log(
 
 ### Middleware
 
-With Elysia you can use [derive](https://elysiajs.com/essential/handler.html#derive) and [macro](https://elysiajs.com/patterns/macro.html#macro) resolve to create a custom middleware plugin for retrieving the session and user information and adding it to the context for following request.
+With Elysia you can use the [plugin](https://elysiajs.com/essential/plugin.html#plugin) and [macro](https://elysiajs.com/patterns/macro.html#macro) patterns to create a custom middleware for retrieving the session and user information.
 
 ```ts
 import { Elysia } from "elysia";
@@ -55,9 +55,16 @@ export const isUserMiddleware = new Elysia()
 	})
 	.as("plugin");
 
-// Example usage
+```
+
+The middleware will add a boolean flag to subsequent routes. When enabled, the above function will run and the session and user information will be available in your context.  
+
+Example usage
+
+```ts
 const app = new Elysia()
 	.use(betterAuthPlugin)
+  // Enable the middleware
 	.use(isUserMiddleware)
 	// isUserMiddleware is false by default and won't run unless specified.
 	.get("/", "Front page")
@@ -76,5 +83,3 @@ console.log(
 );
 
 ```
-
-This will allow you to access the `user` and `session` object in all of your routes.
