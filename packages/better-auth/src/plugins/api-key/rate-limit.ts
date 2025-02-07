@@ -20,7 +20,6 @@ export async function updateRateLimit(
 
 		// Check if the last request was within the time window
 		if (lastRequest < windowStart) {
-			console.log(lastRequest < windowStart);
 			// Reset the count if outside the window
 			await adapter.update<ApiKey>({
 				model: model,
@@ -34,7 +33,6 @@ export async function updateRateLimit(
 		}
 
 		if (requestCount < currentRecord.rateLimitCount) {
-			console.log(`incrementing`)
 			// Increment the count if within the window
 			await adapter.update<ApiKey>({
 				model: model,
@@ -46,7 +44,6 @@ export async function updateRateLimit(
 			});
 			return { success: true, message: null }; // Allowed
 		}
-		console.log(`hit!`)
 		return { success: false, message: ERROR_CODES.RATE_LIMIT_EXCEEDED }; // Rate limit exceeded
 	} else {
 		// If no record exists
