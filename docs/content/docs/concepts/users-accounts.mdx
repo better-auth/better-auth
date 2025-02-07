@@ -109,9 +109,9 @@ Better Auth provides a utility to hard delete a user from your database. It's di
 export const auth = betterAuth({
     //...other config
     user: {
-        deleteUser: {
-            enabled: true // [!Code Highlight]
-        }
+        deleteUser: { // [!code highlight]
+            enabled: true // [!code highlight]
+        } // [!code highlight]
     }
 })
 ```
@@ -339,8 +339,8 @@ Users already signed in can manually link their account to additional social pro
 
   ```ts
   await auth.api.setPassword({
-      headers: /* headers containing the user's session token */,
-      password: /* new password */
+      headers: // headers containing the user's session token,
+      password: // new password
   });
   ```
 
