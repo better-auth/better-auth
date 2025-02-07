@@ -30,8 +30,8 @@ description: Twitter provider setup and usage.
         export const auth = betterAuth({
             socialProviders: {
                 twitter: { // [!code highlight]
-                    clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]
-                    clientSecret: process.env.TWITTER_CLIENT_SECRET, // [!code highlight]
+                    clientId: process.env.TWITTER_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.TWITTER_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
             },
         })
