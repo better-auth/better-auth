@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES, type ApiKey } from ".";
 import { apiKeyClient } from "./client";
-import Database from "better-sqlite3";
 
 describe("apiKey plugin", async () => {
 	let user_id = "";

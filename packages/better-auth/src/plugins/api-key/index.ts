@@ -326,7 +326,10 @@ export const apiKey = (options: ApiKeyOptions) => {
 							name: ctx.body.name,
 							enabled: ctx.body.enabled ?? true,
 							lastVerifiedAt: null,
-							rateLimitEnabled: ctx.body.rateLimit?.enabled ?? (options.rateLimitConfig?.enabled ?? true),
+							rateLimitEnabled:
+								ctx.body.rateLimit?.enabled ??
+								options.rateLimitConfig?.enabled ??
+								true,
 							rateLimitTimeWindow:
 								ctx.body.rateLimit?.timeWindow ??
 								options.rateLimitConfig?.timeWindow ??
