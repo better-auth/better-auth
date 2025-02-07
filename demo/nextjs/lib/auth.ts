@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	oidcProvider,
+	apiKey,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -149,5 +150,6 @@ export const auth = betterAuth({
 		oidcProvider({
 			loginPage: "/sign-in",
 		}),
+		apiKey()
 	],
 });
