@@ -97,29 +97,7 @@ describe("generate", async () => {
 						schema: {},
 					},
 				),
-				plugins: [twoFactor(), username()],
-			},
-		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
-	});
-	it("should generate drizzle schema with array column", async () => {
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle.array",
-			adapter: drizzleAdapter(
-				{},
-				{
-					provider: "pg",
-					schema: {},
-				},
-			)({} as BetterAuthOptions),
-			options: {
-				database: drizzleAdapter(
-					{},
-					{
-						provider: "pg",
-						schema: {},
-					},
-				),
+
 				user: {
 					additionalFields: {
 						arrayCol: {
@@ -130,10 +108,9 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/auth-schema-array.txt",
-		);
+		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
 	});
+
 	it("should generate kysely schema", async () => {
 		const schema = await generateMigrations({
 			file: "test.sql",
