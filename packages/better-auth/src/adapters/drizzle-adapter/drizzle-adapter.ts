@@ -180,32 +180,31 @@ const createTransform = (
 			model: string,
 			builder: any,
 			data: Record<string, any>,
+			where?: Where[],
 		) => {
 			if (config.provider !== "mysql") {
 				const c = await builder.returning();
 				return c[0];
 			}
-			const result = await builder.execute();
-			const updatedResult = builder.config?.where;
+
+			const schemaModel = getSchema(model);
 			const builderVal = builder.config?.values;
-			if (updatedResult) {
-				const upId = updatedResult?.queryChunks[3]?.value;
-				const schemaModel = getSchema(model);
+			if (where) {
+				const whereField = where[0]?.field;
+				const whereValue = where[0]?.value;
 				const res = await db
 					.select()
 					.from(schemaModel)
-					.where(eq(schemaModel.id, upId));
+					.where(eq(schemaModel[whereField], whereValue));
 				return res[0];
 			} else if (builderVal) {
 				const tId = builderVal[0]?.id.value;
-				const schemaModel = getSchema(model);
 				const res = await db
 					.select()
 					.from(schemaModel)
 					.where(eq(schemaModel.id, tId));
 				return res[0];
 			} else if (data.id) {
-				const schemaModel = getSchema(model);
 				const res = await db
 					.select()
 					.from(schemaModel)
@@ -314,7 +313,12 @@ export const drizzleAdapter =
 					.update(schemaModel)
 					.set(transformed)
 					.where(...clause);
-				const returned = await withReturning(model, builder, transformed);
+				const returned = await withReturning(
+					model,
+					builder,
+					transformed,
+					where,
+				);
 				return transformOutput(returned, model);
 			},
 			async updateMany(data) {
