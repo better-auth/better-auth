@@ -270,6 +270,8 @@ function CreateKeyForm({
 			queryClient.invalidateQueries({
 				queryKey: ["keys"],
 			});
+			setIsLoading(undefined);
+			setIsDialogOpen(false);
 		} else {
 			console.log(res.error);
 			toast.error(`Failed to create API Key: ${res.error.message}`);
