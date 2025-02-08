@@ -18,7 +18,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { client } from "@/lib/auth-client";
-import { CalendarIcon, Loader2, Plus } from "lucide-react";
+import { CalendarIcon, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,7 +61,10 @@ export default function Page() {
 			<Card>
 				<CardHeader className="flex flex-row items-center justify-between">
 					<CardTitle className="text-2xl">API Keys</CardTitle>
-					<CreateKeyForm isLoading={isLoading} setIsLoading={setIsLoading} />
+					<div className="flex gap-3">
+						<CreateKeyForm isLoading={isLoading} setIsLoading={setIsLoading} />
+						<VerifyKeyForm isLoading={isLoading} setIsLoading={setIsLoading} />
+					</div>
 				</CardHeader>
 				<CardContent>
 					{isKeysLoading ? (
@@ -77,7 +80,6 @@ export default function Page() {
 									<TableHead>Expires</TableHead>
 									<TableHead>Enabled</TableHead>
 									<TableHead>Last Verified At</TableHead>
-									<TableHead>key</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -97,10 +99,9 @@ export default function Page() {
 												<TableCell>{key.enabled ? "Yes" : "No"}</TableCell>
 												<TableCell>
 													{key.lastVerifiedAt
-														? key.lastVerifiedAt.toString()
+														? format(key.lastVerifiedAt, "PPPp")
 														: "-"}
 												</TableCell>
-												<TableCell>{key.key.slice(0, 10)}...</TableCell>
 												{/* <TableCell>
 											{user.banned ? (
 												<Badge variant="destructive">Yes</Badge>
@@ -242,8 +243,8 @@ function CreateKeyForm({
 		enabled: true,
 		rateLimit: {
 			enabled: true,
-			timeWindow: 60,
-			limit: 60,
+			timeWindow: 1000 * 30,
+			limit: 10,
 		},
 	});
 
@@ -447,6 +448,84 @@ function CreateKeyForm({
 							</>
 						) : (
 							"Create API Key"
+						)}
+					</Button>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+function VerifyKeyForm({
+	isLoading,
+	setIsLoading,
+}: {
+	isLoading: string | undefined;
+	setIsLoading: React.Dispatch<React.SetStateAction<string | undefined>>;
+}) {
+	const [isDialogOpen, setIsDialogOpen] = useState(false);
+	const [apiKey, setApiKey] = useState<string>("");
+
+	const handleVerifyAPIKey = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setIsLoading("verify");
+		const res = await client.apiKey.verify({
+			key: apiKey,
+		});
+		if (res.data?.valid === true) {
+			console.log(res.data);
+			toast.success("API Key is Valid");
+			setIsLoading(undefined);
+			// setIsDialogOpen(false);
+		} else {
+			console.log(res.error);
+			toast.error(
+				`Invalid API Key${res.error?.message ? `: ${res.error.message}` : ""}`,
+			);
+			setIsLoading(undefined);
+		}
+	};
+
+	return (
+		<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+			<DialogTrigger asChild>
+				<Button>
+					<ShieldCheck className="w-4 h-4 mr-2" /> Verify Key
+				</Button>
+			</DialogTrigger>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Verify API Key</DialogTitle>
+				</DialogHeader>
+				<form onSubmit={handleVerifyAPIKey} className="space-y-4">
+					<div>
+						<div className="flex items-center h-8 gap-2">
+							<Label htmlFor="apiKey">API Key*</Label>
+						</div>
+						<p className="h-8 text-sm text-muted-foreground">
+							Your API Key which you want to verify.
+						</p>
+						<Input
+							id="apiKey"
+							value={apiKey}
+							onChange={(e) => setApiKey((x) => e.target.value)}
+							required
+						/>
+					</div>
+
+					<div className="h-2"></div>
+					<Button
+						type="submit"
+						className="w-full"
+						disabled={isLoading === "verify"}
+					>
+						{isLoading === "verify" ? (
+							<>
+								<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+								Verifying...
+							</>
+						) : (
+							"Test Verify Key"
 						)}
 					</Button>
 				</form>
