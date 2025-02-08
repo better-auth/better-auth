@@ -95,14 +95,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
               .$type<string[]>()
               .default(sql\`(json_array())\`)`,
 					pg: `text('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
-					mysql: `json('${name}')`,
+					mysql: `json('${name}')
+              .$type<string[]>()
+              .notNull()
+              .default([])`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: "json" }).notNull()
               .$type<boolean[]>()
               .default(sql\`(json_array())\`) `,
 					pg: `boolean('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
-					mysql: `json('${name}')`,
+					mysql: `json('${name}')
+              .$type<boolean[]>()
+              .notNull()
+              .default([])`,
 				},
 				number: {
 					sqlite: `integer('${name}' , { mode: "json" }).notNull()
@@ -111,14 +117,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array().notNull().default(sql\`ARRAY[]::integer[]\`),`
 						: `integer('${name}').array().notNull().default(sql\`ARRAY[]::integer[]\`)`,
-					mysql: `json('${name}')`,
+
+					mysql: `json('${name}')
+              .$type<number[]>()
+              .notNull()
+              .default([])`,
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: "json" }).notNull()
               .$type<date[]>()
               .default(sql\`(json_array())\`) `,
 					pg: `timestamp('${name}').array().notNull().default(sql\`ARRAY[]::timestamp[]\`)`,
-					mysql: `json('${name}')`,
+					mysql: `json('${name}')
+              .$type<date[]>()
+              .notNull()
+              .default([])`,
 				},
 			};
 
