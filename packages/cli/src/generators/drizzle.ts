@@ -91,24 +91,32 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		) {
 			const arrayTypeMap: Record<string, Record<string, string>> = {
 				string: {
-					sqlite: `text('${name}')`,
+					sqlite: `text('${name}' , { mode: 'json' }).notNull()
+              .$type<string[]>()
+              .default(sql\`(json_array())\`)`,
 					pg: `text('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
 					mysql: `json('${name}')`,
 				},
 				boolean: {
-					sqlite: `integer('${name}', { mode: 'boolean' })`,
+					sqlite: `integer('${name}', { mode: "json" }).notNull()
+              .$type<boolean[]>()
+              .default(sql\`(json_array())\`) `,
 					pg: `boolean('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
 					mysql: `json('${name}')`,
 				},
 				number: {
-					sqlite: `integer('${name}')`,
+					sqlite: `integer('${name}' , { mode: "json" }).notNull()
+              .$type<number[]>()
+              .default(sql\`(json_array())\`) `,
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array().notNull().default(sql\`ARRAY[]::integer[]\`),`
 						: `integer('${name}').array().notNull().default(sql\`ARRAY[]::integer[]\`)`,
 					mysql: `json('${name}')`,
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp' })`,
+					sqlite: `integer('${name}', { mode: "json" }).notNull()
+              .$type<date[]>()
+              .default(sql\`(json_array())\`) `,
 					pg: `timestamp('${name}').array().notNull().default(sql\`ARRAY[]::timestamp[]\`)`,
 					mysql: `json('${name}')`,
 				},
