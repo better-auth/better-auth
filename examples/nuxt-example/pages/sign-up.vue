@@ -22,6 +22,9 @@ const handleSignUp = async () => {
 			onError(context) {
 				alert(context.error.message);
 			},
+			onSuccess() {
+				useRouter().push("/dashboard");
+			},
 		},
 	});
 };

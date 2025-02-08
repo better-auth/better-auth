@@ -16,15 +16,24 @@ export function getSchema(config: BetterAuthOptions) {
 		let actualFields: Record<string, FieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {
 			actualFields[field.fieldName || key] = field;
+			if (field.references) {
+				const refTable = tables[field.references.model];
+				if (refTable) {
+					actualFields[field.fieldName || key].references = {
+						model: refTable.modelName,
+						field: field.references.field,
+					};
+				}
+			}
 		});
-		if (schema[table.tableName]) {
-			schema[table.tableName].fields = {
-				...schema[table.tableName].fields,
+		if (schema[table.modelName]) {
+			schema[table.modelName].fields = {
+				...schema[table.modelName].fields,
 				...actualFields,
 			};
 			continue;
 		}
-		schema[table.tableName] = {
+		schema[table.modelName] = {
 			fields: actualFields,
 			order: table.order || Infinity,
 		};

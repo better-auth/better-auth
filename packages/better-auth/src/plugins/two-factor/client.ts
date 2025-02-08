@@ -1,20 +1,13 @@
 import type { BetterAuthClientPlugin } from "../../client/types";
 import type { twoFactor as twoFa } from "../../plugins/two-factor";
 
-export const twoFactorClient = (
-	options: {
-		twoFactorPage: string;
-		/**
-		 * Redirect to the two factor page. If twoFactorPage
-		 * is not set this will redirect to the root path.
-		 * @default true
-		 */
-		redirect?: boolean;
-	} = {
-		redirect: true,
-		twoFactorPage: "/",
-	},
-) => {
+export const twoFactorClient = (options?: {
+	/**
+	 * a redirect function to call if a user needs to verify
+	 * their two factor
+	 */
+	onTwoFactorRedirect?: () => void | Promise<void>;
+}) => {
 	return {
 		id: "two-factor",
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
@@ -37,10 +30,8 @@ export const twoFactorClient = (
 				hooks: {
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
-							if (options.redirect || options.twoFactorPage) {
-								if (typeof window !== "undefined") {
-									window.location.href = options.twoFactorPage;
-								}
+							if (options?.onTwoFactorRedirect) {
+								await options.onTwoFactorRedirect();
 							}
 						}
 					},

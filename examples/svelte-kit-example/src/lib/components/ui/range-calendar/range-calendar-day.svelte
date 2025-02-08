@@ -1,7 +1,5 @@
 <script lang="ts">
 import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
-import { buttonVariants } from "$lib/components/ui/button/index.js";
-import { cn } from "$lib/utils.js";
 
 type $$Props = RangeCalendarPrimitive.DayProps;
 type $$Events = RangeCalendarPrimitive.DayEvents;

@@ -15,7 +15,7 @@ export type Where = {
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default
-	value: string | number | boolean | string[] | number[];
+	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	connector?: "AND" | "OR"; //AND by default
 };
@@ -23,9 +23,9 @@ export type Where = {
 /**
  * Adapter Interface
  */
-export interface Adapter {
+export type Adapter = {
 	id: string;
-	create: <T extends { id?: string } & Record<string, any>, R = T>(data: {
+	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
 		data: T;
 		select?: string[];
@@ -54,32 +54,74 @@ export interface Adapter {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<T | null>;
+	updateMany: (data: {
+		model: string;
+		where: Where[];
+		update: Record<string, any>;
+	}) => Promise<number>;
 	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
-	deleteMany: (data: { model: string; where: Where[] }) => Promise<void>;
+	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user
-	 * @returns
 	 */
 	createSchema?: (
 		options: BetterAuthOptions,
 		file?: string,
-	) => Promise<{
-		code: string;
-		fileName: string;
-		append?: boolean;
-		overwrite?: boolean;
-	}>;
+	) => Promise<AdapterSchemaCreation>;
 	options?: Record<string, any>;
+};
+
+export type AdapterSchemaCreation = {
+	/**
+	 * Code to be inserted into the file
+	 */
+	code: string;
+	/**
+	 * Path to the file, including the file name and extension.
+	 * Relative paths are supported, with the current working directory of the developer's project as the base.
+	 */
+	path: string;
+	/**
+	 * Append the file if it already exists.
+	 * Note: This will not apply if `overwrite` is set to true.
+	 */
+	append?: boolean;
+	/**
+	 * Overwrite the file if it already exists
+	 */
+	overwrite?: boolean;
+};
+
+export interface AdapterInstance {
+	(options: BetterAuthOptions): Adapter;
 }
 
 export interface SecondaryStorage {
+	/**
+	 *
+	 * @param key - Key to get
+	 * @returns - Value of the key
+	 */
 	get: (key: string) => Promise<string | null> | string | null;
 	set: (
+		/**
+		 * Key to store
+		 */
 		key: string,
+		/**
+		 * Value to store
+		 */
 		value: string,
+		/**
+		 * Time to live in seconds
+		 */
 		ttl?: number,
 	) => Promise<void | null | string> | void;
+	/**
+	 *
+	 * @param key - Key to delete
+	 */
 	delete: (key: string) => Promise<void | null | string> | void;
 }

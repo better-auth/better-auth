@@ -11,7 +11,7 @@ export interface SpotifyProfile {
 	}[];
 }
 
-export interface SpotifyOptions extends ProviderOptions {}
+export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {}
 
 export const spotify = (options: SpotifyOptions) => {
 	return {
@@ -34,12 +34,15 @@ export const spotify = (options: SpotifyOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<SpotifyProfile>(
 				"https://api.spotify.com/v1/me",
 				{
@@ -52,6 +55,7 @@ export const spotify = (options: SpotifyOptions) => {
 			if (error) {
 				return null;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -59,6 +63,7 @@ export const spotify = (options: SpotifyOptions) => {
 					email: profile.email,
 					image: profile.images[0]?.url,
 					emailVerified: false,
+					...userMap,
 				},
 				data: profile,
 			};

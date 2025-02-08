@@ -392,4 +392,101 @@ export const Icons = {
 			</g>
 		</svg>
 	),
+	expo: (props?: SVGProps<any>) => (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 32 32"
+			{...props}
+		>
+			<path
+				fill="currentColor"
+				d="M24.292 15.547a3.93 3.93 0 0 0 4.115-3.145a2.57 2.57 0 0 0-2.161-1.177c-2.272-.052-3.491 2.651-1.953 4.323zm-9.177-10.85l5.359-3.104L18.766.63l-7.391 4.281l.589.328l1.119.629l2.032-1.176zm6.046-3.39c.089.027.161.1.188.188l2.484 7.593a.285.285 0 0 1-.125.344a5.06 5.06 0 0 0-2.317 5.693a5.066 5.066 0 0 0 5.401 3.703a.3.3 0 0 1 .307.203l2.563 7.803a.3.3 0 0 1-.125.344l-7.859 4.771a.3.3 0 0 1-.131.036a.26.26 0 0 1-.203-.041l-2.765-1.797a.3.3 0 0 1-.109-.129l-5.396-12.896l-8.219 4.875c-.016.011-.037.021-.052.032a.3.3 0 0 1-.261-.021l-1.859-1.093a.283.283 0 0 1-.115-.381l7.953-15.749a.27.27 0 0 1 .135-.131L18.615.045a.29.29 0 0 1 .292-.005zm-8.322 5.1l-1.932-1.089l-7.693 15.229l1.396.823l6.631-9.015a.28.28 0 0 1 .271-.12a.29.29 0 0 1 .235.177l7.228 17.296l1.933 1.251l-8.063-24.552zm13.406 10.557c-2.256 0-3.787-2.292-2.923-4.376c.86-2.083 3.563-2.619 5.156-1.025c.595.593.928 1.396.928 2.235a3.16 3.16 0 0 1-3.161 3.167z"
+			></path>
+		</svg>
+	),
+	x: (props?: SVGProps<any>) => (
+		<svg
+			{...props}
+			width={30}
+			stroke="currentColor"
+			fill="currentColor"
+			strokeWidth="0"
+			viewBox="0 0 512 512"
+			xmlns="http://www.w3.org/2000/svg"
+			className="w-full"
+		>
+			<path d="M389.2 48h70.6L305.6 224.2 487 464H345L233.7 318.6 106.5 464H35.8L200.7 275.5 26.8 48H172.4L272.9 180.9 389.2 48zM364.4 421.8h39.1L151.1 88h-42L364.4 421.8z"></path>
+		</svg>
+	),
+	linkedIn: (props?: SVGProps<any>) => (
+		<svg
+			{...props}
+			width={30}
+			stroke="currentColor"
+			fill="currentColor"
+			strokeWidth="0"
+			viewBox="0 0 448 512"
+			xmlns="http://www.w3.org/2000/svg"
+			className="w-full"
+		>
+			<path d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8a53.79 53.79 0 0 1 107.58 0c0 29.7-24.1 54.3-53.79 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.2-48.29-79.2-48.29 0-55.69 37.7-55.69 76.7V448h-92.78V148.9h89.08v40.8h1.3c12.4-23.5 42.69-48.3 87.88-48.3 94 0 111.28 61.9 111.28 142.3V448z"></path>
+		</svg>
+	),
+	nitro: (props?: SVGProps<any>) => (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			fill="currentColor" // Use currentColor here
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 40 40"
+			{...props}
+		>
+			<g clipPath="url(#a)">
+				<path
+					fill="currentColor" // Use currentColor here
+					fillRule="evenodd"
+					d="M35.217 7.02C28.047-1.383 15.424-2.384 7.02 4.785c-8.404 7.169-9.404 19.792-2.236 28.196 7.17 8.403 19.793 9.404 28.196 2.235 8.404-7.169 9.404-19.793 2.236-28.196Zm-9.964 10.497c.77 0 1.262.836.876 1.502l-.112.192L18.47 31.63a.773.773 0 0 1-.661.372h-.72a.755.755 0 0 1-.732-.944l2.048-7.919a1 1 0 0 0-.968-1.25h-3.146a1 1 0 0 1-.968-1.25l3.09-11.955a.923.923 0 0 1 .895-.68c.05 0 .097 0 .135.002h3.168a1 1 0 0 1 .991 1.134l-.02.143-1.207 7.067a1 1 0 0 0 .985 1.168h3.893Z"
+					clipRule="evenodd"
+				/>
+				<mask
+					id="d"
+					x={0}
+					y={0}
+					maskUnits="userSpaceOnUse"
+					style={{
+						maskType: "alpha",
+					}}
+				>
+					<circle cx={20} cy={20.001} r={20} fill="currentColor" />
+				</mask>
+				<g filter="url(#e)" mask="url(#d)">
+					<path
+						fill="currentColor" // Use currentColor here
+						d="M1.111 13.427a20 20 0 1 0 37.957.541l-5.815 1.84a13.901 13.901 0 1 1-26.381-.376l-5.76-2.005Z"
+					/>
+				</g>
+			</g>
+			<defs>
+				<clipPath id="a">
+					<path fill="#fff" d="M0 0h146v40.001H0z" />
+				</clipPath>
+				<filter
+					id="e"
+					x={-10}
+					y={3.427}
+					colorInterpolationFilters="sRGB"
+					filterUnits="userSpaceOnUse"
+				>
+					<feFlood floodOpacity={0} result="BackgroundImageFix" />
+					<feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+					<feGaussianBlur
+						result="effect1_foregroundBlur_115_108"
+						stdDeviation={5}
+					/>
+				</filter>
+			</defs>
+		</svg>
+	),
 };

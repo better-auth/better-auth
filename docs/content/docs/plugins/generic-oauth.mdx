@@ -82,7 +82,6 @@ When adding the plugin to your auth config, you can configure multiple OAuth pro
 interface GenericOAuthConfig {
   providerId: string;
   discoveryUrl?: string;
-  type?: "oauth2" | "oidc";
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
@@ -133,6 +132,27 @@ genericOAuth({
           id: userInfo.sub,
           email: userInfo.email,
           name: userInfo.name,
+          // ... map other fields as needed
+        };
+      }
+    }
+  ]
+})
+```
+
+### Map User Info Fields
+
+If the user info returned by the provider does not match the expected format, or you need to map additional fields, you can use the `mapProfileToUser`:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      // ... other config options
+      mapProfileToUser: async (profile) => {
+        return {
+          firstName: profile.given_name,
           // ... map other fields as needed
         };
       }

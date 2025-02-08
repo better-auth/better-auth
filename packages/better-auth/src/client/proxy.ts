@@ -73,7 +73,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 
 				return await client(routePath, {
 					...options,
-
 					body:
 						method === "GET"
 							? undefined

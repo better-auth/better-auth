@@ -7,10 +7,10 @@ import {
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/types";
+} from "@simplewebauthn/browser";
 import type { Session } from "inspector";
-import type { User } from "../../db/schema";
-import type { passkey as passkeyPl, Passkey } from "../../plugins";
+import type { User } from "../../types";
+import type { passkey as passkeyPl, Passkey } from ".";
 import type { BetterAuthClientPlugin } from "../../client/types";
 import { useAuthQuery } from "../../client";
 import { atom } from "nanostores";
@@ -18,9 +18,9 @@ import { atom } from "nanostores";
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
 	{
-		_listPasskeys,
+		$listPasskeys,
 	}: {
-		_listPasskeys: ReturnType<typeof atom<any>>;
+		$listPasskeys: ReturnType<typeof atom<any>>;
 	},
 ) => {
 	const signInPasskey = async (
@@ -44,10 +44,10 @@ export const getPasskeyActions = (
 			return response;
 		}
 		try {
-			const res = await startAuthentication(
-				response.data,
-				opts?.autoFill || false,
-			);
+			const res = await startAuthentication({
+				optionsJSON: response.data,
+				useBrowserAutofill: opts?.autoFill,
+			});
 			const verified = await $fetch<{
 				session: Session;
 				user: User;
@@ -63,7 +63,14 @@ export const getPasskeyActions = (
 				return verified;
 			}
 		} catch (e) {
-			console.log(e);
+			return {
+				data: null,
+				error: {
+					message: "auth cancelled",
+					status: 400,
+					statusText: "BAD_REQUEST",
+				},
+			};
 		}
 	};
 
@@ -75,6 +82,12 @@ export const getPasskeyActions = (
 			 * identify the passkey in the UI.
 			 */
 			name?: string;
+			/**
+			 * Try to silently create a passkey with the password manager that the user just signed
+			 * in with.
+			 * @default false
+			 */
+			useAutoRegister?: boolean;
 		},
 		fetchOpts?: BetterFetchOption,
 	) => {
@@ -88,7 +101,10 @@ export const getPasskeyActions = (
 			return options;
 		}
 		try {
-			const res = await startRegistration(options.data);
+			const res = await startRegistration({
+				optionsJSON: options.data,
+				useAutoRegister: opts?.useAutoRegister,
+			});
 			const verified = await $fetch<{
 				passkey: Passkey;
 			}>("/passkey/verify-registration", {
@@ -103,7 +119,7 @@ export const getPasskeyActions = (
 			if (!verified.data) {
 				return verified;
 			}
-			_listPasskeys.set(Math.random());
+			$listPasskeys.set(Math.random());
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -169,17 +185,17 @@ export const getPasskeyActions = (
 };
 
 export const passkeyClient = () => {
-	const _listPasskeys = atom<any>();
+	const $listPasskeys = atom<any>();
 	return {
 		id: "passkey",
 		$InferServerPlugin: {} as ReturnType<typeof passkeyPl>,
 		getActions: ($fetch) =>
 			getPasskeyActions($fetch, {
-				_listPasskeys,
+				$listPasskeys,
 			}),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
-				_listPasskeys,
+				$listPasskeys,
 				"/passkey/list-user-passkeys",
 				$fetch,
 				{
@@ -188,7 +204,7 @@ export const passkeyClient = () => {
 			);
 			return {
 				listPasskeys,
-				_listPasskeys,
+				$listPasskeys,
 			};
 		},
 		pathMethods: {
@@ -200,7 +216,8 @@ export const passkeyClient = () => {
 				matcher(path) {
 					return (
 						path === "/passkey/verify-registration" ||
-						path === "/passkey/delete-passkey"
+						path === "/passkey/delete-passkey" ||
+						path === "/passkey/update-passkey"
 					);
 				},
 				signal: "_listPasskeys",

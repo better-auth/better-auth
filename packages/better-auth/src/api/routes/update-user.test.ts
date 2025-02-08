@@ -4,21 +4,27 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db } = await getTestInstance({
-		emailVerification: {
-			async sendVerificationEmail(user, url, token) {
-				emailVerificationToken = token;
-			},
-		},
-		user: {
-			changeEmail: {
-				enabled: true,
-				sendChangeEmailVerification: async (user, newEmail, url, token) => {
-					sendChangeEmail(user, newEmail, url, token);
+	const { client, testUser, sessionSetter, db, customFetchImpl } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					emailVerificationToken = token;
 				},
 			},
-		},
-	});
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailVerification: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
 	const headers = new Headers();
 	const session = await client.signIn.email({
 		email: testUser.email,
@@ -37,11 +43,35 @@ describe("updateUser", async () => {
 	it("should update the user's name", async () => {
 		const updated = await client.updateUser({
 			name: "newName",
+			image: "https://example.com/image.jpg",
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(updated.data?.user.name).toBe("newName");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(updated.data?.status).toBe(true);
+		expect(session.user.name).toBe("newName");
+	});
+
+	it("should unset image", async () => {
+		const updated = await client.updateUser({
+			image: null,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.image).toBeNull();
 	});
 
 	it("should update user email", async () => {
@@ -52,7 +82,13 @@ describe("updateUser", async () => {
 				headers: headers,
 			},
 		});
-		expect(res.data?.user.email).toBe(newEmail);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session.user.email).toBe(newEmail);
 	});
 
 	it("should send email verification before update", async () => {
@@ -175,7 +211,85 @@ describe("updateUser", async () => {
 				headers,
 			},
 		});
-		//@ts-expect-error
-		expect(updated.data?.user.newField).toBe("new");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		// @ts-ignore
+		expect(session?.user.newField).toBe("new");
+	});
+});
+
+describe("delete user", async () => {
+	it("should delete the user", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).toMatchObject({
+			success: true,
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toBeNull();
+	});
+
+	it("should delete with verification flow", async () => {
+		let token = "";
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).toMatchObject({
+			success: true,
+		});
+		expect(token.length).toBe(32);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data).toBeDefined();
+		const deleteCallbackRes = await client.deleteUser({
+			token,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteCallbackRes.data).toMatchObject({
+			success: true,
+		});
+		const nullSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(nullSession.data).toBeNull();
 	});
 });

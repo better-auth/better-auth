@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../utils/constants";
 import type { GoogleProfile } from "./google";
 import { parseSetCookieHeader } from "../cookies";
 import { getOAuth2Tokens } from "../oauth2";
+import { signJWT } from "../crypto/jwt";
 
 vi.mock("../oauth2", async (importOriginal) => {
 	const original = (await importOriginal()) as any;
@@ -30,11 +30,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 					given_name: "First",
 					family_name: "Last",
 				};
-				const testIdToken = await createJWT(
-					"HS256",
-					Buffer.from(DEFAULT_SECRET),
-					data,
-				);
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
 				const tokens = getOAuth2Tokens({
 					access_token: "test",
 					refresh_token: "test",
@@ -46,71 +42,147 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client } = await getTestInstance({
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
-				enabled: true,
+	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					firstName: {
+						type: "string",
+					},
+					lastName: {
+						type: "string",
+					},
+					isOAuth: {
+						type: "boolean",
+					},
+				},
 			},
-			apple: {
-				clientId: "test",
-				clientSecret: "test",
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser(profile) {
+						return {
+							firstName: profile.given_name,
+							lastName: profile.family_name,
+							isOAuth: true,
+						};
+					},
+				},
+				apple: {
+					clientId: "test",
+					clientSecret: "test",
+				},
 			},
 		},
-	});
+		{
+			disableTestUser: true,
+		},
+	);
 	let state = "";
 
 	const headers = new Headers();
-	it("should be able to add social providers", async () => {
-		const signInRes = await client.signIn.social(
-			{
+	describe("signin", async () => {
+		it("should be able to add social providers", async () => {
+			const signInRes = await client.signIn.social({
 				provider: "google",
 				callbackURL: "/callback",
-			},
-			{
-				onSuccess(context) {
+				newUserCallbackURL: "/welcome",
+			});
+			expect(signInRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		});
+
+		it("should be able to sign in with social providers", async () => {
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/welcome");
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-					);
+					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 				},
-			},
-		);
-
-		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			codeVerifier: expect.any(String),
-			state: {
-				hash: expect.any(String),
-				raw: expect.any(String),
-			},
-			redirect: true,
+			});
 		});
-		state = signInRes.data?.state.raw || "";
+
+		it("should use callback url if the user is already registered", async () => {
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				newUserCallbackURL: "/welcome",
+			});
+			expect(signInRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+				},
+			});
+		});
 	});
 
-	it("should be able to sign in with social providers", async () => {
-		await client.$fetch("/callback/google", {
+	it("should be able to map profile to user", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		const profile = await client.$fetch("/callback/google", {
 			query: {
 				state,
 				code: "test",
 			},
 			method: "GET",
-			headers,
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toBeDefined();
-				expect(location).toContain("/callback");
-				const cookies = parseSetCookieHeader(
-					context.response.headers.get("set-cookie") || "",
-				);
-				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			onError: (c) => {
+				//TODO: fix this
+				cookieSetter(headers)(c as any);
 			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			isOAuth: true,
+			firstName: "First",
+			lastName: "Last",
 		});
 	});
 

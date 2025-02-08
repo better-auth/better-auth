@@ -23,3 +23,42 @@ jobs:
       - run: npx changelogithub
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+            node-version: 20.x
+            registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install
+      
+      - name: Build
+        run: pnpm build
+
+      - name: Determine npm tag
+        id: determine_npm_tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" =~ -(next|canary|beta|rc) ]]; then
+            # Extract pre-release tag (e.g., beta, rc)
+            NPM_TAG=${BASH_REMATCH[1]}
+          else
+            # Check if the commit is on the main branch
+            git fetch origin main
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              NPM_TAG="latest"
+            else
+              echo "The tagged commit is not on the main branch."
+              echo "::error ::Releases with the 'latest' npm tag must be on the main branch."
+              exit 1
+            fi
+          fi
+          echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
+          echo "Using npm tag: $NPM_TAG"
+
+      - name: Publish to npm
+        run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

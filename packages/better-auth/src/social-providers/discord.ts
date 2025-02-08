@@ -74,7 +74,9 @@ export interface DiscordProfile extends Record<string, any> {
 	image_url: string;
 }
 
-export interface DiscordOptions extends ProviderOptions {}
+export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
+	prompt?: "none" | "consent";
+}
 
 export const discord = (options: DiscordOptions) => {
 	return {
@@ -90,18 +92,21 @@ export const discord = (options: DiscordOptions) => {
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
-				)}&state=${state}`,
+				)}&state=${state}&prompt=${options.prompt || "none"}`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
 				"https://discord.com/api/users/@me",
 				{
@@ -124,6 +129,7 @@ export const discord = (options: DiscordOptions) => {
 				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
 				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id,
@@ -131,6 +137,7 @@ export const discord = (options: DiscordOptions) => {
 					email: profile.email,
 					emailVerified: profile.verified,
 					image: profile.image_url,
+					...userMap,
 				},
 				data: profile,
 			};

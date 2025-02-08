@@ -52,39 +52,24 @@ export async function generateAction(opts: any) {
 
 	spinner.stop();
 	if (!schema.code) {
-		logger.success("Your schema is already up to date.");
+		logger.info("Your schema is already up to date.");
 		process.exit(0);
 	}
 	if (schema.append || schema.overwrite) {
-		if (options.y) {
-			const exist = existsSync(path.join(cwd, schema.fileName));
-			if (!exist) {
-				await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
-					recursive: true,
-				});
-			}
-			if (schema.overwrite) {
-				await fs.writeFile(path.join(cwd, schema.fileName), schema.code);
-			} else {
-				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
-			}
-			logger.success(
-				`🚀 Schema was ${
-					schema.overwrite ? "overwritten" : "appended"
-				} successfully!`,
-			);
-			process.exit(0);
+		let confirm = options.y;
+		if (!confirm) {
+			const response = await prompts({
+				type: "confirm",
+				name: "confirm",
+				message: `The file ${
+					schema.fileName
+				} already exists. Do you want to ${chalk.yellow(
+					`${schema.overwrite ? "overwrite" : "append"}`,
+				)} the schema to the file?`,
+			});
+			confirm = response.confirm;
 		}
 
-		const { confirm } = await prompts({
-			type: "confirm",
-			name: "confirm",
-			message: `The file ${
-				schema.fileName
-			} already exists. Do you want to ${chalk.yellow(
-				`${schema.overwrite ? "overwrite" : "append"}`,
-			)} the schema to the file?`,
-		});
 		if (confirm) {
 			const exist = existsSync(path.join(cwd, schema.fileName));
 			if (!exist) {
@@ -109,32 +94,19 @@ export async function generateAction(opts: any) {
 		}
 	}
 
-	if (options.y) {
-		if (!options.output) {
-			const dirExist = existsSync(
-				path.dirname(path.join(cwd, schema.fileName)),
-			);
-			if (!dirExist) {
-				await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
-					recursive: true,
-				});
-			}
-		}
-		await fs.writeFile(
-			options.output || path.join(cwd, schema.fileName),
-			schema.code,
-		);
-		logger.success(`🚀 Schema was generated successfully!`);
-		process.exit(0);
+	let confirm = options.y;
+
+	if (!confirm) {
+		const response = await prompts({
+			type: "confirm",
+			name: "confirm",
+			message: `Do you want to generate the schema to ${chalk.yellow(
+				schema.fileName,
+			)}?`,
+		});
+		confirm = response.confirm;
 	}
 
-	const { confirm } = await prompts({
-		type: "confirm",
-		name: "confirm",
-		message: `Do you want to generate the schema to ${chalk.yellow(
-			schema.fileName,
-		)}?`,
-	});
 	if (!confirm) {
 		logger.error("Schema generation aborted.");
 		process.exit(1);
@@ -167,5 +139,5 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
-	.option("-y, --yes", "automatically answer yes to all prompts")
+	.option("-y, --y", "automatically answer yes to all prompts", false)
 	.action(generateAction);

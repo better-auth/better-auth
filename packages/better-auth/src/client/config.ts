@@ -1,11 +1,12 @@
 import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
-import { type Atom, type WritableAtom } from "nanostores";
+import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
-import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
+import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
+import { parseJSON } from "./parser";
 
-export const getClientConfig = <O extends ClientOptions>(options?: O) => {
+export const getClientConfig = (options?: ClientOptions) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL = getBaseURL(options?.baseURL);
@@ -17,17 +18,28 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
+		jsonParser(text) {
+			return parseJSON(text, {
+				strict: false,
+			});
+		},
+		customFetchImpl: async (input, init) => {
+			try {
+				return await fetch(input, init);
+			} catch (error) {
+				return Response.error();
+			}
+		},
 		...options?.fetchOptions,
 		plugins: options?.disableDefaultFetchPlugins
 			? [...(options?.fetchOptions?.plugins || []), ...pluginsFetchPlugins]
 			: [
 					redirectPlugin,
-					addCurrentURL,
 					...(options?.fetchOptions?.plugins || []),
 					...pluginsFetchPlugins,
 				],
 	});
-	const { $sessionSignal, session } = getSessionAtom<O>($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
@@ -37,6 +49,8 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 	let pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
+		"/revoke-other-sessions": "POST",
+		"/delete-user": "POST",
 	};
 	const atomListeners: AtomListener[] = [
 		{
@@ -46,7 +60,8 @@ export const getClientConfig = <O extends ClientOptions>(options?: O) => {
 					path === "/sign-out" ||
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up")
+					path.startsWith("/sign-up") ||
+					path === "/delete-user"
 				);
 			},
 		},

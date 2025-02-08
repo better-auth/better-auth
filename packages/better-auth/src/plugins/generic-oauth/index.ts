@@ -1,21 +1,18 @@
-import { z } from "zod";
-import { APIError } from "better-call";
-import type { BetterAuthPlugin, User } from "../../types";
-import { createAuthEndpoint } from "../../api";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateState, parseState } from "../../oauth2/state";
-import { generateCodeVerifier } from "oslo/oauth2";
-import { logger } from "../../utils/logger";
-import { parseJWT } from "oslo/jwt";
-import { userSchema } from "../../db/schema";
-import { generateId } from "../../utils/id";
+import { APIError } from "better-call";
+import { z } from "zod";
+import { createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import {
 	createAuthorizationURL,
 	validateAuthorizationCode,
 	type OAuth2Tokens,
+	type OAuthProvider,
 } from "../../oauth2";
-import { compareHash } from "../../crypto/hash";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { generateState, parseState } from "../../oauth2/state";
+import type { BetterAuthPlugin, User } from "../../types";
+import { decodeJwt } from "jose";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -28,11 +25,6 @@ interface GenericOAuthConfig {
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string;
-	/**
-	 * Type of OAuth flow.
-	 * @default "oauth2"
-	 */
-	type?: "oauth2" | "oidc";
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -71,7 +63,7 @@ interface GenericOAuthConfig {
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: string;
+	prompt?: "none" | "login" | "consent" | "select_account";
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false
@@ -89,6 +81,31 @@ interface GenericOAuthConfig {
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+	/**
+	 * Custom function to map the user profile to a User object.
+	 */
+	mapProfileToUser?: (profile: Record<string, any>) =>
+		| {
+				id?: string;
+				name?: string;
+				email?: string;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }
+		| Promise<{
+				id?: string;
+				name?: string;
+				email?: string;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }>;
+	/**
+	 * Additional search-params to add to the authorizationUrl.
+	 * Warning: Search-params added here overwrite any default params.
+	 */
+	authorizationUrlParams?: Record<string, string>;
 }
 
 interface GenericOAuthOptions {
@@ -100,13 +117,25 @@ interface GenericOAuthOptions {
 
 async function getUserInfo(
 	tokens: OAuth2Tokens,
-	type: "oauth2" | "oidc",
 	finalUserInfoUrl: string | undefined,
 ) {
-	if (type === "oidc" && tokens.idToken) {
-		const decoded = parseJWT(tokens.idToken);
-		if (decoded?.payload) {
-			return decoded.payload;
+	if (tokens.idToken) {
+		const decoded = decodeJwt(tokens.idToken) as {
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
+		};
+		if (decoded) {
+			if (decoded.sub && decoded.email) {
+				return {
+					id: decoded.sub,
+					emailVerified: decoded.email_verified,
+					image: decoded.picture,
+					...decoded,
+				};
+			}
 		}
 	}
 
@@ -114,39 +143,175 @@ async function getUserInfo(
 		return null;
 	}
 
-	const userInfo = await betterFetch<User>(finalUserInfoUrl, {
+	const userInfo = await betterFetch<{
+		email: string;
+		sub?: string;
+		name: string;
+		email_verified: boolean;
+		picture: string;
+	}>(finalUserInfoUrl, {
 		method: "GET",
 		headers: {
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
-	return userInfo.data;
+	return {
+		id: userInfo.data?.sub,
+		emailVerified: userInfo.data?.email_verified,
+		email: userInfo.data?.email,
+		image: userInfo.data?.picture,
+		name: userInfo.data?.name,
+		...userInfo.data,
+	};
 }
 
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const ERROR_CODES = {
+		INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
+	} as const;
 	return {
 		id: "generic-oauth",
+		init: (ctx) => {
+			const genericProviders = options.config.map((c) => {
+				let finalUserInfoUrl = c.userInfoUrl;
+				return {
+					id: c.providerId,
+					name: c.providerId,
+					createAuthorizationURL(data) {
+						return createAuthorizationURL({
+							id: c.providerId,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							authorizationEndpoint: c.authorizationUrl!,
+							state: data.state,
+							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							scopes: c.scopes || [],
+							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+						});
+					},
+					async validateAuthorizationCode(data) {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+								finalUserInfoUrl = discovery.data.userinfo_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return validateAuthorizationCode({
+							code: data.code,
+							codeVerifier: data.codeVerifier,
+							redirectURI: data.redirectURI,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+								redirectURI: c.redirectURI,
+							},
+							tokenEndpoint: finalTokenUrl,
+						});
+					},
+					async getUserInfo(tokens) {
+						if (!finalUserInfoUrl) {
+							return null;
+						}
+						const userInfo = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl);
+						if (!userInfo) {
+							return null;
+						}
+						return {
+							user: {
+								id: userInfo?.id,
+								email: userInfo?.email,
+								emailVerified: userInfo?.emailVerified,
+								image: userInfo?.image,
+								name: userInfo?.name,
+								...c.mapProfileToUser?.(userInfo),
+							},
+							data: userInfo,
+						};
+					},
+				} as OAuthProvider;
+			});
+			return {
+				context: {
+					socialProviders: genericProviders.concat(ctx.socialProviders),
+				},
+			};
+		},
 		endpoints: {
 			signInWithOAuth2: createAuthEndpoint(
 				"/sign-in/oauth2",
 				{
 					method: "POST",
-					query: z
-						.object({
-							/**
-							 * Redirect to the current URL after the
-							 * user has signed in.
-							 */
-							currentURL: z.string().optional(),
-						})
-						.optional(),
 					body: z.object({
-						providerId: z.string(),
-						callbackURL: z.string().optional(),
+						providerId: z.string({
+							description: "The provider ID for the OAuth provider",
+						}),
+						callbackURL: z
+							.string({
+								description: "The URL to redirect to after sign in",
+							})
+							.optional(),
+						errorCallbackURL: z
+							.string({
+								description: "The URL to redirect to if an error occurs",
+							})
+							.optional(),
+						newUserCallbackURL: z
+							.string({
+								description:
+									"The URL to redirect to after login if the user is new",
+							})
+							.optional(),
+						disableRedirect: z
+							.boolean({
+								description: "Disable redirect",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "Sign in with OAuth2",
+							responses: {
+								200: {
+									description: "Sign in with OAuth2",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+													},
+													redirect: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const { providerId } = ctx.body;
@@ -170,6 +335,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						pkce,
 						prompt,
 						accessType,
+						authorizationUrlParams,
 					} = config;
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
@@ -179,7 +345,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							token_endpoint: string;
 						}>(discoveryUrl, {
 							onError(context) {
-								logger.error(context.error, {
+								ctx.context.logger.error(context.error.message, context.error, {
 									discoveryUrl,
 								});
 							},
@@ -191,33 +357,20 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					if (!finalAuthUrl || !finalTokenUrl) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OAuth configuration.",
+							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
+					if (authorizationUrlParams) {
+						const withAdditionalParams = new URL(finalAuthUrl);
+						for (const [paramName, paramValue] of Object.entries(
+							authorizationUrlParams,
+						)) {
+							withAdditionalParams.searchParams.set(paramName, paramValue);
+						}
+						finalAuthUrl = withAdditionalParams.toString();
+					}
 
-					const currentURL = ctx.query?.currentURL
-						? new URL(ctx.query?.currentURL)
-						: null;
-					const callbackURL = ctx.body.callbackURL?.startsWith("http")
-						? ctx.body.callbackURL
-						: `${currentURL?.origin}${ctx.body.callbackURL || ""}`;
-					const state = await generateState(
-						callbackURL || currentURL?.origin || ctx.context.options.baseURL,
-					);
-					const cookie = ctx.context.authCookies;
-					await ctx.setSignedCookie(
-						cookie.state.name,
-						state.hash,
-						ctx.context.secret,
-						cookie.state.options,
-					);
-					const codeVerifier = generateCodeVerifier();
-					await ctx.setSignedCookie(
-						cookie.pkCodeVerifier.name,
-						codeVerifier,
-						ctx.context.secret,
-						cookie.pkCodeVerifier.options,
-					);
+					const { state, codeVerifier } = await generateState(ctx);
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -226,10 +379,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							redirectURI,
 						},
 						authorizationEndpoint: finalAuthUrl,
-						state: state.raw,
-						codeVerifier: codeVerifier,
+						state,
+						codeVerifier: pkce ? codeVerifier : undefined,
 						scopes: scopes || [],
-						disablePkce: !pkce,
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -247,9 +399,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					return ctx.json({
 						url: authUrl.toString(),
-						state: state,
-						codeVerifier,
-						redirect: true,
+						redirect: !ctx.body.disableRedirect,
 					});
 				},
 			),
@@ -258,19 +408,51 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				{
 					method: "GET",
 					query: z.object({
-						code: z.string().optional(),
-						error: z.string().optional(),
-						state: z.string(),
+						code: z
+							.string({
+								description: "The OAuth2 code",
+							})
+							.optional(),
+						error: z
+							.string({
+								description: "The error message, if any",
+							})
+							.optional(),
+						state: z
+							.string({
+								description: "The state parameter from the OAuth2 request",
+							})
+							.optional(),
 					}),
+					metadata: {
+						openapi: {
+							description: "OAuth2 callback",
+							responses: {
+								200: {
+									description: "OAuth2 callback",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
-						const parsedState = parseState(ctx.query.state);
-						const callbackURL =
-							parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
-						ctx.context.logger.error(ctx.query.error, ctx.params.providerId);
 						throw ctx.redirect(
-							`${callbackURL}?error=${ctx.query.error || "oAuth_code_missing"}`,
+							`${ctx.context.options.baseURL}?error=${
+								ctx.query.error || "oAuth_code_missing"
+							}`,
 						);
 					}
 					const provider = options.config.find(
@@ -282,39 +464,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: `No config found for provider ${ctx.params.providerId}`,
 						});
 					}
-
-					const codeVerifier = await ctx.getSignedCookie(
-						ctx.context.authCookies.pkCodeVerifier.name,
-						ctx.context.secret,
-					);
-
 					let tokens: OAuth2Tokens | undefined = undefined;
-					const parsedState = parseState(ctx.query.state);
-					if (!parsedState.success) {
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=invalid_state`,
-						);
-					}
-					const state = ctx.query.state;
-					const {
-						data: { callbackURL, currentURL },
-					} = parsedState;
+					const parsedState = await parseState(ctx);
+
+					const { callbackURL, codeVerifier, errorURL, newUserURL } =
+						parsedState;
 					const code = ctx.query.code;
-					const errorURL =
-						parsedState.data?.currentURL || `${ctx.context.baseURL}/error`;
-					const storedState = await ctx.getSignedCookie(
-						ctx.context.authCookies.state.name,
-						ctx.context.secret,
-					);
-					if (!storedState) {
-						logger.error("No stored state found");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
-					const isValidState = await compareHash(state, storedState);
-					if (!isValidState) {
-						logger.error("OAuth code mismatch");
-						throw ctx.redirect(`${errorURL}?error=please_restart_the_process`);
-					}
+
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
 					if (provider.discoveryUrl) {
@@ -337,16 +493,22 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						tokens = await validateAuthorizationCode({
 							code,
-							codeVerifier,
+							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
 							options: {
 								clientId: provider.clientId,
 								clientSecret: provider.clientSecret,
+								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 						});
 					} catch (e) {
-						ctx.context.logger.error(e);
+						ctx.context.logger.error(
+							e && typeof e === "object" && "name" in e
+								? (e.name as string)
+								: "",
+							e,
+						);
 						throw ctx.redirect(
 							`${errorURL}?error=oauth_code_verification_failed`,
 						);
@@ -357,126 +519,66 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Invalid OAuth configuration.",
 						});
 					}
-					const userInfo = provider.getUserInfo
-						? await provider.getUserInfo(tokens)
-						: await getUserInfo(
-								tokens,
-								provider.type || "oauth2",
-								finalUserInfoUrl,
-							);
-					const id = generateId();
-					const user = userInfo
-						? userSchema.safeParse({
-								...userInfo,
-								id,
-							})
+					const userInfo = (
+						provider.getUserInfo
+							? await provider.getUserInfo(tokens)
+							: await getUserInfo(tokens, finalUserInfoUrl)
+					) as User | null;
+
+					if (!userInfo?.email) {
+						ctx.context.logger.error("Unable to get user info", userInfo);
+						throw ctx.redirect(
+							`${ctx.context.baseURL}/error?error=email_is_missing`,
+						);
+					}
+
+					const mapUser = provider.mapProfileToUser
+						? await provider.mapProfileToUser(userInfo)
 						: null;
-					if (!user?.success) {
-						throw ctx.redirect(`${errorURL}?error=oauth_user_info_invalid`);
-					}
-					const dbUser = await ctx.context.internalAdapter
-						.findUserByEmail(user.data.email, {
-							includeAccounts: true,
-						})
-						.catch((e) => {
-							logger.error(
-								"Better auth was unable to query your database.\nError: ",
-								e,
-							);
-							throw ctx.redirect(`${errorURL}?error=internal_server_error`);
-						});
 
-					const userId = dbUser?.user.id || id;
+					const result = await handleOAuthUserInfo(ctx, {
+						userInfo: {
+							...userInfo,
+							...mapUser,
+						},
+						account: {
+							providerId: provider.providerId,
+							accountId: userInfo.id,
+							...tokens,
+							scope: tokens.scopes?.join(","),
+						},
+					});
 
-					if (dbUser) {
-						//check if user has already linked this provider
-						const hasBeenLinked = dbUser.accounts.find(
-							(a) => a.providerId === provider.providerId,
+					function redirectOnError(error: string) {
+						throw ctx.redirect(
+							`${
+								errorURL || callbackURL || `${ctx.context.baseURL}/error`
+							}?error=${error}`,
 						);
-
-						const trustedProviders =
-							ctx.context.options.account?.accountLinking?.trustedProviders;
-						const isTrustedProvider = trustedProviders
-							? trustedProviders.includes(provider.providerId as "apple")
-							: true;
-
-						if (
-							!hasBeenLinked &&
-							(!user?.data.emailVerified || !isTrustedProvider)
-						) {
-							let url: URL;
-							try {
-								url = new URL(errorURL);
-								url.searchParams.set("error", "account_not_linked");
-							} catch (e) {
-								throw ctx.redirect(`${errorURL}?error=account_not_linked`);
-							}
-							throw ctx.redirect(url.toString());
-						}
-						if (!hasBeenLinked) {
-							try {
-								await ctx.context.internalAdapter.linkAccount({
-									providerId: provider.providerId,
-									accountId: user.data.id,
-									id: `${provider.providerId}:${user.data.id}`,
-									userId: dbUser.user.id,
-									accessToken: tokens.accessToken,
-									idToken: tokens.idToken,
-									refreshToken: tokens.refreshToken,
-									expiresAt: tokens.accessTokenExpiresAt,
-								});
-							} catch (e) {
-								console.log(e);
-								throw ctx.redirect(`${errorURL}?error=failed_linking_account`);
-							}
-						} else {
-							await ctx.context.internalAdapter.updateAccount(
-								hasBeenLinked.id,
-								{
-									accessToken: tokens.accessToken,
-									idToken: tokens.idToken,
-									refreshToken: tokens.refreshToken,
-									expiresAt: tokens.accessTokenExpiresAt,
-								},
-							);
-						}
-					} else {
-						try {
-							await ctx.context.internalAdapter.createOAuthUser(user.data, {
-								id: `${provider.providerId}:${user.data.id}`,
-								providerId: provider.providerId,
-								accountId: user.data.id,
-								accessToken: tokens.accessToken,
-								idToken: tokens.idToken,
-								refreshToken: tokens.refreshToken,
-								expiresAt: tokens.accessTokenExpiresAt,
-							});
-						} catch (e) {
-							const url = new URL(errorURL);
-							url.searchParams.set("error", "unable_to_create_user");
-							ctx.setHeader("Location", url.toString());
-							throw ctx.redirect(url.toString());
-						}
 					}
-
+					if (result.error) {
+						return redirectOnError(result.error.split(" ").join("_"));
+					}
+					const { session, user } = result.data!;
+					await setSessionCookie(ctx, {
+						session,
+						user,
+					});
+					let toRedirectTo: string;
 					try {
-						const session = await ctx.context.internalAdapter.createSession(
-							userId || id,
-							ctx.request,
-						);
-						if (!session) {
-							throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
-						}
-						await setSessionCookie(ctx, {
-							session,
-							user: user.data,
-						});
+						const url = result.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
+						toRedirectTo = url.toString();
 					} catch {
-						throw ctx.redirect(`${errorURL}?error=unable_to_create_session`);
+						toRedirectTo = result.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
 					}
-					throw ctx.redirect(callbackURL || currentURL || "");
+					throw ctx.redirect(toRedirectTo);
 				},
 			),
 		},
+		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

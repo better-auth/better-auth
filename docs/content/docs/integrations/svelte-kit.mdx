@@ -1,13 +1,13 @@
 ---
-title: Svelte Kit Integration
-description: Learn how to integrate Better Auth with Svelte Kit
+title: SvelteKit Integration
+description: Integrate Better Auth with SvelteKit.
 ---
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Mount the handler
 
-We need to mount the handler to svelte kit server hook.
+We need to mount the handler to SvelteKit server hook.
 
 ```ts title="hooks.server.ts"
 import { auth } from "$lib/auth";
@@ -22,11 +22,11 @@ export async function handle({ event, resolve }) {
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/svelte" // make sure to import from better-auth/svelte
 
 export const authClient = createAuthClient({
-    //you can pass client configuration here
+    // you can pass client configuration here
 })
 ```
 
@@ -50,7 +50,7 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
               await authClient.signOut();
             }}
           >
-            Signout
+            Sign Out
           </button>
         </div>
       {:else}
@@ -73,7 +73,7 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
 import { auth } from "$lib/auth";
 import type { PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async ({request}) => {
+export const load: PageServerLoad = async ({ request }) => {
 	const session = await auth.api.getSession({
 		headers: request.headers,
 	});

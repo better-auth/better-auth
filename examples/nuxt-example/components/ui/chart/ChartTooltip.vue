@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
 defineProps<{
 	title?: string;
 	data: {
@@ -33,7 +31,7 @@ defineProps<{
           </span>
           <span>{{ item.name }}</span>
         </div>
-        <span class="font-semibold ml-4">{{ item.value }}</span>
+        <span class="ml-4 font-semibold">{{ item.value }}</span>
       </div>
     </CardContent>
   </Card>

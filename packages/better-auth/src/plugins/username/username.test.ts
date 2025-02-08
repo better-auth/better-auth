@@ -16,13 +16,25 @@ describe("username", async (it) => {
 	);
 
 	it("should signup with username", async () => {
-		const res = await client.signUp.email({
-			email: "new-email@gamil.com",
-			username: "new-username",
-			password: "new-password",
-			name: "new-name",
+		const headers = new Headers();
+		const res = await client.signUp.email(
+			{
+				email: "new-email@gamil.com",
+				username: "new-username",
+				password: "new-password",
+				name: "new-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
 		});
-		expect(res.data?.user.username).toBe("new-username");
+		expect(session?.user.username).toBe("new-username");
 	});
 	const headers = new Headers();
 	it("should sign-in with username", async () => {
@@ -35,7 +47,7 @@ describe("username", async (it) => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.session).toBeDefined();
+		expect(res.data?.token).toBeDefined();
 	});
 	it("should update username", async () => {
 		const res = await client.updateUser({
@@ -45,6 +57,22 @@ describe("username", async (it) => {
 			},
 		});
 
-		expect(res.data?.user.username).toBe("new-username-2");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("new-username-2");
+	});
+
+	it("should fail on duplicate username", async () => {
+		const res = await client.signUp.email({
+			email: "new-email-2@gamil.com",
+			username: "New-username-2",
+			password: "new-password",
+			name: "new-name",
+		});
+		expect(res.error?.status).toBe(422);
 	});
 });

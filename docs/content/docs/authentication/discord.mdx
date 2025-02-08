@@ -1,6 +1,6 @@
 ---
 title: Discord
-description: Discord Provider
+description: Discord provider setup and usage.
 ---
 
 <Steps>
@@ -19,26 +19,26 @@ description: Discord Provider
         import { betterAuth } from "better-auth"
         
         export const auth = betterAuth({ 
-            socialProviders: { // [!code highlight]
+            socialProviders: {
                 discord: { // [!code highlight]
                     clientId: process.env.DISCORD_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.DISCORD_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
-            }, // [!code highlight]
+            },
         })
         ```
     </Step>
        <Step>
-        ### Signin with Discord 
-        To signin with Discord, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        ### Sign In with Discord 
+        To sign in with Discord, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `discord`.
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        const client = createAuthClient()
+        const authClient =  createAuthClient()
         
-        const signin = async () => {
-            const data = await client.signIn.social({
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
                 provider: "discord"
             })
         }

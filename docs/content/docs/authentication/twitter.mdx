@@ -1,14 +1,23 @@
 ---
 title: Twitter (X)
-description: Twitter Provider
+description: Twitter provider setup and usage.
 ---
 
 <Steps>
     <Step> 
-        ### Get your X(Twitter) Credentials
+        ### Get your Twitter Credentials
         Get your Twitter credentials from the [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard).
 
         Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/twitter` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+        
+        {        /*
+                <Callout type="warn">
+                    If twitter doesn't return the email address, the authentication won't be successful. Make sure to ask for the email address when you create the Twitter app.
+                </Callout>
+                */}
+        <Callout type="info">
+            Twitter API v2 does not provide email addresses. As a workaround, the user's `email` field uses the `username` value instead.
+        </Callout>
     </Step>
 
   <Step>
@@ -19,26 +28,26 @@ description: Twitter Provider
         import { betterAuth } from "better-auth" 
         
         export const auth = betterAuth({
-            socialProviders: {// [!code highlight]
+            socialProviders: {
                 twitter: { // [!code highlight]
                     clientId: process.env.TWITTER_CLIENT_ID, // [!code highlight]
                     clientSecret: process.env.TWITTER_CLIENT_SECRET, // [!code highlight]
                 }, // [!code highlight]
-            }, // [!code highlight]
+            },
         })
         ```
     </Step>
        <Step>
-        ### Signin with Twitter 
-        To signin with Twitter, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        ### Sign In with Twitter 
+        To sign in with Twitter, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `twitter`.
 
-        ```ts title="client.ts"  
+        ```ts title="auth-client.ts"  
         import { createAuthClient } from "better-auth/client"
-        const client = createAuthClient()
+        const authClient =  createAuthClient()
         
-        const signin = async () => {
-            const data = await client.signIn.social({
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
                 provider: "twitter"
             })
         }

@@ -2,13 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogClose,
@@ -36,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import {
 	organization,
-	useActiveOrganization,
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth-client";
@@ -49,17 +42,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import CopyButton from "@/components/ui/copy-button";
 import Image from "next/image";
 
-export function OrganizationCard(props: { session: Session | null }) {
+export function OrganizationCard(props: {
+	session: Session | null;
+	activeOrganization: ActiveOrganization | null;
+}) {
 	const organizations = useListOrganizations();
-	const activeOrg = useActiveOrganization();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
-		null,
+		props.activeOrganization,
 	);
 	const [isRevoking, setIsRevoking] = useState<string[]>([]);
-	useEffect(() => {
-		setOptimisticOrg(activeOrg.data);
-	}, [activeOrg.data]);
-
 	const inviteVariants = {
 		hidden: { opacity: 0, height: 0 },
 		visible: { opacity: 1, height: "auto" },
@@ -92,8 +83,10 @@ export function OrganizationCard(props: { session: Session | null }) {
 						<DropdownMenuContent align="start">
 							<DropdownMenuItem
 								className=" py-1"
-								onClick={() => {
-									organization.setActive(null);
+								onClick={async () => {
+									organization.setActive({
+										organizationId: null,
+									});
 									setOptimisticOrg(null);
 								}}
 							>
@@ -103,16 +96,19 @@ export function OrganizationCard(props: { session: Session | null }) {
 								<DropdownMenuItem
 									className=" py-1"
 									key={org.id}
-									onClick={() => {
+									onClick={async () => {
 										if (org.id === optimisticOrg?.id) {
 											return;
 										}
-										organization.setActive(org.id);
 										setOptimisticOrg({
 											members: [],
 											invitations: [],
 											...org,
 										});
+										const { data } = await organization.setActive({
+											organizationId: org.id,
+										});
+										setOptimisticOrg(data);
 									}}
 								>
 									<p className="text-sm sm">{org.name}</p>
@@ -157,7 +153,7 @@ export function OrganizationCard(props: { session: Session | null }) {
 									<div className="flex items-center gap-2">
 										<Avatar className="sm:flex w-9 h-9">
 											<AvatarImage
-												src={member.user.image}
+												src={member.user.image || ""}
 												className="object-cover"
 											/>
 											<AvatarFallback>
@@ -192,7 +188,7 @@ export function OrganizationCard(props: { session: Session | null }) {
 								<div>
 									<div className="flex items-center gap-2">
 										<Avatar>
-											<AvatarImage src={session?.user.image} />
+											<AvatarImage src={session?.user.image || ""} />
 											<AvatarFallback>
 												{session?.user.name?.charAt(0)}
 											</AvatarFallback>

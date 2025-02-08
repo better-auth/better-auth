@@ -15,7 +15,7 @@ description: LinkedIn Provider
      In the LinkedIn portal under products you need the **Sign In with LinkedIn using OpenID Connect** product.
     </Callout>
 
-    There a some different Guides here:
+    There are some different Guides here:
         [Authorization Code Flow (3-legged OAuth) (Outdated)](https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow)
         [Sign In with LinkedIn using OpenID Connect](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2?context=linkedin%2Fconsumer%2Fcontext)
 
@@ -27,26 +27,26 @@ description: LinkedIn Provider
         import { betterAuth } from "better-auth"
 
         export const auth = betterAuth({
-            socialProviders: { // [!code highlight]
+            socialProviders: {
                 linkedin: { // [!code highlight]
                     clientId: process.env.LINKEDIN_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.LINKEDIN_CLIENT_SECRET as string, // [!code highlight]
                 }, // [!code highlight]
-            }, // [!code highlight]
+            },
         })
         ```
     </Step>
        <Step>
-        ### Signin with LinkedIn
-        To signin with LinkedIn, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        ### Sign In with LinkedIn
+        To sign in with LinkedIn, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `linkedin`.
 
-        ```ts title="client.ts"
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        const client = createAuthClient()
+        const authClient =  createAuthClient()
 
-        const signin = async () => {
-            const data = await client.signIn.social({
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
                 provider: "linkedin"
             })
         }

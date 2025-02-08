@@ -1,12 +1,23 @@
 import type { ZodSchema } from "zod";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, LiteralString } from "../types";
 
 export type FieldType =
 	| "string"
 	| "number"
 	| "boolean"
 	| "date"
-	| `${"string" | "number"}[]`;
+	| `${"string" | "number"}[]`
+	| Array<LiteralString>;
+
+type Primitive =
+	| string
+	| number
+	| boolean
+	| Date
+	| null
+	| undefined
+	| string[]
+	| number[];
 
 export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	/**
@@ -25,21 +36,19 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 */
 	input?: boolean;
 	/**
-	 * If the value should be hashed when it's stored.
-	 * @default false
-	 */
-	hashValue?: boolean;
-	/**
 	 * Default value for the field
 	 *
 	 * Note: This will not create a default value on the database level. It will only
 	 * be used when creating a new record.
 	 */
-	defaultValue?: any;
+	defaultValue?: Primitive | (() => Primitive);
 	/**
 	 * transform the value before storing it.
 	 */
-	transform?: (value: InferValueType<T>) => InferValueType<T>;
+	transform?: {
+		input?: (value: Primitive) => Primitive | Promise<Primitive>;
+		output?: (value: Primitive) => Primitive | Promise<Primitive>;
+	};
 	/**
 	 * Reference to another model.
 	 */
@@ -65,18 +74,27 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	};
 	unique?: boolean;
 	/**
+	 * If the field should be a bigint on the database instead of integer.
+	 */
+	bigint?: boolean;
+	/**
 	 * A zod schema to validate the value.
 	 */
-	validator?: ZodSchema;
+	validator?: {
+		input?: ZodSchema;
+		output?: ZodSchema;
+	};
 	/**
 	 * The name of the field on the database.
-	 *
-	 * @default
-	 * ```txt
-	 * the key in the fields object.
-	 * ```
 	 */
 	fieldName?: string;
+	/**
+	 * If the field should be sortable.
+	 *
+	 * applicable only for `text` type.
+	 * It's useful to mark fields varchar instead of text.
+	 */
+	sortable?: boolean;
 };
 
 export type FieldAttribute<T extends FieldType = FieldType> = {
@@ -102,11 +120,15 @@ export type InferValueType<T extends FieldType> = T extends "string"
 		? number
 		: T extends "boolean"
 			? boolean
-			: T extends `${infer T}[]`
-				? T extends "string"
-					? string[]
-					: number[]
-				: never;
+			: T extends "date"
+				? Date
+				: T extends `${infer T}[]`
+					? T extends "string"
+						? string[]
+						: number[]
+					: T extends Array<any>
+						? T[number]
+						: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
@@ -121,7 +143,7 @@ export type InferFieldsOutput<Field> = Field extends Record<
 		} & {
 			[key in Key as Field[key]["returned"] extends false
 				? never
-				: key]?: InferFieldOutput<Field[key]>;
+				: key]?: InferFieldOutput<Field[key]> | null;
 		}
 	: {};
 
@@ -138,9 +160,10 @@ export type InferFieldsInput<Field> = Field extends Record<
 						? never
 						: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key as Field[key]["input"] extends false ? never : key]:
+			[key in Key as Field[key]["input"] extends false ? never : key]?:
 				| InferFieldInput<Field[key]>
-				| undefined;
+				| undefined
+				| null;
 		}
 	: {};
 
@@ -156,16 +179,22 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 				? never
 				: Field[key]["defaultValue"] extends string | number | boolean | Date
 					? never
-					: key]: InferFieldInput<Field[key]>;
+					: Field[key]["input"] extends false
+						? never
+						: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key]?: InferFieldInput<Field[key]> | undefined;
+			[key in Key as Field[key]["input"] extends false
+				? never
+				: Field[key]["required"] extends false
+					? key
+					: never]?: InferFieldInput<Field[key]> | undefined | null;
 		}
 	: {};
 
 type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined
+		? InferValueType<T["type"]> | undefined | null
 		: InferValueType<T["type"]>;
 
 type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;

@@ -9,8 +9,9 @@ export async function createAuthorizationURL({
 	codeVerifier,
 	scopes,
 	claims,
-	disablePkce,
 	redirectURI,
+	duration,
+	prompt,
 }: {
 	id: string;
 	options: ProviderOptions;
@@ -19,8 +20,9 @@ export async function createAuthorizationURL({
 	state: string;
 	codeVerifier?: string;
 	scopes: string[];
-	disablePkce?: boolean;
 	claims?: string[];
+	duration?: string;
+	prompt?: boolean;
 }) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", "code");
@@ -29,7 +31,7 @@ export async function createAuthorizationURL({
 	url.searchParams.set("scope", scopes.join(" "));
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 
-	if (!disablePkce && codeVerifier) {
+	if (codeVerifier) {
 		const codeChallenge = await generateCodeChallenge(codeVerifier);
 		url.searchParams.set("code_challenge_method", "S256");
 		url.searchParams.set("code_challenge", codeChallenge);
@@ -49,5 +51,12 @@ export async function createAuthorizationURL({
 			}),
 		);
 	}
+	if (duration) {
+		url.searchParams.set("duration", duration);
+	}
+	if (prompt) {
+		url.searchParams.set("prompt", "select_account");
+	}
+
 	return url;
 }

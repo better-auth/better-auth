@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Calendar as CalendarPrimitive } from "bits-ui";
-import { cn } from "$lib/utils.js";
 
 type $$Props = CalendarPrimitive.GridProps;
 

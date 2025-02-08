@@ -3,15 +3,23 @@ import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
-	const { client, signInWithTestUser, auth } = await getTestInstance({
+	const { client, auth, testUser } = await getTestInstance({
 		plugins: [bearer()],
 	});
 
 	let token: string;
-	let encryptedToken: string | undefined;
 	it("should get session", async () => {
-		const { res, headers } = await signInWithTestUser();
-		token = res.data?.session.id || "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: (ctx) => {
+					token = ctx.response.headers.get("set-auth-token") || "";
+				},
+			},
+		);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
@@ -19,10 +27,7 @@ describe("bearer", async () => {
 				},
 			},
 		});
-		encryptedToken = headers
-			.get("cookie")
-			?.split("better-auth.session_token=")[1];
-		expect(session.data?.session.id).toBe(res.data?.session.id);
+		expect(session.data?.session).toBeDefined();
 	});
 
 	it("should list session", async () => {
@@ -37,21 +42,31 @@ describe("bearer", async () => {
 	});
 
 	it("should work on server actions", async () => {
-		const { res } = await signInWithTestUser();
-		token = res.data?.session.id || "";
-		const headers = new Headers();
-		headers.set("authorization", `Bearer ${token}`);
 		const session = await auth.api.getSession({
-			headers,
+			headers: new Headers({
+				authorization: `Bearer ${token}`,
+			}),
 		});
-		expect(session?.session.id).toBe(token);
+		expect(session?.session).toBeDefined();
 	});
 
-	it("should work with encrypted token", async () => {
+	it("should work with ", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
-					authorization: `Bearer ${encryptedToken}`,
+					authorization: `Bearer ${token.split(".")[0]}`,
+				},
+			},
+		});
+		expect(session.data?.session).toBeDefined();
+	});
+
+	it("should work if valid cookie is provided even if authorization header isn't valid", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer invalid.token`,
+					cookie: `better-auth.session_token=${token}`,
 				},
 			},
 		});

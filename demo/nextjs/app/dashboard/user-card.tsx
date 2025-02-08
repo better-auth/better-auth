@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
-	CardDescription,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -42,10 +41,9 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Table,
 	TableBody,
@@ -62,29 +60,9 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data, isPending, error } = useSession();
-	const [ua, setUa] = useState<UAParser.UAParserInstance>();
-
+	const { data } = useSession();
 	const session = data || props.session;
-
-	useEffect(() => {
-		setUa(new UAParser(session?.session.userAgent));
-	}, [session?.session.userAgent]);
-
 	const [isTerminating, setIsTerminating] = useState<string>();
-
-	const { data: qr } = useQuery({
-		queryKey: ["two-factor-qr"],
-		queryFn: async () => {
-			const res = await client.twoFactor.getTotpUri();
-			if (res.error) {
-				throw res.error;
-			}
-			return res.data;
-		},
-		enabled: !!session?.user.twoFactorEnabled,
-	});
-
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
@@ -115,7 +93,7 @@ export default function UserCard(props: {
 							<p className="text-sm">{session?.user.email}</p>
 						</div>
 					</div>
-					<EditUserDialog session={session} />
+					<EditUserDialog />
 				</div>
 
 				{session?.user.emailVerified ? null : (
@@ -168,20 +146,20 @@ export default function UserCard(props: {
 							return (
 								<div key={session.id}>
 									<div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white">
-										{new UAParser(session.userAgent).getDevice().type ===
+										{new UAParser(session.userAgent || "").getDevice().type ===
 										"mobile" ? (
 											<MobileIcon />
 										) : (
 											<Laptop size={16} />
 										)}
-										{new UAParser(session.userAgent).getOS().name},{" "}
-										{new UAParser(session.userAgent).getBrowser().name}
+										{new UAParser(session.userAgent || "").getOS().name},{" "}
+										{new UAParser(session.userAgent || "").getBrowser().name}
 										<button
 											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
 											onClick={async () => {
 												setIsTerminating(session.id);
 												const res = await client.revokeSession({
-													id: session.id,
+													token: session.token,
 												});
 
 												if (res.error) {
@@ -232,15 +210,51 @@ export default function UserCard(props: {
 												Scan the QR code with your TOTP app
 											</DialogDescription>
 										</DialogHeader>
-										<div className="flex items-center justify-center">
-											<QRCode value={qr?.totpURI || ""} />
-										</div>
-										<div className="flex gap-2 items-center justify-center">
-											<p className="text-sm text-muted-foreground">
-												Copy URI to clipboard
-											</p>
-											<CopyButton textToCopy={qr?.totpURI || ""} />
-										</div>
+
+										{twoFactorVerifyURI ? (
+											<>
+												<div className="flex items-center justify-center">
+													<QRCode value={twoFactorVerifyURI} />
+												</div>
+												<div className="flex gap-2 items-center justify-center">
+													<p className="text-sm text-muted-foreground">
+														Copy URI to clipboard
+													</p>
+													<CopyButton textToCopy={twoFactorVerifyURI} />
+												</div>
+											</>
+										) : (
+											<div className="flex flex-col gap-2">
+												<PasswordInput
+													value={twoFaPassword}
+													onChange={(e) => setTwoFaPassword(e.target.value)}
+													placeholder="Enter Password"
+												/>
+												<Button
+													onClick={async () => {
+														if (twoFaPassword.length < 8) {
+															toast.error(
+																"Password must be at least 8 characters",
+															);
+															return;
+														}
+														await client.twoFactor.getTotpUri(
+															{
+																password: twoFaPassword,
+															},
+															{
+																onSuccess(context) {
+																	setTwoFactorVerifyURI(context.data.totpURI);
+																},
+															},
+														);
+														setTwoFaPassword("");
+													}}
+												>
+													Show QR Code
+												</Button>
+											</div>
+										)}
 									</DialogContent>
 								</Dialog>
 							)}
@@ -529,7 +543,8 @@ function ChangePassword() {
 	);
 }
 
-function EditUserDialog(props: { session: Session | null }) {
+function EditUserDialog() {
+	const { data, isPending, error } = useSession();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);
@@ -565,7 +580,7 @@ function EditUserDialog(props: { session: Session | null }) {
 					<Input
 						id="name"
 						type="name"
-						placeholder={props.session?.user.name}
+						placeholder={data?.user.name}
 						required
 						onChange={(e) => {
 							setName(e.target.value);
@@ -645,7 +660,6 @@ function EditUserDialog(props: { session: Session | null }) {
 function AddPasskey() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
-	const queryClient = useQueryClient();
 	const [isLoading, setIsLoading] = useState(false);
 
 	const handleAddPasskey = async () => {
@@ -712,7 +726,7 @@ function AddPasskey() {
 }
 
 function ListPasskeys() {
-	const { data, error } = client.useListPasskeys();
+	const { data } = client.useListPasskeys();
 	const [isOpen, setIsOpen] = useState(false);
 	const [passkeyName, setPasskeyName] = useState("");
 

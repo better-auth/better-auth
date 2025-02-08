@@ -1,0 +1,88 @@
+name: Report an issue
+description: Create a report to help us improve
+labels: ['bug']
+body:
+  - type: checkboxes
+    attributes:
+      label: Is this suited for github?
+      description: Feel free to join the discord community [here](https://discord.gg/GYC3W7tZzb), we can usually respond faster to any questions.
+      options:
+        - label: Yes, this is suited for github
+  - type: markdown
+    attributes:
+      value: |
+        This template is used for reporting a issue with better-auth.
+
+        Feature requests should be opened in [here](https://github.com/better-auth/better-auth/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=).
+
+        Before opening a new issue, please do a [search](https://github.com/better-auth/better-auth/issues) of existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
+  - type: textarea
+    attributes:
+      label: To Reproduce
+      description: A step-by-step description of how to reproduce the issue, based on the linked reproduction. Screenshots can be provided in the issue body below. If using code blocks, make sure that [syntax highlighting is correct](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks#syntax-highlighting) and double check that the rendered preview is not broken.
+      placeholder: |
+        Ex:
+        1. Create a backend
+        2. Create a frontend and use client
+        3. X will happen
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Current vs. Expected behavior
+      description: |
+        A clear and concise description of what the bug is (e.g., screenshots, logs, etc.), and what you expected to happen.
+
+        **Skipping this/failure to provide complete information of the bug will result in the issue being closed.**
+      placeholder: 'Following the steps from the previous section, I expected A to happen, but I observed B instead.'
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: What version of Better Auth are you using?
+      description: Please provide the current version of `better-auth` that you are reporting the bug on
+      placeholder: "1.x.x"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Provide environment information
+      description: Please collect the following information and paste the results. 
+      render: bash
+      placeholder: |
+        - OS: [e.g. Windows 10]
+        - Browser [e.g. chrome, safari]
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Which area(s) are affected? (Select all that apply)
+      multiple: true
+      options:
+        - 'Backend'
+        - 'Client'
+        - 'Types'
+        - 'Documentation'
+        - 'Package'
+        - 'Other'
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Auth config (if applicable)
+      description: If you haven’t already shared a reproducible example or don’t think it’s unrelated, please include your auth config. Make sure to remove any sensitive information.
+      render: typescript
+      value: |
+        import { betterAuth } from "better-auth"
+        export const auth = betterAuth({
+          emailAndPassword: {  
+            enabled: true
+          },
+        });
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: |
+        Any extra information that might help us investigate. For example, is it only reproducible online, or locally too? Is the issue only happening in a specific browser? etc.
+      placeholder: |
+        I tested my reproduction against the latest release.

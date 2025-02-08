@@ -1,11 +1,11 @@
 ---
 title: Database
-description: Learn how to use a database with BetterAuth
+description: Learn how to use a database with Better Auth.
 ---
 
-Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysley </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/"> Kysely </Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a kysely instance in the database options.
+You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a Kysely instance in the database options.
 
 **Example: Sqlite**
 ```ts title="auth.ts"
@@ -29,7 +29,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Mysql**
+**Example: MySQL**
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { createPool } from "mysql2/promise"
@@ -44,7 +44,7 @@ export const auth = betterAuth({
 })
 ```
 
-**Example: Custom Dialect using libsql**
+**Example: Custom Dialect using libSQL**
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -62,7 +62,7 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysley Dialects </Link> for more dialects supported by kysley.
+See <Link href="https://kysely.dev/docs/dialects" target="_blank"> Kysely Dialects </Link> for more dialects supported by Kysely.
 </Callout>
 
 **Example: Custom Kysely Instance**
@@ -151,28 +151,11 @@ import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const client = new MongoClient("mongodb://localhost:27017");
-
+const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db()
 
 export const auth = betterAuth({
     database: mongodbAdapter(db)
-})
-```
-
-#### Use Plural Form
-
-If your schema uses plural form for table names, you can pass the `usePlural` option to the adapter.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { MongoClient } from "mongodb";
-import { mongoAdapter } from "better-auth/adapters/mongodb";
-
-export const auth = betterAuth({
-    database: mongoAdapter(client, {
-      usePlural: true
-    })
 })
 ```
 
@@ -206,7 +189,7 @@ If you prefer adding tables manually, you can do that as well. The core schema r
 
 ## Secondary Storage
 
-Secondary storage in BetterAuth allows you to use key-value stores for managing session data, rate limiting counters, etc.
+Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
@@ -244,21 +227,29 @@ import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
 const redis = createClient();
+await redis.connect();
 
 export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
-		get: async (key) => await redis.get(key),
+		get: async (key) => {
+			const value = await redis.get(key);
+			return value ? value : null;
+		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
+			// or for ioredis:
+			// if (ttl) await redis.set(key, value, 'EX', ttl)
 			else await redis.set(key, value);
 		},
-		delete: async (key) => await redis.del(key),
+		delete: async (key) => {
+			await redis.del(key),
+		}
 	}
 });
 ```
 
-This implementation allows BetterAuth to use Redis for storing session data and rate limiting counters.
+This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
 
 ## Core Schema
 
@@ -319,7 +310,7 @@ Table Name: `session`
     {
       name: "id",
       type: "string",
-      description: "Unique identifier for each session. This is used as the session token.",
+      description: "Unique identifier for each session",
       isPrimaryKey: true
     },
     {
@@ -327,6 +318,12 @@ Table Name: `session`
       type: "string",
       description: "The id of the user",
       isForeignKey: true
+    },
+    {
+      name:"token",
+      type: "string",
+      description: "The unique session token",
+      isUnique: true
     },
     {
       name: "expiresAt",
@@ -345,6 +342,16 @@ Table Name: `session`
       description: "The user agent information of the device",
       isOptional: true
     },
+      {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
   />
 
@@ -369,7 +376,7 @@ Table Name: `account`
     {
       name: "accountId",
       type: "string",
-      description: "The id of the account",
+      description: "The id of the account as provided by the SSO or equal to userId for credential accounts",
     },
     {
       name: "providerId",
@@ -389,9 +396,27 @@ Table Name: `account`
       isOptional: true,
     },
     {
-      name: "expiresAt",
+      name: "accessTokenExpiresAt",
       type: "Date",
-      description: "The time when the access token expires",
+      description: "The time when the verification request expires",
+      isOptional: true,
+    },
+    {
+      name: "refreshTokenExpiresAt",
+      type: "Date",
+      description: "The time when the verification request expires",
+      isOptional: true,
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "The scope of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "idToken",
+      type: "string",
+      description: "The id token returned from the provider",
       isOptional: true,
     },
     {
@@ -400,6 +425,16 @@ Table Name: `account`
       description: "The password of the account. Mainly used for email and password authentication",
       isOptional: true,
     },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
+    }
   ]}
 />
 
@@ -430,6 +465,16 @@ Table Name: `verification`
       name: "expiresAt",
       type: "Date",
       description: "The time when the verification request expires"
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created"
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated"
     }
   ]}
 />
@@ -464,6 +509,28 @@ export const auth = betterAuth({
 <Callout>
   Type inference in your code will still use the original field names (e.g., `user.name`, not `user.full_name`).
 </Callout>
+
+To customize table names and column name for plugins, you can use the `schema` property in the plugin config:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+      twoFactor({
+        schema: {
+          user: {
+            fields: {
+              twoFactorEnabled: "two_factor_enabled",
+              secret: "two_factor_secret",
+            },
+          },
+        },
+      }),
+    ],
+});
+```
 
 
 ### Extending Core Schema
@@ -521,50 +588,63 @@ res.user.lang // > "fr"
   See the [Typescript](/docs/concepts/typescript#inferring-additional-fields-on-client) documentation for more information on how to infer additional fields on the client side.
 </Callout>
 
+If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+
+**Example: Mapping Profile to User For `firstName` and `lastName`**
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+   socialProviders: {
+      github: {
+         clientId: "YOUR_GITHUB_CLIENT_ID",
+         clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.name.split(" ")[0],
+                lastName: profile.name.split(" ")[1],
+              }
+          }
+      },
+      google: {
+          clientId: "YOUR_GOOGLE_CLIENT_ID",
+          clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+          mapProfileToUser: (profile) => {
+              return {
+                firstName: profile.given_name,
+                lastName: profile.family_name,
+              }
+          }
+      }
+    }
+})
+```
+
 ### ID Generation
 
-Better Auth uses `nanoId` by default to generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can pass your own function through the adapter or database configuration.
+Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced` object in your auth config.
 
-**Guidelines:**
+You can also disable ID generation by setting the `generateId` option to `false`. This will assume your database will generate the ID automatically.
 
-- IDs need to be in string format.
-- The ID should be unique for each entity type (like users, sessions, etc.).
-- Since the session ID acts as the token, it should be both unique and sufficiently long for security.
-
-**Example: Built In Kysley Adapter**
+**Example: Automatic Database IDs**
 ```ts title="auth.ts" 
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
 export const auth = betterAuth({
    database: {
-      db: db,
-      generateId: () => {
-         // custom id generation logic
-      }
-   }
+      db: db
+   },
+   advanced: {
+      generateId: false,
+   },
 })
 ```
-
-**Example: Prisma Adapter**
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-   database: prismaAdapter(prisma, {
-      provider: "sqlite",
-      generateId: () => {
-         // custom id generation logic
-      }
-   })
-})
-```
-
-You can also disable ID generation by setting the `generateId` option to `false` in your adapter configuration. This will assume your database will generate the ID automatically.
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in BetterAuth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
 
 There are two types of hooks you can define:
 
@@ -605,6 +685,35 @@ export const auth = betterAuth({
    }
 })
 ```
+
+#### Throwing Errors
+If you want to stop the database hook from proceeding, you can throw errors using the `APIError` class imported from `better-auth/api`.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (user.isAgreedToTerms === false) { // Your special condition.
+            // Send the API error.
+            throw new APIError("BAD_REQUEST", {
+              message: "User must agree to the TOS before signing up.",
+            });
+          }
+          return {
+            data: user
+          };
+        },
+      },
+    },
+  }
+})
+```
+
 
 ## Plugins Schema
 

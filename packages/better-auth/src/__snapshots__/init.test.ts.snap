@@ -9,7 +9,11 @@ exports[`init > should match config 1`] = `
     "findMany": [Function],
     "findOne": [Function],
     "id": "kysely",
+    "options": {
+      "type": "sqlite",
+    },
     "update": [Function],
+    "updateMany": [Function],
   },
   "appName": "Better Auth",
   "authCookies": {
@@ -17,26 +21,6 @@ exports[`init > should match config 1`] = `
       "name": "better-auth.dont_remember",
       "options": {
         "httpOnly": true,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "nonce": {
-      "name": "better-auth.nonce",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
-    "pkCodeVerifier": {
-      "name": "better-auth.pk_code_verifier",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
         "path": "/",
         "sameSite": "lax",
         "secure": false,
@@ -62,31 +46,27 @@ exports[`init > should match config 1`] = `
         "secure": false,
       },
     },
-    "state": {
-      "name": "better-auth.state",
-      "options": {
-        "httpOnly": true,
-        "maxAge": 900,
-        "path": "/",
-        "sameSite": "lax",
-        "secure": false,
-      },
-    },
   },
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
-  "db": Kysely {},
+  "generateId": [Function],
   "internalAdapter": {
     "createAccount": [Function],
     "createOAuthUser": [Function],
     "createSession": [Function],
     "createUser": [Function],
     "createVerificationValue": [Function],
+    "deleteAccount": [Function],
+    "deleteAccounts": [Function],
     "deleteSession": [Function],
     "deleteSessions": [Function],
     "deleteUser": [Function],
+    "deleteVerificationByIdentifier": [Function],
     "deleteVerificationValue": [Function],
+    "findAccount": [Function],
+    "findAccountByUserId": [Function],
     "findAccounts": [Function],
+    "findOAuthUser": [Function],
     "findSession": [Function],
     "findSessions": [Function],
     "findUserByEmail": [Function],
@@ -103,15 +83,13 @@ exports[`init > should match config 1`] = `
     "updateVerificationValue": [Function],
   },
   "logger": {
-    "box": [Function],
-    "break": [Function],
     "debug": [Function],
     "error": [Function],
     "info": [Function],
-    "log": [Function],
     "success": [Function],
     "warn": [Function],
   },
+  "newSession": null,
   "options": {
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
@@ -122,14 +100,11 @@ exports[`init > should match config 1`] = `
       "open": true,
       "readonly": false,
     },
-    "emailAndPassword": {
-      "autoSignIn": true,
-      "enabled": false,
-    },
     "plugins": [],
     "secret": "better-auth-secret-123456789",
   },
   "password": {
+    "checkPassword": [Function],
     "config": {
       "maxPasswordLength": 128,
       "minPasswordLength": 8,
@@ -145,10 +120,13 @@ exports[`init > should match config 1`] = `
   },
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",
+  "session": null,
   "sessionConfig": {
     "expiresIn": 604800,
+    "freshAge": 86400,
     "updateAge": 86400,
   },
+  "setNewSession": [Function],
   "socialProviders": [],
   "tables": {
     "account": {
@@ -158,14 +136,19 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "accessTokenExpiresAt": {
+          "fieldName": "accessTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
         "accountId": {
           "fieldName": "accountId",
           "required": true,
           "type": "string",
         },
-        "expiresAt": {
-          "fieldName": "expiresAt",
-          "required": false,
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
           "type": "date",
         },
         "idToken": {
@@ -188,6 +171,21 @@ exports[`init > should match config 1`] = `
           "required": false,
           "type": "string",
         },
+        "refreshTokenExpiresAt": {
+          "fieldName": "refreshTokenExpiresAt",
+          "required": false,
+          "type": "date",
+        },
+        "scope": {
+          "fieldName": "scope",
+          "required": false,
+          "type": "string",
+        },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
+        },
         "userId": {
           "fieldName": "userId",
           "references": {
@@ -199,11 +197,16 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
+      "modelName": "account",
       "order": 3,
-      "tableName": "account",
     },
     "session": {
       "fields": {
+        "createdAt": {
+          "fieldName": "createdAt",
+          "required": true,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,
@@ -213,6 +216,17 @@ exports[`init > should match config 1`] = `
           "fieldName": "ipAddress",
           "required": false,
           "type": "string",
+        },
+        "token": {
+          "fieldName": "token",
+          "required": true,
+          "type": "string",
+          "unique": true,
+        },
+        "updatedAt": {
+          "fieldName": "updatedAt",
+          "required": true,
+          "type": "date",
         },
         "userAgent": {
           "fieldName": "userAgent",
@@ -230,8 +244,8 @@ exports[`init > should match config 1`] = `
           "type": "string",
         },
       },
+      "modelName": "session",
       "order": 2,
-      "tableName": "session",
     },
     "user": {
       "fields": {
@@ -244,6 +258,7 @@ exports[`init > should match config 1`] = `
         "email": {
           "fieldName": "email",
           "required": true,
+          "sortable": true,
           "type": "string",
           "unique": true,
         },
@@ -261,6 +276,7 @@ exports[`init > should match config 1`] = `
         "name": {
           "fieldName": "name",
           "required": true,
+          "sortable": true,
           "type": "string",
         },
         "updatedAt": {
@@ -270,11 +286,17 @@ exports[`init > should match config 1`] = `
           "type": "date",
         },
       },
+      "modelName": "user",
       "order": 1,
-      "tableName": "user",
     },
     "verification": {
       "fields": {
+        "createdAt": {
+          "defaultValue": [Function],
+          "fieldName": "createdAt",
+          "required": false,
+          "type": "date",
+        },
         "expiresAt": {
           "fieldName": "expiresAt",
           "required": true,
@@ -285,19 +307,24 @@ exports[`init > should match config 1`] = `
           "required": true,
           "type": "string",
         },
+        "updatedAt": {
+          "defaultValue": [Function],
+          "fieldName": "updatedAt",
+          "required": false,
+          "type": "date",
+        },
         "value": {
           "fieldName": "value",
           "required": true,
           "type": "string",
         },
       },
+      "modelName": "verification",
       "order": 4,
-      "tableName": "verification",
     },
   },
   "trustedOrigins": [
     "http://localhost:3000",
   ],
-  "uuid": [Function],
 }
 `;

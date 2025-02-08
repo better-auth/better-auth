@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { VisCrosshair, VisTooltip } from "@unovis/vue";
 import type { BulletLegendItemInterface } from "@unovis/ts";
 import { omit } from "@unovis/ts";
 import { type Component, createApp } from "vue";

@@ -1,20 +1,45 @@
 ---
-title: Typescript
-description: Better Auth typescript integration
+title: TypeScript
+description: Better Auth TypeScript integration.
 ---
 
 Better Auth is designed to be type-safe. Both the client and server are built with TypeScript, allowing you to easily infer types.
 
-## Infering Types
+
+## Typescript Config
+
+### Strict Mode
+
+Better Auth is designed to work with TypeScript's strict mode. We recommend enabling strict mode in your TypeScript config file:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+```
+
+if you can't set `strict` to `true`, you can enable `strictNullChecks`:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "strictNullChecks": true,
+  }
+}
+```
+
+## Inferring Types
 
 Both the client SDK and the server offer types that can be inferred using the `$Infer` property. Plugins can extend base types like `User` and `Session`, and you can use `$Infer` to infer these types. Additionally, plugins can provide extra types that can also be inferred through `$Infer`.
 
-```ts title="client.ts" 
+```ts title="auth-client.ts" 
 import { createAuthClient } from "better-auth/client"
 
-const client = createAuthClient()
+const authClient = createAuthClient()
 
-export type Session = typeof client.$Infer.Session
+export type Session = typeof authClient.$Infer.Session
 ```
 
 The `Session` type includes both `session` and `user` properties. The user property represents the user object type, and the `session` property represents the `session` object type.

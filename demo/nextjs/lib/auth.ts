@@ -1,16 +1,23 @@
 import { betterAuth } from "better-auth";
 import {
 	bearer,
-	organization,
-	passkey,
-	twoFactor,
 	admin,
 	multiSession,
+	organization,
+	twoFactor,
+	oneTap,
+	oAuthProxy,
+	openAPI,
+	oidcProvider,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { reactResetPasswordEmail } from "./email/rest-password";
 import { resend } from "./email/resend";
+import { MysqlDialect } from "kysely";
+import { createPool } from "mysql2/promise";
+import { nextCookies } from "better-auth/next-js";
+import { passkey } from "better-auth/plugins/passkey";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -20,14 +27,24 @@ const libsql = new LibsqlDialect({
 	authToken: process.env.TURSO_AUTH_TOKEN || "",
 });
 
+const mysql = process.env.USE_MYSQL
+	? new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""))
+	: null;
+
+const dialect = process.env.USE_MYSQL ? mysql : libsql;
+
+if (!dialect) {
+	throw new Error("No dialect found");
+}
+
 export const auth = betterAuth({
+	appName: "Better Auth Demo",
 	database: {
-		dialect: libsql,
+		dialect,
 		type: "sqlite",
 	},
 	emailVerification: {
-		async sendVerificationEmail(user, url) {
-			console.log("Sending verification email to", user.email);
+		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
 				from,
 				to: to || user.email,
@@ -36,16 +53,15 @@ export const auth = betterAuth({
 			});
 			console.log(res, user.email);
 		},
-		sendOnSignUp: true,
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github"],
+			trustedProviders: ["google", "github", "demo-app"],
 		},
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword(user, url) {
+		async sendResetPassword({ user, url }) {
 			await resend.emails.send({
 				from,
 				to: user.email,
@@ -58,12 +74,16 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		facebook: {
+			clientId: process.env.FACEBOOK_CLIENT_ID || "",
+			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
+		},
 		github: {
 			clientId: process.env.GITHUB_CLIENT_ID || "",
 			clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
 		},
 		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID || "",
+			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
 		},
 		discord: {
@@ -78,11 +98,15 @@ export const auth = betterAuth({
 			clientId: process.env.TWITCH_CLIENT_ID || "",
 			clientSecret: process.env.TWITCH_CLIENT_SECRET || "",
 		},
+		twitter: {
+			clientId: process.env.TWITTER_CLIENT_ID || "",
+			clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				const res = await resend.emails.send({
+				await resend.emails.send({
 					from,
 					to: data.email,
 					subject: "You've been invited to join an organization",
@@ -96,17 +120,15 @@ export const auth = betterAuth({
 								? `http://localhost:3000/accept-invitation/${data.id}`
 								: `${
 										process.env.BETTER_AUTH_URL ||
-										process.env.NEXT_PUBLIC_APP_URL ||
-										process.env.VERCEL_URL
+										"https://demo.better-auth.com"
 									}/accept-invitation/${data.id}`,
 					}),
 				});
-				console.log(res, data.email);
 			},
 		}),
 		twoFactor({
 			otpOptions: {
-				async sendOTP(user, otp) {
+				async sendOTP({ user, otp }) {
 					await resend.emails.send({
 						from,
 						to: user.email,
@@ -117,8 +139,15 @@ export const auth = betterAuth({
 			},
 		}),
 		passkey(),
+		openAPI(),
 		bearer(),
 		admin(),
 		multiSession(),
+		oneTap(),
+		oAuthProxy(),
+		nextCookies(),
+		oidcProvider({
+			loginPage: "/sign-in",
+		}),
 	],
 });

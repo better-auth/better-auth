@@ -47,18 +47,16 @@ export interface GithubProfile {
 		private_repos: string;
 		collaborators: string;
 	};
-	first_name: string;
-	last_name: string;
 }
 
-export interface GithubOptions extends ProviderOptions {}
+export interface GithubOptions extends ProviderOptions<GithubProfile> {}
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
 		name: "GitHub",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = scopes || ["user:email"];
+			const _scopes = scopes || ["read:user", "user:email"];
 			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "github",
@@ -67,18 +65,20 @@ export const github = (options: GithubOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
-				codeVerifier,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<GithubProfile>(
 				"https://api.github.com/user",
 				{
@@ -93,7 +93,7 @@ export const github = (options: GithubOptions) => {
 			}
 			let emailVerified = false;
 			if (!profile.email) {
-				const { data, error } = await betterFetch<
+				const { data } = await betterFetch<
 					{
 						email: string;
 						primary: boolean;
@@ -102,17 +102,18 @@ export const github = (options: GithubOptions) => {
 					}[]
 				>("https://api.github.com/user/emails", {
 					headers: {
-						authorization: `Bearer ${token.accessToken}`,
+						Authorization: `Bearer ${token.accessToken}`,
 						"User-Agent": "better-auth",
 					},
 				});
-				if (!error) {
+				if (data) {
 					profile.email = (data.find((e) => e.primary) ?? data[0])
 						?.email as string;
 					emailVerified =
 						data.find((e) => e.email === profile.email)?.verified ?? false;
 				}
 			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.id.toString(),
@@ -120,6 +121,7 @@ export const github = (options: GithubOptions) => {
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified,
+					...userMap,
 				},
 				data: profile,
 			};

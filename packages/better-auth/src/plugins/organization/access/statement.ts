@@ -1,11 +1,4 @@
-import { AccessControl } from "./src/access";
-import type { StatementsPrimitive } from "./src/types";
-
-export const createAccessControl = <S extends StatementsPrimitive>(
-	statements: S,
-) => {
-	return new AccessControl<S>(statements);
-};
+import { createAccessControl } from "./access";
 
 export const defaultStatements = {
 	organization: ["update", "delete"],

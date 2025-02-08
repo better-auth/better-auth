@@ -4,8 +4,14 @@ import { magicLink } from ".";
 import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 
+type VerificationEmail = {
+	email: string;
+	token: string;
+	url: string;
+};
+
 describe("magic link", async () => {
-	let verificationEmail = {
+	let verificationEmail: VerificationEmail = {
 		email: "",
 		token: "",
 		url: "",
@@ -49,9 +55,7 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data).toMatchObject({
-			status: true,
-		});
+		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -95,5 +99,90 @@ describe("magic link", async () => {
 				},
 			},
 		);
+	});
+
+	it("should signup with magic link", async () => {
+		const email = "new-email@email.com";
+		await client.signIn.magicLink({
+			email,
+			name: "test",
+		});
+		expect(verificationEmail).toMatchObject({
+			email,
+			url: expect.stringContaining(
+				"http://localhost:3000/api/auth/magic-link/verify",
+			),
+		});
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			name: "test",
+			email: "new-email@email.com",
+			emailVerified: true,
+		});
+	});
+});
+
+describe("magic link verify", async () => {
+	const verificationEmail: VerificationEmail[] = [
+		{
+			email: "",
+			token: "",
+			url: "",
+		},
+	];
+	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail.push(data);
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000/api/auth",
+	});
+
+	it("should verify last magic link", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const headers = new Headers();
+		const lastEmail = verificationEmail.pop() as VerificationEmail;
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(lastEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
 	});
 });

@@ -1,0 +1,386 @@
+---
+title: OIDC Provider
+description: Open ID Connect plugin for Better Auth that allows you to have your own OIDC provider.
+---
+
+The **OIDC Provider Plugin** enables you to build and manage your own OpenID Connect (OIDC) provider, granting full control over user authentication without relying on third-party services like Okta or Azure AD. It also allows other services to authenticate users through your OIDC provider.
+
+**Key Features**:
+
+- **Client Registration**: Register clients to authenticate with your OIDC provider.
+- **Dynamic Client Registration**: Allow clients to register dynamically.
+- **Authorization Code Flow**: Support the Authorization Code Flow.
+- **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
+- **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
+- **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
+- **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
+
+<Callout type="warn">
+This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
+</Callout>
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Mount the Plugin
+
+        Add the OIDC plugin to your auth config. See [OIDC Configuration](#oidc-configuration) on how to configure the plugin.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { oidcProvider } from "better-auth/plugins";
+
+        const auth = betterAuth({
+            plugins: [oidcProvider({
+                loginPage: "/sign-in", // path to the login page
+                // ...other options
+            })]
+        })
+        ```
+    </Step>
+
+    <Step>
+        ### Migrate the Database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+
+    <Step>
+        ### Add the Client Plugin
+
+        Add the OIDC client plugin to your auth client config.
+
+        ```ts
+        import { createAuthClient } from "better-auth/client";
+        import { oidcClient } from "better-auth/client/plugins"
+        const authClient = createAuthClient({
+            plugins: [oidcClient({
+                // Your OIDC configuration
+            })]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+Once installed, you can utilize the OIDC Provider to manage authentication flows within your application.
+
+### Register a New Client
+
+To register a new OIDC client, use the `oauth2.register` method.
+
+```ts title="client.ts"
+const application = await client.oauth2.register({
+    name: "My Client",
+    redirectURLs: ["https://client.example.com/callback"],
+});
+```
+
+Once the application is created, you will receive a `clientId` and `clientSecret` that you can display to the user.
+
+### Consent Screen
+
+When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [oidcProvider({
+        consentPage: "/path/to/consent/page"
+    })]
+})
+```
+
+The plugin will redirect the user to the specified path with a `client_id` and `scope` query parameter. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+
+```ts title="server.ts"
+const res = await client.oauth2.consent({
+	accept: true, // or false to deny
+});
+```
+
+The `client_id` and other necessary information are stored in the browser cookie, so you don't need to pass them in the request. If they don't exist in the cookie, the consent method will return an error.
+
+### Handling Login
+
+When a user is redirected to the OIDC provider for authentication, if they are not already logged in, they will be redirected to the login page. You can customize the login page by providing a `loginPage` option during initialization.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [oidcProvider({
+        loginPage: "/sign-in"
+    })]
+})
+```
+
+You don't need to handle anything from your side; when a new session is created, the plugin will handle continuing the authorization flow.
+
+## Configuration
+
+### OIDC Metadata
+
+Customize the OIDC metadata by providing a configuration object during initialization.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [oidcProvider({
+        metadata: {
+            issuer: "https://your-domain.com",
+            authorization_endpoint: "/custom/oauth2/authorize",
+            token_endpoint: "/custom/oauth2/token",
+            // ...other custom metadata
+        }
+    })]
+})
+```
+
+### JWKS Endpoint (Not Fully Implemented)
+
+For JWKS support, you need to use the `jwt` plugin. It exposes the `/jwks` endpoint to provide the public keys.
+
+<Callout type="warn">
+Currently, the token is signed with the application's secret key. The JWKS endpoint is not fully implemented yet.
+</Callout>
+
+### Dynamic Client Registration
+
+If you want to allow clients to register dynamically, you can enable this feature by setting the `allowDynamicClientRegistration` option to `true`.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [oidcProvider({
+        allowDynamicClientRegistration: true,
+    })]
+})
+```
+
+This will allow clients to register using the `/register` endpoint to be publicly available.
+
+## Schema
+
+The OIDC Provider plugin adds the following tables to the database:
+
+### OAuth Application
+
+Table Name: `oauthApplication`
+
+<DatabaseTable
+  fields={[
+   {
+      name: "id",
+      type: "string",
+      description: "Database ID of the OAuth client",
+      isPrimaryKey: true
+   },
+    { 
+      name: "clientId", 
+      type: "string", 
+      description: "Unique identifier for each OAuth client",
+      isPrimaryKey: true
+    },
+    { 
+      name: "clientSecret", 
+      type: "string", 
+      description: "Secret key for the OAuth client",
+      isRequired: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "Name of the OAuth client",
+      isRequired: true
+    },
+    { 
+      name: "redirectURLs", 
+      type: "string", 
+      description: "Comma-separated list of redirect URLs",
+      isRequired: true
+    },
+    { 
+      name: "metadata", 
+      type: "string",
+      description: "Additional metadata for the OAuth client",
+      isOptional: true
+    },
+    { 
+      name: "type", 
+      type: "string",
+      description: "Type of OAuth client (e.g., web, mobile)",
+      isRequired: true
+    },
+    { 
+      name: "disabled", 
+      type: "boolean", 
+      description: "Indicates if the client is disabled",
+      isRequired: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "ID of the user who owns the client. (optional)",
+      isOptional: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the OAuth client was created" 
+    },
+   {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was last updated"
+   }
+  ]}
+/>
+
+### OAuth Access Token
+
+Table Name: `oauthAccessToken`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Database ID of the access token",
+      isPrimaryKey: true
+   },
+    { 
+      name: "accessToken", 
+      type: "string", 
+      description: "Access token issued to the client",
+    },
+    { 
+      name: "refreshToken", 
+      type: "string", 
+      description: "Refresh token issued to the client",
+      isRequired: true
+    },
+    { 
+      name: "accessTokenExpiresAt", 
+      type: "Date", 
+      description: "Expiration date of the access token",
+      isRequired: true
+    },
+    { 
+      name: "refreshTokenExpiresAt", 
+      type: "Date", 
+      description: "Expiration date of the refresh token",
+      isRequired: true
+    },
+    { 
+      name: "clientId", 
+      type: "string", 
+      description: "ID of the OAuth client",
+      isForeignKey: true,
+      references: { model: "oauthClient", field: "clientId" }
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "ID of the user associated with the token",
+      isForeignKey: true,
+      references: { model: "user", field: "id" }
+    },
+    { 
+      name: "scopes", 
+      type: "string", 
+      description: "Comma-separated list of scopes granted",
+      isRequired: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the access token was created" 
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the access token was last updated"
+    }
+  ]}
+/>
+
+### OAuth Consent
+
+Table Name: `oauthConsent`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Database ID of the consent",
+      isPrimaryKey: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "ID of the user who gave consent",
+      isForeignKey: true,
+      references: { model: "user", field: "id" }
+    },
+    { 
+      name: "clientId", 
+      type: "string", 
+      description: "ID of the OAuth client",
+      isForeignKey: true,
+      references: { model: "oauthClient", field: "clientId" }
+    },
+    { 
+      name: "scopes", 
+      type: "string", 
+      description: "Comma-separated list of scopes consented to",
+      isRequired: true
+    },
+    { 
+      name: "consentGiven", 
+      type: "boolean", 
+      description: "Indicates if consent was given",
+      isRequired: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the consent was given" 
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the consent was last updated"
+    }
+  ]}
+/>
+
+## Options
+
+**allowDynamicClientRegistration**: `boolean` - Enable or disable dynamic client registration.
+
+**metadata**: `OIDCMetadata` - Customize the OIDC provider metadata.
+
+**loginPage**: `string` - Path to the custom login page.
+
+**consentPage**: `string` - Path to the custom consent page.
+

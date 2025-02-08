@@ -1,37 +1,151 @@
 import { APIError } from "better-call";
-import { generateCodeVerifier } from "oslo/oauth2";
 import { z } from "zod";
-import { generateState } from "../../oauth2/state";
 import { createAuthEndpoint } from "../call";
 import { setSessionCookie } from "../../cookies";
-import { socialProviderList } from "../../social-providers";
+import { SocialProviderListEnum } from "../../social-providers";
 import { createEmailVerificationToken } from "./email-verification";
-import { logger } from "../../utils";
+import { generateState } from "../../utils";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
-export const signInOAuth = createAuthEndpoint(
+export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		requireHeaders: true,
-		query: z
-			.object({
-				/**
-				 * Redirect to the current URL after the
-				 * user has signed in.
-				 */
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			/**
-			 * Callback URL to redirect to after the user has signed in.
+			 * Callback URL to redirect to after the user
+			 * has signed in.
 			 */
-			callbackURL: z.string().optional(),
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to redirect to after the user has signed in",
+				})
+				.optional(),
+			/**
+			 * callback url to redirect if the user is newly registered.
+			 *
+			 * useful if you have different routes for existing users and new users
+			 */
+			newUserCallbackURL: z.string().optional(),
+			/**
+			 * Callback url to redirect to if an error happens
+			 *
+			 * If it's initiated from the client sdk this defaults to
+			 * the current url.
+			 */
+			errorCallbackURL: z
+				.string({
+					description: "Callback URL to redirect to if an error happens",
+				})
+				.optional(),
 			/**
 			 * OAuth2 provider to use`
 			 */
-			provider: z.enum(socialProviderList),
+			provider: SocialProviderListEnum,
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
+			/**
+			 * ID token from the provider
+			 *
+			 * This is used to sign in the user
+			 * if the user is already signed in with the
+			 * provider in the frontend.
+			 *
+			 * Only applicable if the provider supports
+			 * it. Currently only `apple` and `google` is
+			 * supported out of the box.
+			 */
+			idToken: z.optional(
+				z.object({
+					/**
+					 * ID token from the provider
+					 */
+					token: z.string({
+						description: "ID token from the provider",
+					}),
+					/**
+					 * The nonce used to generate the token
+					 */
+					nonce: z
+						.string({
+							description: "Nonce used to generate the token",
+						})
+						.optional(),
+					/**
+					 * Access token from the provider
+					 */
+					accessToken: z
+						.string({
+							description: "Access token from the provider",
+						})
+						.optional(),
+					/**
+					 * Refresh token from the provider
+					 */
+					refreshToken: z
+						.string({
+							description: "Refresh token from the provider",
+						})
+						.optional(),
+					/**
+					 * Expiry date of the token
+					 */
+					expiresAt: z
+						.number({
+							description: "Expiry date of the token",
+						})
+						.optional(),
+				}),
+				{
+					description:
+						"ID token from the provider to sign in the user with id token",
+				},
+			),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with a social provider",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										session: {
+											type: "string",
+										},
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const provider = c.context.socialProviders.find(
@@ -45,44 +159,99 @@ export const signInOAuth = createAuthEndpoint(
 				},
 			);
 			throw new APIError("NOT_FOUND", {
-				message: "Provider not found",
+				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 			});
 		}
-		const cookie = c.context.authCookies;
-		const currentURL = c.query?.currentURL
-			? new URL(c.query?.currentURL)
-			: null;
 
-		const callbackURL = c.body.callbackURL?.startsWith("http")
-			? c.body.callbackURL
-			: `${currentURL?.origin}${c.body.callbackURL || ""}`;
+		if (c.body.idToken) {
+			if (!provider.verifyIdToken) {
+				c.context.logger.error(
+					"Provider does not support id token verification",
+					{
+						provider: c.body.provider,
+					},
+				);
+				throw new APIError("NOT_FOUND", {
+					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+				});
+			}
+			const { token, nonce } = c.body.idToken;
+			const valid = await provider.verifyIdToken(token, nonce);
+			if (!valid) {
+				c.context.logger.error("Invalid id token", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.INVALID_TOKEN,
+				});
+			}
+			const userInfo = await provider.getUserInfo({
+				idToken: token,
+				accessToken: c.body.idToken.accessToken,
+				refreshToken: c.body.idToken.refreshToken,
+			});
+			if (!userInfo || !userInfo?.user) {
+				c.context.logger.error("Failed to get user info", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+				});
+			}
+			if (!userInfo.user.email) {
+				c.context.logger.error("User email not found", {
+					provider: c.body.provider,
+				});
+				throw new APIError("UNAUTHORIZED", {
+					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
+				});
+			}
+			const data = await handleOAuthUserInfo(c, {
+				userInfo: {
+					email: userInfo.user.email,
+					id: userInfo.user.id,
+					name: userInfo.user.name || "",
+					image: userInfo.user.image,
+					emailVerified: userInfo.user.emailVerified || false,
+				},
+				account: {
+					providerId: provider.id,
+					accountId: userInfo.user.id,
+					accessToken: c.body.idToken.accessToken,
+				},
+			});
+			if (data.error) {
+				throw new APIError("UNAUTHORIZED", {
+					message: data.error,
+				});
+			}
+			await setSessionCookie(c, data.data!);
+			return c.json({
+				redirect: false,
+				token: data.data!.session.token,
+				url: undefined,
+				user: {
+					id: data.data!.user.id,
+					email: data.data!.user.email,
+					name: data.data!.user.name,
+					image: data.data!.user.image,
+					emailVerified: data.data!.user.emailVerified,
+					createdAt: data.data!.user.createdAt,
+					updatedAt: data.data!.user.updatedAt,
+				},
+			});
+		}
 
-		const state = await generateState(
-			callbackURL || currentURL?.origin || c.context.options.baseURL,
-		);
-		await c.setSignedCookie(
-			cookie.state.name,
-			state.hash,
-			c.context.secret,
-			cookie.state.options,
-		);
-		const codeVerifier = generateCodeVerifier();
-		await c.setSignedCookie(
-			cookie.pkCodeVerifier.name,
-			codeVerifier,
-			c.context.secret,
-			cookie.pkCodeVerifier.options,
-		);
+		const { codeVerifier, state } = await generateState(c);
 		const url = await provider.createAuthorizationURL({
-			state: state.raw,
+			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 		});
+
 		return c.json({
 			url: url.toString(),
-			state: state,
-			codeVerifier,
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -92,15 +261,69 @@ export const signInEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			email: z.string(),
-			password: z.string(),
-			callbackURL: z.string().optional(),
 			/**
-			 * If this is true the session will only be valid for the current browser session
-			 * @default false
+			 * Email of the user
 			 */
-			dontRememberMe: z.boolean().default(false).optional(),
+			email: z.string({
+				description: "Email of the user",
+			}),
+			/**
+			 * Password of the user
+			 */
+			password: z.string({
+				description: "Password of the user",
+			}),
+			/**
+			 * Callback URL to use as a redirect for email
+			 * verification and for possible redirects
+			 */
+			callbackURL: z
+				.string({
+					description:
+						"Callback URL to use as a redirect for email verification",
+				})
+				.optional(),
+			/**
+			 * If this is false, the session will not be remembered
+			 * @default true
+			 */
+			rememberMe: z
+				.boolean({
+					description:
+						"If this is false, the session will not be remembered. Default is `true`.",
+				})
+				.default(true)
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Sign in with email and password",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+										},
+										url: {
+											type: "string",
+										},
+										redirect: {
+											type: "boolean",
+										},
+									},
+									required: ["session", "user", "url", "redirect"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options?.emailAndPassword?.enabled) {
@@ -115,13 +338,7 @@ export const signInEmail = createAuthEndpoint(
 		const isValidEmail = z.string().email().safeParse(email);
 		if (!isValidEmail.success) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
-			});
-		}
-		const checkEmail = z.string().email().safeParse(email);
-		if (!checkEmail.success) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Invalid email",
+				message: BASE_ERROR_CODES.INVALID_EMAIL,
 			});
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
@@ -132,7 +349,7 @@ export const signInEmail = createAuthEndpoint(
 			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -142,24 +359,24 @@ export const signInEmail = createAuthEndpoint(
 		if (!credentialAccount) {
 			ctx.context.logger.error("Credential account not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
 			ctx.context.logger.error("Password not found", { email });
 			throw new APIError("UNAUTHORIZED", {
-				message: "Unexpected error",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
-		const validPassword = await ctx.context.password.verify(
-			currentPassword,
+		const validPassword = await ctx.context.password.verify({
+			hash: currentPassword,
 			password,
-		);
+		});
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Invalid email or password",
+				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
 
@@ -168,40 +385,42 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				logger.error(
-					"Email verification is required but no email verification handler is provided",
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "Email is not verified.",
+				throw new APIError("FORBIDDEN", {
+					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				user.user.email,
+				undefined,
+				ctx.context.options.emailVerification?.expiresIn,
 			);
-			const url = `${ctx.context.options.baseURL}/verify-email?token=${token}`;
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			await ctx.context.options.emailVerification.sendVerificationEmail(
-				user.user,
-				url,
-				token,
+				{
+					user: user.user,
+					url,
+					token,
+				},
+				ctx.request,
 			);
-			ctx.context.logger.error("Email not verified", { email });
 			throw new APIError("FORBIDDEN", {
-				message:
-					"Email is not verified. Check your email for a verification link",
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 			});
 		}
 
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.headers,
-			ctx.body.dontRememberMe,
+			ctx.body.rememberMe === false,
 		);
 
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
-				message: "Failed to create session",
+				message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 			});
 		}
 
@@ -211,13 +430,21 @@ export const signInEmail = createAuthEndpoint(
 				session,
 				user: user.user,
 			},
-			ctx.body.dontRememberMe,
+			ctx.body.rememberMe === false,
 		);
 		return ctx.json({
-			user: user.user,
-			session,
 			redirect: !!ctx.body.callbackURL,
+			token: session.token,
 			url: ctx.body.callbackURL,
+			user: {
+				id: user.user.id,
+				email: user.user.email,
+				name: user.user.name,
+				image: user.user.image,
+				emailVerified: user.user.emailVerified,
+				createdAt: user.user.createdAt,
+				updatedAt: user.user.updatedAt,
+			},
 		});
 	},
 );

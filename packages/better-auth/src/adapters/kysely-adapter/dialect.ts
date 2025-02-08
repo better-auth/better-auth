@@ -11,6 +11,9 @@ import type { KyselyDatabaseType } from "./types";
 function getDatabaseType(
 	db: BetterAuthOptions["database"],
 ): KyselyDatabaseType | null {
+	if (!db) {
+		return null;
+	}
 	if ("dialect" in db) {
 		return getDatabaseType(db.dialect as Dialect);
 	}
@@ -45,6 +48,13 @@ function getDatabaseType(
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
 
+	if (!db) {
+		return {
+			kysely: null,
+			databaseType: null,
+		};
+	}
+
 	if ("db" in db) {
 		return {
 			kysely: db.db,
@@ -54,7 +64,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("dialect" in db) {
 		return {
-			kysely: new Kysely({ dialect: db.dialect }),
+			kysely: new Kysely<any>({ dialect: db.dialect }),
 			databaseType: db.type,
 		};
 	}
@@ -74,9 +84,8 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("getConnection" in db) {
-		dialect = new MysqlDialect({
-			pool: db,
-		});
+		// @ts-ignore - mysql2/promise
+		dialect = new MysqlDialect(db);
 	}
 
 	if ("connect" in db) {
@@ -86,7 +95,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	return {
-		kysely: dialect ? new Kysely({ dialect }) : null,
+		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
 	};
 };

@@ -1,5 +1,6 @@
 generator client {
-    provider = "prisma-client-js"
+    provider        = "prisma-client-js"
+    previewFeatures = ["strictUndefinedChecks"]
 }
 
 datasource db {
@@ -9,14 +10,19 @@ datasource db {
 
 model User {
     id            String   @id @default(cuid())
-    email         String   @unique
+    email_address String   @unique
+    test          String
     emailVerified Boolean  @default(false)
     name          String
     createdAt     DateTime @default(now())
     updatedAt     DateTime @default(now()) @updatedAt
 }
 
-model session {
-    id     String @id @default(cuid())
-    userId String
+model Sessions {
+    id        String   @id @default(cuid())
+    userId    String
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
 }

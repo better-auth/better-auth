@@ -1,9 +1,9 @@
-import {
-	type AlterTableColumnAlteringBuilder,
-	type CreateTableBuilder,
+import type {
+	AlterTableColumnAlteringBuilder,
+	CreateTableBuilder,
 } from "kysely";
 import type { FieldAttribute, FieldType } from ".";
-import { logger } from "../utils/logger";
+import { createLogger } from "../utils/logger";
 import type { BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -34,8 +34,8 @@ const mysqlMap = {
 		"float",
 		"double",
 	],
-	boolean: ["boolean"],
-	date: ["date", "datetime"],
+	boolean: ["boolean", "tinyint"],
+	date: ["timestamp", "datetime", "date"],
 };
 
 const sqliteMap = {
@@ -46,9 +46,9 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["nvarchar", "varchar"],
+	string: ["text", "varchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
-	boolean: ["bit", "boolean"],
+	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
 };
 
@@ -68,13 +68,16 @@ export function matchType(
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType];
-	const type = types[fieldType].map((t) => t.toLowerCase());
+	const type = Array.isArray(fieldType)
+		? types["string"].map((t) => t.toLowerCase())
+		: types[fieldType].map((t) => t.toLowerCase());
 	const matches = type.includes(columnDataType.toLowerCase());
 	return matches;
 }
 
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
+	const logger = createLogger(config.logger);
 
 	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
 
@@ -161,28 +164,58 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 	)[] = [];
 
-	function getType(type: FieldType) {
+	function getType(field: FieldAttribute) {
+		const type = field.type;
 		const typeMap = {
-			string: "text",
-			boolean: "boolean",
-			number: "integer",
-			date: "date",
+			string: {
+				sqlite: "text",
+				postgres: "text",
+				mysql: field.unique
+					? "varchar(255)"
+					: field.references
+						? "varchar(36)"
+						: "text",
+				mssql:
+					field.unique || field.sortable
+						? "varchar(255)"
+						: field.references
+							? "varchar(36)"
+							: "text",
+			},
+			boolean: {
+				sqlite: "integer",
+				postgres: "boolean",
+				mysql: "boolean",
+				mssql: "smallint",
+			},
+			number: {
+				sqlite: field.bigint ? "bigint" : "integer",
+				postgres: field.bigint ? "bigint" : "integer",
+				mysql: field.bigint ? "bigint" : "integer",
+				mssql: field.bigint ? "bigint" : "integer",
+			},
+			date: {
+				sqlite: "date",
+				postgres: "timestamp",
+				mysql: "datetime",
+				mssql: "datetime",
+			},
 		} as const;
-		if (dbType === "mysql" && type === "string") {
-			return "varchar(255)";
-		}
 		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
 			return "text";
 		}
 		if (type === "string[]" || type === "number[]") {
 			return "jsonb";
 		}
-		return typeMap[type];
+		if (Array.isArray(type)) {
+			return "text";
+		}
+		return typeMap[type][dbType || "sqlite"];
 	}
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field.type);
+				const type = getType(field);
 				const exec = db.schema
 					.alterTable(table.table)
 					.addColumn(fieldName, type, (col) => {
@@ -191,6 +224,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 							col = col.references(
 								`${field.references.model}.${field.references.field}`,
 							);
+						}
+						if (field.unique) {
+							col = col.unique();
 						}
 						return col;
 					});
@@ -202,12 +238,14 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
 				.createTable(table.table)
-				.addColumn("id", getType("string"), (col) =>
-					col.primaryKey().notNull(),
+				.addColumn(
+					"id",
+					dbType === "mysql" || dbType === "mssql" ? "varchar(36)" : "text",
+					(col) => col.primaryKey().notNull(),
 				);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field.type);
+				const type = getType(field);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {

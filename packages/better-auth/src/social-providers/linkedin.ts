@@ -16,7 +16,7 @@ export interface LinkedInProfile {
 	email_verified: boolean;
 }
 
-export interface LinkedInOptions extends ProviderOptions {}
+export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {}
 
 export const linkedin = (options: LinkedInOptions) => {
 	const authorizationEndpoint =
@@ -41,7 +41,7 @@ export const linkedin = (options: LinkedInOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return await validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});
@@ -61,6 +61,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				return null;
 			}
 
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.sub,
@@ -68,6 +69,7 @@ export const linkedin = (options: LinkedInOptions) => {
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
 					image: profile.picture,
+					...userMap,
 				},
 				data: profile,
 			};

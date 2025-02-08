@@ -1,6 +1,7 @@
 import Section from "@/components/landing/section";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/features";
+
 async function getGitHubStars() {
 	try {
 		const response = await fetch(
@@ -21,12 +22,13 @@ async function getGitHubStars() {
 		return null;
 	}
 }
+
 export default async function HomePage() {
 	const stars = await getGitHubStars();
 	return (
-		<main className="h-min mx-auto ">
+		<main className="h-min mx-auto overflow-x-hidden">
 			<Section
-				className="-z-1 mb-1  overflow-y-clip"
+				className="-z-1 mb-1 overflow-y-clip"
 				crosses
 				crossesOffset="lg:translate-y-[5.25rem]"
 				customPaddings

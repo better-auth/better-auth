@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { signOut, useSession } from "~/lib/auth-client";
 import globalStylesheet from "~/lib/style/global.css?url";
 import "~/lib/style/global.css";
-import { DoorOpen, LoaderCircle, Moon, Sun } from "lucide-react";
+import { DoorOpen, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {

@@ -6,7 +6,6 @@ import {
 	type CarouselProps,
 	setEmblaContext,
 } from "./context.js";
-import { cn } from "$lib/utils.js";
 
 type $$Props = CarouselProps;
 

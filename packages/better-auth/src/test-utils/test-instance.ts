@@ -1,17 +1,21 @@
 import fs from "fs/promises";
-import { alphabet, generateRandomString } from "../crypto/random";
+import { generateRandomString } from "../crypto/random";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, User } from "../types";
+import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
 import { getMigrations } from "../db/get-migration";
 import { parseSetCookieHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
 import { getBaseURL } from "../utils/url";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
 import { Pool } from "pg";
+import { MongoClient } from "mongodb";
+import { mongodbAdapter } from "../adapters/mongodb-adapter";
+import { createPool } from "mysql2/promise";
+import { bearer } from "../../src/plugins";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -23,14 +27,15 @@ export async function getTestInstance<
 		port?: number;
 		disableTestUser?: boolean;
 		testUser?: Partial<User>;
+		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 	},
-	testWith?: "sqlite" | "postgres",
 ) {
+	const testWith = config?.testWith || "sqlite";
 	/**
 	 * create db folder if not exists
 	 */
 	await fs.mkdir(".db", { recursive: true });
-	const randomStr = generateRandomString(4, alphabet("a-z"));
+	const randomStr = generateRandomString(4, "a-z");
 	const dbName = `./.db/test-${randomStr}.db`;
 
 	const postgres = new Kysely({
@@ -40,6 +45,23 @@ export async function getTestInstance<
 			}),
 		}),
 	});
+
+	const mysql = new Kysely({
+		dialect: new MysqlDialect(
+			createPool("mysql://user:password@localhost:3306/better_auth"),
+		),
+	});
+
+	async function mongodbClient() {
+		const dbClient = async (connectionString: string, dbName: string) => {
+			const client = new MongoClient(connectionString);
+			await client.connect();
+			const db = client.db(dbName);
+			return db;
+		};
+		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+		return db;
+	}
 
 	const opts = {
 		socialProviders: {
@@ -56,12 +78,19 @@ export async function getTestInstance<
 		database:
 			testWith === "postgres"
 				? { db: postgres, type: "postgres" }
-				: new Database(dbName),
+				: testWith === "mongodb"
+					? mongodbAdapter(await mongodbClient())
+					: testWith === "mysql"
+						? { db: mysql, type: "mysql" }
+						: new Database(dbName),
 		emailAndPassword: {
 			enabled: true,
 		},
 		rateLimit: {
 			enabled: false,
+		},
+		advanced: {
+			cookies: {},
 		},
 	} satisfies BetterAuthOptions;
 
@@ -73,12 +102,13 @@ export async function getTestInstance<
 			disableCSRFCheck: true,
 			...options?.advanced,
 		},
+		plugins: [bearer(), ...(options?.plugins || [])],
 	} as O extends undefined ? typeof opts : O & typeof opts);
 
 	const testUser = {
 		email: "test@test.com",
 		password: "test123456",
-		name: "test",
+		name: "test user",
 		...config?.testUser,
 	};
 	async function createTestUser() {
@@ -86,27 +116,47 @@ export async function getTestInstance<
 			return;
 		}
 		//@ts-expect-error
-		await auth.api.signUpEmail({
+		const res = await auth.api.signUpEmail({
 			body: testUser,
 		});
 	}
 
-	const { runMigrations } = await getMigrations({
-		...auth.options,
-		database: opts.database,
-	});
-	await runMigrations();
+	if (testWith !== "mongodb") {
+		const { runMigrations } = await getMigrations({
+			...auth.options,
+			database: opts.database,
+		});
+		await runMigrations();
+	}
+
 	await createTestUser();
 
 	afterAll(async () => {
+		if (testWith === "mongodb") {
+			const db = await mongodbClient();
+			await db.dropDatabase();
+			return;
+		}
 		if (testWith === "postgres") {
 			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 				postgres,
 			);
 			await postgres.destroy();
-		} else {
-			await fs.unlink(dbName);
+			return;
 		}
+
+		if (testWith === "mysql") {
+			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
+			const tables = await mysql.introspection.getTables();
+			for (const table of tables) {
+				// @ts-expect-error
+				await mysql.deleteFrom(table.name).execute();
+			}
+			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
+			return;
+		}
+
+		await fs.unlink(dbName);
 	});
 
 	async function signInWithTestUser() {
@@ -119,7 +169,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const res = await client.signIn.email({
+		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 
@@ -134,7 +184,8 @@ export async function getTestInstance<
 			},
 		});
 		return {
-			res,
+			session: data.session as Session,
+			user: data.user as User,
 			headers,
 			setCookie,
 		};
@@ -142,7 +193,7 @@ export async function getTestInstance<
 	async function signInWithUser(email: string, password: string) {
 		let headers = new Headers();
 		//@ts-expect-error
-		const res = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email,
 			password,
 			fetchOptions: {
@@ -156,7 +207,10 @@ export async function getTestInstance<
 			},
 		});
 		return {
-			res,
+			res: data as {
+				user: User;
+				session: Session;
+			},
 			headers,
 		};
 	}
@@ -179,7 +233,39 @@ export async function getTestInstance<
 			}
 		};
 	}
+	function cookieSetter(headers: Headers) {
+		return (context: {
+			response: Response;
+		}) => {
+			const setCookieHeader = context.response.headers.get("set-cookie");
+			if (!setCookieHeader) {
+				return;
+			}
 
+			const cookieMap = new Map<string, string>();
+
+			const existingCookiesHeader = headers.get("cookie") || "";
+			existingCookiesHeader.split(";").forEach((cookie) => {
+				const [name, ...rest] = cookie.trim().split("=");
+				if (name && rest.length > 0) {
+					cookieMap.set(name, rest.join("="));
+				}
+			});
+
+			const setCookieHeaders = setCookieHeader.split(",");
+			setCookieHeaders.forEach((header) => {
+				const cookies = parseSetCookieHeader(header);
+				cookies.forEach((value, name) => {
+					cookieMap.set(name, value.value);
+				});
+			});
+
+			const updatedCookies = Array.from(cookieMap.entries())
+				.map(([name, value]) => `${name}=${value}`)
+				.join("; ");
+			headers.set("cookie", updatedCookies);
+		};
+	}
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
 		baseURL: getBaseURL(
@@ -196,6 +282,7 @@ export async function getTestInstance<
 		testUser,
 		signInWithTestUser,
 		signInWithUser,
+		cookieSetter,
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),

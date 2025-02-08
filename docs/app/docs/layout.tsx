@@ -9,7 +9,11 @@ export default function Layout({ children }: { children: ReactNode }) {
 		<DocsLayout
 			{...docsOptions}
 			sidebar={{
-				component: <ArticleLayout />,
+				component: (
+					<div className="mr-[--fd-sidebar-width]">
+						<ArticleLayout />
+					</div>
+				),
 			}}
 		>
 			<DocsNavBarMobile />

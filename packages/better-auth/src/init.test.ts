@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { init } from "./init";
 import Database from "better-sqlite3";
 import { betterAuth } from "./auth";
@@ -97,5 +97,54 @@ describe("init", async () => {
 		expect(ok.data).toMatchObject({
 			ok: true,
 		});
+	});
+
+	it("should allow plugins to set config values", async () => {
+		const ctx = await init({
+			database,
+			baseURL: "http://localhost:3000",
+			plugins: [
+				{
+					id: "test-plugin",
+					init(ctx) {
+						return {
+							context: ctx,
+							options: {
+								emailAndPassword: {
+									enabled: true,
+								},
+							},
+						};
+					},
+				},
+			],
+		});
+		expect(ctx.options.emailAndPassword?.enabled).toBe(true);
+	});
+
+	it("should not allow plugins to set config values if theyre set in the main config", async () => {
+		const ctx = await init({
+			database,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: false,
+			},
+			plugins: [
+				{
+					id: "test-plugin",
+					init(ctx) {
+						return {
+							context: ctx,
+							options: {
+								emailAndPassword: {
+									enabled: true,
+								},
+							},
+						};
+					},
+				},
+			],
+		});
+		expect(ctx.options.emailAndPassword?.enabled).toBe(false);
 	});
 });

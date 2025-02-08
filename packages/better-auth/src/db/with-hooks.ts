@@ -1,8 +1,4 @@
-import type { Adapter, Where } from "./../types/adapter";
-import type { BetterAuthOptions } from "../types";
-import { getAuthTables } from "./get-tables";
-import { generateId } from "../utils/id";
-import { convertFromDB, convertToDB } from "./utils";
+import type { Adapter, BetterAuthOptions, Models, Where } from "../types";
 
 export function getWithHooks(
 	adapter: Adapter,
@@ -12,19 +8,19 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	const tables = getAuthTables(ctx.options);
-
-	type Models = "user" | "account" | "session" | "verification";
+	type BaseModels = Extract<
+		Models,
+		"user" | "account" | "session" | "verification"
+	>;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
-		model: Models,
+		model: BaseModels,
 		customCreateFn?: {
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
 	) {
 		let actualData = data;
-		const table = tables[model];
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
@@ -45,11 +41,8 @@ export function getWithHooks(
 		const created =
 			!customCreateFn || customCreateFn.executeMainFn
 				? await adapter.create<T>({
-						model: table.tableName,
-						data: {
-							...convertToDB(table.fields, actualData),
-							id: actualData.id || generateId(),
-						},
+						model,
+						data: actualData as any,
 					})
 				: customCreated;
 
@@ -60,13 +53,13 @@ export function getWithHooks(
 			}
 		}
 
-		return convertFromDB(table.fields, created);
+		return created;
 	}
 
 	async function updateWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: Models,
+		model: BaseModels,
 		customUpdateFn?: {
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
@@ -93,8 +86,53 @@ export function getWithHooks(
 		const updated =
 			!customUpdateFn || customUpdateFn.executeMainFn
 				? await adapter.update<T>({
-						model: tables[model].tableName,
-						update: convertToDB(tables[model].fields, actualData),
+						model,
+						update: actualData,
+						where,
+					})
+				: customUpdated;
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.after;
+			if (toRun) {
+				await toRun(updated as any);
+			}
+		}
+		return updated;
+	}
+
+	async function updateManyWithHooks<T extends Record<string, any>>(
+		data: any,
+		where: Where[],
+		model: BaseModels,
+		customUpdateFn?: {
+			fn: (data: Record<string, any>) => void | Promise<any>;
+			executeMainFn?: boolean;
+		},
+	) {
+		let actualData = data;
+
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.before;
+			if (toRun) {
+				const result = await toRun(data as any);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object";
+				actualData = isObject ? (result as any).data : result;
+			}
+		}
+
+		const customUpdated = customUpdateFn
+			? await customUpdateFn.fn(actualData)
+			: null;
+
+		const updated =
+			!customUpdateFn || customUpdateFn.executeMainFn
+				? await adapter.updateMany({
+						model,
+						update: actualData,
 						where,
 					})
 				: customUpdated;
@@ -106,10 +144,11 @@ export function getWithHooks(
 			}
 		}
 
-		return convertFromDB(tables[model].fields, updated);
+		return updated;
 	}
 	return {
 		createWithHooks,
 		updateWithHooks,
+		updateManyWithHooks,
 	};
 }

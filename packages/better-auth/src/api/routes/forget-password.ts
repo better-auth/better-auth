@@ -1,6 +1,35 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { APIError } from "better-call";
+import type { AuthContext } from "../../init";
+import { getDate } from "../../utils/date";
+import { generateId } from "../../utils";
+import { BASE_ERROR_CODES } from "../../error/codes";
+import { originCheck } from "../middlewares";
+
+function redirectError(
+	ctx: AuthContext,
+	callbackURL: string | undefined,
+	query?: Record<string, string>,
+): string {
+	const url = callbackURL
+		? new URL(callbackURL, ctx.baseURL)
+		: new URL(`${ctx.baseURL}/error`);
+	if (query)
+		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+	return url.href;
+}
+
+function redirectCallback(
+	ctx: AuthContext,
+	callbackURL: string,
+	query?: Record<string, string>,
+): string {
+	const url = new URL(callbackURL, ctx.baseURL);
+	if (query)
+		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+	return url.href;
+}
 
 export const forgetPassword = createAuthEndpoint(
 	"/forget-password",
@@ -10,15 +39,47 @@ export const forgetPassword = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.string().email(),
+			email: z
+				.string({
+					description:
+						"The email address of the user to send a password reset email to",
+				})
+				.email(),
 			/**
 			 * The URL to redirect the user to reset their password.
 			 * If the token isn't valid or expired, it'll be redirected with a query parameter `?
 			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
 			 * token=VALID_TOKEN
 			 */
-			redirectTo: z.string(),
+			redirectTo: z
+				.string({
+					description:
+						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Send a password reset email to the user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -50,22 +111,25 @@ export const forgetPassword = createAuthEndpoint(
 			);
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
-		const expiresAt = new Date(
-			Date.now() +
-				1000 *
-					(ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
-						defaultExpiresIn),
+		const expiresAt = getDate(
+			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+				defaultExpiresIn,
+			"sec",
 		);
-		const verificationToken = ctx.context.uuid();
+		const verificationToken = generateId(24);
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
+			value: user.user.id.toString(),
 			identifier: `reset-password:${verificationToken}`,
 			expiresAt,
 		});
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
-			user.user,
-			url,
+			{
+				user: user.user,
+				url,
+				token: verificationToken,
+			},
+			ctx.request,
 		);
 		return ctx.json({
 			status: true,
@@ -78,64 +142,128 @@ export const forgetPasswordCallback = createAuthEndpoint(
 	{
 		method: "GET",
 		query: z.object({
-			callbackURL: z.string(),
+			callbackURL: z.string({
+				description: "The URL to redirect the user to reset their password",
+			}),
 		}),
+		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		metadata: {
+			openapi: {
+				description: "Redirects the user to the callback URL with the token",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										token: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { token } = ctx.params;
-		const callbackURL = ctx.query.callbackURL;
-		const redirectTo = callbackURL.startsWith("http")
-			? callbackURL
-			: `${ctx.context.options.baseURL}${callbackURL}`;
+		const { callbackURL } = ctx.query;
 		if (!token || !callbackURL) {
-			throw ctx.redirect(`${ctx.context.baseURL}/error?error=INVALID_TOKEN`);
+			throw ctx.redirect(
+				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+			);
 		}
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
 			);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw ctx.redirect(`${redirectTo}?error=INVALID_TOKEN`);
+			throw ctx.redirect(
+				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+			);
 		}
-		throw ctx.redirect(
-			`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}token=${token}`,
-		);
+
+		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
 	},
 );
 
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		query: z.optional(
-			z.object({
-				token: z.string().optional(),
-				currentURL: z.string().optional(),
-			}),
-		),
 		method: "POST",
+		query: z
+			.object({
+				token: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
-			newPassword: z.string(),
+			newPassword: z.string({
+				description: "The new password to set",
+			}),
+			token: z
+				.string({
+					description: "The token to reset the password",
+				})
+				.optional(),
 		}),
+		metadata: {
+			openapi: {
+				description: "Reset the password for a user",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
-		const token =
-			ctx.query?.token ||
-			(ctx.query?.currentURL
-				? new URL(ctx.query.currentURL).searchParams.get("token")
-				: "");
+		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Token not found",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
+
 		const { newPassword } = ctx.body;
+
+		const minLength = ctx.context.password?.config.minPasswordLength;
+		const maxLength = ctx.context.password?.config.maxPasswordLength;
+		if (newPassword.length < minLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+			});
+		}
+		if (newPassword.length > maxLength) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+			});
+		}
+
 		const id = `reset-password:${token}`;
+
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
-
 		if (!verification || verification.expiresAt < new Date()) {
 			throw new APIError("BAD_REQUEST", {
-				message: "Invalid token",
+				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
 		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
@@ -148,21 +276,13 @@ export const resetPassword = createAuthEndpoint(
 				userId,
 				providerId: "credential",
 				password: hashedPassword,
-				accountId: ctx.context.uuid(),
+				accountId: userId,
 			});
 			return ctx.json({
 				status: true,
 			});
 		}
-		const updatedUser = await ctx.context.internalAdapter.updatePassword(
-			userId,
-			hashedPassword,
-		);
-		if (!updatedUser) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Failed to update password",
-			});
-		}
+		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		return ctx.json({
 			status: true,
 		});

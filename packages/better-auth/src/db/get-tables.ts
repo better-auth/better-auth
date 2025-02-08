@@ -7,7 +7,7 @@ export type BetterAuthDbSchema = Record<
 		/**
 		 * The name of the table in the database
 		 */
-		tableName: string;
+		modelName: string;
 		/**
 		 * The fields of the table
 		 */
@@ -37,21 +37,21 @@ export const getAuthTables = (
 						...acc[key]?.fields,
 						...value.fields,
 					},
-					tableName: value.tableName || key,
+					modelName: value.modelName || key,
 				};
 			}
 			return acc;
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, FieldAttribute>; tableName: string }
+			{ fields: Record<string, FieldAttribute>; modelName: string }
 		>,
 	);
 
 	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";
 	const rateLimitTable = {
 		rateLimit: {
-			tableName: options.rateLimit?.tableName || "rateLimit",
+			modelName: options.rateLimit?.modelName || "rateLimit",
 			fields: {
 				key: {
 					type: "string",
@@ -63,6 +63,7 @@ export const getAuthTables = (
 				},
 				lastRequest: {
 					type: "number",
+					bigint: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 				},
 			},
@@ -70,20 +71,75 @@ export const getAuthTables = (
 	} satisfies BetterAuthDbSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
+
+	const sessionTable = {
+		session: {
+			modelName: options.session?.modelName || "session",
+			fields: {
+				expiresAt: {
+					type: "date",
+					required: true,
+					fieldName: options.session?.fields?.expiresAt || "expiresAt",
+				},
+				token: {
+					type: "string",
+					required: true,
+					fieldName: options.session?.fields?.token || "token",
+					unique: true,
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					fieldName: options.session?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					fieldName: options.session?.fields?.updatedAt || "updatedAt",
+				},
+				ipAddress: {
+					type: "string",
+					required: false,
+					fieldName: options.session?.fields?.ipAddress || "ipAddress",
+				},
+				userAgent: {
+					type: "string",
+					required: false,
+					fieldName: options.session?.fields?.userAgent || "userAgent",
+				},
+				userId: {
+					type: "string",
+					fieldName: options.session?.fields?.userId || "userId",
+					references: {
+						model: options.user?.modelName || "user",
+						field: "id",
+						onDelete: "cascade",
+					},
+					required: true,
+				},
+				...session?.fields,
+				...options.session?.additionalFields,
+			},
+			order: 2,
+		},
+	} satisfies BetterAuthDbSchema;
+
 	return {
 		user: {
-			tableName: options.user?.modelName || "user",
+			modelName: options.user?.modelName || "user",
 			fields: {
 				name: {
 					type: "string",
 					required: true,
 					fieldName: options.user?.fields?.name || "name",
+					sortable: true,
 				},
 				email: {
 					type: "string",
 					unique: true,
 					required: true,
 					fieldName: options.user?.fields?.email || "email",
+					sortable: true,
 				},
 				emailVerified: {
 					type: "boolean",
@@ -113,41 +169,12 @@ export const getAuthTables = (
 			},
 			order: 1,
 		},
-		session: {
-			tableName: options.session?.modelName || "session",
-			fields: {
-				expiresAt: {
-					type: "date",
-					required: true,
-					fieldName: options.session?.fields?.expiresAt || "expiresAt",
-				},
-				ipAddress: {
-					type: "string",
-					required: false,
-					fieldName: options.session?.fields?.ipAddress || "ipAddress",
-				},
-				userAgent: {
-					type: "string",
-					required: false,
-					fieldName: options.session?.fields?.userAgent || "userAgent",
-				},
-				userId: {
-					type: "string",
-					fieldName: options.session?.fields?.userId || "userId",
-					references: {
-						model: options.user?.modelName || "user",
-						field: "id",
-						onDelete: "cascade",
-					},
-					required: true,
-				},
-				...session?.fields,
-				...options.session?.additionalFields,
-			},
-			order: 2,
-		},
+		//only add session table if it's not stored in secondary storage
+		...(!options.secondaryStorage || options.session?.storeSessionInDatabase
+			? sessionTable
+			: {}),
 		account: {
-			tableName: options.account?.modelName || "account",
+			modelName: options.account?.modelName || "account",
 			fields: {
 				accountId: {
 					type: "string",
@@ -184,22 +211,46 @@ export const getAuthTables = (
 					required: false,
 					fieldName: options.account?.fields?.idToken || "idToken",
 				},
-				expiresAt: {
+				accessTokenExpiresAt: {
 					type: "date",
 					required: false,
-					fieldName: options.account?.fields?.expiresAt || "expiresAt",
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"accessTokenExpiresAt",
+				},
+				refreshTokenExpiresAt: {
+					type: "date",
+					required: false,
+					fieldName:
+						options.account?.fields?.accessTokenExpiresAt ||
+						"refreshTokenExpiresAt",
+				},
+				scope: {
+					type: "string",
+					required: false,
+					fieldName: options.account?.fields?.scope || "scope",
 				},
 				password: {
 					type: "string",
 					required: false,
 					fieldName: options.account?.fields?.password || "password",
 				},
+				createdAt: {
+					type: "date",
+					required: true,
+					fieldName: options.account?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					fieldName: options.account?.fields?.updatedAt || "updatedAt",
+				},
 				...account?.fields,
 			},
 			order: 3,
 		},
 		verification: {
-			tableName: options.verification?.modelName || "verification",
+			modelName: options.verification?.modelName || "verification",
 			fields: {
 				identifier: {
 					type: "string",
@@ -215,6 +266,18 @@ export const getAuthTables = (
 					type: "date",
 					required: true,
 					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
+				},
+				createdAt: {
+					type: "date",
+					required: false,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: false,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
 				},
 			},
 			order: 4,

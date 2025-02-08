@@ -9,7 +9,7 @@ import {
 import { TextField, TextFieldLabel, TextFieldRoot } from "./ui/textfield";
 import { Button } from "./ui/button";
 import { Checkbox, CheckboxControl, CheckboxLabel } from "./ui/checkbox";
-import { passkeyActions, signIn } from "@/libs/auth-client";
+import { signIn } from "@/libs/auth-client";
 import { createSignal } from "solid-js";
 
 export function SignInCard() {
@@ -75,7 +75,7 @@ export function SignInCard() {
 								signIn.email({
 									email: email(),
 									password: password(),
-									dontRememberMe: !rememberMe(),
+									rememberMe: rememberMe(),
 									fetchOptions: {
 										onError(context) {
 											alert(context.error.message);
@@ -129,10 +129,12 @@ export function SignInCard() {
 							variant="outline"
 							onClick={async () => {
 								await signIn.passkey({
-									callbackURL: "/dashboard",
 									fetchOptions: {
 										onError(context) {
 											alert(context.error.message);
+										},
+										onSuccess(context) {
+											window.location.href = "/";
 										},
 									},
 								});
@@ -145,9 +147,9 @@ export function SignInCard() {
 								viewBox="0 0 24 24"
 								fill="none"
 								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
 								class="lucide lucide-key"
 							>
 								<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" />

@@ -38,4 +38,12 @@ export const techStackIcons: TechStackIconType = {
 		name: "TanStack Start",
 		icon: <Icons.tanstack className="w-10 h-10" />,
 	},
+	expo: {
+		name: "Expo",
+		icon: <Icons.expo className="w-10 h-10" />,
+	},
+	nitro: {
+		name: "Nitro",
+		icon: <Icons.nitro className="w-10 h-10" />,
+	},
 };

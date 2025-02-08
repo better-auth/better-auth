@@ -50,7 +50,7 @@ The Admin plugin provides a set of administrative functions for user management 
   <Step>
     ### Add the client plugin
 
-    Next, include the anonymous client plugin in your authentication client instance.
+    Next, include the admin client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
@@ -78,9 +78,14 @@ const newUser = await authClient.admin.createUser({
   name: "Test User",
   email: "test@example.com",
   password: "password123",
-  role: "user"
+  role: "user",
+  data: {
+    // any additional on the user table including plugin fields and custom fields
+    customField: "customValue"
+  }
 });
 ```
+
 
 ### List Users
 
@@ -107,22 +112,16 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
     query: {
-        search: {
-            field: "email",
-            operator: "contains",
-            value: "@example.com"
-        },
+        searchField: "email",
+        searchOperator: "contains",
+        searchValue: "@example.com",
         limit: 10,
         offset: 0,
         sortBy: "createdAt",
         sortDirection: "desc"
-        filter: [
-          {
-            field: "name",
-            operator: "eq",
-            value: "John",
-          }
-        ]
+        filterField: "role",
+        filterOperator: "eq",
+        filterValue: "admin"
     }
 });
 ```
@@ -165,7 +164,7 @@ const unbannedUser = await authClient.admin.unbanUser({
 Lists all sessions for a user.
 
 ```ts title="admin.ts"
-const sessions = await authClient.admin.listSessions({
+const sessions = await authClient.admin.listUserSessions({
   userId: "user_id_here"
 });
 ```
@@ -175,8 +174,8 @@ const sessions = await authClient.admin.listSessions({
 Revokes a specific session for a user.
 
 ```ts title="admin.ts"
-const revokedSessions = await authClient.admin.revokeSession({
- sessionId: "session_id_here"
+const revokedSession = await authClient.admin.revokeUserSession({
+ sessionToken: "session_token_here"
 });
 ```
 
@@ -199,6 +198,13 @@ const impersonatedSession = await authClient.admin.impersonateUser({
   userId: "user_id_here"
 });
 ```
+### Stop Impersonating User
+
+To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
+
+```ts title="admin.ts"
+await authClient.admin.stopImpersonating();
+```  
 
 ### Remove User
 
@@ -261,11 +267,29 @@ And adds one field in the `session` table:
 
 ### Default Role
 
-The default role for a user created by the admin. Defaults to `user`.
+The default role for a user. Defaults to `user`.
+
+```ts title="auth.ts"
+admin({
+    defaultRole: "regular"
+})
+```
+
+you can pass `false` to disable assigning default role
 
 ```ts title="auth.ts"
 admin({
     defaultRole: false //pass false to disable default role assignment
+})
+```
+
+### Admin role
+
+You can specify what role should be consider admin. Default to `admin`
+
+```ts title="auth.ts"
+admin({
+    adminRole: ["admin", "superAdmin"]
 })
 ```
 
@@ -298,5 +322,3 @@ admin({
     defaultBanExpiresIn: 60 * 60 * 24 // 1 day
 })
 ```
-
-

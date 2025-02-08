@@ -1,7 +1,7 @@
-import type { PluginSchema } from "../../types";
+import type { AuthPluginSchema } from "../../types";
 import { z } from "zod";
 
-export const schema: PluginSchema = {
+export const schema = {
 	jwks: {
 		fields: {
 			publicKey: {
@@ -18,7 +18,7 @@ export const schema: PluginSchema = {
 			},
 		},
 	},
-};
+} satisfies AuthPluginSchema;
 
 export const jwk = z.object({
 	id: z.string(),

@@ -1,11 +1,19 @@
-import { isTest } from "std-env";
+import type { BetterAuthOptions } from "../types";
+import { isTest } from "../utils/env";
 
-export function getIp(req: Request | Headers): string | null {
+export function getIp(
+	req: Request | Headers,
+	options: BetterAuthOptions,
+): string | null {
+	if (options.advanced?.ipAddress?.disableIpTracking) {
+		return null;
+	}
 	const testIP = "127.0.0.1";
 	if (isTest) {
 		return testIP;
 	}
-	const keys = [
+	const ipHeaders = options.advanced?.ipAddress?.ipAddressHeaders;
+	const keys = ipHeaders || [
 		"x-client-ip",
 		"x-forwarded-for",
 		"cf-connecting-ip",
