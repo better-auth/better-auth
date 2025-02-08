@@ -9,7 +9,7 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 
 ### Mount the handler
 
-We need to mount the handler to Elysia endpoint.
+We need to mount the handler to an Elysia endpoint.
 
 ```ts
 import { Elysia } from "elysia";
@@ -56,7 +56,7 @@ export const isUserMiddleware = new Elysia()
 
 ```
 
-The middleware will add a boolean flag to subsequent routes. When enabled, the above function will run and the `session` and `user` information will be available in your context. For custom error handling feel free to update the logic inside the session statement.  
+The middleware will add a boolean flag to subsequent routes. When enabled, the above function will run and the `session` and `user` information will be available in your context. For custom error handling feel free to update the logic inside the `!session` if statement.  
 
 Example usage
 
@@ -65,7 +65,7 @@ const app = new Elysia()
 	.use(betterAuthPlugin)
   	// Enable the middleware
 	.use(isUserMiddleware)
-	// isUserMiddleware is false by default and won't run unless specified.
+	// isUser is false by default and won't run unless specified.
 	.get("/", "Front page")
 	// To enable it pass a third argument and set isUser to true. User and Session will now be present in the context fully typed
 	.get("/user", ({ user }) => user, { isUser: true })
