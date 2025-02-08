@@ -199,7 +199,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 	const model_name = options?.schema?.modelName ?? "apiKey";
 
 	return {
-		id: "apiKey",
+		id: "api-key",
 		$ERROR_CODES: ERROR_CODES,
 		endpoints: {
 			createApiKey: createAuthEndpoint(
