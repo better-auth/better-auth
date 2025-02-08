@@ -16,17 +16,6 @@ describe("team", async (it) => {
 					teams: {
 						enabled: true,
 					},
-					schema: {
-						organization: {
-							modelName: "team",
-						},
-						team: {
-							modelName: "teamOrg",
-						},
-						member: {
-							modelName: "teamMembers",
-						},
-					},
 				}),
 			],
 			logger: {
@@ -38,7 +27,9 @@ describe("team", async (it) => {
 	const client = createAuthClient({
 		plugins: [
 			organizationClient({
-				enableTeams: true,
+				teams: {
+					enabled: true,
+				},
 			}),
 		],
 		baseURL: "http://localhost:3000/api/auth",

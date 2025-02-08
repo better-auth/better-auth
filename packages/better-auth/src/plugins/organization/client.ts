@@ -1,8 +1,11 @@
 import { atom } from "nanostores";
 import type {
+	InferInvitation,
+	InferMember,
 	Invitation,
 	Member,
 	Organization,
+	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import {
@@ -23,7 +26,9 @@ interface OrganizationClientOptions {
 	roles?: {
 		[key in string]: Role;
 	};
-	enableTeams?: boolean;
+	teams?: {
+		enabled: boolean;
+	};
 }
 
 export const organizationClient = <O extends OrganizationClientOptions>(
@@ -45,6 +50,17 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 		owner: ownerAc,
 		...options?.roles,
 	};
+
+	type OrganizationReturn = O["teams"] extends { enabled: true }
+		? {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+				teams: Team[];
+			} & Organization
+		: {
+				members: InferMember<O>[];
+				invitations: InferInvitation<O>[];
+			} & Organization;
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as ReturnType<
@@ -60,30 +76,17 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 							owner: Role;
 						};
 				teams: {
-					enabled: O["enableTeams"] extends true ? true : false;
+					enabled: O["teams"] extends { enabled: true } ? true : false;
 				};
 			}>
 		>,
 		getActions: ($fetch) => ({
 			$Infer: {
-				ActiveOrganization: {} as Prettify<
-					Organization & {
-						members: Prettify<
-							Member & {
-								user: {
-									id: string;
-									name: string;
-									email: string;
-									image?: string | null;
-								};
-							}
-						>[];
-						invitations: Invitation[];
-					}
-				>,
+				ActiveOrganization: {} as Prettify<OrganizationReturn>,
 				Organization: {} as Organization,
-				Invitation: {} as Invitation,
-				Member: {} as Member,
+				Invitation: {} as InferInvitation<O>,
+				Member: {} as InferInvitation<O>,
+				Team: {} as Team,
 			},
 			organization: {
 				checkRolePermission: <
