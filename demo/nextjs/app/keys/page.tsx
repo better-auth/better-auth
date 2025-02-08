@@ -20,7 +20,7 @@ import {
 import { client } from "@/lib/auth-client";
 import { CalendarIcon, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -220,7 +220,7 @@ function CreateKeyForm({
 	setIsLoading: React.Dispatch<React.SetStateAction<string | undefined>>;
 }) {
 	const queryClient = useQueryClient();
-
+	const [menu, setMenu] = useState<"form" | "complete">("form");
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [newKey, setNewKey] = useState<{
 		name: string;
@@ -247,6 +247,7 @@ function CreateKeyForm({
 			limit: 10,
 		},
 	});
+	const [apiKeyResult, setApiKeyResult] = useState<string>("");
 
 	const handleCreateKey = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -272,13 +273,206 @@ function CreateKeyForm({
 				queryKey: ["keys"],
 			});
 			setIsLoading(undefined);
-			setIsDialogOpen(false);
+			setApiKeyResult(res.data.key);
+			setMenu("complete");
 		} else {
 			console.log(res.error);
+			setApiKeyResult("");
 			toast.error(`Failed to create API Key: ${res.error.message}`);
 			setIsLoading(undefined);
 		}
 	};
+
+	useEffect(() => {
+		if (!isDialogOpen) {
+			setTimeout(() => {
+				setMenu("form");
+			}, 100);
+		}
+	}, [isDialogOpen]);
+
+	const formUI = (
+		<form onSubmit={handleCreateKey} className="space-y-4">
+			<div>
+				<div className="flex items-center h-8 gap-2">
+					<Label htmlFor="name">Name*</Label>
+				</div>
+				<p className="h-8 text-sm text-muted-foreground">
+					The name of the API key.
+				</p>
+				<Input
+					id="name"
+					value={newKey.name}
+					onChange={(e) => setNewKey((x) => ({ ...x, name: e.target.value }))}
+					required
+				/>
+			</div>
+			<div>
+				<div className="flex items-center h-8 gap-2">
+					<Label htmlFor="length">Key Length</Label>
+				</div>
+				<p className="h-8 text-sm text-muted-foreground">
+					The length of the API key.
+				</p>
+				<Input
+					type="number"
+					id="length"
+					value={newKey.length}
+					onChange={(e) =>
+						setNewKey((x) => ({
+							...x,
+							length: parseInt(e.target.value),
+						}))
+					}
+				/>
+			</div>
+			<div>
+				<div className="flex items-center h-8 gap-2">
+					<Label htmlFor="prefix">Key Prefix</Label>
+				</div>
+				<p className="h-8 text-sm text-muted-foreground">
+					A prefix to your API Key.
+				</p>
+				<Input
+					value={newKey.prefix}
+					id="prefix"
+					onChange={(e) => setNewKey((x) => ({ ...x, prefix: e.target.value }))}
+				/>
+			</div>
+
+			<div>
+				<div className="flex items-center h-8 gap-2">
+					<Label htmlFor="remaining">Remaining</Label>
+					<Checkbox
+						id="remaining"
+						checked={newKey.remaining !== undefined}
+						onCheckedChange={(checked) => {
+							setNewKey((x) => ({
+								...x,
+								remaining: checked ? 10 : undefined,
+							}));
+						}}
+					/>
+				</div>
+				<p className="h-8 text-sm text-muted-foreground">
+					The number of times this key can be used.
+				</p>
+
+				{newKey.remaining === undefined ? (
+					<Input value="Unlimited" disabled />
+				) : (
+					<Input
+						type="number"
+						value={newKey.remaining ?? 10}
+						onChange={(e) =>
+							setNewKey((x) => ({
+								...x,
+								remaining: parseInt(e.target.value),
+							}))
+						}
+					/>
+				)}
+			</div>
+			<div>
+				<div className="flex items-center h-8 gap-2">
+					<Label htmlFor="expires">Expires</Label>
+					<Checkbox
+						id="expires"
+						checked={newKey.expires !== undefined}
+						onCheckedChange={(checked) => {
+							setNewKey((x) => ({
+								...x,
+								expires: checked
+									? new Date().getTime() + 1000 * 60 * 60 * 24
+									: undefined,
+							}));
+						}}
+					/>
+				</div>
+				<p className="h-8 text-sm text-muted-foreground">
+					The date when the API key expires.
+				</p>
+				<Popover>
+					<PopoverTrigger asChild>
+						<Button
+							variant={"outline"}
+							className={cn(
+								"w-[240px] pl-3 text-left font-normal",
+								!newKey.expires && "text-muted-foreground",
+							)}
+							disabled={!newKey.expires}
+						>
+							{newKey.expires ? (
+								format(newKey.expires, "PPP")
+							) : (
+								<span>Pick a date</span>
+							)}
+							<CalendarIcon className="w-4 h-4 ml-auto opacity-50" />
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="w-auto p-0" align="start">
+						<Calendar
+							mode="single"
+							disabled={(date) => date < new Date()}
+							selected={
+								newKey.expires === undefined
+									? new Date()
+									: new Date(newKey.expires)
+							}
+							onSelect={(date) => {
+								if (date) {
+									setNewKey((x) => ({
+										...x,
+										expires: date.getTime(),
+									}));
+								}
+							}}
+							initialFocus
+						/>
+					</PopoverContent>
+				</Popover>
+			</div>
+			<div className="h-2"></div>
+			<Button
+				type="submit"
+				className="w-full"
+				disabled={isLoading === "create"}
+			>
+				{isLoading === "create" ? (
+					<>
+						<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+						Creating...
+					</>
+				) : (
+					"Create API Key"
+				)}
+			</Button>
+		</form>
+	);
+
+	const completeUI = (
+		<div className="flex flex-col items-center justify-center px-10 space-y-4 ">
+			<Input
+				value={apiKeyResult}
+				spellCheck={false}
+				readOnly
+				className="mt-5"
+			/>
+			<Button
+				onClick={async () => {
+					try {
+						await navigator.clipboard.writeText(apiKeyResult);
+						toast.success("Copied to clipboard");
+					} catch (error) {
+						console.log(error);
+						toast.error("Failed to copy to clipboard");
+					}
+				}}
+			>
+				Copy Key to Clipboard
+			</Button>
+		</div>
+	);
 
 	return (
 		<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -289,168 +483,13 @@ function CreateKeyForm({
 			</DialogTrigger>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Create New API Key</DialogTitle>
+					<DialogTitle>
+						{menu === "form"
+							? "Create New API Key"
+							: "API Key Created Successfully! 🎉"}
+					</DialogTitle>
 				</DialogHeader>
-				<form onSubmit={handleCreateKey} className="space-y-4">
-					<div>
-						<div className="flex items-center h-8 gap-2">
-							<Label htmlFor="name">Name*</Label>
-						</div>
-						<p className="h-8 text-sm text-muted-foreground">
-							The name of the API key.
-						</p>
-						<Input
-							id="name"
-							value={newKey.name}
-							onChange={(e) =>
-								setNewKey((x) => ({ ...x, name: e.target.value }))
-							}
-							required
-						/>
-					</div>
-					<div>
-						<div className="flex items-center h-8 gap-2">
-							<Label htmlFor="length">Key Length</Label>
-						</div>
-						<p className="h-8 text-sm text-muted-foreground">
-							The length of the API key.
-						</p>
-						<Input
-							type="number"
-							id="length"
-							value={newKey.length}
-							onChange={(e) =>
-								setNewKey((x) => ({
-									...x,
-									length: parseInt(e.target.value),
-								}))
-							}
-						/>
-					</div>
-					<div>
-						<div className="flex items-center h-8 gap-2">
-							<Label htmlFor="prefix">Key Prefix</Label>
-						</div>
-						<p className="h-8 text-sm text-muted-foreground">
-							A prefix to your API Key.
-						</p>
-						<Input
-							value={newKey.prefix}
-							id="prefix"
-							onChange={(e) =>
-								setNewKey((x) => ({ ...x, prefix: e.target.value }))
-							}
-						/>
-					</div>
-
-					<div>
-						<div className="flex items-center h-8 gap-2">
-							<Label htmlFor="remaining">Remaining</Label>
-							<Checkbox
-								id="remaining"
-								checked={newKey.remaining !== undefined}
-								onCheckedChange={(checked) => {
-									setNewKey((x) => ({
-										...x,
-										remaining: checked ? 10 : undefined,
-									}));
-								}}
-							/>
-						</div>
-						<p className="h-8 text-sm text-muted-foreground">
-							The number of times this key can be used.
-						</p>
-
-						{newKey.remaining === undefined ? (
-							<Input value="Unlimited" disabled />
-						) : (
-							<Input
-								type="number"
-								value={newKey.remaining ?? 10}
-								onChange={(e) =>
-									setNewKey((x) => ({
-										...x,
-										remaining: parseInt(e.target.value),
-									}))
-								}
-							/>
-						)}
-					</div>
-					<div>
-						<div className="flex items-center h-8 gap-2">
-							<Label htmlFor="expires">Expires</Label>
-							<Checkbox
-								id="expires"
-								checked={newKey.expires !== undefined}
-								onCheckedChange={(checked) => {
-									setNewKey((x) => ({
-										...x,
-										expires: checked
-											? new Date().getTime() + 1000 * 60 * 60 * 24
-											: undefined,
-									}));
-								}}
-							/>
-						</div>
-						<p className="h-8 text-sm text-muted-foreground">
-							The date when the API key expires.
-						</p>
-						<Popover>
-							<PopoverTrigger asChild>
-								<Button
-									variant={"outline"}
-									className={cn(
-										"w-[240px] pl-3 text-left font-normal",
-										!newKey.expires && "text-muted-foreground",
-									)}
-									disabled={!newKey.expires}
-								>
-									{newKey.expires ? (
-										format(newKey.expires, "PPP")
-									) : (
-										<span>Pick a date</span>
-									)}
-									<CalendarIcon className="w-4 h-4 ml-auto opacity-50" />
-								</Button>
-							</PopoverTrigger>
-							<PopoverContent className="w-auto p-0" align="start">
-								<Calendar
-									mode="single"
-									disabled={(date) => date < new Date()}
-									selected={
-										newKey.expires === undefined
-											? new Date()
-											: new Date(newKey.expires)
-									}
-									onSelect={(date) => {
-										if (date) {
-											setNewKey((x) => ({
-												...x,
-												expires: date.getTime(),
-											}));
-										}
-									}}
-									initialFocus
-								/>
-							</PopoverContent>
-						</Popover>
-					</div>
-					<div className="h-2"></div>
-					<Button
-						type="submit"
-						className="w-full"
-						disabled={isLoading === "create"}
-					>
-						{isLoading === "create" ? (
-							<>
-								<Loader2 className="w-4 h-4 mr-2 animate-spin" />
-								Creating...
-							</>
-						) : (
-							"Create API Key"
-						)}
-					</Button>
-				</form>
+				{menu === "form" ? formUI : completeUI}
 			</DialogContent>
 		</Dialog>
 	);
