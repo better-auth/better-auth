@@ -91,13 +91,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
     ) {
       const arrayTypeMap: Record<string, Record<string, string>> = {
         string: {
-          sqlite: `text('${name}')`, // SQLite doesn't support arrays directly
-          pg: `text('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`, // SQLite doesn't support arrays directly
-          mysql: `json('${name}')`, // MySQL uses JSON for arrays
+          sqlite: `text('${name}')`,
+          pg: `text('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
+          mysql: `json('${name}')`,
         },
         boolean: {
           sqlite: `integer('${name}', { mode: 'boolean' })`,
-          pg: `boolean('${name}').array()..notNull().default(sql\`ARRAY[]::text[]\`)`, // PostgreSQL supports array of boolean
+          pg: `boolean('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
           mysql: `json('${name}')`, // MySQL uses JSON for arrays
         },
         number: {
@@ -105,12 +105,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
           pg: field.bigint
             ? `bigint('${name}', { mode: 'number' }).array().notNull().default(sql\`ARRAY[]::integer[]\`),`
             : `integer('${name}').array().notNull().default(sql\`ARRAY[]::integer[]\`)`,
-          mysql: `json('${name}')`, // MySQL uses JSON for arrays
+          mysql: `json('${name}')`,
         },
         date: {
           sqlite: `integer('${name}', { mode: 'timestamp' })`,
           pg: `timestamp('${name}').array().notNull().default(sql\`ARRAY[]::timestamp[]\`)`,
-          mysql: `json('${name}')`, // MySQL uses JSON for arrays
+          mysql: `json('${name}')`,
         },
       };
 
