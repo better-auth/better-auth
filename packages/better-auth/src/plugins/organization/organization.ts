@@ -44,8 +44,8 @@ import {
 } from "./routes/crud-org";
 import {
 	createTeam,
+	listOrganizationTeams,
 	getTeam,
-	getTeams,
 	removeTeam,
 	updateTeam,
 } from "./routes/crud-team";
@@ -110,6 +110,9 @@ export interface OrganizationOptions {
 	 * Support for team.
 	 */
 	teams?: {
+		/**
+		 * Enable team features.
+		 */
 		enabled: boolean;
 	};
 	/**
@@ -160,6 +163,10 @@ export interface OrganizationOptions {
 			 * the organization the user is invited to join
 			 */
 			organization: Organization;
+			/**
+			 * the invitation object
+			 */
+			invitation: Invitation;
 			/**
 			 * the member who is inviting the user
 			 */
@@ -269,7 +276,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		updateOrganization,
 		deleteOrganization,
 		setActiveOrganization,
-		getFullOrganization,
+		getFullOrganization: getFullOrganization<O>(),
 		listOrganizations,
 		createInvitation: createInvitation(options as O),
 		cancelInvitation,
@@ -284,7 +291,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
 		createTeam: createTeam(options as O),
-		listOrganizationTeams: getTeams,
+		listOrganizationTeams,
 		removeTeam,
 		updateTeam,
 		getTeam,
@@ -334,19 +341,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 			} satisfies AuthPluginSchema)
 		: undefined;
 
-	const api = shimContext(
-		endpoints as O["teams"] extends { enabled: true }
-			? typeof teamEndpoints & typeof endpoints
-			: typeof endpoints,
-		{
-			orgOptions: options || {},
-			roles,
-			getSession: async (context: AuthContext) => {
-				//@ts-expect-error
-				return await getSessionFromCtx(context);
-			},
+	const api = shimContext(endpoints, {
+		orgOptions: options || {},
+		roles,
+		getSession: async (context: AuthContext) => {
+			//@ts-expect-error
+			return await getSessionFromCtx(context);
 		},
-	);
+	});
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -357,7 +359,9 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	return {
 		id: "organization",
 		endpoints: {
-			...api,
+			...(api as O["teams"] extends { enabled: true }
+				? typeof teamEndpoints & typeof endpoints
+				: typeof endpoints),
 			hasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{

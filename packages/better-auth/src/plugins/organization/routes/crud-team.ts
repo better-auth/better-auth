@@ -192,8 +192,8 @@ export const getTeam = createAuthEndpoint(
 		return ctx.json(team);
 	},
 );
-export const getTeams = createAuthEndpoint(
-	"/organization/get-teams",
+export const listOrganizationTeams = createAuthEndpoint(
+	"/organization/list-teams",
 	{
 		method: "GET",
 		use: [orgMiddleware, orgSessionMiddleware],

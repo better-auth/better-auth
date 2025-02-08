@@ -19,10 +19,11 @@ import { useAuthQuery } from "../../client";
 import { BetterAuthError } from "../../error";
 
 interface OrganizationClientOptions {
-	ac: AccessControl;
-	roles: {
+	ac?: AccessControl;
+	roles?: {
 		[key in string]: Role;
 	};
+	enableTeams?: boolean;
 }
 
 export const organizationClient = <O extends OrganizationClientOptions>(
@@ -58,6 +59,9 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 							member: Role;
 							owner: Role;
 						};
+				teams: {
+					enabled: O["enableTeams"] extends true ? true : false;
+				};
 			}>
 		>,
 		getActions: ($fetch) => ({

@@ -7,6 +7,13 @@ import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { getSessionFromCtx } from "../../../api";
+import type { OrganizationOptions } from "../organization";
+import type {
+	InferInvitation,
+	InferMember,
+	Organization,
+	Team,
+} from "../schema";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -125,8 +132,7 @@ export const createOrganization = createAuthEndpoint(
 			},
 			user,
 		});
-		console.log({ organization });
-		if (options?.teamSupport) {
+		if (options?.teams?.enabled) {
 			const teamStatus = "active";
 			const defaultTeam = await adapter.createTeam({
 				id: generateId(),
@@ -143,14 +149,6 @@ export const createOrganization = createAuthEndpoint(
 				organizationId: organization.id,
 				role: "admin",
 				createdAt: new Date(),
-			});
-			await adapter.createInvitation({
-				invitation: {
-					role: "member",
-					email: user.email,
-					organizationId: organization.id,
-				},
-				user,
 			});
 		}
 
@@ -387,38 +385,40 @@ export const deleteOrganization = createAuthEndpoint(
 	},
 );
 
-export const getFullOrganization = createAuthEndpoint(
-	"/organization/get-full-organization",
-	{
-		method: "GET",
-		query: z.optional(
-			z.object({
-				organizationId: z
-					.string({
-						description: "The organization id to get",
-					})
-					.optional(),
-				organizationSlug: z
-					.string({
-						description: "The organization slug to get",
-					})
-					.optional(),
-			}),
-		),
-		requireHeaders: true,
-		use: [orgMiddleware, orgSessionMiddleware],
-		metadata: {
-			openapi: {
-				description: "Get the full organization",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									description: "The organization",
-									$ref: "#/components/schemas/Organization",
+export const getFullOrganization = <O extends OrganizationOptions>() =>
+	createAuthEndpoint(
+		"/organization/get-full-organization",
+		{
+			method: "GET",
+			query: z.optional(
+				z.object({
+					organizationId: z
+						.string({
+							description: "The organization id to get",
+						})
+						.optional(),
+					organizationSlug: z
+						.string({
+							description: "The organization slug to get",
+						})
+						.optional(),
+				}),
+			),
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Get the full organization",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The organization",
+										$ref: "#/components/schemas/Organization",
+									},
 								},
 							},
 						},
@@ -426,40 +426,50 @@ export const getFullOrganization = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		const session = ctx.context.session;
-		const organizationId =
-			ctx.query?.organizationSlug ||
-			ctx.query?.organizationId ||
-			session.session.activeOrganizationId;
-		if (!organizationId) {
-			return ctx.json(null, {
-				status: 200,
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.query?.organizationSlug ||
+				ctx.query?.organizationId ||
+				session.session.activeOrganizationId;
+			if (!organizationId) {
+				return ctx.json(null, {
+					status: 200,
+				});
+			}
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const organization = await adapter.findFullOrganization({
+				organizationId,
+				isSlug: !!ctx.query?.organizationSlug,
+				includeTeams: ctx.context.orgOptions.teams?.enabled,
 			});
-		}
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const organization = await adapter.findFullOrganization({
-			organizationId,
-			isSlug: !!ctx.query?.organizationSlug,
-		});
-		const isMember = organization?.members.find(
-			(member) => member.userId === session.user.id,
-		);
-		if (!isMember) {
-			throw new APIError("FORBIDDEN", {
-				message:
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-			});
-		}
-		if (!organization) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-			});
-		}
-		return ctx.json(organization);
-	},
-);
+			const isMember = organization?.members.find(
+				(member) => member.userId === session.user.id,
+			);
+			if (!isMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			type OrganizationReturn = O["teams"] extends { enabled: true }
+				? {
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: Team[];
+					} & Organization
+				: {
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & Organization;
+			return ctx.json(organization as unknown as OrganizationReturn);
+		},
+	);
 
 export const setActiveOrganization = createAuthEndpoint(
 	"/organization/set-active",

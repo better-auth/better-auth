@@ -5,36 +5,42 @@ import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
 
 describe("team", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
-		plugins: [
-			organization({
-				async sendInvitationEmail(data, request) {},
-				schema: {
-					organization: {
-						modelName: "team",
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					async sendInvitationEmail(data, request) {},
+					teams: {
+						enabled: true,
 					},
-					team: {
-						modelName: "teamOrg",
+					schema: {
+						organization: {
+							modelName: "team",
+						},
+						team: {
+							modelName: "teamOrg",
+						},
+						member: {
+							modelName: "teamMembers",
+						},
 					},
-					member: {
-						modelName: "teamMembers",
-					},
-				},
-			}),
-		],
-		logger: {
-			level: "error",
-		},
-	});
-
-	auth.api.createTeam;
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [organizationClient()],
+		plugins: [
+			organizationClient({
+				enableTeams: true,
+			}),
+		],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
@@ -45,6 +51,12 @@ describe("team", async (it) => {
 
 	let organizationId: string;
 	let teamId: string;
+
+	const invitedUser = {
+		email: "invited@email.com",
+		password: "password",
+		name: "Invited User",
+	};
 
 	it("should create an organization and a team", async () => {
 		const createOrganizationResponse = await client.organization.create({
@@ -57,8 +69,9 @@ describe("team", async (it) => {
 				headers,
 			},
 		});
-		console.log({ createOrganizationResponse });
+
 		organizationId = createOrganizationResponse.data?.id as string;
+
 		expect(createOrganizationResponse.data?.name).toBe("Test Organization");
 		expect(createOrganizationResponse.data?.slug).toBe("test-org");
 		expect(createOrganizationResponse.data?.members.length).toBe(1);
@@ -75,10 +88,57 @@ describe("team", async (it) => {
 			},
 			fetchOptions: { headers },
 		});
+
 		teamId = createTeamResponse.data?.id as string;
+
 		expect(createTeamResponse.data?.name).toBe("Development Team");
 		expect(createTeamResponse.data?.status).toBe("active");
 		expect(createTeamResponse.data?.organizationId).toBe(organizationId);
+	});
+
+	it("should invite member to team", async () => {
+		const res = await client.organization.inviteMember(
+			{
+				teamId,
+				email: invitedUser.email,
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data).toMatchObject({
+			email: invitedUser.email,
+			role: "member",
+			teamId,
+		});
+		const newHeaders = new Headers();
+		const signUpRes = await client.signUp.email(invitedUser, {
+			onSuccess: cookieSetter(newHeaders),
+		});
+		const invitation = await client.organization.acceptInvitation(
+			{
+				invitationId: res.data?.id as string,
+			},
+			{
+				headers: newHeaders,
+			},
+		);
+		expect(invitation.data?.member).toMatchObject({
+			role: "member",
+			teamId,
+			userId: signUpRes.data?.user.id,
+		});
+	});
+
+	it("should get full organization", async () => {
+		const organization = await client.organization.getFullOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const teams = organization.data?.teams;
+		expect(teams?.length).toBe(2);
 	});
 
 	it("should get a team by teamId", async () => {
@@ -88,20 +148,19 @@ describe("team", async (it) => {
 			},
 			fetchOptions: { headers },
 		});
-		console.log({ team });
 		expect(team.data?.id).toBe(teamId);
 		expect(team.data?.name).toBe("Development Team");
 		expect(team.data?.status).toBe("active");
 	});
 
 	it("should get all teams", async () => {
-		const team = await client.organization?.getTeams({
+		const team = await client.organization.listTeams({
 			fetchOptions: { headers },
 		});
 		expect(team.data).toBeInstanceOf(Array);
-		// since teamSupport: true; it creates default team when org is created.
 		expect(team.data).toHaveLength(2);
 	});
+
 	it("should update a team", async () => {
 		const updateTeamResponse = await client.organization?.updateTeam({
 			teamId,

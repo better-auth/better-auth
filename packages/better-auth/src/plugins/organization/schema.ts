@@ -15,6 +15,7 @@ export const organizationSchema = z.object({
 	metadata: z
 		.record(z.string())
 		.or(z.string().transform((v) => JSON.parse(v)))
+
 		.nullish(),
 	createdAt: z.date(),
 });
@@ -24,8 +25,8 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
 	role,
-	teamId: z.string().optional(),
 	createdAt: z.date(),
+	teamId: z.string().optional(),
 });
 
 export const invitationSchema = z.object({
@@ -34,9 +35,6 @@ export const invitationSchema = z.object({
 	email: z.string(),
 	role,
 	status: invitationStatus,
-	/**
-	 * The id of the user who invited the user.
-	 */
 	teamId: z.string().optional(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
@@ -57,7 +55,52 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
-export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
+export type InferZodRolesFromOption<O extends OrganizationOptions | undefined> =
 	ZodLiteral<
 		O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner"
 	>;
+export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
+	O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+
+export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
+
+export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
+	enabled: true;
+}
+	? {
+			id: string;
+			organizationId: string;
+			role: InferRolesFromOption<O>;
+			createdAt: Date;
+		}
+	: {
+			id: string;
+			organizationId: string;
+			createdAt: Date;
+			role: InferRolesFromOption<O>;
+			teamId?: string;
+		};
+
+export type InferInvitation<O extends OrganizationOptions> =
+	O["teams"] extends {
+		enabled: true;
+	}
+		? {
+				id: string;
+				organizationId: string;
+				email: string;
+				role: InferRolesFromOption<O>;
+				status: InvitationStatus;
+				inviterId: string;
+				expiresAt: Date;
+			}
+		: {
+				id: string;
+				organizationId: string;
+				email: string;
+				role: InferRolesFromOption<O>;
+				status: InvitationStatus;
+				inviterId: string;
+				expiresAt: Date;
+				teamId?: string;
+			};

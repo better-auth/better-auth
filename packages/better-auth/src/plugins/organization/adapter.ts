@@ -318,9 +318,11 @@ export const getOrgAdapter = (
 		findFullOrganization: async ({
 			organizationId,
 			isSlug,
+			includeTeams,
 		}: {
 			organizationId: string;
 			isSlug?: boolean;
+			includeTeams?: boolean;
 		}) => {
 			const org = await adapter.findOne<Organization>({
 				model: "organization",
@@ -329,7 +331,7 @@ export const getOrgAdapter = (
 			if (!org) {
 				return null;
 			}
-			const [invitations, members] = await Promise.all([
+			const [invitations, members, teams] = await Promise.all([
 				adapter.findMany<Invitation>({
 					model: "invitation",
 					where: [{ field: "organizationId", value: org.id }],
@@ -338,6 +340,12 @@ export const getOrgAdapter = (
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
 				}),
+				includeTeams
+					? adapter.findMany<Team>({
+							model: "team",
+							where: [{ field: "organizationId", value: org.id }],
+						})
+					: null,
 			]);
 
 			if (!org) return null;
@@ -371,6 +379,7 @@ export const getOrgAdapter = (
 				...org,
 				invitations,
 				members: membersWithUsers,
+				teams,
 			};
 		},
 		listOrganizations: async (userId: string) => {
@@ -524,6 +533,7 @@ export const getOrgAdapter = (
 				email: string;
 				role: string;
 				organizationId: string;
+				teamId?: string;
 			};
 			user: User;
 		}) => {
@@ -534,12 +544,10 @@ export const getOrgAdapter = (
 			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
 				data: {
-					email: invitation.email,
-					role: invitation.role,
-					organizationId: invitation.organizationId,
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
+					...invitation,
 				},
 			});
 
