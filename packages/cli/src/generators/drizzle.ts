@@ -23,10 +23,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	);
 	const bigint = databaseType !== "sqlite" ? "bigint" : "";
 	const text = databaseType === "mysql" ? "varchar, text" : "text";
-	let code = `import { ${databaseType}Table, ${text}, ${int}${
+	let code = `
+import { sql } from 'drizzle-orm';
+import { ${databaseType}Table, ${text}, ${int}${
 		hasBigint ? `, ${bigint}` : ""
-	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-			`;
+	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";`;
 
 	const fileExist = existsSync(filePath);
 
