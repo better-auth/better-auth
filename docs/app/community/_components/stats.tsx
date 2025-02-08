@@ -38,7 +38,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
 									>
 										<span className="uppercase font-mono">
 											Join Our Discord
@@ -63,7 +63,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -114,12 +114,12 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 							<div className="flex items-end w-full gap-2 mt-4 text-gray-400">
 								<Link
 									className="w-full"
-									href="https://www.npmjs.com/package/better-auth"
+									href="https://reddit.com/r/better_auth"
 									target="_blank"
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-0 border-t-[1px] border-t-input py-7 w-full hover:text-white"
+										className="group duration-500 text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-white"
 									>
 										<span className="uppercase font-mono">Join Subreddit</span>
 										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-100 text-black group-hover:duration-700 dark:text-white" />
