@@ -98,7 +98,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
         boolean: {
           sqlite: `integer('${name}', { mode: 'boolean' })`,
           pg: `boolean('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
-          mysql: `json('${name}')`, // MySQL uses JSON for arrays
+          mysql: `json('${name}')`,
         },
         number: {
           sqlite: `integer('${name}')`,
