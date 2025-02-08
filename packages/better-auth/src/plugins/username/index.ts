@@ -91,8 +91,8 @@ export const username = (options?: UsernameOptions) => {
 						ctx.context.options.emailAndPassword?.requireEmailVerification
 					) {
 						await sendVerificationEmailFn(ctx, user);
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
 
