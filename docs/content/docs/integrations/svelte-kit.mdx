@@ -67,6 +67,32 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
     </div>
 ```
 
+### Example: Getting User role in a layout 
+```ts title="+layout.server.ts"
+import type { LayoutServerLoad } from './$types';
+import { error, redirect } from '@sveltejs/kit';
+import { authClient } from '$lib/auth-client';
+
+
+export const load: LayoutServerLoad = async ({ request }) => {
+    console.log('Admin Layout Server load ');
+    const session = await authClient.getSession({
+        fetchOptions: {
+            headers: request.headers
+        }
+    });
+    if (!session.data) {
+        console.log('Admin : No session');
+        throw redirect(302, '/login');
+    }
+    if (session.data?.user.role !== 'admin') {
+        console.log('Admin : Not admin');
+        throw error(403, 'Forbidden');
+    }
+}; 
+```
+
+
 ### Example: Getting Session on a loader
 
 ```ts title="+page.server.ts"
