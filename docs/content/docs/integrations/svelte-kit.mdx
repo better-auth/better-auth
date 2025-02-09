@@ -67,7 +67,7 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
     </div>
 ```
 
-### Example: Getting User role in a layout 
+### Example: Getting User session and role in a layout 
 ```ts title="+layout.server.ts"
 import type { LayoutServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
@@ -92,6 +92,77 @@ export const load: LayoutServerLoad = async ({ request }) => {
 }; 
 ```
 
+### Example: Storing session on locals and protecting a route with layout 
+
+We first get the session and set it to event.locals 
+
+```ts title="hooks.server.ts"
+import type { Handle } from '@sveltejs/kit';
+import { authClient } from '$lib/auth-client';
+
+export const handle: Handle = async ({ event, resolve }) => {
+  // Get the session  
+  const session = await authClient.getSession({
+    fetchOptions: {
+      headers: event.request.headers
+    }
+  });
+  // Set session and user to locals 
+  event.locals.session = session?.data?.session;
+  event.locals.user = session?.data?.user;
+
+  const response = await resolve(event);
+  return response;
+};  
+
+```
+
+Then on the +layout.server.ts of the protected routes 
+```ts title="+layout.server.ts"
+import type { LayoutServerLoad } from './$types';
+import { error, redirect } from '@sveltejs/kit';
+
+import { authClient } from '$lib/auth-client';
+
+export const load: LayoutServerLoad = async ({ locals }) => {
+
+    console.log('Admin Layout Server load ');
+
+    const session = locals.session;
+    const user = locals.user;
+
+    if (!session) {
+        console.log('Admin : No session');
+        throw redirect(302, '/login');
+    }
+    if (user?.role !== 'admin') {
+        console.log('Admin : Not admin');
+        throw error(403, 'Forbidden');
+    }
+}; 
+
+```
+if you do this , make sure to also set the types on your app.d.ts
+
+```ts title="app.d.ts"
+// See https://kit.svelte.dev/docs/types#app
+// for information about these interfaces
+
+declare global {
+	namespace App {
+		interface Locals {
+			session: Session | undefined;
+			user: User | undefined;
+		}
+		// interface Error {}
+		// interface Locals {}
+		// interface PageData {}
+		// interface Platform {}
+	}
+}
+
+export { };
+```
 
 ### Example: Getting Session on a loader
 
