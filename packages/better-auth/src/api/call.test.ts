@@ -229,7 +229,7 @@ describe("call", async () => {
 		});
 	});
 
-	it.only("should set cookies", async () => {
+	it("should set cookies", async () => {
 		const response = await api.testCookies({
 			body: {
 				cookies: [
@@ -242,7 +242,6 @@ describe("call", async () => {
 			returnHeaders: true,
 		});
 		const setCookies = response.headers.get("set-cookie");
-		console.log({ setCookies, response });
 		expect(setCookies).toContain("test-cookie=test-value");
 	});
 
@@ -363,104 +362,99 @@ describe("call", async () => {
 					message: "throw-after-hook",
 				},
 			})
-			.then((r) => {
-				console.log(r);
-			})
 			.catch((e) => {
-				console.log(e);
 				expect(e).toBeInstanceOf(APIError);
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from after hook");
 			});
 	});
 
-	// it("should throw from chained hook", async () => {
-	// 	await api
-	// 		.testThrow({
-	// 			query: {
-	// 				message: "throw-chained-hook",
-	// 			},
-	// 		})
-	// 		.catch((e) => {
-	// 			expect(e).toBeInstanceOf(APIError);
-	// 			expect(e.status).toBe("BAD_REQUEST");
-	// 			expect(e.message).toContain("from chained hook 2");
-	// 		});
-	// });
+	it("should throw from chained hook", async () => {
+		await api
+			.testThrow({
+				query: {
+					message: "throw-chained-hook",
+				},
+			})
+			.catch((e) => {
+				expect(e).toBeInstanceOf(APIError);
+				expect(e.status).toBe("BAD_REQUEST");
+				expect(e.message).toContain("from chained hook 2");
+			});
+	});
 
-	// it("should intercept on global before hook", async () => {
-	// 	const response = await api.test({
-	// 		query: {
-	// 			testBeforeGlobal: "true",
-	// 		},
-	// 	});
-	// 	expect(response).toMatchObject({
-	// 		before: "global",
-	// 	});
-	// });
+	it("should intercept on global before hook", async () => {
+		const response = await api.test({
+			query: {
+				testBeforeGlobal: "true",
+			},
+		});
+		expect(response).toMatchObject({
+			before: "global",
+		});
+	});
 
-	// it("should intercept on global after hook", async () => {
-	// 	const response = await api.test({
-	// 		query: {
-	// 			testAfterGlobal: "true",
-	// 		},
-	// 	});
-	// 	expect(response).toMatchObject({
-	// 		after: "global",
-	// 	});
-	// });
+	it("should intercept on global after hook", async () => {
+		const response = await api.test({
+			query: {
+				testAfterGlobal: "true",
+			},
+		});
+		expect(response).toMatchObject({
+			after: "global",
+		});
+	});
 
-	// it("global before hook should change the context", async (ctx) => {
-	// 	const response = await api.signUpEmail({
-	// 		body: {
-	// 			email: "my-email@test.com",
-	// 			password: "password",
-	// 			name: "test",
-	// 		},
-	// 	});
+	it("global before hook should change the context", async (ctx) => {
+		const response = await api.signUpEmail({
+			body: {
+				email: "my-email@test.com",
+				password: "password",
+				name: "test",
+			},
+		});
+		const session = await api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${response?.token}`,
+			}),
+		});
+		expect(session?.user.email).toBe("changed@email.com");
+	});
 
-	// 	const session = await api.getSession({
-	// 		headers: new Headers({
-	// 			Authorization: `Bearer ${response?.token}`,
-	// 		}),
-	// 	});
-	// 	expect(session?.user.email).toBe("changed@email.com");
-	// });
+	it("should fetch using a client", async () => {
+		const response = await client.$fetch("/ok");
+		expect(response.data).toMatchObject({
+			ok: true,
+		});
+	});
 
-	// it("should fetch using a client", async () => {
-	// 	const response = await client.$fetch("/test");
-	// 	expect(response.data).toMatchObject({
-	// 		success: "true",
-	// 	});
-	// });
+	it("should fetch using a client with query", async () => {
+		const response = await client.$fetch("/test", {
+			query: {
+				message: "test",
+			},
+		});
+		expect(response.data).toMatchObject({
+			success: "test",
+		});
+	});
 
-	// it("should fetch using a client with query", async () => {
-	// 	const response = await client.$fetch("/test", {
-	// 		query: {
-	// 			message: "test",
-	// 		},
-	// 	});
-	// 	expect(response.data).toMatchObject({
-	// 		success: "test",
-	// 	});
-	// });
-
-	// it("should set cookies using a client", async () => {
-	// 	await client.$fetch("/test/cookies", {
-	// 		method: "POST",
-	// 		body: {
-	// 			cookies: [
-	// 				{
-	// 					name: "test-cookie",
-	// 					value: "test-value",
-	// 				},
-	// 			],
-	// 		},
-	// 		onResponse(context) {
-	// 			expect(context.response.headers.get("set-cookie")).toContain(
-	// 				"test-cookie=test-value",
-	// 			);
-	// 		},
-	// 	});
-	// });
+	it("should set cookies using a client", async () => {
+		await client.$fetch("/test/cookies", {
+			method: "POST",
+			body: {
+				cookies: [
+					{
+						name: "test-cookie",
+						value: "test-value",
+					},
+				],
+			},
+			onResponse(context) {
+				expect(context.response.headers.get("set-cookie")).toContain(
+					"test-cookie=test-value",
+				);
+			},
+		});
+	});
 });

@@ -1,4 +1,4 @@
-import type { APIError, Endpoint } from "better-call";
+import type { Endpoint, EndpointContext } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthEndpoint } from "../api/call";
 import type { FieldAttribute } from "../db/field";
@@ -20,7 +20,7 @@ export type AuthPluginSchema = {
 export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
 	| void
 	| {
-			context?: Partial<HookEndpointContext>;
+			context?: Partial<EndpointContext<string, any>>;
 	  }
 	| Response
 	| {
@@ -33,9 +33,6 @@ export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
 
 export type HookAfterHandler = (context: HookEndpointContext) => Promise<
 	| void
-	| {
-			responseHeader?: Headers;
-	  }
 	| Response
 	| {
 			response: Record<string, any>;
@@ -86,12 +83,7 @@ export type BetterAuthPlugin = {
 			handler: HookBeforeHandler;
 		}[];
 		after?: {
-			matcher: (
-				context: HookEndpointContext<{
-					returned: APIError | Response | Record<string, any>;
-					endpoint: Endpoint;
-				}>,
-			) => boolean;
+			matcher: (context: HookEndpointContext) => boolean;
 			handler: HookAfterHandler;
 		}[];
 	};

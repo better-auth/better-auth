@@ -1,18 +1,6 @@
-import {
-	APIError,
-	type CookieOptions,
-	type CookiePrefixOptions,
-	type Endpoint,
-	type Middleware,
-	createInternalContext,
-	createRouter,
-	// getCookie,
-	// getSignedCookie,
-	// setCookie,
-	// setSignedCookie,
-} from "better-call";
+import { APIError, type Middleware, createRouter } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions, Session, User } from "../types";
+import type { BetterAuthOptions } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
@@ -46,6 +34,7 @@ import { error } from "./routes/error";
 import { logger } from "../utils/logger";
 import type { BetterAuthPlugin } from "../plugins";
 import { onRequestRateLimit } from "./rate-limiter";
+import { toAuthEndpoints } from "./to-auth-endpoints";
 
 export function getEndpoints<
 	C extends AuthContext,
@@ -128,203 +117,7 @@ export function getEndpoints<
 		ok,
 		error,
 	};
-	let api: Record<string, any> = {};
-	for (const [key, endpoint] of Object.entries(endpoints)) {
-		api[key] = async (context = {} as any) => {
-			let headers = new Headers();
-
-			let internalCtx = await createInternalContext(context, {
-				path: endpoint.path,
-				options: endpoint.options,
-				headers,
-			});
-
-			let authCtx = await ctx;
-			let newSession = null;
-			let internalContext = {
-				...internalCtx,
-				responseHeader: headers,
-				...context,
-				path: endpoint.path,
-				context: {
-					...authCtx,
-					...context.context,
-					session: null,
-					setNewSession: function (
-						session: {
-							session: Session;
-							user: User;
-						} | null,
-					) {
-						this.newSession = session;
-						newSession = session;
-					},
-				},
-			};
-
-			const plugins = options.plugins || [];
-			const beforeHooks = plugins
-				.map((plugin) => {
-					if (plugin.hooks?.before) {
-						return plugin.hooks.before;
-					}
-				})
-				.filter((plugin) => plugin !== undefined)
-				.flat();
-			const afterHooks = plugins
-				.map((plugin) => {
-					if (plugin.hooks?.after) {
-						return plugin.hooks.after;
-					}
-				})
-				.filter((plugin) => plugin !== undefined)
-				.flat();
-			if (options.hooks?.before) {
-				beforeHooks.push({
-					matcher: () => true,
-					handler: options.hooks.before,
-				});
-			}
-			if (options.hooks?.after) {
-				afterHooks.push({
-					matcher: () => true,
-					handler: options.hooks.after,
-				});
-			}
-			for (const hook of beforeHooks) {
-				if (!hook.matcher(internalContext)) continue;
-				const hookRes = await hook.handler(internalContext);
-				if (hookRes && "context" in hookRes) {
-					// modify the context with the response from the hook
-					internalContext = {
-						...internalContext,
-						...hookRes.context,
-					};
-					continue;
-				}
-				if (
-					hookRes &&
-					"headers" in hookRes &&
-					hookRes.headers instanceof Headers
-				) {
-					hookRes.headers.forEach((value, key) => {
-						headers.set(value, key);
-					});
-					continue;
-				}
-				if (hookRes) {
-					// return with the response from the hook
-					return hookRes;
-				}
-			}
-
-			let endpointRes: any;
-			try {
-				//@ts-ignore
-				endpointRes = await endpoint(internalContext);
-				if (newSession) {
-					internalContext.context.newSession = newSession;
-				}
-			} catch (e) {
-				if (newSession) {
-					internalContext.context.newSession = newSession;
-				}
-				if (e instanceof APIError) {
-					/**
-					 * If there are no after plugins, we can directly throw the error
-					 */
-					if (!afterHooks?.length) {
-						// e.headers = headers;
-						throw e;
-					}
-					internalContext.context.returned = e;
-
-					for (const hook of afterHooks || []) {
-						const match = hook.matcher(internalContext);
-						if (match) {
-							try {
-								const hookRes = await hook.handler(internalContext);
-								if (hookRes && "response" in hookRes) {
-									internalContext.context.returned = hookRes.response;
-								}
-							} catch (e) {
-								if (e instanceof APIError) {
-									internalContext.context.returned = e;
-									continue;
-								}
-								throw e;
-							}
-						}
-					}
-
-					if (internalContext.context.returned instanceof APIError) {
-						throw internalContext.context.returned;
-					}
-
-					return internalContext.context.returned;
-				}
-				throw e;
-			}
-			internalContext.context.returned = endpointRes;
-			internalContext.responseHeader = headers;
-			for (const hook of afterHooks) {
-				const match = hook.matcher(internalContext);
-				if (match) {
-					try {
-						const hookRes = await hook.handler({
-							...internalContext,
-							returnHeaders: true,
-						});
-						console.log({ hookRes });
-						if (hookRes) {
-							if ("headers" in hookRes && hookRes.headers instanceof Headers) {
-								hookRes.headers.forEach((value, key) => {
-									if (key === "set-cookie") {
-										headers.append(key, value);
-									} else {
-										headers.set(key, value);
-									}
-								});
-								internalContext.responseHeader = headers;
-							}
-							if ("response" in hookRes && hookRes) {
-								internalContext.context.returned = hookRes.response;
-							}
-						}
-					} catch (e) {
-						if (e instanceof APIError) {
-							internalContext.context.returned = e;
-							continue;
-						}
-						throw e;
-					}
-				}
-			}
-			const response = internalContext.context.returned;
-			if (
-				response instanceof Response ||
-				(response &&
-					"headers" in response &&
-					response.headers instanceof Headers)
-			) {
-				headers.forEach((value, key) => {
-					if (key === "set-cookie") {
-						response.headers.append(key, value);
-					} else {
-						response.headers.set(key, value);
-					}
-				});
-			}
-
-			if (response instanceof APIError) {
-				response.headers = headers;
-				throw response;
-			}
-			return response;
-		};
-		api[key].path = endpoint.path;
-		api[key].options = endpoint.options;
-	}
+	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
@@ -339,7 +132,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	const basePath = new URL(ctx.baseURL).pathname;
 
 	return createRouter(api, {
-		extraContext: ctx,
+		routerContext: ctx,
 		basePath,
 		routerMiddleware: [
 			{

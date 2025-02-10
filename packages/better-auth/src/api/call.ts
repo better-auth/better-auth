@@ -25,7 +25,7 @@ export const createAuthMiddleware = createMiddleware.create({
 		 */
 		createMiddleware(async () => {
 			return {} as {
-				returned?: APIError | Response | Record<string, any>;
+				returned?: unknown;
 				endpoint: Endpoint;
 			};
 		}),
