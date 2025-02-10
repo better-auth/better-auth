@@ -192,7 +192,9 @@ export function getEndpoints<
 						this.newSession = session;
 						newSession = session;
 					},
+					returned: undefined,
 				},
+				responseHeader: undefined,
 			};
 
 			const plugins = options.plugins || [];
