@@ -104,6 +104,7 @@ export const bearer = (options?: BearerOptions) => {
 						}
 						const token = sessionCookie.value;
 						ctx.setHeader("set-auth-token", token);
+						ctx.setHeader("Access-Control-Expose-Headers", "set-auth-token");
 					}),
 				},
 			],
