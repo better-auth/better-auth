@@ -98,7 +98,7 @@ export const discord = (options: DiscordOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://discord.com/api/oauth2/token",
 			});

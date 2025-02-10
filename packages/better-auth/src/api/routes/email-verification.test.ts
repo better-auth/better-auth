@@ -123,3 +123,93 @@ describe("Email Verification", async () => {
 		expect(res.error?.code).toBe("TOKEN_EXPIRED");
 	});
 });
+
+describe("Email Verification Secondary Storage", async () => {
+	let store = new Map<string, string>();
+	let token: string;
+	const { client, signInWithTestUser, db, auth, testUser, cookieSetter } =
+		await getTestInstance({
+			secondaryStorage: {
+				set(key, value, ttl) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			rateLimit: {
+				enabled: false,
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+				},
+				autoSignInAfterVerification: true,
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					async sendChangeEmailVerification(data, request) {
+						token = data.token;
+					},
+				},
+			},
+		});
+
+	it("should verify email", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+		const headers = new Headers();
+		await client.verifyEmail({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.email).toBe(testUser.email);
+		expect(session.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should change email", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.changeEmail({
+			body: {
+				newEmail: "new@email.com",
+			},
+			headers,
+		});
+		const newHeaders = new Headers();
+		await client.verifyEmail({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(newHeaders),
+				headers,
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data?.user.email).toBe("new@email.com");
+		expect(session.data?.user.emailVerified).toBe(false);
+	});
+});

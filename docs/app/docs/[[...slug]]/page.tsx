@@ -201,6 +201,9 @@ function getPageLinks(path: string) {
 		if (!next_category) next_category = contents[0];
 
 		next_page = next_category.list[0];
+		if (next_page.group) {
+			next_page = next_category.list[1];
+		}
 	}
 	// the prev page in the array.
 	let prev_page = current_category.list.filter((x) => !x.group)[
@@ -215,6 +218,9 @@ function getPageLinks(path: string) {
 		// if doesn't exist, return to last cat.
 		if (!prev_category) prev_category = contents[contents.length - 1];
 		prev_page = prev_category.list[prev_category.list.length - 1];
+		if (prev_page.group) {
+			prev_page = prev_category.list[prev_category.list.length - 2];
+		}
 	}
 
 	const pages = source.getPages();

@@ -63,7 +63,8 @@ export const getClientConfig = (options?: ClientOptions) => {
 					path === "/sign-out" ||
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up")
+					path.startsWith("/sign-up") ||
+					path === "/delete-user"
 				);
 			},
 		},

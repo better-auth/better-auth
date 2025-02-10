@@ -30,6 +30,12 @@ interface OAuthProxyOptions {
 	 * If the URL is not inferred correctly, you can provide a value here."
 	 */
 	currentURL?: string;
+	/**
+	 * If a request in a production url it won't be proxied.
+	 *
+	 * default to `BETTER_AUTH_URL`
+	 */
+	productionURL?: string;
 }
 
 /**
@@ -155,6 +161,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 								getVenderBaseURL() ||
 								ctx.context.baseURL,
 						);
+						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+						if (productionURL === ctx.context.options.baseURL) {
+							return;
+						}
 						ctx.body.callbackURL = `${url.origin}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
