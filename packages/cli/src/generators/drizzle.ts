@@ -83,8 +83,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							return `${field}: ${getType(field, attr)}${
 								attr.required ? ".notNull()" : ""
 							}${attr.unique ? ".unique()" : ""}${
-								attr.defaultValue ? typeof attr.defaultValue == "function" ? `.$defaultFn(${attr.defaultValue})` : `.default(${attr.defaultValue})` : "" 
-								}${
+								attr.defaultValue
+									? typeof attr.defaultValue == "function"
+										? `.$defaultFn(${attr.defaultValue})`
+										: `.default(${attr.defaultValue})`
+									: ""
+							}${
 								attr.references
 									? `.references(()=> ${
 											usePlural
