@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
@@ -141,7 +141,6 @@ export const username = (options?: UsernameOptions) => {
 							status: 500,
 							body: {
 								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								status: 500,
 							},
 						});
 					}
@@ -172,7 +171,7 @@ export const username = (options?: UsernameOptions) => {
 					matcher(context) {
 						return context.path === "/sign-up/email";
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
 						if (username) {
 							const user = await ctx.context.adapter.findOne<User>({
@@ -190,7 +189,7 @@ export const username = (options?: UsernameOptions) => {
 								});
 							}
 						}
-					},
+					}),
 				},
 			],
 		},

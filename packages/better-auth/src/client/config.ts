@@ -20,7 +20,7 @@ export const getClientConfig = (options?: ClientOptions) => {
 		method: "GET",
 		jsonParser(text) {
 			if (!text) {
-				return null;
+				return null as any;
 			}
 			return parseJSON(text, {
 				strict: false,
