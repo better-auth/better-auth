@@ -19,6 +19,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		jsonParser(text) {
+			if (!text) {
+				return null;
+			}
 			return parseJSON(text, {
 				strict: false,
 			});

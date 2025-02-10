@@ -93,10 +93,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
-				if (!sessionCookieToken) {
-					return ctx.json(null);
-				}
 
+				if (!sessionCookieToken) {
+					return null;
+				}
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
@@ -226,6 +226,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge,
 						},
 					);
+
 					return ctx.json({
 						session: updatedSession,
 						user: session.user,

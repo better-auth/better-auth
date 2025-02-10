@@ -194,7 +194,7 @@ importers:
         version: 11.13.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -505,7 +505,7 @@ importers:
         version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1439,8 +1439,8 @@ importers:
         specifier: 0.2.3
         version: 0.2.3
       '@better-fetch/fetch':
-        specifier: 1.1.12
-        version: 1.1.12
+        specifier: 1.1.13-beta.5
+        version: 1.1.13-beta.5
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -2653,6 +2653,9 @@ packages:
 
   '@better-fetch/fetch@1.1.12':
     resolution: {integrity: sha512-B3bfloI/2UBQWIATRN6qmlORrvx3Mp0kkNjmXLv0b+DtbtR+pP4/I5kQA/rDUv+OReLywCCldf6co4LdDmh8JA==}
+
+  '@better-fetch/fetch@1.1.13-beta.5':
+    resolution: {integrity: sha512-KAVJKQgyV0qDscDM+yBcq/zLwYVHsZGTEm51l6nrSQLwB+Hn4BvUq9IzSC92iLZ7u0bF4PuyJFejTD7B8aG4fg==}
 
   '@biomejs/biome@1.7.3':
     resolution: {integrity: sha512-ogFQI+fpXftr+tiahA6bIXwZ7CSikygASdqMtH07J2cUzrpjyTMVc9Y97v23c7/tL1xCZhM+W9k4hYIBm7Q6cQ==}
@@ -21192,6 +21195,8 @@ snapshots:
 
   '@better-fetch/fetch@1.1.12': {}
 
+  '@better-fetch/fetch@1.1.13-beta.5': {}
+
   '@biomejs/biome@1.7.3':
     optionalDependencies:
       '@biomejs/cli-darwin-arm64': 1.7.3
@@ -34072,7 +34077,7 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
       next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
