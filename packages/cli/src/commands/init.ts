@@ -5,13 +5,24 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger, type BetterAuthOptions } from "better-auth";
-import yoctoSpinner from "yocto-spinner";
 import prompts from "prompts";
 import fs from "fs/promises";
 import { getPackageInfo } from "../utils/get-package-info";
 import { diffWordsWithSpace } from "diff";
 import chalk from "chalk";
 import { generateAuthConfig } from "../generators/authConfig";
+import {
+	cancel,
+	confirm,
+	intro,
+	isCancel,
+	log,
+	multiselect,
+	outro,
+	select,
+	spinner,
+	text,
+} from "@clack/prompts";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -77,6 +88,8 @@ const optionsSchema = z.object({
 });
 
 export async function initAction(plgns: string[] | undefined, opts: any) {
+	intro("Initialize Better Auth");
+
 	const options = optionsSchema.parse(opts);
 
 	const {
@@ -103,12 +116,19 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	const packageJson = getPackageInfo(options.cwd);
 	let appName: string;
 	if (!options.name && !packageJson.name) {
-		const prompted_name = await prompts({
-			name: "appName",
-			type: "text",
+		const newAppName = await text({
 			message: "What is the name of your application?",
+			validate(value) {
+				const pkgNameRegex =
+					/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+				return pkgNameRegex.test(value) ? undefined : "Invalid package name";
+			},
 		});
-		appName = prompted_name["appName"];
+		if (isCancel(newAppName)) {
+			cancel("Operation cancelled.");
+			process.exit(0);
+		}
+		appName = newAppName;
 	} else {
 		appName = options.name || packageJson.name;
 	}
@@ -184,44 +204,59 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 
 	let database: SupportedDatabases | null = null;
 	if (options.skipDb === undefined && !config.database) {
-		options.skipDb = !(
-			await prompts({
-				type: "confirm",
-				name: "skipDb",
-				message: `Would you like to set up your ${chalk.bold(`database`)}?`,
-			})
-		)["skipDb"];
+		const result = await confirm({
+			message: `Would you like to set up your ${chalk.bold(`database`)}?`,
+			initialValue: false,
+		});
+		if (isCancel(result)) {
+			cancel(`Operating cancelled.`);
+			process.exit(0);
+		}
+		options.skipDb = !result;
 	}
 
 	if (!config.database && !options.skipDb) {
 		if (options.database) {
 			database = options.database;
 		} else {
-			const prompted_database = await prompts({
-				name: "Database",
-				type: "select",
-				message: "What database dialect do you want to use?",
-				choices: supportedDatabases.map((it) => ({ title: it, value: it })),
+			const prompted_database = await select({
+				message: "Choose a Database Dialect",
+				options: supportedDatabases.map((it) => ({ value: it, label: it })),
 			});
-			database = prompted_database["Database"];
+			if (isCancel(prompted_database)) {
+				cancel(`Operating cancelled.`);
+				process.exit(0);
+			}
+			database = prompted_database;
 		}
 	}
 
 	// ===== plugins =====
-
 	let add_plugins: SupportedPlugins[] = [];
 	let existing_plugins: string[] = config.plugins
 		? config.plugins.map((x) => x.id)
 		: [];
 
 	if (options.skipPlugins === undefined) {
-		options.skipPlugins = !(
-			await prompts({
-				type: "confirm",
-				name: "skipPlugins",
+		if (config.plugins === undefined) {
+			const skipPLugins = await confirm({
 				message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
-			})
-		)["skipPlugins"];
+			});
+			if (isCancel(skipPLugins)) {
+				cancel(`Operating cancelled.`);
+				process.exit(0);
+			}
+			options.skipPlugins = !skipPLugins;
+		} else {
+			const skipPLugins = await confirm({
+				message: `Would you like to add new ${chalk.bold(`plugins`)}?`,
+			});
+			if (isCancel(skipPLugins)) {
+				cancel(`Operating cancelled.`);
+				process.exit(0);
+			}
+			options.skipPlugins = !skipPLugins;
+		}
 	}
 	if (!options.skipPlugins) {
 		if (!plugins || plugins.length === 0) {
@@ -233,16 +268,18 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					return { title: plugin_id, value: plugin_id };
 				})
 				.sort((a) => (a.disabled ? 1 : -1));
-			const prompted_plugins = await prompts({
-				name: "plugins",
-				type: "multiselect",
-				message: "What plugins do you want to use?",
-				choices: plugins_to_prompt,
-				hint: "- Space to select. Return to submit",
-				instructions: false,
-				warn: "You already have that plugin enabled",
+
+			const prompted_plugins = await multiselect({
+				message: "Select your new plugins",
+				options: supportedPlugins
+					.filter((x) => x !== "next-cookies" && !existing_plugins.includes(x))
+					.map((x) => ({ value: x, label: x })),
 			});
-			add_plugins = prompted_plugins["plugins"];
+			if (isCancel(prompted_plugins)) {
+				cancel(`Operating cancelled.`);
+				process.exit(0);
+			}
+			add_plugins = prompted_plugins;
 		} else {
 			add_plugins = plugins.filter((x) => !existing_plugins.includes(x));
 		}
@@ -267,12 +304,14 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 		}
 		if (!existing_plugins.includes("next-cookies") && is_next_framework) {
-			const result = await prompts({
-				type: "confirm",
-				name: "confirm",
+			const result = await confirm({
 				message: `It looks like you're using Next.JS. Do you want to add the next-cookies plugin?`,
 			});
-			if (result.confirm) {
+			if (isCancel(result)) {
+				cancel(`Operating cancelled.`);
+				process.exit(0);
+			}
+			if (result) {
 				add_plugins.push("next-cookies");
 			}
 		}
@@ -284,9 +323,8 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		!(options.skipPlugins || add_plugins.length === 0) || database !== null;
 
 	if (shouldUpdateAuthConfig) {
-		const spinner = yoctoSpinner({
-			text: "preparing your new auth config...",
-		}).start();
+		const s = spinner({ indicator: "dots" });
+		s.start("Preparing your new auth config");
 
 		let new_user_config: string;
 		try {
@@ -301,27 +339,29 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		new_user_config = await generateAuthConfig({
 			current_user_config,
 			format,
-			spinner,
+			//@ts-ignore
+			s,
 			database,
 			plugins: add_plugins,
 		});
-		spinner.success("Auth config is ready!");
-		const { confirm: shouldShowDiff } = await prompts({
-			type: "confirm",
-			name: "confirm",
+		s.stop("New auth config generated. 🎉");
+
+		const shouldShowDiff = await confirm({
 			message: `Do you want to see the diff?`,
 		});
+		if (isCancel(shouldShowDiff)) {
+			cancel(`Operating cancelled.`);
+			process.exit(0);
+		}
 
 		if (shouldShowDiff) {
 			const diffed = getStyledDiff(
 				await format(current_user_config),
 				new_user_config,
 			);
-			console.log(diffed);
+			log.message(diffed)
 		}
-
-		spinner.stop();
-		logger.success(`🚀 Auth config successfully applied!`);
+		outro(`🚀 Auth config successfully applied!`);
 	}
 	process.exit(0);
 }

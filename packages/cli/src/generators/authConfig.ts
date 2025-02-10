@@ -1,9 +1,9 @@
-import type { Spinner } from "yocto-spinner";
 import {
 	type SupportedDatabases,
 	type SupportedPlugins,
 } from "../commands/init";
 import { logger } from "better-auth";
+import { type spinner as clackSpinner } from "@clack/prompts";
 
 type Format = (code: string) => Promise<string>;
 
@@ -37,7 +37,7 @@ export async function generateAuthConfig({
 }: {
 	format: Format;
 	current_user_config: string;
-	spinner: Spinner;
+	spinner: ReturnType<typeof clackSpinner>;
 	plugins: SupportedPlugins[];
 	database: SupportedDatabases | null;
 }): Promise<string> {
@@ -558,8 +558,9 @@ export async function generateAuthConfig({
 			// console.log(new_user_config);
 			// console.log(`--------- UPDATE END ---------`);
 		} catch (error: any) {
-			spinner.error(
+			spinner.stop(
 				`Something went wrong while generating/updating your new auth config file.`,
+				1,
 			);
 			logger.error(error.message);
 			process.exit(1);
@@ -576,8 +577,9 @@ export async function generateAuthConfig({
 			);
 			new_user_config = code;
 		} catch (error: any) {
-			spinner.error(
+			spinner.stop(
 				`Something went wrong while generating/updating your new auth config file.`,
+				1,
 			);
 			logger.error(error.message);
 			process.exit(1);
