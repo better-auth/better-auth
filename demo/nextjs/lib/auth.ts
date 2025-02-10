@@ -39,7 +39,10 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	
+	database: {
+		dialect,
+		type: "sqlite",
+	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
@@ -142,9 +145,9 @@ export const auth = betterAuth({
 		multiSession(),
 		oneTap(),
 		oAuthProxy(),
-		// test
+		nextCookies(),
 		oidcProvider({
 			loginPage: "/sign-in",
-		})
+		}),
 	],
 });
