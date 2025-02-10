@@ -1630,15 +1630,15 @@ importers:
   packages/expo:
     dependencies:
       better-call:
-        specifier: ^0.3.3
-        version: 0.3.3
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(typescript@5.7.2)
       zod:
         specifier: ^3.23.8
         version: 3.23.8
     devDependencies:
       '@better-fetch/fetch':
-        specifier: 1.1.12
-        version: 1.1.12
+        specifier: 1.1.13-beta.5
+        version: 1.1.13-beta.5
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -30644,6 +30644,19 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
+  better-call@1.0.0-beta.3(typescript@5.7.2):
+    dependencies:
+      '@better-fetch/fetch': 1.1.12
+      '@standard-schema/spec': 1.0.0
+      arktype: 2.0.4
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+      uncrypto: 0.1.3
+      valibot: 1.0.0-beta.15(typescript@5.7.2)
+      zod: 3.24.1
+    transitivePeerDependencies:
+      - typescript
+
   better-opn@3.0.2:
     dependencies:
       open: 8.4.2
@@ -42665,7 +42678,6 @@ snapshots:
   valibot@1.0.0-beta.15(typescript@5.7.2):
     optionalDependencies:
       typescript: 5.7.2
-    optional: true
 
   validate-html-nesting@1.2.2: {}
 

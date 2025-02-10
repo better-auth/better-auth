@@ -35,7 +35,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@better-fetch/fetch": "1.1.12",
+    "@better-fetch/fetch": "1.1.13-beta.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "expo-constants": "~16.0.2",
@@ -49,7 +49,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
-    "better-call": "^0.3.3",
+    "better-call": "1.0.0-beta.3",
     "zod": "^3.23.8"
   },
   "files": [
