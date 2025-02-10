@@ -194,7 +194,7 @@ export function getEndpoints<
 					},
 					returned: undefined,
 				},
-				responseHeader: undefined,
+				responseHeader: new Headers(),
 			};
 
 			const plugins = options.plugins || [];
