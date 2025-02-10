@@ -5,7 +5,6 @@ import type { SchemaGenerator } from "./types";
 export function convertToSnakeCase(str: string) {
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
-
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
