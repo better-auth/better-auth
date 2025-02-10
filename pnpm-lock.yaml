@@ -1454,8 +1454,8 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0(encoding@0.1.13)
       better-call:
-        specifier: 1.0.0-beta.3
-        version: 1.0.0-beta.3(typescript@5.6.1-rc)
+        specifier: 1.0.0-beta.4
+        version: 1.0.0-beta.4
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1630,8 +1630,8 @@ importers:
   packages/expo:
     dependencies:
       better-call:
-        specifier: 1.0.0-beta.3
-        version: 1.0.0-beta.3(typescript@5.7.2)
+        specifier: 1.0.0-beta.4
+        version: 1.0.0-beta.4
       zod:
         specifier: ^3.23.8
         version: 3.23.8
@@ -1746,14 +1746,8 @@ packages:
   '@ark/schema@0.26.0':
     resolution: {integrity: sha512-b6hk1+M0U4jgZK7ZOGsWKSXgjhfPAqqSCczViM/gQ0Hu0awKLx9SpZYsFhl0j67j3hwlY2+mVZQPKy6GlYDCbQ==}
 
-  '@ark/schema@0.39.0':
-    resolution: {integrity: sha512-LQbQUb3Sj461LgklXObAyUJNtsUUCBxZlO2HqRLYvRSqpStm0xTMrXn51DwBNNxeSULvKVpXFwoxiSec9kwKww==}
-
   '@ark/util@0.26.0':
     resolution: {integrity: sha512-6FSqj6xl3jQ9bD9EU25ThMVcsvaeq6c3gecONgPQ+wDYOUEqBBIAkpjA+LEZMiY0AxVhSF3UF6BlVFspXmef2Q==}
-
-  '@ark/util@0.39.0':
-    resolution: {integrity: sha512-90APHVklk8BP4kku7hIh1BgrhuyKYqoZ4O7EybtFRo7cDl9mIyc/QUbGvYDg//73s0J2H0I/gW9pzroA1R4IBQ==}
 
   '@astrojs/check@0.9.4':
     resolution: {integrity: sha512-IOheHwCtpUfvogHHsvu0AbeRZEnjJg3MopdLddkJE70mULItS/Vh37BHcI00mcOJcH1vhD3odbpvWokpxam7xA==}
@@ -7873,9 +7867,6 @@ packages:
     peerDependencies:
       solid-js: ^1.6.12
 
-  '@standard-schema/spec@1.0.0':
-    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
-
   '@stitches/core@1.2.8':
     resolution: {integrity: sha512-Gfkvwk9o9kE9r9XNBmJRfV8zONvXThnm1tcuojL04Uy5uRyqg93DC83lDebl0rocZCfKSjUv+fWYtMQmEDJldg==}
 
@@ -9587,9 +9578,6 @@ packages:
   arktype@2.0.0-rc.26:
     resolution: {integrity: sha512-OdV40SQNY0CFJH+anT0N7Go9Tl+av+hxzMGPccv47sPHdekZuEPd61MfNmwn1J5H2SIrycdwGPD8jYBZSkhKjQ==}
 
-  arktype@2.0.4:
-    resolution: {integrity: sha512-S68rWVDnJauwH7/QCm8zCUM3aTe9Xk6oRihdcc3FSUAtxCo/q1Fwq46JhcwB5Ufv1YStwdQRz+00Y/URlvbhAQ==}
-
   array-buffer-byte-length@1.0.1:
     resolution: {integrity: sha512-ahC5W1xgou+KTXix4sAO8Ki12Q+jf4i0+tmk3sC+zgcynshkHxzpXdImBehiUYKKKDwvfFiJl1tZt6ewscS1Mg==}
     engines: {node: '>= 0.4'}
@@ -9888,8 +9876,8 @@ packages:
   better-call@0.3.3:
     resolution: {integrity: sha512-N4lDVm0NGmFfDJ0XMQ4O83Zm/3dPlvIQdxvwvgSLSkjFX5PM4GUYSVAuxNzXN27QZMHDkrJTWUqxBrm4tPC3eA==}
 
-  better-call@1.0.0-beta.3:
-    resolution: {integrity: sha512-F4XBPAnMYHhNGtE7be+DI5bECCwTuxAOajk967y2Vw4vRB4pzHO//IF6eQetUipr/a6Onlv0Zx1BYNgX7rgM5Q==}
+  better-call@1.0.0-beta.4:
+    resolution: {integrity: sha512-UmJrEBNcsFb/xBJePy1sYAYG8MUlRnr97D674Y2KmCYr+B402xpgnBuVXMujGEnHhVGx/sdiJdrI70PrjLc2bg==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -19979,14 +19967,8 @@ snapshots:
       '@ark/util': 0.26.0
     optional: true
 
-  '@ark/schema@0.39.0':
-    dependencies:
-      '@ark/util': 0.39.0
-
   '@ark/util@0.26.0':
     optional: true
-
-  '@ark/util@0.39.0': {}
 
   '@astrojs/check@0.9.4(prettier@3.4.2)(typescript@5.7.2)':
     dependencies:
@@ -27530,8 +27512,6 @@ snapshots:
     dependencies:
       solid-js: 1.9.3
 
-  '@standard-schema/spec@1.0.0': {}
-
   '@stitches/core@1.2.8': {}
 
   '@sveltejs/adapter-auto@3.3.1(@sveltejs/kit@2.9.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)))(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)))':
@@ -30096,11 +30076,6 @@ snapshots:
       '@ark/util': 0.26.0
     optional: true
 
-  arktype@2.0.4:
-    dependencies:
-      '@ark/schema': 0.39.0
-      '@ark/util': 0.39.0
-
   array-buffer-byte-length@1.0.1:
     dependencies:
       call-bind: 1.0.7
@@ -30631,31 +30606,12 @@ snapshots:
       uncrypto: 0.1.3
       zod: 3.24.1
 
-  better-call@1.0.0-beta.3(typescript@5.6.1-rc):
+  better-call@1.0.0-beta.4:
     dependencies:
       '@better-fetch/fetch': 1.1.12
-      '@standard-schema/spec': 1.0.0
-      arktype: 2.0.4
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
-      valibot: 1.0.0-beta.15(typescript@5.6.1-rc)
-      zod: 3.24.1
-    transitivePeerDependencies:
-      - typescript
-
-  better-call@1.0.0-beta.3(typescript@5.7.2):
-    dependencies:
-      '@better-fetch/fetch': 1.1.12
-      '@standard-schema/spec': 1.0.0
-      arktype: 2.0.4
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.1
-      uncrypto: 0.1.3
-      valibot: 1.0.0-beta.15(typescript@5.7.2)
-      zod: 3.24.1
-    transitivePeerDependencies:
-      - typescript
 
   better-opn@3.0.2:
     dependencies:
@@ -42678,6 +42634,7 @@ snapshots:
   valibot@1.0.0-beta.15(typescript@5.7.2):
     optionalDependencies:
       typescript: 5.7.2
+    optional: true
 
   validate-html-nesting@1.2.2: {}
 

@@ -1,12 +1,5 @@
-import {
-	APIError,
-	type Endpoint,
-	type Method,
-	createEndpoint,
-	createMiddleware,
-} from "better-call";
+import { createEndpoint, createMiddleware } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types/options";
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
