@@ -1,16 +1,15 @@
 import type { EndpointContext, InputContext } from "better-call";
 import type { AuthContext } from "../init";
 
-export type HookEndpointContext<C extends Record<string, any> = {}> =
-	InputContext<string, any> & {
-		context: AuthContext &
-			C & {
-				returned?: unknown;
-				responseHeaders?: Headers;
-			};
+export type HookEndpointContext = EndpointContext<string, any> &
+	Omit<InputContext<string, any>, "method"> & {
+		context: AuthContext & {
+			returned?: unknown;
+			responseHeaders?: Headers;
+		};
 		headers?: Headers;
 	};
 
-export type GenericEndpointContext = InputContext<string, any> & {
+export type GenericEndpointContext = EndpointContext<string, any> & {
 	context: AuthContext;
 };

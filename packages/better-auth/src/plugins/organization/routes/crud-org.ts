@@ -59,6 +59,7 @@ export const createOrganization = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
+		console.log(ctx.request, ctx.headers);
 		if (!session && (ctx.request || ctx.headers)) {
 			throw new APIError("UNAUTHORIZED");
 		}

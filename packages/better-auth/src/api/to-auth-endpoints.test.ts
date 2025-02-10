@@ -106,6 +106,7 @@ describe("before hook", async () => {
 			const res = await authEndpoints.body();
 			expect(res?.name).toBe("body");
 			const res2 = await authEndpoints.body({
+				//@ts-expect-error
 				body: {
 					key: "value",
 				},

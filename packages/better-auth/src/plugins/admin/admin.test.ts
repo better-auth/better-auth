@@ -55,7 +55,6 @@ describe("Admin plugin", async () => {
 			},
 		);
 		newUser = res.data?.user;
-
 		expect(newUser?.role).toBe("user");
 	});
 

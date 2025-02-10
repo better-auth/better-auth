@@ -1,34 +1,22 @@
 import {
 	APIError,
 	toResponse,
+	type EndpointContext,
 	type EndpointOptions,
 	type InputContext,
-	type Middleware,
 } from "better-call";
-import type { AuthEndpoint } from "./call";
-import type {
-	AuthContext,
-	HookAfterHandler,
-	HookBeforeHandler,
-	HookEndpointContext,
-} from "../types";
+import type { AuthEndpoint, AuthMiddleware } from "./call";
+import type { AuthContext, HookEndpointContext } from "../types";
 import defu from "defu";
 
-interface InternalContext {
-	context: AuthContext & {
-		returned?: unknown;
-		responseHeaders?: Headers;
+type InternalContext = InputContext<string, any> &
+	EndpointContext<string, any> & {
+		asResponse?: boolean;
+		context: AuthContext & {
+			returned?: unknown;
+			responseHeaders?: Headers;
+		};
 	};
-	body?: any;
-	method?: any;
-	query?: unknown;
-	request?: Request | undefined;
-	headers?: Headers | undefined;
-	asResponse?: boolean | undefined;
-	returnHeaders?: boolean | undefined;
-	use?: Middleware[] | undefined;
-	path: string;
-}
 
 export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	endpoints: E,
@@ -36,7 +24,9 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 ) {
 	const api: Record<
 		string,
-		((context?: InputContext<any, any>) => Promise<any>) & {
+		((
+			context: EndpointContext<string, any> & InputContext<string, any>,
+		) => Promise<any>) & {
 			path?: string;
 			options?: EndpointOptions;
 		}
@@ -45,24 +35,31 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context) => {
 			const authContext = await ctx;
-			//reset session
-			authContext.session = null;
 			let internalContext: InternalContext = {
 				...context,
-				context: authContext,
+				context: {
+					...authContext,
+					returned: undefined,
+					responseHeaders: undefined,
+					session: null,
+				},
 				path: endpoint.path,
-				headers: new Headers(context?.headers),
+				headers: context.headers ? new Headers(context?.headers) : undefined,
 			};
 			const { beforeHooks, afterHooks } = getHooks(authContext);
-			//override to make headers object
-			internalContext.headers = new Headers(internalContext.headers);
 			const before = await runBeforeHooks(internalContext, beforeHooks);
 			/**
 			 * If `before.context` is returned, it should
 			 * get merged with the original context
 			 */
-			if ("context" in before && before.context) {
-				const { headers, ...rest }: { headers: Headers } = before.context;
+			if (
+				"context" in before &&
+				before.context &&
+				typeof before.context === "object"
+			) {
+				const { headers, ...rest } = before.context as {
+					headers: Headers;
+				};
 				/**
 				 * Headers should be merged differently
 				 * so the hook doesn't override the whole
@@ -99,22 +96,8 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			};
 			internalContext.context.returned = result.response;
 			internalContext.context.responseHeaders = result.headers;
-			const after = await runAfterHooks(internalContext, afterHooks);
 
-			/**
-			 * Append after hook returned headers
-			 * to the response headers
-			 */
-			if (
-				result &&
-				typeof result === "object" &&
-				"headers" in result &&
-				result.headers instanceof Headers
-			) {
-				after.headers?.forEach((value, key) => {
-					(result.headers as Headers).append(key, value);
-				});
-			}
+			const after = await runAfterHooks(internalContext, afterHooks);
 
 			if (after.response) {
 				result.response = after.response;
@@ -123,7 +106,6 @@ export function toAuthEndpoints<E extends Record<string, AuthEndpoint>>(
 			if (result.response instanceof APIError && !context?.asResponse) {
 				throw result.response;
 			}
-
 			const response = context?.asResponse
 				? toResponse(result.response, {
 						headers: result.headers,
@@ -146,7 +128,7 @@ async function runBeforeHooks(
 	context: HookEndpointContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
-		handler: HookBeforeHandler;
+		handler: AuthMiddleware;
 	}[],
 ) {
 	let modifiedContext: {
@@ -158,9 +140,11 @@ async function runBeforeHooks(
 				...context,
 				returnHeaders: false,
 			});
-			if (result) {
-				if ("context" in result) {
-					const { headers, ...rest } = result.context;
+			if (result && typeof result === "object") {
+				if ("context" in result && typeof result.context === "object") {
+					const { headers, ...rest } = result.context as {
+						headers: Headers;
+					};
 					if (headers instanceof Headers) {
 						if (modifiedContext.headers) {
 							headers.forEach((value, key) => {
@@ -184,21 +168,10 @@ async function runAfterHooks(
 	context: HookEndpointContext,
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
-		handler: HookAfterHandler;
+		handler: AuthMiddleware;
 	}[],
 ) {
-	const response = {
-		headers: null,
-		response: null,
-	} as {
-		headers: Headers | null;
-		response: unknown;
-	};
 	for (const hook of hooks) {
-		context.context.returned = response.response || context.context.returned;
-		context.context.responseHeaders =
-			response.headers || context.context.responseHeaders;
-		context.returnHeaders = true;
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (e instanceof APIError) {
@@ -214,32 +187,39 @@ async function runAfterHooks(
 			};
 			if (result.headers) {
 				result.headers.forEach((value, key) => {
-					if (!response.headers) {
-						response.headers = new Headers({
+					if (!context.context.responseHeaders) {
+						context.context.responseHeaders = new Headers({
 							[key]: value,
 						});
 					} else {
-						response.headers?.append(key, value);
+						if (key.toLowerCase() === "set-cookie") {
+							context.context.responseHeaders.append(key, value);
+						} else {
+							context.context.responseHeaders.set(key, value);
+						}
 					}
 				});
 			}
 			if (result.response) {
-				response.response = result.response;
+				context.context.returned = result.response;
 			}
 		}
 	}
-	return response;
+	return {
+		response: context.context.returned,
+		headers: context.context.responseHeaders,
+	};
 }
 
 function getHooks(authContext: AuthContext) {
 	const plugins = authContext.options.plugins || [];
 	const beforeHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
-		handler: HookBeforeHandler;
+		handler: AuthMiddleware;
 	}[] = [];
 	const afterHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
-		handler: HookAfterHandler;
+		handler: AuthMiddleware;
 	}[] = [];
 	if (authContext.options.hooks?.before) {
 		beforeHooks.push({

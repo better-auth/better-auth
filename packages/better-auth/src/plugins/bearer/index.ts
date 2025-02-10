@@ -1,7 +1,7 @@
 import { serializeSignedCookie } from "better-call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware, getSessionFromCtx } from "../../api";
+import { createAuthMiddleware } from "../../api";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 interface BearerOptions {
@@ -30,7 +30,7 @@ export const bearer = (options?: BearerOptions) => {
 								context.headers?.get("authorization"),
 						);
 					},
-					handler: async (c) => {
+					handler: createAuthMiddleware(async (c) => {
 						const token =
 							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
 							c.headers?.get("Authorization")?.replace("Bearer ", "");
@@ -79,7 +79,7 @@ export const bearer = (options?: BearerOptions) => {
 								headers,
 							},
 						};
-					},
+					}),
 				},
 			],
 			after: [
@@ -88,7 +88,7 @@ export const bearer = (options?: BearerOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const setCookie = ctx.context.responseHeaders.get("set-cookie");
+						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 						if (!setCookie) {
 							return;
 						}

@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 
 export interface EmailOTPOptions {
 	/**
@@ -108,7 +109,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const email = ctx.body.email;
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
-						throw new APIError("BAD_REQUEST", {
+						throw ctx.error("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
@@ -669,19 +670,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							opts.sendVerificationOnSignUp
 						);
 					},
-					async handler(ctx) {
-						const response = ctx.context.returned;
-						if (response instanceof APIError) {
-							return;
-						}
-						const email =
-							response && "email" in response
-								? response.email
-								: response instanceof Response
-									? response.status === 200
-										? ctx.body.email
-										: null
-									: null;
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<{
+							user: { email: string };
+						}>(ctx);
+						const email = response?.user.email;
 						if (email) {
 							const otp = generateRandomString(opts.otpLength, "0-9");
 							await ctx.context.internalAdapter.createVerificationValue({
@@ -698,7 +691,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								ctx.request,
 							);
 						}
-					},
+					}),
 				},
 			],
 		},
