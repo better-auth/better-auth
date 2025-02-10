@@ -6,6 +6,7 @@ import { generate } from "./commands/generate";
 import "dotenv/config";
 import { generateSecret } from "./commands/secret";
 import { getPackageInfo } from "./utils/get-package-info";
+import { init } from "./commands/init";
 // handle exit
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
@@ -17,6 +18,7 @@ async function main() {
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)
+		.addCommand(init)
 		.version(packageInfo.version || "1.1.2")
 		.description("Better Auth CLI");
 	program.parse();
