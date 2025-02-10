@@ -4,10 +4,10 @@ export const user = pgTable("user", {
 					id: text("id").primaryKey(),
 					name: text('name').notNull(),
  email: text('email').notNull().unique(),
- emailVerified: boolean('email_verified').notNull().default(() => false),
+ emailVerified: boolean('email_verified').notNull().$defaultFn(() => false),
  image: text('image'),
- createdAt: timestamp('created_at').notNull().default(() => /* @__PURE__ */ new Date()),
- updatedAt: timestamp('updated_at').notNull().default(() => /* @__PURE__ */ new Date()),
+ createdAt: timestamp('created_at').notNull().$defaultFn(() => /* @__PURE__ */ new Date()),
+ updatedAt: timestamp('updated_at').notNull().$defaultFn(() => /* @__PURE__ */ new Date()),
  twoFactorEnabled: boolean('two_factor_enabled'),
  username: text('username').unique()
 				});
@@ -44,8 +44,8 @@ export const verification = pgTable("verification", {
 					identifier: text('identifier').notNull(),
  value: text('value').notNull(),
  expiresAt: timestamp('expires_at').notNull(),
- createdAt: timestamp('created_at').default(() => /* @__PURE__ */ new Date()),
- updatedAt: timestamp('updated_at').default(() => /* @__PURE__ */ new Date())
+ createdAt: timestamp('created_at').$defaultFn(() => /* @__PURE__ */ new Date()),
+ updatedAt: timestamp('updated_at').$defaultFn(() => /* @__PURE__ */ new Date())
 				});
 
 export const twoFactor = pgTable("two_factor", {
