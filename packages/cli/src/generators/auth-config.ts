@@ -1,6 +1,6 @@
 import {
 	type SupportedDatabases,
-	type SupportedPlugins,
+	type SupportedPlugin,
 } from "../commands/init";
 import { logger } from "better-auth";
 import { type spinner as clackSpinner } from "@clack/prompts";
@@ -38,9 +38,13 @@ export async function generateAuthConfig({
 	format: Format;
 	current_user_config: string;
 	spinner: ReturnType<typeof clackSpinner>;
-	plugins: SupportedPlugins[];
+	plugins: SupportedPlugin[];
 	database: SupportedDatabases | null;
-}): Promise<string> {
+}): Promise<{
+	generatedCode: string;
+	dependencies: string[];
+	envs: string[];
+}> {
 	let _start_of_plugins_common_index = {
 		START_OF_PLUGINS: {
 			type: "regex",
@@ -484,6 +488,8 @@ export async function generateAuthConfig({
 	};
 
 	let new_user_config: string = await format(current_user_config);
+	let total_dependencies: string[] = [];
+	let total_envs: string[] = [];
 
 	if (plugins.length !== 0) {
 		const imports: {
@@ -494,67 +500,54 @@ export async function generateAuthConfig({
 			}[];
 		}[] = [];
 		plugins.forEach((plugin) => {
-			if (plugin === "next-cookies") {
-				imports.push({
-					path: "better-auth/next-js",
-					variables: [
-						{
-							name: "nextCookies",
-							asType: false,
-						},
-					],
-				});
-			} else if (plugin === "passkey") {
-				imports.push({
-					path: "better-auth/plugins/passkey",
-					variables: [
-						{
-							name: "passkey",
-							asType: false,
-						},
-					],
+			const existingIndex = imports.findIndex((x) => x.path === plugin.path);
+			if (existingIndex !== -1) {
+				imports[existingIndex].variables.push({
+					name: plugin.name,
+					asType: false,
 				});
 			} else {
-				const existing = imports.findIndex(
-					(x) => x.path === `better-auth/plugins`,
-				);
-				if (existing !== -1) {
-					imports[existing].variables.push({
-						name: kebabToCamel(plugin),
-						asType: false,
-					});
-				} else {
-					imports.push({
-						path: "better-auth/plugins",
-						variables: [
-							{
-								name: kebabToCamel(plugin),
-								asType: false,
-							},
-						],
-					});
-				}
+				imports.push({
+					path: plugin.path,
+					variables: [
+						{
+							name: plugin.name,
+							asType: false,
+						},
+					],
+				});
 			}
 		});
 		const { code, envs, dependencies } = await config_generation.add_import({
 			config: new_user_config,
 			imports: imports,
 		});
+		total_dependencies.push(...dependencies);
+		total_envs.push(...envs);
 		new_user_config = code;
 	}
 
 	for await (const plugin of plugins) {
 		try {
 			// console.log(`--------- UPDATE: ${plugin} ---------`);
+			let pluginContents = "";
+			if (plugin.id === "magic-link") {
+				pluginContents = `{\nsendMagicLink({ email, token, url }, request) {\n// Send email with magic link\n},\n}`;
+			} else if (plugin.id === "email-otp") {
+				pluginContents = `{\nasync sendVerificationOTP({ email, otp, type }, request) {\n// Send email with OTP\n},\n}`;
+			} else if (plugin.id === "generic-oauth") {
+				pluginContents = `{\nconfig: [],\n}`;
+			}
 			const { code, dependencies, envs } = await config_generation.add_plugin({
 				config: new_user_config,
 				direction_in_plugins_array:
-					plugin === "next-cookies" ? "append" : "prepend",
-				pluginFunctionName: kebabToCamel(plugin),
-				pluginContents: ``,
+					plugin.id === "next-cookies" ? "append" : "prepend",
+				pluginFunctionName: plugin.name,
+				pluginContents: pluginContents,
 			});
 			new_user_config = code;
-
+			total_envs.push(...envs);
+			total_dependencies.push(...dependencies);
 			// console.log(new_user_config);
 			// console.log(`--------- UPDATE END ---------`);
 		} catch (error: any) {
@@ -576,6 +569,8 @@ export async function generateAuthConfig({
 				},
 			);
 			new_user_config = code;
+			total_dependencies.push(...dependencies);
+			total_envs.push(...envs);
 		} catch (error: any) {
 			spinner.stop(
 				`Something went wrong while generating/updating your new auth config file.`,
@@ -586,22 +581,11 @@ export async function generateAuthConfig({
 		}
 	}
 
-	return new_user_config;
-}
-
-/**
- * Helper function to convert kebab-case to camelCase.
- */
-function kebabToCamel(kebab: string): string {
-	return kebab
-		.split("-")
-		.map((word, index) => {
-			if (index === 0) {
-				return word;
-			}
-			return word.charAt(0).toUpperCase() + word.slice(1);
-		})
-		.join("");
+	return {
+		generatedCode: new_user_config,
+		dependencies: total_dependencies,
+		envs: total_envs,
+	};
 }
 
 function findClosingBracket(
