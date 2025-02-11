@@ -147,7 +147,7 @@ export async function generateAuthConfig({
 
 				new_content = insertContent({
 					line: end_of_plugins.line,
-					character: end_of_plugins.character - 1,
+					character: end_of_plugins.character,
 					content: opts.config,
 					insert_content: `${!has_found_comma ? "," : ""}${
 						opts.pluginFunctionName
@@ -284,18 +284,17 @@ export async function generateAuthConfig({
 				});
 			} else if (opts.database === "mysql") {
 				await add_db({
-					db_code: `createPool({\nhost: process.env.DATABASE_HOST || "localhost",\nport: process.env.DATABASE_PORT || 3306,\nuser: process.env.DATABASE_USER || "root",\npassword: process.env.DATABASE_PASSWORD || "password",\ndatabase: process.env.DATABASE_NAME || "database"\n})`,
-					dependencies: ["mysql"],
+					db_code: `createPool({\nhost: process.env.DATABASE_HOST || "localhost",\nuser: process.env.DATABASE_USER || "root",\npassword: process.env.DATABASE_PASSWORD || "password",\ndatabase: process.env.DATABASE_NAME || "database"\n})`,
+					dependencies: ["mysql2"],
 					envs: [
 						"DATABASE_HOST",
-						"DATABASE_PORT",
 						"DATABASE_USER",
 						"DATABASE_PASSWORD",
 						"DATABASE_NAME",
 					],
 					imports: [
 						{
-							path: "mysql/promise",
+							path: "mysql2/promise",
 							variables: [
 								{
 									asType: false,
