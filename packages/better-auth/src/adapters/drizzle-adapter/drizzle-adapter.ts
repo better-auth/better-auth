@@ -49,6 +49,74 @@ const createTransform = (
 				: model;
 	};
 
+	function convertWhereClause(where: Where[], model: string) {
+		const schemaModel = getSchema(model);
+		if (!where) return [];
+		if (where.length === 1) {
+			const w = where[0];
+			if (!w) {
+				return [];
+			}
+			const field = getField(model, w.field);
+			if (!schemaModel[field]) {
+				throw new BetterAuthError(
+					`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+				);
+			}
+			if (w.operator === "in") {
+				if (!Array.isArray(w.value)) {
+					throw new BetterAuthError(
+						`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+					);
+				}
+				return [inArray(schemaModel[field], w.value)];
+			}
+
+			if (w.operator === "contains") {
+				return [like(schemaModel[field], `%${w.value}%`)];
+			}
+
+			if (w.operator === "starts_with") {
+				return [like(schemaModel[field], `${w.value}%`)];
+			}
+
+			if (w.operator === "ends_with") {
+				return [like(schemaModel[field], `%${w.value}`)];
+			}
+
+			return [eq(schemaModel[field], w.value)];
+		}
+		const andGroup = where.filter((w) => w.connector === "AND" || !w.connector);
+		const orGroup = where.filter((w) => w.connector === "OR");
+
+		const andClause = and(
+			...andGroup.map((w) => {
+				const field = getField(model, w.field);
+				if (w.operator === "in") {
+					if (!Array.isArray(w.value)) {
+						throw new BetterAuthError(
+							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+						);
+					}
+					return inArray(schemaModel[field], w.value);
+				}
+				return eq(schemaModel[field], w.value);
+			}),
+		);
+		const orClause = or(
+			...orGroup.map((w) => {
+				const field = getField(model, w.field);
+				return eq(schemaModel[field], w.value);
+			}),
+		);
+
+		const clause: SQL<unknown>[] = [];
+
+		if (andGroup.length) clause.push(andClause!);
+		if (orGroup.length) clause.push(orClause!);
+		return clause;
+	}
+
 	const useDatabaseGeneratedId = options?.advanced?.generateId === false;
 	return {
 		getSchema,
@@ -107,91 +175,41 @@ const createTransform = (
 			}
 			return transformedData as any;
 		},
-		convertWhereClause(where: Where[], model: string) {
-			const schemaModel = getSchema(model);
-			if (!where) return [];
-			if (where.length === 1) {
-				const w = where[0];
-				if (!w) {
-					return [];
-				}
-				const field = getField(model, w.field);
-				if (!schemaModel[field]) {
-					throw new BetterAuthError(
-						`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-					);
-				}
-				if (w.operator === "in") {
-					if (!Array.isArray(w.value)) {
-						throw new BetterAuthError(
-							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-						);
-					}
-					return [inArray(schemaModel[field], w.value)];
-				}
-
-				if (w.operator === "contains") {
-					return [like(schemaModel[field], `%${w.value}%`)];
-				}
-
-				if (w.operator === "starts_with") {
-					return [like(schemaModel[field], `${w.value}%`)];
-				}
-
-				if (w.operator === "ends_with") {
-					return [like(schemaModel[field], `%${w.value}`)];
-				}
-
-				return [eq(schemaModel[field], w.value)];
-			}
-			const andGroup = where.filter(
-				(w) => w.connector === "AND" || !w.connector,
-			);
-			const orGroup = where.filter((w) => w.connector === "OR");
-
-			const andClause = and(
-				...andGroup.map((w) => {
-					const field = getField(model, w.field);
-					if (w.operator === "in") {
-						if (!Array.isArray(w.value)) {
-							throw new BetterAuthError(
-								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-							);
-						}
-						return inArray(schemaModel[field], w.value);
-					}
-					return eq(schemaModel[field], w.value);
-				}),
-			);
-			const orClause = or(
-				...orGroup.map((w) => {
-					const field = getField(model, w.field);
-					return eq(schemaModel[field], w.value);
-				}),
-			);
-
-			const clause: SQL<unknown>[] = [];
-
-			if (andGroup.length) clause.push(andClause!);
-			if (orGroup.length) clause.push(orClause!);
-			return clause;
-		},
+		convertWhereClause,
 		withReturning: async (
 			model: string,
 			builder: any,
 			data: Record<string, any>,
+			where?: Where[],
 		) => {
 			if (config.provider !== "mysql") {
 				const c = await builder.returning();
 				return c[0];
 			}
-			await builder;
+			await builder.execute();
 			const schemaModel = getSchema(model);
-			const res = await db
-				.select()
-				.from(schemaModel)
-				.where(eq(schemaModel.id, data.id));
-			return res[0];
+			const builderVal = builder.config?.values;
+			if (where?.length) {
+				const clause = convertWhereClause(where, model);
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(...clause);
+				return res[0];
+			} else if (builderVal) {
+				const tId = builderVal[0]?.id.value;
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(eq(schemaModel.id, tId));
+				return res[0];
+			} else if (data.id) {
+				const res = await db
+					.select()
+					.from(schemaModel)
+					.where(eq(schemaModel.id, data.id));
+				return res[0];
+			}
 		},
 		getField,
 		getModelName,
@@ -294,7 +312,12 @@ export const drizzleAdapter =
 					.update(schemaModel)
 					.set(transformed)
 					.where(...clause);
-				const returned = await withReturning(model, builder, transformed);
+				const returned = await withReturning(
+					model,
+					builder,
+					transformed,
+					where,
+				);
 				return transformOutput(returned, model);
 			},
 			async updateMany(data) {
@@ -319,7 +342,7 @@ export const drizzleAdapter =
 			async deleteMany(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(where, model); //con
 				const builder = db.delete(schemaModel).where(...clause);
 				const res = await builder;
 				return res ? res.length : 0;

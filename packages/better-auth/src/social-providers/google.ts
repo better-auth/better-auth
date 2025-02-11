@@ -105,7 +105,8 @@ export const google = (options: GoogleOptions) => {
 			}
 			const isValid =
 				tokenInfo.aud === options.clientId &&
-				tokenInfo.iss === "https://accounts.google.com";
+				(tokenInfo.iss === "https://accounts.google.com" ||
+					tokenInfo.iss === "accounts.google.com");
 			return isValid;
 		},
 		async getUserInfo(token) {

@@ -232,7 +232,11 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookieString = ctx.responseHeader.get("set-cookie");
+						const headers =
+							ctx.context.returned instanceof APIError
+								? ctx.context.returned.headers
+								: ctx.responseHeader;
+						const cookieString = headers.get("set-cookie");
 						if (!cookieString) return;
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;

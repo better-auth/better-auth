@@ -144,15 +144,22 @@ export const createInternalAdapter = (
 			return users;
 		},
 		deleteUser: async (userId: string) => {
-			await adapter.deleteMany({
-				model: "session",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-			});
+			if (secondaryStorage) {
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+			}
+
+			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+				await adapter.deleteMany({
+					model: "session",
+					where: [
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+				});
+			}
+
 			await adapter.deleteMany({
 				model: "account",
 				where: [
