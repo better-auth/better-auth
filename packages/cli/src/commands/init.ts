@@ -1,3 +1,4 @@
+import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
@@ -17,7 +18,6 @@ import {
 	isCancel,
 	log,
 	multiselect,
-	outro,
 	select,
 	spinner,
 	text,
@@ -119,6 +119,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		process.exit(1);
 	}
 
+	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
+		undefined;
+
 	// ===== package.json =====
 	let packageInfo: Record<string, any>;
 	try {
@@ -127,6 +130,96 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		log.error(`Couldn't read your package.json file. (${options.cwd})`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
+	}
+
+	// ===== install better-auth =====
+
+	let latest_betterauth_version: string;
+	try {
+		latest_betterauth_version = await getLatestNpmVersion("better-auth");
+	} catch (error) {
+		log.error(`Couldn't get latest version of better-auth.`);
+		log.error(JSON.stringify(error, null, 2));
+		process.exit(1);
+	}
+
+	if (
+		!packageInfo.dependencies ||
+		!Object.keys(packageInfo.dependencies).includes("better-auth")
+	) {
+		const shouldInstallBetterAuthDep = await confirm({
+			message: `Would you like to install Better Auth?`,
+		});
+		if (isCancel(shouldInstallBetterAuthDep)) {
+			cancel(`Operation cancelled.`);
+			process.exit(0);
+		}
+		if (packageManagerPreference === undefined) {
+			packageManagerPreference = await getPackageManager();
+		}
+
+		const s = spinner({ indicator: "dots" });
+		s.start(
+			`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
+		);
+
+		try {
+			const start = Date.now();
+			await installDependencies({
+				dependencies: ["better-auth"],
+				packageManager: packageManagerPreference,
+				cwd: options.cwd,
+			});
+			s.stop(
+				`🚀 Better Auth installed successfully! ${chalk.gray(
+					`(${formatMilliseconds(Date.now() - start)}ms)`,
+				)}`,
+			);
+		} catch (error: any) {
+			s.stop(`Failed to install Better Auth:`);
+			log.error(error.message);
+			process.exit(1);
+		}
+	} else if (
+		packageInfo.dependencies["better-auth"] !== "workspace:*" &&
+		!semver.satisfies(
+			packageInfo.dependencies["better-auth"],
+			latest_betterauth_version,
+		)
+	) {
+		const shouldInstallBetterAuthDep = await confirm({
+			message: `Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
+				packageInfo.dependencies["better-auth"],
+			)} -> ${chalk.bold(`v${latest_betterauth_version}`)})`,
+		});
+		if (isCancel(shouldInstallBetterAuthDep)) {
+			cancel(`Operation cancelled.`);
+			process.exit(0);
+		}
+		if (packageManagerPreference === undefined) {
+			packageManagerPreference = await getPackageManager();
+		}
+		const s = spinner({ indicator: "dots" });
+		s.start(
+			`Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
+		);
+		try {
+			const start = Date.now();
+			await installDependencies({
+				dependencies: ["better-auth"],
+				packageManager: packageManagerPreference,
+				cwd: options.cwd,
+			});
+			s.stop(
+				`🚀 Better Auth updated successfully! ${chalk.gray(
+					`(${formatMilliseconds(Date.now() - start)}ms)`,
+				)}`,
+			);
+		} catch (error: any) {
+			s.stop(`Failed to update Better Auth:`);
+			log.error(error.message);
+			process.exit(1);
+		}
 	}
 
 	// ===== appName =====
@@ -409,50 +502,20 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 				process.exit(0);
 			}
 			if (shouldInstallDeps) {
-				const { hasBun, hasPnpm } = await checkPackageManagers();
-
-				const packageManagerOptions: {
-					value: "bun" | "pnpm" | "yarn" | "npm";
-					label?: string;
-					hint?: string;
-				}[] = [];
-
-				if (hasPnpm) {
-					packageManagerOptions.push({
-						value: "pnpm",
-						label: "pnpm",
-						hint: "recommended",
-					});
-				}
-				if (hasBun) {
-					packageManagerOptions.push({
-						value: "bun",
-						label: "bun",
-					});
-				}
-				packageManagerOptions.push({
-					value: "npm",
-					hint: "not recommended",
-				});
-
-				let packageManager = await select({
-					message: "Choose a package manager",
-					options: packageManagerOptions,
-				});
-				if (isCancel(packageManager)) {
-					cancel(`Operation cancelled.`);
-					process.exit(0);
-				}
-
 				const s = spinner({ indicator: "dots" });
 				s.start(
-					`Installing dependencies using ${chalk.bold(packageManager)}...`,
+					`Installing dependencies using ${chalk.bold(
+						packageManagerPreference,
+					)}...`,
 				);
+				if (packageManagerPreference === undefined) {
+					packageManagerPreference = await getPackageManager();
+				}
 				try {
 					const start = Date.now();
 					await installDependencies({
 						dependencies,
-						packageManager,
+						packageManager: packageManagerPreference,
 						cwd: options.cwd,
 					});
 					s.stop(
@@ -461,7 +524,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 						)}`,
 					);
 				} catch (error: any) {
-					s.stop(`Failed to install dependencies using ${packageManager}:`);
+					s.stop(
+						`Failed to install dependencies using ${packageManagerPreference}:`,
+					);
 					log.error(error.message);
 					process.exit(1);
 				}
@@ -509,4 +574,57 @@ function getStyledDiff(oldStr: string, newStr: string) {
 		}
 	});
 	return result;
+}
+
+async function getLatestNpmVersion(packageName: string): Promise<string> {
+	try {
+		const response = await fetch(`https://registry.npmjs.org/${packageName}`);
+
+		if (!response.ok) {
+			throw new Error(`Package not found: ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return data["dist-tags"].latest; // Get the latest version from dist-tags
+	} catch (error: any) {
+		throw error?.message;
+	}
+}
+
+async function getPackageManager() {
+	const { hasBun, hasPnpm } = await checkPackageManagers();
+
+	const packageManagerOptions: {
+		value: "bun" | "pnpm" | "yarn" | "npm";
+		label?: string;
+		hint?: string;
+	}[] = [];
+
+	if (hasPnpm) {
+		packageManagerOptions.push({
+			value: "pnpm",
+			label: "pnpm",
+			hint: "recommended",
+		});
+	}
+	if (hasBun) {
+		packageManagerOptions.push({
+			value: "bun",
+			label: "bun",
+		});
+	}
+	packageManagerOptions.push({
+		value: "npm",
+		hint: "not recommended",
+	});
+
+	let packageManager = await select({
+		message: "Choose a package manager",
+		options: packageManagerOptions,
+	});
+	if (isCancel(packageManager)) {
+		cancel(`Operation cancelled.`);
+		process.exit(0);
+	}
+	return packageManager;
 }
