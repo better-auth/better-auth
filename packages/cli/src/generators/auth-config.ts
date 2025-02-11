@@ -537,6 +537,8 @@ export async function generateAuthConfig({
 				pluginContents = `{\nasync sendVerificationOTP({ email, otp, type }, request) {\n// Send email with OTP\n},\n}`;
 			} else if (plugin.id === "generic-oauth") {
 				pluginContents = `{\nconfig: [],\n}`;
+			} else if (plugin.id === "oidc") {
+				pluginContents = `{\nloginPage: "/sign-in",\n}`;
 			}
 			const { code, dependencies, envs } = await config_generation.add_plugin({
 				config: new_user_config,
