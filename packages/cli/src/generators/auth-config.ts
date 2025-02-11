@@ -284,14 +284,9 @@ export async function generateAuthConfig({
 				});
 			} else if (opts.database === "mysql") {
 				await add_db({
-					db_code: `createPool({\nhost: process.env.DATABASE_HOST || "localhost",\nuser: process.env.DATABASE_USER || "root",\npassword: process.env.DATABASE_PASSWORD || "password",\ndatabase: process.env.DATABASE_NAME || "database"\n})`,
+					db_code: `createPool(process.env.DATABASE_URL!)`,
 					dependencies: ["mysql2"],
-					envs: [
-						"DATABASE_HOST",
-						"DATABASE_USER",
-						"DATABASE_PASSWORD",
-						"DATABASE_NAME",
-					],
+					envs: ["DATABASE_URL"],
 					imports: [
 						{
 							path: "mysql2/promise",

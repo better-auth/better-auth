@@ -572,7 +572,7 @@ export async function initAction(opts: any) {
 	} else {
 		outro(`Happy hacking! 👋`);
 	}
-	console.log(`\n`);
+	console.log();
 	process.exit(0);
 }
 
