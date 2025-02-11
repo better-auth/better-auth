@@ -17,7 +17,6 @@ import {
 	UserCircle,
 	Users2,
 	UserSquare2,
-	UserSearch,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";

@@ -1,6 +1,6 @@
 import type { CookieOptions } from "better-call";
 import { BetterAuthError } from "../error";
-import type { AuthContext, Session, User } from "../types";
+import type { Session, User } from "../types";
 import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";

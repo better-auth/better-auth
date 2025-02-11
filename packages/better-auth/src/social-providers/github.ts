@@ -56,7 +56,7 @@ export const github = (options: GithubOptions) => {
 		id: "github",
 		name: "GitHub",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["user:email"];
+			const _scopes = scopes || ["read:user", "user:email"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
@@ -93,24 +93,26 @@ export const github = (options: GithubOptions) => {
 				return null;
 			}
 			let emailVerified = false;
-			const { data } = await betterFetch<
-				{
-					email: string;
-					primary: boolean;
-					verified: boolean;
-					visibility: "public" | "private";
-				}[]
-			>("https://api.github.com/user/emails", {
-				headers: {
-					authorization: `Bearer ${token.accessToken}`,
-					"User-Agent": "better-auth",
-				},
-			});
-			if (data) {
-				profile.email = (data.find((e) => e.primary) ?? data[0])
-					?.email as string;
-				emailVerified =
-					data.find((e) => e.email === profile.email)?.verified ?? false;
+			if (!profile.email) {
+				const { data } = await betterFetch<
+					{
+						email: string;
+						primary: boolean;
+						verified: boolean;
+						visibility: "public" | "private";
+					}[]
+				>("https://api.github.com/user/emails", {
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+						"User-Agent": "better-auth",
+					},
+				});
+				if (data) {
+					profile.email = (data.find((e) => e.primary) ?? data[0])
+						?.email as string;
+					emailVerified =
+						data.find((e) => e.email === profile.email)?.verified ?? false;
+				}
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {

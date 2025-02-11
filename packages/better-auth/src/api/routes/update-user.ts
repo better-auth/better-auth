@@ -94,8 +94,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				rest,
 				"update",
 			);
-			const user = await ctx.context.internalAdapter.updateUserByEmail(
-				session.user.email,
+			const user = await ctx.context.internalAdapter.updateUser(
+				session.user.id,
 				{
 					name,
 					image,

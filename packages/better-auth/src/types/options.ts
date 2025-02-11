@@ -658,7 +658,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: User & Record<string, any>;
+							data: Partial<User & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -746,7 +746,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Account & Record<string, any>;
+							data: Partial<Account & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -787,7 +787,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Verification & Record<string, any>;
+							data: Partial<Verification & Record<string, any>>;
 					  }
 				>;
 				/**
