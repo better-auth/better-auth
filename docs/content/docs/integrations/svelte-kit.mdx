@@ -71,21 +71,18 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
 ```ts title="+layout.server.ts"
 import type { LayoutServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
-import { authClient } from '$lib/auth-client';
+import { auth } from '$lib/auth';
 
 
 export const load: LayoutServerLoad = async ({ request }) => {
-    console.log('Admin Layout Server load ');
-    const session = await authClient.getSession({
-        fetchOptions: {
-            headers: request.headers
-        }
+    const session = await auth.api.getSession({
+          headers: request.headers
     });
-    if (!session.data) {
+    if (!session) {
         console.log('Admin : No session');
         throw redirect(302, '/login');
     }
-    if (session.data?.user.role !== 'admin') {
+    if (session.user.role !== 'admin') {
         console.log('Admin : Not admin');
         throw error(403, 'Forbidden');
     }
@@ -98,14 +95,12 @@ We first get the session and set it to event.locals
 
 ```ts title="hooks.server.ts"
 import type { Handle } from '@sveltejs/kit';
-import { authClient } from '$lib/auth-client';
+import { auth } from '$lib/auth-client';
 
 export const handle: Handle = async ({ event, resolve }) => {
   // Get the session  
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: event.request.headers
-    }
+  const session = await auth.api.getSession({
+    headers: event.request.headers
   });
   // Set session and user to locals 
   event.locals.session = session?.data?.session;
@@ -122,12 +117,7 @@ Then on the +layout.server.ts of the protected routes
 import type { LayoutServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 
-import { authClient } from '$lib/auth-client';
-
 export const load: LayoutServerLoad = async ({ locals }) => {
-
-    console.log('Admin Layout Server load ');
-
     const session = locals.session;
     const user = locals.user;
 
@@ -162,29 +152,4 @@ declare global {
 }
 
 export { };
-```
-
-### Example: Getting Session on a loader
-
-```ts title="+page.server.ts"
-import { auth } from "$lib/auth";
-import type { PageServerLoad } from "./$types";
-
-export const load: PageServerLoad = async ({ request }) => {
-	const session = await auth.api.getSession({
-		headers: request.headers,
-	});
-	if (!session) {
-		return {
-			status: 401,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				error: "Unauthorized",
-			}),
-		};
-	}
-	return session;
-}
 ```
