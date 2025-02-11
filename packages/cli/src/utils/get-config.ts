@@ -7,7 +7,6 @@ import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
-import { loadDotenv } from "c12";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 
