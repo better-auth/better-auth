@@ -69,7 +69,7 @@ export const supportedPlugins = [
 	{ id: "oauth-proxy", name: "oAuthProxy", path: `better-auth/plugins` },
 	{ id: "open-api", name: "openAPI", path: `better-auth/plugins` },
 	{ id: "jwt", name: "jwt", path: `better-auth/plugins` },
-	{ id: "next-cookies", name: "nextCookies", path: `better-auth/plugins` },
+	{ id: "next-cookies", name: "nextCookies", path: `better-auth/next-js` },
 ] as const;
 
 export type SupportedPlugin = (typeof supportedPlugins)[number];
@@ -469,11 +469,12 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			plugins: add_plugins,
 		});
 		new_user_config = generatedCode;
-		s.stop("New auth config ready. 🎉");
+		s.stop("🎉 Your new auth config ready. 🎉");
 
 		const shouldShowDiff = await confirm({
 			message: `Do you want to see the diff?`,
 		});
+
 		if (isCancel(shouldShowDiff)) {
 			cancel(`Operating cancelled.`);
 			process.exit(0);
