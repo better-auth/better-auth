@@ -18,6 +18,7 @@ import {
 	isCancel,
 	log,
 	multiselect,
+	outro,
 	select,
 	spinner,
 	text,
@@ -85,55 +86,34 @@ const optionsSchema = z.object({
 	name: z.string().optional(),
 	config: z.string().optional(),
 	database: z.enum(supportedDatabases).optional(),
-	skipDb: z.boolean().optional(),
-	skipPlugins: z.boolean().optional(),
+	"skip-db": z.boolean().optional(),
+	"skip-plugins": z.boolean().optional(),
+	"package-manager": z.string().optional(),
 });
 
-export async function initAction(plgns: string[] | undefined, opts: any) {
+export async function initAction(opts: any) {
 	console.log();
-	intro("🍿 Initializing Better Auth");
+	intro("Initializing Better Auth");
 
 	const options = optionsSchema.parse(opts);
 
-	const {
-		data: plugins,
-		success: successfullyParsedPlugins,
-		error: errorParsingPlugins,
-	} = z
-		.array(
-			z.enum(
-				//@ts-ignore
-				supportedPlugins.map((p) => p.id),
-				{
-					message: `Invalid plugin. Supported plugins include: ${supportedPlugins.join(
-						", ",
-					)}.`,
-				},
-			),
-		)
-		.safeParse(plgns);
-
-	if (!successfullyParsedPlugins) {
-		log.error(errorParsingPlugins.issues[0].message);
-		process.exit(1);
-	}
-
+	const cwd = path.resolve(options.cwd);
 	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
 		undefined;
 
 	// ===== package.json =====
 	let packageInfo: Record<string, any>;
 	try {
-		packageInfo = getPackageInfo(options.cwd);
+		packageInfo = getPackageInfo(cwd);
 	} catch (error) {
-		log.error(`❌ Couldn't read your package.json file. (${options.cwd})`);
+		log.error(`❌ Couldn't read your package.json file. (${cwd})`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
 	}
 
 	// ===== install better-auth =====
 	const s = spinner({ indicator: "dots" });
-	s.start(`🤔 Checking better-auth installation`);
+	s.start(`Checking better-auth installation`);
 
 	let latest_betterauth_version: string;
 	try {
@@ -148,10 +128,10 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		!packageInfo.dependencies ||
 		!Object.keys(packageInfo.dependencies).includes("better-auth")
 	) {
-		s.stop();
+		s.stop("Finished fetching latest version of better-auth.");
 		const s2 = spinner({ indicator: "dots" });
 		const shouldInstallBetterAuthDep = await confirm({
-			message: `😉 Would you like to install Better Auth?`,
+			message: `Would you like to install Better Auth?`,
 		});
 		if (isCancel(shouldInstallBetterAuthDep)) {
 			cancel(`✋ Operation cancelled.`);
@@ -162,19 +142,19 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		}
 		if (shouldInstallBetterAuthDep) {
 			s2.start(
-				`👉 Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
+				`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
 			try {
 				const start = Date.now();
 				await installDependencies({
 					dependencies: ["better-auth@latest"],
 					packageManager: packageManagerPreference,
-					cwd: options.cwd,
+					cwd: cwd,
 				});
 				s2.stop(
-					`✅ Better Auth installed successfully! ${chalk.gray(
-						`(${formatMilliseconds(Date.now() - start)}ms)`,
-					)}`,
+					`Better Auth installed ${chalk.greenBright(
+						`successfully`,
+					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)}ms)`)}`,
 				);
 			} catch (error: any) {
 				s2.stop(`Failed to install Better Auth:`);
@@ -189,9 +169,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			semver.clean(latest_betterauth_version)!,
 		)
 	) {
-		s.stop();
+		s.stop("Finished fetching latest version of better-auth.");
 		const shouldInstallBetterAuthDep = await confirm({
-			message: `🤔 Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
+			message: `Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
 				packageInfo.dependencies["better-auth"],
 			)} → ${chalk.bold(`v${latest_betterauth_version}`)})`,
 		});
@@ -205,19 +185,19 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 			const s = spinner({ indicator: "dots" });
 			s.start(
-				`👉 Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
+				`Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
 			try {
 				const start = Date.now();
 				await installDependencies({
 					dependencies: ["better-auth@latest"],
 					packageManager: packageManagerPreference,
-					cwd: options.cwd,
+					cwd: cwd,
 				});
 				s.stop(
-					`✅ Better Auth updated successfully! ${chalk.gray(
-						`(${formatMilliseconds(Date.now() - start)})`,
-					)}`,
+					`Better Auth updated ${chalk.greenBright(
+						`successfully`,
+					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
 				);
 			} catch (error: any) {
 				s.stop(`Failed to update Better Auth:`);
@@ -226,16 +206,16 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 		}
 	} else {
-		s.stop("✅ Better Auth dependencies are already up to date!");
+		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
 	}
 
 	// ===== appName =====
 
-	const packageJson = getPackageInfo(options.cwd);
+	const packageJson = getPackageInfo(cwd);
 	let appName: string;
 	if (!options.name && !packageJson.name) {
 		const newAppName = await text({
-			message: "🤔 What is the name of your application?",
+			message: "What is the name of your application?",
 			validate(value) {
 				const pkgNameRegex =
 					/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
@@ -249,28 +229,6 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		appName = newAppName;
 	} else {
 		appName = options.name || packageJson.name;
-	}
-
-	// ===== config =====
-
-	const cwd = path.resolve(options.cwd);
-	if (!existsSync(cwd)) {
-		log.error(`❌ The directory "${cwd}" does not exist.`);
-		process.exit(1);
-	}
-	let config: BetterAuthOptions;
-	const resolvedConfig = await getConfig({
-		cwd,
-		configPath: options.config,
-	});
-	if (resolvedConfig) {
-		if (resolvedConfig.appName) appName = resolvedConfig.appName;
-		config = resolvedConfig;
-	} else {
-		config = {
-			appName,
-			plugins: [],
-		};
 	}
 
 	// ===== config path =====
@@ -303,9 +261,30 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	}
 
 	if (!config_path) {
-		log.info(`😶 No auth config file found.`);
+		log.info(`No auth config file found.`);
 	} else {
-		log.info(`👍 Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+	}
+
+	// ===== config =====
+
+	if (!existsSync(cwd)) {
+		log.error(`❌ The directory "${cwd}" does not exist.`);
+		process.exit(1);
+	}
+	let config: BetterAuthOptions;
+	const resolvedConfig = await getConfig({
+		cwd,
+		configPath: options.config,
+	});
+	if (resolvedConfig) {
+		if (resolvedConfig.appName) appName = resolvedConfig.appName;
+		config = resolvedConfig;
+	} else {
+		config = {
+			appName,
+			plugins: [],
+		};
 	}
 
 	const format = async (code: string) =>
@@ -328,24 +307,24 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	// ===== database =====
 
 	let database: SupportedDatabases | null = null;
-	if (options.skipDb === undefined && !config.database) {
+	if (options["skip-db"] === undefined && !config.database) {
 		const result = await confirm({
-			message: `🤔 Would you like to set up your ${chalk.bold(`database`)}?`,
+			message: `Would you like to set up your ${chalk.bold(`database`)}?`,
 			initialValue: true,
 		});
 		if (isCancel(result)) {
 			cancel(`✋ Operating cancelled.`);
 			process.exit(0);
 		}
-		options.skipDb = !result;
+		options["skip-db"] = !result;
 	}
 
-	if (!config.database && !options.skipDb) {
+	if (!config.database && !options["skip-db"]) {
 		if (options.database) {
 			database = options.database;
 		} else {
 			const prompted_database = await select({
-				message: "🤔 Choose a Database Dialect",
+				message: "Choose a Database Dialect",
 				options: supportedDatabases.map((it) => ({ value: it, label: it })),
 			});
 			if (isCancel(prompted_database)) {
@@ -362,54 +341,31 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		? config.plugins.map((x) => x.id)
 		: [];
 
-	if (options.skipPlugins === undefined) {
+	if (options["skip-plugins"] !== false) {
 		if (config.plugins === undefined) {
 			const skipPLugins = await confirm({
-				message: `📦 Would you like to set up ${chalk.bold(`plugins`)}?`,
+				message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
 			});
 			if (isCancel(skipPLugins)) {
 				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
-			options.skipPlugins = !skipPLugins;
+			options["skip-plugins"] = !skipPLugins;
 		} else {
 			const skipPLugins = await confirm({
-				message: `📦 Would you like to add new ${chalk.bold(`plugins`)}?`,
+				message: `Would you like to add new ${chalk.bold(`plugins`)}?`,
 			});
 			if (isCancel(skipPLugins)) {
 				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
-			options.skipPlugins = !skipPLugins;
-		}
-	}
-	if (!options.skipPlugins) {
-		if (!plugins || plugins.length === 0) {
-			const prompted_plugins = await multiselect({
-				message: "👉 Select your new plugins",
-				options: supportedPlugins
-					.filter(
-						(x) => x.id !== "next-cookies" && !existing_plugins.includes(x.id),
-					)
-					.map((x) => ({ value: x.id, label: x.id })),
-			});
-			if (isCancel(prompted_plugins)) {
-				cancel(`✋ Operating cancelled.`);
-				process.exit(0);
-			}
-			add_plugins = prompted_plugins.map(
-				(x) => supportedPlugins.find((y) => y.id === x)!,
-			);
-		} else {
-			add_plugins = plugins
-				.filter((x) => !existing_plugins.includes(x))
-				.map((x) => supportedPlugins.find((y) => y.id === x)!);
+			options["skip-plugins"] = !skipPLugins;
 		}
 	}
 
 	// ===== suggest nextCookies plugin =====
 
-	if (!options.skipPlugins) {
+	if (!options["skip-plugins"]) {
 		const possible_next_config_paths = [
 			"next.config.js",
 			"next.config.ts",
@@ -427,7 +383,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		}
 		if (!existing_plugins.includes("next-cookies") && is_next_framework) {
 			const result = await confirm({
-				message: `👍 It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(`(Recommended)`)}`,
+				message: `It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(
+					`(Recommended)`,
+				)}`,
 			});
 			if (isCancel(result)) {
 				cancel(`✋ Operating cancelled.`);
@@ -444,7 +402,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	// ===== generate new config =====
 
 	const shouldUpdateAuthConfig =
-		!(options.skipPlugins || add_plugins.length === 0) || database !== null;
+		!(options["skip-plugins"] || add_plugins.length === 0) || database !== null;
 
 	if (shouldUpdateAuthConfig) {
 		const s = spinner({ indicator: "dots" });
@@ -472,7 +430,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		s.stop("🎉 Your new auth config ready! 🎉");
 
 		const shouldShowDiff = await confirm({
-			message: `👀 Do you want to see the diff?`,
+			message: `Do you want to see the ${chalk.bold(`diff`)}?`,
 		});
 
 		if (isCancel(shouldShowDiff)) {
@@ -480,17 +438,23 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			process.exit(0);
 		}
 
+		// ===== Show diff =====
+
 		if (shouldShowDiff) {
 			const diffed = getStyledDiff(
 				await format(current_user_config),
 				new_user_config,
 			);
-			log.info("⭐ New auth config:");
+			log.info("Your new auth config:");
 			log.message(diffed);
 		}
 
+		// ===== apply changes ====
+
 		const shouldApply = await confirm({
-			message: `👍 Do you want to apply the changes to your auth config?`,
+			message: `Do you want to ${chalk.bold(
+				`apply changes`,
+			)} to your auth config?`,
 		});
 		if (isCancel(shouldApply)) {
 			cancel(`✋ Operation cancelled.`);
@@ -509,9 +473,11 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			log.info(`✋ Skipping auth config update.`);
 		}
 
-		if (dependencies.length !== 0) {
+		// ===== install dependencies ====
+
+		if (dependencies.length !== 0 && shouldApply) {
 			const shouldInstallDeps = await confirm({
-				message: `🙏 Do you want to install the nessesary dependencies? (${dependencies
+				message: `Do you want to install the nessesary dependencies? (${dependencies
 					.map((x) => chalk.bold(x))
 					.join(", ")})`,
 			});
@@ -521,54 +487,106 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 			if (shouldInstallDeps) {
 				const s = spinner({ indicator: "dots" });
-				s.start(
-					`👉 Installing dependencies using ${chalk.bold(
-						packageManagerPreference,
-					)}...`,
-				);
 				if (packageManagerPreference === undefined) {
 					packageManagerPreference = await getPackageManager();
 				}
+				s.start(
+					`Installing dependencies using ${chalk.bold(
+						packageManagerPreference,
+					)}...`,
+				);
 				try {
 					const start = Date.now();
 					await installDependencies({
 						dependencies,
 						packageManager: packageManagerPreference,
-						cwd: options.cwd,
+						cwd: cwd,
 					});
 					s.stop(
-						`✅ Dependencies installed successfully! ${chalk.gray(
-							`(${formatMilliseconds(Date.now() - start)})`,
-						)}`,
+						`Dependencies installed ${chalk.greenBright(
+							`successfully`,
+						)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
 					);
 				} catch (error: any) {
 					s.stop(
-						`❌ Failed to install dependencies using ${packageManagerPreference}:`,
+						`Failed to install dependencies using ${packageManagerPreference}:`,
 					);
 					log.error(error.message);
 					process.exit(1);
 				}
 			} else {
-				log.info("✋ Skipping dependency installation.");
+				log.info("Skipping dependency installation.");
 			}
 		}
+
+		// ===== update ENVs =====
+		if (envs.length !== 0 && shouldApply) {
+			log.step(
+				`There are ${envs.length} environment variables for your database of choice.`,
+			);
+			const shouldUpdateEnvs = await confirm({
+				message: `Would you like us to update your ENV files?`,
+			});
+			if (isCancel(shouldUpdateEnvs)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+			if (shouldUpdateEnvs) {
+				const envFiles = await getEnvFiles(cwd);
+				const filesToUpdate = await multiselect({
+					message: "Select the .env files you want to update",
+					options: envFiles.map((x) => ({
+						value: path.join(cwd, x),
+						label: x,
+						hint:
+							x === ".env.example" ? "We'll add example values!" : undefined,
+					})),
+				});
+				if (isCancel(filesToUpdate)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+				try {
+					await updateEnvs({
+						files: filesToUpdate,
+						envs,
+					});
+				} catch (error) {
+					log.error(`Failed to update .env files:`);
+					log.error(JSON.stringify(error, null, 2));
+					process.exit(1);
+				}
+				log.success(`🚀 ENV files successfully updated!`);
+			}
+		}
+
+		// ===== prompt to run migrate/generate ====
+		if (database !== null && shouldApply) {
+			log.info(
+				`Don't forget to run ${chalk.yellowBright(
+					`npx @better-auth/cli generate`,
+				)} to generate your schema!`,
+			);
+			outro(`Happy hacking! 👋`);
+		}
+	} else {
+		outro(`Happy hacking! 👋`);
 	}
+	console.log(`\n`);
 	process.exit(0);
 }
 
 // ===== Init Command =====
 
 export const init = new Command("init")
-	.argument("[plugins...]", "The plugins to install.")
 	.option("--name <name>", "The name of your application.")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())
 	.option(
 		"--config <config>",
 		"The path to the auth configuration file. defaults to the first `auth.ts` file found.",
 	)
-	.option("--database <database>", "The database dialect you want to use.")
-	.option("--skipDb", "Skip the database setup.")
-	.option("--skipPlugins", "Skip the plugins setup.")
+	.option("--skip-db", "Skip the database setup.")
+	.option("--skip-plugins", "Skip the plugins setup.")
 	.option(
 		"--package-manager <package-manager>",
 		"The package manager you want to use.",
@@ -646,4 +664,52 @@ async function getPackageManager() {
 		process.exit(0);
 	}
 	return packageManager;
+}
+
+async function getEnvFiles(cwd: string) {
+	const files = await fs.readdir(cwd);
+	return files.filter((x) => x.startsWith(".env"));
+}
+
+async function updateEnvs({
+	envs,
+	files,
+}: {
+	/**
+	 * The ENVs to append to the file
+	 */
+	envs: string[];
+	/**
+	 * Full file paths
+	 */
+	files: string[];
+}) {
+	for (const file of files) {
+		const content = await fs.readFile(file, "utf8");
+		const lines = content.split("\n");
+		const newLines = envs.map(
+			(x) => `# ${x}="${getEnvDescription(x) ?? "some value"}"`,
+		);
+		newLines.push("");
+		newLines.push(...lines);
+		await fs.writeFile(file, newLines.join("\n"), "utf8");
+	}
+
+	function getEnvDescription(env: string) {
+		if (env === "DATABASE_HOST") {
+			return "The host of your database";
+		}
+		if (env === "DATABASE_PORT") {
+			return "The port of your database";
+		}
+		if (env === "DATABASE_USER") {
+			return "The username of your database";
+		}
+		if (env === "DATABASE_PASSWORD") {
+			return "The password of your database";
+		}
+		if (env === "DATABASE_NAME") {
+			return "The name of your database";
+		}
+	}
 }
