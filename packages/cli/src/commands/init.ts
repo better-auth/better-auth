@@ -2,7 +2,7 @@ import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
-import { z } from "zod";
+import { late, z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { type BetterAuthOptions } from "better-auth";
@@ -157,68 +157,71 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		if (packageManagerPreference === undefined) {
 			packageManagerPreference = await getPackageManager();
 		}
-
-		const s = spinner({ indicator: "dots" });
-		s.start(
-			`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
-		);
-
-		try {
-			const start = Date.now();
-			await installDependencies({
-				dependencies: ["better-auth"],
-				packageManager: packageManagerPreference,
-				cwd: options.cwd,
-			});
-			s.stop(
-				`🚀 Better Auth installed successfully! ${chalk.gray(
-					`(${formatMilliseconds(Date.now() - start)}ms)`,
-				)}`,
+		if (shouldInstallBetterAuthDep) {
+			const s = spinner({ indicator: "dots" });
+			s.start(
+				`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
-		} catch (error: any) {
-			s.stop(`Failed to install Better Auth:`);
-			log.error(error.message);
-			process.exit(1);
+
+			try {
+				const start = Date.now();
+				await installDependencies({
+					dependencies: ["better-auth@latest"],
+					packageManager: packageManagerPreference,
+					cwd: options.cwd,
+				});
+				s.stop(
+					`🚀 Better Auth installed successfully! ${chalk.gray(
+						`(${formatMilliseconds(Date.now() - start)}ms)`,
+					)}`,
+				);
+			} catch (error: any) {
+				s.stop(`Failed to install Better Auth:`);
+				log.error(error.message);
+				process.exit(1);
+			}
 		}
 	} else if (
 		packageInfo.dependencies["better-auth"] !== "workspace:*" &&
-		!semver.satisfies(
-			packageInfo.dependencies["better-auth"],
-			latest_betterauth_version,
+		semver.lt(
+			semver.coerce(packageInfo.dependencies["better-auth"])?.toString()!,
+			semver.clean(latest_betterauth_version)!,
 		)
 	) {
 		const shouldInstallBetterAuthDep = await confirm({
 			message: `Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
 				packageInfo.dependencies["better-auth"],
-			)} -> ${chalk.bold(`v${latest_betterauth_version}`)})`,
+			)} → ${chalk.bold(`v${latest_betterauth_version}`)})`,
 		});
 		if (isCancel(shouldInstallBetterAuthDep)) {
 			cancel(`Operation cancelled.`);
 			process.exit(0);
 		}
-		if (packageManagerPreference === undefined) {
-			packageManagerPreference = await getPackageManager();
-		}
-		const s = spinner({ indicator: "dots" });
-		s.start(
-			`Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
-		);
-		try {
-			const start = Date.now();
-			await installDependencies({
-				dependencies: ["better-auth"],
-				packageManager: packageManagerPreference,
-				cwd: options.cwd,
-			});
-			s.stop(
-				`🚀 Better Auth updated successfully! ${chalk.gray(
-					`(${formatMilliseconds(Date.now() - start)}ms)`,
-				)}`,
+		if (shouldInstallBetterAuthDep) {
+			if (packageManagerPreference === undefined) {
+				packageManagerPreference = await getPackageManager();
+			}
+			const s = spinner({ indicator: "dots" });
+			s.start(
+				`Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
-		} catch (error: any) {
-			s.stop(`Failed to update Better Auth:`);
-			log.error(error.message);
-			process.exit(1);
+			try {
+				const start = Date.now();
+				await installDependencies({
+					dependencies: ["better-auth@latest"],
+					packageManager: packageManagerPreference,
+					cwd: options.cwd,
+				});
+				s.stop(
+					`🚀 Better Auth updated successfully! ${chalk.gray(
+						`(${formatMilliseconds(Date.now() - start)})`,
+					)}`,
+				);
+			} catch (error: any) {
+				s.stop(`Failed to update Better Auth:`);
+				log.error(error.message);
+				process.exit(1);
+			}
 		}
 	}
 
@@ -520,7 +523,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					});
 					s.stop(
 						`Dependencies installed successfully! ${chalk.gray(
-							`(${formatMilliseconds(Date.now() - start)}ms)`,
+							`(${formatMilliseconds(Date.now() - start)})`,
 						)}`,
 					);
 				} catch (error: any) {
@@ -593,6 +596,7 @@ async function getLatestNpmVersion(packageName: string): Promise<string> {
 
 async function getPackageManager() {
 	const { hasBun, hasPnpm } = await checkPackageManagers();
+	if (!hasBun && !hasPnpm) return "npm";
 
 	const packageManagerOptions: {
 		value: "bun" | "pnpm" | "yarn" | "npm";
