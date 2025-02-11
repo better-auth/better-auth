@@ -101,6 +101,8 @@ export async function initAction(opts: any) {
 	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
 		undefined;
 
+	const envFiles = await getEnvFiles(cwd);
+
 	// ===== package.json =====
 	let packageInfo: Record<string, any>;
 	try {
@@ -362,6 +364,24 @@ export async function initAction(opts: any) {
 			options["skip-plugins"] = !skipPLugins;
 		}
 	}
+	if (!options["skip-plugins"]) {
+		const prompted_plugins = await multiselect({
+			message: "Select your new plugins",
+			options: supportedPlugins
+				.filter(
+					(x) => x.id !== "next-cookies" && !existing_plugins.includes(x.id),
+				)
+				.map((x) => ({ value: x.id, label: x.id })),
+			required: false,
+		});
+		if (isCancel(prompted_plugins)) {
+			cancel(`✋ Operating cancelled.`);
+			process.exit(0);
+		}
+		add_plugins = prompted_plugins.map(
+			(x) => supportedPlugins.find((y) => y.id === x)!,
+		);
+	}
 
 	// ===== suggest nextCookies plugin =====
 
@@ -532,31 +552,33 @@ export async function initAction(opts: any) {
 				process.exit(0);
 			}
 			if (shouldUpdateEnvs) {
-				const envFiles = await getEnvFiles(cwd);
 				const filesToUpdate = await multiselect({
 					message: "Select the .env files you want to update",
 					options: envFiles.map((x) => ({
 						value: path.join(cwd, x),
 						label: x,
-						hint:
-							x === ".env.example" ? "We'll add example values!" : undefined,
 					})),
+					required: false,
 				});
 				if (isCancel(filesToUpdate)) {
 					cancel("✋ Operation cancelled.");
 					process.exit(0);
 				}
-				try {
-					await updateEnvs({
-						files: filesToUpdate,
-						envs,
-					});
-				} catch (error) {
-					log.error(`Failed to update .env files:`);
-					log.error(JSON.stringify(error, null, 2));
-					process.exit(1);
+				if (filesToUpdate.length === 0) {
+					log.info("No .env files to update. Skipping...");
+				} else {
+					try {
+						await updateEnvs({
+							files: filesToUpdate,
+							envs,
+						});
+					} catch (error) {
+						log.error(`Failed to update .env files:`);
+						log.error(JSON.stringify(error, null, 2));
+						process.exit(1);
+					}
+					log.success(`🚀 ENV files successfully updated!`);
 				}
-				log.success(`🚀 ENV files successfully updated!`);
 			}
 		}
 
@@ -570,6 +592,7 @@ export async function initAction(opts: any) {
 			outro(`Happy hacking! 👋`);
 		}
 	} else {
+		log.info(`No plugins or databases operations needed, skipping...`);
 		outro(`Happy hacking! 👋`);
 	}
 	console.log();
