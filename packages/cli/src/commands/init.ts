@@ -589,11 +589,11 @@ export async function initAction(opts: any) {
 					`npx @better-auth/cli generate`,
 				)} to generate your schema!`,
 			);
-			outro(`Happy hacking! 👋`);
+			outro(`All Done, Happy Hacking! 👋`);
 		}
 	} else {
 		log.info(`No plugins or databases operations needed, skipping...`);
-		outro(`Happy hacking! 👋`);
+		outro(`All Done, Happy Hacking! 👋`);
 	}
 	console.log();
 	process.exit(0);
