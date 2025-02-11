@@ -163,7 +163,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const response =
 							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
-
 						if (!response) {
 							return;
 						}

@@ -166,8 +166,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/better-auth
       better-call:
-        specifier: 0.2.3-beta.2
-        version: 0.2.3-beta.2
+        specifier: 1.0.0-beta.5
+        version: 1.0.0-beta.5
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.6.0
@@ -1439,8 +1439,8 @@ importers:
         specifier: 0.2.3
         version: 0.2.3
       '@better-fetch/fetch':
-        specifier: 1.1.12
-        version: 1.1.12
+        specifier: ^1.1.14-beta.2
+        version: 1.1.14-beta.2
       '@noble/ciphers':
         specifier: ^0.6.0
         version: 0.6.0
@@ -1454,8 +1454,8 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0(encoding@0.1.13)
       better-call:
-        specifier: 0.3.3
-        version: 0.3.3
+        specifier: ^1.0.0-beta.5
+        version: 1.0.0-beta.5
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1468,6 +1468,9 @@ importers:
       nanostores:
         specifier: ^0.11.3
         version: 0.11.3
+      valibot:
+        specifier: 1.0.0-beta.15
+        version: 1.0.0-beta.15(typescript@5.6.1-rc)
       zod:
         specifier: ^3.24.1
         version: 3.24.1
@@ -1627,15 +1630,15 @@ importers:
   packages/expo:
     dependencies:
       better-call:
-        specifier: ^0.3.3
-        version: 0.3.3
+        specifier: 1.0.0-beta.4
+        version: 1.0.0-beta.4
       zod:
         specifier: ^3.23.8
         version: 3.23.8
     devDependencies:
       '@better-fetch/fetch':
-        specifier: 1.1.12
-        version: 1.1.12
+        specifier: 1.1.13-beta.5
+        version: 1.1.13-beta.5
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -2656,6 +2659,12 @@ packages:
 
   '@better-fetch/fetch@1.1.12':
     resolution: {integrity: sha512-B3bfloI/2UBQWIATRN6qmlORrvx3Mp0kkNjmXLv0b+DtbtR+pP4/I5kQA/rDUv+OReLywCCldf6co4LdDmh8JA==}
+
+  '@better-fetch/fetch@1.1.13-beta.5':
+    resolution: {integrity: sha512-KAVJKQgyV0qDscDM+yBcq/zLwYVHsZGTEm51l6nrSQLwB+Hn4BvUq9IzSC92iLZ7u0bF4PuyJFejTD7B8aG4fg==}
+
+  '@better-fetch/fetch@1.1.14-beta.2':
+    resolution: {integrity: sha512-XXEvj0KnNF2BofwKUtypR7W7fJDieUXs60p+jZ0rvkCQfadlJcUSka3X1l4FCmNRR2TffKCwObd0lQMj/SaWUg==}
 
   '@biomejs/biome@1.7.3':
     resolution: {integrity: sha512-ogFQI+fpXftr+tiahA6bIXwZ7CSikygASdqMtH07J2cUzrpjyTMVc9Y97v23c7/tL1xCZhM+W9k4hYIBm7Q6cQ==}
@@ -8675,9 +8684,6 @@ packages:
   '@types/semver@7.5.8':
     resolution: {integrity: sha512-I8EUhyrgfLrcTkzV3TSsGyl1tSuPrEDzr0yd5m90UgNxQkyDXULk3b6MlQqTCpZpNtWe1K0hzclnZkTcLBe2UQ==}
 
-  '@types/set-cookie-parser@2.4.10':
-    resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
-
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
 
@@ -9864,11 +9870,14 @@ packages:
   better-call@0.2.15-beta.6:
     resolution: {integrity: sha512-IIpVe7z7xW5pNOOhOj3u7cEde53v3Duzs4bstDJfLVqdmEiYRUCfy+1w2apf3MqYOHY8gYcd7DbTsvFeBqg4CA==}
 
-  better-call@0.2.3-beta.2:
-    resolution: {integrity: sha512-ybOtGcR4pOsHI2XE+urR9zcmK+s0YnhJSx8KDj6ul7MUEyYOiMEnq/bylyH62/7qXuYb9q8Oqkp9NF9vWOZ4Mg==}
-
   better-call@0.3.3:
     resolution: {integrity: sha512-N4lDVm0NGmFfDJ0XMQ4O83Zm/3dPlvIQdxvwvgSLSkjFX5PM4GUYSVAuxNzXN27QZMHDkrJTWUqxBrm4tPC3eA==}
+
+  better-call@1.0.0-beta.4:
+    resolution: {integrity: sha512-UmJrEBNcsFb/xBJePy1sYAYG8MUlRnr97D674Y2KmCYr+B402xpgnBuVXMujGEnHhVGx/sdiJdrI70PrjLc2bg==}
+
+  better-call@1.0.0-beta.5:
+    resolution: {integrity: sha512-0Jzk5+58hnJWJpGIcrvmxLTqKGjtNGkAQ9zpSKvCC860TUJGdNHvK661pQ5JYKNnbcKORA52xglu4T/MqKJyrQ==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -18952,8 +18961,8 @@ packages:
       typescript:
         optional: true
 
-  valibot@1.0.0-beta.9:
-    resolution: {integrity: sha512-yEX8gMAZ2R1yI2uwOO4NCtVnJQx36zn3vD0omzzj9FhcoblvPukENIiRZXKZwCnqSeV80bMm8wNiGhQ0S8fiww==}
+  valibot@1.0.0-beta.15:
+    resolution: {integrity: sha512-BKy8XosZkDHWmYC+cJG74LBzP++Gfntwi33pP3D3RKztz2XV9jmFWnkOi21GoqARP8wAWARwhV6eTr1JcWzjGw==}
     peerDependencies:
       typescript: '>=5'
     peerDependenciesMeta:
@@ -21194,6 +21203,10 @@ snapshots:
       uncrypto: 0.1.3
 
   '@better-fetch/fetch@1.1.12': {}
+
+  '@better-fetch/fetch@1.1.13-beta.5': {}
+
+  '@better-fetch/fetch@1.1.14-beta.2': {}
 
   '@biomejs/biome@1.7.3':
     optionalDependencies:
@@ -28504,10 +28517,6 @@ snapshots:
 
   '@types/semver@7.5.8': {}
 
-  '@types/set-cookie-parser@2.4.10':
-    dependencies:
-      '@types/node': 22.10.7
-
   '@types/stack-utils@2.0.3': {}
 
   '@types/stats.js@0.17.3': {}
@@ -30580,20 +30589,26 @@ snapshots:
       uncrypto: 0.1.3
       zod: 3.24.1
 
-  better-call@0.2.3-beta.2:
-    dependencies:
-      '@better-fetch/fetch': 1.1.12
-      '@types/set-cookie-parser': 2.4.10
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.1
-      typescript: 5.7.2
-
   better-call@0.3.3:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
       uncrypto: 0.1.3
       zod: 3.24.1
+
+  better-call@1.0.0-beta.4:
+    dependencies:
+      '@better-fetch/fetch': 1.1.12
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+      uncrypto: 0.1.3
+
+  better-call@1.0.0-beta.5:
+    dependencies:
+      '@better-fetch/fetch': 1.1.12
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+      uncrypto: 0.1.3
 
   better-opn@3.0.2:
     dependencies:
@@ -41506,7 +41521,7 @@ snapshots:
       joi: 17.13.3
       json-schema-to-ts: 3.1.1
       superstruct: 2.0.2
-      valibot: 1.0.0-beta.9(typescript@5.7.2)
+      valibot: 1.0.0-beta.15(typescript@5.7.2)
       yup: 1.4.0
       zod: 3.24.1
       zod-to-json-schema: 3.23.5(zod@3.24.1)
@@ -42609,7 +42624,11 @@ snapshots:
     optionalDependencies:
       typescript: 5.7.2
 
-  valibot@1.0.0-beta.9(typescript@5.7.2):
+  valibot@1.0.0-beta.15(typescript@5.6.1-rc):
+    optionalDependencies:
+      typescript: 5.6.1-rc
+
+  valibot@1.0.0-beta.15(typescript@5.7.2):
     optionalDependencies:
       typescript: 5.7.2
     optional: true

@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
+import { createAuthClient } from "../../client";
 
 describe("Admin plugin", async () => {
-	const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+	const { signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl } =
 		await getTestInstance(
 			{
 				plugins: [admin()],
@@ -29,11 +30,15 @@ describe("Admin plugin", async () => {
 				testUser: {
 					name: "Admin",
 				},
-				clientOptions: {
-					plugins: [adminClient()],
-				},
 			},
 		);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+	});
+
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 
@@ -50,7 +55,6 @@ describe("Admin plugin", async () => {
 			},
 		);
 		newUser = res.data?.user;
-
 		expect(newUser?.role).toBe("user");
 	});
 
@@ -253,6 +257,7 @@ describe("Admin plugin", async () => {
 				headers,
 			},
 		});
+		console.log(res);
 		expect(res.data?.length).toBe(2);
 	});
 

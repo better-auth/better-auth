@@ -1,10 +1,6 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
 import type { Account, Session, User, Verification } from "../types";
-import type {
-	BetterAuthPlugin,
-	HookAfterHandler,
-	HookBeforeHandler,
-} from "./plugins";
+import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -14,6 +10,7 @@ import type { AuthContext, LiteralUnion, OmitId } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
+import type { AuthMiddleware } from "../plugins";
 
 export type BetterAuthOptions = {
 	/**
@@ -822,11 +819,11 @@ export type BetterAuthOptions = {
 		/**
 		 * Before a request is processed
 		 */
-		before?: HookBeforeHandler;
+		before?: AuthMiddleware;
 		/**
 		 * After a request is processed
 		 */
-		after?: HookAfterHandler;
+		after?: AuthMiddleware;
 	};
 	/**
 	 * Disabled paths
