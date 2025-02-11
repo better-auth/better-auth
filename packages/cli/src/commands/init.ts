@@ -2,7 +2,7 @@ import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
-import { late, z } from "zod";
+import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { type BetterAuthOptions } from "better-auth";
@@ -92,7 +92,6 @@ const optionsSchema = z.object({
 export async function initAction(plgns: string[] | undefined, opts: any) {
 	console.log();
 	intro("Initializing Better Auth");
-	log.message("");
 
 	const options = optionsSchema.parse(opts);
 
@@ -133,6 +132,8 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	}
 
 	// ===== install better-auth =====
+	const s = spinner({ indicator: "dots" });
+	s.start(`Checking better-auth installation`);
 
 	let latest_betterauth_version: string;
 	try {
@@ -147,6 +148,8 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		!packageInfo.dependencies ||
 		!Object.keys(packageInfo.dependencies).includes("better-auth")
 	) {
+		s.stop();
+		const s2 = spinner({ indicator: "dots" });
 		const shouldInstallBetterAuthDep = await confirm({
 			message: `Would you like to install Better Auth?`,
 		});
@@ -158,11 +161,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			packageManagerPreference = await getPackageManager();
 		}
 		if (shouldInstallBetterAuthDep) {
-			const s = spinner({ indicator: "dots" });
-			s.start(
+			s2.start(
 				`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
-
 			try {
 				const start = Date.now();
 				await installDependencies({
@@ -170,13 +171,13 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					packageManager: packageManagerPreference,
 					cwd: options.cwd,
 				});
-				s.stop(
+				s2.stop(
 					`🚀 Better Auth installed successfully! ${chalk.gray(
 						`(${formatMilliseconds(Date.now() - start)}ms)`,
 					)}`,
 				);
 			} catch (error: any) {
-				s.stop(`Failed to install Better Auth:`);
+				s2.stop(`Failed to install Better Auth:`);
 				log.error(error.message);
 				process.exit(1);
 			}
@@ -188,6 +189,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			semver.clean(latest_betterauth_version)!,
 		)
 	) {
+		s.stop();
 		const shouldInstallBetterAuthDep = await confirm({
 			message: `Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
 				packageInfo.dependencies["better-auth"],
@@ -223,6 +225,8 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 				process.exit(1);
 			}
 		}
+	} else {
+		s.stop("Better Auth dependencies are already up to date!");
 	}
 
 	// ===== appName =====
@@ -296,6 +300,12 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 				break;
 			}
 		}
+	}
+
+	if (!config_path) {
+		log.info(`No auth config file found.`);
+	} else {
+		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 	}
 
 	const format = async (code: string) =>
@@ -485,14 +495,18 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			cancel(`Operation cancelled.`);
 			process.exit(0);
 		}
-		try {
-			await fs.writeFile(config_path, new_user_config);
-		} catch (error) {
-			log.error(`Failed to write your auth config file: ${config_path}`);
-			log.error(JSON.stringify(error, null, 2));
-			process.exit(1);
+		if (shouldApply) {
+			try {
+				await fs.writeFile(config_path, new_user_config);
+			} catch (error) {
+				log.error(`Failed to write your auth config file: ${config_path}`);
+				log.error(JSON.stringify(error, null, 2));
+				process.exit(1);
+			}
+			log.success(`🚀 Auth config successfully applied!`);
+		} else {
+			log.info(`Skipping auth config update.`);
 		}
-		log.success(`🚀 Auth config successfully applied!`);
 
 		if (dependencies.length !== 0) {
 			const shouldInstallDeps = await confirm({
