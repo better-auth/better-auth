@@ -1,11 +1,11 @@
-import type { Endpoint } from "better-call";
 import type { Migration } from "kysely";
-import type { AuthEndpoint, AuthMiddleware } from "../api/call";
+import { type AuthMiddleware } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
 import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
 
 import type { AuthContext, BetterAuthOptions } from ".";
+import type { Endpoint } from "better-call";
 
 export type AuthPluginSchema = {
 	[table in string]: {
@@ -16,20 +16,6 @@ export type AuthPluginSchema = {
 		modelName?: string;
 	};
 };
-
-// export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
-// 	| void
-// 	| {
-// 			context?: Partial<EndpointContext<string, any>>;
-// 	  }
-// 	| Response
-// 	| {
-// 			response: Record<string, any>;
-// 			body: any;
-// 			_flag: "json";
-// 	  }
-// 	| Record<string, any>
-// >;
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
@@ -42,7 +28,7 @@ export type BetterAuthPlugin = {
 		options?: Partial<BetterAuthOptions>;
 	} | void;
 	endpoints?: {
-		[key: string]: AuthEndpoint;
+		[key: string]: Endpoint;
 	};
 	middlewares?: {
 		path: string;
