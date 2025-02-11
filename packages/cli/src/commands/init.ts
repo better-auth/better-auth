@@ -95,9 +95,11 @@ const optionsSchema = z.object({
 
 const horiztonalLine = "─".repeat(30);
 
+const outroText = `All Done, Happy Hacking! 🥳`;
+
 export async function initAction(opts: any) {
 	console.log();
-	intro("Initializing Better Auth");
+	intro("👋 Initializing Better Auth");
 
 	const options = optionsSchema.parse(opts);
 
@@ -714,11 +716,11 @@ export async function initAction(opts: any) {
 					`npx @better-auth/cli generate`,
 				)} to generate your schema!`,
 			);
-			outro(`All Done, Happy Hacking! 👋`);
+			outro(outroText);
 		}
 	} else {
 		log.info(`No plugins or databases operations needed, skipping...`);
-		outro(`All Done, Happy Hacking! 👋`);
+		outro(outroText);
 	}
 	console.log();
 	process.exit(0);
@@ -844,7 +846,7 @@ async function updateEnvs({
 		const newLines = envs.map(
 			(x) =>
 				`${isCommented ? "# " : ""}${x}=${
-					getEnvDescription(x) ?? "some value"
+					getEnvDescription(x) ?? `"some_value"`
 				}`,
 		);
 		newLines.push("");
@@ -867,6 +869,9 @@ async function updateEnvs({
 		}
 		if (env === "DATABASE_NAME") {
 			return `"The name of your database"`;
+		}
+		if (env === "DATABASE_URL") {
+			return `"The URL of your database"`;
 		}
 		if (env === "BETTER_AUTH_SECRET") {
 			previouslyGeneratedSecret =
