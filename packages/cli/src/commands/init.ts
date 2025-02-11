@@ -91,7 +91,7 @@ const optionsSchema = z.object({
 
 export async function initAction(plgns: string[] | undefined, opts: any) {
 	console.log();
-	intro("Initializing Better Auth");
+	intro("🍿 Initializing Better Auth");
 
 	const options = optionsSchema.parse(opts);
 
@@ -126,20 +126,20 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	try {
 		packageInfo = getPackageInfo(options.cwd);
 	} catch (error) {
-		log.error(`Couldn't read your package.json file. (${options.cwd})`);
+		log.error(`❌ Couldn't read your package.json file. (${options.cwd})`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
 	}
 
 	// ===== install better-auth =====
 	const s = spinner({ indicator: "dots" });
-	s.start(`Checking better-auth installation`);
+	s.start(`🤔 Checking better-auth installation`);
 
 	let latest_betterauth_version: string;
 	try {
 		latest_betterauth_version = await getLatestNpmVersion("better-auth");
 	} catch (error) {
-		log.error(`Couldn't get latest version of better-auth.`);
+		log.error(`❌ Couldn't get latest version of better-auth.`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
 	}
@@ -151,10 +151,10 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		s.stop();
 		const s2 = spinner({ indicator: "dots" });
 		const shouldInstallBetterAuthDep = await confirm({
-			message: `Would you like to install Better Auth?`,
+			message: `😉 Would you like to install Better Auth?`,
 		});
 		if (isCancel(shouldInstallBetterAuthDep)) {
-			cancel(`Operation cancelled.`);
+			cancel(`✋ Operation cancelled.`);
 			process.exit(0);
 		}
 		if (packageManagerPreference === undefined) {
@@ -162,7 +162,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		}
 		if (shouldInstallBetterAuthDep) {
 			s2.start(
-				`Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
+				`👉 Installing Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
 			try {
 				const start = Date.now();
@@ -172,7 +172,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					cwd: options.cwd,
 				});
 				s2.stop(
-					`🚀 Better Auth installed successfully! ${chalk.gray(
+					`✅ Better Auth installed successfully! ${chalk.gray(
 						`(${formatMilliseconds(Date.now() - start)}ms)`,
 					)}`,
 				);
@@ -191,12 +191,12 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	) {
 		s.stop();
 		const shouldInstallBetterAuthDep = await confirm({
-			message: `Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
+			message: `🤔 Your current Better Auth dependency is out-of-date. Would you like to update it? (${chalk.bold(
 				packageInfo.dependencies["better-auth"],
 			)} → ${chalk.bold(`v${latest_betterauth_version}`)})`,
 		});
 		if (isCancel(shouldInstallBetterAuthDep)) {
-			cancel(`Operation cancelled.`);
+			cancel(`✋ Operation cancelled.`);
 			process.exit(0);
 		}
 		if (shouldInstallBetterAuthDep) {
@@ -205,7 +205,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 			const s = spinner({ indicator: "dots" });
 			s.start(
-				`Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
+				`👉 Updating Better Auth using ${chalk.bold(packageManagerPreference)}`,
 			);
 			try {
 				const start = Date.now();
@@ -215,7 +215,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					cwd: options.cwd,
 				});
 				s.stop(
-					`🚀 Better Auth updated successfully! ${chalk.gray(
+					`✅ Better Auth updated successfully! ${chalk.gray(
 						`(${formatMilliseconds(Date.now() - start)})`,
 					)}`,
 				);
@@ -226,7 +226,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 		}
 	} else {
-		s.stop("Better Auth dependencies are already up to date!");
+		s.stop("✅ Better Auth dependencies are already up to date!");
 	}
 
 	// ===== appName =====
@@ -235,7 +235,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	let appName: string;
 	if (!options.name && !packageJson.name) {
 		const newAppName = await text({
-			message: "What is the name of your application?",
+			message: "🤔 What is the name of your application?",
 			validate(value) {
 				const pkgNameRegex =
 					/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
@@ -243,7 +243,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			},
 		});
 		if (isCancel(newAppName)) {
-			cancel("Operation cancelled.");
+			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
 		appName = newAppName;
@@ -255,7 +255,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
-		log.error(`The directory "${cwd}" does not exist.`);
+		log.error(`❌ The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
 	let config: BetterAuthOptions;
@@ -303,9 +303,9 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	}
 
 	if (!config_path) {
-		log.info(`No auth config file found.`);
+		log.info(`😶 No auth config file found.`);
 	} else {
-		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+		log.info(`👍 Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 	}
 
 	const format = async (code: string) =>
@@ -320,7 +320,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	try {
 		current_user_config = await fs.readFile(config_path, "utf8");
 	} catch (error) {
-		log.error(`Failed to read your auth config file: ${config_path}`);
+		log.error(`❌ Failed to read your auth config file: ${config_path}`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
 	}
@@ -330,11 +330,11 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	let database: SupportedDatabases | null = null;
 	if (options.skipDb === undefined && !config.database) {
 		const result = await confirm({
-			message: `Would you like to set up your ${chalk.bold(`database`)}?`,
+			message: `🤔 Would you like to set up your ${chalk.bold(`database`)}?`,
 			initialValue: true,
 		});
 		if (isCancel(result)) {
-			cancel(`Operating cancelled.`);
+			cancel(`✋ Operating cancelled.`);
 			process.exit(0);
 		}
 		options.skipDb = !result;
@@ -345,11 +345,11 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			database = options.database;
 		} else {
 			const prompted_database = await select({
-				message: "Choose a Database Dialect",
+				message: "🤔 Choose a Database Dialect",
 				options: supportedDatabases.map((it) => ({ value: it, label: it })),
 			});
 			if (isCancel(prompted_database)) {
-				cancel(`Operating cancelled.`);
+				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
 			database = prompted_database;
@@ -365,19 +365,19 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	if (options.skipPlugins === undefined) {
 		if (config.plugins === undefined) {
 			const skipPLugins = await confirm({
-				message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
+				message: `📦 Would you like to set up ${chalk.bold(`plugins`)}?`,
 			});
 			if (isCancel(skipPLugins)) {
-				cancel(`Operating cancelled.`);
+				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
 			options.skipPlugins = !skipPLugins;
 		} else {
 			const skipPLugins = await confirm({
-				message: `Would you like to add new ${chalk.bold(`plugins`)}?`,
+				message: `📦 Would you like to add new ${chalk.bold(`plugins`)}?`,
 			});
 			if (isCancel(skipPLugins)) {
-				cancel(`Operating cancelled.`);
+				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
 			options.skipPlugins = !skipPLugins;
@@ -386,7 +386,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	if (!options.skipPlugins) {
 		if (!plugins || plugins.length === 0) {
 			const prompted_plugins = await multiselect({
-				message: "Select your new plugins",
+				message: "👉 Select your new plugins",
 				options: supportedPlugins
 					.filter(
 						(x) => x.id !== "next-cookies" && !existing_plugins.includes(x.id),
@@ -394,7 +394,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 					.map((x) => ({ value: x.id, label: x.id })),
 			});
 			if (isCancel(prompted_plugins)) {
-				cancel(`Operating cancelled.`);
+				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
 			add_plugins = prompted_plugins.map(
@@ -427,10 +427,10 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 		}
 		if (!existing_plugins.includes("next-cookies") && is_next_framework) {
 			const result = await confirm({
-				message: `It looks like you're using Next.JS. Do you want to add the next-cookies plugin?`,
+				message: `👍 It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(`(Recommended)`)}`,
 			});
 			if (isCancel(result)) {
-				cancel(`Operating cancelled.`);
+				cancel(`✋ Operating cancelled.`);
 				process.exit(0);
 			}
 			if (result) {
@@ -469,14 +469,14 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			plugins: add_plugins,
 		});
 		new_user_config = generatedCode;
-		s.stop("🎉 Your new auth config ready. 🎉");
+		s.stop("🎉 Your new auth config ready! 🎉");
 
 		const shouldShowDiff = await confirm({
-			message: `Do you want to see the diff?`,
+			message: `👀 Do you want to see the diff?`,
 		});
 
 		if (isCancel(shouldShowDiff)) {
-			cancel(`Operating cancelled.`);
+			cancel(`✋ Operating cancelled.`);
 			process.exit(0);
 		}
 
@@ -485,15 +485,15 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 				await format(current_user_config),
 				new_user_config,
 			);
-			log.info("New auth config:");
+			log.info("⭐ New auth config:");
 			log.message(diffed);
 		}
 
 		const shouldApply = await confirm({
-			message: `Do you want to apply the changes to your auth config?`,
+			message: `👍 Do you want to apply the changes to your auth config?`,
 		});
 		if (isCancel(shouldApply)) {
-			cancel(`Operation cancelled.`);
+			cancel(`✋ Operation cancelled.`);
 			process.exit(0);
 		}
 		if (shouldApply) {
@@ -506,23 +506,23 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			}
 			log.success(`🚀 Auth config successfully applied!`);
 		} else {
-			log.info(`Skipping auth config update.`);
+			log.info(`✋ Skipping auth config update.`);
 		}
 
 		if (dependencies.length !== 0) {
 			const shouldInstallDeps = await confirm({
-				message: `Do you want to install the nessesary dependencies? (${dependencies
+				message: `🙏 Do you want to install the nessesary dependencies? (${dependencies
 					.map((x) => chalk.bold(x))
 					.join(", ")})`,
 			});
 			if (isCancel(shouldInstallDeps)) {
-				cancel(`Operation cancelled.`);
+				cancel(`✋ Operation cancelled.`);
 				process.exit(0);
 			}
 			if (shouldInstallDeps) {
 				const s = spinner({ indicator: "dots" });
 				s.start(
-					`Installing dependencies using ${chalk.bold(
+					`👉 Installing dependencies using ${chalk.bold(
 						packageManagerPreference,
 					)}...`,
 				);
@@ -537,19 +537,19 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 						cwd: options.cwd,
 					});
 					s.stop(
-						`Dependencies installed successfully! ${chalk.gray(
+						`✅ Dependencies installed successfully! ${chalk.gray(
 							`(${formatMilliseconds(Date.now() - start)})`,
 						)}`,
 					);
 				} catch (error: any) {
 					s.stop(
-						`Failed to install dependencies using ${packageManagerPreference}:`,
+						`❌ Failed to install dependencies using ${packageManagerPreference}:`,
 					);
 					log.error(error.message);
 					process.exit(1);
 				}
 			} else {
-				log.info("Skipping dependency installation.");
+				log.info("✋ Skipping dependency installation.");
 			}
 		}
 	}
