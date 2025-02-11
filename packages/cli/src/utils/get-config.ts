@@ -93,19 +93,14 @@ const jitiOptions = (cwd: string) => {
 export async function getConfig({
 	cwd,
 	configPath,
-	silentLogs,
 }: {
 	cwd: string;
 	configPath?: string;
-	silentLogs?: boolean;
 }) {
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
 			const resolvedPath = path.join(cwd, configPath);
-			if (silentLogs) {
-				process.env.HIDE_BETTER_AUTH_LOGS = "true";
-			}
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;
@@ -130,9 +125,6 @@ export async function getConfig({
 		if (!configFile) {
 			for (const possiblePath of possiblePaths) {
 				try {
-					if (silentLogs) {
-						process.env.HIDE_BETTER_AUTH_LOGS = "true";
-					}
 					const { config } = await loadConfig<{
 						auth: {
 							options: BetterAuthOptions;

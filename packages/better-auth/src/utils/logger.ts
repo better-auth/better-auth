@@ -91,7 +91,6 @@ export const createLogger = (
 		const formattedMessage = formatMessage(level, message);
 
 		if (!options || typeof options.log !== "function") {
-			if (process.env.HIDE_BETTER_AUTH_LOGS === "true") return;
 			if (level === "error") {
 				console.error(formattedMessage, ...args);
 			} else if (level === "warn") {
