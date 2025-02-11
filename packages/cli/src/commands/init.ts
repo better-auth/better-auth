@@ -1,3 +1,4 @@
+import { parse } from "dotenv";
 import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
@@ -26,6 +27,7 @@ import {
 import { installDependencies } from "../utils/install-dependencies";
 import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
+import { generateSecretHash } from "./secret";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -91,6 +93,8 @@ const optionsSchema = z.object({
 	"package-manager": z.string().optional(),
 });
 
+const horiztonalLine = "─".repeat(30);
+
 export async function initAction(opts: any) {
 	console.log();
 	intro("Initializing Better Auth");
@@ -101,7 +105,116 @@ export async function initAction(opts: any) {
 	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
 		undefined;
 
+	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
+
+	let targetEnvFile: string;
+	if (envFiles.includes(".env")) targetEnvFile = ".env";
+	else if (envFiles.includes(".env.local")) targetEnvFile = ".env.local";
+	else if (envFiles.includes(".env.development"))
+		targetEnvFile = ".env.development";
+	else if (envFiles.length === 1) targetEnvFile = envFiles[0];
+	else targetEnvFile = "none";
+
+	if (targetEnvFile !== "none") {
+		try {
+			const fileContents = await fs.readFile(
+				path.join(cwd, targetEnvFile),
+				"utf8",
+			);
+			const parsed = parse(fileContents);
+			let isMissingSecret = false;
+			let isMissingUrl = false;
+			if (parsed.BETTER_AUTH_SECRET === undefined) isMissingSecret = true;
+			if (parsed.BETTER_AUTH_URL === undefined) isMissingUrl = true;
+			if (isMissingSecret || isMissingUrl) {
+				let txt = "";
+				if (isMissingSecret && !isMissingUrl)
+					txt = chalk.bold(`BETTER_AUTH_SECRET`);
+				else if (!isMissingSecret && isMissingUrl)
+					txt = chalk.bold(`BETTER_AUTH_URL`);
+				else
+					txt =
+						chalk.bold.underline(`BETTER_AUTH_SECRET`) +
+						` and ` +
+						chalk.bold.underline(`BETTER_AUTH_URL`);
+				log.warn(`Missing ${txt} in ${targetEnvFile}`);
+
+				const shouldAdd = await select({
+					message: `Do you want to add ${txt} to ${targetEnvFile}?`,
+					options: [
+						{ label: "Yes", value: "yes" },
+						{ label: "No", value: "no" },
+						{ label: "Choose other file(s)", value: "other" },
+					],
+				});
+				if (isCancel(shouldAdd)) {
+					cancel(`✋ Operation cancelled.`);
+					process.exit(0);
+				}
+				let envs: string[] = [];
+				if (isMissingSecret) {
+					envs.push("BETTER_AUTH_SECRET");
+				}
+				if (isMissingUrl) {
+					envs.push("BETTER_AUTH_URL");
+				}
+				if (shouldAdd === "yes") {
+					try {
+						await updateEnvs({
+							files: [path.join(cwd, targetEnvFile)],
+							envs: envs,
+							isCommented: false,
+						});
+					} catch (error) {
+						log.error(`Failed to add ENV variables to ${targetEnvFile}`);
+						log.error(JSON.stringify(error, null, 2));
+						process.exit(1);
+					}
+					log.success(`🚀 ENV variables successfully added!`);
+					if (isMissingUrl) {
+						log.info(
+							`Be sure to update your BETTER_AUTH_URL according to your app's needs.`,
+						);
+					}
+				} else if (shouldAdd === "no") {
+					log.info(`Skipping ENV step.`);
+				} else if (shouldAdd === "other") {
+					const envFilesToUpdate = await multiselect({
+						message: "Select the .env files you want to update",
+						options: envFiles.map((x) => ({
+							value: path.join(cwd, x),
+							label: x,
+						})),
+						required: false,
+					});
+					if (isCancel(envFilesToUpdate)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					if (envFilesToUpdate.length === 0) {
+						log.info("No .env files to update. Skipping...");
+					} else {
+						try {
+							await updateEnvs({
+								files: envFilesToUpdate,
+								envs: envs,
+								isCommented: false,
+							});
+						} catch (error) {
+							log.error(`Failed to update .env files:`);
+							log.error(JSON.stringify(error, null, 2));
+							process.exit(1);
+						}
+						log.success(`🚀 ENV files successfully updated!`);
+					}
+				}
+				log.message(chalk.gray(horiztonalLine));
+			}
+		} catch (error) {
+			// if fails, ignore, and do not proceed with ENV operations.
+		}
+	}
 
 	// ===== package.json =====
 	let packageInfo: Record<string, any>;
@@ -211,6 +324,8 @@ export async function initAction(opts: any) {
 		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
 	}
 
+	log.message(chalk.gray(horiztonalLine));
+
 	// ===== appName =====
 
 	const packageJson = getPackageInfo(cwd);
@@ -266,6 +381,7 @@ export async function initAction(opts: any) {
 		log.info(`No auth config file found.`);
 	} else {
 		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+		log.message();
 	}
 
 	// ===== config =====
@@ -306,6 +422,8 @@ export async function initAction(opts: any) {
 		process.exit(1);
 	}
 
+	log.message(chalk.gray(horiztonalLine));
+
 	// ===== database =====
 
 	let database: SupportedDatabases | null = null;
@@ -336,6 +454,7 @@ export async function initAction(opts: any) {
 			database = prompted_database;
 		}
 	}
+	log.message(chalk.gray(horiztonalLine));
 
 	// ===== plugins =====
 	let add_plugins: SupportedPlugin[] = [];
@@ -363,6 +482,7 @@ export async function initAction(opts: any) {
 			}
 			options["skip-plugins"] = !skipPLugins;
 		}
+		if (options["skip-plugins"]) log.message(chalk.gray(horiztonalLine));
 	}
 	if (!options["skip-plugins"]) {
 		const prompted_plugins = await multiselect({
@@ -417,6 +537,7 @@ export async function initAction(opts: any) {
 				);
 			}
 		}
+		log.message(chalk.gray(horiztonalLine));
 	}
 
 	// ===== generate new config =====
@@ -492,6 +613,7 @@ export async function initAction(opts: any) {
 		} else {
 			log.info(`✋ Skipping auth config update.`);
 		}
+		log.message(chalk.gray(horiztonalLine));
 
 		// ===== install dependencies ====
 
@@ -537,6 +659,7 @@ export async function initAction(opts: any) {
 			} else {
 				log.info("Skipping dependency installation.");
 			}
+			log.message(chalk.gray(horiztonalLine));
 		}
 
 		// ===== update ENVs =====
@@ -571,6 +694,7 @@ export async function initAction(opts: any) {
 						await updateEnvs({
 							files: filesToUpdate,
 							envs,
+							isCommented: true,
 						});
 					} catch (error) {
 						log.error(`Failed to update .env files:`);
@@ -580,6 +704,7 @@ export async function initAction(opts: any) {
 					log.success(`🚀 ENV files successfully updated!`);
 				}
 			}
+			log.message(chalk.gray(horiztonalLine));
 		}
 
 		// ===== prompt to run migrate/generate ====
@@ -697,6 +822,7 @@ async function getEnvFiles(cwd: string) {
 async function updateEnvs({
 	envs,
 	files,
+	isCommented,
 }: {
 	/**
 	 * The ENVs to append to the file
@@ -706,12 +832,20 @@ async function updateEnvs({
 	 * Full file paths
 	 */
 	files: string[];
+	/**
+	 * Weather to comment the all of the envs or not
+	 */
+	isCommented: boolean;
 }) {
+	let previouslyGeneratedSecret: string | null = null;
 	for (const file of files) {
 		const content = await fs.readFile(file, "utf8");
 		const lines = content.split("\n");
 		const newLines = envs.map(
-			(x) => `# ${x}="${getEnvDescription(x) ?? "some value"}"`,
+			(x) =>
+				`${isCommented ? "# " : ""}${x}=${
+					getEnvDescription(x) ?? "some value"
+				}`,
 		);
 		newLines.push("");
 		newLines.push(...lines);
@@ -720,19 +854,27 @@ async function updateEnvs({
 
 	function getEnvDescription(env: string) {
 		if (env === "DATABASE_HOST") {
-			return "The host of your database";
+			return `"The host of your database"`;
 		}
 		if (env === "DATABASE_PORT") {
-			return "The port of your database";
+			return `"The port of your database"`;
 		}
 		if (env === "DATABASE_USER") {
-			return "The username of your database";
+			return `"The username of your database"`;
 		}
 		if (env === "DATABASE_PASSWORD") {
-			return "The password of your database";
+			return `"The password of your database"`;
 		}
 		if (env === "DATABASE_NAME") {
-			return "The name of your database";
+			return `"The name of your database"`;
+		}
+		if (env === "BETTER_AUTH_SECRET") {
+			previouslyGeneratedSecret =
+				previouslyGeneratedSecret ?? generateSecretHash();
+			return `"${previouslyGeneratedSecret}"`;
+		}
+		if (env === "BETTER_AUTH_URL") {
+			return `"http://localhost:3000" # Your APP URL`;
 		}
 	}
 }
