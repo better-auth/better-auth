@@ -1,0 +1,97 @@
+*Note: This is an incomplete result, please enable full generation by entering a Firecrawl key.
+
+# https://better-auth.com llms.txt
+
+- [Better Auth: TypeScript](https://beta.better-auth.com/): TypeScript authentication framework with email/password, social logins, two-factor, multi-tenant support, and plugins.
+- [TypeScript Auth Framework](https://www.better-auth.com/): Comprehensive authentication framework for TypeScript; supports many frameworks and features.
+- [Better Auth OAuth](https://www.better-auth.com/docs/concepts/oauth): Integrate OAuth 2.0 and OpenID Connect with Better Auth for seamless user authentication via Google, Facebook, GitHub, and more.
+- [Discord Authentication with Better Auth](https://www.better-auth.com/docs/authentication/discord): Setup Discord logins with Better Auth: get credentials, configure the provider, and implement the sign-in flow.
+- [Contributing to BetterAuth](https://www.better-auth.com/docs/contribute/getting-started): Get started contributing to BetterAuth by forking, cloning, and setting up the development environment.
+- [Better Auth Docs Contribution](https://www.better-auth.com/docs/contribute/documenting): Guide to contributing documentation for Better Auth, covering MDX, structure, best practices, and contribution workflow.
+- [Better Auth V1.0](https://beta.better-auth.com/v1): Better Auth V1.0 release announcement with breaking changes, new features like OpenAPI docs and UI builder, and migration guide.
+- [Email/Password Authentication](https://www.better-auth.com/docs/authentication/email-password): Integrate email and password authentication into your app using Better Auth.  Includes signup, signin, and password reset.
+- [Security Issue Reporting](https://www.better-auth.com/docs/contribute/security-issues): Report security vulnerabilities responsibly to Better Auth; includes guidelines, process, and disclosure policy.
+- [Email OTP Plugin](https://www.better-auth.com/docs/plugins/email-otp): Better Auth's Email OTP plugin enables user sign-in, email verification, and password reset using one-time passwords sent via email.
+- [Better Auth Session Management](https://www.better-auth.com/docs/concepts/session-management): Cookie-based session management in Better Auth, covering expiration, freshness, caching, and functions for getting, using, listing, and revoking sessions.
+- [OIDC Provider Plugin](https://www.better-auth.com/docs/plugins/oidc-provider): Build and manage your own OpenID Connect provider with this Better Auth plugin, enabling full control over user authentication without third-party services.
+- [LinkedIn Authentication with Better Auth](https://www.better-auth.com/docs/authentication/linkedin): Integrate LinkedIn login; get credentials, configure provider, and implement sign-in.
+- [Better Auth TypeScript Guide](https://www.better-auth.com/docs/concepts/typescript): TypeScript configuration, type inference, and additional fields in Better Auth.
+- [Better Auth One Tap Plugin](https://www.better-auth.com/docs/plugins/one-tap): Single tap Google login integration for Better Auth using the One Tap API.  Includes installation, usage, and client/server options.
+- [Better Auth V1.0 Released](https://www.better-auth.com/v1): Better Auth V1.0 release announcement: production-ready, stable APIs, new features, UI builder, OpenAPI docs, and improved schema.
+- [Spotify Authentication with Better Auth](https://www.better-auth.com/docs/authentication/spotify): Integrate Spotify login functionality into your app using Better Auth: setup, configuration, and sign-in.
+- [NextAuth.js to Better Auth Migration](https://www.better-auth.com/docs/guides/next-auth-migration-guide): Migrate your NextAuth.js project to Better Auth, a more flexible and feature-rich authentication solution.  This guide provides a step-by-step walkthrough for seamless transition.
+- [Passkey Authentication Plugin](https://www.better-auth.com/docs/plugins/passkey): Secure passwordless authentication using WebAuthn and FIDO2 standards.  Integrates passkeys for user login via biometrics, PINs, or security keys.  Provides detailed setup and usage instructions.
+- [Facebook Authentication with Better Auth](https://www.better-auth.com/docs/authentication/facebook): Integrate Facebook login; setup, configuration, and handling scopes and tokens.
+- [Better Auth: Comparison](https://www.better-auth.com/docs/comparison): Compare Better Auth with other auth libraries, self-hosting, and managed services.
+- [Better Auth Organization Plugin](https://beta.better-auth.com/docs/plugins/organization): Manage users within organizations using this Better Auth plugin.
+- [Better Auth Basic Usage](https://www.better-auth.com/docs/basic-usage): Better Auth's basic usage guide covers email/password, social login, server-side authentication, sessions, and plugin integration.
+- [BetterAuth Browser Extension Guide](https://www.better-auth.com/docs/guides/browser-extension-guide): Step-by-step guide to building a browser extension using BetterAuth and Plasmo.
+- [Better Auth Username Plugin](https://www.better-auth.com/docs/plugins/username): Add username functionality to your authentication system with this Better Auth plugin.
+- [Better Auth Hooks](https://www.better-auth.com/docs/concepts/hooks): Customize Better Auth's behavior using before and after hooks; modify requests, responses, and context.
+- [2FA Authentication Plugin](https://www.better-auth.com/docs/plugins/2fa): Better Auth's two-factor authentication plugin adds extra security with OTP, TOTP, backup codes, and trusted devices.
+- [OAuth Proxy Plugin](https://www.better-auth.com/docs/plugins/oauth-proxy): Better Auth OAuth proxy plugin for development: proxies OAuth requests, handles redirect URLs, and ensures secure cookie sharing.
+- [Better Auth Changelogs](https://beta.better-auth.com/changelogs): Release notes, features, and bug fixes for all Better Auth versions.
+- [SvelteKit Better Auth Integration](https://www.better-auth.com/docs/integrations/svelte-kit): Integrate Better Auth with SvelteKit using server hooks, create a client, and handle user sessions.
+- [Astro Better Auth Integration](https://www.better-auth.com/docs/integrations/astro): Integrate Better Auth with Astro: mount handler, create client, implement auth middleware, and handle sessions using Astro locals.
+- [Elysia Integration Guide](https://www.better-auth.com/docs/integrations/elysia): Integrate Better Auth with Elysia using middleware for secure authentication and authorization.
+- [Better Auth SSO Plugin](https://www.better-auth.com/docs/plugins/sso): Integrate Single Sign-On (SSO) using OIDC and OAuth2 with Better Auth.
+- [Better Auth TanStack Integration](https://www.better-auth.com/docs/integrations/tanstack): Integrate Better Auth with TanStack Start by mounting the handler to a TanStack API endpoint.
+- [User Account Management](https://www.better-auth.com/docs/concepts/users-accounts): User & account management, including updates, password changes, deletion, and account linking.
+- [Better Auth Plugins](https://www.better-auth.com/docs/concepts/plugins): Extend Better Auth functionalities with server and client plugins; create custom endpoints, schemas, middleware, hooks, and more.
+- [Better Auth Email Integration](https://www.better-auth.com/docs/concepts/email): Configure and implement email verification, password reset, and other email-related features in your Better Auth application.
+- [Better Auth JWT Plugin](https://www.better-auth.com/docs/plugins/jwt): Setup and use the JWT plugin for generating and verifying JSON Web Tokens.
+- [500 Internal Server Error](https://www.better-auth.com/docs/*): The server encountered an unexpected condition that prevented it from fulfilling the request.
+- [Remix Better Auth Integration](https://www.better-auth.com/docs/integrations/remix): Integrate Better Auth with Remix: setup, API routes, client, signup, and signin examples.
+- [Nuxt Better Auth Integration](https://www.better-auth.com/docs/integrations/nuxt): Integrate Better Auth with Nuxt.js: setup API routes, database migrations, client-side and server-side usage examples.
+- [Generic OAuth Plugin](https://www.better-auth.com/docs/plugins/generic-oauth): Integrate OAuth 2.0 and OIDC authentication with any provider, easily adding social or custom logins to your app.
+- [Community Better Auth Plugins](https://www.better-auth.com/docs/plugins/community-plugins): List of recommended community-made Better Auth plugins and how to create your own.
+- [Better Auth Community](https://www.better-auth.com/community): Join the Better Auth community for help, discussions, and updates via Discord, Reddit, X, and GitHub.
+- [SolidStart Integration Guide](https://www.better-auth.com/docs/integrations/solid-start): Integrate Better Auth with SolidStart by mounting the handler in your SolidStart server; this guide provides a step-by-step process.
+- [Better Auth: TypeScript Authentication](https://www.better-auth.com/docs/introduction): Framework-agnostic authentication and authorization framework for TypeScript with comprehensive features and plugin ecosystem.
+- [Better Auth Configuration Options](https://www.better-auth.com/docs/reference/options): Complete reference guide for configuring Better Auth, including database, email, social logins, and advanced settings.
+- [Better Auth Server API](https://www.better-auth.com/docs/concepts/api): Interact with Better Auth server-side using the api object;  includes examples of calling endpoints, handling responses and errors.
+- [GitLab Authentication with Better Auth](https://www.better-auth.com/docs/authentication/gitlab): Integrate GitLab login functionality; get credentials, configure provider, and sign in users.
+- [404 Page Not Found](https://www.better-auth.com/*): The page you requested could not be found. Please check the URL and try again.
+- [Better Auth Hono Integration](https://www.better-auth.com/docs/integrations/hono): Integrate Better Auth with Hono, including mounting handlers, CORS, middleware, and cross-domain cookies.
+- [Better Auth Testing Guide](https://www.better-auth.com/docs/contribute/testing): Comprehensive guide to testing in Better Auth, covering philosophy, setup, structure, best practices, and future plans.
+- [GitHub Authentication with Better Auth](https://www.better-auth.com/docs/authentication/github): Setup and usage guide for GitHub authentication using the Better Auth library.
+- [Google Authentication with Better Auth](https://www.better-auth.com/docs/authentication/google): Setup Google Sign-In with Better Auth, using client ID, client secret, and ID token.
+- [Better Auth Username Plugin](https://beta.better-auth.com/docs/plugins/username): Add username functionality to your authentication system with this simple plugin.
+- [Magic Link Authentication](https://www.better-auth.com/docs/plugins/magic-link): Better Auth's magic link plugin enables passwordless authentication via email links.  Setup involves server and client plugin installation,  followed by using the `signIn.magicLink` and `verify` functions for authentication and verification, respectively. Configuration options include setting expiration time and disabling signup.
+- [Better Auth Rate Limiting](https://www.better-auth.com/docs/concepts/rate-limit): Configure and customize Better Auth's rate limiting features, including window settings, custom rules, storage options, and error handling.
+- [Better Auth Installation Guide](https://www.better-auth.com/docs/installation): Setup and configuration instructions for integrating Better Auth into your application.
+- [User Account Management](https://beta.better-auth.com/docs/concepts/users-accounts): User and account management, including updating information, changing passwords, and account linking.
+- [Create First Better Auth Plugin](https://www.better-auth.com/docs/guides/your-first-plugin): Step-by-step guide creating a Better Auth plugin, including server and client setup, schema definition, authorization, and integration.
+- [Apple Sign-in Guide](https://www.better-auth.com/docs/authentication/apple): Integrate Apple Sign-in with Better Auth: Get OAuth credentials, configure the provider, and implement sign-in with and without ID tokens.
+- [Better Auth Multi-Session Plugin](https://www.better-auth.com/docs/plugins/multi-session): Manage multiple active user sessions across accounts within the same browser, improving account switching without logout.
+- [Reddit Authentication](https://www.better-auth.com/docs/authentication/reddit): Configure Reddit authentication with Better Auth: get credentials, set up the provider, handle sign-in, and manage scopes for extended access.
+- [Bearer Token Authentication Plugin](https://www.better-auth.com/docs/plugins/bearer): Better Auth plugin for Bearer token authentication; setup, usage guide, and options.
+- [Better Auth Introduction](https://www.better-auth.com/docs/introduction): TypeScript authentication framework offering comprehensive features, plugins, and support for various authentication methods.  Simplify auth development.
+- [Better Auth Demo](https://demo.better-auth.com/): Demo showcasing Better Auth features, including email/password, MFA, and more.
+- [Twitch Authentication with Better Auth](https://www.better-auth.com/docs/authentication/twitch): Integrate Twitch login functionality into your app using Better Auth.  Get credentials, configure the provider, and implement sign-in.
+- [Better Auth Anonymous Plugin](https://www.better-auth.com/docs/plugins/anonymous): Enable anonymous user authentication without PII; allows later account linking.
+- [Better Auth Phone Number Plugin](https://www.better-auth.com/docs/plugins/phone-number): Add phone number login/signup with OTP to your Better Auth app.
+- [Better Auth Security Features](https://www.better-auth.com/docs/reference/security): Comprehensive guide to Better Auth's security, including password hashing, session management, CSRF protection, and more.
+- [Better Auth Basic Usage](https://beta.better-auth.com/docs/basic-usage): Better Auth's basic usage guide: email/password, social logins (Google, GitHub, etc.), session management, plugins, and database migration.
+- [Better Auth Cookies](https://www.better-auth.com/docs/concepts/cookies): Configure Better Auth's cookie settings: prefix, custom cookies, cross-subdomain, and secure cookies.
+- [Better Auth Admin Plugin](https://www.better-auth.com/docs/plugins/admin): User management plugin with features for creating, managing, and banning users.
+- [Microsoft Authentication](https://www.better-auth.com/docs/authentication/microsoft): Configure Microsoft Azure Entra ID for user authentication and signup in your application using OAuth. Get credentials, set up the provider, and implement the sign-in functionality.
+- [Next.js Better Auth Integration](https://www.better-auth.com/docs/integrations/next): Integrate Better Auth with Next.js using API routes, create a client, implement RSC and server actions, handle cookies, and middleware.
+- [BetterAuth Contribution Areas](https://www.better-auth.com/docs/contribute/areas-to-contribute): Contribute to BetterAuth by fixing issues, integrating frameworks, developing plugins, adding core features, improving security, or other ways.
+- [Better Auth Twitter Login](https://www.better-auth.com/docs/authentication/twitter): Setup Twitter authentication with Better Auth: get credentials, configure provider, and sign in.
+- [Better Auth Performance Guide](https://www.better-auth.com/docs/guides/optimizing-for-performance): Optimize Better Auth app performance using caching (cookie and framework), SSR optimizations, and database techniques like indexing and connection pooling.
+- [Dropbox Authentication with Better Auth](https://www.better-auth.com/docs/authentication/dropbox): Integrate Dropbox login functionality into your application using Better Auth.  This guide covers setup, configuration, and usage.
+- [Better Auth Node.js Integration](https://www.better-auth.com/docs/integrations/node): Integrate Better Auth with your Node.js backend using Express.js, including setup, CORS configuration, and user session retrieval.
+- [Better Auth Organization Plugin](https://www.better-auth.com/docs/plugins/organization): Better Auth's organization plugin for managing users, teams, permissions, and access control within organizations.
+- [Forgot Password?](https://demo.better-auth.com/forget-password): Reset your password by entering your email below and clicking 'Send reset link'.
+- [Sign In or Sign Up](https://demo.better-auth.com/sign-in): Secure login and account creation; email, password, or passkey authentication.
+- [Better Auth Nitro Integration](https://www.better-auth.com/docs/integrations/nitro): Integrate Better Auth with your Nitro application by following this step-by-step guide covering setup, configuration, and security.
+- [Magic Link Authentication](https://beta.better-auth.com/docs/plugins/magic-link): Better Auth's magic link plugin enables passwordless authentication by sending login links via email; includes server and client setup, usage instructions, and configuration options.
+- [Better Auth FAQ](https://www.better-auth.com/docs/reference/faq): Troubleshooting Better Auth: common issues, FAQs, and helpful information for developers.
+- [Better Auth Database](https://www.better-auth.com/docs/concepts/database): Database setup, adapters, schema, migrations, and secondary storage for Better Auth.
+- [Better Auth Changelogs](https://www.better-auth.com/changelogs): Comprehensive changelog of all Better Auth releases, including bug fixes and new features.
+- [Better Auth Expo Integration](https://www.better-auth.com/docs/integrations/expo): Integrate Better Auth with your Expo app using this guide, covering installation, configuration, and usage.
+- [Better Auth Rate Limiting](https://beta.better-auth.com/docs/concepts/rate-limit): Configure and manage request rate limits with custom rules and storage options for Better Auth.
+- [Better Auth Client Library](https://www.better-auth.com/docs/concepts/client): Client library for frontend frameworks (React, Vue, Svelte etc.) with methods, hooks, and plugins.
+- [Better Auth CLI Commands](https://www.better-auth.com/docs/concepts/cli): Manage database schema, generate secrets, and migrate using the Better Auth CLI.
+- [Better Auth OpenAPI Plugin](https://www.better-auth.com/docs/plugins/open-api): Better Auth's OpenAPI plugin: Installation, usage, schema generation, and configuration instructions with examples.

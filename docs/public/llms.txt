@@ -1,0 +1,14 @@
+*Note: This is an incomplete result, please enable full generation by entering a Firecrawl key.
+
+# https://better-auth.com llms.txt
+
+- [Better Auth: Comparison](https://www.better-auth.com/docs/comparison): Compare Better Auth with other auth libraries, self-hosting, managed services, and rolling your own.
+- [Better-Auth Community](https://www.better-auth.com/community): Join our community for help, ideas, and updates.  Discord, Reddit, Twitter and GitHub.
+- [Better Auth V1.0 Released](https://www.better-auth.com/v1): Better Auth V1.0 released with breaking changes, new features, improved UI builder, OpenAPI docs, and more. Update for production use.
+- [Better Auth Changelogs](https://www.better-auth.com/changelogs): Release notes and bug fixes for Better Auth, a TypeScript authentication library.
+- [Better Auth: Own Your Auth](https://www.better-auth.com/): TypeScript authentication framework; supports popular frameworks, OAuth providers, and two-factor authentication.
+- [Better Auth Installation](https://www.better-auth.com/docs/installation): Install Better Auth, set environment variables, configure database, create tables, set authentication methods, mount handler, and create client instance.
+- [Better Auth Changelog](https://beta.better-auth.com/changelogs): Better Auth changelog:  TypeScript authentication library release notes, features, and updates.
+- [Better Auth V1.0 Release](https://beta.better-auth.com/v1): Better Auth V1.0 release announcement with breaking changes, new features like OpenAPI docs and UI Builder, migration guide, and changelog.
+- [Better Auth: TypeScript Auth](https://beta.better-auth.com/): TypeScript authentication framework, comprehensive, framework-agnostic, supports multiple providers and features, plugin ecosystem.
+- [Better Auth Demo](https://demo.better-auth.com/): Demo showcasing Better Auth's features, including email/password, passkeys, and more.
