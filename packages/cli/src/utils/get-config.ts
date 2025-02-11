@@ -7,6 +7,7 @@ import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
+import { loadDotenv } from "c12";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 
@@ -92,14 +93,19 @@ const jitiOptions = (cwd: string) => {
 export async function getConfig({
 	cwd,
 	configPath,
+	silentLogs,
 }: {
 	cwd: string;
 	configPath?: string;
+	silentLogs?: boolean;
 }) {
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
 			const resolvedPath = path.join(cwd, configPath);
+			if (silentLogs) {
+				process.env.HIDE_BETTER_AUTH_LOGS = "true";
+			}
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;
@@ -124,6 +130,9 @@ export async function getConfig({
 		if (!configFile) {
 			for (const possiblePath of possiblePaths) {
 				try {
+					if (silentLogs) {
+						process.env.HIDE_BETTER_AUTH_LOGS = "true";
+					}
 					const { config } = await loadConfig<{
 						auth: {
 							options: BetterAuthOptions;

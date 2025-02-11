@@ -5,7 +5,6 @@ import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
 import { logger, type BetterAuthOptions } from "better-auth";
-import prompts from "prompts";
 import fs from "fs/promises";
 import { getPackageInfo } from "../utils/get-package-info";
 import { diffWordsWithSpace } from "diff";
@@ -23,6 +22,7 @@ import {
 	spinner,
 	text,
 } from "@clack/prompts";
+
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -260,15 +260,6 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 	}
 	if (!options.skipPlugins) {
 		if (!plugins || plugins.length === 0) {
-			let plugins_to_prompt = supportedPlugins
-				.filter((x) => x !== "next-cookies")
-				.map((plugin_id) => {
-					if (existing_plugins.find((x) => x === plugin_id))
-						return { title: plugin_id, value: plugin_id, disabled: true };
-					return { title: plugin_id, value: plugin_id };
-				})
-				.sort((a) => (a.disabled ? 1 : -1));
-
 			const prompted_plugins = await multiselect({
 				message: "Select your new plugins",
 				options: supportedPlugins
@@ -344,7 +335,7 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 			database,
 			plugins: add_plugins,
 		});
-		s.stop("New auth config generated. 🎉");
+		s.stop("New auth config ready. 🎉");
 
 		const shouldShowDiff = await confirm({
 			message: `Do you want to see the diff?`,
@@ -359,7 +350,8 @@ export async function initAction(plgns: string[] | undefined, opts: any) {
 				await format(current_user_config),
 				new_user_config,
 			);
-			log.message(diffed)
+			log.info("New auth config:");
+			log.message(diffed);
 		}
 		outro(`🚀 Auth config successfully applied!`);
 	}
