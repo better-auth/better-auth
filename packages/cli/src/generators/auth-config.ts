@@ -254,7 +254,7 @@ export async function generateAuthConfig({
 				await add_db({
 					db_code: `new Database(process.env.DATABASE_URL || "database.sqlite")`,
 					dependencies: ["better-sqlite3"],
-					envs: [],
+					envs: ["DATABASE_URL"],
 					imports: [
 						{
 							path: "better-sqlite3",
