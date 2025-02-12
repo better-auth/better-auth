@@ -657,7 +657,7 @@ export const admin = Object.assign(
 						permission: {
 							user: ["impersonate"],
 						},
-					});;
+					});
 					if (!canImpersonateUser) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -863,7 +863,7 @@ export const admin = Object.assign(
 						permission: {
 							user: ["revoke-sessions"],
 						},
-					});;
+					});
 					if (!canRevokeSession) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -921,7 +921,7 @@ export const admin = Object.assign(
 						permission: {
 							user: ["delete"],
 						},
-					});;
+					});
 					if (!canDeleteUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
