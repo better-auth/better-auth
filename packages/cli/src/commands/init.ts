@@ -6,7 +6,7 @@ import { getConfig } from "../utils/get-config";
 import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
-import { type BetterAuthOptions } from "better-auth";
+import { logger, type BetterAuthOptions } from "better-auth";
 import fs from "fs/promises";
 import { getPackageInfo } from "../utils/get-package-info";
 import { diffWordsWithSpace } from "diff";
@@ -717,7 +717,7 @@ export async function initAction(opts: any) {
 					`(${config_path})`,
 				)}`,
 			);
-			log.error(error?.message);
+			console.error(error);
 			process.exit(1);
 		}
 	} else {

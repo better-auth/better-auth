@@ -117,7 +117,7 @@ export async function getConfig({
 			});
 			if (!config.auth && !config.default) {
 				if (shouldThrowOnError) {
-					throw new BetterAuthError(
+					throw new Error(
 						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 					);
 				}
@@ -214,6 +214,7 @@ export async function getConfig({
 		if (shouldThrowOnError) {
 			throw e;
 		}
+
 		logger.error("Couldn't read your auth config.", e);
 		process.exit(1);
 	}
