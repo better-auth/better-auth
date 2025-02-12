@@ -1,7 +1,4 @@
-import {
-	type SupportedDatabases,
-	type SupportedPlugin,
-} from "../commands/init";
+import { type SupportedPlugin } from "../commands/init";
 import { type spinner as clackSpinner } from "@clack/prompts";
 import type { CommonIndexConfig, Import } from "./auth-config";
 
@@ -12,13 +9,11 @@ export async function generateClientAuthConfig({
 	current_user_config,
 	spinner,
 	plugins,
-	database,
 }: {
 	format: Format;
 	current_user_config: string;
 	spinner: ReturnType<typeof clackSpinner>;
 	plugins: SupportedPlugin[];
-	database: SupportedDatabases | null;
 }): Promise<{
 	generatedCode: string;
 	dependencies: string[];
@@ -27,7 +22,7 @@ export async function generateClientAuthConfig({
 	let _start_of_plugins_common_index = {
 		START_OF_PLUGINS: {
 			type: "regex",
-			regex: /betterAuth\([\w\W]*plugins:[\W]*\[()/m,
+			regex: /createAuthClient\([\w\W]*plugins:[\W]*\[()/m,
 			getIndex: ({ matchIndex, match }) => {
 				return matchIndex + match[0].length;
 			},
@@ -50,9 +45,9 @@ export async function generateClientAuthConfig({
 		} satisfies CommonIndexConfig<{ start_of_plugins: number }>,
 		START_OF_BETTERAUTH: {
 			type: "regex",
-			regex: /betterAuth\({()/m,
+			regex: /createAuthClient\({()/m,
 			getIndex: ({ matchIndex }) => {
-				return matchIndex + "betterAuth({".length;
+				return matchIndex + "createAuthClient({".length;
 			},
 		} satisfies CommonIndexConfig<{}>,
 	};
@@ -173,291 +168,66 @@ export async function generateClientAuthConfig({
 				);
 			}
 		},
-		add_database: async (opts: {
-			database: SupportedDatabases;
-			config: string;
-		}): Promise<{ code: string; dependencies: string[]; envs: string[] }> => {
-			const required_envs: string[] = [];
-			const required_deps: string[] = [];
-			let database_code_str: string = "";
-
-			async function add_db({
-				db_code,
-				dependencies,
-				envs,
-				imports,
-				code_before_betterAuth,
-			}: {
-				imports: Import[];
-				db_code: string;
-				envs: string[];
-				dependencies: string[];
-				/**
-				 * Any code you want to put before the betterAuth export
-				 */
-				code_before_betterAuth?: string;
-			}) {
-				if (code_before_betterAuth) {
-					let start_of_betterauth = getGroupInfo(
-						opts.config,
-						common_indexs.START_OF_BETTERAUTH,
-						{},
-					);
-					if (!start_of_betterauth) {
-						throw new Error("Couldn't find start of betterAuth() function.");
-					}
-					opts.config = insertContent({
-						line: start_of_betterauth.line - 1,
-						character: 0,
-						content: opts.config,
-						insert_content: `\n${code_before_betterAuth}\n`,
-					});
-				}
-
-				const code_gen = await config_generation.add_import({
-					config: opts.config,
-					imports: imports,
-				});
-				opts.config = code_gen.code;
-				database_code_str = db_code;
-				required_envs.push(...envs, ...code_gen.envs);
-				required_deps.push(...dependencies, ...code_gen.dependencies);
-			}
-
-			if (opts.database === "sqlite") {
-				await add_db({
-					db_code: `new Database(process.env.DATABASE_URL || "database.sqlite")`,
-					dependencies: ["better-sqlite3"],
-					envs: ["DATABASE_URL"],
-					imports: [
-						{
-							path: "better-sqlite3",
-							variables: {
-								asType: false,
-								name: "Database",
-							},
-						},
-					],
-				});
-			} else if (opts.database === "postgres") {
-				await add_db({
-					db_code: `new Pool({\nconnectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/database"\n})`,
-					dependencies: ["pg"],
-					envs: ["DATABASE_URL"],
-					imports: [
-						{
-							path: "pg",
-							variables: [
-								{
-									asType: false,
-									name: "Pool",
-								},
-							],
-						},
-					],
-				});
-			} else if (opts.database === "mysql") {
-				await add_db({
-					db_code: `createPool(process.env.DATABASE_URL!)`,
-					dependencies: ["mysql2"],
-					envs: ["DATABASE_URL"],
-					imports: [
-						{
-							path: "mysql2/promise",
-							variables: [
-								{
-									asType: false,
-									name: "createPool",
-								},
-							],
-						},
-					],
-				});
-			} else if (opts.database === "mssql") {
-				const dialectCode = `new MssqlDialect({
-						tarn: {
-							...Tarn,
-							options: {
-							min: 0,
-							max: 10,
-							},
-						},
-						tedious: {
-							...Tedious,
-							connectionFactory: () => new Tedious.Connection({
-							authentication: {
-								options: {
-								password: 'password',
-								userName: 'username',
-								},
-								type: 'default',
-							},
-							options: {
-								database: 'some_db',
-								port: 1433,
-								trustServerCertificate: true,
-							},
-							server: 'localhost',
-							}),
-						},
-					})`;
-				await add_db({
-					code_before_betterAuth: dialectCode,
-					db_code: `dialect`,
-					dependencies: ["tedious", "tarn", "kysely"],
-					envs: ["DATABASE_URL"],
-					imports: [
-						{
-							path: "tedious",
-							variables: {
-								name: "*",
-								as: "Tedious",
-							},
-						},
-						{
-							path: "tarn",
-							variables: {
-								name: "*",
-								as: "Tarn",
-							},
-						},
-						{
-							path: "kysely",
-							variables: [
-								{
-									name: "MssqlDialect",
-								},
-							],
-						},
-					],
-				});
-			} else if (
-				opts.database === "drizzle:mysql" ||
-				opts.database === "drizzle:sqlite" ||
-				opts.database === "drizzle:pg"
-			) {
-				await add_db({
-					db_code: `new DrizzleAdapter(db, {\nprovider: "${opts.database.replace(
-						"drizzle:",
-						"",
-					)}",\n})`,
-					dependencies: [],
-					envs: [],
-					imports: [
-						{
-							path: "better-auth/adapters/drizzle",
-							variables: [
-								{
-									name: "DrizzleAdapter",
-								},
-							],
-						},
-						{
-							path: "./database.ts",
-							variables: [
-								{
-									name: "db",
-								},
-							],
-						},
-					],
-				});
-			} else if (
-				opts.database === "prisma:mysql" ||
-				opts.database === "prisma:sqlite" ||
-				opts.database === "prisma:pg"
-			) {
-				await add_db({
-					db_code: `new PrismaAdapter(new PrismaClient(), {\nprovider: "${opts.database.replace(
-						"prisma:",
-						"",
-					)}",\n})`,
-					dependencies: [`@prisma/client`],
-					envs: [],
-					imports: [
-						{
-							path: "better-auth/adapters/prisma",
-							variables: [
-								{
-									name: "PrismaAdapter",
-								},
-							],
-						},
-						{
-							path: "@prisma/client",
-							variables: [
-								{
-									name: "PrismaClient",
-								},
-							],
-						},
-					],
-				});
-			} else if (opts.database === "mongodb") {
-				await add_db({
-					db_code: `mongodbAdapter(db)`,
-					dependencies: ["mongodb"],
-					envs: [`DATABASE_URL`],
-					code_before_betterAuth: [
-						`const client = new MongoClient(process.env.DATABASE_URL || "mongodb://localhost:27017/database");`,
-						`const db = client.db();`,
-					].join("\n"),
-					imports: [
-						{
-							path: "better-auth/adapters/mongo",
-							variables: [
-								{
-									name: "mongodbAdapter",
-								},
-							],
-						},
-						{
-							path: "mongodb",
-							variables: [
-								{
-									name: "MongoClient",
-								},
-							],
-						},
-					],
-				});
-			}
-
-			let start_of_betterauth = getGroupInfo(
-				opts.config,
-				common_indexs.START_OF_BETTERAUTH,
-				{},
-			);
-			if (!start_of_betterauth) {
-				throw new Error("Couldn't find start of betterAuth() function.");
-			}
-			let new_content: string;
-			new_content = insertContent({
-				line: start_of_betterauth.line,
-				character: start_of_betterauth.character,
-				content: opts.config,
-				insert_content: `database: ${database_code_str},`,
-			});
-
-			try {
-				new_content = await format(new_content);
-				return {
-					code: new_content,
-					dependencies: required_deps,
-					envs: required_envs,
-				};
-			} catch (error) {
-				console.error(error);
-				throw new Error(
-					`Failed to generate new auth config during database addition phase.`,
-				);
-			}
-		},
 	};
 
 	let new_user_config: string = await format(current_user_config);
 	let total_dependencies: string[] = [];
 	let total_envs: string[] = [];
+
+	if (plugins.length !== 0) {
+		const imports: {
+			path: string;
+			variables: {
+				asType: boolean;
+				name: string;
+			}[];
+		}[] = [];
+		for await (const plugin of plugins) {
+			if (plugin.clientName === undefined) continue;
+			const existingIndex = imports.findIndex(
+				(x) => x.path === plugin.clientPath,
+			);
+			if (existingIndex !== -1) {
+				imports[existingIndex].variables.push({
+					name: plugin.name,
+					asType: false,
+				});
+			} else {
+				imports.push({
+					path: plugin.clientPath,
+					variables: [
+						{
+							name: plugin.clientName,
+							asType: false,
+						},
+					],
+				});
+			}
+		}
+		if (imports.length !== 0) {
+			const { code, envs, dependencies } = await config_generation.add_import({
+				config: new_user_config,
+				imports: imports,
+			});
+			total_dependencies.push(...dependencies);
+			total_envs.push(...envs);
+			new_user_config = code;
+		}
+	}
+
+	for await (const plugin of plugins) {
+		if (!plugin.clientName) continue;
+
+		let pluginContents: string = "";
+		const { code, dependencies, envs } = await config_generation.add_plugin({
+			config: new_user_config,
+			direction_in_plugins_array: "append",
+			pluginContents: pluginContents,
+			pluginFunctionName: plugin.clientName,
+		});
+		new_user_config = code;
+		total_dependencies.push(...dependencies), total_envs.push(...envs);
+	}
 
 	return {
 		generatedCode: new_user_config,

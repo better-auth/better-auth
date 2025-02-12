@@ -84,7 +84,7 @@ export async function generateAuthConfig({
 			},
 		} satisfies CommonIndexConfig<{}>,
 	};
-	
+
 	const config_generation = {
 		add_plugin: async (opts: {
 			direction_in_plugins_array: "append" | "prepend";
@@ -402,7 +402,7 @@ export async function generateAuthConfig({
 					)}",\n})`,
 					dependencies: [`@prisma/client`],
 					envs: [],
-					code_before_betterAuth: 'const client = new PrismaClient();',
+					code_before_betterAuth: "const client = new PrismaClient();",
 					imports: [
 						{
 							path: "better-auth/adapters/prisma",
@@ -496,7 +496,7 @@ export async function generateAuthConfig({
 				name: string;
 			}[];
 		}[] = [];
-		plugins.forEach((plugin) => {
+		for await (const plugin of plugins) {
 			const existingIndex = imports.findIndex((x) => x.path === plugin.path);
 			if (existingIndex !== -1) {
 				imports[existingIndex].variables.push({
@@ -514,14 +514,16 @@ export async function generateAuthConfig({
 					],
 				});
 			}
-		});
-		const { code, envs, dependencies } = await config_generation.add_import({
-			config: new_user_config,
-			imports: imports,
-		});
-		total_dependencies.push(...dependencies);
-		total_envs.push(...envs);
-		new_user_config = code;
+		}
+		if (imports.length !== 0) {
+			const { code, envs, dependencies } = await config_generation.add_import({
+				config: new_user_config,
+				imports: imports,
+			});
+			total_dependencies.push(...dependencies);
+			total_envs.push(...envs);
+			new_user_config = code;
+		}
 	}
 
 	for await (const plugin of plugins) {

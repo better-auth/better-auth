@@ -57,31 +57,36 @@ export const supportedPlugins = [
 	{
 		id: "two-factor",
 		name: "twoFactor",
-		clientName: "twoFactorClient",
 		path: `better-auth/plugins`,
+		clientName: "twoFactorClient",
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "username",
 		name: "username",
 		clientName: "usernameClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "anonymous",
 		name: "anonymous",
 		clientName: "anonymousClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "phone-number",
 		name: "phoneNumber",
 		clientName: "phoneNumberClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "magic-link",
 		name: "magicLink",
 		clientName: "magicLinkClient",
+		clientPath: "better-auth/client/plugins",
 		path: `better-auth/plugins`,
 	},
 	{
@@ -89,88 +94,103 @@ export const supportedPlugins = [
 		name: "emailOTP",
 		clientName: "emailOTPClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "passkey",
 		name: "passkey",
 		clientName: "passkeyClient",
 		path: `better-auth/plugins/passkey`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "generic-oauth",
 		name: "genericOAuth",
 		clientName: "genericOAuthClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "one-tap",
 		name: "oneTap",
 		clientName: "oneTapClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "api-key",
 		name: "apiKey",
 		clientName: "apiKeyClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "admin",
 		name: "admin",
 		clientName: "adminClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "organization",
 		name: "organization",
 		clientName: "organizationClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "oidc",
 		name: "oidcProvider",
 		clientName: "oidcClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "sso",
 		name: "sso",
 		clientName: "ssoClient",
 		path: `better-auth/plugins/sso`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "bearer",
 		name: "bearer",
 		clientName: undefined,
 		path: `better-auth/plugins`,
+		clientPath: undefined,
 	},
 	{
 		id: "multi-session",
 		name: "multiSession",
 		clientName: "multiSessionClient",
 		path: `better-auth/plugins`,
+		clientPath: "better-auth/client/plugins",
 	},
 	{
 		id: "oauth-proxy",
 		name: "oAuthProxy",
 		clientName: undefined,
 		path: `better-auth/plugins`,
+		clientPath: undefined,
 	},
 	{
 		id: "open-api",
 		name: "openAPI",
 		clientName: undefined,
 		path: `better-auth/plugins`,
+		clientPath: undefined,
 	},
 	{
 		id: "jwt",
 		name: "jwt",
 		clientName: undefined,
+		clientPath: undefined,
 		path: `better-auth/plugins`,
 	},
 	{
 		id: "next-cookies",
 		name: "nextCookies",
+		clientPath: undefined,
 		clientName: undefined,
 		path: `better-auth/next-js`,
 	},
@@ -1080,6 +1100,7 @@ export async function initAction(opts: any) {
 			break;
 		}
 	}
+	let authClientConfig: string = "";
 
 	if (!authClientConfigPath) {
 		const choice = await select({
@@ -1098,34 +1119,33 @@ export async function initAction(opts: any) {
 			authClientConfigPath = path.join(cwd, "auth-client.ts");
 			log.info(`Creating auth client config file: ${authClientConfigPath}`);
 			try {
-				await fs.writeFile(
-					authClientConfigPath,
-					await getDefaultAuthClientConfig({
-						auth_config_path: (
-							"./" + path.join(config_path.replace(cwd, ""))
-						).replace(".//", "./"),
-						clientPlugins: add_plugins
-							.filter((x) => x.clientName)
-							.map((plugin) => {
-								let contents = "";
-								if (plugin.id === "one-tap") {
-									contents = `{ clientId: "MY_CLIENT_ID" }`;
-								}
-								return {
-									contents,
-									id: plugin.id,
-									name: plugin.clientName!,
-									imports: [
-										{
-											path: "better-auth/client/plugins",
-											variables: [{ name: plugin.clientName! }],
-										},
-									],
-								};
-							}),
-						framework: framework,
-					}),
-				);
+				const contents = await getDefaultAuthClientConfig({
+					auth_config_path: (
+						"./" + path.join(config_path.replace(cwd, ""))
+					).replace(".//", "./"),
+					clientPlugins: add_plugins
+						.filter((x) => x.clientName)
+						.map((plugin) => {
+							let contents = "";
+							if (plugin.id === "one-tap") {
+								contents = `{ clientId: "MY_CLIENT_ID" }`;
+							}
+							return {
+								contents,
+								id: plugin.id,
+								name: plugin.clientName!,
+								imports: [
+									{
+										path: "better-auth/client/plugins",
+										variables: [{ name: plugin.clientName! }],
+									},
+								],
+							};
+						}),
+					framework: framework,
+				});
+				await fs.writeFile(authClientConfigPath, contents);
+				authClientConfig = contents;
 				log.success(`🚀 Auth client config file successfully created!`);
 			} catch (error) {
 				log.error(
@@ -1137,32 +1157,40 @@ export async function initAction(opts: any) {
 		} else if (choice === "no") {
 			log.info(`Skipping auth client config file creation.`);
 		} else if (choice === "other") {
-			async function getConfigPath() {
-				const configPath = await text({
-					message: `What is the path to your auth client config file? ${chalk.gray(
-						`(Relative path supported)`,
-					)}`,
-					placeholder: "/auth-client.ts",
-					validate(value) {
-						const configPath = path.join(cwd, value);
-						if (
-							!value.endsWith(".ts") &&
-							!value.endsWith(".tsx") &&
-							!value.endsWith(".js") &&
-							!value.endsWith(".jsx")
-						)
-							return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
-						if (!existsSync(configPath))
-							return `Config file does not exist. (recieved: ${configPath})`;
-					},
-				});
-				if (isCancel(configPath)) {
-					cancel("✋ Operation cancelled.");
-					process.exit(0);
-				}
-				return path.join(cwd, configPath);
+			const configPath = await text({
+				message: `What is the path to your auth client config file? ${chalk.gray(
+					`(Relative path supported)`,
+				)}`,
+				placeholder: "/auth-client.ts",
+				validate(value) {
+					const configPath = path.join(cwd, value);
+					if (
+						!value.endsWith(".ts") &&
+						!value.endsWith(".tsx") &&
+						!value.endsWith(".js") &&
+						!value.endsWith(".jsx")
+					)
+						return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
+					if (!existsSync(configPath))
+						return `Config file does not exist. (recieved: ${configPath})`;
+				},
+			});
+			if (isCancel(configPath)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
 			}
-			authClientConfigPath = await getConfigPath();
+			authClientConfigPath = path.join(cwd, configPath);
+			try {
+				const contents = await fs.readFile(authClientConfigPath, "utf-8");
+				authClientConfig = contents;
+			} catch (error) {
+				log.error(
+					`Error reading auth client config file. (${authClientConfigPath})`,
+				);
+				console.error(error);
+				process.exit(1);
+			}
+
 			log.message("");
 			log.info(
 				`Found auth client config file. ${chalk.gray(
@@ -1177,6 +1205,16 @@ export async function initAction(opts: any) {
 				`(${authClientConfigPath})`,
 			)}`,
 		);
+
+		try {
+			authClientConfig = await fs.readFile(authClientConfigPath, "utf-8");
+		} catch (error) {
+			log.error(
+				`Error reading auth client config file. (${authClientConfigPath})`,
+			);
+			console.error(error);
+			process.exit(1);
+		}
 
 		if (
 			!options["skip-plugins"] &&
@@ -1196,7 +1234,7 @@ export async function initAction(opts: any) {
 					const { dependencies, envs, generatedCode } =
 						await generateClientAuthConfig({
 							format,
-							current_user_config: authClientConfigPath,
+							current_user_config: authClientConfig,
 							//@ts-ignore
 							s,
 							plugins: add_plugins,
