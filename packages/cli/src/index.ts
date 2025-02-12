@@ -13,7 +13,12 @@ process.on("SIGTERM", () => process.exit(0));
 
 async function main() {
 	const program = new Command("better-auth");
-	const packageInfo = await getPackageInfo();
+	let packageInfo: Record<string, any> = {};
+	try {
+		packageInfo = await getPackageInfo();
+	} catch (error) {
+		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
+	}
 	program
 		.addCommand(migrate)
 		.addCommand(generate)
