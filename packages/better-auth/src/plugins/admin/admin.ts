@@ -22,6 +22,7 @@ import { shimContext } from "../../utils/shim";
 import { adminMiddleware } from "./call";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { adminAc, defaultRoles, defaultStatements, userAc } from "./access";
+import { hasPermission } from "./has-permission";
 
 export interface UserWithRole extends User {
 	role: string;
@@ -123,16 +124,13 @@ export const admin = Object.assign(
 					},
 				},
 				async (ctx) => {
-					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canSetRole = role.authorize({
-						user: ["set-role"],
-					}).success;
+					const canSetRole = hasPermission({
+						role: ctx.context.session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["set-role"],
+						},
+					});
 					if (!canSetRole) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -206,15 +204,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canCreateUser = role.authorize({
-						user: ["create"],
-					}).success;
+					const canCreateUser = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["create"],
+						},
+					});
 					if (!canCreateUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
@@ -349,15 +345,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canListUsers = role.authorize({
-						user: ["list"],
-					}).success;
+					const canListUsers = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["list"],
+						},
+					});
 					if (!canListUsers) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
@@ -444,15 +438,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canListSessions = role.authorize({
-						user: ["list-sessions"],
-					}).success;
+					const canListSessions = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["list-sessions"],
+						},
+					});
 					if (!canListSessions) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -505,15 +497,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canBanUser = role.authorize({
-						user: ["ban"],
-					}).success;
+					const canBanUser = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["ban"],
+						},
+					});
 					if (!canBanUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
@@ -584,15 +574,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canBanUser = role.authorize({
-						user: ["ban"],
-					}).success;
+					const canBanUser = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["ban"],
+						},
+					});
 					if (!canBanUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
@@ -663,15 +651,13 @@ export const admin = Object.assign(
 					},
 				},
 				async (ctx) => {
-					const role = ctx.context.roles[ctx.context.session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canImpersonateUser = role.authorize({
-						user: ["impersonate"],
-					}).success;
+					const canImpersonateUser = hasPermission({
+						role: ctx.context.session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["impersonate"],
+						},
+					});;
 					if (!canImpersonateUser) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -812,15 +798,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canRevokeSession = role.authorize({
-						user: ["revoke-sessions"],
-					}).success;
+					const canRevokeSession = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["revoke-sessions"],
+						},
+					});
 					if (!canRevokeSession) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -873,15 +857,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canRevokeSession = role.authorize({
-						user: ["revoke-sessions"],
-					}).success;
+					const canRevokeSession = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["revoke-sessions"],
+						},
+					});;
 					if (!canRevokeSession) {
 						throw new APIError("FORBIDDEN", {
 							message:
@@ -933,15 +915,13 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const session = ctx.context.session;
-					const role = ctx.context.roles[session.user.role];
-					if (!role) {
-						throw new APIError("BAD_REQUEST", {
-							message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-						});
-					}
-					const canDeleteUser = role.authorize({
-						user: ["delete"],
-					}).success;
+					const canDeleteUser = hasPermission({
+						role: session.user.role,
+						options: ctx.context.adminOptions,
+						permission: {
+							user: ["delete"],
+						},
+					});;
 					if (!canDeleteUser) {
 						throw new APIError("FORBIDDEN", {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
@@ -961,6 +941,7 @@ export const admin = Object.assign(
 		};
 
 		const api = shimContext(endpoints, {
+			adminOptions: options || {},
 			roles,
 		});
 
@@ -1110,25 +1091,17 @@ export const admin = Object.assign(
 									"invalid permission check. you can only check one resource permission at a time.",
 							});
 						}
-						const session = ctx.context.session;
-						const role = roles[session.user.role as keyof typeof roles];
-						const result = role.authorize(ctx.body.permission as any);
 
-						if (result.error) {
-							return ctx.json(
-								{
-									error: result.error,
-									success: false,
-								},
-								{
-									status: 403,
-								},
-							);
-						}
+						const session = ctx.context.session;
+						const result = hasPermission({
+							role: session.user.role,
+							options: options as AdminOptions,
+							permission: ctx.body.permission as any,
+						});
 
 						return ctx.json({
 							error: null,
-							success: true,
+							success: result,
 						});
 					},
 				),
