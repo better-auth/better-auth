@@ -1086,7 +1086,9 @@ export async function initAction(opts: any) {
 				await fs.writeFile(
 					authClientConfigPath,
 					await getDefaultAuthClientConfig({
-						auth_config_path: "./" + path.join(config_path.replace(cwd, "")),
+						auth_config_path: (
+							"./" + path.join(config_path.replace(cwd, ""))
+						).replace(".//", "./"),
 						clientPlugins: add_plugins
 							.filter((x) => x.clientName)
 							.map((plugin) => {
