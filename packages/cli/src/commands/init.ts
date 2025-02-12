@@ -519,7 +519,9 @@ export async function initAction(opts: any) {
 			`Better Auth requires your tsconfig.json to have "compilerOptions.strict" set to true.`,
 		);
 		const shouldAdd = await confirm({
-			message: `Would you like us to set ${chalk.bold(`strict`)} to ${chalk.bold(`true`)}?`,
+			message: `Would you like us to set ${chalk.bold(
+				`strict`,
+			)} to ${chalk.bold(`true`)}?`,
 		});
 		if (isCancel(shouldAdd)) {
 			cancel(`✋ Operation cancelled.`);
@@ -531,14 +533,11 @@ export async function initAction(opts: any) {
 					path.join(cwd, "tsconfig.json"),
 					await prettierFormat(
 						JSON.stringify(
-							Object.assign(
-								{
-									compilerOptions: {
-										strict: true,
-									},
+							Object.assign(tsconfigInfo, {
+								compilerOptions: {
+									strict: true,
 								},
-								tsconfigInfo,
-							),
+							}),
 						),
 						{ filepath: "tsconfig.json", ...defaultFormatOptions },
 					),
