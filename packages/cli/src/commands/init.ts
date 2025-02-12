@@ -1093,6 +1093,9 @@ export async function initAction(opts: any) {
 							.filter((x) => x.clientName)
 							.map((plugin) => {
 								let contents = "";
+								if (plugin.id === "one-tap") {
+									contents = `{ clientId: "MY_CLIENT_ID" }`;
+								}
 								return {
 									contents,
 									id: plugin.id,
