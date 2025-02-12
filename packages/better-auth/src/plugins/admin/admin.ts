@@ -217,8 +217,7 @@ export const admin = Object.assign(
 					}).success;
 					if (!canCreateUser) {
 						throw new APIError("FORBIDDEN", {
-							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
+							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 						});
 					}
 

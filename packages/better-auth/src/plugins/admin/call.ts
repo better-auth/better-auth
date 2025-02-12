@@ -11,7 +11,7 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 
 	return {
-		session
+		session,
 	} as {
 		session: {
 			user: UserWithRole;
