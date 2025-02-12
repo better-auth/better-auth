@@ -83,6 +83,20 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
+const defaultAuthConfig = await prettierFormat(
+	[
+		"import { betterAuth } from 'better-auth';",
+		"",
+		"export const auth = betterAuth({",
+		"plugins: [],",
+		"});",
+	].join("\n"),
+	{
+		filepath: "auth.ts",
+		...defaultFormatOptions,
+	},
+);
+
 const optionsSchema = z.object({
 	cwd: z.string(),
 	config: z.string().optional(),
@@ -384,7 +398,9 @@ export async function initAction(opts: any) {
 			}
 		}
 	}
-	let configStatus: "created" | "skip" = "created";
+
+	// ===== create auth config =====
+	let configStatus: "created" | "skip" | "exists" = "exists";
 
 	if (!config_path) {
 		const shouldCreateAuthConfig = await select({
@@ -400,7 +416,17 @@ export async function initAction(opts: any) {
 			process.exit(0);
 		}
 		if (shouldCreateAuthConfig === "yes") {
-			await createAuthConfig();
+			configStatus = "created";
+			const filePath = path.join(cwd, "auth.ts");
+			try {
+				await fs.writeFile(filePath, defaultAuthConfig);
+				config_path = filePath;
+				log.success(`🚀 Auth config file successfully created!`);
+			} catch (error) {
+				log.error(`Failed to create auth config file: ${filePath}`);
+				log.error(JSON.stringify(error, null, 2));
+				process.exit(1);
+			}
 		} else if (shouldCreateAuthConfig === "no") {
 			configStatus = "skip";
 			log.info(`Skipping auth config file creation.`);
@@ -434,30 +460,6 @@ export async function initAction(opts: any) {
 			log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 			log.message();
 		}
-		async function createAuthConfig() {
-			const s = spinner({ indicator: "dots" });
-			s.start(`Creating auth config file`);
-			try {
-				const start = Date.now();
-				const { dependencies, envs, generatedCode } = await generateAuthConfig({
-					format,
-					current_user_config: "",
-					spinner: s,
-					plugins: [],
-					database: null,
-				});
-				s.stop(
-					`Auth config file created ${chalk.greenBright(
-						`successfully`,
-					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
-				);
-			} catch (error: any) {
-				s.stop(`Failed to create auth config file:`);
-				log.error(error.message);
-				process.exit(1);
-			}
-			log.success(`🚀 Auth config file successfully created!`);
-		}
 	} else {
 		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 		log.message();
@@ -470,13 +472,20 @@ export async function initAction(opts: any) {
 		process.exit(1);
 	}
 	let config: BetterAuthOptions;
-	const resolvedConfig = await getConfig({
-		cwd,
-		configPath: config_path,
-	});
-	if (resolvedConfig) {
-		if (resolvedConfig.appName) appName = resolvedConfig.appName;
-		config = resolvedConfig;
+	if (configStatus === "exists") {
+		const resolvedConfig = await getConfig({
+			cwd,
+			configPath: config_path,
+		});
+		if (resolvedConfig) {
+			if (resolvedConfig.appName) appName = resolvedConfig.appName;
+			config = resolvedConfig;
+		} else {
+			config = {
+				appName,
+				plugins: [],
+			};
+		}
 	} else {
 		config = {
 			appName,
