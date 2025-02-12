@@ -219,32 +219,81 @@ const getDefaultAuthClientConfig = async ({
 		imports: Import[];
 	}[];
 }) => {
-	let importString = "";
-	for (const plugin of clientPlugins) {
-		if (Array.isArray(plugin.imports)) {
+	function groupImportVariables(): Import[] {
+		const result: Import[] = [
+			{
+				path: "better-auth/client/plugins",
+				variables: [{ name: "inferAdditionalFields" }],
+			},
+		];
+		for (const plugin of clientPlugins) {
 			for (const import_ of plugin.imports) {
 				if (Array.isArray(import_.variables)) {
-					importString += `import { ${import_.variables
-						.map(
-							(x) =>
-								`${x.asType ? "type " : ""}${x.name}${
-									x.as ? ` as ${x.as}` : ""
-								}`,
-						)
-						.join(", ")} } from "${import_.path}";\n`;
+					for (const variable of import_.variables) {
+						const existingIndex = result.findIndex(
+							(x) => x.path === import_.path,
+						);
+						if (existingIndex !== -1) {
+							if (Array.isArray(result[existingIndex].variables)) {
+								result[existingIndex].variables.push(variable);
+							} else {
+								result[existingIndex].variables = [
+									result[existingIndex].variables,
+									variable,
+								];
+							}
+						} else {
+							result.push({
+								path: import_.path,
+								variables: [variable],
+							});
+						}
+					}
 				} else {
-					importString += `import ${import_.variables.asType ? "type " : ""}${
-						import_.variables.name
-					}${import_.variables.as ? ` as ${import_.variables.as}` : ""} from "${
-						import_.path
-					}";\n`;
+					const existingIndex = result.findIndex(
+						(x) => x.path === import_.path,
+					);
+					if (existingIndex !== -1) {
+						if (Array.isArray(result[existingIndex].variables)) {
+							result[existingIndex].variables.push(import_.variables);
+						} else {
+							result[existingIndex].variables = [
+								result[existingIndex].variables,
+								import_.variables,
+							];
+						}
+					} else {
+						result.push({
+							path: import_.path,
+							variables: [import_.variables],
+						});
+					}
 				}
 			}
 		}
+		return result;
 	}
+	let imports = groupImportVariables();
+	let importString = "";
+	for (const import_ of imports) {
+		if (Array.isArray(import_.variables)) {
+			importString += `import { ${import_.variables
+				.map(
+					(x) =>
+						`${x.asType ? "type " : ""}${x.name}${x.as ? ` as ${x.as}` : ""}`,
+				)
+				.join(", ")} } from "${import_.path}";\n`;
+		} else {
+			importString += `import ${import_.variables.asType ? "type " : ""}${
+				import_.variables.name
+			}${import_.variables.as ? ` as ${import_.variables.as}` : ""} from "${
+				import_.path
+			}";\n`;
+		}
+	}
+
 	return await prettierFormat(
 		[
-			`import { inferAdditionalFields } from "better-auth/client/plugins";`,
 			`import { createAuthClient } from "better-auth/${
 				framework === "nextjs"
 					? "react"
@@ -1049,7 +1098,7 @@ export async function initAction(opts: any) {
 									imports: [
 										{
 											path: "better-auth/client/plugins",
-											variables: [{ name: plugin.name }],
+											variables: [{ name: plugin.clientName! }],
 										},
 									],
 								};
