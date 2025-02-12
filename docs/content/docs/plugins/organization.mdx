@@ -624,10 +624,11 @@ the plugin providers easy way to define your own set of permission for each role
       When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
-    import { createAccessControl, defaultStatements, adminAc } from "better-auth/plugins/access";
+    import { createAccessControl } from "better-auth/plugins/access";
+    import { organization } from 'better-auth/plugins/organization'
 
     const statement = { 
-        ...defaultStatements, // [!code highlight]
+        ...organization.defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
     
@@ -635,7 +636,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...adminAc.statements, // [!code highlight]
+        ...organization.adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -671,7 +672,7 @@ the plugin providers easy way to define your own set of permission for each role
         ```ts title="auth-client"
         import { createAuthClient } from "better-auth/client"
         import { organizationClient } from "better-auth/client/plugins"
-        import { ac } from "@/auth/permissions"
+        import { ac, owner, admin, member, myCustomRole } from "@/auth/permissions"
 
         export const client = createAuthClient({
             plugins: [
@@ -699,7 +700,7 @@ You can use the `hasPermission` action provided by the `api` to check the permis
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.hasPermission({
+    auth.api.organizationHasPermission({
         headers: await headers(),
         body: {
             permission: {

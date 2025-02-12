@@ -5,7 +5,6 @@ description: Admin plugin for Better Auth
 
 The Admin plugin provides a set of administrative functions for user management in your application. It allows administrators to perform various operations such as creating users, managing user roles, banning/unbanning users, impersonating users, and more.
 
-
 ## Installation
 
 <Steps>
@@ -17,7 +16,7 @@ The Admin plugin provides a set of administrative functions for user management 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { admin } from "better-auth/plugins" // [!code highlight]
-    
+
     export const auth = betterAuth({
         // ... other config options
         plugins: [
@@ -25,6 +24,7 @@ The Admin plugin provides a set of administrative functions for user management 
         ]
     })
     ```
+
   </Step>
 
     <Step>
@@ -55,13 +55,14 @@ The Admin plugin provides a set of administrative functions for user management 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { adminClient } from "better-auth/client/plugins"
-    
+
     const authClient = createAuthClient({
         plugins: [
             adminClient()
         ]
     })
     ```
+
   </Step>
 </Steps>
 
@@ -81,11 +82,10 @@ const newUser = await authClient.admin.createUser({
   role: "user",
   data: {
     // any additional on the user table including plugin fields and custom fields
-    customField: "customValue"
-  }
+    customField: "customValue",
+  },
 });
 ```
-
 
 ### List Users
 
@@ -93,16 +93,18 @@ Allows an admin to list all users in the database.
 
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
-    query: {
-        limit: 10,
-    }
+  query: {
+    limit: 10,
+  },
 });
 ```
+
 By default, 100 users are returned. You can adjust the limit and offset using the following query parameters:
+
 - `search`: The search query to apply to the users. It can be an object with the following properties:
-    - `field`: The field to search on, which can be `email` or `name`.
-    - `operator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
-    - `value`: The value to search for.
+  - `field`: The field to search on, which can be `email` or `name`.
+  - `operator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
+  - `value`: The value to search for.
 - `limit`: The number of users to return.
 - `offset`: The number of users to skip.
 - `sortBy`: The field to sort the users by.
@@ -133,7 +135,7 @@ Changes the role of a user.
 ```ts title="admin.ts"
 const updatedUser = await authClient.admin.setRole({
   userId: "user_id_here",
-  role: "admin"
+  role: "admin",
 });
 ```
 
@@ -145,7 +147,7 @@ Bans a user, preventing them from signing in and revokes all of their existing s
 const bannedUser = await authClient.admin.banUser({
   userId: "user_id_here",
   banReason: "Spamming", // Optional (if not provided, the default ban reason will be used - No reason)
-  banExpiresIn: 60 * 60 * 24 * 7 // Optional (if not provided, the ban will never expire)
+  banExpiresIn: 60 * 60 * 24 * 7, // Optional (if not provided, the ban will never expire)
 });
 ```
 
@@ -155,7 +157,7 @@ Removes the ban from a user, allowing them to sign in again.
 
 ```ts title="admin.ts"
 const unbannedUser = await authClient.admin.unbanUser({
-  userId: "user_id_here"
+  userId: "user_id_here",
 });
 ```
 
@@ -165,7 +167,7 @@ Lists all sessions for a user.
 
 ```ts title="admin.ts"
 const sessions = await authClient.admin.listUserSessions({
-  userId: "user_id_here"
+  userId: "user_id_here",
 });
 ```
 
@@ -175,7 +177,7 @@ Revokes a specific session for a user.
 
 ```ts title="admin.ts"
 const revokedSession = await authClient.admin.revokeUserSession({
- sessionToken: "session_token_here"
+  sessionToken: "session_token_here",
 });
 ```
 
@@ -185,7 +187,7 @@ Revokes all sessions for a user.
 
 ```ts title="admin.ts"
 const revokedSessions = await authClient.admin.revokeUserSessions({
-  userId: "user_id_here"
+  userId: "user_id_here",
 });
 ```
 
@@ -195,16 +197,17 @@ This feature allows an admin to create a session that mimics the specified user.
 
 ```ts title="admin.ts"
 const impersonatedSession = await authClient.admin.impersonateUser({
-  userId: "user_id_here"
+  userId: "user_id_here",
 });
 ```
+
 ### Stop Impersonating User
 
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
 
 ```ts title="admin.ts"
 await authClient.admin.stopImpersonating();
-```  
+```
 
 ### Remove User
 
@@ -212,7 +215,190 @@ Hard deletes a user from the database.
 
 ```ts title="admin.ts"
 const deletedUser = await authClient.admin.removeUser({
-  userId: "user_id_here"
+  userId: "user_id_here",
+});
+```
+
+## Access Control
+
+The admin plugin offers a highly flexible access control system, allowing you to manage user permissions based on their role. You can define custom permission sets to fit your needs.
+
+### Roles
+
+By default, there are two roles:
+
+`admin`: Users with the admin role have full control over other users.
+
+`user`: Users with the user role have no control over other users.
+
+### Permissions
+
+By default, there is one resource with eight actions.
+
+**user**:
+
+    `create` `list` `set-role` `ban` `list-sessions` `revoke-sessions` `impersonate` `delete`
+
+The admin have full control over all the resources and actions. The user have no control over any of those actions.
+
+### Custom Permissions
+
+the plugin providers easy way to define your own set of permission for each role.
+
+<Steps>
+    <Step>
+    #### Create Access Control
+
+    You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+
+    /**
+     * make sure to use `as const` so typescript can infer the type correctly
+     */
+    const statement = { // [!code highlight]
+        project: ["create", "share", "update", "delete"], // [!code highlight]
+    } as const; // [!code highlight]
+
+    const ac = createAccessControl(statement); // [!code highlight]
+    ```
+    </Step>
+
+    <Step>
+    #### Create Roles
+
+    Once you have created the access controller you can create roles with the permissions you have defined.
+
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+
+    const statement = {
+        project: ["create", "share", "update", "delete"],
+    } as const;
+
+    const ac = createAccessControl(statement);
+
+    const user = ac.newRole({ // [!code highlight]
+        project: ["create"], // [!code highlight]
+    }); // [!code highlight]
+
+    const admin = ac.newRole({ // [!code highlight]
+        project: ["create", "update"], // [!code highlight]
+    }); // [!code highlight]
+
+    const myCustomRole = ac.newRole({ // [!code highlight]
+        project: ["create", "update", "delete"], // [!code highlight]
+        user: ["ban"], // [!code highlight]
+    }); // [!code highlight]
+    ```
+
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+    import { admin } from "better-auth/plugins/admin";
+
+    const statement = {
+        ...admin.defaultStatements, // [!code highlight]
+        project: ["create", "share", "update", "delete"],
+    } as const;
+
+    const ac = createAccessControl(statement);
+
+    const admin = ac.newRole({
+        project: ["create", "update"],
+        ...admin.adminAc.statements, // [!code highlight]
+    });
+    ```
+
+    </Step>
+
+    <Step>
+        #### Pass Roles to the Plugin
+
+        Once you have created the roles you can pass them to the organization plugin both on the client and the server.
+
+        ```ts title="auth.ts"
+        import { ac, admin, user } from "@/auth/permissions"
+        import { betterAuth } from "better-auth"
+        import { admin } from "better-auth/plugins"
+
+        export const auth = betterAuth({
+            plugins: [
+                admin({
+                    ac: ac,
+                    roles: {
+                        admin,
+                        user,
+                        myCustomRole
+                    }
+                }),
+            ],
+        });
+        ```
+
+        You also need to pass the access controller and the roles to the client plugin.
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { adminClient } from "better-auth/client/plugins"
+        import { ac, admin, user, myCustomRole } from "@/auth/permissions"
+
+        export const client = createAuthClient({
+            plugins: [
+                adminClient({
+                    ac: ac,
+                    roles: {
+                        admin,
+                        user,
+                        myCustomRole
+                    }
+                })
+            ]
+        })
+        ```
+    </Step>
+
+</Steps>
+
+### Access Control Usage
+
+**Has Permission**:
+
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+auth.api.adminHasPermission({
+  headers: await headers(),
+  body: {
+    permission: {
+      project: ["create"], // This must match the structure in your access control
+    },
+  },
+});
+```
+
+If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client.
+
+```ts title="auth-client.ts"
+const canCreateProject = await authClient.admin.hasPermission({
+  permission: {
+    project: ["create"],
+  },
+});
+```
+
+**Check Role Permission**:
+
+Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+
+```ts title="auth-client.ts"
+const canCreateProject = client.admin.checkRolePermission({
+  permission: {
+    user: ["delete"],
+  },
+  role: "admin",
 });
 ```
 
@@ -221,47 +407,47 @@ const deletedUser = await authClient.admin.removeUser({
 This plugin adds the following fields to the `user` table:
 
 <DatabaseTable
-    fields={[
-        {
-            name: "role",
-            type: "string",
-            description: "The user's role. Defaults to `user`. Admins will have the `admin` role.",
-            isOptional: true,
-        },
-        {
-            name: "banned",
-            type: "boolean",
-            description: "Indicates whether the user is banned.",
-            isOptional: true,
-        },
-        {
-            name: "banReason",
-            type: "string",
-            description: "The reason for the user's ban.",
-            isOptional: true,
-        },
-        {
-            name: "banExpires",
-            type: "number",
-            description: "The Unix timestamp when the user's ban will expire.",
-            isOptional: true,
-        },
-    ]}
+  fields={[
+    {
+      name: "role",
+      type: "string",
+      description:
+        "The user's role. Defaults to `user`. Admins will have the `admin` role.",
+      isOptional: false,
+    },
+    {
+      name: "banned",
+      type: "boolean",
+      description: "Indicates whether the user is banned.",
+      isOptional: true,
+    },
+    {
+      name: "banReason",
+      type: "string",
+      description: "The reason for the user's ban.",
+      isOptional: true,
+    },
+    {
+      name: "banExpires",
+      type: "number",
+      description: "The Unix timestamp when the user's ban will expire.",
+      isOptional: true,
+    },
+  ]}
 />
 
 And adds one field in the `session` table:
 
 <DatabaseTable
-    fields={[
-        {
-            name: "impersonatedBy",
-            type: "string",
-            description: "The ID of the admin that is impersonating this session.",
-            isOptional: true,
-        },
-    ]}
+  fields={[
+    {
+      name: "impersonatedBy",
+      type: "string",
+      description: "The ID of the admin that is impersonating this session.",
+      isOptional: true,
+    },
+  ]}
 />
-
 
 ## Options
 
@@ -271,26 +457,8 @@ The default role for a user. Defaults to `user`.
 
 ```ts title="auth.ts"
 admin({
-    defaultRole: "regular"
-})
-```
-
-you can pass `false` to disable assigning default role
-
-```ts title="auth.ts"
-admin({
-    defaultRole: false //pass false to disable default role assignment
-})
-```
-
-### Admin role
-
-You can specify what role should be consider admin. Default to `admin`
-
-```ts title="auth.ts"
-admin({
-    adminRole: ["admin", "superAdmin"]
-})
+  defaultRole: "regular",
+});
 ```
 
 ### impersonationSessionDuration
@@ -299,8 +467,8 @@ The duration of the impersonation session in seconds. Defaults to 1 hour.
 
 ```ts title="auth.ts"
 admin({
-    impersonationSessionDuration: 60 * 60 * 24 // 1 day
-})
+  impersonationSessionDuration: 60 * 60 * 24, // 1 day
+});
 ```
 
 ### Default Ban Reason
@@ -309,8 +477,8 @@ The default ban reason for a user created by the admin. Defaults to `No reason`.
 
 ```ts title="auth.ts"
 admin({
-    defaultBanReason: "Spamming"
-})
+  defaultBanReason: "Spamming",
+});
 ```
 
 ### Default Ban Expires In
@@ -319,6 +487,6 @@ The default ban expires in for a user created by the admin in seconds. Defaults 
 
 ```ts title="auth.ts"
 admin({
-    defaultBanExpiresIn: 60 * 60 * 24 // 1 day
-})
+  defaultBanExpiresIn: 60 * 60 * 24, // 1 day
+});
 ```
