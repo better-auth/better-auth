@@ -28,6 +28,7 @@ import { installDependencies } from "../utils/install-dependencies";
 import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
 import { generateSecretHash } from "./secret";
+import { generateClientAuthConfig } from "../generators/auth-client-config";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -679,11 +680,13 @@ export async function initAction(opts: any) {
 				}
 				return path.join(cwd, configPath);
 			}
-			config_path = await getConfigPath();
+			log.message();
 			log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+			config_path = await getConfigPath();
 			log.message();
 		}
 	} else {
+		log.message();
 		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 		log.message();
 	}
@@ -773,8 +776,8 @@ export async function initAction(opts: any) {
 			}
 			database = prompted_database;
 		}
+		log.message(chalk.gray(horiztonalLine));
 	}
-	log.message(chalk.gray(horiztonalLine));
 
 	// ===== plugins =====
 	let add_plugins: SupportedPlugin[] = [];
@@ -1160,12 +1163,65 @@ export async function initAction(opts: any) {
 				return path.join(cwd, configPath);
 			}
 			authClientConfigPath = await getConfigPath();
+			log.message("");
 			log.info(
 				`Found auth client config file. ${chalk.gray(
 					`(${authClientConfigPath})`,
 				)}`,
 			);
-			log.message();
+			log.message("");
+		}
+	} else {
+		log.info(
+			`Found auth client config file. ${chalk.gray(
+				`(${authClientConfigPath})`,
+			)}`,
+		);
+
+		if (
+			!options["skip-plugins"] &&
+			add_plugins.filter((x) => x.clientName !== undefined).length > 0
+		) {
+			const shouldAdd = await confirm({
+				message: `Do you want to add the new plugins to your auth client config file?`,
+			});
+			if (isCancel(shouldAdd)) {
+				cancel(`✋ Operation cancelled.`);
+				process.exit(0);
+			}
+			if (shouldAdd) {
+				const s = spinner({ indicator: "dots" });
+				s.start(`Updating auth client config file...`);
+				try {
+					const { dependencies, envs, generatedCode } =
+						await generateClientAuthConfig({
+							format,
+							current_user_config: authClientConfigPath,
+							//@ts-ignore
+							s,
+							plugins: add_plugins,
+							database: database,
+						});
+					try {
+						await fs.writeFile(authClientConfigPath, generatedCode);
+						log.success(`🚀 Auth client config file successfully updated!`);
+						log.message(chalk.gray(horiztonalLine));
+					} catch (error) {
+						log.error(
+							`Failed to update auth client config file: ${authClientConfigPath}`,
+						);
+						console.error(error);
+						process.exit(1);
+					}
+				} catch (error) {
+					s.stop(`Failed to update auth client config file:`);
+					console.error(error);
+					process.exit(1);
+				}
+			}
+		} else {
+			log.step(`No auth client actions needed, skipping...`);
+			log.message(chalk.gray(horiztonalLine));
 		}
 	}
 

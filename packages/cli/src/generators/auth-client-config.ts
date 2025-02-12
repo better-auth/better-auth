@@ -2,40 +2,12 @@ import {
 	type SupportedDatabases,
 	type SupportedPlugin,
 } from "../commands/init";
-import { logger } from "better-auth";
 import { type spinner as clackSpinner } from "@clack/prompts";
-
-export type Import = {
-	path: string;
-	variables:
-		| { asType?: boolean; name: string; as?: string }[]
-		| { asType?: boolean; name: string; as?: string };
-};
+import type { CommonIndexConfig, Import } from "./auth-config";
 
 type Format = (code: string) => Promise<string>;
 
-type CommonIndexConfig_Regex<AdditionalFields> = {
-	type: "regex";
-	regex: RegExp;
-	getIndex: (args: {
-		matchIndex: number;
-		match: RegExpMatchArray;
-		additionalFields: AdditionalFields;
-	}) => number | null;
-};
-type CommonIndexConfig_manual<AdditionalFields> = {
-	type: "manual";
-	getIndex: (args: {
-		content: string;
-		additionalFields: AdditionalFields;
-	}) => number | null;
-};
-
-export type CommonIndexConfig<AdditionalFields> =
-	| CommonIndexConfig_Regex<AdditionalFields>
-	| CommonIndexConfig_manual<AdditionalFields>;
-
-export async function generateAuthConfig({
+export async function generateClientAuthConfig({
 	format,
 	current_user_config,
 	spinner,
@@ -84,7 +56,7 @@ export async function generateAuthConfig({
 			},
 		} satisfies CommonIndexConfig<{}>,
 	};
-	
+
 	const config_generation = {
 		add_plugin: async (opts: {
 			direction_in_plugins_array: "append" | "prepend";
@@ -396,13 +368,12 @@ export async function generateAuthConfig({
 				opts.database === "prisma:pg"
 			) {
 				await add_db({
-					db_code: `new PrismaAdapter(client, {\nprovider: "${opts.database.replace(
+					db_code: `new PrismaAdapter(new PrismaClient(), {\nprovider: "${opts.database.replace(
 						"prisma:",
 						"",
 					)}",\n})`,
 					dependencies: [`@prisma/client`],
 					envs: [],
-					code_before_betterAuth: 'const client = new PrismaClient();',
 					imports: [
 						{
 							path: "better-auth/adapters/prisma",
@@ -487,98 +458,6 @@ export async function generateAuthConfig({
 	let new_user_config: string = await format(current_user_config);
 	let total_dependencies: string[] = [];
 	let total_envs: string[] = [];
-
-	if (plugins.length !== 0) {
-		const imports: {
-			path: string;
-			variables: {
-				asType: boolean;
-				name: string;
-			}[];
-		}[] = [];
-		plugins.forEach((plugin) => {
-			const existingIndex = imports.findIndex((x) => x.path === plugin.path);
-			if (existingIndex !== -1) {
-				imports[existingIndex].variables.push({
-					name: plugin.name,
-					asType: false,
-				});
-			} else {
-				imports.push({
-					path: plugin.path,
-					variables: [
-						{
-							name: plugin.name,
-							asType: false,
-						},
-					],
-				});
-			}
-		});
-		const { code, envs, dependencies } = await config_generation.add_import({
-			config: new_user_config,
-			imports: imports,
-		});
-		total_dependencies.push(...dependencies);
-		total_envs.push(...envs);
-		new_user_config = code;
-	}
-
-	for await (const plugin of plugins) {
-		try {
-			// console.log(`--------- UPDATE: ${plugin} ---------`);
-			let pluginContents = "";
-			if (plugin.id === "magic-link") {
-				pluginContents = `{\nsendMagicLink({ email, token, url }, request) {\n// Send email with magic link\n},\n}`;
-			} else if (plugin.id === "email-otp") {
-				pluginContents = `{\nasync sendVerificationOTP({ email, otp, type }, request) {\n// Send email with OTP\n},\n}`;
-			} else if (plugin.id === "generic-oauth") {
-				pluginContents = `{\nconfig: [],\n}`;
-			} else if (plugin.id === "oidc") {
-				pluginContents = `{\nloginPage: "/sign-in",\n}`;
-			}
-			const { code, dependencies, envs } = await config_generation.add_plugin({
-				config: new_user_config,
-				direction_in_plugins_array:
-					plugin.id === "next-cookies" ? "append" : "prepend",
-				pluginFunctionName: plugin.name,
-				pluginContents: pluginContents,
-			});
-			new_user_config = code;
-			total_envs.push(...envs);
-			total_dependencies.push(...dependencies);
-			// console.log(new_user_config);
-			// console.log(`--------- UPDATE END ---------`);
-		} catch (error: any) {
-			spinner.stop(
-				`Something went wrong while generating/updating your new auth config file.`,
-				1,
-			);
-			logger.error(error.message);
-			process.exit(1);
-		}
-	}
-
-	if (database) {
-		try {
-			const { code, dependencies, envs } = await config_generation.add_database(
-				{
-					config: new_user_config,
-					database: database,
-				},
-			);
-			new_user_config = code;
-			total_dependencies.push(...dependencies);
-			total_envs.push(...envs);
-		} catch (error: any) {
-			spinner.stop(
-				`Something went wrong while generating/updating your new auth config file.`,
-				1,
-			);
-			logger.error(error.message);
-			process.exit(1);
-		}
-	}
 
 	return {
 		generatedCode: new_user_config,
