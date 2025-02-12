@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
+import { createAccessControl } from "./access";
+import { createAuthClient } from "../../client";
+import { BetterAuthError } from "../../error";
 
 describe("Admin plugin", async () => {
 	const { client, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -360,5 +363,117 @@ describe("Admin plugin", async () => {
 		);
 
 		expect(res.data?.success).toBe(true);
+	});
+});
+
+describe("access control", async (it) => {
+	const ac = createAccessControl({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
+	});
+
+	const adminAc = ac.newRole({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
+	});
+	const userAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+
+	const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							admin: adminAc,
+							user: userAc,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Admin",
+				},
+				clientOptions: {
+					plugins: [
+						adminClient({
+							ac,
+							roles: {
+								admin: adminAc,
+								user: userAc,
+							},
+						}),
+					],
+				},
+			},
+		);
+
+	const { headers } = await signInWithTestUser();
+
+	it("should return success", async () => {
+		const canCreateProject = client.admin.checkRolePermission({
+			role: "admin",
+			permission: {
+				user: [],
+			},
+		});
+		expect(canCreateProject).toBe(true);
+		const canCreateProjectServer = await client.admin.hasPermission({
+			permission: {
+				user: ["read"],
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(canCreateProjectServer.data?.success).toBe(true);
+	});
+
+	it("should return not success", async () => {
+		const canCreateProject = client.admin.checkRolePermission({
+			role: "user",
+			permission: {
+				user: ["delete"],
+			},
+		});
+		expect(canCreateProject).toBe(false);
+	});
+
+	it("should return not success #2", async () => {
+		let error: BetterAuthError | null = null;
+		try {
+			client.admin.checkRolePermission({
+				role: "admin",
+				permission: {
+					user: ["create"],
+					order: ["delete"],
+				},
+			});
+		} catch (e) {
+			if (e instanceof BetterAuthError) {
+				error = e;
+			}
+		}
+		expect(error).toBeInstanceOf(BetterAuthError);
 	});
 });
