@@ -132,23 +132,35 @@ export const createOrganization = createAuthEndpoint(
 			},
 			user,
 		});
-		if (options?.teams?.enabled) {
+		if (
+			options?.teams?.enabled &&
+			options.teams.defaultTeam?.enabled !== false
+		) {
 			const teamStatus = "active";
-			const defaultTeam = await adapter.createTeam({
-				id: generateId(),
-				organizationId: organization.id,
-				name: `${organization.name}`,
-				status: teamStatus,
-				createdAt: new Date(),
-			});
+			const defaultTeam =
+				(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
+					organization,
+					ctx.request,
+				)) ||
+				(await adapter.createTeam({
+					id: generateId(),
+					organizationId: organization.id,
+					name: `${organization.name}`,
+					status: teamStatus,
+					createdAt: new Date(),
+				}));
 
 			await adapter.createMember({
-				id: generateId(),
 				teamId: defaultTeam.id,
 				userId: user.id,
 				organizationId: organization.id,
-				role: "admin",
-				createdAt: new Date(),
+				role: ctx.context.orgOptions.creatorRole || "owner",
+			});
+		} else {
+			await adapter.createMember({
+				userId: user.id,
+				organizationId: organization.id,
+				role: ctx.context.orgOptions.creatorRole || "owner",
 			});
 		}
 

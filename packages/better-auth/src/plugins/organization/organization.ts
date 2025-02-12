@@ -114,6 +114,24 @@ export interface OrganizationOptions {
 		 * Enable team features.
 		 */
 		enabled: boolean;
+		/**
+		 * Default team configuration
+		 */
+		defaultTeam?: {
+			/**
+			 * Enable creating a default team when an organization is created
+			 *
+			 * @default true
+			 */
+			enabled: boolean;
+			/**
+			 * Pass a custom default team creator function
+			 */
+			customCreateDefaultTeam: (
+				organization: Organization & Record<string, any>,
+				request?: Request,
+			) => Promise<Team & Record<string, any>>;
+		};
 	};
 	/**
 	 * The expiration time for the invitation link.

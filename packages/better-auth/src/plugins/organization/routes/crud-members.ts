@@ -15,14 +15,17 @@ export const addMember = <O extends OrganizationOptions>() =>
 		"/organization/add-member",
 		{
 			method: "POST",
-			body: z.object({
-				userId: z.string(),
-				role: z.string() as unknown as InferRolesFromOption<O>,
-				organizationId: z.string().optional(),
-			}),
+			body: z.record(z.string()),
 			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
+				$Infer: {
+					body: {} as {
+						userId: string;
+						role: InferRolesFromOption<O>;
+						organizationId?: string;
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -221,16 +224,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		"/organization/update-member-role",
 		{
 			method: "POST",
-			body: z.object({
-				role: z.string() as unknown as InferRolesFromOption<O>,
-				memberId: z.string(),
-				/**
-				 * If not provided, the active organization will be used
-				 */
-				organizationId: z.string().optional(),
-			}),
+			body: z.object({}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as {
+						role: InferRolesFromOption<O>;
+						memberId: string;
+						/**
+						 * If not provided, the active organization will be used
+						 */
+						organizationId?: string;
+					},
+				},
 				openapi: {
 					description: "Update the role of a member in an organization",
 					responses: {

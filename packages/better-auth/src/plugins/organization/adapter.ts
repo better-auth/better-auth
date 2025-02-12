@@ -197,7 +197,10 @@ export const getOrgAdapter = (
 		createMember: async (data: MemberInput) => {
 			const member = await adapter.create<MemberInput>({
 				model: "member",
-				data: data,
+				data: {
+					...data,
+					createdAt: new Date(),
+				},
 			});
 			return member;
 		},
@@ -418,7 +421,6 @@ export const getOrgAdapter = (
 			});
 			return team;
 		},
-
 		findTeamById: async (teamId: string) => {
 			const team = await adapter.findOne<Team>({
 				model: "team",
@@ -434,7 +436,6 @@ export const getOrgAdapter = (
 			}
 			return team;
 		},
-
 		updateTeam: async (
 			teamId: string,
 			data: { name?: string; description?: string; status?: string },

@@ -25,7 +25,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
 	role,
-	createdAt: z.date(),
+	createdAt: z.date().default(() => new Date()),
 	teamId: z.string().optional(),
 });
 
@@ -43,6 +43,7 @@ export const teamSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string().min(1, "Team name is required"),
 	description: z.optional(z.string().min(1, "Description is required")),
+	metadata: z.record(z.string(), z.any()).optional(),
 	status: z.string().optional(), // status of the team
 	organizationId: z.string(), // Organization ID (required)
 	createdAt: z.date(), // Team creation date (required)
