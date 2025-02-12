@@ -630,9 +630,7 @@ export async function initAction(opts: any) {
 	// ===== generate new config =====
 
 	const shouldUpdateAuthConfig =
-		!(options["skip-plugins"] || add_plugins.length === 0) ||
-		database !== null ||
-		configStatus !== "skip";
+		!(options["skip-plugins"] || add_plugins.length === 0) || database !== null;
 
 	if (shouldUpdateAuthConfig) {
 		const s = spinner({ indicator: "dots" });
