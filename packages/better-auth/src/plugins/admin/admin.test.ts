@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { admin, type UserWithRole } from ".";
+import { admin, type UserWithRole } from "./admin";
 import { adminClient } from "./client";
-import { createAccessControl } from "./access";
+import { createAccessControl } from "../access";
 import { BetterAuthError } from "../../error";
 
 describe("Admin plugin", async () => {

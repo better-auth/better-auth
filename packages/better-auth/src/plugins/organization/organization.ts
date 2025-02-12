@@ -15,10 +15,8 @@ import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
 import {
 	type AccessControl,
-	type Role,
-	defaultRoles,
-	type defaultStatements,
-} from "./access";
+	type Role
+} from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -45,6 +43,7 @@ import {
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { ownerAc, adminAc, memberAc, defaultAc, defaultRoles, defaultStatements } from "./access";
 
 export interface OrganizationOptions {
 	/**
@@ -236,7 +235,7 @@ export interface OrganizationOptions {
  * });
  * ```
  */
-export const organization = <O extends OrganizationOptions>(options?: O) => {
+export const organization = Object.assign(<O extends OrganizationOptions>(options?: O) => {
 	const endpoints = {
 		createOrganization,
 		updateOrganization,
@@ -279,7 +278,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		id: "organization",
 		endpoints: {
 			...api,
-			hasPermission: createAuthEndpoint(
+			organizationHasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{
 					method: "POST",
@@ -536,4 +535,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
-};
+}, {
+	defaultStatements,
+	defaultRoles,
+	defaultAc,
+	ownerAc,
+	adminAc,
+	memberAc
+});

@@ -2,8 +2,9 @@ import { type Context } from "better-call";
 import type { Session, User } from "../../types";
 import { createAuthMiddleware } from "../../api/call";
 import { sessionMiddleware } from "../../api";
-import type { Role, defaultRoles } from "./access";
+import type { Role } from "../access";
 import type { OrganizationOptions } from "./organization";
+import type { defaultRoles } from "./access/statement";
 
 export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 	return {} as {

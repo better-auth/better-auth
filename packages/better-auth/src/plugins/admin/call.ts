@@ -1,7 +1,8 @@
-import { type UserWithRole } from ".";
+import { type UserWithRole } from "./admin";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { type Session } from "../../types";
-import { type defaultRoles, type Role } from "./access";
+import { type Role } from "../access";
+import { type defaultRoles } from "./access/statement";
 
 export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);

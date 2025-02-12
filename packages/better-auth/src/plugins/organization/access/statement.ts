@@ -1,4 +1,4 @@
-import { createAccessControl } from "./access";
+import { createAccessControl } from "../../access";
 
 export const defaultStatements = {
 	organization: ["update", "delete"],

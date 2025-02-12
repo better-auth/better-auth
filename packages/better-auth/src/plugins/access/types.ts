@@ -1,4 +1,4 @@
-import type { LiteralString } from "../../../types/helper";
+import type { LiteralString } from "../../types/helper";
 
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
 	T[number][];
