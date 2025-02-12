@@ -85,7 +85,6 @@ const defaultFormatOptions = {
 
 const optionsSchema = z.object({
 	cwd: z.string(),
-	name: z.string().optional(),
 	config: z.string().optional(),
 	database: z.enum(supportedDatabases).optional(),
 	"skip-db": z.boolean().optional(),
@@ -332,7 +331,7 @@ export async function initAction(opts: any) {
 
 	const packageJson = getPackageInfo(cwd);
 	let appName: string;
-	if (!options.name && !packageJson.name) {
+	if (!packageJson.name) {
 		const newAppName = await text({
 			message: "What is the name of your application?",
 			validate(value) {
@@ -347,8 +346,9 @@ export async function initAction(opts: any) {
 		}
 		appName = newAppName;
 	} else {
-		appName = options.name || packageJson.name;
+		appName = packageJson.name;
 	}
+
 
 	// ===== config path =====
 
@@ -729,7 +729,6 @@ export async function initAction(opts: any) {
 // ===== Init Command =====
 
 export const init = new Command("init")
-	.option("--name <name>", "The name of your application.")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())
 	.option(
 		"--config <config>",
