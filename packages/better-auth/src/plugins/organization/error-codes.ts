@@ -38,4 +38,7 @@ export const ORGANIZATION_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
 		"you are not allowed to invite user with this role",
 	FAILED_TO_RETRIEVE_INVITATION: "Failed to retrieve invitation",
+	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS:
+		"You have reached the maximum number of teams",
+	UNABLE_TO_REMOVE_LAST_TEAM: "Unable to remove last team",
 } as const;

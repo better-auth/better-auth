@@ -41,6 +41,10 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			const organizationId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
 
+			if ((!session && ctx.request) || ctx.headers) {
+				throw new APIError("UNAUTHORIZED");
+			}
+
 			if (!organizationId) {
 				return ctx.json(null, {
 					status: 400,
@@ -51,6 +55,26 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const existingTeams = await adapter.listTeams(organizationId);
+
+			const maximum =
+				typeof ctx.context.orgOptions.teams?.maximumTeams === "function"
+					? await ctx.context.orgOptions.teams?.maximumTeams(
+							{
+								organizationId,
+								session,
+							},
+							ctx.request,
+						)
+					: ctx.context.orgOptions.teams?.maximumTeams;
+
+			const maxTeamsReached = maximum ? existingTeams.length >= maximum : false;
+			if (maxTeamsReached) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS,
+				});
+			}
 			const createdTeam = await adapter.createTeam({
 				id: generateId(),
 				name: ctx.body.data.name,
@@ -59,10 +83,10 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				organizationId,
 				createdAt: new Date(),
 			});
-
 			return ctx.json(createdTeam);
 		},
 	);
+
 export const removeTeam = createAuthEndpoint(
 	"/organization/remove-team",
 	{
@@ -93,6 +117,15 @@ export const removeTeam = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 			});
+		}
+
+		if (!ctx.context.orgOptions.teams?.allowRemovingAllTeams) {
+			const teams = await adapter.listTeams(organizationId);
+			if (teams.length <= 1) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.UNABLE_TO_REMOVE_LAST_TEAM,
+				});
+			}
 		}
 
 		await adapter.deleteTeam(team.id);

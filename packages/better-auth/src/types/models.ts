@@ -89,8 +89,8 @@ interface RateLimit {
 	lastRequest: number;
 }
 
-export type User = z.infer<typeof userSchema>;
+export type User = z.infer<typeof userSchema> & Record<string, any>;
 export type Account = z.infer<typeof accountSchema>;
-export type Session = z.infer<typeof sessionSchema>;
+export type Session = z.infer<typeof sessionSchema> & Record<string, any>;
 export type Verification = z.infer<typeof verificationSchema>;
 export type { RateLimit };

@@ -7,7 +7,7 @@ import {
 	ZodString,
 	z,
 } from "zod";
-import type { AuthPluginSchema, User } from "../../types";
+import type { AuthPluginSchema, Session, User } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
@@ -132,6 +132,37 @@ export interface OrganizationOptions {
 				request?: Request,
 			) => Promise<Team & Record<string, any>>;
 		};
+		/**
+		 * Maximum number of teams an organization can have.
+		 *
+		 * You can pass a number or a function that returns a number
+		 *
+		 * @default "unlimited"
+		 *
+		 * @param organization
+		 * @param request
+		 * @returns
+		 */
+		maximumTeams?:
+			| ((
+					data: {
+						organizationId: string;
+						session: {
+							user: User;
+							session: Session;
+						} | null;
+					},
+					request?: Request,
+			  ) => number | Promise<number>)
+			| number;
+		/**
+		 * By default, if an organization does only have one team, they'll not be able to remove it.
+		 *
+		 * You can disable this behavior by setting this to `false.
+		 *
+		 * @default false
+		 */
+		allowRemovingAllTeams?: boolean;
 	};
 	/**
 	 * The expiration time for the invitation link.

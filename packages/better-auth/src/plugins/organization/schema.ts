@@ -48,7 +48,8 @@ export const teamSchema = z.object({
 	organizationId: z.string(), // Organization ID (required)
 	createdAt: z.date(), // Team creation date (required)
 });
-export type Organization = z.infer<typeof organizationSchema>;
+export type Organization = z.infer<typeof organizationSchema> &
+	Record<string, any>;
 export type Member = z.infer<typeof memberSchema>;
 export type Team = z.infer<typeof teamSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
