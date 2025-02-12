@@ -218,7 +218,7 @@ export const admin = Object.assign(
 					if (!canCreateUser) {
 						throw new APIError("FORBIDDEN", {
 							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 						});
 					}
 
