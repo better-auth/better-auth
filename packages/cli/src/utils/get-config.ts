@@ -6,7 +6,7 @@ import path from "path";
 import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
-import fs from "fs";
+import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 
@@ -99,7 +99,8 @@ export async function getConfig({
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
-			const resolvedPath = path.join(cwd, configPath);
+			let resolvedPath: string = path.join(cwd, configPath);
+			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;

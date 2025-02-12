@@ -106,6 +106,14 @@ export async function initAction(opts: any) {
 	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
 		undefined;
 
+	let config_path: string = "";
+
+	const format = async (code: string) =>
+		await prettierFormat(code, {
+			filepath: config_path,
+			...defaultFormatOptions,
+		});
+
 	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
 
@@ -222,7 +230,7 @@ export async function initAction(opts: any) {
 	try {
 		packageInfo = getPackageInfo(cwd);
 	} catch (error) {
-		log.error(`❌ Couldn't read your package.json file. (${cwd})`);
+		log.error(`❌ Couldn't read your package.json file. (dir: ${cwd})`);
 		log.error(JSON.stringify(error, null, 2));
 		process.exit(1);
 	}
@@ -349,7 +357,6 @@ export async function initAction(opts: any) {
 		appName = packageJson.name;
 	}
 
-
 	// ===== config path =====
 
 	let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
@@ -366,7 +373,6 @@ export async function initAction(opts: any) {
 		...possiblePaths.map((it) => `app/${it}`),
 	];
 
-	let config_path: string = "";
 	if (options.config) {
 		config_path = path.join(cwd, options.config);
 	} else {
@@ -378,9 +384,80 @@ export async function initAction(opts: any) {
 			}
 		}
 	}
+	let configStatus: "created" | "skip" = "created";
 
 	if (!config_path) {
-		log.info(`No auth config file found.`);
+		const shouldCreateAuthConfig = await select({
+			message: `Would you like to create an auth config file?`,
+			options: [
+				{ label: "Yes", value: "yes" },
+				{ label: "No", value: "no" },
+				{ label: "I already have one", value: "other" },
+			],
+		});
+		if (isCancel(shouldCreateAuthConfig)) {
+			cancel(`✋ Operation cancelled.`);
+			process.exit(0);
+		}
+		if (shouldCreateAuthConfig === "yes") {
+			await createAuthConfig();
+		} else if (shouldCreateAuthConfig === "no") {
+			configStatus = "skip";
+			log.info(`Skipping auth config file creation.`);
+		} else if (shouldCreateAuthConfig === "other") {
+			async function getConfigPath() {
+				const configPath = await text({
+					message: `What is the path to your auth config file? ${chalk.gray(
+						`(Relative path supported)`,
+					)}`,
+					placeholder: "/auth.ts",
+					validate(value) {
+						const configPath = path.join(cwd, value);
+						if (
+							!value.endsWith(".ts") &&
+							!value.endsWith(".tsx") &&
+							!value.endsWith(".js") &&
+							!value.endsWith(".jsx")
+						)
+							return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
+						if (!existsSync(configPath))
+							return `Config file does not exist. (recieved: ${configPath})`;
+					},
+				});
+				if (isCancel(configPath)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+				return path.join(cwd, configPath);
+			}
+			config_path = await getConfigPath();
+			log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+			log.message();
+		}
+		async function createAuthConfig() {
+			const s = spinner({ indicator: "dots" });
+			s.start(`Creating auth config file`);
+			try {
+				const start = Date.now();
+				const { dependencies, envs, generatedCode } = await generateAuthConfig({
+					format,
+					current_user_config: "",
+					spinner: s,
+					plugins: [],
+					database: null,
+				});
+				s.stop(
+					`Auth config file created ${chalk.greenBright(
+						`successfully`,
+					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
+				);
+			} catch (error: any) {
+				s.stop(`Failed to create auth config file:`);
+				log.error(error.message);
+				process.exit(1);
+			}
+			log.success(`🚀 Auth config file successfully created!`);
+		}
 	} else {
 		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 		log.message();
@@ -388,14 +465,14 @@ export async function initAction(opts: any) {
 
 	// ===== config =====
 
-	if (!existsSync(cwd)) {
+	if (!existsSync(cwd) && !configStatus) {
 		log.error(`❌ The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
 	let config: BetterAuthOptions;
 	const resolvedConfig = await getConfig({
 		cwd,
-		configPath: options.config,
+		configPath: config_path,
 	});
 	if (resolvedConfig) {
 		if (resolvedConfig.appName) appName = resolvedConfig.appName;
@@ -406,30 +483,28 @@ export async function initAction(opts: any) {
 			plugins: [],
 		};
 	}
-
-	const format = async (code: string) =>
-		await prettierFormat(code, {
-			filepath: config_path,
-			...defaultFormatOptions,
-		});
-
 	// ===== getting user auth config =====
 
-	let current_user_config: string;
-	try {
-		current_user_config = await fs.readFile(config_path, "utf8");
-	} catch (error) {
-		log.error(`❌ Failed to read your auth config file: ${config_path}`);
-		log.error(JSON.stringify(error, null, 2));
-		process.exit(1);
+	let current_user_config: string = "";
+	if (configStatus !== "skip") {
+		try {
+			current_user_config = await fs.readFile(config_path, "utf8");
+		} catch (error) {
+			log.error(`❌ Failed to read your auth config file: ${config_path}`);
+			log.error(JSON.stringify(error, null, 2));
+			process.exit(1);
+		}
+		log.message(chalk.gray(horiztonalLine));
 	}
-
-	log.message(chalk.gray(horiztonalLine));
 
 	// ===== database =====
 
 	let database: SupportedDatabases | null = null;
-	if (options["skip-db"] === undefined && !config.database) {
+	if (
+		options["skip-db"] === undefined &&
+		!config.database &&
+		configStatus !== "skip"
+	) {
 		const result = await confirm({
 			message: `Would you like to set up your ${chalk.bold(`database`)}?`,
 			initialValue: true,
@@ -441,7 +516,7 @@ export async function initAction(opts: any) {
 		options["skip-db"] = !result;
 	}
 
-	if (!config.database && !options["skip-db"]) {
+	if (!config.database && !options["skip-db"] && configStatus !== "skip") {
 		if (options.database) {
 			database = options.database;
 		} else {
@@ -464,7 +539,7 @@ export async function initAction(opts: any) {
 		? config.plugins.map((x) => x.id)
 		: [];
 
-	if (options["skip-plugins"] !== false) {
+	if (options["skip-plugins"] !== false && configStatus !== "skip") {
 		if (config.plugins === undefined) {
 			const skipPLugins = await confirm({
 				message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
@@ -486,7 +561,7 @@ export async function initAction(opts: any) {
 		}
 		if (options["skip-plugins"]) log.message(chalk.gray(horiztonalLine));
 	}
-	if (!options["skip-plugins"]) {
+	if (!options["skip-plugins"] && configStatus !== "skip") {
 		const prompted_plugins = await multiselect({
 			message: "Select your new plugins",
 			options: supportedPlugins
@@ -507,7 +582,7 @@ export async function initAction(opts: any) {
 
 	// ===== suggest nextCookies plugin =====
 
-	if (!options["skip-plugins"]) {
+	if (!options["skip-plugins"] && configStatus !== "skip") {
 		const possible_next_config_paths = [
 			"next.config.js",
 			"next.config.ts",
@@ -545,7 +620,9 @@ export async function initAction(opts: any) {
 	// ===== generate new config =====
 
 	const shouldUpdateAuthConfig =
-		!(options["skip-plugins"] || add_plugins.length === 0) || database !== null;
+		!(options["skip-plugins"] || add_plugins.length === 0) ||
+		database !== null ||
+		configStatus !== "skip";
 
 	if (shouldUpdateAuthConfig) {
 		const s = spinner({ indicator: "dots" });
@@ -614,6 +691,8 @@ export async function initAction(opts: any) {
 			log.success(`🚀 Auth config successfully applied!`);
 		} else {
 			log.info(`✋ Skipping auth config update.`);
+			outro(outroText);
+			process.exit(0);
 		}
 		log.message(chalk.gray(horiztonalLine));
 
@@ -719,7 +798,9 @@ export async function initAction(opts: any) {
 			outro(outroText);
 		}
 	} else {
-		log.info(`No plugins or databases operations needed, skipping...`);
+		if (configStatus !== "skip") {
+			log.info(`No plugins or databases operations needed, skipping...`);
+		}
 		outro(outroText);
 	}
 	console.log();
