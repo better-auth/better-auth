@@ -1,5 +1,3 @@
-*Note: This is an incomplete result, please enable full generation by entering a Firecrawl key.
-
 # https://better-auth.com llms.txt
 
 - [Better Auth: Comparison](https://www.better-auth.com/docs/comparison): Compare Better Auth with other auth libraries, self-hosting, managed services, and rolling your own.

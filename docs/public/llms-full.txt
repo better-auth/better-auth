@@ -1,5 +1,3 @@
-*Note: This is an incomplete result, please enable full generation by entering a Firecrawl key.
-
 # https://better-auth.com llms.txt
 
 - [Better Auth: TypeScript](https://beta.better-auth.com/): TypeScript authentication framework with email/password, social logins, two-factor, multi-tenant support, and plugins.
