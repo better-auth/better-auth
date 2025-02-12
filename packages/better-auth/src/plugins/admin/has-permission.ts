@@ -13,7 +13,7 @@ export const hasPermission = (input: {
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
 		const result = _role?.authorize(input.permission);
-		if (!result?.success) {
+		if (result?.success) {
 			return true;
 		}
 	}
