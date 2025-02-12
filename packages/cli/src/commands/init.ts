@@ -108,7 +108,7 @@ const optionsSchema = z.object({
 
 const horiztonalLine = "─".repeat(30);
 
-const outroText = `All Done, Happy Hacking! 🥳`;
+const outroText = `🥳 All Done, Happy Hacking!`;
 
 export async function initAction(opts: any) {
 	console.log();
