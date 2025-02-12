@@ -11,7 +11,7 @@ import fs from "fs/promises";
 import { getPackageInfo } from "../utils/get-package-info";
 import { diffWordsWithSpace } from "diff";
 import chalk from "chalk";
-import { generateAuthConfig } from "../generators/auth-config";
+import { generateAuthConfig, type Import } from "../generators/auth-config";
 import {
 	cancel,
 	confirm,
@@ -53,26 +53,126 @@ const supportedDatabases = [
 export type SupportedDatabases = (typeof supportedDatabases)[number];
 
 export const supportedPlugins = [
-	{ id: "two-factor", name: "twoFactor", path: `better-auth/plugins` },
-	{ id: "username", name: "username", path: `better-auth/plugins` },
-	{ id: "anonymous", name: "anonymous", path: `better-auth/plugins` },
-	{ id: "phone-number", name: "phoneNumber", path: `better-auth/plugins` },
-	{ id: "magic-link", name: "magicLink", path: `better-auth/plugins` },
-	{ id: "email-otp", name: "emailOTP", path: `better-auth/plugins` },
-	{ id: "passkey", name: "passkey", path: `better-auth/plugins/passkey` },
-	{ id: "generic-oauth", name: "genericOAuth", path: `better-auth/plugins` },
-	{ id: "one-tap", name: "oneTap", path: `better-auth/plugins` },
-	{ id: "api-key", name: "apiKey", path: `better-auth/plugins` },
-	{ id: "admin", name: "admin", path: `better-auth/plugins` },
-	{ id: "organization", name: "organization", path: `better-auth/plugins` },
-	{ id: "oidc", name: "oidcProvider", path: `better-auth/plugins` },
-	{ id: "sso", name: "sso", path: `better-auth/plugins/sso` },
-	{ id: "bearer", name: "bearer", path: `better-auth/plugins` },
-	{ id: "multi-session", name: "multiSession", path: `better-auth/plugins` },
-	{ id: "oauth-proxy", name: "oAuthProxy", path: `better-auth/plugins` },
-	{ id: "open-api", name: "openAPI", path: `better-auth/plugins` },
-	{ id: "jwt", name: "jwt", path: `better-auth/plugins` },
-	{ id: "next-cookies", name: "nextCookies", path: `better-auth/next-js` },
+	{
+		id: "two-factor",
+		name: "twoFactor",
+		clientName: "twoFactorClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "username",
+		name: "username",
+		clientName: "usernameClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "anonymous",
+		name: "anonymous",
+		clientName: "anonymousClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "phone-number",
+		name: "phoneNumber",
+		clientName: "phoneNumberClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "magic-link",
+		name: "magicLink",
+		clientName: "magicLinkClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "email-otp",
+		name: "emailOTP",
+		clientName: "emailOTPClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "passkey",
+		name: "passkey",
+		clientName: "passkeyClient",
+		path: `better-auth/plugins/passkey`,
+	},
+	{
+		id: "generic-oauth",
+		name: "genericOAuth",
+		clientName: "genericOAuthClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "one-tap",
+		name: "oneTap",
+		clientName: "oneTapClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "api-key",
+		name: "apiKey",
+		clientName: "apiKeyClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "admin",
+		name: "admin",
+		clientName: "adminClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "organization",
+		name: "organization",
+		clientName: "organizationClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "oidc",
+		name: "oidcProvider",
+		clientName: "oidcProviderClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "sso",
+		name: "sso",
+		clientName: "ssoClient",
+		path: `better-auth/plugins/sso`,
+	},
+	{
+		id: "bearer",
+		name: "bearer",
+		clientName: "bearerClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "multi-session",
+		name: "multiSession",
+		clientName: "multiSessionClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "oauth-proxy",
+		name: "oAuthProxy",
+		clientName: "oAuthProxyClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "open-api",
+		name: "openAPI",
+		clientName: "openAPIClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "jwt",
+		name: "jwt",
+		clientName: "jwtClient",
+		path: `better-auth/plugins`,
+	},
+	{
+		id: "next-cookies",
+		name: "nextCookies",
+		clientName: undefined,
+		path: `better-auth/next-js`,
+	},
 ] as const;
 
 export type SupportedPlugin = (typeof supportedPlugins)[number];
@@ -96,6 +196,78 @@ const defaultAuthConfig = await prettierFormat(
 		...defaultFormatOptions,
 	},
 );
+
+type SupportedFrameworks =
+	| "vanilla"
+	| "react"
+	| "vue"
+	| "svelte"
+	| "solid"
+	| "nextjs";
+
+const getDefaultAuthClientConfig = async ({
+	auth_config_path,
+	framework,
+	clientPlugins,
+}: {
+	framework: SupportedFrameworks;
+	auth_config_path: string;
+	clientPlugins: {
+		id: string;
+		name: string;
+		contents: string;
+		imports: Import[];
+	}[];
+}) => {
+	let importString = "";
+	for (const plugin of clientPlugins) {
+		if (Array.isArray(plugin.imports)) {
+			for (const import_ of plugin.imports) {
+				if (Array.isArray(import_.variables)) {
+					importString += `import { ${import_.variables
+						.map(
+							(x) =>
+								`${x.asType ? "type " : ""}${x.name}${
+									x.as ? ` as ${x.as}` : ""
+								}`,
+						)
+						.join(", ")} } from "${import_.path}";\n`;
+				} else {
+					importString += `import ${import_.variables.asType ? "type " : ""}${
+						import_.variables.name
+					}${import_.variables.as ? ` as ${import_.variables.as}` : ""} from "${
+						import_.path
+					}";\n`;
+				}
+			}
+		}
+	}
+	return await prettierFormat(
+		[
+			`import { inferAdditionalFields } from "better-auth/client/plugins";`,
+			`import { createAuthClient } from "better-auth/${
+				framework === "nextjs"
+					? "react"
+					: framework === "vanilla"
+						? "client"
+						: framework
+			}";`,
+			`import type { auth } from "${auth_config_path}";`,
+			importString,
+			``,
+			`export const authClient = createAuthClient({`,
+			`baseURL: "http://localhost:3000",`,
+			`plugins: [inferAdditionalFields<typeof auth>(),${clientPlugins
+				.map((x) => `${x.name}(${x.contents})`)
+				.join(", ")}],`,
+			`});`,
+		].join("\n"),
+		{
+			filepath: "auth-client.ts",
+			...defaultFormatOptions,
+		},
+	);
+};
 
 const optionsSchema = z.object({
 	cwd: z.string(),
@@ -121,6 +293,7 @@ export async function initAction(opts: any) {
 		undefined;
 
 	let config_path: string = "";
+	let framework: SupportedFrameworks = "vanilla";
 
 	const format = async (code: string) =>
 		await prettierFormat(code, {
@@ -601,14 +774,13 @@ export async function initAction(opts: any) {
 			".next/server/next.config.ts",
 			".next/server/next.config.mjs",
 		];
-		let is_next_framework = false;
 		for (const possible_next_config_path of possible_next_config_paths) {
 			if (existsSync(path.join(cwd, possible_next_config_path))) {
-				is_next_framework = true;
+				framework = "nextjs";
 				break;
 			}
 		}
-		if (!existing_plugins.includes("next-cookies") && is_next_framework) {
+		if (!existing_plugins.includes("next-cookies") && framework === "nextjs") {
 			const result = await confirm({
 				message: `It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(
 					`(Recommended)`,
@@ -803,14 +975,135 @@ export async function initAction(opts: any) {
 					`npx @better-auth/cli generate`,
 				)} to generate your schema!`,
 			);
-			outro(outroText);
 		}
 	} else {
 		if (configStatus !== "skip") {
 			log.info(`No plugins or databases operations needed, skipping...`);
+			log.message(chalk.gray(horiztonalLine));
 		}
-		outro(outroText);
 	}
+
+	// ===== auth client path =====
+
+	let possibleClientPaths = [
+		"auth-client.ts",
+		"auth-client.tsx",
+		"auth-client.js",
+		"auth-client.jsx",
+		"client.ts",
+		"client.tsx",
+		"client.js",
+		"client.jsx",
+	];
+	possibleClientPaths = [
+		...possibleClientPaths,
+		...possibleClientPaths.map((it) => `lib/server/${it}`),
+		...possibleClientPaths.map((it) => `server/${it}`),
+		...possibleClientPaths.map((it) => `lib/${it}`),
+		...possibleClientPaths.map((it) => `utils/${it}`),
+	];
+	possibleClientPaths = [
+		...possibleClientPaths,
+		...possibleClientPaths.map((it) => `src/${it}`),
+		...possibleClientPaths.map((it) => `app/${it}`),
+	];
+
+	let authClientConfigPath: string | null = null;
+	for (const possiblePath of possibleClientPaths) {
+		const doesExist = existsSync(path.join(cwd, possiblePath));
+		if (doesExist) {
+			authClientConfigPath = path.join(cwd, possiblePath);
+			break;
+		}
+	}
+
+	if (!authClientConfigPath) {
+		const choice = await select({
+			message: `Would you like to create an auth client config file?`,
+			options: [
+				{ label: "Yes", value: "yes" },
+				{ label: "No", value: "no" },
+				{ label: "I already have one", value: "other" },
+			],
+		});
+		if (isCancel(choice)) {
+			cancel(`✋ Operation cancelled.`);
+			process.exit(0);
+		}
+		if (choice === "yes") {
+			authClientConfigPath = path.join(cwd, "auth-client.ts");
+			log.info(`Creating auth client config file: ${authClientConfigPath}`);
+			try {
+				await fs.writeFile(
+					authClientConfigPath,
+					await getDefaultAuthClientConfig({
+						auth_config_path: "./" + path.join(config_path.replace(cwd, "")),
+						clientPlugins: add_plugins
+							.filter((x) => x.clientName)
+							.map((plugin) => {
+								let contents = "";
+								return {
+									contents,
+									id: plugin.id,
+									name: plugin.clientName!,
+									imports: [
+										{
+											path: "better-auth/client/plugins",
+											variables: [{ name: plugin.name }],
+										},
+									],
+								};
+							}),
+						framework: framework,
+					}),
+				);
+				log.success(`🚀 Auth client config file successfully created!`);
+			} catch (error) {
+				log.error(
+					`Failed to create auth client config file: ${authClientConfigPath}`,
+				);
+				log.error(JSON.stringify(error, null, 2));
+				process.exit(1);
+			}
+		} else if (choice === "no") {
+			log.info(`Skipping auth client config file creation.`);
+		} else if (choice === "other") {
+			async function getConfigPath() {
+				const configPath = await text({
+					message: `What is the path to your auth client config file? ${chalk.gray(
+						`(Relative path supported)`,
+					)}`,
+					placeholder: "/auth-client.ts",
+					validate(value) {
+						const configPath = path.join(cwd, value);
+						if (
+							!value.endsWith(".ts") &&
+							!value.endsWith(".tsx") &&
+							!value.endsWith(".js") &&
+							!value.endsWith(".jsx")
+						)
+							return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
+						if (!existsSync(configPath))
+							return `Config file does not exist. (recieved: ${configPath})`;
+					},
+				});
+				if (isCancel(configPath)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+				return path.join(cwd, configPath);
+			}
+			authClientConfigPath = await getConfigPath();
+			log.info(
+				`Found auth client config file. ${chalk.gray(
+					`(${authClientConfigPath})`,
+				)}`,
+			);
+			log.message();
+		}
+	}
+
+	outro(outroText);
 	console.log();
 	process.exit(0);
 }

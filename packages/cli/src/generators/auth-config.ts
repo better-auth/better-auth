@@ -5,6 +5,13 @@ import {
 import { logger } from "better-auth";
 import { type spinner as clackSpinner } from "@clack/prompts";
 
+export type Import = {
+	path: string;
+	variables:
+		| { asType?: boolean; name: string; as?: string }[]
+		| { asType?: boolean; name: string; as?: string };
+};
+
 type Format = (code: string) => Promise<string>;
 
 type CommonIndexConfig_Regex<AdditionalFields> = {
@@ -77,12 +84,7 @@ export async function generateAuthConfig({
 			},
 		} satisfies CommonIndexConfig<{}>,
 	};
-	type Import = {
-		path: string;
-		variables:
-			| { asType?: boolean; name: string; as?: string }[]
-			| { asType?: boolean; name: string; as?: string };
-	};
+	
 	const config_generation = {
 		add_plugin: async (opts: {
 			direction_in_plugins_array: "append" | "prepend";
