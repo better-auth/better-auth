@@ -3,7 +3,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
 import { createAccessControl } from "./access";
-import { createAuthClient } from "../../client";
 import { BetterAuthError } from "../../error";
 
 describe("Admin plugin", async () => {
