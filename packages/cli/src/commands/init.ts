@@ -128,7 +128,7 @@ export const supportedPlugins = [
 	{
 		id: "oidc",
 		name: "oidcProvider",
-		clientName: "oidcProviderClient",
+		clientName: "oidcClient",
 		path: `better-auth/plugins`,
 	},
 	{
@@ -140,7 +140,7 @@ export const supportedPlugins = [
 	{
 		id: "bearer",
 		name: "bearer",
-		clientName: "bearerClient",
+		clientName: undefined,
 		path: `better-auth/plugins`,
 	},
 	{
@@ -152,19 +152,19 @@ export const supportedPlugins = [
 	{
 		id: "oauth-proxy",
 		name: "oAuthProxy",
-		clientName: "oAuthProxyClient",
+		clientName: undefined,
 		path: `better-auth/plugins`,
 	},
 	{
 		id: "open-api",
 		name: "openAPI",
-		clientName: "openAPIClient",
+		clientName: undefined,
 		path: `better-auth/plugins`,
 	},
 	{
 		id: "jwt",
 		name: "jwt",
-		clientName: "jwtClient",
+		clientName: undefined,
 		path: `better-auth/plugins`,
 	},
 	{
