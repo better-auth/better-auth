@@ -92,9 +92,11 @@ const jitiOptions = (cwd: string) => {
 export async function getConfig({
 	cwd,
 	configPath,
+	shouldThrowOnError = false,
 }: {
 	cwd: string;
 	configPath?: string;
+	shouldThrowOnError?: boolean;
 }) {
 	try {
 		let configFile: BetterAuthOptions | null = null;
@@ -114,6 +116,11 @@ export async function getConfig({
 				jitiOptions: jitiOptions(cwd),
 			});
 			if (!config.auth && !config.default) {
+				if (shouldThrowOnError) {
+					throw new BetterAuthError(
+						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+					);
+				}
 				logger.error(
 					`[#better-auth]: Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
@@ -141,6 +148,11 @@ export async function getConfig({
 						configFile =
 							config.auth?.options || config.default?.options || null;
 						if (!configFile) {
+							if (shouldThrowOnError) {
+								throw new Error(
+									"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+								);
+							}
 							logger.error("[#better-auth]: Couldn't read your auth config.");
 							console.log("");
 							logger.info(
@@ -160,10 +172,18 @@ export async function getConfig({
 							"This module cannot be imported from a Client Component module",
 						)
 					) {
+						if (shouldThrowOnError) {
+							throw new Error(
+								`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+							);
+						}
 						logger.error(
 							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 						);
 						process.exit(1);
+					}
+					if (shouldThrowOnError) {
+						throw e;
 					}
 					logger.error("[#better-auth]: Couldn't read your auth config.", e);
 					process.exit(1);
@@ -181,10 +201,18 @@ export async function getConfig({
 				"This module cannot be imported from a Client Component module",
 			)
 		) {
+			if (shouldThrowOnError) {
+				throw new Error(
+					`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+				);
+			}
 			logger.error(
 				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 			);
 			process.exit(1);
+		}
+		if (shouldThrowOnError) {
+			throw e;
 		}
 		logger.error("Couldn't read your auth config.", e);
 		process.exit(1);

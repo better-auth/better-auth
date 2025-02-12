@@ -696,18 +696,29 @@ export async function initAction(opts: any) {
 	}
 	let config: BetterAuthOptions;
 	if (configStatus === "exists") {
-		const resolvedConfig = await getConfig({
-			cwd,
-			configPath: config_path,
-		});
-		if (resolvedConfig) {
-			if (resolvedConfig.appName) appName = resolvedConfig.appName;
-			config = resolvedConfig;
-		} else {
-			config = {
-				appName,
-				plugins: [],
-			};
+		try {
+			const resolvedConfig = await getConfig({
+				cwd,
+				configPath: config_path,
+				shouldThrowOnError: true,
+			});
+			if (resolvedConfig) {
+				if (resolvedConfig.appName) appName = resolvedConfig.appName;
+				config = resolvedConfig;
+			} else {
+				config = {
+					appName,
+					plugins: [],
+				};
+			}
+		} catch (error: any) {
+			log.error(
+				`❌ Failed to read your auth config file, it's likely there is an error in your auth config file. ${chalk.gray(
+					`(${config_path})`,
+				)}`,
+			);
+			log.error(error?.message);
+			process.exit(1);
 		}
 	} else {
 		config = {
@@ -1024,6 +1035,7 @@ export async function initAction(opts: any) {
 					`npx @better-auth/cli generate`,
 				)} to generate your schema!`,
 			);
+			log.message(chalk.gray(horiztonalLine));
 		}
 	} else {
 		if (configStatus !== "skip") {
