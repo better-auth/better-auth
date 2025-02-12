@@ -418,6 +418,7 @@ export async function initAction(opts: any) {
 		if (shouldCreateAuthConfig === "yes") {
 			configStatus = "created";
 			const filePath = path.join(cwd, "auth.ts");
+			log.info(`Creating auth config file: ${filePath}`);
 			try {
 				await fs.writeFile(filePath, defaultAuthConfig);
 				config_path = filePath;
