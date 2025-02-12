@@ -25,6 +25,7 @@ import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
 import { generateSecretHash } from "./secret";
 import { generateAuthConfig } from "../generators/auth-config";
+import { getTsconfigInfo } from "../utils/get-tsconfig-info";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -498,6 +499,62 @@ export async function initAction(opts: any) {
 		process.exit(1);
 	}
 
+	// ===== tsconfig.json =====
+	let tsconfigInfo: Record<string, any>;
+	try {
+		tsconfigInfo = await getTsconfigInfo(cwd);
+	} catch (error) {
+		log.error(`❌ Couldn't read your tsconfig.json file. (dir: ${cwd})`);
+		console.error(error);
+		process.exit(1);
+	}
+	if (
+		!(
+			"compilerOptions" in tsconfigInfo &&
+			"strict" in tsconfigInfo.compilerOptions &&
+			tsconfigInfo.compilerOptions.strict === true
+		)
+	) {
+		log.warn(
+			`Better Auth requires your tsconfig.json to have "compilerOptions.strict" set to true.`,
+		);
+		const shouldAdd = await confirm({
+			message: `Would you like us to set ${chalk.bold(`strict`)} to ${chalk.bold(`true`)}?`,
+		});
+		if (isCancel(shouldAdd)) {
+			cancel(`✋ Operation cancelled.`);
+			process.exit(0);
+		}
+		if (shouldAdd) {
+			try {
+				await fs.writeFile(
+					path.join(cwd, "tsconfig.json"),
+					await prettierFormat(
+						JSON.stringify(
+							Object.assign(
+								{
+									compilerOptions: {
+										strict: true,
+									},
+								},
+								tsconfigInfo,
+							),
+						),
+						{ filepath: "tsconfig.json", ...defaultFormatOptions },
+					),
+					"utf-8",
+				);
+				log.success(`🚀 tsconfig.json successfully updated!`);
+			} catch (error) {
+				log.error(
+					`Failed to add "compilerOptions.strict" to your tsconfig.json file.`,
+				);
+				console.error(error);
+				process.exit(1);
+			}
+		}
+	}
+
 	// ===== install better-auth =====
 	const s = spinner({ indicator: "dots" });
 	s.start(`Checking better-auth installation`);
@@ -507,7 +564,7 @@ export async function initAction(opts: any) {
 		latest_betterauth_version = await getLatestNpmVersion("better-auth");
 	} catch (error) {
 		log.error(`❌ Couldn't get latest version of better-auth.`);
-		log.error(JSON.stringify(error, null, 2));
+		console.error(error);
 		process.exit(1);
 	}
 
@@ -545,7 +602,7 @@ export async function initAction(opts: any) {
 				);
 			} catch (error: any) {
 				s2.stop(`Failed to install Better Auth:`);
-				log.error(error.message);
+				console.error(error);
 				process.exit(1);
 			}
 		}
