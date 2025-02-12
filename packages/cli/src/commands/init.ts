@@ -2,16 +2,12 @@ import { parse } from "dotenv";
 import semver from "semver";
 import { format as prettierFormat } from "prettier";
 import { Command } from "commander";
-import { getConfig } from "../utils/get-config";
 import { z } from "zod";
 import { existsSync } from "fs";
 import path from "path";
-import { type BetterAuthOptions } from "better-auth";
 import fs from "fs/promises";
 import { getPackageInfo } from "../utils/get-package-info";
-import { diffWordsWithSpace } from "diff";
 import chalk from "chalk";
-import { generateAuthConfig, type Import } from "../generators/auth-config";
 import {
 	cancel,
 	confirm,
@@ -28,7 +24,7 @@ import { installDependencies } from "../utils/install-dependencies";
 import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
 import { generateSecretHash } from "./secret";
-import { generateClientAuthConfig } from "../generators/auth-client-config";
+import { generateAuthConfig } from "../generators/auth-config";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -204,19 +200,25 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const defaultAuthConfig = await prettierFormat(
-	[
-		"import { betterAuth } from 'better-auth';",
-		"",
-		"export const auth = betterAuth({",
-		"plugins: [],",
-		"});",
-	].join("\n"),
-	{
-		filepath: "auth.ts",
-		...defaultFormatOptions,
-	},
-);
+const getDefaultAuthConfig = async ({
+	appName,
+}: {
+	appName?: string;
+}) =>
+	await prettierFormat(
+		[
+			"import { betterAuth } from 'better-auth';",
+			"",
+			"export const auth = betterAuth({",
+			appName ? `appName: "${appName}",` : "",
+			"plugins: [],",
+			"});",
+		].join("\n"),
+		{
+			filepath: "auth.ts",
+			...defaultFormatOptions,
+		},
+	);
 
 type SupportedFrameworks =
 	| "vanilla"
@@ -225,6 +227,13 @@ type SupportedFrameworks =
 	| "svelte"
 	| "solid"
 	| "nextjs";
+
+type Import = {
+	path: string;
+	variables:
+		| { asType?: boolean; name: string; as?: string }[]
+		| { asType?: boolean; name: string; as?: string };
+};
 
 const getDefaultAuthClientConfig = async ({
 	auth_config_path,
@@ -347,8 +356,6 @@ const optionsSchema = z.object({
 	"skip-plugins": z.boolean().optional(),
 	"package-manager": z.string().optional(),
 });
-
-const horiztonalLine = "─".repeat(30);
 
 const outroText = `🥳 All Done, Happy Hacking!`;
 
@@ -475,7 +482,6 @@ export async function initAction(opts: any) {
 						log.success(`🚀 ENV files successfully updated!`);
 					}
 				}
-				log.message(chalk.gray(horiztonalLine));
 			}
 		} catch (error) {
 			// if fails, ignore, and do not proceed with ENV operations.
@@ -590,8 +596,6 @@ export async function initAction(opts: any) {
 		s.stop(`Better Auth dependencies are ${chalk.greenBright(`up-to-date`)}!`);
 	}
 
-	log.message(chalk.gray(horiztonalLine));
-
 	// ===== appName =====
 
 	const packageJson = getPackageInfo(cwd);
@@ -599,11 +603,6 @@ export async function initAction(opts: any) {
 	if (!packageJson.name) {
 		const newAppName = await text({
 			message: "What is the name of your application?",
-			validate(value) {
-				const pkgNameRegex =
-					/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-				return pkgNameRegex.test(value) ? undefined : "Invalid package name";
-			},
 		});
 		if (isCancel(newAppName)) {
 			cancel("✋ Operation cancelled.");
@@ -644,6 +643,9 @@ export async function initAction(opts: any) {
 
 	// ===== create auth config =====
 	let configStatus: "created" | "skip" | "exists" = "exists";
+	let current_user_config = "";
+	let database: SupportedDatabases | null = null;
+	let add_plugins: SupportedPlugin[] = [];
 
 	if (!config_path) {
 		const shouldCreateAuthConfig = await select({
@@ -651,7 +653,6 @@ export async function initAction(opts: any) {
 			options: [
 				{ label: "Yes", value: "yes" },
 				{ label: "No", value: "no" },
-				{ label: "I already have one", value: "other" },
 			],
 		});
 		if (isCancel(shouldCreateAuthConfig)) {
@@ -660,411 +661,205 @@ export async function initAction(opts: any) {
 		}
 		if (shouldCreateAuthConfig === "yes") {
 			configStatus = "created";
+
+			const shouldSetupDb = await confirm({
+				message: `Would you like to set up your ${chalk.bold(`database`)}?`,
+				initialValue: true,
+			});
+			if (isCancel(shouldSetupDb)) {
+				cancel(`✋ Operating cancelled.`);
+				process.exit(0);
+			}
+			if (shouldSetupDb) {
+				const prompted_database = await select({
+					message: "Choose a Database Dialect",
+					options: supportedDatabases.map((it) => ({ value: it, label: it })),
+				});
+				if (isCancel(prompted_database)) {
+					cancel(`✋ Operating cancelled.`);
+					process.exit(0);
+				}
+				database = prompted_database;
+			}
+
+			if (options["skip-plugins"] !== false) {
+				const shouldSetupPlugins = await confirm({
+					message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
+				});
+				if (isCancel(shouldSetupPlugins)) {
+					cancel(`✋ Operating cancelled.`);
+					process.exit(0);
+				}
+				if (shouldSetupPlugins) {
+					const prompted_plugins = await multiselect({
+						message: "Select your new plugins",
+						options: supportedPlugins
+							.filter((x) => x.id !== "next-cookies")
+							.map((x) => ({ value: x.id, label: x.id })),
+						required: false,
+					});
+					if (isCancel(prompted_plugins)) {
+						cancel(`✋ Operating cancelled.`);
+						process.exit(0);
+					}
+					add_plugins = prompted_plugins.map(
+						(x) => supportedPlugins.find((y) => y.id === x)!,
+					);
+
+					const possible_next_config_paths = [
+						"next.config.js",
+						"next.config.ts",
+						"next.config.mjs",
+						".next/server/next.config.js",
+						".next/server/next.config.ts",
+						".next/server/next.config.mjs",
+					];
+					for (const possible_next_config_path of possible_next_config_paths) {
+						if (existsSync(path.join(cwd, possible_next_config_path))) {
+							framework = "nextjs";
+							break;
+						}
+					}
+					if (framework === "nextjs") {
+						const result = await confirm({
+							message: `It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(
+								`(Recommended)`,
+							)}`,
+						});
+						if (isCancel(result)) {
+							cancel(`✋ Operating cancelled.`);
+							process.exit(0);
+						}
+						if (result) {
+							add_plugins.push(
+								supportedPlugins.find((x) => x.id === "next-cookies")!,
+							);
+						}
+					}
+				}
+			}
+
 			const filePath = path.join(cwd, "auth.ts");
+			config_path = filePath;
 			log.info(`Creating auth config file: ${filePath}`);
 			try {
-				await fs.writeFile(filePath, defaultAuthConfig);
+				current_user_config = await getDefaultAuthConfig({
+					appName,
+				});
+				const { dependencies, envs, generatedCode } = await generateAuthConfig({
+					current_user_config,
+					format,
+					//@ts-ignore
+					s,
+					plugins: add_plugins,
+					database,
+				});
+				current_user_config = generatedCode;
+				await fs.writeFile(filePath, current_user_config);
 				config_path = filePath;
 				log.success(`🚀 Auth config file successfully created!`);
+
+				if (envs.length !== 0) {
+					log.info(
+						`There are ${envs.length} environment variables for your database of choice.`,
+					);
+					const shouldUpdateEnvs = await confirm({
+						message: `Would you like us to update your ENV files?`,
+					});
+					if (isCancel(shouldUpdateEnvs)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					if (shouldUpdateEnvs) {
+						const filesToUpdate = await multiselect({
+							message: "Select the .env files you want to update",
+							options: envFiles.map((x) => ({
+								value: path.join(cwd, x),
+								label: x,
+							})),
+							required: false,
+						});
+						if (isCancel(filesToUpdate)) {
+							cancel("✋ Operation cancelled.");
+							process.exit(0);
+						}
+						if (filesToUpdate.length === 0) {
+							log.info("No .env files to update. Skipping...");
+						} else {
+							try {
+								await updateEnvs({
+									files: filesToUpdate,
+									envs,
+									isCommented: true,
+								});
+							} catch (error) {
+								log.error(`Failed to update .env files:`);
+								log.error(JSON.stringify(error, null, 2));
+								process.exit(1);
+							}
+							log.success(`🚀 ENV files successfully updated!`);
+						}
+					}
+
+					if (dependencies.length !== 0) {
+						log.info(
+							`There are ${dependencies.length} dependencies for your plugins of choice.`,
+						);
+						const shouldInstallDeps = await confirm({
+							message: `Would you like us to install dependencies?`,
+						});
+						if (isCancel(shouldInstallDeps)) {
+							cancel("✋ Operation cancelled.");
+							process.exit(0);
+						}
+						if (shouldInstallDeps) {
+							const s = spinner({ indicator: "dots" });
+							if (packageManagerPreference === undefined) {
+								packageManagerPreference = await getPackageManager();
+							}
+							s.start(
+								`Installing dependencies using ${chalk.bold(
+									packageManagerPreference,
+								)}...`,
+							);
+							try {
+								const start = Date.now();
+								await installDependencies({
+									dependencies: dependencies,
+									packageManager: packageManagerPreference,
+									cwd: cwd,
+								});
+								s.stop(
+									`Dependencies installed ${chalk.greenBright(
+										`successfully`,
+									)} ${chalk.gray(
+										`(${formatMilliseconds(Date.now() - start)})`,
+									)}`,
+								);
+							} catch (error: any) {
+								s.stop(
+									`Failed to install dependencies using ${packageManagerPreference}:`,
+								);
+								log.error(error.message);
+								process.exit(1);
+							}
+						}
+					}
+				}
 			} catch (error) {
 				log.error(`Failed to create auth config file: ${filePath}`);
-				log.error(JSON.stringify(error, null, 2));
+				console.error(error);
 				process.exit(1);
 			}
 		} else if (shouldCreateAuthConfig === "no") {
 			configStatus = "skip";
 			log.info(`Skipping auth config file creation.`);
-		} else if (shouldCreateAuthConfig === "other") {
-			async function getConfigPath() {
-				const configPath = await text({
-					message: `What is the path to your auth config file? ${chalk.gray(
-						`(Relative path supported)`,
-					)}`,
-					placeholder: "/auth.ts",
-					validate(value) {
-						const configPath = path.join(cwd, value);
-						if (
-							!value.endsWith(".ts") &&
-							!value.endsWith(".tsx") &&
-							!value.endsWith(".js") &&
-							!value.endsWith(".jsx")
-						)
-							return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
-						if (!existsSync(configPath))
-							return `Config file does not exist. (recieved: ${configPath})`;
-					},
-				});
-				if (isCancel(configPath)) {
-					cancel("✋ Operation cancelled.");
-					process.exit(0);
-				}
-				return path.join(cwd, configPath);
-			}
-			log.message();
-			log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
-			config_path = await getConfigPath();
-			log.message();
 		}
 	} else {
+		configStatus = "exists";
 		log.message();
-		log.info(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
+		log.success(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 		log.message();
-	}
-
-	// ===== config =====
-
-	if (!existsSync(cwd) && !configStatus) {
-		log.error(`❌ The directory "${cwd}" does not exist.`);
-		process.exit(1);
-	}
-	let config: BetterAuthOptions;
-	if (configStatus === "exists") {
-		try {
-			const resolvedConfig = await getConfig({
-				cwd,
-				configPath: config_path,
-				shouldThrowOnError: true,
-			});
-			if (resolvedConfig) {
-				if (resolvedConfig.appName) appName = resolvedConfig.appName;
-				config = resolvedConfig;
-			} else {
-				config = {
-					appName,
-					plugins: [],
-				};
-			}
-		} catch (error: any) {
-			log.error(
-				`❌ Failed to read your auth config file, it's likely there is an error in your auth config file. ${chalk.gray(
-					`(${config_path})`,
-				)}`,
-			);
-			console.error(error);
-			process.exit(1);
-		}
-	} else {
-		config = {
-			appName,
-			plugins: [],
-		};
-	}
-	// ===== getting user auth config =====
-
-	let current_user_config: string = "";
-	if (configStatus !== "skip") {
-		try {
-			current_user_config = await fs.readFile(config_path, "utf8");
-		} catch (error) {
-			log.error(`❌ Failed to read your auth config file: ${config_path}`);
-			log.error(JSON.stringify(error, null, 2));
-			process.exit(1);
-		}
-		log.message(chalk.gray(horiztonalLine));
-	}
-
-	// ===== database =====
-
-	let database: SupportedDatabases | null = null;
-	if (
-		options["skip-db"] === undefined &&
-		!config.database &&
-		configStatus !== "skip"
-	) {
-		const result = await confirm({
-			message: `Would you like to set up your ${chalk.bold(`database`)}?`,
-			initialValue: true,
-		});
-		if (isCancel(result)) {
-			cancel(`✋ Operating cancelled.`);
-			process.exit(0);
-		}
-		options["skip-db"] = !result;
-	}
-
-	if (!config.database && !options["skip-db"] && configStatus !== "skip") {
-		if (options.database) {
-			database = options.database;
-		} else {
-			const prompted_database = await select({
-				message: "Choose a Database Dialect",
-				options: supportedDatabases.map((it) => ({ value: it, label: it })),
-			});
-			if (isCancel(prompted_database)) {
-				cancel(`✋ Operating cancelled.`);
-				process.exit(0);
-			}
-			database = prompted_database;
-		}
-		log.message(chalk.gray(horiztonalLine));
-	}
-
-	// ===== plugins =====
-	let add_plugins: SupportedPlugin[] = [];
-	let existing_plugins: string[] = config.plugins
-		? config.plugins.map((x) => x.id)
-		: [];
-
-	if (options["skip-plugins"] !== false && configStatus !== "skip") {
-		if (config.plugins === undefined) {
-			const skipPLugins = await confirm({
-				message: `Would you like to set up ${chalk.bold(`plugins`)}?`,
-			});
-			if (isCancel(skipPLugins)) {
-				cancel(`✋ Operating cancelled.`);
-				process.exit(0);
-			}
-			options["skip-plugins"] = !skipPLugins;
-		} else {
-			const skipPLugins = await confirm({
-				message: `Would you like to add new ${chalk.bold(`plugins`)}?`,
-			});
-			if (isCancel(skipPLugins)) {
-				cancel(`✋ Operating cancelled.`);
-				process.exit(0);
-			}
-			options["skip-plugins"] = !skipPLugins;
-		}
-		if (options["skip-plugins"]) log.message(chalk.gray(horiztonalLine));
-	}
-	if (!options["skip-plugins"] && configStatus !== "skip") {
-		const prompted_plugins = await multiselect({
-			message: "Select your new plugins",
-			options: supportedPlugins
-				.filter(
-					(x) => x.id !== "next-cookies" && !existing_plugins.includes(x.id),
-				)
-				.map((x) => ({ value: x.id, label: x.id })),
-			required: false,
-		});
-		if (isCancel(prompted_plugins)) {
-			cancel(`✋ Operating cancelled.`);
-			process.exit(0);
-		}
-		add_plugins = prompted_plugins.map(
-			(x) => supportedPlugins.find((y) => y.id === x)!,
-		);
-	}
-
-	// ===== suggest nextCookies plugin =====
-
-	if (!options["skip-plugins"] && configStatus !== "skip") {
-		const possible_next_config_paths = [
-			"next.config.js",
-			"next.config.ts",
-			"next.config.mjs",
-			".next/server/next.config.js",
-			".next/server/next.config.ts",
-			".next/server/next.config.mjs",
-		];
-		for (const possible_next_config_path of possible_next_config_paths) {
-			if (existsSync(path.join(cwd, possible_next_config_path))) {
-				framework = "nextjs";
-				break;
-			}
-		}
-		if (!existing_plugins.includes("next-cookies") && framework === "nextjs") {
-			const result = await confirm({
-				message: `It looks like you're using NextJS. Do you want to add the next-cookies plugin? ${chalk.bold(
-					`(Recommended)`,
-				)}`,
-			});
-			if (isCancel(result)) {
-				cancel(`✋ Operating cancelled.`);
-				process.exit(0);
-			}
-			if (result) {
-				add_plugins.push(
-					supportedPlugins.find((x) => x.id === "next-cookies")!,
-				);
-			}
-		}
-		log.message(chalk.gray(horiztonalLine));
-	}
-
-	// ===== generate new config =====
-
-	const shouldUpdateAuthConfig =
-		!(options["skip-plugins"] || add_plugins.length === 0) || database !== null;
-
-	if (shouldUpdateAuthConfig) {
-		const s = spinner({ indicator: "dots" });
-		s.start("Preparing your new auth config");
-
-		let new_user_config: string;
-		try {
-			new_user_config = await format(current_user_config);
-		} catch (error) {
-			log.error(
-				`We found your auth config file, however we failed to format your auth config file. It's likely your file has a syntax error. Please fix it and try again.`,
-			);
-			process.exit(1);
-		}
-
-		const { generatedCode, dependencies, envs } = await generateAuthConfig({
-			current_user_config,
-			format,
-			//@ts-ignore
-			s,
-			database,
-			plugins: add_plugins,
-		});
-		new_user_config = generatedCode;
-		s.stop("🎉 Your new auth config ready! 🎉");
-
-		const shouldShowDiff = await confirm({
-			message: `Do you want to see the ${chalk.bold(`diff`)}?`,
-		});
-
-		if (isCancel(shouldShowDiff)) {
-			cancel(`✋ Operating cancelled.`);
-			process.exit(0);
-		}
-
-		// ===== Show diff =====
-
-		if (shouldShowDiff) {
-			const diffed = getStyledDiff(
-				await format(current_user_config),
-				new_user_config,
-			);
-			log.info("Your new auth config:");
-			log.message(diffed);
-		}
-
-		// ===== apply changes ====
-
-		const shouldApply = await confirm({
-			message: `Do you want to ${chalk.bold(
-				`apply changes`,
-			)} to your auth config?`,
-		});
-		if (isCancel(shouldApply)) {
-			cancel(`✋ Operation cancelled.`);
-			process.exit(0);
-		}
-		if (shouldApply) {
-			try {
-				await fs.writeFile(config_path, new_user_config);
-			} catch (error) {
-				log.error(`Failed to write your auth config file: ${config_path}`);
-				log.error(JSON.stringify(error, null, 2));
-				process.exit(1);
-			}
-			log.success(`🚀 Auth config successfully applied!`);
-		} else {
-			log.info(`✋ Skipping auth config update.`);
-			outro(outroText);
-			process.exit(0);
-		}
-		log.message(chalk.gray(horiztonalLine));
-
-		// ===== install dependencies ====
-
-		if (dependencies.length !== 0 && shouldApply) {
-			const shouldInstallDeps = await confirm({
-				message: `Do you want to install the nessesary dependencies? (${dependencies
-					.map((x) => chalk.bold(x))
-					.join(", ")})`,
-			});
-			if (isCancel(shouldInstallDeps)) {
-				cancel(`✋ Operation cancelled.`);
-				process.exit(0);
-			}
-			if (shouldInstallDeps) {
-				const s = spinner({ indicator: "dots" });
-				if (packageManagerPreference === undefined) {
-					packageManagerPreference = await getPackageManager();
-				}
-				s.start(
-					`Installing dependencies using ${chalk.bold(
-						packageManagerPreference,
-					)}...`,
-				);
-				try {
-					const start = Date.now();
-					await installDependencies({
-						dependencies,
-						packageManager: packageManagerPreference,
-						cwd: cwd,
-					});
-					s.stop(
-						`Dependencies installed ${chalk.greenBright(
-							`successfully`,
-						)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
-					);
-				} catch (error: any) {
-					s.stop(
-						`Failed to install dependencies using ${packageManagerPreference}:`,
-					);
-					log.error(error.message);
-					process.exit(1);
-				}
-			} else {
-				log.info("Skipping dependency installation.");
-			}
-			log.message(chalk.gray(horiztonalLine));
-		}
-
-		// ===== update ENVs =====
-		if (envs.length !== 0 && shouldApply) {
-			log.step(
-				`There are ${envs.length} environment variables for your database of choice.`,
-			);
-			const shouldUpdateEnvs = await confirm({
-				message: `Would you like us to update your ENV files?`,
-			});
-			if (isCancel(shouldUpdateEnvs)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
-			}
-			if (shouldUpdateEnvs) {
-				const filesToUpdate = await multiselect({
-					message: "Select the .env files you want to update",
-					options: envFiles.map((x) => ({
-						value: path.join(cwd, x),
-						label: x,
-					})),
-					required: false,
-				});
-				if (isCancel(filesToUpdate)) {
-					cancel("✋ Operation cancelled.");
-					process.exit(0);
-				}
-				if (filesToUpdate.length === 0) {
-					log.info("No .env files to update. Skipping...");
-				} else {
-					try {
-						await updateEnvs({
-							files: filesToUpdate,
-							envs,
-							isCommented: true,
-						});
-					} catch (error) {
-						log.error(`Failed to update .env files:`);
-						log.error(JSON.stringify(error, null, 2));
-						process.exit(1);
-					}
-					log.success(`🚀 ENV files successfully updated!`);
-				}
-			}
-			log.message(chalk.gray(horiztonalLine));
-		}
-
-		// ===== prompt to run migrate/generate ====
-		if (database !== null && shouldApply) {
-			log.info(
-				`Don't forget to run ${chalk.yellowBright(
-					`npx @better-auth/cli generate`,
-				)} to generate your schema!`,
-			);
-			log.message(chalk.gray(horiztonalLine));
-		}
-	} else {
-		if (configStatus !== "skip") {
-			log.info(`No plugins or databases operations needed, skipping...`);
-			log.message(chalk.gray(horiztonalLine));
-		}
 	}
 
 	// ===== auth client path =====
@@ -1100,7 +895,6 @@ export async function initAction(opts: any) {
 			break;
 		}
 	}
-	let authClientConfig: string = "";
 
 	if (!authClientConfigPath) {
 		const choice = await select({
@@ -1108,7 +902,6 @@ export async function initAction(opts: any) {
 			options: [
 				{ label: "Yes", value: "yes" },
 				{ label: "No", value: "no" },
-				{ label: "I already have one", value: "other" },
 			],
 		});
 		if (isCancel(choice)) {
@@ -1119,7 +912,7 @@ export async function initAction(opts: any) {
 			authClientConfigPath = path.join(cwd, "auth-client.ts");
 			log.info(`Creating auth client config file: ${authClientConfigPath}`);
 			try {
-				const contents = await getDefaultAuthClientConfig({
+				let contents = await getDefaultAuthClientConfig({
 					auth_config_path: (
 						"./" + path.join(config_path.replace(cwd, ""))
 					).replace(".//", "./"),
@@ -1145,7 +938,6 @@ export async function initAction(opts: any) {
 					framework: framework,
 				});
 				await fs.writeFile(authClientConfigPath, contents);
-				authClientConfig = contents;
 				log.success(`🚀 Auth client config file successfully created!`);
 			} catch (error) {
 				log.error(
@@ -1156,111 +948,13 @@ export async function initAction(opts: any) {
 			}
 		} else if (choice === "no") {
 			log.info(`Skipping auth client config file creation.`);
-		} else if (choice === "other") {
-			const configPath = await text({
-				message: `What is the path to your auth client config file? ${chalk.gray(
-					`(Relative path supported)`,
-				)}`,
-				placeholder: "/auth-client.ts",
-				validate(value) {
-					const configPath = path.join(cwd, value);
-					if (
-						!value.endsWith(".ts") &&
-						!value.endsWith(".tsx") &&
-						!value.endsWith(".js") &&
-						!value.endsWith(".jsx")
-					)
-						return `Config file must be a .ts or .js file. (recieved: ${configPath})`;
-					if (!existsSync(configPath))
-						return `Config file does not exist. (recieved: ${configPath})`;
-				},
-			});
-			if (isCancel(configPath)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
-			}
-			authClientConfigPath = path.join(cwd, configPath);
-			try {
-				const contents = await fs.readFile(authClientConfigPath, "utf-8");
-				authClientConfig = contents;
-			} catch (error) {
-				log.error(
-					`Error reading auth client config file. (${authClientConfigPath})`,
-				);
-				console.error(error);
-				process.exit(1);
-			}
-
-			log.message("");
-			log.info(
-				`Found auth client config file. ${chalk.gray(
-					`(${authClientConfigPath})`,
-				)}`,
-			);
-			log.message("");
 		}
 	} else {
-		log.info(
+		log.success(
 			`Found auth client config file. ${chalk.gray(
 				`(${authClientConfigPath})`,
 			)}`,
 		);
-
-		try {
-			authClientConfig = await fs.readFile(authClientConfigPath, "utf-8");
-		} catch (error) {
-			log.error(
-				`Error reading auth client config file. (${authClientConfigPath})`,
-			);
-			console.error(error);
-			process.exit(1);
-		}
-
-		if (
-			!options["skip-plugins"] &&
-			add_plugins.filter((x) => x.clientName !== undefined).length > 0
-		) {
-			const shouldAdd = await confirm({
-				message: `Do you want to add the new plugins to your auth client config file?`,
-			});
-			if (isCancel(shouldAdd)) {
-				cancel(`✋ Operation cancelled.`);
-				process.exit(0);
-			}
-			if (shouldAdd) {
-				const s = spinner({ indicator: "dots" });
-				s.start(`Updating auth client config file...`);
-				try {
-					const { dependencies, envs, generatedCode } =
-						await generateClientAuthConfig({
-							format,
-							current_user_config: authClientConfig,
-							//@ts-ignore
-							s,
-							plugins: add_plugins,
-							database: database,
-						});
-					try {
-						await fs.writeFile(authClientConfigPath, generatedCode);
-						log.success(`🚀 Auth client config file successfully updated!`);
-						log.message(chalk.gray(horiztonalLine));
-					} catch (error) {
-						log.error(
-							`Failed to update auth client config file: ${authClientConfigPath}`,
-						);
-						console.error(error);
-						process.exit(1);
-					}
-				} catch (error) {
-					s.stop(`Failed to update auth client config file:`);
-					console.error(error);
-					process.exit(1);
-				}
-			}
-		} else {
-			log.step(`No auth client actions needed, skipping...`);
-			log.message(chalk.gray(horiztonalLine));
-		}
 	}
 
 	outro(outroText);
@@ -1283,25 +977,6 @@ export const init = new Command("init")
 		"The package manager you want to use.",
 	)
 	.action(initAction);
-
-/**
- * Helper function to get a styled diff between two strings.
- */
-function getStyledDiff(oldStr: string, newStr: string) {
-	const diff = diffWordsWithSpace(oldStr, newStr);
-	let result = "";
-
-	diff.forEach((part) => {
-		if (part.added) {
-			result += chalk.green(part.value);
-		} else if (part.removed) {
-			result += chalk.red(part.value);
-		} else {
-			result += chalk.gray(part.value);
-		}
-	});
-	return result;
-}
 
 async function getLatestNpmVersion(packageName: string): Promise<string> {
 	try {
