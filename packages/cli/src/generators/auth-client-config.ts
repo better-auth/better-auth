@@ -50,6 +50,11 @@ export async function generateClientAuthConfig({
 				return matchIndex + "createAuthClient({".length;
 			},
 		} satisfies CommonIndexConfig<{}>,
+		IMPORTS: {
+			type: "regex",
+			regex:
+				/import\s+((?:type\s+)?[a-zA-Z0-9_$]+(?:,\s*)?|\{\s*(?:(?:type\s+)?[a-zA-Z0-9_$]+(?:\s+as\s+[a-zA-Z0-9_$]+)?(?:,\s*)?)+\s*\})(?:\s+as\s+[a-zA-Z0-9_$]+)?(?:,\s*(?:type\s+)?[a-zA-Z0-9_$]+(?:,\s*)?)?\s+from\s+["']([^"']+)["'](?:;\s*)?/gm,
+		},
 	};
 
 	const config_generation = {
@@ -139,27 +144,34 @@ export async function generateClientAuthConfig({
 			imports: Import[];
 			config: string;
 		}): Promise<{ code: string; dependencies: string[]; envs: string[] }> => {
-			let importString = "";
+			const imports = extractAllMatches(common_indexs.IMPORTS.regex, opts.config)
+
+
+			let importStrings: string[] = [];
 			for (const import_ of opts.imports) {
 				if (Array.isArray(import_.variables)) {
-					importString += `import { ${import_.variables
-						.map(
-							(x) =>
-								`${x.asType ? "type " : ""}${x.name}${
-									x.as ? ` as ${x.as}` : ""
-								}`,
-						)
-						.join(", ")} } from "${import_.path}";\n`;
+					importStrings.push(
+						`import { ${import_.variables
+							.map(
+								(x) =>
+									`${x.asType ? "type " : ""}${x.name}${
+										x.as ? ` as ${x.as}` : ""
+									}`,
+							)
+							.join(", ")} } from "${import_.path}";\n`,
+					);
 				} else {
-					importString += `import ${import_.variables.asType ? "type " : ""}${
-						import_.variables.name
-					}${import_.variables.as ? ` as ${import_.variables.as}` : ""} from "${
-						import_.path
-					}";\n`;
+					importStrings.push(
+						`import ${import_.variables.asType ? "type " : ""}${
+							import_.variables.name
+						}${
+							import_.variables.as ? ` as ${import_.variables.as}` : ""
+						} from "${import_.path}";\n`,
+					);
 				}
 			}
 			try {
-				let new_content = format(importString + opts.config);
+				let new_content = format(importStrings.join("\n") + opts.config);
 				return { code: await new_content, dependencies: [], envs: [] };
 			} catch (error) {
 				console.error(error);
@@ -370,3 +382,23 @@ const getPosition = (str: string, index: number) => {
 		character: lines[lines.length - 1].length,
 	};
 };
+
+/**
+ * Helper function to extract all matches from a regex in a string
+ */
+function extractAllMatches(regex: RegExp, inputString: string) {
+	const matches = [];
+	let match: any;
+
+	// Create a new regex object with the 'g' (global) flag if it's not already set.
+	const globalRegex = new RegExp(
+		regex,
+		regex.flags.includes("g") ? regex.flags : regex.flags + "g",
+	);
+
+	while ((match = globalRegex.exec(inputString)) !== null) {
+		matches.push(match);
+	}
+
+	return matches;
+}
