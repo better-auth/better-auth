@@ -84,7 +84,7 @@ const authClient = createAuthClient({
     passkeyClient(),
   ],
 });
-// ---cut---
+
 const data = await authClient.passkey.addPasskey(); // [!code highlight]
 ```
 
@@ -109,7 +109,7 @@ const authClient = createAuthClient({
     passkeyClient(),
   ],
 });
-// ---cut---
+
 const data = await authClient.signIn.passkey(); // [!code highlight]
 ```
 
