@@ -621,7 +621,7 @@ the plugin providers easy way to define your own set of permission for each role
     }); // [!code highlight]
     ```
 
-      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
@@ -696,7 +696,7 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+You can use the `organizationHasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
