@@ -1,6 +1,16 @@
-import { APIError, type Endpoint, createRouter, statusCode } from "better-call";
+import {
+	APIError,
+	type CookieOptions,
+	type CookiePrefixOptions,
+	type Endpoint,
+	createRouter,
+	getCookie,
+	getSignedCookie,
+	setCookie,
+	setSignedCookie,
+} from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, Session, User } from "../types";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares/origin-check";
 import {
@@ -15,15 +25,18 @@ import {
 	sendVerificationEmail,
 	changeEmail,
 	signInEmail,
-	signInOAuth,
+	signInSocial,
 	signOut,
 	verifyEmail,
 	linkSocialAccount,
+	revokeOtherSessions,
 	listUserAccounts,
 	changePassword,
 	deleteUser,
 	setPassword,
 	updateUser,
+	deleteUserCallback,
+	unlinkAccount,
 } from "./routes";
 import { ok } from "./routes/ok";
 import { signUpEmail } from "./routes/sign-up";
@@ -84,7 +97,7 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInOAuth,
+		signInSocial,
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
@@ -103,8 +116,11 @@ export function getEndpoints<
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
+		revokeOtherSessions,
 		linkSocialAccount,
 		listUserAccounts,
+		deleteUserCallback,
+		unlinkAccount,
 	};
 	const endpoints = {
 		...baseEndpoints,
@@ -113,110 +129,213 @@ export function getEndpoints<
 		error,
 	};
 	let api: Record<string, any> = {};
-	for (const [key, value] of Object.entries(endpoints)) {
+	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context = {} as any) => {
-			let c = await ctx;
-			for (const plugin of options.plugins || []) {
-				if (plugin.hooks?.before) {
-					for (const hook of plugin.hooks.before) {
-						const match = hook.matcher({
-							...value,
-							...context,
-							context: c,
-						});
-						if (match) {
-							const hookRes = await hook.handler({
-								...context,
-								context: {
-									...c,
-									...context?.context,
-								},
-							});
-							if (hookRes && "context" in hookRes) {
-								c = {
-									...c,
-									...hookRes.context,
-								};
-							}
-						}
+			endpoint.headers = new Headers();
+			let internalCtx = {
+				setHeader(key: string, value: string) {
+					endpoint.headers.set(key, value);
+				},
+				setCookie(key: string, value: string, options?: CookieOptions) {
+					setCookie(endpoint.headers, key, value, options);
+				},
+				getCookie(key: string, prefix?: CookiePrefixOptions) {
+					const header = context.headers;
+					const cookieH = header?.get("cookie");
+					const cookie = getCookie(cookieH || "", key, prefix);
+					return cookie;
+				},
+				getSignedCookie(
+					key: string,
+					secret: string,
+					prefix?: CookiePrefixOptions,
+				) {
+					const header = context.headers;
+					if (!header) {
+						return null;
 					}
+					const cookie = getSignedCookie(header, secret, key, prefix);
+					return cookie;
+				},
+				async setSignedCookie(
+					key: string,
+					value: string,
+					secret: string | BufferSource,
+					options?: CookieOptions,
+				) {
+					await setSignedCookie(endpoint.headers, key, value, secret, options);
+				},
+				redirect(url: string) {
+					endpoint.headers.set("Location", url);
+					return new APIError("FOUND");
+				},
+				responseHeader: endpoint.headers,
+			};
+
+			let authCtx = await ctx;
+
+			let newSession = null;
+			let internalContext = {
+				...internalCtx,
+				...context,
+				path: endpoint.path,
+				context: {
+					...authCtx,
+					...context.context,
+					session: null,
+					setNewSession: function (
+						session: {
+							session: Session;
+							user: User;
+						} | null,
+					) {
+						this.newSession = session;
+						newSession = session;
+					},
+					returned: undefined,
+				},
+				responseHeader: new Headers(),
+			};
+
+			const plugins = options.plugins || [];
+			const beforeHooks = plugins
+				.map((plugin) => {
+					if (plugin.hooks?.before) {
+						return plugin.hooks.before;
+					}
+				})
+				.filter((plugin) => plugin !== undefined)
+				.flat();
+			const afterHooks = plugins
+				.map((plugin) => {
+					if (plugin.hooks?.after) {
+						return plugin.hooks.after;
+					}
+				})
+				.filter((plugin) => plugin !== undefined)
+				.flat();
+			if (options.hooks?.before) {
+				beforeHooks.push({
+					matcher: () => true,
+					handler: options.hooks.before,
+				});
+			}
+			if (options.hooks?.after) {
+				afterHooks.push({
+					matcher: () => true,
+					handler: options.hooks.after,
+				});
+			}
+			for (const hook of beforeHooks) {
+				if (!hook.matcher(internalContext)) continue;
+				const hookRes = await hook.handler(internalContext);
+				if (hookRes && "context" in hookRes) {
+					// modify the context with the response from the hook
+					internalContext = {
+						...internalContext,
+						...hookRes.context,
+					};
+					continue;
+				}
+
+				if (hookRes) {
+					// return with the response from the hook
+					return hookRes;
 				}
 			}
+
 			let endpointRes: any;
 			try {
 				//@ts-ignore
-				endpointRes = await value({
-					...context,
-					context: {
-						...c,
-						...context.context,
-					},
-				});
+				endpointRes = await endpoint(internalContext);
+				if (newSession) {
+					internalContext.context.newSession = newSession;
+				}
 			} catch (e) {
+				if (newSession) {
+					internalContext.context.newSession = newSession;
+				}
 				if (e instanceof APIError) {
-					const afterPlugins = options.plugins
-						?.map((plugin) => {
-							if (plugin.hooks?.after) {
-								return plugin.hooks.after;
-							}
-						})
-						.filter((plugin) => plugin !== undefined)
-						.flat();
-
-					if (!afterPlugins?.length) {
+					/**
+					 * If there are no after plugins, we can directly throw the error
+					 */
+					if (!afterHooks?.length) {
+						e.headers = endpoint.headers;
 						throw e;
 					}
-
-					let response = new Response(JSON.stringify(e.body), {
-						status: statusCode[e.status],
-						headers: e.headers,
-					});
-
-					for (const hook of afterPlugins || []) {
-						const match = hook.matcher(context);
+					internalContext.context.returned = e;
+					internalContext.context.returned.headers = endpoint.headers;
+					for (const hook of afterHooks || []) {
+						const match = hook.matcher(internalContext);
 						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
-							if (hookRes && "response" in hookRes) {
-								response = hookRes.response as any;
+							try {
+								const hookRes = await hook.handler(internalContext);
+								if (hookRes && "response" in hookRes) {
+									internalContext.context.returned = hookRes.response;
+								}
+							} catch (e) {
+								if (e instanceof APIError) {
+									internalContext.context.returned = e;
+									continue;
+								}
+								throw e;
 							}
 						}
 					}
-					return response;
+					if (internalContext.context.returned instanceof APIError) {
+						// set the headers from the endpoint
+						internalContext.context.returned.headers = endpoint.headers;
+						throw internalContext.context.returned;
+					}
+
+					return internalContext.context.returned;
 				}
 				throw e;
 			}
-			let response = endpointRes;
-			for (const plugin of options.plugins || []) {
-				if (plugin.hooks?.after) {
-					for (const hook of plugin.hooks.after) {
-						const match = hook.matcher(context);
-						if (match) {
-							const obj = Object.assign(context, {
-								context: {
-									...ctx,
-									returned: response,
-								},
-							});
-							const hookRes = await hook.handler(obj);
-							if (hookRes && "response" in hookRes) {
-								response = hookRes.response as any;
+			internalContext.context.returned = endpointRes;
+			internalContext.responseHeader = endpoint.headers;
+			for (const hook of afterHooks) {
+				const match = hook.matcher(internalContext);
+				if (match) {
+					try {
+						const hookRes = await hook.handler(internalContext);
+						if (hookRes) {
+							if ("responseHeader" in hookRes) {
+								const headers = hookRes.responseHeader as Headers;
+								internalContext.responseHeader = headers;
+							} else {
+								internalContext.context.returned = hookRes;
 							}
 						}
+					} catch (e) {
+						if (e instanceof APIError) {
+							internalContext.context.returned = e;
+							continue;
+						}
+						throw e;
 					}
 				}
 			}
+			const response = internalContext.context.returned;
+			if (response instanceof Response) {
+				endpoint.headers.forEach((value, key) => {
+					if (key === "set-cookie") {
+						response.headers.append(key, value);
+					} else {
+						response.headers.set(key, value);
+					}
+				});
+			}
+			if (response instanceof APIError) {
+				response.headers = endpoint.headers;
+				throw response;
+			}
 			return response;
 		};
-		api[key].path = value.path;
-		api[key].method = value.method;
-		api[key].options = value.options;
-		api[key].headers = value.headers;
+		api[key].path = endpoint.path;
+		api[key].method = endpoint.method;
+		api[key].options = endpoint.options;
+		api[key].headers = endpoint.headers;
 	}
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
@@ -245,8 +364,8 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);
-					if (response) {
-						return response;
+					if (response && "response" in response) {
+						return response.response;
 					}
 				}
 			}
@@ -264,6 +383,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
+			if (e instanceof APIError && e.status === "FOUND") {
+				return;
+			}
 			if (options.onAPIError?.throw) {
 				throw e;
 			}
@@ -272,15 +394,42 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 				return;
 			}
 
-			const log = options.logger?.verboseLogging ? logger : undefined;
+			const optLogLevel = options.logger?.level;
+			const log =
+				optLogLevel === "error" ||
+				optLogLevel === "warn" ||
+				optLogLevel === "debug"
+					? logger
+					: undefined;
 			if (options.logger?.disabled !== true) {
+				if (
+					e &&
+					typeof e === "object" &&
+					"message" in e &&
+					typeof e.message === "string"
+				) {
+					if (
+						e.message.includes("no column") ||
+						e.message.includes("column") ||
+						e.message.includes("relation") ||
+						e.message.includes("table") ||
+						e.message.includes("does not exist")
+					) {
+						ctx.logger?.error(e.message);
+						return;
+					}
+				}
+
 				if (e instanceof APIError) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
-						logger.error(e);
+						ctx.logger.error(e.status, e);
 					}
 					log?.error(e.message);
 				} else {
-					logger?.error(e);
+					ctx.logger?.error(
+						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
+						e,
+					);
 				}
 			}
 		},

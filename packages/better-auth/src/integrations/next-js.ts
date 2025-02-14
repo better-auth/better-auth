@@ -1,3 +1,7 @@
+import type { BetterAuthPlugin } from "../types";
+import { cookies } from "next/headers";
+import { parseSetCookieHeader } from "../cookies";
+
 export function toNextJsHandler(
 	auth:
 		| {
@@ -13,3 +17,47 @@ export function toNextJsHandler(
 		POST: handler,
 	};
 }
+
+export const nextCookies = () => {
+	return {
+		id: "next-cookies",
+		hooks: {
+			after: [
+				{
+					matcher(ctx) {
+						return true;
+					},
+					handler: async (ctx) => {
+						const returned = ctx.responseHeader;
+						if ("_flag" in ctx && ctx._flag === "router") {
+							return;
+						}
+						if (returned instanceof Headers) {
+							const setCookies = returned?.get("set-cookie");
+							if (!setCookies) return;
+							const parsed = parseSetCookieHeader(setCookies);
+							const cookieHelper = await cookies();
+							parsed.forEach((value, key) => {
+								if (!key) return;
+								const opts = {
+									sameSite: value.samesite,
+									secure: value.secure,
+									maxAge: value["max-age"],
+									httpOnly: value.httponly,
+									domain: value.domain,
+									path: value.path,
+								} as const;
+								try {
+									cookieHelper.set(key, decodeURIComponent(value.value), opts);
+								} catch (e) {
+									// this will fail if the cookie is being set on server component
+								}
+							});
+							return;
+						}
+					},
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+};

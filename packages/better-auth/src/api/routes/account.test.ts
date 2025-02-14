@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
 import type { GoogleProfile } from "../../social-providers";
-import { createJWT } from "oslo/jwt";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { getOAuth2Tokens } from "../../oauth2";
+import { signJWT } from "../../crypto/jwt";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 let email = "";
 vi.mock("../../oauth2", async (importOriginal) => {
@@ -31,11 +32,7 @@ vi.mock("../../oauth2", async (importOriginal) => {
 					given_name: "First",
 					family_name: "Last",
 				};
-				const testIdToken = await createJWT(
-					"HS256",
-					Buffer.from(DEFAULT_SECRET),
-					data,
-				);
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
 				const tokens = getOAuth2Tokens({
 					access_token: "test",
 					refresh_token: "test",
@@ -135,5 +132,29 @@ describe("account", async () => {
 			},
 		);
 		expect(linkAccountRes.error?.status).toBe(400);
+	});
+
+	it("should unlink account", async () => {
+		const { headers } = await signInWithTestUser();
+		const unlinkRes = await client.unlinkAccount({
+			providerId: "google",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unlinkRes.data?.status).toBe(true);
+	});
+
+	it("should fail to unlink a user last account", async () => {
+		const { headers } = await signInWithTestUser();
+		const unlinkRes = await client.unlinkAccount({
+			providerId: "credential",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(unlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+		);
 	});
 });

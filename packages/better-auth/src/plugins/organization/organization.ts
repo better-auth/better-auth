@@ -4,9 +4,10 @@ import {
 	type ZodLiteral,
 	type ZodObject,
 	type ZodOptional,
+	ZodString,
 	z,
 } from "zod";
-import type { User } from "../../db/schema";
+import type { User } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
@@ -17,7 +18,7 @@ import {
 	type Role,
 	defaultRoles,
 	type defaultStatements,
-} from "../access";
+} from "./access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -27,17 +28,23 @@ import {
 	getInvitation,
 	rejectInvitation,
 } from "./routes/crud-invites";
-import { removeMember, updateMemberRole } from "./routes/crud-members";
+import {
+	addMember,
+	getActiveMember,
+	removeMember,
+	updateMemberRole,
+} from "./routes/crud-members";
 import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
-	listOrganization,
+	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 
 export interface OrganizationOptions {
 	/**
@@ -63,11 +70,12 @@ export interface OrganizationOptions {
 	 */
 	organizationLimit?: number | ((user: User) => Promise<boolean> | boolean);
 	/**
-	 * The role that is assigned to the creator of the organization.
+	 * The role that is assigned to the creator of the
+	 * organization.
 	 *
-	 * @default "admin"
+	 * @default "owner"
 	 */
-	creatorRole?: "admin" | "owner";
+	creatorRole?: string;
 	/**
 	 * The number of memberships a user can have in an organization.
 	 *
@@ -75,15 +83,15 @@ export interface OrganizationOptions {
 	 */
 	membershipLimit?: number;
 	/**
-	 * Configure the roles and permissions for the organization plugin.
-	 *
+	 * Configure the roles and permissions for the
+	 * organization plugin.
 	 */
 	ac?: AccessControl;
 	/**
 	 * Custom permissions for roles.
 	 */
 	roles?: {
-		[key in "admin" | "member" | "owner"]?: Role<any>;
+		[key in string]?: Role<any>;
 	};
 	/**
 	 * The expiration time for the invitation link.
@@ -124,13 +132,13 @@ export interface OrganizationOptions {
 			/**
 			 * the role of the user
 			 */
-			role: "admin" | "owner" | "member";
+			role: string;
 			/**
 			 * the email of the user
 			 */
 			email: string;
 			/**
-			 * the organization the user is invited to
+			 * the organization the user is invited to join
 			 */
 			organization: Organization;
 			/**
@@ -145,6 +153,73 @@ export interface OrganizationOptions {
 		 */
 		request?: Request,
 	) => Promise<void>;
+	/**
+	 * The schema for the organization plugin.
+	 */
+	schema?: {
+		session?: {
+			fields?: {
+				activeOrganizationId?: string;
+			};
+		};
+		organization?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Organization, "id">]?: string;
+			};
+		};
+		member?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Member, "id">]?: string;
+			};
+		};
+		invitation?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Invitation, "id">]?: string;
+			};
+		};
+	};
+	/**
+	 * Configure how organization deletion is handled
+	 */
+	organizationDeletion?: {
+		/**
+		 * disable deleting organization
+		 */
+		disabled?: boolean;
+		/**
+		 * A callback that runs before the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		beforeDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+		/**
+		 * A callback that runs after the organization is
+		 * deleted
+		 *
+		 * @param data - organization and user object
+		 * @param request - the request object
+		 * @returns
+		 */
+		afterDelete?: (
+			data: {
+				organization: Organization;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
@@ -168,14 +243,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		deleteOrganization,
 		setActiveOrganization,
 		getFullOrganization,
-		listOrganization,
-		createInvitation,
+		listOrganizations,
+		createInvitation: createInvitation(options as O),
 		cancelInvitation,
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		addMember: addMember<O>(),
 		removeMember,
-		updateMemberRole,
+		updateMemberRole: updateMemberRole(options as O),
+		getActiveMember,
 	};
 
 	const roles = {
@@ -208,6 +285,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
+						organizationId: z.string().optional(),
 						permission: z.record(z.string(), z.array(z.string())),
 					}) as unknown as ZodObject<{
 						permission: ZodObject<{
@@ -216,27 +294,82 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ZodArray<ZodLiteral<Statements[key][number]>>
 							>;
 						}>;
+						organizationId: ZodOptional<ZodString>;
 					}>,
 					use: [orgSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+												},
+											},
+											required: ["permission"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
+													},
+												},
+												required: ["success"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
-					if (!ctx.context.session.session.activeOrganizationId) {
+					if (
+						!ctx.body.permission ||
+						Object.keys(ctx.body.permission).length > 1
+					) {
 						throw new APIError("BAD_REQUEST", {
-							message: "No active organization",
+							message:
+								"invalid permission check. you can only check one resource permission at a time.",
+						});
+					}
+					const activeOrganizationId =
+						ctx.body.organizationId ||
+						ctx.context.session.session.activeOrganizationId;
+					if (!activeOrganizationId) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 						});
 					}
 					const adapter = getOrgAdapter(ctx.context);
 					const member = await adapter.findMemberByOrgId({
 						userId: ctx.context.session.user.id,
-						organizationId:
-							ctx.context.session.session.activeOrganizationId || "",
+						organizationId: activeOrganizationId,
 					});
 					if (!member) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "You are not a member of this organization",
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role = roles[member.role];
+					const role = roles[member.role as keyof typeof roles];
 					const result = role.authorize(ctx.body.permission as any);
 					if (result.error) {
 						return ctx.json(
@@ -262,34 +395,44 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
 					},
 				},
 			},
 			organization: {
+				modelName: options?.schema?.organization?.modelName,
 				fields: {
 					name: {
 						type: "string",
 						required: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.name,
 					},
 					slug: {
 						type: "string",
 						unique: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.slug,
 					},
 					logo: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.organization?.fields?.logo,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.organization?.fields?.createdAt,
 					},
 					metadata: {
 						type: "string",
 						required: false,
+						fieldName: options?.schema?.organization?.fields?.metadata,
 					},
 				},
 			},
 			member: {
+				modelName: options?.schema?.member?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -298,27 +441,33 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						fieldName: options?.schema?.member?.fields?.organizationId,
 					},
 					userId: {
 						type: "string",
 						required: true,
-					},
-					email: {
-						type: "string",
-						required: true,
+						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
 					},
 					role: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "member",
+						fieldName: options?.schema?.member?.fields?.role,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.member?.fields?.createdAt,
 					},
 				},
 			},
 			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -327,23 +476,31 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "organization",
 							field: "id",
 						},
+						fieldName: options?.schema?.invitation?.fields?.organizationId,
 					},
 					email: {
 						type: "string",
 						required: true,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.email,
 					},
 					role: {
 						type: "string",
 						required: false,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.role,
 					},
 					status: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "pending",
+						fieldName: options?.schema?.invitation?.fields?.status,
 					},
 					expiresAt: {
 						type: "date",
 						required: true,
+						fieldName: options?.schema?.invitation?.fields?.expiresAt,
 					},
 					inviterId: {
 						type: "string",
@@ -351,6 +508,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							model: "user",
 							field: "id",
 						},
+						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
 				},
@@ -368,7 +526,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								id: string;
 								name: string;
 								email: string;
-								image: string;
+								image?: string | null;
 							};
 						}
 					>[];
@@ -376,5 +534,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				}
 			>,
 		},
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

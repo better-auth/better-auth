@@ -1,21 +1,9 @@
 <script setup lang="ts" generic="T extends z.ZodAny">
 import * as z from "zod";
 import { computed, provide } from "vue";
-import { PlusIcon, TrashIcon } from "lucide-vue-next";
-import { FieldArray, FieldContextKey, useField } from "vee-validate";
-import type { Config, ConfigItem } from "./interface";
-import { beautifyObjectName, getBaseType } from "./utils";
-import AutoFormField from "./AutoFormField.vue";
-import AutoFormLabel from "./AutoFormLabel.vue";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { FormItem, FormMessage } from "@/components/ui/form";
+import { FieldContextKey, useField } from "vee-validate";
+import type { Config } from "./interface";
+import { getBaseType } from "./utils";
 
 const props = defineProps<{
 	fieldName: string;

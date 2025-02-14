@@ -1,6 +1,6 @@
 import type { AuthContext, RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
-import { logger } from "../../utils/logger";
+import { wildcardMatch } from "../../utils/wildcard";
 
 function shouldRateLimit(
 	max: number,
@@ -34,22 +34,28 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
-function createDBStorage(ctx: AuthContext, tableName?: string) {
-	const model = tableName ?? "rateLimit";
+function createDBStorage(ctx: AuthContext, modelName?: string) {
+	const model = ctx.options.rateLimit?.modelName || "rateLimit";
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
-			const res = await db.findOne<RateLimit>({
+			const res = await db.findMany<RateLimit>({
 				model,
 				where: [{ field: "key", value: key }],
 			});
-			return res;
+			const data = res[0];
+
+			if (typeof data?.lastRequest === "bigint") {
+				data.lastRequest = Number(data.lastRequest);
+			}
+
+			return data;
 		},
 		set: async (key: string, value: RateLimit, _update?: boolean) => {
 			try {
 				if (_update) {
-					await db.update({
-						model: tableName ?? "rateLimit",
+					await db.updateMany({
+						model: modelName ?? "rateLimit",
 						where: [{ field: "key", value: key }],
 						update: {
 							count: value.count,
@@ -58,7 +64,7 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 					});
 				} else {
 					await db.create({
-						model: tableName ?? "rateLimit",
+						model: modelName ?? "rateLimit",
 						data: {
 							key,
 							count: value.count,
@@ -67,7 +73,7 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 					});
 				}
 			} catch (e) {
-				logger.error("Error setting rate limit", e);
+				ctx.logger.error("Error setting rate limit", e);
 			}
 		},
 	};
@@ -75,6 +81,9 @@ function createDBStorage(ctx: AuthContext, tableName?: string) {
 
 const memory = new Map<string, RateLimit>();
 export function getRateLimitStorage(ctx: AuthContext) {
+	if (ctx.options.rateLimit?.customStorage) {
+		return ctx.options.rateLimit.customStorage;
+	}
 	if (ctx.rateLimit.storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
@@ -97,7 +106,7 @@ export function getRateLimitStorage(ctx: AuthContext) {
 			},
 		};
 	}
-	return createDBStorage(ctx, ctx.rateLimit.tableName);
+	return createDBStorage(ctx, ctx.rateLimit.modelName);
 }
 
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
@@ -106,10 +115,10 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 
 	const baseURL = ctx.baseURL;
-	const path = req.url.replace(baseURL, "");
+	const path = req.url.replace(baseURL, "").split("?")[0];
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
-	const key = getIp(req) + path;
+	const key = getIp(req, ctx.options) + path;
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
@@ -132,10 +141,21 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 
 	if (ctx.rateLimit.customRules) {
-		const customRule = ctx.rateLimit.customRules[path];
-		if (customRule) {
-			window = customRule.window;
-			max = customRule.max;
+		const _path = Object.keys(ctx.rateLimit.customRules).find((p) => {
+			if (p.includes("*")) {
+				const isMatch = wildcardMatch(p)(path);
+				return isMatch;
+			}
+			return p === path;
+		});
+		if (_path) {
+			const customRule = ctx.rateLimit.customRules[_path];
+			const resolved =
+				typeof customRule === "function" ? await customRule(req) : customRule;
+			if (resolved) {
+				window = resolved.window;
+				max = resolved.max;
+			}
 		}
 	}
 
@@ -157,17 +177,25 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 			return rateLimitResponse(retryAfter);
 		} else if (timeSinceLastRequest > window * 1000) {
 			// Reset the count if the window has passed since the last request
-			await storage.set(key, {
-				...data,
-				count: 1,
-				lastRequest: now,
-			});
+			await storage.set(
+				key,
+				{
+					...data,
+					count: 1,
+					lastRequest: now,
+				},
+				true,
+			);
 		} else {
-			await storage.set(key, {
-				...data,
-				count: data.count + 1,
-				lastRequest: now,
-			});
+			await storage.set(
+				key,
+				{
+					...data,
+					count: data.count + 1,
+					lastRequest: now,
+				},
+				true,
+			);
 		}
 	}
 }
@@ -176,7 +204,12 @@ function getDefaultSpecialRules() {
 	const specialRules = [
 		{
 			pathMatcher(path: string) {
-				return path.startsWith("/sign-in") || path.startsWith("/sign-up");
+				return (
+					path.startsWith("/sign-in") ||
+					path.startsWith("/sign-up") ||
+					path.startsWith("/change-password") ||
+					path.startsWith("/change-email")
+				);
 			},
 			window: 10,
 			max: 3,

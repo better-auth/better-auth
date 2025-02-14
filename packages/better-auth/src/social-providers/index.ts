@@ -12,7 +12,8 @@ import { dropbox } from "./dropbox";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
-
+import { reddit } from "./reddit";
+import { z } from "zod";
 export const socialProviders = {
 	apple,
 	discord,
@@ -27,6 +28,7 @@ export const socialProviders = {
 	linkedin,
 	gitlab,
 	tiktok,
+	reddit
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -34,13 +36,21 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	...(keyof typeof socialProviders)[],
 ];
 
-export type SocialProviders = typeof socialProviders extends {
-	[key in infer K]: infer V;
-}
-	? V extends (options: infer V) => any
-		? Partial<Record<K, Prettify<V & { enabled?: boolean }>>>
-		: never
-	: never;
+export type SocialProviderList = typeof socialProviderList;
+
+export const SocialProviderListEnum = z.enum(socialProviderList, {
+	description: "OAuth2 provider to use",
+});
+
+export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
+
+export type SocialProviders = {
+	[K in SocialProviderList[number]]?: Prettify<
+		Parameters<(typeof socialProviders)[K]>[0] & {
+			enabled?: boolean;
+		}
+	>;
+};
 
 export * from "./github";
 export * from "./google";
@@ -55,5 +65,6 @@ export * from "./dropbox";
 export * from "./linkedin";
 export * from "./gitlab";
 export * from "./tiktok";
+export * from "./reddit";
 
 export type SocialProviderList = typeof socialProviderList;

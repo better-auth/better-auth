@@ -1,9 +1,12 @@
 import { APIError } from "better-call";
 import { createAuthMiddleware } from "../call";
-import { logger } from "../../utils";
+import { wildcardMatch } from "../../utils/wildcard";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
+import type { GenericEndpointContext } from "../../types";
 
 /**
- * A middleware to validate callbackURL, redirectURL, errorURL, currentURL and origin against trustedOrigins.
+ * A middleware to validate callbackURL and origin against
+ * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (ctx.request?.method !== "POST") {
@@ -12,20 +15,38 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const { body, query, context } = ctx;
 	const originHeader =
 		ctx.headers?.get("origin") || ctx.headers?.get("referer") || "";
-	const callbackURL = body?.callbackURL;
+	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
-	const currentURL = query?.currentURL;
+	const errorCallbackURL = body?.errorCallbackURL;
+	const newUserCallbackURL = body?.newUserCallbackURL;
 	const trustedOrigins = context.trustedOrigins;
 	const usesCookies = ctx.headers?.has("cookie");
 
+	const matchesPattern = (url: string, pattern: string): boolean => {
+		if (url.startsWith("/")) {
+			return false;
+		}
+		if (pattern.includes("*")) {
+			return wildcardMatch(pattern)(getHost(url));
+		}
+
+		const protocol = getProtocol(url);
+		return protocol === "http:" || protocol === "https:" || !protocol
+			? pattern === getOrigin(url)
+			: url.startsWith(pattern);
+	};
 	const validateURL = (url: string | undefined, label: string) => {
+		if (!url) {
+			return;
+		}
 		const isTrustedOrigin = trustedOrigins.some(
 			(origin) =>
-				url?.startsWith(origin) || (url?.startsWith("/") && label !== "origin"),
+				matchesPattern(url, origin) ||
+				(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
 		);
 		if (!isTrustedOrigin) {
-			logger.error(`Invalid ${label}: ${url}`);
-			logger.info(
+			ctx.context.logger.error(`Invalid ${label}: ${url}`);
+			ctx.context.logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${trustedOrigins}`,
 			);
@@ -37,5 +58,45 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
-	currentURL && validateURL(currentURL, "currentURL");
+	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
+	newUserCallbackURL && validateURL(newUserCallbackURL, "newUserCallbackURL");
 });
+
+export const originCheck = (
+	getValue: (ctx: GenericEndpointContext) => string,
+) =>
+	createAuthMiddleware(async (ctx) => {
+		const { context } = ctx;
+		const callbackURL = getValue(ctx);
+		const trustedOrigins = context.trustedOrigins;
+
+		const matchesPattern = (url: string, pattern: string): boolean => {
+			if (url.startsWith("/")) {
+				return false;
+			}
+			if (pattern.includes("*")) {
+				return wildcardMatch(pattern)(getHost(url));
+			}
+			return url.startsWith(pattern);
+		};
+
+		const validateURL = (url: string | undefined, label: string) => {
+			if (!url) {
+				return;
+			}
+			const isTrustedOrigin = trustedOrigins.some(
+				(origin) =>
+					matchesPattern(url, origin) ||
+					(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+			);
+			if (!isTrustedOrigin) {
+				ctx.context.logger.error(`Invalid ${label}: ${url}`);
+				ctx.context.logger.info(
+					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
+					`Current list of trustedOrigins: ${trustedOrigins}`,
+				);
+				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+			}
+		};
+		callbackURL && validateURL(callbackURL, "callbackURL");
+	});

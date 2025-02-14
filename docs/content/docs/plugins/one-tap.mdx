@@ -1,0 +1,89 @@
+---
+title: One Tap
+description: One Tap plugin for Better Auth
+---
+
+The One Tap plugin allows users to login with a single tap using Google's One Tap API.
+
+## Installation
+
+<Steps>
+<Step>
+### Add the server Plugin
+
+Add the One Tap plugin to your auth config.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oneTap } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [ // [!code highlight]
+        oneTap(), // [!code highlight]
+    ] // [!code highlight]
+})
+```
+</Step>
+
+<Step>
+        ### Add the client Plugin
+
+        Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { oneTapClient } from "better-auth/client/plugins"
+
+        const authClient =  createAuthClient({
+            plugins: [
+                oneTapClient({
+                    clientId: "YOUR_CLIENT_ID"
+                })
+            ]
+        })
+        ```
+        </Step>
+</Steps>
+
+## Usage
+
+To make the one tap pop up appear, you can call the `oneTap` method.
+
+```ts
+await authClient.oneTap()
+```
+
+By default, the plugin will automatically redirect the user to "/" after the user has successfully logged in. It does a hard redirect, so the page will be reloaded. If you want to 
+avoid this, you can pass `fetchOptions` to the `oneTap` method.
+
+```tsx
+authClient.oneTap({
+    fetchOptions: {
+        onSuccess: () => {
+            router.push("/dashboard")
+        }
+    }
+})
+```
+
+If you want it to hard redirect to a different page, you can pass the `callbackURL` option to the `oneTap` method.
+
+```tsx
+authClient.oneTap({
+    callbackURL: "/dashboard"
+})
+```
+
+## Client Options
+
+**clientId**: The client ID of your Google One Tap API
+
+**autoSelect**: Automatically select the first account in the list. Default is `false`
+
+**context**: The context in which the One Tap API should be used. Default is `signin`
+
+**cancelOnTapOutside**: Cancel the One Tap popup when the user taps outside of the popup. Default is `true`.
+
+## Server Options
+
+**disableSignUp**: Disable the sign up option. Default is `false`. If set to `true`, the user will only be able to sign in with an existing account.

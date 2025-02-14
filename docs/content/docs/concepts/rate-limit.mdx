@@ -22,11 +22,10 @@ export const auth = betterAuth({
 ```
 
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
+- `/sign-in/email`: Is limited to 3 requests within 10 seconds.
 
-"/sign-in/email": Limited to 3 requests within 10 seconds.
-
-In addition to that, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has the following custom rules:
-- "/two-factor/verify": Limited to 3 requests within 10 seconds.
+In addition, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has custom rules:
+- `/two-factor/verify`: Is limited to 3 requests within 10 seconds.
 
 These custom rules ensure that sensitive operations are protected with stricter limits.
 
@@ -42,11 +41,32 @@ export const auth = betterAuth({
     rateLimit: {
         window: 60, // time window in seconds
         max: 100, // max requests in the window
-        customRules: { // custom rules for specific paths
+    },
+})
+```
+
+You can also pass custom rules for specific paths.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        window: 60, // time window in seconds
+        max: 100, // max requests in the window
+        customRules: {
             "/sign-in/email": {
                 window: 10,
-                max: 7, 
+                max: 3,
             },
+            "/two-factor/*": async (request)=> {
+                // custom function to return rate limit window and max
+                return {
+                    window: 10,
+                    max: 3,
+                }
+            }
         },
     },
 })
@@ -54,7 +74,7 @@ export const auth = betterAuth({
 
 ### Storage
 
-By default, rate limit data is stored in memory. However, you can either use your database or custom storage to store rate limit data.
+By default, rate limit data is stored in memory, which may not be suitable for many use cases, particularly in serverless environments. To address this, you can use a database, secondary storage, or custom storage for storing rate limit data.
 
 **Using Database**
 
@@ -65,18 +85,35 @@ export const auth = betterAuth({
     //...other options
     rateLimit: {
         storage: "database",
-        tableName: "rateLimit", //optional by default "rateLimit" is used
+        modelName: "rateLimit", //optional by default "rateLimit" is used
     },
 })
 ```
 
-make sure to run `migrate` to create the rate limit table in your database.
+Make sure to run `migrate` to create the rate limit table in your database.
 
 ```bash
 npx @better-auth/cli migrate
 ```
 
+**Using Secondary Storage**
+
+If a [Secondary Storage](/docs/concepts/database#secondary-storage) has been configured you can use that to store rate limit data.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+		storage: "secondary-storage"
+    },
+})
+```
+
 **Custom Storage**
+
+If none of the above solutions suits your use case you can implement a `customStorage`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -102,14 +139,14 @@ When a request exceeds the rate limit, Better Auth returns the following header:
 
 - `X-Retry-After`: The number of seconds until the user can make another request.
 
-To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass fetchOptions to handle rate limit errors
+To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass `fetchOptions` to handle rate limit errors
 
 **Global Handling**
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 
-export const client = createAuthClient({
+export const authClient =  createAuthClient({
     fetchOptions: {
         onError: async (context) => {
             const { response } = context;
@@ -125,10 +162,10 @@ export const client = createAuthClient({
 
 **Per Request Handling**
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { client } from "./client";
 
-await client.signIn.email({
+await authClient.signIn.email({
     fetchOptions: {
         onError: async (context) => {
             const { response } = context;
@@ -156,18 +193,13 @@ Table Name: `rateLimit`
         isPrimaryKey: true
         },
         { 
-        name: "window", 
+        name: "count", 
         type: "integer", 
         description: "Time window in seconds" 
         },
         { 
-        name: "max", 
-        type: "integer", 
+        name: "lastRequest", 
+        type: "bigint", 
         description: "Max requests in the window" 
-        },
-        { 
-        name: "count", 
-        type: "integer", 
-        description: "Number of requests made in the window" 
         }]}
     />

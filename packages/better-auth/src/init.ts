@@ -1,35 +1,38 @@
-import type { Kysely } from "kysely";
-import { getAuthTables } from "./db/get-tables";
-import { createKyselyAdapter } from "./adapters/kysely-adapter/dialect";
-import { getAdapter } from "./db/utils";
+import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
 import { createInternalAdapter } from "./db";
-import { env, isProduction } from "./utils/env";
+import { getAuthTables } from "./db/get-tables";
+import { getAdapter } from "./db/utils";
 import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	LiteralUnion,
+	Models,
 	SecondaryStorage,
+	Session,
+	User,
 } from "./types";
-import { defu } from "defu";
-import { getBaseURL } from "./utils/url";
 import { DEFAULT_SECRET } from "./utils/constants";
 import {
 	type BetterAuthCookies,
 	createCookieGetter,
 	getCookies,
 } from "./cookies";
-import { createLogger, logger } from "./utils/logger";
+import { createLogger } from "./utils/logger";
 import { socialProviderList, socialProviders } from "./social-providers";
 import type { OAuthProvider } from "./oauth2";
 import { generateId } from "./utils";
+import { env, isProduction } from "./utils/env";
+import { checkPassword } from "./utils/password";
+import { getBaseURL } from "./utils/url";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
+	const logger = createLogger(options.logger);
 
-	const { kysely: db } = await createKyselyAdapter(options);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
 	const secret =
@@ -52,29 +55,32 @@ export const init = async (options: BetterAuthOptions) => {
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
-		emailAndPassword: {
-			...options.emailAndPassword,
-			enabled: options.emailAndPassword?.enabled ?? false,
-			autoSignIn: options.emailAndPassword?.autoSignIn ?? true,
-		},
 	};
 	const cookies = getCookies(options);
-
 	const tables = getAuthTables(options);
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
 			const value = options.socialProviders?.[key as "github"]!;
-			if (value.enabled === false) {
+			if (!value || value.enabled === false) {
 				return null;
 			}
-			if (!value.clientId || !value.clientSecret) {
+			if (!value.clientId) {
 				logger.warn(
 					`Social provider ${key} is missing clientId or clientSecret`,
 				);
 			}
-			return socialProviders[key as (typeof socialProviderList)[number]](value);
+			return socialProviders[key as (typeof socialProviderList)[number]](
+				value as any, // TODO: fix this
+			);
 		})
 		.filter((x) => x !== null);
+
+	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
+		if (typeof options?.advanced?.generateId === "function") {
+			return options.advanced.generateId({ model, size });
+		}
+		return generateId(size);
+	};
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -84,8 +90,15 @@ export const init = async (options: BetterAuthOptions) => {
 		trustedOrigins: getTrustedOrigins(options),
 		baseURL: baseURL || "",
 		sessionConfig: {
-			updateAge: options.session?.updateAge || 24 * 60 * 60, // 24 hours
+			updateAge:
+				options.session?.updateAge !== undefined
+					? options.session.updateAge
+					: 24 * 60 * 60, // 24 hours
 			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+			freshAge:
+				options.session?.freshAge === undefined
+					? 60 * 60 * 24 // 24 hours
+					: options.session.freshAge,
 		},
 		secret,
 		rateLimit: {
@@ -94,16 +107,13 @@ export const init = async (options: BetterAuthOptions) => {
 			window: options.rateLimit?.window || 10,
 			max: options.rateLimit?.max || 100,
 			storage:
-				options.rateLimit?.storage || options.secondaryStorage
-					? ("secondary-storage" as const)
-					: ("memory" as const),
+				options.rateLimit?.storage ||
+				(options.secondaryStorage ? "secondary-storage" : "memory"),
 		},
 		authCookies: cookies,
-		logger: createLogger({
-			disabled: options.logger?.disabled || false,
-		}),
-		db,
-		uuid: generateId,
+		logger: logger,
+		generateId: generateIdFunc,
+		session: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
@@ -112,11 +122,17 @@ export const init = async (options: BetterAuthOptions) => {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,
 			},
+			checkPassword,
 		},
+		setNewSession(session) {
+			this.newSession = session;
+		},
+		newSession: null,
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
 	};
@@ -129,10 +145,29 @@ export type AuthContext = {
 	appName: string;
 	baseURL: string;
 	trustedOrigins: string[];
+	/**
+	 * New session that will be set after the request
+	 * meaning: there is a `set-cookie` header that will set
+	 * the session cookie. This is the fetched session. And it's set
+	 * by `setNewSession` method.
+	 */
+	newSession: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	} | null;
+	session: {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	} | null;
+	setNewSession: (
+		session: {
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null,
+	) => void;
 	socialProviders: OAuthProvider[];
 	authCookies: BetterAuthCookies;
 	logger: ReturnType<typeof createLogger>;
-	db: Kysely<any> | null;
 	rateLimit: {
 		enabled: boolean;
 		window: number;
@@ -146,16 +181,21 @@ export type AuthContext = {
 	sessionConfig: {
 		updateAge: number;
 		expiresIn: number;
+		freshAge: number;
 	};
-	uuid: (size?: number) => string;
+	generateId: (options: {
+		model: LiteralUnion<Models, string>;
+		size?: number;
+	}) => string;
 	secondaryStorage: SecondaryStorage | undefined;
 	password: {
 		hash: (password: string) => Promise<string>;
-		verify: (hash: string, password: string) => Promise<boolean>;
+		verify: (data: { password: string; hash: string }) => Promise<boolean>;
 		config: {
 			minPasswordLength: number;
 			maxPasswordLength: number;
 		};
+		checkPassword: typeof checkPassword;
 	};
 	tables: ReturnType<typeof getAuthTables>;
 };
@@ -170,10 +210,11 @@ function runPluginInit(ctx: AuthContext) {
 			const result = plugin.init(ctx);
 			if (typeof result === "object") {
 				if (result.options) {
-					if (result.options.databaseHooks) {
-						dbHooks.push(result.options.databaseHooks);
+					const { databaseHooks, ...restOpts } = result.options;
+					if (databaseHooks) {
+						dbHooks.push(databaseHooks);
 					}
-					options = defu(options, result.options);
+					options = defu(options, restOpts);
 				}
 				if (result.context) {
 					context = {
@@ -189,6 +230,7 @@ function runPluginInit(ctx: AuthContext) {
 	context.internalAdapter = createInternalAdapter(ctx.adapter, {
 		options,
 		hooks: dbHooks.filter((u) => u !== undefined),
+		generateId: ctx.generateId,
 	});
 	context.options = options;
 	return { context };

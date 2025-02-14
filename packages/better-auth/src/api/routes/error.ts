@@ -1,6 +1,15 @@
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { createAuthEndpoint } from "../call";
 
+function sanitize(input: string): string {
+	return input
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
 const html = (errorCode: string = "Unknown") => `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,7 +87,9 @@ const html = (errorCode: string = "Unknown") => `<!DOCTYPE html>
         <h1>Better Auth Error</h1>
         <p>We encountered an issue while processing your request. Please try again or contact the application owner if the problem persists.</p>
         <a href="/" id="returnLink" class="btn">Return to Application</a>
-        <div class="error-code">Error Code: <span id="errorCode">${errorCode}</span></div>
+        <div class="error-code">Error Code: <span id="errorCode">${sanitize(
+					errorCode,
+				)}</span></div>
     </div>
 </body>
 </html>`;
@@ -87,7 +98,24 @@ export const error = createAuthEndpoint(
 	"/error",
 	{
 		method: "GET",
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			openapi: {
+				description: "Displays an error page",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"text/html": {
+								schema: {
+									type: "string",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (c) => {
 		const query =

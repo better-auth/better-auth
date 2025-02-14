@@ -2,8 +2,8 @@ import type { BetterAuthClientPlugin, Store } from "better-auth";
 import * as Browser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 
 interface CookieAttributes {
 	value: string;
@@ -38,7 +38,7 @@ function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
 
 interface ExpoClientOptions {
 	scheme?: string;
-	storage?: {
+	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
 	};
@@ -51,9 +51,9 @@ interface StoredCookie {
 	expires: Date | null;
 }
 
-function getSetCookie(header: string) {
+function getSetCookie(header: string, prevCookie?: string) {
 	const parsed = parseSetCookieHeader(header);
-	const toSetCookie: Record<string, StoredCookie> = {};
+	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
@@ -67,10 +67,21 @@ function getSetCookie(header: string) {
 			expires,
 		};
 	});
+	if (prevCookie) {
+		try {
+			const prevCookieParsed = JSON.parse(prevCookie);
+			toSetCookie = {
+				...prevCookieParsed,
+				...toSetCookie,
+			};
+		} catch {
+			//
+		}
+	}
 	return JSON.stringify(toSetCookie);
 }
 
-function getCookie(cookie: string) {
+export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
@@ -91,11 +102,15 @@ function getOrigin(scheme: string) {
 
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: Store | null = null;
-	const cookieName = `${opts.storagePrefix || "better-auth"}_cookie`;
-	const localCacheName = `${opts.storagePrefix || "better-auth"}_session_data`;
-	const storage = opts.storage || SecureStore;
-	const scheme = opts.scheme || Constants.platform?.scheme;
+	const cookieName = `${opts?.storagePrefix || "better-auth"}_cookie`;
+	const localCacheName = `${opts?.storagePrefix || "better-auth"}_session_data`;
+	const storage = opts?.storage;
 	const isWeb = Platform.OS === "web";
+
+	const rawScheme =
+		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
+	const scheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+
 	if (!scheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
@@ -104,16 +119,28 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	return {
 		id: "expo",
 		getActions(_, $store) {
-			if (Platform.OS === "web") return {};
 			store = $store;
-			const localSession = storage.getItem(cookieName);
-			localSession &&
-				$store.atoms.session.set({
-					data: JSON.parse(localSession),
-					error: null,
-					isPending: false,
-				});
-			return {};
+			return {
+				/**
+				 * Get the stored cookie.
+				 *
+				 * You can use this to get the cookie stored in the device and use it in your fetch
+				 * requests.
+				 *
+				 * @example
+				 * ```ts
+				 * const cookie = client.getCookie();
+				 * fetch("https://api.example.com", {
+				 * 	headers: {
+				 * 		cookie,
+				 * 	},
+				 * });
+				 */
+				getCookie: () => {
+					const cookie = storage.getItem(cookieName);
+					return getCookie(cookie || "{}");
+				},
+			};
 		},
 		fetchPlugins: [
 			{
@@ -124,22 +151,27 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
-							const toSetCookie = getSetCookie(setCookie || "");
+							const prevCookie = await storage.getItem(cookieName);
+							const toSetCookie = getSetCookie(
+								setCookie || "",
+								prevCookie ?? undefined,
+							);
 							await storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
 						}
 
 						if (
 							context.request.url.toString().includes("/get-session") &&
-							!opts.disableCache
+							!opts?.disableCache
 						) {
 							const data = context.data;
 							storage.setItem(localCacheName, JSON.stringify(data));
 						}
 
 						if (
-							context.data.redirect &&
-							context.request.url.toString().includes("/sign-in")
+							context.data?.redirect &&
+							context.request.url.toString().includes("/sign-in") &&
+							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;
@@ -158,7 +190,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options,
+							options: {
+								...options,
+								signal: new AbortController().signal,
+							} as BetterFetchOption,
 						};
 					}
 					options = options || {};
@@ -178,6 +213,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							options.body.callbackURL = url;
 						}
 					}
+					if (options.body?.newUserCallbackURL) {
+						if (options.body.newUserCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.newUserCallbackURL, {
+								scheme,
+							});
+							options.body.newUserCallbackURL = url;
+						}
+					}
+					if (options.body?.errorCallbackURL) {
+						if (options.body.errorCallbackURL.startsWith("/")) {
+							const url = Linking.createURL(options.body.errorCallbackURL, {
+								scheme,
+							});
+							options.body.errorCallbackURL = url;
+						}
+					}
 					if (url.includes("/sign-out")) {
 						await storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
@@ -189,7 +240,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options,
+						options: {
+							...options,
+							signal: new AbortController().signal,
+						} as BetterFetchOption,
 					};
 				},
 			},

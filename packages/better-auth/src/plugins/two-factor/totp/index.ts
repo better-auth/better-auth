@@ -1,6 +1,4 @@
 import { APIError } from "better-call";
-import { TimeSpan } from "oslo";
-import { TOTPController, createTOTPKeyURI } from "oslo/otp";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
@@ -13,12 +11,14 @@ import type {
 	UserWithTwoFactor,
 } from "../types";
 import { setSessionCookie } from "../../../cookies";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { createOTP } from "@better-auth/utils/otp";
 
 export type TOTPOptions = {
 	/**
 	 * Issuer
 	 */
-	issuer: string;
+	issuer?: string;
 	/**
 	 * How many digits the otp to be
 	 *
@@ -34,23 +34,52 @@ export type TOTPOptions = {
 	 * Backup codes configuration
 	 */
 	backupCodes?: BackupCodeOptions;
+	/**
+	 * Disable totp
+	 */
+	disable?: boolean;
 };
 
-export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
+export const totp2fa = (options?: TOTPOptions) => {
 	const opts = {
 		...options,
-		digits: 6,
-		period: new TimeSpan(options?.period || 30, "s"),
+		digits: options?.digits || 6,
+		period: options?.period || 30,
 	};
+
+	const twoFactorTable = "twoFactor";
 
 	const generateTOTP = createAuthEndpoint(
 		"/totp/generate",
 		{
 			method: "POST",
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Generate TOTP code",
+					description: "Use this endpoint to generate a TOTP code",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											code: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
-			if (!options) {
+			if (options?.disable) {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
@@ -70,11 +99,13 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
-			const totp = new TOTPController(opts);
-			const code = await totp.generate(Buffer.from(twoFactor.secret));
+			const code = await createOTP(twoFactor.secret, {
+				period: opts.period,
+				digits: opts.digits,
+			}).totp();
 			return { code };
 		},
 	);
@@ -82,11 +113,39 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 	const getTOTPURI = createAuthEndpoint(
 		"/two-factor/get-totp-uri",
 		{
-			method: "GET",
+			method: "POST",
 			use: [sessionMiddleware],
+			body: z.object({
+				password: z.string({
+					description: "User password",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					summary: "Get TOTP URI",
+					description: "Use this endpoint to get the TOTP URI",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											totpURI: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
-			if (!options) {
+			if (options?.disable) {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
@@ -106,16 +165,20 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 			});
 			if (!twoFactor || !user.twoFactorEnabled) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
+			const secret = await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: twoFactor.secret,
+			});
+			await ctx.context.password.checkPassword(user.id, ctx);
+			const totpURI = createOTP(secret, {
+				digits: opts.digits,
+				period: opts.period,
+			}).url(options?.issuer || ctx.context.appName, user.email);
 			return {
-				totpURI: createTOTPKeyURI(
-					options?.issuer || "BetterAuth",
-					user.email,
-					Buffer.from(twoFactor.secret),
-					opts,
-				),
+				totpURI,
 			};
 		},
 	);
@@ -125,12 +188,37 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 		{
 			method: "POST",
 			body: z.object({
-				code: z.string(),
+				code: z.string({
+					description: "The otp code to verify",
+				}),
 			}),
 			use: [verifyTwoFactorMiddleware],
+			metadata: {
+				openapi: {
+					summary: "Verify two factor TOTP",
+					description: "Verify two factor TOTP",
+					responses: {
+						200: {
+							description: "Successful response",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
-			if (!options) {
+			if (options?.disable) {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
@@ -151,16 +239,17 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 
 			if (!twoFactor) {
 				throw new APIError("BAD_REQUEST", {
-					message: "totp isn't enabled",
+					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
-			const totp = new TOTPController(opts);
 			const decrypted = await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: twoFactor.secret,
 			});
-			const secret = Buffer.from(decrypted);
-			const status = await totp.verify(ctx.body.code, secret);
+			const status = await createOTP(decrypted, {
+				period: opts.period,
+				digits: opts.digits,
+			}).verify(ctx.body.code);
 			if (!status) {
 				return ctx.context.invalid();
 			}
@@ -172,8 +261,19 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 						twoFactorEnabled: true,
 					},
 				);
-				const newSession = await ctx.context.internalAdapter.createSession(
-					user.id,
+				const newSession = await ctx.context.internalAdapter
+					.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					)
+					.catch((e) => {
+						throw e;
+					});
+
+				await ctx.context.internalAdapter.deleteSession(
+					ctx.context.session.session.token,
 				);
 				await setSessionCookie(ctx, {
 					session: newSession,
@@ -188,7 +288,7 @@ export const totp2fa = (options: TOTPOptions, twoFactorTable: string) => {
 		id: "totp",
 		endpoints: {
 			generateTOTP: generateTOTP,
-			viewTOTPURI: getTOTPURI,
+			getTOTPURI: getTOTPURI,
 			verifyTOTP,
 		},
 	} satisfies TwoFactorProvider;

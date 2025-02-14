@@ -406,4 +406,87 @@ export const Icons = {
 			></path>
 		</svg>
 	),
+	x: (props?: SVGProps<any>) => (
+		<svg
+			{...props}
+			width={30}
+			stroke="currentColor"
+			fill="currentColor"
+			strokeWidth="0"
+			viewBox="0 0 512 512"
+			xmlns="http://www.w3.org/2000/svg"
+			className="w-full"
+		>
+			<path d="M389.2 48h70.6L305.6 224.2 487 464H345L233.7 318.6 106.5 464H35.8L200.7 275.5 26.8 48H172.4L272.9 180.9 389.2 48zM364.4 421.8h39.1L151.1 88h-42L364.4 421.8z"></path>
+		</svg>
+	),
+	linkedIn: (props?: SVGProps<any>) => (
+		<svg
+			{...props}
+			width={30}
+			stroke="currentColor"
+			fill="currentColor"
+			strokeWidth="0"
+			viewBox="0 0 448 512"
+			xmlns="http://www.w3.org/2000/svg"
+			className="w-full"
+		>
+			<path d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8a53.79 53.79 0 0 1 107.58 0c0 29.7-24.1 54.3-53.79 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.2-48.29-79.2-48.29 0-55.69 37.7-55.69 76.7V448h-92.78V148.9h89.08v40.8h1.3c12.4-23.5 42.69-48.3 87.88-48.3 94 0 111.28 61.9 111.28 142.3V448z"></path>
+		</svg>
+	),
+	nitro: (props?: SVGProps<any>) => (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			fill="currentColor" // Use currentColor here
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 40 40"
+			{...props}
+		>
+			<g clipPath="url(#a)">
+				<path
+					fill="currentColor" // Use currentColor here
+					fillRule="evenodd"
+					d="M35.217 7.02C28.047-1.383 15.424-2.384 7.02 4.785c-8.404 7.169-9.404 19.792-2.236 28.196 7.17 8.403 19.793 9.404 28.196 2.235 8.404-7.169 9.404-19.793 2.236-28.196Zm-9.964 10.497c.77 0 1.262.836.876 1.502l-.112.192L18.47 31.63a.773.773 0 0 1-.661.372h-.72a.755.755 0 0 1-.732-.944l2.048-7.919a1 1 0 0 0-.968-1.25h-3.146a1 1 0 0 1-.968-1.25l3.09-11.955a.923.923 0 0 1 .895-.68c.05 0 .097 0 .135.002h3.168a1 1 0 0 1 .991 1.134l-.02.143-1.207 7.067a1 1 0 0 0 .985 1.168h3.893Z"
+					clipRule="evenodd"
+				/>
+				<mask
+					id="d"
+					x={0}
+					y={0}
+					maskUnits="userSpaceOnUse"
+					style={{
+						maskType: "alpha",
+					}}
+				>
+					<circle cx={20} cy={20.001} r={20} fill="currentColor" />
+				</mask>
+				<g filter="url(#e)" mask="url(#d)">
+					<path
+						fill="currentColor" // Use currentColor here
+						d="M1.111 13.427a20 20 0 1 0 37.957.541l-5.815 1.84a13.901 13.901 0 1 1-26.381-.376l-5.76-2.005Z"
+					/>
+				</g>
+			</g>
+			<defs>
+				<clipPath id="a">
+					<path fill="#fff" d="M0 0h146v40.001H0z" />
+				</clipPath>
+				<filter
+					id="e"
+					x={-10}
+					y={3.427}
+					colorInterpolationFilters="sRGB"
+					filterUnits="userSpaceOnUse"
+				>
+					<feFlood floodOpacity={0} result="BackgroundImageFix" />
+					<feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+					<feGaussianBlur
+						result="effect1_foregroundBlur_115_108"
+						stdDeviation={5}
+					/>
+				</filter>
+			</defs>
+		</svg>
+	),
 };

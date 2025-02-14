@@ -86,7 +86,7 @@ export default function SignInCard() {
 									email: email,
 									password: password,
 									callbackURL: "/dashboard",
-									dontRememberMe: !rememberMe,
+									rememberMe,
 								},
 								{
 									onRequest: () => {

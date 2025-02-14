@@ -13,10 +13,10 @@
   },
   "dependencies": {
     "@noble/ciphers": "^0.6.0",
+    "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
-    "@types/better-sqlite3": "^7.6.11",
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^11.6.0",
     "oslo": "^1.2.1",
-    "pg": "^8.13.0"
+    "pg": "^8.13.1"
   }
 }

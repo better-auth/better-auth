@@ -13,10 +13,29 @@ describe("adapter test", async () => {
 	});
 
 	await runAdapterTest({
-		adapter,
+		getAdapter: async (customOptions = {}) => {
+			return adapter({
+				user: {
+					fields: {
+						email: "email_address",
+					},
+					additionalFields: {
+						test: {
+							type: "string",
+							defaultValue: "test",
+						},
+					},
+				},
+				session: {
+					modelName: "sessions",
+				},
+				...customOptions,
+			});
+		},
 	});
 });
 
 async function clearDb() {
 	await db.user.deleteMany();
+	await db.sessions.deleteMany();
 }

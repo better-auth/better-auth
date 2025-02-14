@@ -1,52 +1,53 @@
-import type { FieldAttribute } from ".";
+import { getAuthTables, type FieldAttribute } from ".";
 import { BetterAuthError } from "../error";
-import type { BetterAuthOptions } from "../types";
-import type { Adapter } from "../types/adapter";
-import { getAuthTables } from "./get-tables";
+import type { Adapter, BetterAuthOptions } from "../types";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import { kyselyAdapter } from "../adapters/kysely-adapter";
+import { memoryAdapter } from "../adapters/memory-adapter";
+import { logger } from "../utils";
 
 export async function getAdapter(options: BetterAuthOptions): Promise<Adapter> {
 	if (!options.database) {
-		throw new BetterAuthError("Database configuration is required");
+		const tables = getAuthTables(options);
+		const memoryDB = Object.keys(tables).reduce((acc, key) => {
+			// @ts-ignore
+			acc[key] = [];
+			return acc;
+		}, {});
+		logger.warn(
+			"No database configuration provided. Using memory adapter in development",
+		);
+		return memoryAdapter(memoryDB)(options);
 	}
 
-	if ("create" in options.database) {
-		return options.database;
+	if (typeof options.database === "function") {
+		return options.database(options);
 	}
 
 	const { kysely, databaseType } = await createKyselyAdapter(options);
 	if (!kysely) {
 		throw new BetterAuthError("Failed to initialize database adapter");
 	}
-	const tables = getAuthTables(options);
-	let schema: Record<string, Record<string, FieldAttribute>> = {};
-	for (const table of Object.values(tables)) {
-		schema[table.tableName] = table.fields;
-	}
 	return kyselyAdapter(kysely, {
-		transform: {
-			schema,
-			date: true,
-			boolean: databaseType === "sqlite",
-		},
-		generateId:
-			"generateId" in options.database
-				? options.database.generateId
-				: undefined,
-	});
+		type: databaseType || "sqlite",
+	})(options);
 }
 
 export function convertToDB<T extends Record<string, any>>(
 	fields: Record<string, FieldAttribute>,
 	values: T,
 ) {
-	let result: Record<string, any> = {
-		id: values.id,
-	};
+	let result: Record<string, any> = values.id
+		? {
+				id: values.id,
+			}
+		: {};
 	for (const key in fields) {
 		const field = fields[key];
 		const value = values[key];
+		if (value === undefined) {
+			continue;
+		}
 		result[field.fieldName || key] = value;
 	}
 	return result as T;

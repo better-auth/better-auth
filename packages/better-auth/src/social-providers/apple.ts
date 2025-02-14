@@ -1,5 +1,7 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { parseJWT } from "oslo/jwt";
 import { validateAuthorizationCode } from "../oauth2";
 export interface AppleProfile {
 	/**
@@ -42,9 +44,29 @@ export interface AppleProfile {
 	 * process.
 	 */
 	name: string;
+	/**
+	 * The URL to the user's profile picture.
+	 */
+	picture: string;
+	user?: AppleNonConformUser;
 }
 
-export interface AppleOptions extends ProviderOptions {}
+/**
+ * This is the shape of the `user` query parameter that Apple sends the first
+ * time the user consents to the app.
+ * @see https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server#4066168
+ */
+export interface AppleNonConformUser {
+	name: {
+		firstName: string;
+		lastName: string;
+	};
+	email: string;
+}
+
+export interface AppleOptions extends ProviderOptions<AppleProfile> {
+	appBundleIdentifier?: string;
+}
 
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
@@ -52,42 +74,102 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scope = scopes || ["email", "name", "openid"];
+			const _scope = scopes || ["email", "name"];
 			options.scope && _scope.push(...options.scope);
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId
 				}&response_type=code&redirect_uri=${
-					redirectURI || options.redirectURI
-				}&scope=${_scope.join(" ")}&state=${state}`,
+					options.redirectURI || redirectURI
+				}&scope=${_scope.join(" ")}&state=${state}&response_mode=form_post`,
 			);
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});
 		},
+		async verifyIdToken(token, nonce) {
+			if (options.disableIdTokenSignIn) {
+				return false;
+			}
+			if (options.verifyIdToken) {
+				return options.verifyIdToken(token, nonce);
+			}
+			const decodedHeader = decodeProtectedHeader(token);
+			const { kid, alg: jwtAlg } = decodedHeader;
+			if (!kid || !jwtAlg) return false;
+			const publicKey = await getApplePublicKey(kid);
+			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+				algorithms: [jwtAlg],
+				issuer: "https://appleid.apple.com",
+				audience: options.appBundleIdentifier || options.clientId,
+				maxTokenAge: "1h",
+			});
+			["email_verified", "is_private_email"].forEach((field) => {
+				if (jwtClaims[field] !== undefined) {
+					jwtClaims[field] = Boolean(jwtClaims[field]);
+				}
+			});
+			if (nonce && jwtClaims.nonce !== nonce) {
+				return false;
+			}
+			return !!jwtClaims;
+		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			if (!token.idToken) {
 				return null;
 			}
-			const data = parseJWT(token.idToken)?.payload as AppleProfile | null;
-			if (!data) {
+			const profile = decodeJwt<AppleProfile>(token.idToken);
+			if (!profile) {
 				return null;
 			}
+			const name = profile.user
+				? `${profile.user.name.firstName} ${profile.user.name.lastName}`
+				: profile.email;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: data.sub,
-					name: data.name,
-					email: data.email,
-					emailVerified: data.email_verified === "true",
+					id: profile.sub,
+					name: name,
+					emailVerified: false,
+					email: profile.email,
+					...userMap,
 				},
-				data,
+				data: profile,
 			};
 		},
 	} satisfies OAuthProvider<AppleProfile>;
+};
+
+export const getApplePublicKey = async (kid: string) => {
+	const APPLE_BASE_URL = "https://appleid.apple.com";
+	const JWKS_APPLE_URI = "/auth/keys";
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+		}>;
+	}>(`${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+	return await importJWK(jwk, jwk.alg);
 };

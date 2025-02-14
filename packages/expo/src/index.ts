@@ -1,6 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
 
-export const expo = () => {
+export interface ExpoOptions {
+	/**
+	 * Override origin header for expo api routes
+	 */
+	overrideOrigin?: boolean;
+}
+
+export const expo = (options?: ExpoOptions) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -15,6 +22,9 @@ export const expo = () => {
 			};
 		},
 		async onRequest(request, ctx) {
+			if (!options?.overrideOrigin || request.headers.get("origin")) {
+				return;
+			}
 			/**
 			 * To bypass origin check from expo, we need to set the origin header to the expo-origin header
 			 */
@@ -22,46 +32,48 @@ export const expo = () => {
 			if (!expoOrigin) {
 				return;
 			}
-			request.headers.set("origin", expoOrigin);
+			const req = request.clone();
+			req.headers.set("origin", expoOrigin);
 			return {
-				request,
+				request: req,
 			};
 		},
 		hooks: {
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback");
+						return (
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
 					},
 					handler: async (ctx) => {
-						const response = ctx.context.returned as Response;
-						if (response.status === 302) {
-							const location = response.headers.get("location");
-							if (!location) {
-								return;
-							}
-							const trustedOrigins = ctx.context.trustedOrigins.filter(
-								(origin) => !origin.startsWith("http"),
-							);
-							const isTrustedOrigin = trustedOrigins.some((origin) =>
-								location?.startsWith(origin),
-							);
-							if (!isTrustedOrigin) {
-								return;
-							}
-							const cookie = response.headers.get("set-cookie");
+						const headers = ctx.context.returned?.headers as Headers;
 
-							if (!cookie) {
-								return;
-							}
-							console.log({ location });
-							const url = new URL(location);
-							url.searchParams.set("cookie", cookie);
-							response.headers.set("location", url.toString());
-							return {
-								response,
-							};
+						if (!headers) {
+							return;
 						}
+
+						const location = headers.get("location");
+						if (!location) {
+							return;
+						}
+						const trustedOrigins = ctx.context.trustedOrigins.filter(
+							(origin) => !origin.startsWith("http"),
+						);
+						const isTrustedOrigin = trustedOrigins.some((origin) =>
+							location?.startsWith(origin),
+						);
+						if (!isTrustedOrigin) {
+							return;
+						}
+						const cookie = headers.get("set-cookie");
+						if (!cookie) {
+							return;
+						}
+						const url = new URL(location);
+						url.searchParams.set("cookie", cookie);
+						ctx.setHeader("location", url.toString());
 					},
 				},
 			],

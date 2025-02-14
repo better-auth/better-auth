@@ -15,7 +15,7 @@ better-auth
 ```
 
 <Callout type="info">
-If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project. (currently, Better Auth only supports web platforms, but more clients will be added soon)
+If you're using a separate client and server setup, make sure to install Better Auth in both parts of your project.
 </Callout>
 </Step>
 
@@ -26,13 +26,13 @@ Create a `.env` file in the root of your project and add the following environme
 
 1. **Secret Key**
 
-Random value used by the library for encryption and generating hashes. **You can generate one using the button below**  or you can use something like openssl.
+Random value used by the library for encryption and generating hashes. **You can generate one using the button below** or you can use something like openssl.
 ```txt title=".env"
 BETTER_AUTH_SECRET=
 ```
 <GenerateSecret/>
 
-2. **Set Base URL (optional)**
+2. **Set Base URL**
 
 ```txt title=".env"
 BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
@@ -64,7 +64,7 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database
 
-Better Auth requires a database to store user data. By default, it uses Kysely for database queries, supporting `postgresql`, `mysql`, and `sqlite` out of the box.
+Better Auth requires a database to store user data. You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, with Kysely handling queries and migrations for these databases.
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -103,7 +103,7 @@ Better Auth requires a database to store user data. By default, it uses Kysely f
     </Tab>
 </Tabs>
 
-You can also use any Kysely dialect in the database configuration.
+You can also provide any Kysely dialect or a Kysely instance to the `database` option.
 
 **Example with LibsqlDialect:**
 
@@ -126,7 +126,7 @@ export const auth = betterAuth({
 
 **Adapters**
 
-If your database isn’t supported by Kysely, you can use an adapter to connect. Simply import the adapter and pass it into the `database` option.
+If you prefer to use an ORM or if your database is not supported by Kysely, you can use one of the built-in adapters.
 
 <Tabs items={["prisma", "drizzle", "mongodb"]}>
     <Tab value="prisma">
@@ -169,36 +169,24 @@ If your database isn’t supported by Kysely, you can use an adapter to connect.
     });
     ```
     </Tab>
-
-    <Tab value="surrealDB">
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth";
-    import { surrealdbAdapter } from "better-auth/adapters/surrealdb";
-    import { surrealClient } from "@/db"; // your SurrealDB client
-
-    export const auth = betterAuth({
-        database: surrealdbAdapter(client)
-    });
-    ```
-    </Tab>
 </Tabs>
-   <Callout>
-     For optimal performance, use the built-in Kysely adapter if possible.
-    </Callout>
 </Step>
 
 <Step>
     ### Create Database Tables
+    Better Auth includes a CLI tool to help manage the schema required by the library.
 
-    Better Auth’s comes with a CLI tool to help manage schema required by the library.
+    - **Generate**: This command generates an ORM schema or SQL migration file.
 
-    **Generate**: Generates an ORM schema or SQL migration file.
+    <Callout>
+    If you're using Kysely, you can apply the migration directly with `migrate` command below. Use `generate` only if you plan to apply the migration manually.
+    </Callout>
 
     ```bash title="Terminal"
     npx @better-auth/cli generate
     ```
 
-    **Migrate**: Directly creates the required tables in the database. (only available for built-in Kysely adapter)
+    - **Migrate**: This command creates the required tables directly in the database. (Available only for the built-in Kysely adapter)
 
     ```bash title="Terminal"
     npx @better-auth/cli migrate
@@ -248,7 +236,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack", "expo"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -307,8 +295,7 @@ Better Auth supports any backend framework with standard Request and Response ob
 
     const app = new Hono();
 
-    app.get('/api/auth/*', (c) => auth.handler(c.req.raw));
-    app.post('/api/auth/*', (c) => auth.handler(c.req.raw));
+    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```
@@ -324,11 +311,16 @@ Better Auth supports any backend framework with standard Request and Response ob
     const port = 8000;
 
     app.all("/api/auth/*", toNodeHandler(auth));
+
+    // Mount express json middleware after Better Auth handler
+    // or only apply it to routes that don't interact with Better Auth
+    app.use(express.json());
+
     app.listen(port, () => {
         console.log(`Better Auth app listening on port ${port}`);
     });
     ```
-    This also works for any other node server framework like express, fastify, hapi, etc.
+    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
     </Tab>
     <Tab value="astro">
     ```ts title="/pages/api/auth/[...all].ts"
@@ -346,7 +338,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
     <Tab value="elysia">
     ```ts
-    import { Elysia } from "elysia";
+    import { Elysia, Context } from "elysia";
     import { auth } from "./auth";
 
     const betterAuthView = (context: Context) => {
@@ -371,7 +363,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { auth } from '~/lib/server/auth'
     import { createAPIFileRoute } from '@tanstack/start/api'
 
-    export const Route = createAPIFileRoute('/api/auth/$')({
+    export const APIRoute = createAPIFileRoute('/api/auth/$')({
         GET: ({ request }) => {
             return auth.handler(request)
         },
@@ -395,7 +387,7 @@ Better Auth supports any backend framework with standard Request and Response ob
 <Step>
 ### Create Client Instance
 
-The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular web frameworks including for vanilla javascript.
+The client-side library helps you interact with the auth server. Better Auth comes with a client for all the popular web frameworks, including  vanilla JavaScript.
 
 1. Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React).
 2. Call the function to create your client.

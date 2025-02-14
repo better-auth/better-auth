@@ -1,12 +1,12 @@
 {
   "name": "@better-auth/expo",
-  "version": "0.7.0-beta.1",
+  "version": "1.1.18-beta.1",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "scripts": {
     "test": "vitest",
-    "build": "tsup --dts --minify --clean",
+    "build": "tsup --dts --clean",
     "dev": "tsup --watch --sourcemap --dts"
   },
   "exports": {
@@ -21,12 +21,23 @@
       "require": "./dist/client.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@better-fetch/fetch": "1.1.12",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^11.5.0",
+    "better-sqlite3": "^11.6.0",
     "expo-constants": "~16.0.2",
     "expo-crypto": "^13.0.2",
     "expo-linking": "~6.3.1",
@@ -36,5 +47,12 @@
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
-  }
+  },
+  "dependencies": {
+    "better-call": "^0.3.3",
+    "zod": "^3.23.8"
+  },
+  "files": [
+    "dist"
+  ]
 }

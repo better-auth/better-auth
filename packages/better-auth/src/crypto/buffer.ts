@@ -12,7 +12,7 @@ export function constantTimeEqual(
 	}
 	let c = 0;
 	for (let i = 0; i < aBuffer.length; i++) {
-		c |= aBuffer[i]! ^ bBuffer[i]!; // ^: XOR operator
+		c |= aBuffer[i]! ^ bBuffer[i]!;
 	}
 	return c === 0;
 }

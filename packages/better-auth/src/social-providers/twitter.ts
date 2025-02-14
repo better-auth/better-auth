@@ -91,19 +91,23 @@ export interface TwitterProfile {
 	[claims: string]: unknown;
 }
 
-export interface TwitterOption extends ProviderOptions {}
+export interface TwitterOption extends ProviderOptions<TwitterProfile> {}
 
 export const twitter = (options: TwitterOption) => {
 	return {
 		id: "twitter",
 		name: "Twitter",
 		createAuthorizationURL(data) {
-			const _scopes = data.scopes || ["account_info.read"];
+			const _scopes = data.scopes || [
+				"users.read",
+				"tweet.read",
+				"offline.access",
+			];
 			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "twitter",
 				options,
-				authorizationEndpoint: "https://twitter.com/i/oauth2/authorize",
+				authorizationEndpoint: "https://x.com/i/oauth2/authorize",
 				scopes: _scopes,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
@@ -114,12 +118,16 @@ export const twitter = (options: TwitterOption) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				authentication: "basic",
+				redirectURI,
 				options,
-				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
+				tokenEndpoint: "https://api.x.com/2/oauth2/token",
 			});
 		},
 		async getUserInfo(token) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(token);
+			}
 			const { data: profile, error } = await betterFetch<TwitterProfile>(
 				"https://api.x.com/2/users/me?user.fields=profile_image_url",
 				{
@@ -132,16 +140,15 @@ export const twitter = (options: TwitterOption) => {
 			if (error) {
 				return null;
 			}
-			if (!profile.data.email) {
-				return null;
-			}
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.email,
+					email: profile.data.username || null,
 					image: profile.data.profile_image_url,
 					emailVerified: profile.data.verified || false,
+					...userMap,
 				},
 				data: profile,
 			};

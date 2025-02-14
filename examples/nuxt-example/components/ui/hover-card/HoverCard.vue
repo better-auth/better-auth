@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	HoverCardRoot,
 	type HoverCardRootEmits,
 	type HoverCardRootProps,
 	useForwardPropsEmits,

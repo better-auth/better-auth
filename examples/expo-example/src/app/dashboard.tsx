@@ -9,12 +9,12 @@ import { router } from "expo-router";
 import { useEffect } from "react";
 
 export default function Dashboard() {
-	const { data: session, error } = authClient.useSession();
+	const { data: session, isPending } = authClient.useSession();
 	useEffect(() => {
-		if (error) {
+		if (!session && !isPending) {
 			router.push("/");
 		}
-	}, [error]);
+	}, [session, isPending]);
 	return (
 		<Card className="w-10/12">
 			<CardHeader>
@@ -22,7 +22,7 @@ export default function Dashboard() {
 					<Avatar alt="user-image">
 						<AvatarImage
 							source={{
-								uri: session?.user?.image,
+								uri: session?.user?.image || "",
 							}}
 						/>
 						<AvatarFallback>

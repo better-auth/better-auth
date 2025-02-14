@@ -216,9 +216,9 @@ export const CarouselPrevious = (
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="M5 12h14M5 12l6 6m-6-6l6-6"
 				/>
 				<title>Previous slide</title>
@@ -260,9 +260,9 @@ export const CarouselNext = (
 				<path
 					fill="none"
 					stroke="currentColor"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
 					d="M5 12h14m-4 4l4-4m-4-4l4 4"
 				/>
 				<title>Next slide</title>

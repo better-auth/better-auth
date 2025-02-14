@@ -1,4 +1,4 @@
-import { alphabet, generateRandomString } from "../../../crypto/random";
+import { generateRandomString } from "../../../crypto/random";
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api/call";
 import { sessionMiddleware } from "../../../api";
@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 
 export interface BackupCodeOptions {
 	/**
@@ -31,9 +32,7 @@ export interface BackupCodeOptions {
 function generateBackupCodesFn(options?: BackupCodeOptions) {
 	return Array.from({ length: options?.amount ?? 10 })
 		.fill(null)
-		.map(() =>
-			generateRandomString(options?.length ?? 10, alphabet("a-z", "0-9")),
-		)
+		.map(() => generateRandomString(options?.length ?? 10, "a-z", "0-9", "A-Z"))
 		.map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 }
 
@@ -64,9 +63,15 @@ export async function verifyBackupCode(
 ) {
 	const codes = await getBackupCodes(data.backupCodes, key);
 	if (!codes) {
-		return false;
+		return {
+			status: false,
+			updated: null,
+		};
 	}
-	return codes.includes(data.code);
+	return {
+		status: codes.includes(data.code),
+		updated: codes.filter((code) => code !== data.code),
+	};
 }
 
 export async function getBackupCodes(backupCodes: string, key: string) {
@@ -81,10 +86,8 @@ export async function getBackupCodes(backupCodes: string, key: string) {
 	return null;
 }
 
-export const backupCode2fa = (
-	options: BackupCodeOptions,
-	twoFactorTable: string,
-) => {
+export const backupCode2fa = (options?: BackupCodeOptions) => {
+	const twoFactorTable = "twoFactor";
 	return {
 		id: "backup_code",
 		endpoints: {
@@ -115,24 +118,42 @@ export const backupCode2fa = (
 					});
 					if (!twoFactor) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes aren't enabled",
+							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
-					const validate = verifyBackupCode(
+					const validate = await verifyBackupCode(
 						{
 							backupCodes: twoFactor.backupCodes,
 							code: ctx.body.code,
 						},
 						ctx.context.secret,
 					);
-					if (!validate) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid backup code",
+					if (!validate.status) {
+						throw new APIError("UNAUTHORIZED", {
+							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						});
 					}
+					const updatedBackupCodes = await symmetricEncrypt({
+						key: ctx.context.secret,
+						data: JSON.stringify(validate.updated),
+					});
+
+					await ctx.context.adapter.updateMany({
+						model: twoFactorTable,
+						update: {
+							backupCodes: updatedBackupCodes,
+						},
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+
 					if (!ctx.body.disableSession) {
 						await setSessionCookie(ctx, {
-							session: ctx.context.session,
+							session: ctx.context.session.session,
 							user,
 						});
 					}
@@ -146,15 +167,19 @@ export const backupCode2fa = (
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
+					body: z.object({
+						password: z.string(),
+					}),
 					use: [sessionMiddleware],
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Two factor isn't enabled",
+							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						});
 					}
+					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						options,
@@ -178,19 +203,23 @@ export const backupCode2fa = (
 				},
 			),
 			viewBackupCodes: createAuthEndpoint(
-				"/view/backup-codes",
+				"/two-factor/view-backup-codes",
 				{
 					method: "GET",
-					use: [sessionMiddleware],
+					body: z.object({
+						userId: z.string(),
+					}),
+					metadata: {
+						SERVER_ONLY: true,
+					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
 							{
 								field: "userId",
-								value: user.id,
+								value: ctx.body.userId,
 							},
 						],
 					});
@@ -199,13 +228,13 @@ export const backupCode2fa = (
 							message: "Backup codes aren't enabled",
 						});
 					}
-					const backupCodes = getBackupCodes(
+					const backupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
 						ctx.context.secret,
 					);
 					if (!backupCodes) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Backup codes aren't enabled",
+							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
 					return ctx.json({

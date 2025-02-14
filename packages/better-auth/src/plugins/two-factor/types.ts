@@ -1,9 +1,11 @@
-import type { User } from "../../db/schema";
+import type { User } from "../../types";
 import type { AuthEndpoint } from "../../api/call";
 import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
 import type { TOTPOptions } from "./totp";
+import type { InferOptionSchema } from "../../types";
+import type { schema } from "./schema";
 
 export interface TwoFactorOptions {
 	/**
@@ -23,15 +25,14 @@ export interface TwoFactorOptions {
 	 */
 	backupCodeOptions?: BackupCodeOptions;
 	/**
-	 * Table name for two factor authentication.
-	 * @default "userTwoFactor"
-	 */
-	twoFactorTable?: string;
-	/**
 	 * Skip verification on enabling two factor authentication.
 	 * @default false
 	 */
 	skipVerificationOnEnable?: boolean;
+	/**
+	 * Custom schema for the two factor plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export interface UserWithTwoFactor extends User {

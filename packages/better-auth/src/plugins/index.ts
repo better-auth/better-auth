@@ -1,6 +1,5 @@
 export * from "./organization";
 export * from "./two-factor";
-export * from "./passkey";
 export * from "./username";
 export * from "./bearer";
 export * from "../types/plugins";
@@ -14,3 +13,8 @@ export * from "./generic-oauth";
 export * from "./jwt";
 export * from "./multi-session";
 export * from "./email-otp";
+export * from "./one-tap";
+export * from "./oauth-proxy";
+export * from "./custom-session";
+export * from "./open-api";
+export * from "./oidc-provider";

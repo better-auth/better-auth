@@ -4,7 +4,6 @@ import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "./ui/card";
@@ -12,7 +11,6 @@ import {
 	OTPField,
 	OTPFieldGroup,
 	OTPFieldInput,
-	OTPFieldSeparator,
 	OTPFieldSlot,
 } from "./ui/otp-field";
 import { twoFactorActions } from "@/libs/auth-client";
@@ -24,7 +22,6 @@ export function TwoFactorComponent() {
 		if (otp().length === 6) {
 			twoFactorActions.verifyTotp({
 				code: otp(),
-				callbackURL: "/dashboard",
 				fetchOptions: {
 					onError(context) {
 						if (context.error.status === 429) {

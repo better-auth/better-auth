@@ -5,16 +5,22 @@
 		"target": "es2022",
 		"allowJs": true,
 		"resolveJsonModule": true,
-		"module": "ESNext",
+		"module": "Preserve",
 		"noEmit": true,
+		"types": ["node"],
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
+		"composite": false,
+		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
 		"strict": true,
 		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
+		"noFallthroughCasesInSwitch": true,
+		"downlevelIteration": true
 	},
-	"exclude": ["node_modules"],
-	"include": ["src"]
+	"exclude": ["**/dist", "node_modules"],
+	"references": [],
+	"include": ["src/**/*"]
 }

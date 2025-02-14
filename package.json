@@ -3,7 +3,7 @@
     "private": true,
     "type": "module",
     "version": "0.0.2-beta.8",
-    "packageManager": "pnpm@9.1.1",
+    "packageManager": "pnpm@9.15.0",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
@@ -14,27 +14,30 @@
         "lint:fix": "biome check . --apply",
         "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
         "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
-        "release:beta": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag next --no-git-checks",
+        "release:canary": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
+        "bump": "bumpp",
         "test": "turbo --filter \"./packages/*\" test",
         "typecheck": "turbo --filter \"./packages/*\" typecheck"
     },
     "dependencies": {
         "@biomejs/biome": "1.7.3",
-        "@types/node": "^20.12.12",
-        "bumpp": "^9.4.1",
-        "dotenv-cli": "^7.4.2",
+        "@types/node": "^20.17.9",
+        "bumpp": "^9.8.1",
+        "cross-env": "^7.0.3",
+        "dotenv-cli": "^7.4.4",
         "simple-git-hooks": "^2.11.1",
-        "tinyglobby": "^0.2.9",
-        "turbo": "^2.0.4",
-        "typescript": "5.6.1-rc",
-        "cross-env": "^7.0.3"
+        "taze": "^0.18.0",
+        "tinyglobby": "^0.2.10",
+        "turbo": "^2.3.3",
+        "typescript": "5.6.1-rc"
     },
     "pnpm": {
         "overrides": {
+            "mdast-util-frontmatter": "2.0.1",
             "remark-mdx": "3.0.0",
-            "unified": "11.0.4",
             "remark-parse": "11.0.0",
-            "mdast-util-frontmatter": "2.0.1"
+            "unified": "11.0.4",
+            "whatwg-url": "^14.0.0"
         }
     }
 }

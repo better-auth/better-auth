@@ -18,7 +18,7 @@ function withPath(url: string, path = "/api/auth") {
 		return url;
 	}
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${url}${path}`;
+	return `${url.replace(/\/+$/, "")}${path}`;
 }
 
 export function getBaseURL(url?: string, path?: string) {
@@ -37,7 +37,7 @@ export function getBaseURL(url?: string, path?: string) {
 		return withPath(fromEnv, path);
 	}
 
-	if (typeof window !== "undefined") {
+	if (typeof window !== "undefined" && window.location) {
 		return withPath(window.location.origin, path);
 	}
 	return undefined;
@@ -46,13 +46,30 @@ export function getBaseURL(url?: string, path?: string) {
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);
-		return parsedUrl.origin.replace("http://", "").replace("https://", "");
+		return parsedUrl.origin;
+	} catch (error) {
+		return null;
+	}
+}
+
+export function getProtocol(url: string) {
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.protocol;
 	} catch (error) {
 		return null;
 	}
 }
 
 export const checkURLValidity = (url: string) => {
-	const urlPattern = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
-	return urlPattern.test(url);
+	const urlPattern = url.includes("://");
+	return urlPattern;
 };
+
+export function getHost(url: string) {
+	if (url.includes("://")) {
+		const parsedUrl = new URL(url);
+		return parsedUrl.host;
+	}
+	return url;
+}

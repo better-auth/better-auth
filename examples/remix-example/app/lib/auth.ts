@@ -7,11 +7,11 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 		sendEmailVerificationOnSignUp: true,
-		async sendVerificationEmail(email, url, token) {
-			console.log("Send email to", email, "with verification link", url);
+		async sendVerificationEmail() {
+			console.log("Send email to verify email address");
 		},
 		async sendResetPassword(url, user) {
-			console.log("Send reset password email to", user.email, "with link", url);
+			console.log("Send email to reset password");
 		},
 	},
 	socialProviders: {

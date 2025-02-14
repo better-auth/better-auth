@@ -1,11 +1,17 @@
-import type { Kysely } from "kysely";
-import type { Session, User } from "../../db/schema";
+import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
-import { generateId } from "../../utils/id";
 import type { OrganizationOptions } from "./organization";
-import type { Invitation, Member, Organization } from "./schema";
+import type {
+	Invitation,
+	InvitationInput,
+	Member,
+	MemberInput,
+	Organization,
+	OrganizationInput,
+} from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
+import parseJSON from "../../client/parser";
 
 export const getOrgAdapter = (
 	context: AuthContext,
@@ -26,10 +32,13 @@ export const getOrgAdapter = (
 			return organization;
 		},
 		createOrganization: async (data: {
-			organization: Organization;
+			organization: OrganizationInput;
 			user: User;
 		}) => {
-			const organization = await adapter.create<Organization>({
+			const organization = await adapter.create<
+				OrganizationInput,
+				Organization
+			>({
 				model: "organization",
 				data: {
 					...data.organization,
@@ -38,14 +47,12 @@ export const getOrgAdapter = (
 						: undefined,
 				},
 			});
-			const member = await adapter.create<Member>({
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: {
-					id: generateId(),
 					organizationId: organization.id,
 					userId: data.user.id,
 					createdAt: new Date(),
-					email: data.user.email,
 					role: options?.creatorRole || "owner",
 				},
 			});
@@ -71,32 +78,32 @@ export const getOrgAdapter = (
 			email: string;
 			organizationId: string;
 		}) => {
-			const member = await adapter.findOne<Member>({
-				model: "member",
+			const user = await adapter.findOne<User>({
+				model: "user",
 				where: [
 					{
 						field: "email",
 						value: data.email,
 					},
+				],
+			});
+			if (!user) {
+				return null;
+			}
+			const member = await adapter.findOne<Member>({
+				model: "member",
+				where: [
 					{
 						field: "organizationId",
 						value: data.organizationId,
 					},
-				],
-			});
-			if (!member) {
-				return null;
-			}
-			const user = await adapter.findOne<User>({
-				model: context.tables.user.tableName,
-				where: [
 					{
-						field: "id",
-						value: member.userId,
+						field: "userId",
+						value: user.id,
 					},
 				],
 			});
-			if (!user) {
+			if (!member) {
 				return null;
 			}
 			return {
@@ -128,7 +135,7 @@ export const getOrgAdapter = (
 					],
 				}),
 				await adapter.findOne<User>({
-					model: context.tables.user.tableName,
+					model: "user",
 					where: [
 						{
 							field: "id",
@@ -164,7 +171,7 @@ export const getOrgAdapter = (
 				return null;
 			}
 			const user = await adapter.findOne<User>({
-				model: context.tables.user.tableName,
+				model: "user",
 				where: [
 					{
 						field: "id",
@@ -185,8 +192,8 @@ export const getOrgAdapter = (
 				},
 			};
 		},
-		createMember: async (data: Member) => {
-			const member = await adapter.create<Member>({
+		createMember: async (data: MemberInput) => {
+			const member = await adapter.create<MemberInput>({
 				model: "member",
 				data: data,
 			});
@@ -219,26 +226,43 @@ export const getOrgAdapter = (
 			});
 			return member;
 		},
-		updateOrganization: async (orgId: string, data: Partial<Organization>) => {
+		updateOrganization: async (
+			organizationId: string,
+			data: Partial<Organization>,
+		) => {
 			const organization = await adapter.update<Organization>({
 				model: "organization",
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
-				update: data,
+				update: {
+					...data,
+					metadata:
+						typeof data.metadata === "object"
+							? JSON.stringify(data.metadata)
+							: data.metadata,
+				},
 			});
-			return organization;
+			if (!organization) {
+				return null;
+			}
+			return {
+				...organization,
+				metadata: organization.metadata
+					? parseJSON<Record<string, any>>(organization.metadata)
+					: undefined,
+			};
 		},
-		deleteOrganization: async (orgId: string) => {
+		deleteOrganization: async (organizationId: string) => {
 			await adapter.delete({
 				model: "member",
 				where: [
 					{
 						field: "organizationId",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -247,7 +271,7 @@ export const getOrgAdapter = (
 				where: [
 					{
 						field: "organizationId",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -256,34 +280,31 @@ export const getOrgAdapter = (
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
-			return orgId;
+			return organizationId;
 		},
-		setActiveOrganization: async (sessionId: string, orgId: string | null) => {
-			const session = await adapter.update<Session>({
-				model: context.tables.session.tableName,
-				where: [
-					{
-						field: "id",
-						value: sessionId,
-					},
-				],
-				update: {
-					activeOrganizationId: orgId,
+		setActiveOrganization: async (
+			sessionToken: string,
+			organizationId: string | null,
+		) => {
+			const session = await context.internalAdapter.updateSession(
+				sessionToken,
+				{
+					activeOrganizationId: organizationId,
 				},
-			});
-			return session;
+			);
+			return session as Session;
 		},
-		findOrganizationById: async (orgId: string) => {
+		findOrganizationById: async (organizationId: string) => {
 			const organization = await adapter.findOne<Organization>({
 				model: "organization",
 				where: [
 					{
 						field: "id",
-						value: orgId,
+						value: organizationId,
 					},
 				],
 			});
@@ -292,19 +313,28 @@ export const getOrgAdapter = (
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async (orgId: string, db?: Kysely<any>) => {
-			const [org, invitations, members] = await Promise.all([
-				adapter.findOne<Organization>({
-					model: "organization",
-					where: [{ field: "id", value: orgId }],
-				}),
+		findFullOrganization: async ({
+			organizationId,
+			isSlug,
+		}: {
+			organizationId: string;
+			isSlug?: boolean;
+		}) => {
+			const org = await adapter.findOne<Organization>({
+				model: "organization",
+				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
+			});
+			if (!org) {
+				return null;
+			}
+			const [invitations, members] = await Promise.all([
 				adapter.findMany<Invitation>({
 					model: "invitation",
-					where: [{ field: "organizationId", value: orgId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 				adapter.findMany<Member>({
 					model: "member",
-					where: [{ field: "organizationId", value: orgId }],
+					where: [{ field: "organizationId", value: org.id }],
 				}),
 			]);
 
@@ -312,12 +342,11 @@ export const getOrgAdapter = (
 
 			const userIds = members.map((member) => member.userId);
 			const users = await adapter.findMany<User>({
-				model: context.tables.user.tableName,
+				model: "user",
 				where: [{ field: "id", value: userIds, operator: "in" }],
 			});
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
-
 			const membersWithUsers = members.map((member) => {
 				const user = userMap.get(member.userId);
 				if (!user) {
@@ -369,7 +398,6 @@ export const getOrgAdapter = (
 					},
 				],
 			});
-
 			return organizations;
 		},
 		createInvitation: async ({
@@ -378,7 +406,7 @@ export const getOrgAdapter = (
 		}: {
 			invitation: {
 				email: string;
-				role: "admin" | "member" | "owner";
+				role: string;
 				organizationId: string;
 			};
 			user: User;
@@ -387,10 +415,9 @@ export const getOrgAdapter = (
 			const expiresAt = getDate(
 				options?.invitationExpiresIn || defaultExpiration,
 			);
-			const invite = await adapter.create<Invitation>({
+			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
 				data: {
-					id: generateId(),
 					email: invitation.email,
 					role: invitation.role,
 					organizationId: invitation.organizationId,

@@ -68,20 +68,20 @@ export interface ClientOptions {
 
 export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
-		? (O["plugins"] extends Array<infer Pl>
-				? UnionToIntersection<
-						Pl extends {
-							$InferServerPlugin: infer Plug;
-						}
-							? Plug extends {
-									endpoints: infer Endpoints;
-								}
-								? Endpoints
+		? Auth["api"] &
+				(O["plugins"] extends Array<infer Pl>
+					? UnionToIntersection<
+							Pl extends {
+								$InferServerPlugin: infer Plug;
+							}
+								? Plug extends {
+										endpoints: infer Endpoints;
+									}
+									? Endpoints
+									: {}
 								: {}
-							: {}
-					>
-				: {}) &
-				Auth["api"]
+						>
+					: {})
 		: Auth["api"],
 	O
 >;
@@ -91,12 +91,23 @@ export type InferActions<O extends ClientOptions> = O["plugins"] extends Array<
 >
 	? UnionToIntersection<
 			Plugin extends BetterAuthClientPlugin
-				? Plugin["getActions"] extends ($fetch: BetterFetch) => infer Actions
+				? Plugin["getActions"] extends (...args: any) => infer Actions
 					? Actions
 					: {}
 				: {}
 		>
 	: {};
+
+export type InferErrorCodes<O extends ClientOptions> =
+	O["plugins"] extends Array<infer Plugin>
+		? UnionToIntersection<
+				Plugin extends BetterAuthClientPlugin
+					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
+						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+						: {}
+					: {}
+			>
+		: {};
 /**
  * signals are just used to recall a computed value.
  * as a convention they start with "$"

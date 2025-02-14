@@ -1,4 +1,3 @@
-import type { User } from "../db/schema";
 import type { LiteralString } from "../types/helper";
 
 export interface OAuth2Tokens {
@@ -28,14 +27,21 @@ export interface OAuthProvider<
 		codeVerifier?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
-		user: Omit<User, "createdAt" | "updatedAt">;
+		user: {
+			id: string;
+			name?: string;
+			email?: string | null;
+			image?: string;
+			emailVerified: boolean;
+		};
 		data: T;
 	} | null>;
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
+	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
 }
 
-export type ProviderOptions = {
+export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client ID of your application
 	 */
@@ -54,10 +60,54 @@ export type ProviderOptions = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string;
-
 	/**
 	 * The client key of your application
 	 * Tiktok Social Provider uses this field instead of clientId
 	 */
 	clientKey?: string;
+	/**
+	 * Disable provider from allowing users to sign in
+	 * with this provider with an id token sent from the
+	 * client.
+	 */
+	disableIdTokenSignIn?: boolean;
+	/**
+	 * verifyIdToken function to verify the id token
+	 */
+	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
+	/**
+	 * Custom function to get user info from the provider
+	 */
+	getUserInfo?: (token: OAuth2Tokens) => Promise<{
+		user: {
+			id: string;
+			name?: string;
+			email?: string | null;
+			image?: string;
+			emailVerified: boolean;
+			[key: string]: any;
+		};
+		data: any;
+	}>;
+	/**
+	 * Custom function to map the provider profile to a
+	 * user.
+	 */
+	mapProfileToUser?: (profile: Profile) =>
+		| {
+				id?: string;
+				name?: string;
+				email?: string | null;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }
+		| Promise<{
+				id?: string;
+				name?: string;
+				email?: string | null;
+				image?: string;
+				emailVerified?: boolean;
+				[key: string]: any;
+		  }>;
 };

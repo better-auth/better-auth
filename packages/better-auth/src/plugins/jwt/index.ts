@@ -1,9 +1,15 @@
-import type { BetterAuthPlugin, User } from "../../types";
+import type {
+	BetterAuthPlugin,
+	InferOptionSchema,
+	Session,
+	User,
+} from "../../types";
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
 import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { mergeSchema } from "../../db/schema";
 
 type JWKOptions =
 	| {
@@ -79,10 +85,15 @@ export interface JwtOptions {
 		 * @default 15m
 		 */
 		expirationTime?: number | string | Date;
-		definePayload?: (
-			user: User,
-		) => Promise<Record<string, any>> | Record<string, any>;
+		definePayload?: (session: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		}) => Promise<Record<string, any>> | Record<string, any>;
 	};
+	/**
+	 * Custom schema for the admin plugin
+	 */
+	schema?: InferOptionSchema<typeof schema>;
 }
 
 export const jwt = (options?: JwtOptions) => {
@@ -93,11 +104,98 @@ export const jwt = (options?: JwtOptions) => {
 				"/jwks",
 				{
 					method: "GET",
+					metadata: {
+						openapi: {
+							description: "Get the JSON Web Key Set",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													keys: {
+														type: "array",
+														items: {
+															type: "object",
+															properties: {
+																kid: {
+																	type: "string",
+																},
+																kty: {
+																	type: "string",
+																},
+																use: {
+																	type: "string",
+																},
+																alg: {
+																	type: "string",
+																},
+																n: {
+																	type: "string",
+																},
+																e: {
+																	type: "string",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
 					const keySets = await adapter.getAllKeys();
+
+					if (keySets.length === 0) {
+						const { publicKey, privateKey } = await generateKeyPair(
+							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
+						);
+
+						const publicWebKey = await exportJWK(publicKey);
+						const privateWebKey = await exportJWK(privateKey);
+						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+						const privateKeyEncryptionEnabled =
+							!options?.jwks?.disablePrivateKeyEncryption;
+						let jwk: Partial<Jwk> = {
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
+							publicKey: JSON.stringify(publicWebKey),
+							privateKey: privateKeyEncryptionEnabled
+								? JSON.stringify(
+										await symmetricEncrypt({
+											key: ctx.context.options.secret!,
+											data: stringifiedPrivateWebKey,
+										}),
+									)
+								: stringifiedPrivateWebKey,
+							createdAt: new Date(),
+						};
+
+						await adapter.createJwk(jwk as Jwk);
+
+						return ctx.json({
+							keys: [
+								{
+									...publicWebKey,
+									kid: jwk.id,
+								},
+							],
+						});
+					}
 
 					return ctx.json({
 						keys: keySets.map((keySet) => ({
@@ -114,6 +212,28 @@ export const jwt = (options?: JwtOptions) => {
 					method: "GET",
 					requireHeaders: true,
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Get a JWT token",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const adapter = getJwksAdapter(ctx.context.adapter);
@@ -125,7 +245,10 @@ export const jwt = (options?: JwtOptions) => {
 					if (key === undefined) {
 						const { publicKey, privateKey } = await generateKeyPair(
 							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-							options?.jwks?.keyPairConfig ?? { crv: "Ed25519" },
+							options?.jwks?.keyPairConfig ?? {
+								crv: "Ed25519",
+								extractable: true,
+							},
 						);
 
 						const publicWebKey = await exportJWK(publicKey);
@@ -133,7 +256,9 @@ export const jwt = (options?: JwtOptions) => {
 						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 
 						let jwk: Partial<Jwk> = {
-							id: crypto.randomUUID(),
+							id: ctx.context.generateId({
+								model: "jwks",
+							}),
 							publicKey: JSON.stringify(publicWebKey),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
@@ -156,11 +281,14 @@ export const jwt = (options?: JwtOptions) => {
 							})
 						: key.privateKey;
 
-					const privateKey = await importJWK(JSON.parse(privateWebKey));
+					const privateKey = await importJWK(
+						JSON.parse(privateWebKey),
+						options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+					);
 
 					const payload = !options?.jwt?.definePayload
 						? ctx.context.session.user
-						: await options?.jwt.definePayload(ctx.context.session.user);
+						: await options?.jwt.definePayload(ctx.context.session);
 
 					const jwt = await new SignJWT({
 						...payload,
@@ -189,6 +317,6 @@ export const jwt = (options?: JwtOptions) => {
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };

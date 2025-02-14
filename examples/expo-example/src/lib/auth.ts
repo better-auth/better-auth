@@ -4,7 +4,7 @@ import { Pool } from "pg";
 
 export const auth = betterAuth({
 	database: new Pool({
-		connectionString: "postgresql://user:password@localhost:5432/better_auth",
+		connectionString: process.env.DATABASE_URL,
 	}),
 	emailAndPassword: {
 		enabled: true,
@@ -15,5 +15,10 @@ export const auth = betterAuth({
 			clientId: process.env.GITHUB_CLIENT_ID!,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET!,
 		},
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID!,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+		},
 	},
+	trustedOrigins: ["exp://"],
 });

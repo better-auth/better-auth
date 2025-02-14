@@ -1,8 +1,25 @@
 import type { Primitive } from "zod";
 
 export type LiteralString = "" | (string & Record<never, never>);
+export type LiteralNumber = 0 | (number & Record<never, never>);
+
+export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
 export type Prettify<T> = Omit<T, never>;
+export type PreserveJSDoc<T> = {
+	[K in keyof T]: T[K];
+} & {};
+export type PrettifyDeep<T> = {
+	[K in keyof T]: T[K] extends (...args: any[]) => any
+		? T[K]
+		: T[K] extends object
+			? T[K] extends Array<any>
+				? T[K]
+				: T[K] extends Date
+					? T[K]
+					: PrettifyDeep<T[K]>
+			: T[K];
+} & {};
 export type LiteralUnion<LiteralType, BaseType extends Primitive> =
 	| LiteralType
 	| (BaseType & Record<never, never>);
@@ -38,3 +55,4 @@ export type DeepPartial<T> = T extends Function
 	: T extends object
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
+export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;

@@ -28,6 +28,12 @@ export default withMDX({
 			{
 				hostname: "assets.aceternity.com",
 			},
+			{
+				hostname: "pbs.twimg.com",
+			},
+			{
+				hostname: "github.com",
+			},
 		],
 	},
 });

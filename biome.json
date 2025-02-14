@@ -21,6 +21,9 @@
 			"complexity": {
 				"noUselessSwitchCase": "warn",
 				"noUselessTypeConstraint": "warn"
+			},
+			"correctness": {
+				"noUnusedImports": "warn"
 			}
 		}
 	},
@@ -33,7 +36,9 @@
 			".contentlayer",
 			".turbo",
 			".nuxt",
-			".source"
+			".source",
+			".expo",
+			".cache"
 		]
 	}
 }

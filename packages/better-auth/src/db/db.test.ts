@@ -20,13 +20,13 @@ describe("db", async () => {
 			name: "Test User",
 		});
 		const users = await db.findMany({
-			model: "users",
+			model: "user",
 		});
 		const session = await db.findMany({
-			model: "sessions",
+			model: "session",
 		});
 		const accounts = await db.findMany({
-			model: "accounts",
+			model: "account",
 		});
 		expect(res.data).toBeDefined();
 		//including the user that was created in the test instance
@@ -61,12 +61,20 @@ describe("db", async () => {
 			name: "test",
 			password: "password",
 		});
-		expect(res.data?.user.image).toBe("test-image");
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${res.data?.token}`,
+				},
+				throw: true,
+			},
+		});
+		expect(session.user?.image).toBe("test-image");
 		expect(callback).toBe(true);
 	});
 
 	it("should work with custom field names", async () => {
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client } = await getTestInstance({
 			user: {
 				fields: {
 					email: "email_address",
@@ -78,16 +86,14 @@ describe("db", async () => {
 			password: "password",
 			name: "Test User",
 		});
-		expect(res.data?.user.email).toBe("test@email.com");
-		const { headers } = await signInWithTestUser();
-		const res2 = await client.updateUser(
-			{
-				name: "New Name",
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${res.data?.token}`,
+				},
+				throw: true,
 			},
-			{
-				headers,
-			},
-		);
-		expect(res2.data?.user.name).toBe("New Name");
+		});
+		expect(session.user.email).toBe("test@email.com");
 	});
 });
