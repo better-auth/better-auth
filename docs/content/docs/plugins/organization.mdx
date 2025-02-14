@@ -103,6 +103,17 @@ const auth = betterAuth({
 })
 ```
 
+#### Check if organization slug is taken
+
+To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
+
+- `slug`: The slug of the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.checkSlug({
+    slug: "my-org",
+});
+```
 
 ### List User's Organizations
 
