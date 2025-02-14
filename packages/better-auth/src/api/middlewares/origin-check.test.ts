@@ -169,7 +169,7 @@ describe("Origin Check", async (it) => {
 		});
 		expect(res2.data?.user).toBeDefined();
 	});
-	
+
 	it("should work with wildcard trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "https://sub-domain.my-site.com",
