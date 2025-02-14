@@ -6,7 +6,8 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { APIError } from "better-call";
 import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { hasPermission } from "../has-permission";
 
 export const createOrganization = createAuthEndpoint(
 	"/organization/create",
@@ -59,6 +60,7 @@ export const createOrganization = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
+		console.log(ctx.request, ctx.headers);
 		if (!session && (ctx.request || ctx.headers)) {
 			throw new APIError("UNAUTHORIZED");
 		}
@@ -131,6 +133,29 @@ export const createOrganization = createAuthEndpoint(
 			);
 		}
 		return ctx.json(organization);
+	},
+);
+
+export const checkOrganizationSlug = createAuthEndpoint(
+	"/organization/check-slug",
+	{
+		method: "POST",
+		body: z.object({
+			slug: z.string(),
+		}),
+		use: [requestOnlySessionMiddleware, orgMiddleware],
+	},
+	async (ctx) => {
+		const orgAdapter = getOrgAdapter(ctx.context);
+		const org = await orgAdapter.findOrganizationBySlug(ctx.body.slug);
+		if (!org) {
+			return ctx.json({
+				status: true,
+			});
+		}
+		throw new APIError("BAD_REQUEST", {
+			message: "slug is taken",
+		});
 	},
 );
 
@@ -218,19 +243,14 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
-			});
-		}
-		const canUpdateOrg = role.authorize({
-			organization: ["update"],
+		const canUpdateOrg = hasPermission({
+			permission: {
+				organization: ["update"],
+			},
+			role: member.role,
+			options: ctx.context.orgOptions,
 		});
-		if (canUpdateOrg.error) {
+		if (!canUpdateOrg) {
 			return ctx.json(null, {
 				body: {
 					message:
@@ -307,19 +327,14 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
-		if (!role) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Role not found!",
-				},
-			});
-		}
-		const canDeleteOrg = role.authorize({
-			organization: ["delete"],
+		const canDeleteOrg = hasPermission({
+			role: member.role,
+			permission: {
+				organization: ["delete"],
+			},
+			options: ctx.context.orgOptions,
 		});
-		if (canDeleteOrg.error) {
+		if (!canDeleteOrg) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
@@ -331,8 +346,28 @@ export const deleteOrganization = createAuthEndpoint(
 			 */
 			await adapter.setActiveOrganization(session.session.token, null);
 		}
+		const option = ctx.context.orgOptions.organizationDeletion;
+		if (option?.disabled) {
+			throw new APIError("FORBIDDEN");
+		}
+		const org = await adapter.findOrganizationById(organizationId);
+		if (!org) {
+			throw new APIError("BAD_REQUEST");
+		}
+		if (option?.beforeDelete) {
+			await option.beforeDelete({
+				organization: org,
+				user: session.user,
+			});
+		}
 		await adapter.deleteOrganization(organizationId);
-		return ctx.json(organizationId);
+		if (option?.afterDelete) {
+			await option.afterDelete({
+				organization: org,
+				user: session.user,
+			});
+		}
+		return ctx.json(org);
 	},
 );
 

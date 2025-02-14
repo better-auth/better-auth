@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodString } from "zod";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { createEmailVerificationToken } from "./email-verification";
 import { setSessionCookie } from "../../cookies";
@@ -8,7 +8,6 @@ import type {
 	BetterAuthOptions,
 	User,
 } from "../../types";
-import type { toZod } from "../../types/to-zod";
 import { parseUserInput } from "../../db/schema";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { isDevelopment } from "../../utils/env";
@@ -18,13 +17,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		"/sign-up/email",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()) as unknown as ZodObject<{
-				name: ZodString;
-				email: ZodString;
-				password: ZodString;
-			}> &
-				toZod<AdditionalUserFieldsInput<O>>,
+			body: z.record(z.string(), z.any()),
 			metadata: {
+				$Infer: {
+					body: {} as {
+						name: string;
+						email: string;
+						password: string;
+					} & AdditionalUserFieldsInput<O>,
+				},
 				openapi: {
 					description: "Sign up a user using email and password",
 					requestBody: {
@@ -204,7 +205,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			}
 
 			if (
-				!ctx.context.options.emailAndPassword.autoSignIn ||
+				ctx.context.options.emailAndPassword.autoSignIn === false ||
 				ctx.context.options.emailAndPassword.requireEmailVerification
 			) {
 				return ctx.json({

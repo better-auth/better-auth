@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
@@ -91,8 +91,8 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 						ctx.context.options.emailAndPassword?.requireEmailVerification
 					) {
 						await sendVerificationEmailFn(ctx, user);
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
 
@@ -141,7 +141,6 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 							status: 500,
 							body: {
 								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								status: 500,
 							},
 						});
 					}
@@ -172,7 +171,7 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 					matcher(context) {
 						return context.path === "/sign-up/email";
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
 						if (username) {
 							const user = await ctx.context.adapter.findOne<User>({
@@ -190,7 +189,7 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 								});
 							}
 						}
-					},
+					}),
 				},
 				{
 					matcher(context) {

@@ -6,6 +6,7 @@ export const schema = {
 			username: {
 				type: "string",
 				required: false,
+				sortable: true,
 				unique: true,
 				returned: true,
 				transform: {
