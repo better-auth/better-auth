@@ -143,6 +143,12 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
+		countTotalUsers: async () => {
+			const total = await adapter.count({
+				model: "user",
+			});
+			return total;
+		},
 		deleteUser: async (userId: string) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`active-sessions-${userId}`);

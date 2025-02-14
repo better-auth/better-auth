@@ -126,6 +126,45 @@ const users = await authClient.admin.listUsers({
 });
 ```
 
+#### Pagination
+The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
+
+```ts
+{
+  users: User[],   // Array of returned users
+  total: number,   // Total number of users after filters and search queries
+  limit: number | undefined,   // The limit provided in the query
+  offset: number | undefined   // The offset provided in the query
+}
+
+##### How to Implement Pagination  
+
+To paginate results, use the `total`, `limit`, and `offset` values to calculate:  
+
+- **Total pages:** `Math.ceil(total / limit)`  
+- **Current page:** `(offset / limit) + 1`  
+- **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
+- **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
+
+##### Example Usage  
+
+Fetching the second page with 10 users per page:  
+
+```ts title="admin.ts"
+const pageSize = 10;
+const currentPage = 2;
+
+const users = await authClient.admin.listUsers({
+    query: {
+        limit: pageSize,
+        offset: (currentPage - 1) * pageSize
+    }
+});
+
+const totalUsers = users.total;
+const totalPages = Math.ceil(totalUsers / limit)
+```
+
 ### Set User Role
 
 Changes the role of a user.

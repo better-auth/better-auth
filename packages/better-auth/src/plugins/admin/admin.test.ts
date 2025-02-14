@@ -70,6 +70,18 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users.length).toBe(2);
 	});
 
+	it("should allow admin to count users", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(2);
+	});
+
 	it("should allow to sort users by name", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -80,6 +92,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+
 		expect(res.data?.users[0].name).toBe("Test User");
 
 		const res2 = await client.admin.listUsers({
@@ -336,7 +349,7 @@ describe("Admin plugin", async () => {
 		expect(sessions2.data?.sessions.length).toBe(0);
 	});
 
-	it("should list with ne", async () => {
+	it("should list with me", async () => {
 		const response = await client.admin.listUsers({
 			query: {
 				sortBy: "createdAt",
