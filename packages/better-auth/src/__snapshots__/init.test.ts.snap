@@ -258,6 +258,7 @@ exports[`init > should match config 1`] = `
         "email": {
           "fieldName": "email",
           "required": true,
+          "sortable": true,
           "type": "string",
           "unique": true,
         },
@@ -275,6 +276,7 @@ exports[`init > should match config 1`] = `
         "name": {
           "fieldName": "name",
           "required": true,
+          "sortable": true,
           "type": "string",
         },
         "updatedAt": {

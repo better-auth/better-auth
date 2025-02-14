@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
 	/**
@@ -47,8 +48,8 @@ export const expo = (options?: ExpoOptions) => {
 							context.path?.startsWith("/oauth2/callback")
 						);
 					},
-					handler: async (ctx) => {
-						const headers = ctx.responseHeader;
+					handler: createAuthMiddleware(async (ctx) => {
+						const headers = ctx.context.responseHeader;
 
 						const location = headers.get("location");
 						if (!location) {
@@ -70,7 +71,7 @@ export const expo = (options?: ExpoOptions) => {
 						const url = new URL(location);
 						url.searchParams.set("cookie", cookie);
 						ctx.setHeader("location", url.toString());
-					},
+					}),
 				},
 			],
 		},

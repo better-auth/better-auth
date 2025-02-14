@@ -101,7 +101,8 @@ On top of normal methods, the client provides hooks to easily access different r
             const {
                 data: session,
                 isPending, //loading state
-                error //error object 
+                error, //error object 
+                refetch //refetch the session
             } = useSession()
             return (
                 //...

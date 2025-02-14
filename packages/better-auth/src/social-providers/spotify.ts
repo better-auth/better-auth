@@ -18,8 +18,9 @@ export const spotify = (options: SpotifyOptions) => {
 		id: "spotify",
 		name: "Spotify",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = scopes || ["user-read-email"];
+			const _scopes = options.disableDefaultScope ? [] : ["user-read-email"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "spotify",
 				options,
@@ -34,7 +35,7 @@ export const spotify = (options: SpotifyOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://accounts.spotify.com/api/token",
 			});

@@ -6,6 +6,7 @@ export const schema = {
 			username: {
 				type: "string",
 				required: false,
+				sortable: true,
 				unique: true,
 				returned: true,
 				transform: {
@@ -13,6 +14,10 @@ export const schema = {
 						return value?.toString().toLowerCase();
 					},
 				},
+			},
+			displayUsername: {
+				type: "string",
+				required: false,
 			},
 		},
 	},

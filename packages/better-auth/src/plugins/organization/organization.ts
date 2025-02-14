@@ -35,6 +35,7 @@ import {
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
+	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
@@ -45,6 +46,7 @@ import {
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { hasPermission } from "./has-permission";
 
 export interface OrganizationOptions {
 	/**
@@ -249,6 +251,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
@@ -369,22 +372,14 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role = roles[member.role as keyof typeof roles];
-					const result = role.authorize(ctx.body.permission as any);
-					if (result.error) {
-						return ctx.json(
-							{
-								error: result.error,
-								success: false,
-							},
-							{
-								status: 403,
-							},
-						);
-					}
+					const result = hasPermission({
+						role: member.role,
+						options: options as OrganizationOptions,
+						permission: ctx.body.permission as any,
+					});
 					return ctx.json({
 						error: null,
-						success: true,
+						success: result,
 					});
 				},
 			),
@@ -405,11 +400,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					name: {
 						type: "string",
 						required: true,
+						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.name,
 					},
 					slug: {
 						type: "string",
 						unique: true,
+						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
 					},
 					logo: {
@@ -453,6 +450,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					role: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
@@ -478,16 +476,19 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					email: {
 						type: "string",
 						required: true,
+						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
 					},
 					role: {
 						type: "string",
 						required: false,
+						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.role,
 					},
 					status: {
 						type: "string",
 						required: true,
+						sortable: true,
 						defaultValue: "pending",
 						fieldName: options?.schema?.invitation?.fields?.status,
 					},

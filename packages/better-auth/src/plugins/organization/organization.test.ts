@@ -288,6 +288,27 @@ describe("organization", async (it) => {
 		expect(member.data?.role).toBe("admin");
 	});
 
+	it("should allow setting multiple roles", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const c = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["member", "owner", "admin"],
+			memberId: org.data?.members[1].id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(c.data?.role).toBe("member,owner,admin");
+	});
+
 	const adminUser = {
 		email: "test3@test.com",
 		password: "test123456",

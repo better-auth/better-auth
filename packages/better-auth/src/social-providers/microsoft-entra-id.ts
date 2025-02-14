@@ -44,9 +44,11 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
-			const scopes = data.scopes || ["openid", "profile", "email", "User.Read"];
+			const scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email", "User.Read"];
 			options.scope && scopes.push(...options.scope);
-
+			data.scopes && scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
@@ -62,7 +64,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});

@@ -17,12 +17,12 @@ To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
 const auth = new BetterAuth({
-    session: {
-        cookieCache: {
-            enabled: true,
-            maxAge: 5 * 60 // Cache duration in seconds
-        }
-    }
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // Cache duration in seconds
+    },
+  },
 });
 ```
 
@@ -155,6 +155,24 @@ Here’s how to effectively utilize indexes in Better Auth:
 4. **Monitoring and Maintenance**: Regularly monitor index usage and performance. Unused or rarely used indexes can be removed to reduce overhead. Additionally, consider rebuilding or reorganizing indexes periodically to maintain their efficiency.
 
 You can read more about indexes in the <Link href="https://en.wikipedia.org/wiki/Database_index">database index wikipedia page</Link>.
+
+#### Recommended fields to index
+
+| Table         | Fields                     | Plugin       |
+| ------------- | -------------------------- | ------------ |
+| users         | `email`                    |              |
+| accounts      | `userId`                   |              |
+| sessions      | `userId`, `token`          |              |
+| verifications | `identifier`               |              |
+| invitations   | `userId`, `organizationId` | organization |
+| members       | `userId`, `organizationId` | organization |
+| organizations | `slug`                     | organization |
+| passkey       | `userId`                   | passkey      |
+| twoFactor     | `secret`                   | twoFactor    |
+
+<Callout>
+  We intend to add indexing support in our schema generation tool in the future.
+</Callout>
 
 ### Using a connection pool
 

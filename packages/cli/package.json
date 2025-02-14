@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.1.15-beta.1",
+  "version": "1.2.0-beta.4",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
@@ -11,6 +11,7 @@
   "main": "./dist/index.mjs",
   "scripts": {
     "dev": "tsup --watch --sourcemap",
+    "start": "node ./dist/index.mjs",
     "test": "vitest",
     "build": "tsup --clean"
   },
@@ -22,6 +23,7 @@
   "exports": "./dist/index.mjs",
   "bin": "./dist/index.mjs",
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^1.6.0"
@@ -40,6 +42,7 @@
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.33.0",
+    "fs-extra": "^11.3.0",
     "get-tsconfig": "^4.8.1",
     "prisma": "^5.22.0",
     "prompts": "^2.4.2",
