@@ -17,7 +17,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
     export const auth = betterAuth({
         plugins: [ // [!code highlight]
-            turnstile({ // [!code highlight]
+            captcha({ // [!code highlight]
                 provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
