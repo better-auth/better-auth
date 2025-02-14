@@ -1,0 +1,196 @@
+---
+title: App Invite
+description: Invite users to your application and allow them to sign up.
+---
+
+The App Invite plugin allows inviting other users to your application and sign them up.
+
+## Installation
+
+<Steps>
+    <Step>
+    ### Add the plugin to your auth config
+
+    To use the App Invite plugin, add it to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { appInvite } from "better-auth/plugins" // [!code highlight]
+
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            appInvite({ // [!code highlight]
+                sendInvitationEmail: (data) => { // [!code highlight]
+                    // ... send invitation to the user // [!code highlight]
+                } // [!code highlight]
+            }) // [!code highlight]
+        ]
+    })
+    ```
+
+    </Step>
+    <Step>
+    ### Add the client plugin
+
+    Include the App Invite client plugin in your authentication client instance.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { appInviteClient } from "better-auth/client/plugins" // [!code highlight]
+
+    const authClient = createAuthClient({
+        plugins: [
+            appInviteClient() // [!code highlight]
+        ]
+    })
+    ```
+
+    </Step>
+
+</Steps>
+
+## Usage
+
+To add members to the application, we first need to send an invitation to the user. The user will receive an email/sms with the invitation link. Once the user accepts the invitation, they will be signed up to the application.
+
+### Setup Invitation Email
+
+For app invites to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+
+You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { appInvite } from "better-auth/plugins";
+import { sendAppInvitation } from "./email";
+
+export const auth = betterAuth({
+  plugins: [
+    appInvite({
+      async sendInvitationEmail(data) {
+        const inviteLink = `https://example.com/accept-invitation/${data.id}`;
+        sendAppInvitation({
+          email: data.email,
+          invitedByUsername: data.inviter.name,
+          invitedByEmail: data.inviter.email,
+          inviteLink,
+        });
+      },
+    }),
+  ],
+});
+```
+
+### Send Invitation
+
+To invite users to the app, you can use the `invite` function provided by the client.
+the `invite` function takes an object with the following properties:
+
+- `email`: The email address of the user to invite
+
+- `resend`: A boolean value that determines whether to resend the invitation email, if the user is already invited
+
+```ts title="invitation.ts"
+await authClient.inviteUser({
+  email: "test@email.com",
+});
+```
+
+### Accept Invitation
+
+When a user receives an invitation email, they can click on the invitation link to accept the invitation. The link should include the invitation ID, which will be used to accept the invitation.
+
+```ts title="auth-client.ts"
+await authClient.acceptInvitation({
+  invitationId: "invitation-id",
+  name: "John Doe",
+  password: "password123456",
+  // ... additional user data
+});
+```
+
+### Update Invitation Status
+
+To update the status of invitations you can use the `acceptInvitation`, `rejectInvitation`, `cancelInvitation` function provided by the client. The functions take the invitation id as an argument.
+
+```ts title="auth-client.ts"
+// cancel invitation (by default only the inviter can cancel invitations)
+await authClient.cancelInvitation({
+  invitationId: "invitation-id",
+});
+
+// reject invitation
+await authClient.rejectInvitation({
+  invitationId: "invitation-id",
+});
+```
+
+### Get Invitation
+
+To get an invitation you can use the `getAppInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
+
+```ts title="auth-client"
+await authClient.getAppInvitation({
+  query: {
+    id: params.id,
+  },
+});
+```
+
+## Schema
+
+The plugin requires an additional table in the database.
+
+Table Name: `app_invitation`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each invitation",
+      isPrimaryKey: true,
+    },
+    {
+      name: "email",
+      type: "string",
+      description: "The email address of the user",
+    },
+    {
+      name: "inviterId",
+      type: "string",
+      description: "The ID of the inviter",
+      isForeignKey: true,
+    },
+    {
+      name: "status",
+      type: "string",
+      description: "The status of the invitation",
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "Timestamp of when the invitation expires",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the invitation was created",
+    },
+  ]}
+/>
+
+## Options
+
+**allowUserToSendInvitation**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create invite others. By defaults it's `true`. You can set it to `false` to restrict users from creating invitations.
+
+**allowUserToCancelInvitation**: `(data: { user: User, invitation: AppInvitation }) => Promise<boolean> | boolean` - A functon that determines whether a user can cancel inivtations. By default the user can only cancel invites created by them. You can set it to `false` to restrict users from canceling invitations.
+
+**invitationExpiresIn**: `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
+
+**sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
+
+**autoSignIn**: A boolean value that determines whether to prevent automatic sign-up when accepting an invitation. Defaults to `false`.
+
+**$Infer.AdditionalFields**: Allows you to infer additional data for the user. This option is available in the client plugin aswell.
