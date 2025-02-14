@@ -94,8 +94,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				rest,
 				"update",
 			);
-			const user = await ctx.context.internalAdapter.updateUserByEmail(
-				session.user.email,
+			const user = await ctx.context.internalAdapter.updateUser(
+				session.user.id,
 				{
 					name,
 					image,
@@ -475,9 +475,6 @@ export const deleteUserCallback = createAuthEndpoint(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			if (token) {
-				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
-			}
 			throw new APIError("NOT_FOUND", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});

@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export interface ExpoOptions {
 	/**
@@ -13,8 +14,8 @@ export const expo = (options?: ExpoOptions) => {
 		init: (ctx) => {
 			const trustedOrigins =
 				process.env.NODE_ENV === "development"
-					? [...(ctx.options.trustedOrigins || []), "exp://"]
-					: ctx.options.trustedOrigins;
+					? [...(ctx.trustedOrigins || []), "exp://"]
+					: ctx.trustedOrigins;
 			return {
 				options: {
 					trustedOrigins,
@@ -47,17 +48,17 @@ export const expo = (options?: ExpoOptions) => {
 							context.path?.startsWith("/oauth2/callback")
 						);
 					},
-					handler: async (ctx) => {
-						const headers = ctx.responseHeader;
+					handler: createAuthMiddleware(async (ctx) => {
+						const headers = ctx.context.responseHeader;
 
 						const location = headers.get("location");
 						if (!location) {
 							return;
 						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(
-							(origin) => !origin.startsWith("http"),
+							(origin: string) => !origin.startsWith("http"),
 						);
-						const isTrustedOrigin = trustedOrigins.some((origin) =>
+						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
 							location?.startsWith(origin),
 						);
 						if (!isTrustedOrigin) {
@@ -70,7 +71,7 @@ export const expo = (options?: ExpoOptions) => {
 						const url = new URL(location);
 						url.searchParams.set("cookie", cookie);
 						ctx.setHeader("location", url.toString());
-					},
+					}),
 				},
 			],
 		},

@@ -265,6 +265,15 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.request,
 			);
 
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user: {
+					...session.user,
+					email: parsed.updateTo,
+					emailVerified: false,
+				},
+			});
+
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
@@ -296,7 +305,21 @@ export const verifyEmail = createAuthEndpoint(
 						message: "Failed to create session",
 					});
 				}
-				await setSessionCookie(ctx, { session, user: user.user });
+				await setSessionCookie(ctx, {
+					session,
+					user: {
+						...user.user,
+						emailVerified: true,
+					},
+				});
+			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+						emailVerified: true,
+					},
+				});
 			}
 		}
 

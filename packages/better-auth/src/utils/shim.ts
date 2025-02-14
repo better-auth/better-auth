@@ -34,10 +34,14 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 					});
 					if (match) {
 						const hookRes = await hook.handler(context);
-						if (hookRes && "context" in hookRes) {
+						if (
+							hookRes &&
+							typeof hookRes === "object" &&
+							"context" in hookRes
+						) {
 							context = {
 								...context,
-								...hookRes.context,
+								...(hookRes.context as any),
 								...value,
 							};
 						}
@@ -63,7 +67,11 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 							returned: endpointRes,
 						});
 						const hookRes = await hook.handler(obj);
-						if (hookRes && "response" in hookRes) {
+						if (
+							hookRes &&
+							typeof hookRes === "object" &&
+							"response" in hookRes
+						) {
 							response = hookRes.response as any;
 						}
 					}

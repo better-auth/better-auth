@@ -17,10 +17,10 @@ describe("username", async (it) => {
 
 	it("should signup with username", async () => {
 		const headers = new Headers();
-		const res = await client.signUp.email(
+		await client.signUp.email(
 			{
 				email: "new-email@gamil.com",
-				username: "new-username",
+				username: "New-Username",
 				password: "new-password",
 				name: "new-name",
 			},
@@ -35,6 +35,7 @@ describe("username", async (it) => {
 			},
 		});
 		expect(session?.user.username).toBe("new-username");
+		expect(session?.user.displayUsername).toBe("New-Username");
 	});
 	const headers = new Headers();
 	it("should sign-in with username", async () => {
@@ -51,7 +52,7 @@ describe("username", async (it) => {
 	});
 	it("should update username", async () => {
 		const res = await client.updateUser({
-			username: "new-username-2",
+			username: "new-Username-2",
 			fetchOptions: {
 				headers,
 			},
@@ -64,6 +65,7 @@ describe("username", async (it) => {
 			},
 		});
 		expect(session?.user.username).toBe("new-username-2");
+		expect(session?.user.displayUsername).toBe("new-Username-2");
 	});
 
 	it("should fail on duplicate username", async () => {

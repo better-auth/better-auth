@@ -143,16 +143,29 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		deleteUser: async (userId: string) => {
-			await adapter.deleteMany({
-				model: "session",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
+		countTotalUsers: async () => {
+			const total = await adapter.count({
+				model: "user",
 			});
+			return total;
+		},
+		deleteUser: async (userId: string) => {
+			if (secondaryStorage) {
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+			}
+
+			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+				await adapter.deleteMany({
+					model: "session",
+					where: [
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+				});
+			}
+
 			await adapter.deleteMany({
 				model: "account",
 				where: [
@@ -736,6 +749,18 @@ export const createInternalAdapter = (
 				},
 				limit: 1,
 			});
+			if (!options.verification?.disableCleanup) {
+				await adapter.deleteMany({
+					model: "verification",
+					where: [
+						{
+							field: "expiresAt",
+							value: new Date().toISOString(),
+							operator: "lt",
+						},
+					],
+				});
+			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},

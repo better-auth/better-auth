@@ -19,6 +19,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		jsonParser(text) {
+			if (!text) {
+				return null as any;
+			}
 			return parseJSON(text, {
 				strict: false,
 			});
@@ -60,7 +63,8 @@ export const getClientConfig = (options?: ClientOptions) => {
 					path === "/sign-out" ||
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up")
+					path.startsWith("/sign-up") ||
+					path === "/delete-user"
 				);
 			},
 		},

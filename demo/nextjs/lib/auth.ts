@@ -42,9 +42,9 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: new Database("./better-auth-demo.sqlite"),
-	session: {
-		freshAge: 0,
+	database: {
+		dialect,
+		type: "sqlite",
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {

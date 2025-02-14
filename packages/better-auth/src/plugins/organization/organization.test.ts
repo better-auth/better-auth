@@ -8,27 +8,28 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { BetterAuthError } from "../../error";
 
 describe("organization", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
-		plugins: [
-			organization({
-				async sendInvitationEmail(data, request) {},
-				schema: {
-					organization: {
-						modelName: "team",
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					async sendInvitationEmail(data, request) {},
+					schema: {
+						organization: {
+							modelName: "team",
+						},
+						member: {
+							modelName: "teamMembers",
+						},
 					},
-					member: {
-						modelName: "teamMembers",
-					},
-				},
-			}),
-		],
-		logger: {
-			level: "error",
-		},
-	});
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -288,6 +289,27 @@ describe("organization", async (it) => {
 		expect(member.data?.role).toBe("admin");
 	});
 
+	it("should allow setting multiple roles", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const c = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["member", "owner", "admin"],
+			memberId: org.data?.members[1].id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(c.data?.role).toBe("member,owner,admin");
+	});
+
 	const adminUser = {
 		email: "test3@test.com",
 		password: "test123456",
@@ -310,6 +332,36 @@ describe("organization", async (it) => {
 		expect(invite.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
 		);
+	});
+
+	it("should allow leaving organization", async () => {
+		const newUser = {
+			email: "leave@org.com",
+			name: "leaving member",
+			password: "password",
+		};
+		const headers = new Headers();
+		const res = await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(headers),
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: res.data?.user.id!,
+				role: "admin",
+			},
+		});
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+		expect(leaveRes.data).toMatchObject({
+			userId: res.data?.user.id!,
+		});
 	});
 
 	it("should allow removing member from organization", async () => {

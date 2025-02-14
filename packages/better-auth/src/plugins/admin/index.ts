@@ -120,7 +120,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									return {
 										data: {
 											role: options?.defaultRole ?? "user",
-											...user,
 										},
 									};
 								},
@@ -163,7 +162,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const response =
 							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
-
 						if (!response) {
 							return;
 						}
@@ -398,6 +396,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 															$ref: "#/components/schemas/User",
 														},
 													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													offset: {
+														type: ["number", "undefined"],
+													},
 												},
 											},
 										},
@@ -438,12 +445,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
+						const total = await ctx.context.internalAdapter.countTotalUsers();
 						return ctx.json({
 							users: users as UserWithRole[],
+							total: total,
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined,
 						});
 					} catch (e) {
 						return ctx.json({
 							users: [],
+							total: 0,
 						});
 					}
 				},
@@ -880,6 +892,29 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 					return ctx.json({
 						success: true,
+					});
+				},
+			),
+			setUserPassword: createAuthEndpoint(
+				"/admin/set-user-password",
+				{
+					method: "POST",
+					body: z.object({
+						newPassword: z.string(),
+						userId: z.string(),
+					}),
+					use: [adminMiddleware],
+				},
+				async (ctx) => {
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.newPassword,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						ctx.body.userId,
+						hashedPassword,
+					);
+					return ctx.json({
+						status: true,
 					});
 				},
 			),

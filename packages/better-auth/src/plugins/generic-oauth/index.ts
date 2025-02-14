@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api";
+import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import {
 	createAuthorizationURL,
@@ -13,6 +13,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { decodeJwt } from "jose";
+import { BASE_ERROR_CODES } from "../../error/codes";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -286,6 +287,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -381,7 +388,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -467,7 +476,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL, newUserURL } =
+					const { callbackURL, codeVerifier, errorURL, newUserURL, link } =
 						parsedState;
 					const code = ctx.query.code;
 
@@ -536,6 +545,28 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						? await provider.mapProfileToUser(userInfo)
 						: null;
 
+					if (link) {
+						if (link.email !== userInfo.email.toLowerCase()) {
+							return redirectOnError("email_doesn't_match");
+						}
+						const newAccount = await ctx.context.internalAdapter.createAccount({
+							userId: link.userId,
+							providerId: provider.providerId,
+							accountId: userInfo.id,
+						});
+						if (!newAccount) {
+							return redirectOnError("unable_to_link_account");
+						}
+						let toRedirectTo: string;
+						try {
+							const url = callbackURL;
+							toRedirectTo = url.toString();
+						} catch {
+							toRedirectTo = callbackURL;
+						}
+						throw ctx.redirect(toRedirectTo);
+					}
+
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: {
 							...userInfo,
@@ -576,6 +607,102 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							: callbackURL;
 					}
 					throw ctx.redirect(toRedirectTo);
+				},
+			),
+			oAuth2LinkAccount: createAuthEndpoint(
+				"/oauth2/link",
+				{
+					method: "POST",
+					body: z.object({
+						providerId: z.string(),
+						callbackURL: z.string(),
+					}),
+					use: [sessionMiddleware],
+				},
+				async (c) => {
+					const session = c.context.session;
+					const account = await c.context.internalAdapter.findAccounts(
+						session.user.id,
+					);
+					const existingAccount = account.find(
+						(a) => a.providerId === c.body.providerId,
+					);
+					if (existingAccount) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
+						});
+					}
+					const provider = options.config.find(
+						(p) => p.providerId === c.body.providerId,
+					);
+					if (!provider) {
+						throw new APIError("NOT_FOUND", {
+							message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
+						});
+					}
+					const {
+						providerId,
+						clientId,
+						clientSecret,
+						redirectURI,
+						authorizationUrl,
+						discoveryUrl,
+						pkce,
+						scopes,
+					} = provider;
+
+					let finalAuthUrl = authorizationUrl;
+					if (!finalAuthUrl) {
+						if (!discoveryUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							});
+						}
+						const discovery = await betterFetch<{
+							authorization_endpoint: string;
+							token_endpoint: string;
+						}>(discoveryUrl, {
+							onError(context) {
+								c.context.logger.error(context.error.message, context.error, {
+									discoveryUrl,
+								});
+							},
+						});
+						if (discovery.data) {
+							finalAuthUrl = discovery.data.authorization_endpoint;
+						}
+					}
+
+					if (!finalAuthUrl) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+						});
+					}
+
+					const state = await generateState(c, {
+						userId: session.user.id,
+						email: session.user.email,
+					});
+
+					const url = await createAuthorizationURL({
+						id: providerId,
+						options: {
+							clientId,
+							clientSecret,
+							redirectURI:
+								redirectURI || `${c.context.baseURL}/oauth2/callback`,
+						},
+						authorizationEndpoint: finalAuthUrl,
+						state: state.state,
+						codeVerifier: pkce ? state.codeVerifier : undefined,
+						scopes: scopes || [],
+						redirectURI: `${c.context.baseURL}/oauth2/callback/${providerId}`,
+					});
+
+					return c.json({
+						url: url.toString(),
+						redirect: true,
+					});
 				},
 			),
 		},
