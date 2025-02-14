@@ -40,7 +40,11 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				ctx.baseURL = baseURL;
 			}
 			ctx.trustedOrigins = [
-				...(options.trustedOrigins || []),
+				...(options.trustedOrigins
+					? Array.isArray(options.trustedOrigins)
+						? options.trustedOrigins
+						: options.trustedOrigins(request)
+					: []),
 				ctx.baseURL,
 				url.origin,
 			];
