@@ -53,9 +53,9 @@ export const auth = betterAuth({
             enabled: true,
             sendChangeEmailVerification: async ({ user, newEmail, url, token }, request) => {
                 await sendEmail({
-                    to: newEmail,
-                    subject: 'Verify your email change',
-                    text: `Click the link to verify: ${url}`
+                    to: user.email, // verification email must be sent to the current user email to approve the change
+                    subject: 'Approve email change',
+                    text: `Click the link to approve the change: ${url}`
                 })
             }
         }
@@ -109,9 +109,9 @@ Better Auth provides a utility to hard delete a user from your database. It's di
 export const auth = betterAuth({
     //...other config
     user: {
-        deleteUser: {
-            enabled: true // [!Code Highlight]
-        }
+        deleteUser: { // [!code highlight]
+            enabled: true // [!code highlight]
+        } // [!code highlight]
     }
 })
 ```
@@ -321,6 +321,17 @@ Users already signed in can manually link their account to additional social pro
   await authClient.linkSocial({
       provider: "google", // Provider to link
       callbackURL: "/callback" // Callback URL after linking completes
+  });
+  ```
+
+  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings. 
+  ```ts title="auth.ts"
+  const auth = betterAuth({
+      account: {
+          accountLinking: {
+              allowDifferentEmails: true
+          }
+      },
   });
   ```
 

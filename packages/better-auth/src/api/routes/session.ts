@@ -95,9 +95,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 
 				if (!sessionCookieToken) {
-					return ctx.json(null);
+					return null;
 				}
-
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
@@ -157,7 +156,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
@@ -228,6 +226,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge,
 						},
 					);
+
 					return ctx.json({
 						session: updatedSession,
 						user: session.user,
@@ -268,10 +267,12 @@ export const getSessionFromCtx = async <
 			user: U & User;
 		};
 	}
+
 	const session = await getSession()({
 		...ctx,
-		_flag: "json",
+		asResponse: false,
 		headers: ctx.headers!,
+		returnHeaders: false,
 		query: config,
 	}).catch((e) => {
 		return null;
@@ -371,15 +372,20 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			const sessions = await ctx.context.internalAdapter.listSessions(
-				ctx.context.session.user.id,
-			);
-			const activeSessions = sessions.filter((session) => {
-				return session.expiresAt > new Date();
-			});
-			return ctx.json(
-				activeSessions as unknown as Prettify<InferSession<Option>>[],
-			);
+			try {
+				const sessions = await ctx.context.internalAdapter.listSessions(
+					ctx.context.session.user.id,
+				);
+				const activeSessions = sessions.filter((session) => {
+					return session.expiresAt > new Date();
+				});
+				return ctx.json(
+					activeSessions as unknown as Prettify<InferSession<Option>>[],
+				);
+			} catch (e: any) {
+				ctx.context.logger.error(e);
+				throw ctx.error("INTERNAL_SERVER_ERROR");
+			}
 		},
 	);
 

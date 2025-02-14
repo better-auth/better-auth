@@ -349,6 +349,52 @@ To get the full details of an organization, you can use the `getFullOrganization
 </Tabs>
 
 
+### Update Organization
+
+To update organization info, you can use `organization.update`
+
+
+```ts 
+await client.organization.update({
+  data: {
+    name: "updated-name",
+    logo: "new-logo.url",
+    metadata: {
+      customerId: "test"
+    },
+    slug: "updated-slug"
+  },
+  organizationId: 'org-id' //defaults to the current active organization
+})
+```
+
+### Delete Organization
+
+To remove user owned organization, you can use `organization.delete`
+
+```ts title="org.ts"
+await authClient.organization.delete({
+  organizationId: "test"
+});
+```
+
+If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
+
+You can configure how organization deletion is handled through `organizationDeletion` option:
+
+```ts
+const auth = betterAuth({
+  organizationDeletion: {
+    disabled: true, //to disable it altogether
+    beforeDelete: async(data, request)=>{
+      // a callback to run before deleting org
+    },
+    afterDelete: async(data, request)=>{
+      // a callback to run after deleting org
+    }
+  }
+})
+```
 
 ## Invitations
 
@@ -393,7 +439,7 @@ To invite users to an organization, you can use the `invite` function provided b
 ```ts title="invitation.ts"
 await authClient.organization.inviteMember({
     email: "test@email.com",
-    role: "admin",
+    role: "admin", //this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -459,7 +505,7 @@ To update the role of a member in an organization, you can use the `organization
 ```ts title="auth-client.ts"
 await authClient.organization.updateMemberRole({
     memberId: "member-id",
-    role: "admin"
+    role: "admin" // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -501,6 +547,9 @@ By default, there are three roles in the organization:
 
 `member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
 
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
 
 ### Permissions
 
@@ -785,6 +834,12 @@ Table Name: `invitation`
       name: "email", 
       type: "string", 
       description: "The email address of the user" 
+    },
+    { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
     },
     { 
       name: "organizationId", 

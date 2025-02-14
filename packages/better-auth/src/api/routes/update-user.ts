@@ -1,11 +1,10 @@
-import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getSessionFromCtx, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { toZod } from "../../types/to-zod";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
@@ -17,15 +16,15 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()) as unknown as toZod<
-				AdditionalUserFieldsInput<O>
-			> &
-				ZodObject<{
-					name: ZodOptional<ZodString>;
-					image: ZodOptional<ZodString | ZodNull>;
-				}>,
+			body: z.record(z.string(), z.any()),
 			use: [sessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as AdditionalUserFieldsInput<O> & {
+						name?: string;
+						image?: string | null;
+					},
+				},
 				openapi: {
 					description: "Update the current user",
 					requestBody: {
@@ -95,8 +94,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				rest,
 				"update",
 			);
-			const user = await ctx.context.internalAdapter.updateUserByEmail(
-				session.user.email,
+			const user = await ctx.context.internalAdapter.updateUser(
+				session.user.id,
 				{
 					name,
 					image,
@@ -476,9 +475,6 @@ export const deleteUserCallback = createAuthEndpoint(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			if (token) {
-				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
-			}
 			throw new APIError("NOT_FOUND", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});

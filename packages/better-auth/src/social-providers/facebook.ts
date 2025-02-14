@@ -32,8 +32,11 @@ export const facebook = (options: FacebookOptions) => {
 		id: "facebook",
 		name: "Facebook",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["email", "public_profile"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "public_profile"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
@@ -46,7 +49,7 @@ export const facebook = (options: FacebookOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});
@@ -61,26 +64,29 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			/* limited login */
-			try {
-				const { payload: jwtClaims } = await jwtVerify(
-					token,
-					createRemoteJWKSet(
-						new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
-					),
-					{
-						algorithms: ["RS256"],
-						audience: options.clientId,
-						issuer: "https://www.facebook.com",
-					},
-				);
+			// check is limited token
+			if (token.split(".").length) {
+				try {
+					const { payload: jwtClaims } = await jwtVerify(
+						token,
+						createRemoteJWKSet(
+							new URL("https://www.facebook.com/.well-known/oauth/openid/jwks"),
+						),
+						{
+							algorithms: ["RS256"],
+							audience: options.clientId,
+							issuer: "https://www.facebook.com",
+						},
+					);
 
-				if (nonce && jwtClaims.nonce !== nonce) {
+					if (nonce && jwtClaims.nonce !== nonce) {
+						return false;
+					}
+
+					return !!jwtClaims;
+				} catch (error) {
 					return false;
 				}
-
-				return !!jwtClaims;
-			} catch (error) {
-				return false;
 			}
 
 			/* access_token */
