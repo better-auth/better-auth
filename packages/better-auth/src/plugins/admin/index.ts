@@ -120,7 +120,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									return {
 										data: {
 											role: options?.defaultRole ?? "user",
-											...user,
 										},
 									};
 								},
