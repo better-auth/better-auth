@@ -12,6 +12,7 @@ import { dropbox } from "./dropbox";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { reddit } from "./reddit";
+import { roblox } from "./roblox";
 import { z } from "zod";
 import { vk } from "./vk";
 export const socialProviders = {
@@ -28,6 +29,7 @@ export const socialProviders = {
 	linkedin,
 	gitlab,
 	reddit,
+	roblox,
 	vk,
 };
 
@@ -65,4 +67,5 @@ export * from "./dropbox";
 export * from "./linkedin";
 export * from "./gitlab";
 export * from "./reddit";
+export * from "./roblox";
 export * from "./vk";
