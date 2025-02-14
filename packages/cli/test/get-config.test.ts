@@ -362,4 +362,30 @@ describe("getConfig", async () => {
 			getConfig({ cwd: tmpDir, configPath: "server/auth/auth.ts" }),
 		).rejects.toThrowError();
 	});
+
+	it("should resolve js config", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		const dbPath = path.join(tmpDir, "server", "db");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(dbPath, { recursive: true });
+
+		//create dummy auth.ts
+		await fs.writeFile(
+			path.join(authPath, "auth.js"),
+			`import  { betterAuth } from "better-auth";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`,
+		);
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.js",
+		});
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
 });

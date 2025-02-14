@@ -43,9 +43,6 @@ export const auth = betterAuth({
 		dialect,
 		type: "sqlite",
 	},
-	session: {
-		freshAge: 0,
-	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({

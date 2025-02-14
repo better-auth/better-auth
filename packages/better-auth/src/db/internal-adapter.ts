@@ -144,15 +144,22 @@ export const createInternalAdapter = (
 			return users;
 		},
 		deleteUser: async (userId: string) => {
-			await adapter.deleteMany({
-				model: "session",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-			});
+			if (secondaryStorage) {
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+			}
+
+			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+				await adapter.deleteMany({
+					model: "session",
+					where: [
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+				});
+			}
+
 			await adapter.deleteMany({
 				model: "account",
 				where: [
@@ -246,24 +253,26 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (sessionStringified) {
-					const s = JSON.parse(sessionStringified);
-					const parsedSession = parseSessionOutput(ctx.options, {
-						...s.session,
-						expiresAt: new Date(s.session.expiresAt),
-						createdAt: new Date(s.session.createdAt),
-						updatedAt: new Date(s.session.updatedAt),
-					});
-					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
-					});
-					return {
-						session: parsedSession,
-						user: parsedUser,
-					};
+				if (!sessionStringified) {
+					return null;
 				}
+
+				const s = JSON.parse(sessionStringified);
+				const parsedSession = parseSessionOutput(ctx.options, {
+					...s.session,
+					expiresAt: new Date(s.session.expiresAt),
+					createdAt: new Date(s.session.createdAt),
+					updatedAt: new Date(s.session.updatedAt),
+				});
+				const parsedUser = parseUserOutput(ctx.options, {
+					...s.user,
+					createdAt: new Date(s.user.createdAt),
+					updatedAt: new Date(s.user.updatedAt),
+				});
+				return {
+					session: parsedSession,
+					user: parsedUser,
+				};
 			}
 
 			const session = await adapter.findOne<Session>({
@@ -294,28 +303,6 @@ export const createInternalAdapter = (
 			}
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
-
-			if (secondaryStorage) {
-				/**
-				 * Persists session data to secondary storage as it seems it has been evicted from it.
-				 */
-				await secondaryStorage?.set(
-					token,
-					JSON.stringify({
-						session: parsedSession,
-						user: parsedUser,
-					}),
-					parsedSession.expiresAt
-						? Math.floor(
-								((parsedSession.expiresAt instanceof Date
-									? parsedSession.expiresAt.getTime()
-									: new Date(parsedSession.expiresAt).getTime()) -
-									Date.now()) /
-									1000,
-							)
-						: sessionExpiration,
-				);
-			}
 
 			return {
 				session: parsedSession,
@@ -424,18 +411,13 @@ export const createInternalAdapter = (
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
 				await secondaryStorage.delete(token);
-				if (options.session?.storeSessionInDatabase) {
-					await adapter.delete<Session>({
-						model: "session",
-						where: [
-							{
-								field: "token",
-								value: token,
-							},
-						],
-					});
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
 				}
-				return;
 			}
 			await adapter.delete<Session>({
 				model: "session",
@@ -494,23 +476,13 @@ export const createInternalAdapter = (
 						}
 					}
 				}
-				if (options.session?.storeSessionInDatabase) {
-					await adapter.deleteMany({
-						model: "session",
-						where: [
-							{
-								field: Array.isArray(userIdOrSessionTokens)
-									? "token"
-									: "userId",
-								value: userIdOrSessionTokens,
-								operator: Array.isArray(userIdOrSessionTokens)
-									? "in"
-									: undefined,
-							},
-						],
-					});
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
 				}
-				return;
 			}
 			await adapter.deleteMany({
 				model: "session",

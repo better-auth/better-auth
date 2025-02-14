@@ -15,20 +15,7 @@ describe("oauth2", async () => {
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
 
-	beforeAll(async () => {
-		await server.issuer.keys.generate("RS256");
-
-		server.issuer.on;
-		// Start the server
-		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
-	});
-
-	afterAll(async () => {
-		await server.stop();
-	});
-
-	const { customFetchImpl } = await getTestInstance({
+	const { customFetchImpl, auth } = await getTestInstance({
 		plugins: [
 			genericOAuth({
 				config: [
@@ -52,6 +39,24 @@ describe("oauth2", async () => {
 		fetchOptions: {
 			customFetchImpl,
 		},
+	});
+
+	beforeAll(async () => {
+		const context = await auth.$context;
+		await context.internalAdapter.createUser({
+			email: "oauth2@test.com",
+			name: "OAuth2 Test",
+		});
+		await server.issuer.keys.generate("RS256");
+
+		server.issuer.on;
+		// Start the server
+		await server.start(8080, "localhost");
+		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
+	});
+
+	afterAll(async () => {
+		await server.stop();
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
@@ -99,6 +104,7 @@ describe("oauth2", async () => {
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("http://localhost:8080/authorize"),
@@ -111,11 +117,41 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
+	it("should redirect to the provider and handle the response for a new user", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-2@test.com",
+				name: "OAuth2 Test 2",
+				sub: "oauth2-2",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		let headers = new Headers();
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("http://localhost:8080/authorize"),
+			redirect: true,
+		});
+		const callbackURL = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+	});
+
 	it("should redirect to the provider and handle the response after linked", async () => {
 		let headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		const callbackURL = await simulateOAuthFlow(res.data?.url || "", headers);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
@@ -125,6 +161,7 @@ describe("oauth2", async () => {
 		const res = await authClient.signIn.oauth2({
 			providerId: "invalid-provider",
 			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(res.error?.status).toBe(400);
 	});
@@ -146,6 +183,7 @@ describe("oauth2", async () => {
 			{
 				providerId: "test",
 				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
 			},
 			{
 				onSuccess(context) {
@@ -169,7 +207,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should work with custom redirect uri", async () => {
-		const { customFetchImpl } = await getTestInstance({
+		const { customFetchImpl, auth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -198,6 +236,7 @@ describe("oauth2", async () => {
 		const res = await authClient.signIn.oauth2({
 			providerId: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(res.data?.url).toContain("http://localhost:8080/authorize");
 		const headers = new Headers();
@@ -206,7 +245,7 @@ describe("oauth2", async () => {
 			headers,
 			customFetchImpl,
 		);
-		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
 	});
 
 	it.only("should not create user when sign ups are disabled", async () => {

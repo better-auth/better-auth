@@ -357,6 +357,16 @@ export type BetterAuthOptions = {
 		 */
 		storeSessionInDatabase?: boolean;
 		/**
+		 * By default, sessions are deleted from the database when secondary storage
+		 * is provided when session is revoked.
+		 *
+		 * Set this to true to preserve session records in the database,
+		 * even if they are deleted from the secondary storage.
+		 *
+		 * @default false
+		 */
+		preserveSessionInDatabase?: boolean;
+		/**
 		 * Enable caching session in cookie
 		 */
 		cookieCache?: {
@@ -402,6 +412,14 @@ export type BetterAuthOptions = {
 			trustedProviders?: Array<
 				LiteralUnion<SocialProviderList[number] | "email-password", string>
 			>;
+			/**
+			 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
+			 *
+			 * @default false
+			 *
+			 * ⚠️ Warning: enabling this might lead to account takeovers, so proceed with caution.
+			 */
+			allowDifferentEmails?: boolean;
 		};
 	};
 	/**
@@ -414,7 +432,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of trusted origins.
 	 */
-	trustedOrigins?: string[];
+	trustedOrigins?: string[] | ((request: Request) => string[]);
 	/**
 	 * Rate limiting configuration
 	 */
@@ -629,7 +647,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: User & Record<string, any>;
+							data: Partial<User & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -717,7 +735,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Account & Record<string, any>;
+							data: Partial<Account & Record<string, any>>;
 					  }
 				>;
 				/**
@@ -758,7 +776,7 @@ export type BetterAuthOptions = {
 					| boolean
 					| void
 					| {
-							data: Verification & Record<string, any>;
+							data: Partial<Verification & Record<string, any>>;
 					  }
 				>;
 				/**

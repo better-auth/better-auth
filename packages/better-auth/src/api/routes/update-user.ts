@@ -1,11 +1,10 @@
-import { z, ZodNull, ZodObject, ZodOptional, ZodString } from "zod";
+import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { getSessionFromCtx, sessionMiddleware } from "./session";
 import { APIError } from "better-call";
 import { createEmailVerificationToken } from "./email-verification";
-import type { toZod } from "../../types/to-zod";
 import type { AdditionalUserFieldsInput, BetterAuthOptions } from "../../types";
 import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
@@ -17,15 +16,15 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()) as unknown as toZod<
-				AdditionalUserFieldsInput<O>
-			> &
-				ZodObject<{
-					name: ZodOptional<ZodString>;
-					image: ZodOptional<ZodString | ZodNull>;
-				}>,
+			body: z.record(z.string(), z.any()),
 			use: [sessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as AdditionalUserFieldsInput<O> & {
+						name?: string;
+						image?: string | null;
+					},
+				},
 				openapi: {
 					description: "Update the current user",
 					requestBody: {
@@ -95,8 +94,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				rest,
 				"update",
 			);
-			const user = await ctx.context.internalAdapter.updateUserByEmail(
-				session.user.email,
+			const user = await ctx.context.internalAdapter.updateUser(
+				session.user.id,
 				{
 					name,
 					image,
@@ -517,11 +516,6 @@ export const changeEmail = createAuthEndpoint(
 	"/change-email",
 	{
 		method: "POST",
-		query: z
-			.object({
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			newEmail: z
 				.string({
@@ -616,9 +610,7 @@ export const changeEmail = createAuthEndpoint(
 		);
 		const url = `${
 			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${
-			ctx.body.callbackURL || ctx.query?.currentURL || "/"
-		}`;
+		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,

@@ -14,6 +14,7 @@ export default defineConfig((env) => {
 			"adapters/mongodb": "./src/adapters/mongodb-adapter/index.ts",
 			"adapters/kysely": "./src/adapters/kysely-adapter/index.ts",
 			"adapters/memory": "./src/adapters/memory-adapter/index.ts",
+			"adapters/test": "./src/adapters/test.ts",
 			db: "./src/db/index.ts",
 			oauth2: "./src/oauth2/index.ts",
 			react: "./src/client/react/index.ts",
@@ -48,10 +49,9 @@ export default defineConfig((env) => {
 			"plugins/username": "./src/plugins/username/index.ts",
 		},
 		format: ["esm", "cjs"],
-		bundle: true,
-		splitting: false,
+		splitting: true,
 		cjsInterop: true,
 		skipNodeModulesBundle: true,
-		noExternal: ["@better-fetch/fetch", "nanostores", "@simplewebauthn/types"],
+		treeshake: true,
 	};
 });

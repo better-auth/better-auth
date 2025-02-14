@@ -87,6 +87,7 @@ export async function handleOAuthUserInfo(
 					refreshToken: account.refreshToken,
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				}).filter(([_, value]) => value !== undefined),
 			);
 

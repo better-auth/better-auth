@@ -34,9 +34,7 @@ interface WebAuthnChallengeValue {
 
 function getRpID(options: PasskeyOptions, baseURL?: string) {
 	return (
-		options.rpID ||
-		baseURL?.replace("http://", "").replace("https://", "").split(":")[0] ||
-		"localhost" // default rpID
+		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
 	);
 }
 
@@ -245,7 +243,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
 						rpName: opts.rpName || ctx.context.appName,
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
@@ -408,7 +406,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const options = await generateAuthenticationOptions({
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userVerification: "preferred",
 						...(userPasskeys.length
 							? {
@@ -531,7 +529,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
@@ -667,7 +665,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							credential: {
 								id: passkey.credentialID,
 								publicKey: new Uint8Array(

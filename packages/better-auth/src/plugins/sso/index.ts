@@ -692,10 +692,14 @@ export const sso = (options?: SSOOptions) => {
 					});
 					let toRedirectTo: string;
 					try {
-						const url = new URL(callbackURL);
+						const url = linked.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
 						toRedirectTo = url.toString();
 					} catch {
-						toRedirectTo = callbackURL;
+						toRedirectTo = linked.isRegister
+							? newUserURL || callbackURL
+							: callbackURL;
 					}
 					throw ctx.redirect(toRedirectTo);
 				},

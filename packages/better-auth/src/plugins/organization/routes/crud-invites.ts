@@ -180,7 +180,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				{
 					id: invitation.id,
 					role: invitation.role as string,
-					email: invitation.email,
+					email: invitation.email.toLowerCase(),
 					organization: organization,
 					inviter: {
 						...member,

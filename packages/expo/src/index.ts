@@ -1,13 +1,20 @@
 import type { BetterAuthPlugin } from "better-auth";
 
-export const expo: () => BetterAuthPlugin = () => {
+export interface ExpoOptions {
+	/**
+	 * Override origin header for expo api routes
+	 */
+	overrideOrigin?: boolean;
+}
+
+export const expo = (options?: ExpoOptions) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
 			const trustedOrigins =
 				process.env.NODE_ENV === "development"
-					? [...(ctx.options.trustedOrigins || []), "exp://"]
-					: ctx.options.trustedOrigins;
+					? [...(ctx.trustedOrigins || []), "exp://"]
+					: ctx.trustedOrigins;
 			return {
 				options: {
 					trustedOrigins,
@@ -15,7 +22,7 @@ export const expo: () => BetterAuthPlugin = () => {
 			};
 		},
 		async onRequest(request, ctx) {
-			if (request.headers.get("origin")) {
+			if (!options?.overrideOrigin || request.headers.get("origin")) {
 				return;
 			}
 			/**
@@ -25,9 +32,10 @@ export const expo: () => BetterAuthPlugin = () => {
 			if (!expoOrigin) {
 				return;
 			}
-			request.headers.set("origin", expoOrigin);
+			const req = request.clone();
+			req.headers.set("origin", expoOrigin);
 			return {
-				request,
+				request: req,
 			};
 		},
 		hooks: {
@@ -40,16 +48,20 @@ export const expo: () => BetterAuthPlugin = () => {
 						);
 					},
 					handler: async (ctx) => {
-						const headers = ctx.responseHeader;
+						const headers = ctx.context.returned?.headers as Headers;
+
+						if (!headers) {
+							return;
+						}
 
 						const location = headers.get("location");
 						if (!location) {
 							return;
 						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(
-							(origin) => !origin.startsWith("http"),
+							(origin: string) => !origin.startsWith("http"),
 						);
-						const isTrustedOrigin = trustedOrigins.some((origin) =>
+						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
 							location?.startsWith(origin),
 						);
 						if (!isTrustedOrigin) {
@@ -66,5 +78,5 @@ export const expo: () => BetterAuthPlugin = () => {
 				},
 			],
 		},
-	};
+	} satisfies BetterAuthPlugin;
 };
