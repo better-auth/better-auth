@@ -14,7 +14,7 @@ export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
 };
 
-export const username = (options?: UsernameOptions) => {
+export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 	const ERROR_CODES = {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
 		EMAIL_NOT_VERIFIED: "email not verified",
@@ -190,6 +190,19 @@ export const username = (options?: UsernameOptions) => {
 							}
 						}
 					}),
+				},
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
+					},
+					async handler(ctx) {
+						if (!ctx.body.displayUsername && ctx.body.username) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+					},
 				},
 			],
 		},
