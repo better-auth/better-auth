@@ -1,5 +1,4 @@
 import type { appInvite } from ".";
-import { betterAuth } from "../../auth";
 import { createAuthClient } from "../../client";
 import type { BetterAuthClientPlugin } from "../../types";
 

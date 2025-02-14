@@ -18,3 +18,4 @@ export * from "./oauth-proxy";
 export * from "./custom-session";
 export * from "./open-api";
 export * from "./oidc-provider";
+export * from "./app-invite";

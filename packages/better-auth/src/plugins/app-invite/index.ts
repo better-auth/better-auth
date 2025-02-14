@@ -752,6 +752,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					return (
 						path.startsWith("/accept-invitation") ||
 						path.startsWith("/reject-invitation") ||
+						path.startsWith("/cancel-invitation") ||
 						path.startsWith("/invite-user") ||
 						path.startsWith("/get-app-invitation")
 					);

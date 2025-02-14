@@ -47,6 +47,7 @@ export default defineConfig((env) => {
 			"plugins/sso": "./src/plugins/sso/index.ts",
 			"plugins/two-factor": "./src/plugins/two-factor/index.ts",
 			"plugins/username": "./src/plugins/username/index.ts",
+			"plugins/app-invite": "./src/plugins/app-invite/index.ts"
 		},
 		format: ["esm", "cjs"],
 		splitting: true,
