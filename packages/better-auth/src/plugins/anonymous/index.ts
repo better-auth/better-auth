@@ -162,17 +162,19 @@ export const anonymous = (options?: AnonymousOptions) => {
 							context.context.authCookies.sessionToken.name,
 						);
 						return (
-							!!hasSessionToken &&
-							(context.path.startsWith("/sign-in") ||
-								context.path.startsWith("/sign-up") ||
-								context.path.startsWith("/callback") ||
-								context.path.startsWith("/oauth2/callback") ||
-								context.path.startsWith("/magic-link/verify") ||
-								context.path.startsWith("/email-otp/verify-email"))
+							context.path.startsWith("/sign-in") ||
+							context.path.startsWith("/sign-up") ||
+							context.path.startsWith("/callback") ||
+							context.path.startsWith("/oauth2/callback") ||
+							context.path.startsWith("/magic-link/verify") ||
+							context.path.startsWith("/email-otp/verify-email")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const headers = ctx.responseHeader;
+						const headers =
+							ctx.context.returned instanceof APIError
+								? ctx.context.returned.headers
+								: ctx.responseHeader;
 						const setCookie = headers.get("set-cookie");
 						/**
 						 * We can consider the user is about to sign in or sign up
