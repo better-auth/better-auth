@@ -247,7 +247,6 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		async findOne(data) {
 			const { model, where, select } = data;
 			const clause = transform.convertWhereClause(where, model);
-			console.log({ clause });
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOne(clause);
