@@ -9,9 +9,8 @@ import babelPresetReact from "@babel/preset-react";
 import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
-import D from "path";
 
-let possiblePaths = ["auth.ts", "auth.tsx"];
+let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
 
 possiblePaths = [
 	...possiblePaths,
@@ -37,7 +36,6 @@ function stripJsonComments(jsonString: string): string {
 function getPathAliases(cwd: string): Record<string, string> | null {
 	const tsConfigPath = path.join(cwd, "tsconfig.json");
 	if (!fs.existsSync(tsConfigPath)) {
-		logger.warn("[#better-auth]: tsconfig.json not found.");
 		return null;
 	}
 	try {

@@ -195,13 +195,12 @@ export const forgetPasswordCallback = createAuthEndpoint(
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
-		query: z.optional(
-			z.object({
-				token: z.string().optional(),
-				currentURL: z.string().optional(),
-			}),
-		),
 		method: "POST",
+		query: z
+			.object({
+				token: z.string().optional(),
+			})
+			.optional(),
 		body: z.object({
 			newPassword: z.string({
 				description: "The new password to set",
@@ -236,12 +235,7 @@ export const resetPassword = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const token =
-			ctx.body.token ||
-			ctx.query?.token ||
-			(ctx.query?.currentURL
-				? new URL(ctx.query.currentURL).searchParams.get("token")
-				: "");
+		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,

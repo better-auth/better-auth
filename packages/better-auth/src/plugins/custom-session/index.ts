@@ -5,8 +5,6 @@ import type {
 	BetterAuthPlugin,
 	InferSession,
 	InferUser,
-	Session,
-	User,
 } from "../../types";
 
 export const customSession = <

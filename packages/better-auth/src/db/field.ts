@@ -1,5 +1,5 @@
 import type { ZodSchema } from "zod";
-import type { BetterAuthOptions, LiteralNumber, LiteralString } from "../types";
+import type { BetterAuthOptions, LiteralString } from "../types";
 
 export type FieldType =
 	| "string"
@@ -74,6 +74,10 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	};
 	unique?: boolean;
 	/**
+	 * If the field should be a bigint on the database instead of integer.
+	 */
+	bigint?: boolean;
+	/**
 	 * A zod schema to validate the value.
 	 */
 	validator?: {
@@ -84,6 +88,13 @@ export type FieldAttributeConfig<T extends FieldType = FieldType> = {
 	 * The name of the field on the database.
 	 */
 	fieldName?: string;
+	/**
+	 * If the field should be sortable.
+	 *
+	 * applicable only for `text` type.
+	 * It's useful to mark fields varchar instead of text.
+	 */
+	sortable?: boolean;
 };
 
 export type FieldAttribute<T extends FieldType = FieldType> = {
@@ -149,7 +160,7 @@ export type InferFieldsInput<Field> = Field extends Record<
 						? never
 						: key]: InferFieldInput<Field[key]>;
 		} & {
-			[key in Key as Field[key]["input"] extends false ? never : key]:
+			[key in Key as Field[key]["input"] extends false ? never : key]?:
 				| InferFieldInput<Field[key]>
 				| undefined
 				| null;

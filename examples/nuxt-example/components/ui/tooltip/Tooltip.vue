@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-	TooltipRoot,
 	type TooltipRootEmits,
 	type TooltipRootProps,
 	useForwardPropsEmits,

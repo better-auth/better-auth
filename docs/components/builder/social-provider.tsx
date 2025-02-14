@@ -304,7 +304,7 @@ export const socialProviders = {
 				></path>
 			</svg>`,
 	},
-	x: {
+	twitter: {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

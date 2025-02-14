@@ -2,13 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogClose,
@@ -35,9 +29,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import {
-	client,
 	organization,
-	useActiveOrganization,
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth-client";

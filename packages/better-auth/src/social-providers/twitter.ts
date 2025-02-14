@@ -119,7 +119,7 @@ export const twitter = (options: TwitterOption) => {
 				code,
 				codeVerifier,
 				authentication: "basic",
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://api.x.com/2/oauth2/token",
 			});

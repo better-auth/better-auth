@@ -1,7 +1,6 @@
 <script lang="ts">
 import { Toggle as TogglePrimitive } from "bits-ui";
-import { type Size, type Variant, toggleVariants } from "./index.js";
-import { cn } from "$lib/utils.js";
+import { type Size, type Variant } from "./index.js";
 
 type $$Props = TogglePrimitive.Props & {
 	variant?: Variant;

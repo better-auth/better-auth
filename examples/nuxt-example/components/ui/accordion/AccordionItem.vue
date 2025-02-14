@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
-import {
-	AccordionItem,
-	type AccordionItemProps,
-	useForwardProps,
-} from "radix-vue";
-import { cn } from "@/lib/utils";
+import { type AccordionItemProps, useForwardProps } from "radix-vue";
 
 const props = defineProps<
 	AccordionItemProps & { class?: HTMLAttributes["class"] }

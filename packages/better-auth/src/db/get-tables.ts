@@ -63,6 +63,7 @@ export const getAuthTables = (
 				},
 				lastRequest: {
 					type: "number",
+					bigint: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 				},
 			},
@@ -70,49 +71,8 @@ export const getAuthTables = (
 	} satisfies BetterAuthDbSchema;
 
 	const { user, session, account, ...pluginTables } = pluginSchema || {};
-	return {
-		user: {
-			modelName: options.user?.modelName || "user",
-			fields: {
-				name: {
-					type: "string",
-					required: true,
-					fieldName: options.user?.fields?.name || "name",
-				},
-				email: {
-					type: "string",
-					unique: true,
-					required: true,
-					fieldName: options.user?.fields?.email || "email",
-				},
-				emailVerified: {
-					type: "boolean",
-					defaultValue: () => false,
-					required: true,
-					fieldName: options.user?.fields?.emailVerified || "emailVerified",
-				},
-				image: {
-					type: "string",
-					required: false,
-					fieldName: options.user?.fields?.image || "image",
-				},
-				createdAt: {
-					type: "date",
-					defaultValue: () => new Date(),
-					required: true,
-					fieldName: options.user?.fields?.createdAt || "createdAt",
-				},
-				updatedAt: {
-					type: "date",
-					defaultValue: () => new Date(),
-					required: true,
-					fieldName: options.user?.fields?.updatedAt || "updatedAt",
-				},
-				...user?.fields,
-				...options.user?.additionalFields,
-			},
-			order: 1,
-		},
+
+	const sessionTable = {
 		session: {
 			modelName: options.session?.modelName || "session",
 			fields: {
@@ -162,6 +122,57 @@ export const getAuthTables = (
 			},
 			order: 2,
 		},
+	} satisfies BetterAuthDbSchema;
+
+	return {
+		user: {
+			modelName: options.user?.modelName || "user",
+			fields: {
+				name: {
+					type: "string",
+					required: true,
+					fieldName: options.user?.fields?.name || "name",
+					sortable: true,
+				},
+				email: {
+					type: "string",
+					unique: true,
+					required: true,
+					fieldName: options.user?.fields?.email || "email",
+					sortable: true,
+				},
+				emailVerified: {
+					type: "boolean",
+					defaultValue: () => false,
+					required: true,
+					fieldName: options.user?.fields?.emailVerified || "emailVerified",
+				},
+				image: {
+					type: "string",
+					required: false,
+					fieldName: options.user?.fields?.image || "image",
+				},
+				createdAt: {
+					type: "date",
+					defaultValue: () => new Date(),
+					required: true,
+					fieldName: options.user?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					defaultValue: () => new Date(),
+					required: true,
+					fieldName: options.user?.fields?.updatedAt || "updatedAt",
+				},
+				...user?.fields,
+				...options.user?.additionalFields,
+			},
+			order: 1,
+		},
+		//only add session table if it's not stored in secondary storage
+		...(!options.secondaryStorage || options.session?.storeSessionInDatabase
+			? sessionTable
+			: {}),
 		account: {
 			modelName: options.account?.modelName || "account",
 			fields: {

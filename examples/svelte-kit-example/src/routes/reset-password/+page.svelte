@@ -1,9 +1,4 @@
 <script>
-import { signIn, client } from "$lib/auth-client";
-import { Button } from "$lib/components/ui/button/index";
-import * as Card from "$lib/components/ui/card/index";
-import { Input } from "$lib/components/ui/input/index";
-import { Label } from "$lib/components/ui/label/index";
 import { writable } from "svelte/store";
 
 const confirmPassword = writable("");

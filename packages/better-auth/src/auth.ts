@@ -8,6 +8,7 @@ import type {
 	InferUser,
 	PrettifyDeep,
 	Expand,
+	AuthContext,
 } from "./types";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
@@ -71,4 +72,5 @@ export type Auth = {
 	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
 	$ERROR_CODES: typeof BASE_ERROR_CODES;
+	$context: Promise<AuthContext>;
 };

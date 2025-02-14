@@ -18,8 +18,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const timestampAndBoolean =
 		databaseType !== "sqlite" ? "timestamp, boolean" : "";
 	const int = databaseType === "mysql" ? "int" : "integer";
+	const hasBigint = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.bigint),
+	);
+	const bigint = databaseType !== "sqlite" ? "bigint" : "";
 	const text = databaseType === "mysql" ? "varchar, text" : "text";
-	let code = `import { ${databaseType}Table, ${text}, ${int}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
+	let code = `import { ${databaseType}Table, ${text}, ${int}${
+		hasBigint ? `, ${bigint}` : ""
+	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
 			`;
 
 	const fileExist = existsSync(filePath);
@@ -49,8 +55,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 				number: {
 					sqlite: `integer('${name}')`,
-					pg: `integer('${name}')`,
-					mysql: `int('${name}')`,
+					pg: field.bigint
+						? `bigint('${name}', { mode: 'number' })`
+						: `integer('${name}')`,
+					mysql: field.bigint
+						? `bigint('${name}', { mode: 'number' })`
+						: `int('${name}')`,
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp' })`,
@@ -79,7 +89,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											usePlural
 												? `${attr.references.model}s`
 												: attr.references.model
-										}.${attr.references.field})`
+										}.${attr.references.field}, { onDelete: 'cascade' })`
 									: ""
 							}`;
 						})

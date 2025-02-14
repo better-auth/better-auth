@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { createAuthEndpoint } from "../call";
 import { deleteSessionCookie } from "../../cookies";
 import { APIError } from "better-call";

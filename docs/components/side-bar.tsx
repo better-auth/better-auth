@@ -17,10 +17,6 @@ import {
 } from "./ui/select";
 import { loglib } from "@loglib/tracker";
 import { cn } from "@/lib/utils";
-import { GitHubIcon } from "@/app/changelogs/_components/icons";
-import Link from "next/link";
-import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 
 export default function ArticleLayout() {
 	const [currentOpen, setCurrentOpen] = useState<number>(0);
@@ -42,7 +38,7 @@ export default function ArticleLayout() {
 		const grp = pathname.includes("examples") ? "examples" : "docs";
 		setGroup(grp);
 		setCurrentOpen(getDefaultValue());
-	}, []);
+	}, [pathname]);
 
 	const cts = group === "docs" ? contents : examples;
 
@@ -63,7 +59,7 @@ export default function ArticleLayout() {
 							}
 						}}
 					>
-						<SelectTrigger className="rounded-none h-16 border-none border-b border">
+						<SelectTrigger className="h-16 border border-b border-none rounded-none">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -131,8 +127,8 @@ export default function ArticleLayout() {
 							loglib.track("sidebar-search-open");
 						}}
 					>
-						<Search className="h-4 w-4" />
-						<p className="text-sm bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text text-transparent">
+						<Search className="w-4 h-4" />
+						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
 							Search documentation...
 						</p>
 					</div>
@@ -190,8 +186,8 @@ export default function ArticleLayout() {
 														>
 															<Suspense fallback={<>Loading...</>}>
 																{listItem.group ? (
-																	<div className="flex flex-row gap-2 items-center mx-5 my-1  ">
-																		<p className="text-sm bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text text-transparent from-gray-900 to-stone-900">
+																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
+																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}
 																		</p>
 																		<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />

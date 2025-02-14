@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { type HTMLAttributes, computed } from "vue";
-import {
-	NavigationMenuViewport,
-	type NavigationMenuViewportProps,
-	useForwardProps,
-} from "radix-vue";
-import { cn } from "@/lib/utils";
+import { type NavigationMenuViewportProps, useForwardProps } from "radix-vue";
 
 const props = defineProps<
 	NavigationMenuViewportProps & { class?: HTMLAttributes["class"] }

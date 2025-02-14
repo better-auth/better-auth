@@ -9,7 +9,6 @@ import {
 	oAuthProxy,
 	openAPI,
 	oidcProvider,
-	createAuthMiddleware,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -43,9 +42,6 @@ export const auth = betterAuth({
 	database: {
 		dialect,
 		type: "sqlite",
-	},
-	session: {
-		freshAge: 0,
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -110,7 +106,7 @@ export const auth = betterAuth({
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				const res = await resend.emails.send({
+				await resend.emails.send({
 					from,
 					to: data.email,
 					subject: "You've been invited to join an organization",
