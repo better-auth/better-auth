@@ -48,7 +48,11 @@ export const expo = (options?: ExpoOptions) => {
 						);
 					},
 					handler: async (ctx) => {
-						const headers = ctx.responseHeader;
+						const headers = ctx.context.returned?.headers as Headers;
+
+						if (!headers) {
+							return;
+						}
 
 						const location = headers.get("location");
 						if (!location) {
