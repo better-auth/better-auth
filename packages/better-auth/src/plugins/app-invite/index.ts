@@ -16,7 +16,24 @@ import { setSessionCookie } from "../../cookies";
 
 export interface AppInviteOptions {
 	/**
-	 * Define wheter users are allowed to cancel invitations.
+	 * Define wheter a user is allowed to send invitations.
+	 *
+	 * You can also pass a function that returns a boolean.
+	 *
+	 * 	@example
+	 * ```ts
+	 * allowUserToSendInvitation: async (user) => {
+	 * 		const canInvite: boolean = await hasPermission(user, 'send-invitation');
+	 *      return canInvite;
+	 * }
+	 * ```
+	 * @default true
+	 */
+	allowUserToSendInvitation?:
+		| boolean
+		| ((user: User) => Promise<boolean> | boolean);
+	/**
+	 * Define wheter a user is allowed to cancel invitations.
 	 *
 	 * By default users can only cancel invitations issued by themself.
 	 */
@@ -79,9 +96,9 @@ export interface AppInviteOptions {
 		max: number;
 	};
 	$Infer?: {
-        /**
-         * Infer additional fields for the user
-         */
+		/**
+		 * Infer additional fields for the user
+		 */
 		AdditionalFields?: Record<string, any>;
 	};
 }
@@ -104,6 +121,7 @@ export interface AppInviteOptions {
  */
 export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 	const options = {
+		allowUserToSendInvitation: true,
 		allowUserToCancelInvitation: ({ user, invitation }) => {
 			return invitation.inviterId === user.id;
 		},
@@ -181,8 +199,19 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						});
 					}
 
-					const adapter = getAppInviteAdapter(ctx.context, options);
 					const session = ctx.context.session;
+					const canInvite =
+						typeof options.allowUserToSendInvitation === "function"
+							? await options.allowUserToSendInvitation(session.user)
+							: options.allowUserToSendInvitation;
+					if (!canInvite) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								APP_INVITE_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_APPLICATION,
+						});
+					}
+
+					const adapter = getAppInviteAdapter(ctx.context, options);
 					const alreadyMember =
 						await ctx.context.internalAdapter.findUserByEmail(ctx.body.email);
 					if (alreadyMember) {

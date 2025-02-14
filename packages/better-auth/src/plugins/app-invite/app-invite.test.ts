@@ -40,6 +40,9 @@ describe("App Invite", async (it) => {
 		plugins: [
 			appInvite({
 				autoSignIn: true,
+				allowUserToSendInvitation: (user) => {
+					return user.email !== "test7@test.com";
+				},
 				sendInvitationEmail: async (data, request) => {
 					mockFn(data);
 				},
@@ -238,6 +241,28 @@ describe("App Invite", async (it) => {
 
 		const res = await client.cancelInvitation({
 			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: anotherUser.headers,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow disabling sending invitations based on the issuer", async () => {
+		const isUserSignedUp = await client.signUp.email({
+			email: "test7@test.com",
+			name: "Test Name",
+			password: "password123456",
+		});
+		if (isUserSignedUp.error) {
+			throw new Error("Could't create test user");
+		}
+		const anotherUser = await signInWithUser(
+			"test7@test.com",
+			"password123456",
+		);
+		const res = await client.inviteUser({
+			email: "test8@test.com",
 			fetchOptions: {
 				headers: anotherUser.headers,
 			},
