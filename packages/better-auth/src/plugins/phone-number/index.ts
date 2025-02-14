@@ -68,7 +68,7 @@ export interface PhoneNumberOptions {
 	callbackOnVerification?: (
 		data: {
 			phoneNumber: string;
-			user: UserWithPhoneNumber | null;
+			user: UserWithPhoneNumber;
 		},
 		request?: Request,
 	) => void | Promise<void>;
@@ -475,13 +475,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							},
 						],
 					});
-					await options?.callbackOnVerification?.(
-						{
-							phoneNumber: ctx.body.phoneNumber,
-							user,
-						},
-						ctx.request,
-					);
 					if (!user) {
 						if (options?.signUpOnVerification) {
 							user = await ctx.context.internalAdapter.createUser({
@@ -501,14 +494,24 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 								});
 							}
-						} else {
-							return ctx.json(null);
 						}
 					} else {
 						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							[opts.phoneNumberVerified]: true,
 						});
 					}
+
+					if (!user) {
+						return ctx.json(null);
+					}
+
+					await options?.callbackOnVerification?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							user,
+						},
+						ctx.request,
+					);
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -14,8 +14,8 @@ export const expo = (options?: ExpoOptions) => {
 		init: (ctx) => {
 			const trustedOrigins =
 				process.env.NODE_ENV === "development"
-					? [...(ctx.options.trustedOrigins || []), "exp://"]
-					: ctx.options.trustedOrigins;
+					? [...(ctx.trustedOrigins || []), "exp://"]
+					: ctx.trustedOrigins;
 			return {
 				options: {
 					trustedOrigins,
@@ -56,9 +56,9 @@ export const expo = (options?: ExpoOptions) => {
 							return;
 						}
 						const trustedOrigins = ctx.context.trustedOrigins.filter(
-							(origin) => !origin.startsWith("http"),
+							(origin: string) => !origin.startsWith("http"),
 						);
-						const isTrustedOrigin = trustedOrigins.some((origin) =>
+						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
 							location?.startsWith(origin),
 						);
 						if (!isTrustedOrigin) {

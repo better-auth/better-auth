@@ -94,8 +94,8 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 						? C extends InputContext<any, any>
 							? <
 									FetchOptions extends BetterFetchOption<
-										C["body"] & Record<string, any>,
-										C["query"] & Record<string, any>,
+										Partial<C["body"]> & Record<string, any>,
+										Partial<C["query"]> & Record<string, any>,
 										C["params"]
 									>,
 								>(
