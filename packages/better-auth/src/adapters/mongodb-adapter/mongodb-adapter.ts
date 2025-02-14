@@ -5,7 +5,15 @@ import { withApplyDefault } from "../utils";
 
 const createTransform = (options: BetterAuthOptions) => {
 	const schema = getAuthTables(options);
+	/**
+	 * if custom id gen is provided we don't want to override with object id
+	 */
+	const customIdGen = options.advanced?.generateId;
+
 	function serializeID(field: string, value: any, model: string) {
+		if (customIdGen) {
+			return value;
+		}
 		if (
 			field === "id" ||
 			field === "_id" ||
@@ -42,6 +50,9 @@ const createTransform = (options: BetterAuthOptions) => {
 	}
 
 	function deserializeID(field: string, value: any, model: string) {
+		if (customIdGen) {
+			return value;
+		}
 		if (
 			field === "id" ||
 			schema[model].fields[field].references?.field === "id"
@@ -64,11 +75,15 @@ const createTransform = (options: BetterAuthOptions) => {
 
 	function getField(field: string, model: string) {
 		if (field === "id") {
+			if (customIdGen) {
+				return "id";
+			}
 			return "_id";
 		}
 		const f = schema[model].fields[field];
 		return f.fieldName || field;
 	}
+
 	return {
 		transformInput(
 			data: Record<string, any>,
@@ -78,9 +93,13 @@ const createTransform = (options: BetterAuthOptions) => {
 			const transformedData: Record<string, any> =
 				action === "update"
 					? {}
-					: {
-							_id: new ObjectId(),
-						};
+					: customIdGen
+						? {
+								id: customIdGen({ model }),
+							}
+						: {
+								_id: new ObjectId(),
+							};
 			const fields = schema[model].fields;
 			for (const field in fields) {
 				const value = data[field];
@@ -111,6 +130,7 @@ const createTransform = (options: BetterAuthOptions) => {
 							}
 						: {}
 					: {};
+
 			const tableSchema = schema[model].fields;
 			for (const key in tableSchema) {
 				if (select.length && !select.includes(key)) {
@@ -206,12 +226,13 @@ const createTransform = (options: BetterAuthOptions) => {
 
 export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 	const transform = createTransform(options);
+	const hasCustomId = options.advanced?.generateId;
 	return {
 		id: "mongodb-adapter",
 		async create(data) {
 			const { model, data: values, select } = data;
 			const transformedData = transform.transformInput(values, model, "create");
-			if (transformedData.id) {
+			if (transformedData.id && !hasCustomId) {
 				// biome-ignore lint/performance/noDelete: setting id to undefined will cause the id to be null in the database which is not what we want
 				delete transformedData.id;
 			}
@@ -219,13 +240,14 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 				.collection(transform.getModelName(model))
 				.insertOne(transformedData);
 			const id = res.insertedId;
-			const insertedData = { ...transformedData, id: id.toString() };
+			const insertedData = { id: id.toString(), ...transformedData };
 			const t = transform.transformOutput(insertedData, model, select);
 			return t;
 		},
 		async findOne(data) {
 			const { model, where, select } = data;
 			const clause = transform.convertWhereClause(where, model);
+			console.log({ clause });
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOne(clause);
