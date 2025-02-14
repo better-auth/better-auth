@@ -330,7 +330,7 @@ describe("organization", async (it) => {
 				role: "admin",
 			},
 		});
-		const leaveRes = await client.organization.leaveOrganization(
+		const leaveRes = await client.organization.leave(
 			{
 				organizationId,
 			},

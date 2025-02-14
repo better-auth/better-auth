@@ -404,7 +404,7 @@ export const getActiveMember = createAuthEndpoint(
 );
 
 export const leaveOrganization = createAuthEndpoint(
-	"/organization/leave-organization",
+	"/organization/leave",
 	{
 		method: "POST",
 		body: z.object({
