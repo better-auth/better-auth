@@ -133,7 +133,7 @@ describe("SSO", async () => {
 		} catch (e) {
 			expect(e).toMatchObject({
 				status: "BAD_REQUEST",
-				cause: {
+				body: {
 					message: "Invalid issuer. Must be a valid URL",
 				},
 			});

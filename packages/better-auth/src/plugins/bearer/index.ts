@@ -1,4 +1,4 @@
-import { serializeSigned } from "better-call";
+import { serializeSignedCookie } from "better-call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { parseSetCookieHeader } from "../../cookies";
 import { createAuthMiddleware } from "../../api";
@@ -30,10 +30,10 @@ export const bearer = (options?: BearerOptions) => {
 								context.headers?.get("authorization"),
 						);
 					},
-					handler: async (c) => {
+					handler: createAuthMiddleware(async (c) => {
 						const token =
 							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
-							c.headers?.get("authorization")?.replace("Bearer ", "");
+							c.headers?.get("Authorization")?.replace("Bearer ", "");
 						if (!token) {
 							return;
 						}
@@ -46,7 +46,7 @@ export const bearer = (options?: BearerOptions) => {
 								return;
 							}
 							signedToken = (
-								await serializeSigned("", token, c.context.secret)
+								await serializeSignedCookie("", token, c.context.secret)
 							).replace("=", "");
 						}
 						try {
@@ -65,31 +65,30 @@ export const bearer = (options?: BearerOptions) => {
 						} catch (e) {
 							return;
 						}
-						if (c.request) {
-							c.request.headers.append(
-								"cookie",
-								`${c.context.authCookies.sessionToken.name}=${signedToken}`,
-							);
-						}
-						if (c.headers) {
-							c.headers.append(
-								"cookie",
-								`${c.context.authCookies.sessionToken.name}=${signedToken}`,
-							);
-						}
+						const existingHeaders = (c.request?.headers ||
+							c.headers) as Headers;
+						const headers = new Headers({
+							...Object.fromEntries(existingHeaders?.entries()),
+						});
+						headers.append(
+							"cookie",
+							`${c.context.authCookies.sessionToken.name}=${signedToken}`,
+						);
 						return {
-							context: c,
+							context: {
+								headers,
+							},
 						};
-					},
+					}),
 				},
 			],
 			after: [
 				{
 					matcher(context) {
-						return !!context.responseHeader.get("set-cookie");
+						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const setCookie = ctx.responseHeader.get("set-cookie");
+						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 						if (!setCookie) {
 							return;
 						}
@@ -104,10 +103,8 @@ export const bearer = (options?: BearerOptions) => {
 							return;
 						}
 						const token = sessionCookie.value;
-						ctx.responseHeader.set("set-auth-token", token);
-						return {
-							responseHeader: ctx.responseHeader,
-						};
+						ctx.setHeader("set-auth-token", token);
+						ctx.setHeader("Access-Control-Expose-Headers", "set-auth-token");
 					}),
 				},
 			],

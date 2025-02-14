@@ -133,17 +133,6 @@ describe("two factor", async () => {
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
-				onSuccess(context) {
-					const parsed = parseSetCookieHeader(
-						context.response.headers.get("Set-Cookie") || "",
-					);
-					headers.append(
-						"cookie",
-						`better-auth.otp_counter=${
-							parsed.get("better-auth.otp_counter")?.value
-						}`,
-					);
-				},
 			},
 		});
 
@@ -159,6 +148,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
+		console.log({ verifyRes });
 		expect(verifyRes.data?.token).toBeDefined();
 	});
 

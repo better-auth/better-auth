@@ -127,40 +127,56 @@ const signIn = async () => {
 
 ## Middleware
 
-In Next.js, middleware doesn’t have access to many Node APIs, so you can’t use the usual `auth` instance to validate sessions directly. Instead, you can make a request to the API route to get the session using the request headers.
+In Next.js middleware, it's recommended to only check for the existence of a session cookie to handle redirection. To avoid blocking requests by making API or database calls.
 
-Here’s how it looks:
+You can use the `getSessionCookie` helper from Better Auth for this purpose:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth";
+
+export async function middleware(request: NextRequest) {
+	const sessionCookie = getSessionCookie(request); // Optionally pass config as the second argument if cookie name or prefix is customized.
+	if (!sessionCookie) {
+		return NextResponse.redirect(new URL("/", request.url));
+	}
+	return NextResponse.next();
+}
+
+export const config = {
+	matcher: ["/dashboard"], // Specify the routes the middleware applies to
+};
+```
+
+If you need the full session object, you'll have to fetch it from the `/get-session` API route. Since Next.js middleware doesn't support running Node.js APIs directly, you must make an HTTP request.
 
 <Callout>
-We're using `better-fetch` to make the request to the API route. You can use any fetch library you want.
+The example uses [better-fetch](https://better-fetch.vercel.app), but you can use any fetch library.
 </Callout>
 
 ```ts
 import { betterFetch } from "@better-fetch/fetch";
 import type { auth } from "@/lib/auth";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 type Session = typeof auth.$Infer.Session;
- 
-export default async function authMiddleware(request: NextRequest) {
-	const { data: session } = await betterFetch<Session>(
-		"/api/auth/get-session",
-		{
-			baseURL: request.nextUrl.origin,
-			headers: {
-				//get the cookie from the request
-				cookie: request.headers.get("cookie") || "",
-			},
+
+export async function middleware(request: NextRequest) {
+	const { data: session } = await betterFetch<Session>("/api/auth/get-session", {
+		baseURL: request.nextUrl.origin,
+		headers: {
+			cookie: request.headers.get("cookie") || "", // Forward the cookies from the request
 		},
-	);
- 
+	});
+
 	if (!session) {
 		return NextResponse.redirect(new URL("/sign-in", request.url));
 	}
+
 	return NextResponse.next();
 }
- 
+
 export const config = {
-	matcher: ["/dashboard"],
+	matcher: ["/dashboard"], // Apply middleware to specific routes
 };
 ```

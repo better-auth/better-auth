@@ -17,7 +17,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     <Step>
         ### Add Plugin to the server
 
-        ```ts title="auth.ts" 
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { sso } from "better-auth/plugins/sso";
 
@@ -49,11 +49,11 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     </Step>
     <Step>
         ### Add the client plugin
-        
+
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { ssoClient } from "better-auth/client/plugins"
-        
+
         const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 ssoClient() // [!code highlight]
@@ -145,7 +145,7 @@ const res = await authClient.signIn.sso({
 
 or you can specify the domain:
 
-```
+```ts title="sign-in-domain.ts"
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",

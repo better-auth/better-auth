@@ -56,6 +56,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	scope?: string[];
 	/**
+	 * Remove default scopes of the provider
+	 */
+	disableDefaultScope?: boolean;
+	/**
 	 * The redirect URL for your application. This is where the provider will
 	 * redirect the user after the sign in process. Make sure this URL is
 	 * whitelisted in the provider's dashboard.

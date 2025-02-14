@@ -97,18 +97,9 @@ export const forgetPassword = createAuthEndpoint(
 		});
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
-			//only on the server status is false for the client it's always true
-			//to avoid leaking information
-			return ctx.json(
-				{
-					status: false,
-				},
-				{
-					body: {
-						status: true,
-					},
-				},
-			);
+			return ctx.json({
+				status: true,
+			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
 		const expiresAt = getDate(

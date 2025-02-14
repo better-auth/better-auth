@@ -30,7 +30,7 @@ export async function validateAuthorizationCode({
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
 	deviceId && body.set("device_id", deviceId);
-	body.set("redirect_uri", redirectURI);
+	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(
 			`${options.clientId}:${options.clientSecret}`,
