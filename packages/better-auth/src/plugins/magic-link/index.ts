@@ -42,6 +42,10 @@ interface MagicLinkOptions {
 		window: number;
 		max: number;
 	};
+	/**
+	 * Custom function to generate a token
+	 */
+	generateToken?: (email: string) => Promise<string> | string;
 }
 
 export const magicLink = (options: MagicLinkOptions) => {
@@ -108,7 +112,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 					}
 
-					const verificationToken = generateRandomString(32, "a-z", "A-Z");
+					const verificationToken = options?.generateToken
+						? await options.generateToken(email)
+						: generateRandomString(32, "a-z", "A-Z");
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: verificationToken,
 						value: JSON.stringify({ email, name: ctx.body.name }),
