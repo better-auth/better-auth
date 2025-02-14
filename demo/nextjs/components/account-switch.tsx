@@ -15,8 +15,7 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { ChevronDown, LogOutIcon, PlusCircle } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, PlusCircle } from "lucide-react";
 import { Session } from "@/lib/auth-types";
 import { client, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";

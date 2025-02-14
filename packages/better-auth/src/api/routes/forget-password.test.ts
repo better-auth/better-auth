@@ -1,4 +1,4 @@
-import { describe, expect, vi, beforeAll } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("forget password", async (it) => {

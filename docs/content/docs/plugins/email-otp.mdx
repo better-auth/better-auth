@@ -59,7 +59,7 @@ The Email OTP plugin allows users to sign in, verify their email, or reset their
 To sign in with OTP, use the `sendVerificationOtp()` method to send a "sign-in" OTP email to the user.
 
 ```ts title="example.ts"
-await authClient.emailOtp.sendVerificationOtp({
+const { data, error } = await authClient.emailOtp.sendVerificationOtp({
     email: "user-email@email.com",
     type: "sign-in"
 })
@@ -68,7 +68,7 @@ await authClient.emailOtp.sendVerificationOtp({
 Once the user provides the OTP, use the `signIn.emailOTP()` method to sign in.
 
 ```ts title="example.ts"
-const user = await authClient.signIn.emailOtp({
+const { data, error } = await authClient.signIn.emailOtp({
     email: "user-email@email.com",
     otp: "123456"
 })
@@ -90,7 +90,7 @@ await authClient.emailOtp.sendVerificationOtp({
 Once the user provides the OTP, use the `verifyEmail()` method to complete email verification.
 
 ```ts title="example.ts"
-const user = await authClient.emailOtp.verifyEmail({
+const { data, error } = await authClient.emailOtp.verifyEmail({
     email: "user-email@email.com",
     otp: "123456"
 })
@@ -120,7 +120,7 @@ await authClient.emailOtp.checkVerificationOtp({
 Then, use the `resetPassword()` method to reset the user's password.
 
 ```ts title="example.ts"
-await authClient.emailOtp.resetPassword({
+const { data, error } = await authClient.emailOtp.resetPassword({
     email: "user-email@email.com",
     otp: "123456",
     password: "password"

@@ -5,9 +5,10 @@ import type { GenericEndpointContext } from "../types/context";
 import type { BetterAuthOptions } from "../types/options";
 import { getDate } from "../utils/date";
 import { isProduction } from "../utils/env";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { base64Url } from "@better-auth/utils/base64";
 import { createTime } from "../utils/time";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { safeJSONParse } from "../utils/json";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -212,5 +213,60 @@ export function parseCookies(cookieHeader: string) {
 }
 
 export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
+
+export const getSessionCookie = (
+	request: Request | Headers,
+	config?: {
+		cookiePrefix?: string;
+		cookieName?: string;
+	},
+) => {
+	const headers = request instanceof Headers ? request : request.headers;
+	const cookies = headers.get("cookie");
+	if (!cookies) {
+		return null;
+	}
+	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
+		config || {};
+	const name = isProduction
+		? `__Secure-${cookiePrefix}.${cookieName}`
+		: `${cookiePrefix}.${cookieName}`;
+	const parsedCookie = parseCookies(cookies);
+	const sessionToken = parsedCookie.get(name);
+	if (sessionToken) {
+		return sessionToken;
+	}
+	return null;
+};
+
+export const getCookieCache = <
+	Session extends {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	},
+>(
+	request: Request | Headers,
+	config?: {
+		cookiePrefix?: string;
+		cookieName?: string;
+	},
+) => {
+	const headers = request instanceof Headers ? request : request.headers;
+	const cookies = headers.get("cookie");
+	if (!cookies) {
+		return null;
+	}
+	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
+		config || {};
+	const name = isProduction
+		? `__Secure-${cookiePrefix}.${cookieName}`
+		: `${cookiePrefix}.${cookieName}`;
+	const parsedCookie = parseCookies(cookies);
+	const sessionData = parsedCookie.get(name);
+	if (sessionData) {
+		return safeJSONParse<Session>(sessionData);
+	}
+	return null;
+};
 
 export * from "./cookie-utils";

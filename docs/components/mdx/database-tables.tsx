@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import {
 	Table,
 	TableBody,
@@ -8,8 +7,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CircleDot, Key, Link } from "lucide-react";
-import { Label } from "../ui/label";
+import { Key, Link } from "lucide-react";
 import {
 	Tooltip,
 	TooltipContent,

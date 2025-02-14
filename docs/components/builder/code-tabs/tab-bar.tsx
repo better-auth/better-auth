@@ -1,4 +1,3 @@
-import React from "react";
 import { CodeTab } from "./code-tabs";
 
 interface File {

@@ -1,23 +1,9 @@
 <script setup lang="ts" generic="T extends ZodRawShape">
-import type { ZodAny, ZodObject, ZodRawShape } from "zod";
+import type { ZodAny, ZodObject } from "zod";
 import { computed, provide } from "vue";
 import { FieldContextKey, useField } from "vee-validate";
-import AutoFormField from "./AutoFormField.vue";
-import type { Config, ConfigItem, Shape } from "./interface";
-import {
-	beautifyObjectName,
-	getBaseSchema,
-	getBaseType,
-	getDefaultValueInZodStack,
-} from "./utils";
-import AutoFormLabel from "./AutoFormLabel.vue";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion";
-import { FormItem } from "@/components/ui/form";
+import type { Config, Shape } from "./interface";
+import { getBaseSchema, getBaseType, getDefaultValueInZodStack } from "./utils";
 
 const props = defineProps<{
 	fieldName: string;

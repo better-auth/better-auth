@@ -1,4 +1,4 @@
-import { base64url, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { z } from "zod";
 import {
 	APIError,
@@ -145,7 +145,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);
-					return metadata;
+					return ctx.json(metadata);
 				},
 			),
 			oAuth2authorize: createAuthEndpoint(
@@ -736,3 +736,4 @@ export const oidcProvider = (options: OIDCOptions) => {
 		schema,
 	} satisfies BetterAuthPlugin;
 };
+export type * from "./types";

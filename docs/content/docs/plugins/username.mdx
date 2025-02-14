@@ -110,3 +110,60 @@ The plugin requires 1 field to be added to the user table:
         },
     ]}
 />
+
+## Options
+
+### Min Username Length
+
+The minimum length of the username. Default is `3`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            minUsernameLength: 5
+        })
+    ]
+})
+```
+
+### Max Username Length
+
+The maximum length of the username. Default is `30`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            maxUsernameLength: 100
+        })
+    ]
+})
+```
+
+### Username Validator 
+
+A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters and underscores. 
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            usernameValidator: (username) => {
+                if (username === "admin") {
+                    return false
+                }
+            }
+        })
+    ]
+})
+```

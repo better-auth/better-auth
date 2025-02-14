@@ -73,6 +73,24 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("shouldn't allow untrusted origin headers which start with trusted origin", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com.malicious.com",
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("shouldn't allow untrusted origin subdomains", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -108,28 +126,6 @@ describe("Origin Check", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
-	it("shouldn't allow untrusted currentURL", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
-
-		const res2 = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				// @ts-expect-error - query is not defined in the type
-				query: {
-					currentURL: "http://malicious.com",
-				},
-			},
-		});
-		expect(res2.error?.status).toBe(403);
-		expect(res2.error?.message).toBe("Invalid currentURL");
-	});
-
 	it("shouldn't allow untrusted redirectTo", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -145,7 +141,7 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
-	it("should work with list of trusted origins ", async (ctx) => {
+	it("should work with list of trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {

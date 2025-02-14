@@ -1,7 +1,6 @@
 import { describe } from "vitest";
 import { memoryAdapter } from "./memory-adapter";
 import { runAdapterTest } from "../test";
-import type { BetterAuthOptions } from "../../types";
 
 describe("adapter test", async () => {
 	const db = {

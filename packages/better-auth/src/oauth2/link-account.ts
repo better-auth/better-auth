@@ -85,6 +85,7 @@ export async function handleOAuthUserInfo(
 					refreshToken: account.refreshToken,
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
 				}).filter(([_, value]) => value !== undefined),
 			);
 
@@ -137,7 +138,8 @@ export async function handleOAuthUserInfo(
 					c.request,
 				);
 			}
-		} catch (e) {
+		} catch (e: any) {
+			logger.error(e);
 			if (e instanceof APIError) {
 				return {
 					error: e.message,

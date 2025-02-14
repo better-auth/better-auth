@@ -1,7 +1,5 @@
 <script lang="ts">
 import { Calendar as CalendarPrimitive } from "bits-ui";
-import { buttonVariants } from "$lib/components/ui/button/index.js";
-import { cn } from "$lib/utils.js";
 
 type $$Props = CalendarPrimitive.DayProps;
 type $$Events = CalendarPrimitive.DayEvents;

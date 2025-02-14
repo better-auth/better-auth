@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Highlight, themes } from "prism-react-renderer";
+import { useState } from "react";
+import { Highlight } from "prism-react-renderer";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import theme from "./theme";

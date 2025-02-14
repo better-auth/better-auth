@@ -46,9 +46,9 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["nvarchar", "varchar"],
+	string: ["text", "varchar"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
-	boolean: ["bit", "boolean"],
+	boolean: ["bit", "smallint"],
 	date: ["datetime", "date"],
 };
 
@@ -175,19 +175,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 					: field.references
 						? "varchar(36)"
 						: "text",
-				mssql: "text",
+				mssql:
+					field.unique || field.sortable
+						? "varchar(255)"
+						: field.references
+							? "varchar(36)"
+							: "text",
 			},
 			boolean: {
 				sqlite: "integer",
 				postgres: "boolean",
 				mysql: "boolean",
-				mssql: "boolean",
+				mssql: "smallint",
 			},
 			number: {
-				sqlite: "integer",
-				postgres: "integer",
-				mysql: "integer",
-				mssql: "integer",
+				sqlite: field.bigint ? "bigint" : "integer",
+				postgres: field.bigint ? "bigint" : "integer",
+				mysql: field.bigint ? "bigint" : "integer",
+				mssql: field.bigint ? "bigint" : "integer",
 			},
 			date: {
 				sqlite: "date",
@@ -233,8 +238,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeCreated) {
 			let dbT = db.schema
 				.createTable(table.table)
-				.addColumn("id", dbType === "mysql" ? "varchar(36)" : "text", (col) =>
-					col.primaryKey().notNull(),
+				.addColumn(
+					"id",
+					dbType === "mysql" || dbType === "mssql" ? "varchar(36)" : "text",
+					(col) => col.primaryKey().notNull(),
 				);
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {

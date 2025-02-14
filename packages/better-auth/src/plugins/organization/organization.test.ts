@@ -8,27 +8,28 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { BetterAuthError } from "../../error";
 
 describe("organization", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
-		plugins: [
-			organization({
-				async sendInvitationEmail(data, request) {},
-				schema: {
-					organization: {
-						modelName: "team",
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					async sendInvitationEmail(data, request) {},
+					schema: {
+						organization: {
+							modelName: "team",
+						},
+						member: {
+							modelName: "teamMembers",
+						},
 					},
-					member: {
-						modelName: "teamMembers",
-					},
-				},
-			}),
-		],
-		logger: {
-			level: "error",
-		},
-	});
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -312,6 +313,36 @@ describe("organization", async (it) => {
 		);
 	});
 
+	it("should allow leaving organization", async () => {
+		const newUser = {
+			email: "leave@org.com",
+			name: "leaving member",
+			password: "password",
+		};
+		const headers = new Headers();
+		const res = await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(headers),
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: res.data?.user.id!,
+				role: "admin",
+			},
+		});
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+		expect(leaveRes.data).toMatchObject({
+			userId: res.data?.user.id!,
+		});
+	});
+
 	it("should allow removing member from organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const orgBefore = await client.organization.getFullOrganization({
@@ -398,7 +429,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(org.error?.status).toBe(400);
+		expect(org.error?.status).toBe(403);
 	});
 
 	it("should have server side methods", async () => {

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Primitive, type PrimitiveProps, useForwardProps } from "radix-vue";
-import { DashIcon } from "@radix-icons/vue";
+import { type PrimitiveProps, useForwardProps } from "radix-vue";
 
 const props = defineProps<PrimitiveProps>();
 const forwardedProps = useForwardProps(props);

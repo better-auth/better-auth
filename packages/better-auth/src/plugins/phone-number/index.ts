@@ -23,7 +23,7 @@ function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
 
-export const phoneNumber = (options?: {
+export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
 	 * @default 6
@@ -57,7 +57,7 @@ export const phoneNumber = (options?: {
 	callbackOnVerification?: (
 		data: {
 			phoneNumber: string;
-			user: UserWithPhoneNumber | null;
+			user: UserWithPhoneNumber;
 		},
 		request?: Request,
 	) => void | Promise<void>;
@@ -93,7 +93,9 @@ export const phoneNumber = (options?: {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
-}) => {
+}
+
+export const phoneNumber = (options?: PhoneNumberOptions) => {
 	const opts = {
 		expiresIn: options?.expiresIn || 300,
 		otpLength: options?.otpLength || 6,
@@ -461,13 +463,6 @@ export const phoneNumber = (options?: {
 							},
 						],
 					});
-					await options?.callbackOnVerification?.(
-						{
-							phoneNumber: ctx.body.phoneNumber,
-							user,
-						},
-						ctx.request,
-					);
 					if (!user) {
 						if (options?.signUpOnVerification) {
 							user = await ctx.context.internalAdapter.createUser({
@@ -487,14 +482,24 @@ export const phoneNumber = (options?: {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 								});
 							}
-						} else {
-							return ctx.json(null);
 						}
 					} else {
 						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							[opts.phoneNumberVerified]: true,
 						});
 					}
+
+					if (!user) {
+						return ctx.json(null);
+					}
+
+					await options?.callbackOnVerification?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							user,
+						},
+						ctx.request,
+					);
 
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -563,6 +568,7 @@ const schema = {
 				type: "string",
 				required: false,
 				unique: true,
+				sortable: true,
 				returned: true,
 			},
 			phoneNumberVerified: {

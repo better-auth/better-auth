@@ -12,15 +12,6 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		query: z
-			.object({
-				/**
-				 * Redirect to the current URL after the
-				 * user has signed in.
-				 */
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user
@@ -394,7 +385,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				throw new APIError("UNAUTHORIZED", {
+				throw new APIError("FORBIDDEN", {
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}

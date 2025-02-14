@@ -5,7 +5,7 @@ import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
 
-interface EmailOTPOptions {
+export interface EmailOTPOptions {
 	/**
 	 * Function to send email verification
 	 */

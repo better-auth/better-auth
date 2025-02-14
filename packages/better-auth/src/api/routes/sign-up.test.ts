@@ -1,6 +1,5 @@
-import { describe, expect, expectTypeOf, vi } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { User } from "../../types";
 
 describe("sign-up with custom fields", async (it) => {
 	const mockFn = vi.fn();

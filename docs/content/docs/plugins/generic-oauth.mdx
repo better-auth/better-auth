@@ -70,6 +70,17 @@ const response = await authClient.signIn.oauth2({
 });
 ```
 
+### Linking OAuth Accounts
+
+To link an OAuth account to an existing user:
+
+```ts title="link-account.ts"
+const response = await authClient.oauth2.link({
+  providerId: "provider-id",
+  callbackURL: "/dashboard" // the path to redirect to after the account is linked
+});
+```
+
 ### Handle OAuth Callback
 
 The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
@@ -82,7 +93,6 @@ When adding the plugin to your auth config, you can configure multiple OAuth pro
 interface GenericOAuthConfig {
   providerId: string;
   discoveryUrl?: string;
-  type?: "oauth2" | "oidc";
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
