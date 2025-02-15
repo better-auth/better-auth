@@ -1,5 +1,4 @@
 import type { appInvite } from ".";
-import { createAuthClient } from "../../client";
 import type { BetterAuthClientPlugin } from "../../types";
 
 export const appInviteClient = <
@@ -19,7 +18,3 @@ export const appInviteClient = <
 		$InferServerPlugin: {} as ReturnType<typeof appInvite<O>>,
 	} satisfies BetterAuthClientPlugin;
 };
-
-const x = createAuthClient({
-	plugins: [appInviteClient()],
-});
