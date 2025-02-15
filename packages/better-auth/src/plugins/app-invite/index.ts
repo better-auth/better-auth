@@ -22,14 +22,14 @@ export interface AppInviteOptions {
 	 *
 	 * 	@example
 	 * ```ts
-	 * allowUserToSendInvitation: async (user) => {
+	 * allowUserToCreateInvitation: async (user) => {
 	 * 		const canInvite: boolean = await hasPermission(user, 'send-invitation');
 	 *      return canInvite;
 	 * }
 	 * ```
 	 * @default true
 	 */
-	allowUserToSendInvitation?:
+	allowUserToCreateInvitation?:
 		| boolean
 		| ((user: User, type: "personal" | "public") => Promise<boolean> | boolean);
 	/**
@@ -121,7 +121,7 @@ export interface AppInviteOptions {
  */
 export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 	const options = {
-		allowUserToSendInvitation: true,
+		allowUserToCreateInvitation: true,
 		allowUserToCancelInvitation: ({ user, invitation }) => {
 			return invitation.inviterId === user.id;
 		},
@@ -197,12 +197,12 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 
 					const session = ctx.context.session;
 					const canInvite =
-						typeof options.allowUserToSendInvitation === "function"
-							? await options.allowUserToSendInvitation(
+						typeof options.allowUserToCreateInvitation === "function"
+							? await options.allowUserToCreateInvitation(
 									session.user,
 									!!ctx.body.email ? "personal" : "public",
 								)
-							: options.allowUserToSendInvitation;
+							: options.allowUserToCreateInvitation;
 					if (!canInvite) {
 						throw new APIError("FORBIDDEN", {
 							message:

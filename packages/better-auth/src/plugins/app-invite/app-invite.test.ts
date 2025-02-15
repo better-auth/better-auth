@@ -41,7 +41,7 @@ describe("App Invite", async (it) => {
 		plugins: [
 			appInvite({
 				autoSignIn: true,
-				allowUserToSendInvitation: (user) => {
+				allowUserToCreateInvitation: (user) => {
 					return user.email !== "test7@test.com";
 				},
 				sendInvitationEmail: async (data, request) => {

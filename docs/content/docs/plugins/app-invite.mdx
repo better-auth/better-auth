@@ -189,7 +189,7 @@ Table Name: `app_invitation`
 
 ## Options
 
-**allowUserToSendInvitation**: `boolean` | `((user: User, type: "personal" | "public") => Promise<boolean> | boolean)` - A function that determines whether a user can create invite others. By defaults it's `true`. You can set it to `false` to restrict users from creating invitations.
+**allowUserToCreateInvitation**: `boolean` | `((user: User, type: "personal" | "public") => Promise<boolean> | boolean)` - A function that determines whether a user can create invite others. By defaults it's `true`. You can set it to `false` to restrict users from creating invitations.
 
 **allowUserToCancelInvitation**: `(data: { user: User, invitation: AppInvitation }) => Promise<boolean> | boolean` - A functon that determines whether a user can cancel inivtations. By default the user can only cancel invites created by them. You can set it to `false` to restrict users from canceling invitations.
 
