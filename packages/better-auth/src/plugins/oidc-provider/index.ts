@@ -31,7 +31,7 @@ const getMetadata = (
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
-		userInfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
