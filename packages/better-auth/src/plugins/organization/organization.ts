@@ -258,7 +258,7 @@ export const organization = Object.assign(
 			removeMember,
 			updateMemberRole: updateMemberRole(options as O),
 			getActiveMember,
-			leaveOrganization
+			leaveOrganization,
 		};
 
 		const roles = {
