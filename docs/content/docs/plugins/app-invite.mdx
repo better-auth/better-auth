@@ -189,13 +189,13 @@ Table Name: `app_invitation`
 
 ## Options
 
-**allowUserToSendInvitation**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create invite others. By defaults it's `true`. You can set it to `false` to restrict users from creating invitations.
+**allowUserToSendInvitation**: `boolean` | `((user: User, type: "personal" | "public") => Promise<boolean> | boolean)` - A function that determines whether a user can create invite others. By defaults it's `true`. You can set it to `false` to restrict users from creating invitations.
 
 **allowUserToCancelInvitation**: `(data: { user: User, invitation: AppInvitation }) => Promise<boolean> | boolean` - A functon that determines whether a user can cancel inivtations. By default the user can only cancel invites created by them. You can set it to `false` to restrict users from canceling invitations.
 
 **invitationExpiresIn**: `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
 
-**sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
+**sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user. This is only required for personal invitations.
 
 **autoSignIn**: A boolean value that determines whether to prevent automatic sign-up when accepting an invitation. Defaults to `false`.
 

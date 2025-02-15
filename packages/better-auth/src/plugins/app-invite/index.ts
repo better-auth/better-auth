@@ -31,7 +31,7 @@ export interface AppInviteOptions {
 	 */
 	allowUserToSendInvitation?:
 		| boolean
-		| ((user: User) => Promise<boolean> | boolean);
+		| ((user: User, type: "personal" | "public") => Promise<boolean> | boolean);
 	/**
 	 * Define wheter a user is allowed to cancel invitations.
 	 *
@@ -198,7 +198,10 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					const session = ctx.context.session;
 					const canInvite =
 						typeof options.allowUserToSendInvitation === "function"
-							? await options.allowUserToSendInvitation(session.user)
+							? await options.allowUserToSendInvitation(
+									session.user,
+									!!ctx.body.email ? "personal" : "public",
+								)
 							: options.allowUserToSendInvitation;
 					if (!canInvite) {
 						throw new APIError("FORBIDDEN", {
