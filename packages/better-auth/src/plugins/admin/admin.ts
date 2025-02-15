@@ -25,7 +25,7 @@ import { adminAc, defaultRoles, defaultStatements, userAc } from "./access";
 import { hasPermission } from "./has-permission";
 
 export interface UserWithRole extends User {
-	role: string;
+	role?: string;
 	banned?: boolean | null;
 	banReason?: string | null;
 	banExpires?: Date | null;
@@ -63,7 +63,7 @@ export interface AdminOptions {
 	/**
 	 * Custom schema for the admin plugin
 	 */
-	schema?: InferOptionSchema<ReturnType<typeof createSchema>>;
+	schema?: InferOptionSchema<typeof schema>;
 	/**
 	 * Configure the roles and permissions for the admin
 	 * plugin.
@@ -1130,7 +1130,7 @@ export const admin = Object.assign(
 				),
 			},
 			$ERROR_CODES: ADMIN_ERROR_CODES,
-			schema: mergeSchema(createSchema(opts), opts.schema),
+			schema: mergeSchema(schema, opts.schema),
 		} satisfies BetterAuthPlugin;
 	},
 	{
@@ -1141,44 +1141,38 @@ export const admin = Object.assign(
 	},
 );
 
-const createSchema = ({
-	defaultRole,
-}: {
-	defaultRole: string;
-}) =>
-	({
-		user: {
-			fields: {
-				role: {
-					type: "string",
-					required: true,
-					input: false,
-					defaultValue: defaultRole,
-				},
-				banned: {
-					type: "boolean",
-					defaultValue: false,
-					required: false,
-					input: false,
-				},
-				banReason: {
-					type: "string",
-					required: false,
-					input: false,
-				},
-				banExpires: {
-					type: "date",
-					required: false,
-					input: false,
-				},
+const schema = {
+	user: {
+		fields: {
+			role: {
+				type: "string",
+				required: false,
+				input: false,
+			},
+			banned: {
+				type: "boolean",
+				defaultValue: false,
+				required: false,
+				input: false,
+			},
+			banReason: {
+				type: "string",
+				required: false,
+				input: false,
+			},
+			banExpires: {
+				type: "date",
+				required: false,
+				input: false,
 			},
 		},
-		session: {
-			fields: {
-				impersonatedBy: {
-					type: "string",
-					required: false,
-				},
+	},
+	session: {
+		fields: {
+			impersonatedBy: {
+				type: "string",
+				required: false,
 			},
 		},
-	}) satisfies AuthPluginSchema;
+	},
+} satisfies AuthPluginSchema;
