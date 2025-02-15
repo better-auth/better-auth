@@ -186,7 +186,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
-					if (!options?.sendInvitationEmail) {
+					if (!!ctx.body.email && !options?.sendInvitationEmail) {
 						ctx.context.logger.warn(
 							"Invitation email is not enabled. Pass `sendInvitationEmail` to the plugin options to enable it.",
 						);
