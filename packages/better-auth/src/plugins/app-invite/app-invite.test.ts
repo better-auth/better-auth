@@ -4,6 +4,7 @@ import { appInvite } from ".";
 import { appInviteClient } from "./client";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../additional-fields/client";
+import { APP_INVITE_ERROR_CODES } from "./error-codes";
 
 describe("App Invite", async (it) => {
 	const mockFn = vi.fn();
@@ -188,6 +189,76 @@ describe("App Invite", async (it) => {
 		});
 		if (!invite.data) throw new Error("Invitation not created");
 		expect(invite.data.email).toBe(newUser.email);
+	});
+
+	describe("should allow inviting multiple users with a single link", async (it) => {
+		const invitation = await auth.api.createAppInvitation({
+			body: {},
+			headers: user.headers,
+		});
+		if (!invitation) {
+			throw new Error("Couldn't create invitation");
+		}
+		expect(invitation?.status).toBe("pending");
+
+		it.each(
+			[
+				{
+					invitee: {
+						name: "Test User #1",
+						email: "test-user-1@test.de",
+						password: "password123456",
+					},
+					action: "accept-invitation",
+					message: "$name should be able to accept the invitation",
+				},
+				{
+					invitee: {
+						name: "Test User #2",
+						email: "test-user-2@test.de",
+						password: "password123456",
+					},
+					action: "accept-invitation",
+					message: "$name should be able to accept the invitation",
+				},
+				{
+					action: "reject-invitation",
+					message: "should not allow to reject the invitation",
+				},
+			].map(({ action, message, ...data }) => [
+				`${
+					message?.replaceAll(/\$name/g, () => `'${data.invitee?.name}'`) ||
+					action
+				}`,
+				action,
+				data,
+			]),
+		)("%s", async (_, action, { invitee }) => {
+			switch (action) {
+				case "accept-invitation": {
+					if (!invitee) {
+						throw new Error("No invitee defined")
+					}
+					const res = await client.acceptInvitation({
+						invitationId: invitation.id,
+						name: invitee.name,
+						email: invitee.email,
+						password: invitee.password,
+					});
+					expect(res.data?.user.email).toBe(invitee.email);
+					break;
+				}
+				case "reject-invitation": {
+					const res = await client.rejectInvitation({
+						invitationId: invitation.id,
+					});
+					expect(res.error?.message).not.toBe(
+						APP_INVITE_ERROR_CODES.THIS_APP_INVITATION_CANT_BE_REJECTED,
+					);
+					break;
+				}
+			}
+		});
 	});
 
 	it("should allow canceling an invitation issued by the user", async () => {

@@ -137,9 +137,11 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					method: "POST",
 					use: [sessionMiddleware],
 					body: z.object({
-						email: z.string({
-							description: "The email address of the user to invite",
-						}),
+						email: z
+							.string({
+								description: "The email address of the user to invite",
+							})
+							.optional(),
 						resend: z
 							.boolean({
 								description:
@@ -174,13 +176,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 														type: "string",
 													},
 												},
-												required: [
-													"id",
-													"email",
-													"inviterId",
-													"status",
-													"expiresAt",
-												],
+												required: ["id", "inviterId", "status", "expiresAt"],
 											},
 										},
 									},
@@ -212,22 +208,24 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					}
 
 					const adapter = getAppInviteAdapter(ctx.context, options);
-					const alreadyMember =
-						await ctx.context.internalAdapter.findUserByEmail(ctx.body.email);
-					if (alreadyMember) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								APP_INVITE_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_APPLICATION,
+					if (ctx.body.email) {
+						const alreadyMember =
+							await ctx.context.internalAdapter.findUserByEmail(ctx.body.email);
+						if (alreadyMember) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									APP_INVITE_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_APPLICATION,
+							});
+						}
+						const alreadyInvited = await adapter.findPendingInvitation({
+							email: ctx.body.email,
 						});
-					}
-					const alreadyInvited = await adapter.findPendingInvitation({
-						email: ctx.body.email,
-					});
-					if (!!alreadyInvited && !ctx.body.resend) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								APP_INVITE_ERROR_CODES.USER_WAS_ALREADY_INVITED_TO_THIS_APPLICATION,
-						});
+						if (!!alreadyInvited && !ctx.body.resend) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									APP_INVITE_ERROR_CODES.USER_WAS_ALREADY_INVITED_TO_THIS_APPLICATION,
+							});
+						}
 					}
 
 					const invitation = await adapter.createInvitation({
@@ -237,13 +235,16 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						user: session.user,
 					});
 
-					await options.sendInvitationEmail?.(
-						{
-							...invitation,
-							inviter: session.user,
-						},
-						ctx.request,
-					);
+					if (invitation.email) {
+						await options.sendInvitationEmail?.(
+							{
+								id: invitation.id,
+								email: invitation.email,
+								inviter: session.user,
+							},
+							ctx.request,
+						);
+					}
 					return ctx.json(invitation);
 				},
 			),
@@ -359,6 +360,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 								invitationId: string;
 
 								name: string;
+								email?: string;
 								password: string;
 							} & (O["$Infer"] extends {
 								AdditionalFields: Record<string, any>;
@@ -378,6 +380,10 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 												name: {
 													type: "string",
 													description: "The name of the user",
+												},
+												email: {
+													type: "string",
+													description: "The email address of the user",
 												},
 												password: {
 													type: "string",
@@ -441,7 +447,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 
 					const body = {
 						...(bodyData as any),
-						email: invitation.email,
+						email: invitation.email || bodyData.email,
 					} as User & {
 						password: string;
 					} & {
@@ -528,10 +534,13 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						password: hash,
 					});
 
-					const acceptedI = await adapter.updateInvitation({
-						invitationId,
-						status: "accepted",
-					});
+					let acceptedI: AppInvitation | null = invitation;
+					if (invitation.email) {
+						acceptedI = await adapter.updateInvitation({
+							invitationId,
+							status: "accepted",
+						});
+					}
 
 					if (!options?.autoSignIn) {
 						return ctx.json({
@@ -563,7 +572,6 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						user: createdUser,
 					});
 
-					// TODO: Redirect to callbackURL if defined
 					if (!ctx.query?.callbackURL) {
 						return ctx.json({
 							token: session.token,
@@ -590,8 +598,8 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						callbackURL: z.string({
 							description:
 								"The URL to redirect to after rejecting the invitation",
-						}),
-					}),
+						}).optional(),
+					}).optional(),
 					body: z.object({
 						invitationId: z.string({
 							description: "The ID of the invitation",
@@ -654,6 +662,12 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					) {
 						throw new APIError("BAD_REQUEST", {
 							message: APP_INVITE_ERROR_CODES.APP_INVITATION_NOT_FOUND,
+						});
+					}
+					if (!invitation.email) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								APP_INVITE_ERROR_CODES.THIS_APP_INVITATION_CANT_BE_REJECTED,
 						});
 					}
 					const rejectedI = await adapter.updateInvitation({
@@ -768,7 +782,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 				fields: {
 					email: {
 						type: "string",
-						required: true,
+						required: false,
 						sortable: true,
 						fieldName: options?.schema?.appInvitation?.fields?.email,
 					},

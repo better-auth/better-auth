@@ -14,7 +14,7 @@ export const getAppInviteAdapter = (
 			user,
 		}: {
 			invitation: {
-				email: string;
+				email?: string;
 			};
 			user: User;
 		}) => {
