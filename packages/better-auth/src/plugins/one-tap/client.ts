@@ -37,7 +37,7 @@ export interface GoogleOneTapOptions {
 	 *
 	 * @default "popup"
 	 */
-	uxMode: "popup" | "redirect";
+	uxMode?: "popup" | "redirect";
 	/**
 	 * The context to use for the Google One Tap flow
 	 *
