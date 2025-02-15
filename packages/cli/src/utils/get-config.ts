@@ -17,6 +17,10 @@ possiblePaths = [
 	...possiblePaths.map((it) => `lib/server/${it}`),
 	...possiblePaths.map((it) => `server/${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
+	// this is a support for filename.server.ts file even if they do have multiple finename prefix
+	...possiblePaths.map((it) =>
+		it.replace(/(\.ts|\.tsx|\.js|\.jsx)$/, ".server$1"),
+	),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
 possiblePaths = [
