@@ -10,5 +10,5 @@ export const APP_INVITE_ERROR_CODES = {
 		"You are not allowed to cancel this app invitation",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_APPLICATION:
 		"You are not allowed to invite users to this application",
-	THIS_APP_INVITATION_CANT_BE_REJECTED: "This app invitation can't be rejected"
+	THIS_APP_INVITATION_CANT_BE_REJECTED: "This app invitation can't be rejected",
 } as const;

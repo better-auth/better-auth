@@ -594,12 +594,16 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 				"/reject-invitation",
 				{
 					method: "GET",
-					query: z.object({
-						callbackURL: z.string({
-							description:
-								"The URL to redirect to after rejecting the invitation",
-						}).optional(),
-					}).optional(),
+					query: z
+						.object({
+							callbackURL: z
+								.string({
+									description:
+										"The URL to redirect to after rejecting the invitation",
+								})
+								.optional(),
+						})
+						.optional(),
 					body: z.object({
 						invitationId: z.string({
 							description: "The ID of the invitation",

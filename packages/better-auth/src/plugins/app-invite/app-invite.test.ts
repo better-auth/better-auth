@@ -237,7 +237,7 @@ describe("App Invite", async (it) => {
 			switch (action) {
 				case "accept-invitation": {
 					if (!invitee) {
-						throw new Error("No invitee defined")
+						throw new Error("No invitee defined");
 					}
 					const res = await client.acceptInvitation({
 						invitationId: invitation.id,
@@ -271,7 +271,9 @@ describe("App Invite", async (it) => {
 				headers: user.headers,
 			},
 		});
-		if (!invite.data) throw new Error("Invitation not created");
+		if (!invite.data) {
+			throw new Error("Invitation not created");
+		}
 		expect(invite.data.email).toBe(newUser.email);
 
 		const res = await client.cancelInvitation({
@@ -280,7 +282,9 @@ describe("App Invite", async (it) => {
 				headers: user.headers,
 			},
 		});
-		if (!res.data) throw new Error("Invitation not canceled");
+		if (!res.data) {
+			throw new Error("Invitation not canceled");
+		}
 		expect(res.data.status).toBe("canceled");
 	});
 
@@ -307,7 +311,9 @@ describe("App Invite", async (it) => {
 				headers: user.headers,
 			},
 		});
-		if (!invite.data) throw new Error("Invitation not created");
+		if (!invite.data) {
+			throw new Error("Invitation not created");
+		}
 		expect(invite.data.email).toBe(newUser.email);
 
 		const res = await client.cancelInvitation({
