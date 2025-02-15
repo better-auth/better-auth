@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { JSXElementConstructor, ReactElement, ReactNode, ReactPortal, useState } from "react";
+import { useState } from "react";
 import { signIn, signUp } from "@/lib/auth-client";
 import Image from "next/image";
 import { Loader2, X } from "lucide-react";
