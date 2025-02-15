@@ -3,7 +3,8 @@ title: App Invite
 description: Invite users to your application and allow them to sign up.
 ---
 
-The App Invite plugin allows inviting other users to your application and sign them up.
+The App Invite plugin allows inviting other users to your application and sign them up.  
+You can create either personal or public invitations. Personal invitations are restricted to a specific email address while public invitations allow multiple users to sign up via a single invitation.
 
 ## Installation
 
@@ -21,6 +22,7 @@ The App Invite plugin allows inviting other users to your application and sign t
         // ... other config options
         plugins: [
             appInvite({ // [!code highlight]
+                // required for personal invites // [!code highlight]
                 sendInvitationEmail: (data) => { // [!code highlight]
                     // ... send invitation to the user // [!code highlight]
                 } // [!code highlight]
@@ -56,9 +58,11 @@ To add members to the application, we first need to send an invitation to the us
 
 ### Setup Invitation Email
 
-For app invites to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+For personal invites to work we first need to provide `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
 
 You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
+
+This is only required for personal invites. Sharing public invitations is up to the inviter.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -87,7 +91,7 @@ export const auth = betterAuth({
 To invite users to the app, you can use the `invite` function provided by the client.
 the `invite` function takes an object with the following properties:
 
-- `email`: The email address of the user to invite
+- `email`: The email address of the user to invite. Leave empty to create a public invitation.
 
 - `resend`: A boolean value that determines whether to resend the invitation email, if the user is already invited
 
@@ -105,6 +109,7 @@ When a user receives an invitation email, they can click on the invitation link 
 await authClient.acceptInvitation({
   invitationId: "invitation-id",
   name: "John Doe",
+  email: "test@email.com", // must be set for public invites
   password: "password123456",
   // ... additional user data
 });
@@ -120,7 +125,7 @@ await authClient.cancelInvitation({
   invitationId: "invitation-id",
 });
 
-// reject invitation
+// reject invitation (this is only available for personal invites)
 await authClient.rejectInvitation({
   invitationId: "invitation-id",
 });
@@ -156,6 +161,7 @@ Table Name: `app_invitation`
       name: "email",
       type: "string",
       description: "The email address of the user",
+      isOptional: true,
     },
     {
       name: "inviterId",
