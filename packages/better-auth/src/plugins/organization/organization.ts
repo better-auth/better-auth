@@ -26,6 +26,7 @@ import {
 import {
 	addMember,
 	getActiveMember,
+	leaveOrganization,
 	removeMember,
 	updateMemberRole,
 } from "./routes/crud-members";
@@ -257,6 +258,7 @@ export const organization = Object.assign(
 			removeMember,
 			updateMemberRole: updateMemberRole(options as O),
 			getActiveMember,
+			leaveOrganization
 		};
 
 		const roles = {
