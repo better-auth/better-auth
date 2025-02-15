@@ -14,6 +14,10 @@ export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
 };
 
+export interface UserWithUsername extends User {
+	username: string;
+}
+
 export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 	const ERROR_CODES = {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
@@ -69,7 +73,7 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 					},
 				},
 				async (ctx) => {
-					const user = await ctx.context.adapter.findOne<User>({
+					const user = await ctx.context.adapter.findOne<UserWithUsername>({
 						model: "user",
 						where: [
 							{
@@ -155,6 +159,7 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 							id: user.id,
 							email: user.email,
 							emailVerified: user.emailVerified,
+							username: user.username,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
