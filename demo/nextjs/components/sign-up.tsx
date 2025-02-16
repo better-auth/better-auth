@@ -150,8 +150,10 @@ export function SignUp() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							if (password !== passwordConfirmation){
-								toast.error("Please ensure your password and confirm password match.");
+							if (password !== passwordConfirmation) {
+								toast.error(
+									"Please ensure your password and confirm password match.",
+								);
 								return;
 							}
 							await signUp.email({
