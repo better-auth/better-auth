@@ -1,7 +1,5 @@
 ---
 import { auth } from "@/auth";
-import { UserCard } from "@/components/user-card";
-import RootLayout from "@/layouts/root-layout.astro";
 
 const activeSessions = await auth.api
 	.listSessions({
