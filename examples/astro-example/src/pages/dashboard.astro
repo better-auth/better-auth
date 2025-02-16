@@ -1,5 +1,7 @@
 ---
 import { auth } from "@/auth";
+import { UserCard } from "@/components/user-card";
+import RootLayout from "@/layouts/root-layout.astro";
 
 const activeSessions = await auth.api
 	.listSessions({
@@ -14,5 +16,5 @@ const session = await auth.api.getSession({
 ---
 
 <RootLayout>
-      <UserCard  activeSessions={activeSessions} initialSession={session} client:only  />
+	<UserCard activeSessions={activeSessions} initialSession={session} client:only />
 </RootLayout>
