@@ -11,5 +11,5 @@ export const APP_INVITE_ERROR_CODES = {
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_APPLICATION:
 		"You are not allowed to invite users to this application",
 	THIS_APP_INVITATION_CANT_BE_REJECTED: "This app invitation can't be rejected",
-	EMAIL_DOMAIN_IS_NOT_IN_WHITELIST: "Email domain is not in whitelist"
+	EMAIL_DOMAIN_IS_NOT_IN_WHITELIST: "Email domain is not in whitelist",
 } as const;

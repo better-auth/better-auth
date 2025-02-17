@@ -30,7 +30,9 @@ export const getAppInviteAdapter = (
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
-					domainWhitelist: invitation.domainWhitelist
+					domainWhitelist: !invitation.email
+						? invitation.domainWhitelist
+						: undefined,
 				},
 			});
 
