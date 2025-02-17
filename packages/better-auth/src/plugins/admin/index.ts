@@ -66,6 +66,12 @@ export interface AdminOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * List of user ids that should have admin access
+	 *
+	 * If this is set, the `adminRole` option is ignored
+	 */
+	adminUserIds?: string[];
 }
 
 export const admin = <O extends AdminOptions>(options?: O) => {
@@ -88,6 +94,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			throw new APIError("UNAUTHORIZED");
 		}
 		const user = session.user as UserWithRole;
+
+		if (options?.adminUserIds?.includes(user.id)) {
+			return {
+				session: {
+					user: user,
+					session: session.session,
+				},
+			};
+		}
 		if (
 			!user.role ||
 			(Array.isArray(opts.adminRole)
