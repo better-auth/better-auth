@@ -35,7 +35,6 @@ export interface EmailOTPOptions {
 	generateOTP?: (
 		data: {
 			email: string;
-			length: number;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
 		request?: Request,
@@ -60,8 +59,7 @@ const types = ["email-verification", "sign-in", "forget-password"] as const;
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
-		otpLength: 6,
-		generateOTP: ({ length }) => generateRandomString(length, "0-9"),
+		generateOTP: () => generateRandomString(options.otpLength ?? 6, "0-9"),
 		...options,
 	} satisfies EmailOTPOptions;
 	const ERROR_CODES = {
@@ -134,7 +132,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}
 					}
 					const otp = opts.generateOTP(
-						{ email, length: opts.otpLength, type: ctx.body.type },
+						{ email, type: ctx.body.type },
 						ctx.request,
 					);
 					await ctx.context.internalAdapter
@@ -202,7 +200,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				async (ctx) => {
 					const email = ctx.body.email;
 					const otp = opts.generateOTP(
-						{ email, length: opts.otpLength, type: ctx.body.type },
+						{ email, type: ctx.body.type },
 						ctx.request,
 					);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -557,7 +555,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const otp = opts.generateOTP(
-						{ email, length: opts.otpLength, type: ctx.body.type },
+						{ email, type: ctx.body.type },
 						ctx.request,
 					);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -705,7 +703,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									: null;
 						if (email) {
 							const otp = opts.generateOTP(
-								{ email, length: opts.otpLength, type: ctx.body.type },
+								{ email, type: ctx.body.type },
 								ctx.request,
 							);
 							await ctx.context.internalAdapter.createVerificationValue({
