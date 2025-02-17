@@ -15,6 +15,7 @@ export const getAppInviteAdapter = (
 		}: {
 			invitation: {
 				email?: string;
+				domainWhitelist?: string;
 			};
 			user: User;
 		}) => {
@@ -29,6 +30,7 @@ export const getAppInviteAdapter = (
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
+					domainWhitelist: invitation.domainWhitelist
 				},
 			});
 

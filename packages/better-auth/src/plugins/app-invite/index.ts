@@ -149,9 +149,9 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 							})
 							.optional(),
 						domainWhitelist: z
-							.array(z.string(), {
+							.string({
 								description:
-									"A list of domains that are allowed to accept the invitation. (Only available for public invitations)",
+									"A comma separated list of domains that are allowed to accept the invitation. (Only available for public invitations)",
 							})
 							.optional(),
 					}),
@@ -241,6 +241,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					const invitation = await adapter.createInvitation({
 						invitation: {
 							email: ctx.body.email,
+							domainWhitelist: ctx.body.domainWhitelist,
 						},
 						user: session.user,
 					});
@@ -475,13 +476,16 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					}
 
 					if (invitationType === "public") {
-						const [_lP, domain] = email.split("@", 1);
+						const [_lP, domain] = email.split("@", 2);
+
+						const domainWhitelist = invitation.domainWhitelist?.split(",");
 
 						if (
-							invitation.domainWhitelist &&
-							invitation.domainWhitelist.length > 0 &&
-							!invitation.domainWhitelist.some(
-								(wDomain) => wDomain.toLowerCase() === domain.toLowerCase(),
+							domainWhitelist?.length &&
+							domainWhitelist.length > 0 &&
+							!domainWhitelist.some(
+								(wDomain) =>
+									wDomain.trim().toLowerCase() === domain.trim().toLowerCase(),
 							)
 						) {
 							throw new APIError("FORBIDDEN", {
@@ -841,7 +845,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						required: true,
 					},
 					domainWhitelist: {
-						type: "string[]",
+						type: "string",
 						required: false,
 						fieldName: options?.schema?.appInvitation?.fields?.domainWhitelist,
 					},

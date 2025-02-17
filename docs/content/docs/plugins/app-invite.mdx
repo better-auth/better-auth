@@ -95,7 +95,7 @@ the `invite` function takes an object with the following properties:
 
 - `resend`: A boolean value that determines whether to resend the invitation email, if the user is already invited. Defaults to `false`
 
-- `domainWhitelist`: An optional array of strings that allows public invitations to be accepted only from approved domains.
+- `domainWhitelist`: An optional comma separated list of domains that allows public invitations to be accepted only from approved domains.
 
 ```ts title="invitation.ts"
 await authClient.inviteUser({
@@ -178,8 +178,9 @@ Table Name: `app_invitation`
     },
     {
       name: "domainWhitelist",
-      type: "string[]",
-      description: "A whitelist of domains for a public invitation"
+      type: "string",
+      description:
+        "A comma separated whitelist of domains for a public invitation",
     },
     {
       name: "expiresAt",

@@ -194,7 +194,7 @@ describe("App Invite", async (it) => {
 	describe("should allow inviting multiple users with a single link", async (it) => {
 		const invitation = await auth.api.createAppInvitation({
 			body: {
-				domainWhitelist: ["test.com", "test2.com"],
+				domainWhitelist: "test.com, test2.com",
 			},
 			headers: user.headers,
 		});
@@ -229,8 +229,9 @@ describe("App Invite", async (it) => {
 						email: "test-user-3@test3.com",
 						password: "password123456",
 					},
-					action: "accept-invitation",
-					message: "$name should not be able to accept the invitation (domain not in whitelist)",
+					action: "accept-invitation-expect-error",
+					message:
+						"$name should not be able to accept the invitation (domain not in whitelist)",
 				},
 				{
 					action: "reject-invitation",
@@ -246,6 +247,7 @@ describe("App Invite", async (it) => {
 			]),
 		)("%s", async (_, action, { invitee }) => {
 			switch (action) {
+				case "accept-invitation-expect-error":
 				case "accept-invitation": {
 					if (!invitee) {
 						throw new Error("No invitee defined");
@@ -256,7 +258,14 @@ describe("App Invite", async (it) => {
 						email: invitee.email,
 						password: invitee.password,
 					});
-					expect(res.data?.user.email).toBe(invitee.email);
+					if (action === "accept-invitation") {
+						expect(res.data?.user.email).toBe(invitee.email);
+					}
+					if (action === "accept-invitation-expect-error") {
+						expect(res.error?.message).toBe(
+							APP_INVITE_ERROR_CODES.EMAIL_DOMAIN_IS_NOT_IN_WHITELIST,
+						);
+					}
 					break;
 				}
 				case "reject-invitation": {
