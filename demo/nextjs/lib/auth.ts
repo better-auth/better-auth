@@ -42,10 +42,7 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: {
-		dialect,
-		type: "sqlite",
-	},
+	database: new Database("./stripe.db"),
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
@@ -151,6 +148,7 @@ export const auth = betterAuth({
 		oidcProvider({
 			loginPage: "/sign-in",
 		}),
+		oneTap(),
 		stripe({
 			stripeClient: new Stripe(
 				"sk_test_51JMg84EerAovSgjdOLL46HBBuHUlf28mHn0v7rWkY3Z8H9suzVCcvLKg8GHzW8ikpMyY9afUCCu5h1DbItg9uEgI00npUsqL4X",
@@ -160,11 +158,17 @@ export const auth = betterAuth({
 				defaultPlan: "free",
 				plans: [
 					{
-						name: "free",
+						name: "Starter",
+						priceId: "price_1QtOenEerAovSgjdlxS290sB",
+						yearlyDiscountPriceId: "price_1QtOenEerAovSgjdn2YcLWbz",
 					},
 					{
-						name: "pro",
-						priceId: "price_1QnwtXEerAovSgjdM5mpWuOO",
+						name: "Professional",
+						priceId: "price_1QtOfQEerAovSgjdueb6go9H",
+						yearlyDiscountPriceId: "price_1QtOg1EerAovSgjdwzNFMexz",
+					},
+					{
+						name: "Enterprise",
 					},
 				],
 			},

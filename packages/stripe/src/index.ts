@@ -21,10 +21,70 @@ export const stripeClient = new Stripe(`${process.env.STRIPE_SECRET_KEY}`, {
 });
 
 type Plan = {
+	/**
+	 * Monthly price id
+	 */
 	priceId?: string;
+	/**
+	 * A yearly discount price id
+	 *
+	 * useful when you want to offer a discount for
+	 * yearly subscription
+	 */
+	yearlyDiscountPriceId?: string;
+	/**
+	 * Plan name
+	 */
 	name: string;
+	/**
+	 * Limits for the plan
+	 */
 	limits?: Record<string, number>;
+	/**
+	 * Plan group name
+	 *
+	 * useful when you want to group plans or
+	 * when a user can subscribe to multiple plans.
+	 */
 	group?: string;
+	/**
+	 * Free trial days
+	 */
+	freeTrial?: {
+		/**
+		 * Number of days
+		 */
+		days: number;
+		/**
+		 * A function that will be called when the trial
+		 * starts.
+		 *
+		 * @param subscription
+		 * @returns
+		 */
+		onTrialStart?: (subscription: Subscription) => Promise<void>;
+		/**
+		 * A function that will be called when the trial
+		 * ends
+		 *
+		 * @param subscription - Subscription
+		 * @returns
+		 */
+		onTrialEnd?: (
+			data: {
+				subscription: Subscription;
+				user: User & Record<string, any>;
+			},
+			request?: Request,
+		) => Promise<void>;
+		/**
+		 * A function that will be called when the trial
+		 * expired.
+		 * @param subscription - Subscription
+		 * @returns
+		 */
+		onTrialExpired?: (subscription: Subscription) => Promise<void>;
+	};
 };
 
 export interface Subscription {

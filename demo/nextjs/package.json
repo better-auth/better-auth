@@ -11,10 +11,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/stripe": "workspace:*",
     "@better-fetch/fetch": "1.1.12",
     "@hookform/resolvers": "^3.9.1",
     "@libsql/client": "^0.12.0",
     "@libsql/kysely-libsql": "^0.4.1",
+    "@number-flow/react": "^0.5.5",
     "@prisma/adapter-libsql": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-accordion": "^1.2.1",
@@ -50,9 +52,9 @@
     "@tanstack/react-query": "^5.62.3",
     "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
-    "@better-auth/stripe": "workspace:*",
     "better-call": "0.2.3-beta.2",
     "better-sqlite3": "^11.6.0",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
@@ -87,6 +89,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.17.9",
     "@types/react": "^18.3.14",
     "@types/react-dom": "^18.3.2",

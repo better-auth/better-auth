@@ -40,6 +40,7 @@
   "license": "ISC",
   "dependencies": {
     "better-auth": "workspace:^",
+    "better-call": "^1.0.0",
     "stripe": "^17.6.0",
     "zod": "^3.24.1"
   },

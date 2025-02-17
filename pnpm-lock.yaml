@@ -63,6 +63,9 @@ importers:
       '@libsql/kysely-libsql':
         specifier: ^0.4.1
         version: 0.4.1(kysely@0.27.4)
+      '@number-flow/react':
+        specifier: ^0.5.5
+        version: 0.5.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@prisma/adapter-libsql':
         specifier: ^5.22.0
         version: 5.22.0(@libsql/client@0.12.0)
@@ -174,6 +177,9 @@ importers:
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.6.0
+      canvas-confetti:
+        specifier: ^1.9.3
+        version: 1.9.3
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -197,7 +203,7 @@ importers:
         version: 11.13.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -271,6 +277,9 @@ importers:
         specifier: ^3.23.8
         version: 3.23.8
     devDependencies:
+      '@types/canvas-confetti':
+        specifier: ^1.9.0
+        version: 1.9.0
       '@types/node':
         specifier: ^20.17.9
         version: 20.17.9
@@ -508,7 +517,7 @@ importers:
         version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1672,6 +1681,9 @@ importers:
       better-auth:
         specifier: workspace:^
         version: link:../better-auth
+      better-call:
+        specifier: ^1.0.0
+        version: 1.0.0
       stripe:
         specifier: ^17.6.0
         version: 17.6.0
@@ -4906,6 +4918,12 @@ packages:
     resolution: {integrity: sha512-gGq0NJkIGSwdbUt4yhdF8ZrmkGKVz9vAdVzpOfnom+V8PLSmSOVhZwbNvZZS1EYcJN5hzzKBxmmVVAInM6HQLg==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
+  '@number-flow/react@0.5.5':
+    resolution: {integrity: sha512-Zdju5n0osxrb+7jbcpUJ9L2VJ2+9ptwjz5+A+2wq9Q32hs3PW/noPJjHtLTrtGINM9mEw76DcDg0ac/dx6j1aA==}
+    peerDependencies:
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
+
   '@nuxt/devalue@2.0.2':
     resolution: {integrity: sha512-GBzP8zOc7CGWyFQS6dv1lQz8VVpz5C2yRszbXufwG/9zhStTIH50EtD87NmWbTMwXDvZLNg8GIpb1UFdH93JCA==}
 
@@ -8135,6 +8153,9 @@ packages:
   '@types/bun@1.2.2':
     resolution: {integrity: sha512-tr74gdku+AEDN5ergNiBnplr7hpDp3V1h7fqI2GcR/rsUaM39jpSeKH0TFibRvU0KwniRx5POgaYnaXbk0hU+w==}
 
+  '@types/canvas-confetti@1.9.0':
+    resolution: {integrity: sha512-aBGj/dULrimR1XDZLtG9JwxX1b4HPRF6CX9Yfwh3NvstZEm1ZL7RBnel4keCPSqs1ANRu1u2Aoz9R+VmtjYuTg==}
+
   '@types/chrome@0.0.258':
     resolution: {integrity: sha512-vicJi6cg2zaFuLmLY7laG6PHBknjKFusPYlaKQ9Zlycskofy71rStlGvW07MUuqUIVorZf8k5KH+zeTTGcH2dQ==}
 
@@ -9627,11 +9648,11 @@ packages:
   better-call@0.3.3:
     resolution: {integrity: sha512-N4lDVm0NGmFfDJ0XMQ4O83Zm/3dPlvIQdxvwvgSLSkjFX5PM4GUYSVAuxNzXN27QZMHDkrJTWUqxBrm4tPC3eA==}
 
+  better-call@1.0.0:
+    resolution: {integrity: sha512-3+q6AQENjZQRuY/gi1gx/Ufd3oTASutrS2KK+S4uxbeCh44JYFS9sZvyW+/QVTl3xIuSwfdjCUo3dFK6+4ChEA==}
+
   better-call@1.0.0-beta.4:
     resolution: {integrity: sha512-UmJrEBNcsFb/xBJePy1sYAYG8MUlRnr97D674Y2KmCYr+B402xpgnBuVXMujGEnHhVGx/sdiJdrI70PrjLc2bg==}
-
-  better-call@1.0.0-beta.5:
-    resolution: {integrity: sha512-0Jzk5+58hnJWJpGIcrvmxLTqKGjtNGkAQ9zpSKvCC860TUJGdNHvK661pQ5JYKNnbcKORA52xglu4T/MqKJyrQ==}
 
   better-call@1.0.0-beta.6:
     resolution: {integrity: sha512-VEl+JPJuliYS4XtD9aWH2zdRTdAPSUGWsHZhFYkPC3Bt49xMTDDsgv/y0TGvioW/MLw+9Ni+QOhGQNBqQflFew==}
@@ -9902,6 +9923,9 @@ packages:
 
   caniuse-lite@1.0.30001676:
     resolution: {integrity: sha512-Qz6zwGCiPghQXGJvgQAem79esjitvJ+CxSbSQkW9H/UX5hg8XM88d4lp2W+MEQ81j+Hip58Il+jGVdazk1z9cw==}
+
+  canvas-confetti@1.9.3:
+    resolution: {integrity: sha512-rFfTURMvmVEX1gyXFgn5QMn81bYk70qa0HLzcIOSVEyl57n6o9ItHeBtUSWdvKAPY0xlvBHno4/v3QPrT83q9g==}
 
   capture-stack-trace@1.0.2:
     resolution: {integrity: sha512-X/WM2UQs6VMHUtjUDnZTRI+i1crWteJySFzr9UpGoQa4WQffXVTTXuekjl7TjZRlcF2XfjgITT0HxZ9RnxeT0w==}
@@ -15216,6 +15240,9 @@ packages:
 
   nullthrows@1.1.1:
     resolution: {integrity: sha512-2vPPEi+Z7WqML2jZYddDIfy5Dqb0r2fze2zTxNNknZaFpVHU3mFB3R+DWeJWGVx0ecvttSGlJTI+WG+8Z4cDWw==}
+
+  number-flow@0.5.3:
+    resolution: {integrity: sha512-iLKyssImNWQmJ41rza9K7P5lHRZTyishi/9FarWPLQHYY2Ydtl6eiXINEjZ1fa8dHeY0O7+YOD+Py3ZsJddYkg==}
 
   nuxi@3.15.0:
     resolution: {integrity: sha512-ZVu45nuDrdb7nzKW2kLGY/N1vvFYLLbUVX6gUYw4BApKGGu4+GktTR5o48dGVgMYX9A8chaugl7TL9ZYmwC9Mg==}
@@ -23114,6 +23141,13 @@ snapshots:
     dependencies:
       which: 3.0.1
 
+  '@number-flow/react@0.5.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      esm-env: 1.2.1
+      number-flow: 0.5.3
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   '@nuxt/devalue@2.0.2': {}
 
   '@nuxt/devtools-kit@1.6.0(magicast@0.3.5)(rollup@4.24.3)(vite@5.4.14(@types/node@22.10.1)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))':
@@ -27656,6 +27690,8 @@ snapshots:
     dependencies:
       bun-types: 1.2.2
 
+  '@types/canvas-confetti@1.9.0': {}
+
   '@types/chrome@0.0.258':
     dependencies:
       '@types/filesystem': 0.0.36
@@ -30094,14 +30130,14 @@ snapshots:
       uncrypto: 0.1.3
       zod: 3.24.1
 
-  better-call@1.0.0-beta.4:
+  better-call@1.0.0:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
 
-  better-call@1.0.0-beta.5:
+  better-call@1.0.0-beta.4:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1
@@ -30497,6 +30533,8 @@ snapshots:
       lodash.uniq: 4.5.0
 
   caniuse-lite@1.0.30001676: {}
+
+  canvas-confetti@1.9.3: {}
 
   capture-stack-trace@1.0.2: {}
 
@@ -33573,7 +33611,7 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
       next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
@@ -37521,6 +37559,10 @@ snapshots:
       boolbase: 1.0.0
 
   nullthrows@1.1.1: {}
+
+  number-flow@0.5.3:
+    dependencies:
+      esm-env: 1.2.1
 
   nuxi@3.15.0: {}
 
