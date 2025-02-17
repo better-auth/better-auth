@@ -555,7 +555,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const otp = opts.generateOTP(
-						{ email, type: ctx.body.type },
+						{ email, type: "forget-password" },
 						ctx.request,
 					);
 					await ctx.context.internalAdapter.createVerificationValue({
