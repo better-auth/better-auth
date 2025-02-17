@@ -32,7 +32,7 @@ export interface EmailOTPOptions {
 	/**
 	 * Function to create OTP
 	 */
-	createOTP?: (
+	generateOTP?: (
 		data: {
 			email: string;
 			length: number;
@@ -61,7 +61,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		otpLength: 6,
-		createOTP: ({ length }) => generateRandomString(length, "0-9"),
+		generateOTP: ({ length }) => generateRandomString(length, "0-9"),
 		...options,
 	} satisfies EmailOTPOptions;
 	const ERROR_CODES = {
@@ -133,7 +133,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							});
 						}
 					}
-					const otp = opts.createOTP(
+					const otp = opts.generateOTP(
 						{ email, length: opts.otpLength, type: ctx.body.type },
 						ctx.request,
 					);
@@ -201,7 +201,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const otp = generateRandomString(opts.otpLength, "0-9");
+					const otp = opts.generateOTP(
+						{ email, length: opts.otpLength, type: ctx.body.type },
+						ctx.request,
+					);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `${ctx.body.type}-otp-${email}`,
@@ -553,7 +556,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
-					const otp = generateRandomString(opts.otpLength, "0-9");
+					const otp = opts.generateOTP(
+						{ email, length: opts.otpLength, type: ctx.body.type },
+						ctx.request,
+					);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: `forget-password-otp-${email}`,
@@ -698,7 +704,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 										: null
 									: null;
 						if (email) {
-							const otp = generateRandomString(opts.otpLength, "0-9");
+							const otp = opts.generateOTP(
+								{ email, length: opts.otpLength, type: ctx.body.type },
+								ctx.request,
+							);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
 								identifier: `email-verification-otp-${email}`,
