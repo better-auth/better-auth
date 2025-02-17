@@ -225,7 +225,7 @@ describe("App Invite", async (it) => {
 				},
 				{
 					invitee: {
-						name: "Test User #2",
+						name: "Test User #3",
 						email: "test-user-3@test3.com",
 						password: "password123456",
 					},
