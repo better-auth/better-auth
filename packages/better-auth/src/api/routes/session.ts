@@ -175,7 +175,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
-				console.log({ disblae: ctx.query?.disableRefresh });
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled
