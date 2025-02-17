@@ -148,6 +148,12 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 									"Resend the invitation email, if the user is already invited",
 							})
 							.optional(),
+						domainWhitelist: z
+							.array(z.string(), {
+								description:
+									"A list of domains that are allowed to accept the invitation. (Only available for public invitations)",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -186,7 +192,8 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
-					if (!!ctx.body.email && !options?.sendInvitationEmail) {
+					const invitationType = !!ctx.body.email ? "personal" : "public";
+					if (invitationType === "personal" && !options?.sendInvitationEmail) {
 						ctx.context.logger.warn(
 							"Invitation email is not enabled. Pass `sendInvitationEmail` to the plugin options to enable it.",
 						);
@@ -200,7 +207,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						typeof options.allowUserToCreateInvitation === "function"
 							? await options.allowUserToCreateInvitation(
 									session.user,
-									!!ctx.body.email ? "personal" : "public",
+									invitationType,
 								)
 							: options.allowUserToCreateInvitation;
 					if (!canInvite) {
@@ -438,6 +445,8 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						});
 					}
 
+					const invitationType = invitation.email ? "personal" : "public";
+
 					const inviter = await ctx.context.internalAdapter.findUserById(
 						invitation.inviterId,
 					);
@@ -463,6 +472,23 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
 						});
+					}
+
+					if (invitationType === "public") {
+						const [_lP, domain] = email.split("@", 1);
+
+						if (
+							invitation.domainWhitelist &&
+							invitation.domainWhitelist.length > 0 &&
+							!invitation.domainWhitelist.some(
+								(wDomain) => wDomain.toLowerCase() === domain.toLowerCase(),
+							)
+						) {
+							throw new APIError("FORBIDDEN", {
+								message:
+									APP_INVITE_ERROR_CODES.EMAIL_DOMAIN_IS_NOT_IN_WHITELIST,
+							});
+						}
 					}
 
 					const minPasswordLength =
@@ -538,7 +564,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					});
 
 					let acceptedI: AppInvitation | null = invitation;
-					if (invitation.email) {
+					if (invitationType === "personal") {
 						acceptedI = await adapter.updateInvitation({
 							invitationId,
 							status: "accepted",
@@ -813,6 +839,11 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						},
 						fieldName: options?.schema?.appInvitation?.fields?.inviterId,
 						required: true,
+					},
+					domainWhitelist: {
+						type: "string[]",
+						required: false,
+						fieldName: options?.schema?.appInvitation?.fields?.domainWhitelist,
 					},
 				},
 			},

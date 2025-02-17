@@ -193,7 +193,9 @@ describe("App Invite", async (it) => {
 
 	describe("should allow inviting multiple users with a single link", async (it) => {
 		const invitation = await auth.api.createAppInvitation({
-			body: {},
+			body: {
+				domainWhitelist: ["test.com", "test2.com"],
+			},
 			headers: user.headers,
 		});
 		if (!invitation) {
@@ -206,7 +208,7 @@ describe("App Invite", async (it) => {
 				{
 					invitee: {
 						name: "Test User #1",
-						email: "test-user-1@test.de",
+						email: "test-user-1@test.com",
 						password: "password123456",
 					},
 					action: "accept-invitation",
@@ -215,11 +217,20 @@ describe("App Invite", async (it) => {
 				{
 					invitee: {
 						name: "Test User #2",
-						email: "test-user-2@test.de",
+						email: "test-user-2@test2.com",
 						password: "password123456",
 					},
 					action: "accept-invitation",
 					message: "$name should be able to accept the invitation",
+				},
+				{
+					invitee: {
+						name: "Test User #2",
+						email: "test-user-3@test3.com",
+						password: "password123456",
+					},
+					action: "accept-invitation",
+					message: "$name should not be able to accept the invitation (domain not in whitelist)",
 				},
 				{
 					action: "reject-invitation",
