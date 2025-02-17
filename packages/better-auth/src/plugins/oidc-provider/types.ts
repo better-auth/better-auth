@@ -393,7 +393,7 @@ export interface OIDCMetadata {
 	 *
 	 * @default `/oauth2/userinfo`
 	 */
-	userInfo_endpoint: string;
+	userinfo_endpoint: string;
 	/**
 	 * The URL of the jwks_uri endpoint.
 	 *

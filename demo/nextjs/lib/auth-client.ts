@@ -25,6 +25,9 @@ export const client = createAuthClient({
 		multiSessionClient(),
 		oneTapClient({
 			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+			promptOptions: {
+				maxAttempts: 2,
+			},
 		}),
 		oidcClient(),
 		genericOAuthClient(),

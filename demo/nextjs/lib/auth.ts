@@ -146,7 +146,6 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 		multiSession(),
-		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
 		oidcProvider({

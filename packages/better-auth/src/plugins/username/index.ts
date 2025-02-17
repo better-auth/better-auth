@@ -12,14 +12,39 @@ import { mergeSchema } from "../../db/schema";
 
 export type UsernameOptions = {
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * The minimum length of the username
+	 *
+	 * @default 3
+	 */
+	minUsernameLength?: number;
+	/**
+	 * The maximum length of the username
+	 *
+	 * @default 30
+	 */
+	maxUsernameLength?: number;
+	/**
+	 * A function to validate the username
+	 *
+	 * By default, the username should only contain alphanumeric characters and underscores
+	 */
+	usernameValidator?: (username: string) => boolean | Promise<boolean>;
 };
 
-export const username = <Opts extends UsernameOptions>(options?: Opts) => {
+function defaultUsernameValidator(username: string) {
+	return /^[a-zA-Z0-9_]+$/.test(username);
+}
+
+export const username = (options?: UsernameOptions) => {
 	const ERROR_CODES = {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
 		EMAIL_NOT_VERIFIED: "email not verified",
 		UNEXPECTED_ERROR: "unexpected error",
 		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
+		USERNAME_TOO_SHORT: "username is too short",
+		USERNAME_TOO_LONG: "username is too long",
+		INVALID_USERNAME: "username is invalid",
 	};
 	return {
 		id: "username",
@@ -69,7 +94,46 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 					},
 				},
 				async (ctx) => {
-					const user = await ctx.context.adapter.findOne<User>({
+					if (!ctx.body.username || !ctx.body.password) {
+						ctx.context.logger.error("Username or password not found");
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						});
+					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (ctx.body.username.length < minUsernameLength) {
+						ctx.context.logger.error("Username too short", {
+							username: ctx.body.username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (ctx.body.username.length > maxUsernameLength) {
+						ctx.context.logger.error("Username too long", {
+							username: ctx.body.username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!validator(ctx.body.username)) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string }
+					>({
 						model: "user",
 						where: [
 							{
@@ -155,6 +219,7 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 							id: user.id,
 							email: user.email,
 							emailVerified: user.emailVerified,
+							username: user.username,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -169,11 +234,38 @@ export const username = <Opts extends UsernameOptions>(options?: Opts) => {
 			before: [
 				{
 					matcher(context) {
-						return context.path === "/sign-up/email";
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
 						if (username) {
+							const minUsernameLength = options?.minUsernameLength || 3;
+							const maxUsernameLength = options?.maxUsernameLength || 30;
+							if (username.length < minUsernameLength) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_TOO_SHORT,
+								});
+							}
+
+							if (username.length > maxUsernameLength) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_TOO_LONG,
+								});
+							}
+
+							const validator =
+								options?.usernameValidator || defaultUsernameValidator;
+
+							const valid = await validator(username);
+							if (!valid) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.INVALID_USERNAME,
+								});
+							}
+
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
