@@ -190,7 +190,6 @@ export const createInternalAdapter = (
 			const data: Omit<Session, "id"> = {
 				ipAddress: request ? getIp(request, ctx.options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
-				...rest,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
@@ -203,6 +202,7 @@ export const createInternalAdapter = (
 				token: generateId(32),
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...rest,
 			};
 			const res = await createWithHooks(
 				data,
