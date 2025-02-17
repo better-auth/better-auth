@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    better-call:
+      specifier: ^1.0.1
+      version: 1.0.1
+
 overrides:
   mdast-util-frontmatter: 2.0.1
   remark-mdx: 3.0.0
@@ -1466,8 +1472,8 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0(encoding@0.1.13)
       better-call:
-        specifier: 1.0.0-beta.6
-        version: 1.0.0-beta.6
+        specifier: 'catalog:'
+        version: 1.0.1
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -9654,8 +9660,11 @@ packages:
   better-call@1.0.0-beta.4:
     resolution: {integrity: sha512-UmJrEBNcsFb/xBJePy1sYAYG8MUlRnr97D674Y2KmCYr+B402xpgnBuVXMujGEnHhVGx/sdiJdrI70PrjLc2bg==}
 
-  better-call@1.0.0-beta.6:
-    resolution: {integrity: sha512-VEl+JPJuliYS4XtD9aWH2zdRTdAPSUGWsHZhFYkPC3Bt49xMTDDsgv/y0TGvioW/MLw+9Ni+QOhGQNBqQflFew==}
+  better-call@1.0.0-beta.5:
+    resolution: {integrity: sha512-0Jzk5+58hnJWJpGIcrvmxLTqKGjtNGkAQ9zpSKvCC860TUJGdNHvK661pQ5JYKNnbcKORA52xglu4T/MqKJyrQ==}
+
+  better-call@1.0.1:
+    resolution: {integrity: sha512-Z3DT2A290JiXvg5HXpyi3GrlfZnS3bGCrZ7Bii8pkDJC2DUUlWoRxpHDPISAl93lk1LLfuZoMsOZiMDfZ8B68w==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -30144,7 +30153,7 @@ snapshots:
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
 
-  better-call@1.0.0-beta.6:
+  better-call@1.0.1:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1

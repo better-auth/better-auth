@@ -144,9 +144,24 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const account = await ctx.context.internalAdapter.findAccount(sub);
 					if (!account) {
-						throw new APIError("UNAUTHORIZED", {
-							message: "Google sub doesn't match",
-						});
+						const accountLinking = ctx.context.options.account?.accountLinking;
+						const shouldLinkAccount =
+							accountLinking?.enabled &&
+							(accountLinking.trustedProviders?.includes("google") ||
+								email_verified);
+						if (shouldLinkAccount) {
+							await ctx.context.internalAdapter.linkAccount({
+								userId: user.user.id,
+								providerId: "google",
+								accountId: sub,
+								scope: "openid,profile,email",
+								idToken,
+							});
+						} else {
+							throw new APIError("UNAUTHORIZED", {
+								message: "Google sub doesn't match",
+							});
+						}
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
