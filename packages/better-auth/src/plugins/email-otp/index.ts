@@ -29,6 +29,9 @@ export interface EmailOTPOptions {
    * @default 300 (5 minutes)
    */
   expiresIn?: number;
+  /**
+   * Function to create OTP
+   */
   createOTP?: (
     data: {
       email: string;
@@ -36,7 +39,7 @@ export interface EmailOTPOptions {
       type: "sign-in" | "email-verification" | "forget-password";
     },
     request?: Request,
-  ) => Promise<string>;
+  ) => string;
   /**
    * Send email verification on sign-up
    *
