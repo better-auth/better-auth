@@ -150,28 +150,25 @@ export const auth = betterAuth({
 		}),
 		oneTap(),
 		stripe({
-			stripeClient: new Stripe(
-				"sk_test_51JMg84EerAovSgjdOLL46HBBuHUlf28mHn0v7rWkY3Z8H9suzVCcvLKg8GHzW8ikpMyY9afUCCu5h1DbItg9uEgI00npUsqL4X",
-			),
-			subscription: {
-				enabled: true,
-				defaultPlan: "free",
-				plans: [
-					{
-						name: "Starter",
-						priceId: "price_1QtOenEerAovSgjdlxS290sB",
-						yearlyDiscountPriceId: "price_1QtOenEerAovSgjdn2YcLWbz",
+			stripeClient: new Stripe(process.env.STRIPE_KEY!),
+			plans: [
+				{
+					name: "Starter",
+					priceId: "price_1QtOenEerAovSgjdlxS290sB",
+					annualDiscountPriceId: "price_1QtOenEerAovSgjdn2YcLWbz",
+					freeTrial: {
+						days: 7,
 					},
-					{
-						name: "Professional",
-						priceId: "price_1QtOfQEerAovSgjdueb6go9H",
-						yearlyDiscountPriceId: "price_1QtOg1EerAovSgjdwzNFMexz",
-					},
-					{
-						name: "Enterprise",
-					},
-				],
-			},
+				},
+				{
+					name: "Professional",
+					priceId: "price_1QtOfQEerAovSgjdueb6go9H",
+					annualDiscountPriceId: "price_1QtOg1EerAovSgjdwzNFMexz",
+				},
+				{
+					name: "Enterprise",
+				},
+			],
 		}),
 	],
 });

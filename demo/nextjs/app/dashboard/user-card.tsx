@@ -87,7 +87,8 @@ export default function UserCard(props: {
 	});
 	const isPro = subscriptions?.some(
 		(subscription) =>
-			subscription.plan === "pro" && subscription.status === "active",
+			subscription.plan?.toLowerCase() === "starter" &&
+			subscription.status === "active",
 	);
 	return (
 		<Card>
@@ -140,11 +141,7 @@ export default function UserCard(props: {
 						variant="outline"
 						size="sm"
 						onClick={async () => {
-							const { data, error } = await client.subscription.upgrade({
-								plan: "pro",
-							});
-							error && toast.error(error.message);
-							data?.url && window.open(data.url, "_blank");
+							alert(JSON.stringify(subscriptions));
 						}}
 					>
 						<svg

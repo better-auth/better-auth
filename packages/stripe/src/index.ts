@@ -26,12 +26,19 @@ type Plan = {
 	 */
 	priceId?: string;
 	/**
+	 * To use lookup key instead of price id
+	 *
+	 * https://docs.stripe.com/products-prices/
+	 * manage-prices#lookup-keys
+	 */
+	lookupKey?: string;
+	/**
 	 * A yearly discount price id
 	 *
 	 * useful when you want to offer a discount for
 	 * yearly subscription
 	 */
-	yearlyDiscountPriceId?: string;
+	annualDiscountPriceId?: string;
 	/**
 	 * Plan name
 	 */
@@ -122,9 +129,9 @@ export interface Customer {
 export interface InputCustomer extends Omit<Customer, "id"> {}
 
 async function getPlans(options: StripeOptions) {
-	return typeof options.subscription?.plans === "function"
-		? await options.subscription.plans()
-		: options.subscription?.plans;
+	return typeof options?.plans === "function"
+		? await options.plans()
+		: options?.plans;
 }
 
 async function getPlanByPriceId(options: StripeOptions, priceId: string) {
@@ -135,12 +142,12 @@ async function getPlanByPriceId(options: StripeOptions, priceId: string) {
 
 async function getPlanByName(options: StripeOptions, name: string) {
 	return await getPlans(options).then((res) =>
-		res?.find((plan) => plan.name === name),
+		res?.find((plan) => plan.name.toLowerCase() === name.toLowerCase()),
 	);
 }
 
-const getSchema = (options: StripeOptions) => {
-	const subscription = {
+const getSchema = () => {
+	return {
 		subscription: {
 			fields: {
 				plan: {
@@ -169,9 +176,6 @@ const getSchema = (options: StripeOptions) => {
 				},
 			},
 		},
-	} satisfies AuthPluginSchema;
-	return {
-		...(options.subscription?.enabled ? subscription : {}),
 		customer: {
 			fields: {
 				stripeCustomerId: {
@@ -215,42 +219,36 @@ interface StripeOptions {
 	/**
 	 * Subscription Configuration
 	 */
-	subscription?: {
-		/**
-		 * Enable subscriptions
-		 */
-		enabled: boolean;
-		/**
-		 * List of plan
-		 */
-		plans: Plan[] | (() => Promise<Plan[]>);
-		/**
-		 * Default plan to create subscription, when a user sign up.
-		 */
-		defaultPlan: string;
-		/**
-		 * parameters for session create params
-		 *
-		 * @param data - data containing user, session and plan
-		 * @param request - Request Object
-		 */
-		getCheckoutSessionParams?: (
-			data: {
-				user: User & Record<string, any>;
-				session: Session & Record<string, any>;
-				plan: Plan;
-			},
-			request?: Request,
-		) =>
-			| Promise<{
-					params?: Stripe.Checkout.SessionCreateParams;
-					options?: Stripe.RequestOptions;
-			  }>
-			| {
-					params?: Stripe.Checkout.SessionCreateParams;
-					options?: Stripe.RequestOptions;
-			  };
-	};
+	/**
+	 * List of plan
+	 */
+	plans: Plan[] | (() => Promise<Plan[]>);
+	/**
+	 * Default plan to create subscription, when a user sign up.
+	 */
+	defaultPlan?: string;
+	/**
+	 * parameters for session create params
+	 *
+	 * @param data - data containing user, session and plan
+	 * @param request - Request Object
+	 */
+	getCheckoutSessionParams?: (
+		data: {
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+			plan: Plan;
+		},
+		request?: Request,
+	) =>
+		| Promise<{
+				params?: Stripe.Checkout.SessionCreateParams;
+				options?: Stripe.RequestOptions;
+		  }>
+		| {
+				params?: Stripe.Checkout.SessionCreateParams;
+				options?: Stripe.RequestOptions;
+		  };
 	onCheckoutSessionComplete?: (
 		event: Stripe.Event,
 		subscription?: Subscription | null,
@@ -268,49 +266,45 @@ async function checkoutSessionCompleted(
 	if (checkoutSession.mode === "setup") {
 		return;
 	}
-	if (options.subscription?.enabled) {
-		const subscription = await client.subscriptions.retrieve(
-			checkoutSession.subscription as string,
-		);
-		const priceId = subscription.items.data[0]?.price.id;
-		const plan = await getPlanByPriceId(options, priceId as string);
-		if (plan) {
-			const referenceId = checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
-			if (referenceId && subscriptionId) {
-				let dbSubscription = await ctx.adapter.update<InputSubscription>({
-					model: "subscription",
-					update: {
-						status: subscription.status,
-						updatedAt: new Date(),
-						billingCycleStart: new Date(
-							subscription.current_period_start * 1000,
-						),
+	const subscription = await client.subscriptions.retrieve(
+		checkoutSession.subscription as string,
+	);
+	const priceId = subscription.items.data[0]?.price.id;
+	const plan = await getPlanByPriceId(options, priceId as string);
+	if (plan) {
+		const referenceId = checkoutSession?.metadata?.referenceId;
+		const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+		if (referenceId && subscriptionId) {
+			let dbSubscription = await ctx.adapter.update<InputSubscription>({
+				model: "subscription",
+				update: {
+					status: subscription.status,
+					updatedAt: new Date(),
+					billingCycleStart: new Date(subscription.current_period_start * 1000),
+				},
+				where: [
+					{
+						field: "referenceId",
+						value: referenceId,
 					},
+				],
+			});
+			if (!dbSubscription) {
+				dbSubscription = await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
 					where: [
 						{
-							field: "referenceId",
-							value: referenceId,
+							field: "id",
+							value: subscriptionId,
 						},
 					],
 				});
-				if (!dbSubscription) {
-					dbSubscription = await ctx.adapter.findOne<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
-				}
-				await options.onCheckoutSessionComplete?.(
-					event,
-					dbSubscription as Subscription,
-				);
-				return;
 			}
+			await options.onCheckoutSessionComplete?.(
+				event,
+				dbSubscription as Subscription,
+			);
+			return;
 		}
 	}
 	await options.onCheckoutSessionComplete?.(event);
@@ -329,8 +323,8 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 	const events = new Set([
 		"charge.succeeded",
 		"checkout.session.completed",
-		"customer.subscription.updated",
-		"customer.subscription.deleted",
+		"customer.updated",
+		"customer.deleted",
 		"invoice.payment_failed",
 	]);
 	return {
@@ -386,6 +380,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 					return ctx.json({ success: true });
 				},
 			),
+
 			upgradeSubscription: createAuthEndpoint(
 				"/subscription/upgrade",
 				{
@@ -394,12 +389,24 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						plan: z.string(),
 						referenceId: z.string().optional(),
 						metadata: z.record(z.string(), z.any()).optional(),
-						successURL: z.string().optional(),
+						uiMode: z.enum(["embedded", "hosted"]).default("hosted"),
+						successUrl: z
+							.string({
+								description:
+									"callback url to redirect back after successful subscription",
+							})
+							.default("/"),
+						cancelUrl: z
+							.string({
+								description:
+									"callback url to redirect back after successful subscription",
+							})
+							.default("/"),
 					}),
 					use: [
 						sessionMiddleware,
 						originCheck((c) => {
-							return c.body.successURL;
+							return [c.body.successURL, c.body.cancelURL];
 						}),
 					],
 				},
@@ -514,7 +521,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						throw new APIError("INTERNAL_SERVER_ERROR");
 					}
 
-					const params = await options.subscription?.getCheckoutSessionParams?.(
+					const params = await options?.getCheckoutSessionParams?.(
 						{
 							user,
 							session,
@@ -522,6 +529,14 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						},
 						ctx.request,
 					);
+					const getURL = (url: string) => {
+						if (url.startsWith("http")) {
+							return url;
+						}
+						return `${ctx.context.options.baseURL}${
+							url.startsWith("/") ? url : `/${url}`
+						}`;
+					};
 					const checkoutSession = await client.checkout.sessions.create(
 						{
 							line_items: [
@@ -530,10 +545,16 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 									quantity: 1,
 								},
 							],
+							ui_mode: "hosted",
 							customer_email: user.email,
 							mode: "subscription",
-							success_url: `${ctx.context.options.baseURL}`,
-							cancel_url: `${ctx.context.options.baseURL}/cancel`,
+							success_url: `${getURL(
+								ctx.body.successUrl,
+							)}?session_id={CHECKOUT_SESSION_ID}`,
+							cancel_url: getURL(ctx.body.cancelUrl),
+							subscription_data: {
+								trial_period_days: plan.freeTrial?.days,
+							},
 							...params?.options,
 							metadata: {
 								referenceId,
@@ -543,7 +564,11 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						},
 						params?.options,
 					);
-					return ctx.json(checkoutSession);
+					return ctx.json({
+						clientSecret: checkoutSession.client_secret,
+						url: checkoutSession.url,
+						redirect: true,
+					});
 				},
 			),
 			listSubscriptions: createAuthEndpoint(
@@ -570,7 +595,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 						});
 					if (!subscriptions.length) {
 						throw new APIError("BAD_REQUEST", {
-							message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+							message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 						});
 					}
 					const plans = await getPlans(options);
@@ -591,6 +616,6 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 				},
 			),
 		},
-		schema: getSchema(options),
+		schema: getSchema(),
 	} satisfies BetterAuthPlugin;
 };
