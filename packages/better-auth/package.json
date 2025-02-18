@@ -440,6 +440,16 @@
         "types": "./dist/plugins/username.d.cts",
         "default": "./dist/plugins/username.cjs"
       }
+    },
+    "./plugins/app-invite": {
+      "import": {
+        "types": "./dist/plugins/app-invite.d.ts",
+        "default": "./dist/plugins/app-invite.js"
+      },
+      "require": {
+        "types": "./dist/plugins/app-invite.d.cts",
+        "default": "./dist/plugins/app-invite.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -563,6 +573,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username.d.ts"
+      ],
+      "plugins/app-invite": [
+        "./dist/plugins/app-invite.d.ts"
       ]
     }
   },
