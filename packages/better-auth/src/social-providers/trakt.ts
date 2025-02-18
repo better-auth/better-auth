@@ -22,9 +22,7 @@ export interface TraktProfile {
   }
 }
 
-export interface TraktOption extends ProviderOptions<TraktProfile> {
-	prompt?: "login"
-}
+export interface TraktOption extends ProviderOptions<TraktProfile> {}
 
 export const trakt = (options: TraktOption) => {
 	return {
