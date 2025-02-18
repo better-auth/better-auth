@@ -20,6 +20,7 @@ import type {
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
+import { base64 } from "@better-auth/utils/base64";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -270,9 +271,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+					let { client_id, client_secret } = body;
+					const authorization = ctx.request?.headers.get("authorization") || null
+					if (authorization) {
+							const encoded = authorization.replace("Basic ", "");
+							client_id = new TextDecoder().decode(base64.decode(encoded)).split(":")[0]
+							client_secret = new TextDecoder().decode(base64.decode(encoded)).split(":")[1]
+					}
 					const {
-						client_id,
-						client_secret,
+						
 						grant_type,
 						code,
 						redirect_uri,
