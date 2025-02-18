@@ -274,14 +274,28 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let { client_id, client_secret } = body;
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
-					if (authorization && !client_id && !client_secret) {
+					if (
+						authorization &&
+						!client_id &&
+						!client_secret &&
+						authorization.startsWith("Basic ")
+					) {
 						const encoded = authorization.replace("Basic ", "");
-						client_id = new TextDecoder()
-							.decode(base64.decode(encoded))
-							.split(":")[0];
-						client_secret = new TextDecoder()
-							.decode(base64.decode(encoded))
-							.split(":")[1];
+						const decoded = new TextDecoder().decode(base64.decode(encoded));
+						if (!decoded.includes(":"))
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						const [id, secret] = decoded.split(":");
+						if (!id || !secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						client_id = id;
+						client_secret = secret;
 					}
 					const {
 						grant_type,
