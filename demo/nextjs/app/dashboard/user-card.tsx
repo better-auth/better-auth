@@ -36,7 +36,6 @@ import {
 	QrCode,
 	ShieldCheck,
 	ShieldOff,
-	Sparkles,
 	Trash,
 	X,
 } from "lucide-react";
@@ -55,13 +54,16 @@ import {
 } from "@/components/ui/table";
 import QRCode from "react-qr-code";
 import CopyButton from "@/components/ui/copy-button";
-import UpgradeButton from "./upgrade-button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
+import { SubscriptionTierLabel } from "@/components/tier-labels";
+import { Component } from "./change-plan";
+import { Subscription } from "@better-auth/stripe";
 
 export default function UserCard(props: {
 	session: Session | null;
 	activeSessions: Session["session"][];
+	subscription?: Subscription;
 }) {
 	const router = useRouter();
 	const { data } = useSession();
@@ -74,22 +76,18 @@ export default function UserCard(props: {
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
-	const { data: subscriptions } = useQuery({
+	const { data: subscription } = useQuery({
 		queryKey: ["subscriptions"],
+		initialData: props.subscription ? props.subscription : null,
 		queryFn: async () => {
 			const res = await client.subscription.list({
 				fetchOptions: {
 					throw: true,
 				},
 			});
-			return res;
+			return res.length ? res[0] : null;
 		},
 	});
-	const isPro = subscriptions?.some(
-		(subscription) =>
-			subscription.plan?.toLowerCase() === "starter" &&
-			subscription.status === "active",
-	);
 	return (
 		<Card>
 			<CardHeader>
@@ -112,7 +110,7 @@ export default function UserCard(props: {
 									<p className="text-sm font-medium leading-none">
 										{session?.user.name}
 									</p>
-									{isPro && (
+									{!!subscription && (
 										<Badge
 											className="w-min p-px rounded-full"
 											variant="outline"
@@ -136,31 +134,14 @@ export default function UserCard(props: {
 						</div>
 						<EditUserDialog />
 					</div>
-					<Button
-						className="w-min flex gap-2"
-						variant="outline"
-						size="sm"
-						onClick={async () => {
-							alert(JSON.stringify(subscriptions));
-						}}
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="1em"
-							height="1em"
-							viewBox="0 0 24 24"
-						>
-							<g fill="none">
-								<path
-									fillRule="evenodd"
-									clipRule="evenodd"
-									d="M6 3a1 1 0 0 0-2 0v1H3a1 1 0 0 0 0 2h1v1a1 1 0 0 0 2 0V6h1a1 1 0 0 0 0-2H6V3zm7-1a1 1 0 0 1 1 1c0 3.344 1.148 5.296 2.514 6.43C17.918 10.598 19.672 11 21 11a1 1 0 1 1 0 2c-3.26 0-4.924 1.324-5.838 2.881C14.2 17.524 14 19.556 14 21a1 1 0 1 1-2 0c0-3.344-1.148-5.296-2.514-6.43C8.082 13.402 6.328 13 5 13a1 1 0 1 1 0-2c3.26 0 4.924-1.324 5.838-2.881C11.8 6.476 12 4.444 12 3a1 1 0 0 1 1-1z"
-									fill="currentColor"
-								></path>
-							</g>
-						</svg>
-						<span>Upgrade to Pro</span>
-					</Button>
+					<div className="flex items-center justify-between">
+						<SubscriptionTierLabel
+							tier={subscription?.plan?.toLowerCase() as "starter"}
+						/>
+						<Component
+							currentPlan={subscription?.plan?.toLowerCase() as "starter"}
+						/>
+					</div>
 				</div>
 
 				{session?.user.emailVerified ? null : (
@@ -485,7 +466,7 @@ export default function UserCard(props: {
 						) : (
 							<div className="flex items-center gap-2">
 								<LogOut size={16} />
-								Sign Ou t
+								Sign Out
 							</div>
 						)}
 					</span>

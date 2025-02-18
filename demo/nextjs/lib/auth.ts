@@ -151,6 +151,8 @@ export const auth = betterAuth({
 		oneTap(),
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY!),
+			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			requireEmailVerification: true,
 			plans: [
 				{
 					name: "Starter",
