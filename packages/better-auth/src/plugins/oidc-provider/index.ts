@@ -283,11 +283,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 						try {
 							const encoded = authorization.replace("Basic ", "");
 							const decoded = new TextDecoder().decode(base64.decode(encoded));
-							if (!decoded.includes(":"))
+							if (!decoded.includes(":")) {
 								throw new APIError("UNAUTHORIZED", {
 									error_description: "invalid authorization header format",
 									error: "invalid_client",
 								});
+							}
 							const [id, secret] = decoded.split(":");
 							if (!id || !secret) {
 								throw new APIError("UNAUTHORIZED", {
