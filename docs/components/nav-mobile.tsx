@@ -12,6 +12,7 @@ import { AnimatePresence, FadeIn } from "@/components/ui/fade-in";
 import { contents, examples } from "./sidebar-content";
 import { MobileThemeToggle } from "./theme-toggler";
 import { usePathname } from "next/navigation";
+import SearchDocumentation from "./search-documentation";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -21,7 +22,7 @@ interface NavbarMobileContextProps {
 }
 
 const NavbarContext = createContext<NavbarMobileContextProps | undefined>(
-	undefined,
+	undefined
 );
 
 export const NavbarProvider = ({ children }: { children: React.ReactNode }) => {
@@ -48,7 +49,7 @@ export const useNavbarMobile = (): NavbarMobileContextProps => {
 	const context = useContext(NavbarContext);
 	if (!context) {
 		throw new Error(
-			"useNavbarMobile must be used within a NavbarMobileProvider",
+			"useNavbarMobile must be used within a NavbarMobileProvider"
 		);
 	}
 	return context;
@@ -169,6 +170,11 @@ export const DocsNavBarMobile = () => {
 					fromTopToBottom
 					className="absolute top-[100px] left-0 bg-background h-[calc(100%-57px-27px)] w-full z-[1000] p-5 divide-y overflow-y-auto"
 				>
+					<SearchDocumentation
+						onClick={() => {
+							toggleNavbar();
+						}}
+					/>
 					{content.map((menu, i) => (
 						<Accordion type="single" collapsible key={menu.title}>
 							<AccordionItem value={menu.title}>
@@ -219,28 +225,28 @@ export const navMenu: {
 		path: string;
 	}[];
 }[] = [
-	{
-		name: "_helo",
-		path: "/",
-	},
+		{
+			name: "_helo",
+			path: "/",
+		},
 
-	{
-		name: "docs",
-		path: "/docs",
-	},
-	{
-		name: "examples",
-		path: "/docs/examples/next-js",
-	},
-	{
-		name: "changelogs",
-		path: "/changelogs",
-	},
-	{
-		name: "community",
-		path: "/community",
-	},
-];
+		{
+			name: "docs",
+			path: "/docs",
+		},
+		{
+			name: "examples",
+			path: "/docs/examples/next-js",
+		},
+		{
+			name: "changelogs",
+			path: "/changelogs",
+		},
+		{
+			name: "community",
+			path: "/community",
+		},
+	];
 
 export const DocsNavbarMobileTitle = () => {
 	const pathname = usePathname();
