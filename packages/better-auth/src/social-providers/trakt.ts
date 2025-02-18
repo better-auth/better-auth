@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { createAuthorizationURL, getOAuth2Tokens, validateAuthorizationCode } from "../oauth2";
 
 export interface TraktProfile {
 	/** The user's username */
@@ -39,18 +39,33 @@ export const trakt = (options: TraktOption) => {
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
-			return validateAuthorizationCode({
-				code,
-				redirectURI: options.redirectURI || redirectURI,
-				options,
-				tokenEndpoint: "https://api.trakt.tv/oauth/token",
-				authentication: "post",
+			const { data, error } = await betterFetch<object>("https://api.trakt.tv/oauth/token", {
+				method: "POST",
+				body: {
+					"code": code,
+					"client_id": options.clientId,
+					"client_secret": options.clientSecret,
+					"redirect_uri": options.redirectURI || redirectURI,
+					"grant_type": "authorization_code",
+				},
+				headers: {
+					"content-type": "application/json",
+				},
 			});
+		
+			if (error) {
+				throw error;
+			}
+
+			const tokens = getOAuth2Tokens(data);
+
+			return tokens;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
+			
 			const { data: profile, error } = await betterFetch<TraktProfile>(
 				"https://api.trakt.tv/users/me?extended=full",
 				{
