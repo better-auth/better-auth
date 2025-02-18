@@ -66,6 +66,16 @@ export const otp2fa = (options?: OTPOptions) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
+			body: z
+				.object({
+					/**
+					 * if true, the device will be trusted
+					 * for 30 days. It'll be refreshed on
+					 * every sign in request within this time.
+					 */
+					trustDevice: z.boolean().optional(),
+				})
+				.optional(),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
 				openapi: {
@@ -134,6 +144,12 @@ export const otp2fa = (options?: OTPOptions) => {
 				code: z.string({
 					description: "The otp code to verify",
 				}),
+				/**
+				 * if true, the device will be trusted
+				 * for 30 days. It'll be refreshed on
+				 * every sign in request within this time.
+				 */
+				trustDevice: z.boolean().optional(),
 			}),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
@@ -185,14 +201,13 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${user.id}`,
 				);
-
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
 			}
 			if (toCheckOtp.value === ctx.body.code) {
-				return ctx.context.valid();
+				return ctx.context.valid(ctx);
 			} else {
 				return ctx.context.invalid();
 			}

@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin, type UserWithRole } from ".";
 import { adminClient } from "./client";
+import { createAuthClient } from "../../client";
 
 describe("Admin plugin", async () => {
-	const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+	const { signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl } =
 		await getTestInstance(
 			{
 				plugins: [admin()],
@@ -29,11 +30,15 @@ describe("Admin plugin", async () => {
 				testUser: {
 					name: "Admin",
 				},
-				clientOptions: {
-					plugins: [adminClient()],
-				},
 			},
 		);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+	});
+
 	const { headers: adminHeaders } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 
@@ -50,7 +55,6 @@ describe("Admin plugin", async () => {
 			},
 		);
 		newUser = res.data?.user;
-
 		expect(newUser?.role).toBe("user");
 	});
 
@@ -66,6 +70,18 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users.length).toBe(2);
 	});
 
+	it("should allow admin to count users", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.total).toBe(2);
+	});
+
 	it("should allow to sort users by name", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -76,6 +92,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+
 		expect(res.data?.users[0].name).toBe("Test User");
 
 		const res2 = await client.admin.listUsers({
@@ -253,6 +270,7 @@ describe("Admin plugin", async () => {
 				headers,
 			},
 		});
+		console.log(res);
 		expect(res.data?.length).toBe(2);
 	});
 
@@ -331,7 +349,7 @@ describe("Admin plugin", async () => {
 		expect(sessions2.data?.sessions.length).toBe(0);
 	});
 
-	it("should list with ne", async () => {
+	it("should list with me", async () => {
 		const response = await client.admin.listUsers({
 			query: {
 				sortBy: "createdAt",

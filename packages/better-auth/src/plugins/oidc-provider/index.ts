@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
+	createAuthMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
@@ -31,7 +32,7 @@ const getMetadata = (
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
-		userInfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
@@ -102,14 +103,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 					matcher() {
 						return true;
 					},
-					handler: async (ctx) => {
+					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
 						const cookieName = ctx.context.authCookies.sessionToken.name;
 						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.responseHeader.get("set-cookie") || "",
+							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
 						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
 						if (!cookie || !hasSessionToken) {
@@ -129,11 +130,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query.prompt = "consent";
+						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
-					},
+					}),
 				},
 			],
 		},
@@ -187,9 +188,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verification.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Code expired",
 							error: "invalid_grant",
@@ -248,7 +246,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.any(),
+					body: z.record(z.any()),
 					metadata: {
 						isAction: false,
 					},
@@ -373,9 +371,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "code expired",
 							error: "invalid_grant",

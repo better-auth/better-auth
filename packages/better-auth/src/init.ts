@@ -61,7 +61,7 @@ export const init = async (options: BetterAuthOptions) => {
 	const providers = Object.keys(options.socialProviders || {})
 		.map((key) => {
 			const value = options.socialProviders?.[key as "github"]!;
-			if (value.enabled === false) {
+			if (!value || value.enabled === false) {
 				return null;
 			}
 			if (!value.clientId) {
@@ -250,7 +250,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 		return [];
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins) {
+	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;

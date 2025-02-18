@@ -20,9 +20,9 @@ export const reddit = (options: RedditOptions) => {
 		id: "reddit",
 		name: "Reddit",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["identity"];
+			const _scopes = options.disableDefaultScope ? [] : ["identity"];
 			options.scope && _scopes.push(...options.scope);
-
+			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "reddit",
 				options,

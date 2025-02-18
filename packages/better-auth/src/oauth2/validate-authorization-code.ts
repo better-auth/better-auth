@@ -10,11 +10,13 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
+	deviceId,
 }: {
 	code: string;
 	redirectURI: string;
 	options: ProviderOptions;
 	codeVerifier?: string;
+	deviceId?: string;
 	tokenEndpoint: string;
 	authentication?: "basic" | "post";
 }) {
@@ -27,6 +29,7 @@ export async function validateAuthorizationCode({
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
+	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
 		const encodedCredentials = btoa(

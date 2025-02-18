@@ -144,12 +144,12 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 		multiSession(),
-		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
 		oidcProvider({
 			loginPage: "/sign-in",
 		}),
-		apiKey()
+		apiKey(),
+		oneTap(),
 	],
 });

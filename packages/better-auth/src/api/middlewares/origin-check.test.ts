@@ -141,6 +141,35 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
+	it("should work with list of trusted origins", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com",
+				},
+			},
+		});
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:5000/reset-password",
+		});
+		expect(res.data?.status).toBeTruthy();
+
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				// @ts-expect-error - query is not defined in the type
+				query: {
+					currentURL: "http://localhost:5000",
+				},
+			},
+		});
+		expect(res2.data?.user).toBeDefined();
+	});
+
 	it("should work with wildcard trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "https://sub-domain.my-site.com",
