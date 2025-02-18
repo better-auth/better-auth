@@ -538,7 +538,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						: null;
 
 					if (link) {
-						if (link.email !== userInfo.email.toLowerCase()) {
+						if (
+							ctx.context.options.account?.accountLinking?.allowDifferentEmails !== true &&
+							link.email !== userInfo.email.toLowerCase()
+						) {
 							return redirectOnError("email_doesn't_match");
 						}
 						const newAccount = await ctx.context.internalAdapter.createAccount({
