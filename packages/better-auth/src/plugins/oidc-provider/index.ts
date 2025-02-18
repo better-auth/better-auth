@@ -273,7 +273,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					let { client_id, client_secret } = body;
 					const authorization = ctx.request?.headers.get("authorization") || null
-					if (authorization) {
+					if (authorization && !client_id && !client_secret) {
 							const encoded = authorization.replace("Basic ", "");
 							client_id = new TextDecoder().decode(base64.decode(encoded)).split(":")[0]
 							client_secret = new TextDecoder().decode(base64.decode(encoded)).split(":")[1]
