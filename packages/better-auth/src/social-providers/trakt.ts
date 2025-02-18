@@ -29,15 +29,12 @@ export const trakt = (options: TraktOption) => {
 		id: "trakt",
 		name: "Trakt",
 		createAuthorizationURL(data) {
-			const _scopes = data.scopes || ["openid", "profile"]
-			options.scope && _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "trakt",
 				options,
 				authorizationEndpoint: "https://trakt.tv/oauth/authorize",
-				scopes: _scopes,
+				scopes: [],
 				state: data.state,
-				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
 			});
 		},
