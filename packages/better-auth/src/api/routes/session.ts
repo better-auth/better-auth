@@ -273,7 +273,7 @@ export const getSessionFromCtx = async <
 		...ctx,
 		_flag: "json",
 		headers: ctx.headers!,
-		query: { ...config, ...ctx.query },
+		query: { ...ctx.query, ...config },
 	}).catch((e) => {
 		return null;
 	});
