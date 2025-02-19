@@ -22,7 +22,7 @@ interface NavbarMobileContextProps {
 }
 
 const NavbarContext = createContext<NavbarMobileContextProps | undefined>(
-	undefined
+	undefined,
 );
 
 export const NavbarProvider = ({ children }: { children: React.ReactNode }) => {
@@ -49,7 +49,7 @@ export const useNavbarMobile = (): NavbarMobileContextProps => {
 	const context = useContext(NavbarContext);
 	if (!context) {
 		throw new Error(
-			"useNavbarMobile must be used within a NavbarMobileProvider"
+			"useNavbarMobile must be used within a NavbarMobileProvider",
 		);
 	}
 	return context;
@@ -225,28 +225,28 @@ export const navMenu: {
 		path: string;
 	}[];
 }[] = [
-		{
-			name: "_helo",
-			path: "/",
-		},
+	{
+		name: "_helo",
+		path: "/",
+	},
 
-		{
-			name: "docs",
-			path: "/docs",
-		},
-		{
-			name: "examples",
-			path: "/docs/examples/next-js",
-		},
-		{
-			name: "changelogs",
-			path: "/changelogs",
-		},
-		{
-			name: "community",
-			path: "/community",
-		},
-	];
+	{
+		name: "docs",
+		path: "/docs",
+	},
+	{
+		name: "examples",
+		path: "/docs/examples/next-js",
+	},
+	{
+		name: "changelogs",
+		path: "/changelogs",
+	},
+	{
+		name: "community",
+		path: "/community",
+	},
+];
 
 export const DocsNavbarMobileTitle = () => {
 	const pathname = usePathname();
