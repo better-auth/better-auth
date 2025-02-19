@@ -17,6 +17,7 @@ import {
 	UserCircle,
 	Users2,
 	UserSquare2,
+	KeyRound,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -920,6 +921,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "API Key",
+				href: "/docs/plugins/api-key",
+				icon: () => <KeyRound className="size-4" />
 			},
 			{
 				title: "Authorization",

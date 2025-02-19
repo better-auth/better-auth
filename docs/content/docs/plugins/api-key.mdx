@@ -1,0 +1,335 @@
+---
+title: API Key
+description: API Key plugin for Better Auth.
+---
+
+The API Key plugin allows you to create and manage API keys for your application. It provides a way to authenticate and authorize API requests by verifying API keys.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { apiKey } from "better-auth/plugins"
+
+        const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                apiKey() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { apiKeyClient } from "better-auth/client/plugins"
+
+        const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                apiKeyClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Create an API key
+
+To create an API key, you can use the `apiKey.create` function provided by the client. The `apiKey.create` function takes an object with the following properties:
+
+- `name`: The name of the API key.
+- `reference`: A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)
+- `remaining`: The number of requests remaining.
+- `prefix`: A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah".
+- `length`: The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
+- `expires`: UNIX timestamp of when the API key expires.
+- `enabled`: Whether the key is enabled or not.
+- `rateLimit`: An object containing rate limit configurations.
+    - `rateLimit.enabled`: Whether rate limiting is enabled for the API key.
+    - `rateLimit.timeWindow`: The time window in milliseconds for rate limiting.
+    - `rateLimit.limit`: The maximum number of requests allowed in the time window.
+
+
+```ts
+const data = await authClient.apiKey.create({
+  reference: "my_user_id",
+  name: "My API Key",
+  prefix: "my_app",
+  length: 64,
+  expires: new Date().getTime() + 1000 * 60 * 60 * 24, // 1 day
+  enabled: true,
+  rateLimit: {
+    enabled: true,
+    timeWindow: 1000 * 60, // 1 minute
+    limit: 10, // with a limit of 10 requests per minute
+  },
+});
+```
+
+### Verify an API key
+
+To verify an API key, you can use the `apiKey.verify` function provided by the client. The `apiKey.verify` function takes an object with the following properties:
+
+- `key`: The API key to verify.
+
+```ts
+const isValid = await authClient.apiKey.verify({
+  key: "your_api_key_here",
+});
+```
+
+### Get an API key
+
+To get an API key, you can use the `apiKey.get` function provided by the client. The `apiKey.get` function takes an object with the following properties:
+
+- `keyId`: The ID of the API key to get.
+
+```ts
+const apiKey = await authClient.apiKey.get({
+  keyId: "your_api_key_id_here",
+});
+```
+
+### Update an API key
+
+To update an API key, you can use the `apiKey.update` function provided by the client. The `apiKey.update` function takes an object with the following properties:
+
+- `keyId`: The ID of the API key to update.
+- `name`: The new name for the API key.
+- `remaining`: The new number of requests remaining.
+- `expires`: The new expiration date for the API key.
+- `enabled`: Whether the API key is enabled or not.
+
+```ts
+const updatedApiKey = await authClient.apiKey.update({
+  keyId: "your_api_key_id_here",
+  name: "New API Key Name",
+  remaining: 100,
+  expires: new Date().getTime() + 1000 * 60 * 60 * 24 * 7, // 1 week from now
+  enabled: true,
+});
+```
+
+### List API keys
+
+To list all API keys associated with a reference, you can use the `apiKey.list` function provided by the client. The `apiKey.list` function takes an object with the following properties:
+
+- `reference`: The reference to list API keys for.
+
+```ts
+const apiKeys = await authClient.apiKey.list({
+  reference: "your_reference_here",
+});
+```
+
+
+## Server only functions
+
+### Force rerolling an API key
+
+You can pass an API key ID to the `apiKey.forceReroll` function to force reroll the API key.
+
+The traditional rerolling process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic rerolling process for your API, or if the API key was created without an owner,
+then this function is able of rerolling the key as needed.
+
+Additional properties can allow you to configure the ne API key:
+
+- `prefix`: The prefix of the API key. (Default `undefined`)
+- `length`: The length of the API key. (Default `64`)
+
+```ts
+await auth.api.apiKey.forceReroll({
+  keyId: "my-key-id",
+  prefix: "test",
+  length: 64,
+});
+```
+
+### Force revoking an API key
+
+You can pass an API key ID to the `apiKey.forceRevoke` function to force revoke the API key.
+
+The traditional revoking process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic revoking process for your API, or if the API key was created without an owner,
+then this function is able of revoking the key as needed.
+
+```ts
+await auth.api.apiKey.forceRevoke({
+  keyId: "my-key-id",
+});
+```
+
+### Force updating an API key
+
+You can pass an API key ID to the `apiKey.forceUpdate` function to force update information on the API key.
+
+The traditional updating process requires you to have an active session. This
+function on the other hand is ran on the server and will not require an active
+session.
+This is helpful if you want to have an automatic updating process for your API, or if the API key was created without an owner,
+then this function is able of updating the key as needed.
+
+Properties that can be updated:
+
+- `name`: The name of the API key.
+- `remaining`: The number of requests remaining.
+- `expires`: The expiration date of the API key in Unix timestamp format.
+- `enabled`: Whether the API key is enabled or not.
+
+```ts
+await auth.api.apiKey.forceUpdate({
+  keyId: "my-key-id",
+  name: "new-name",
+  remaining: 10,
+  expires: new Date().getTime + 1000 * 60 * 60 * 24 * 7, // 1 week from now
+  enabled: true,
+});
+```
+
+### Delete all expired API keys
+
+To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
+This function will delete all API keys that have an expiration date and are expired.
+
+<Callout>
+  We automatically delete expired API keys every time any apiKey plugin
+  functions were called, however they are rate-limited to a 10 second cooldown
+  each call.
+</Callout>
+
+```ts
+await auth.api.apiKey.deleteAllExpiredApiKeys();
+```
+
+## Schema
+
+Table: `apiKey`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "The ID of the api key",
+      isUnique: true,
+      isPrimaryKey: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated",
+    },
+    {
+      name: "lastVerifiedAt",
+      type: "Date",
+      description:
+        "The date and time the API key was last verified. (Excluding failed requests)",
+      isOptional: true,
+    },
+    {
+      name: "createdBy",
+      type: "string",
+      description: "The id of the user who created the API key",
+      isForeignKey: true,
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining",
+      isOptional: true,
+    },
+    {
+      name: "key",
+      type: "string",
+      description: "The API key itself",
+    },
+    {
+      name: "reference",
+      type: "string",
+      description:
+        "A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)",
+    },
+    {
+      name: "expires",
+      type: "number",
+      description:
+        "The expiration date of the API key in Unix timestamp format",
+      isOptional: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the API key",
+      isOptional: true,
+    },
+    {
+      name: "enabled",
+      type: "boolean",
+      description: "Whether the API key is enabled",
+    },
+    {
+      name: "rateLimitEnabled",
+      type: "boolean",
+      description: "Whether the API key has rate limiting enabled",
+    },
+    {
+      name: "rateLimitTimeWindow",
+      type: "number",
+      description: "The time window in milliseconds for rate limiting",
+    },
+    {
+      name: "rateLimitCount",
+      type: "number",
+      description: "The number of requests allowed in the time window",
+    },
+    {
+      name: "requestCount",
+      type: "number",
+      description:
+        "The number of requests made using this API key for the rate-limiter",
+    },
+    {
+      name: "lastRequest",
+      type: "Date",
+      description:
+        "The last time a request was made to this key. Used for the rate-limiter",
+    },
+  ]}
+/>
