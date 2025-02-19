@@ -26,6 +26,7 @@ export const schema = {
 			userId: {
 				type: "string",
 				required: true,
+				unique: true,
 				returned: false,
 				references: {
 					model: "user",
