@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
@@ -72,8 +72,10 @@ export function createApiKey({
 				refillInterval,
 			} = ctx.body;
 
+			const session = await getSessionFromCtx(ctx);
+
 			// make sure that the user has a session.
-			if (!ctx.context.session) {
+			if (!session) {
 				opts.events?.({
 					event: "key.create",
 					success: false,
@@ -88,7 +90,7 @@ export function createApiKey({
 			}
 
 			// make sure that the user is not banned.
-			if (ctx.context.session.user.banned === true) {
+			if (session.user.banned === true) {
 				opts.events?.({
 					event: "key.create",
 					success: false,
@@ -110,7 +112,7 @@ export function createApiKey({
 					success: false,
 					error_code: "request.forbidden",
 					error_message: ERROR_CODES.INVALID_METADATA_TYPE,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -125,7 +127,7 @@ export function createApiKey({
 					success: false,
 					error_code: "request.forbidden",
 					error_message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -139,7 +141,7 @@ export function createApiKey({
 					success: false,
 					error_code: "request.forbidden",
 					error_message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -169,8 +171,8 @@ export function createApiKey({
 						: opts.keyExpiration.defaultExpiresIn
 							? getDate(opts.keyExpiration.defaultExpiresIn, "ms")
 							: null,
-					userId: ctx.context.session.user.id,
-					lastRefillAt: new Date(),
+					userId: session.user.id,
+					lastRefillAt: null,
 					lastRequest: null,
 					metadata: metadata ?? null,
 					rateLimitMax: opts.rateLimit.maxRequests ?? null,
@@ -187,9 +189,10 @@ export function createApiKey({
 				success: true,
 				error_code: null,
 				error_message: null,
-				user: ctx.context.session.user,
+				user: session.user,
 				apiKey: apiKey,
 			});
+			return apiKey;
 		},
 	);
 }

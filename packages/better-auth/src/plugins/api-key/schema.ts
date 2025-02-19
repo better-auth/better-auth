@@ -9,15 +9,6 @@ export const apiKeySchema = ({
 			modelName: "apikey",
 			fields: {
 				/**
-				 * The unique identifier of the key.
-				 */
-				id: {
-					type: "string",
-					required: true,
-					input: false,
-					unique: true,
-				},
-				/**
 				 * The name of the key.
 				 */
 				name: {

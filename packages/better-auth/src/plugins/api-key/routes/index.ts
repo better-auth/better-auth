@@ -50,16 +50,15 @@ export function createApiKeyRoutes({
 	}
 
 	return {
-		createApiKey: () =>
-			createApiKey({
-				keyGenerator,
-				opts,
-				schema,
-				deleteAllExpiredApiKeys,
-			}),
-		verifyApiKey: () => verifyApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		getApiKey: () => getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		updateApiKey: () => updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		deleteApiKey: () => deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		createApiKey: createApiKey({
+			keyGenerator,
+			opts,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		verifyApiKey: verifyApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 	};
 }

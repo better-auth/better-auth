@@ -143,11 +143,11 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			],
 		},
 		endpoints: {
-			createApiKey: routes.createApiKey(),
-			verifyApiKey: routes.verifyApiKey(),
-			getApiKey: routes.getApiKey(),
-			updateApiKey: routes.updateApiKey(),
-			deleteApiKey: routes.deleteApiKey(),
+			createApiKey: routes.createApiKey,
+			verifyApiKey: routes.verifyApiKey,
+			getApiKey: routes.getApiKey,
+			updateApiKey: routes.updateApiKey,
+			deleteApiKey: routes.deleteApiKey,
 		},
 		schema: schema,
 	} satisfies BetterAuthPlugin;

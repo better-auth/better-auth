@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
@@ -31,8 +31,10 @@ export function deleteApiKey({
 		async (ctx) => {
 			const { keyId } = ctx.body;
 
+			const session = await getSessionFromCtx(ctx);
+
 			// make sure that the user has a session.
-			if (!ctx.context.session) {
+			if (!session) {
 				opts.events?.({
 					event: "key.delete",
 					success: false,
@@ -47,7 +49,7 @@ export function deleteApiKey({
 			}
 
 			// make sure that the user is not banned.
-			if (ctx.context.session.user.banned === true) {
+			if (session.user.banned === true) {
 				opts.events?.({
 					event: "key.delete",
 					success: false,
@@ -71,7 +73,7 @@ export function deleteApiKey({
 					},
 					{
 						field: "userId",
-						value: ctx.context.session.user.id,
+						value: session.user.id,
 					},
 				],
 			});
@@ -83,7 +85,7 @@ export function deleteApiKey({
 					success: false,
 					error_code: "key.notFound",
 					error_message: ERROR_CODES.KEY_NOT_FOUND,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("NOT_FOUND", {
@@ -101,7 +103,7 @@ export function deleteApiKey({
 						},
 						{
 							field: "userId",
-							value: ctx.context.session.user.id,
+							value: session.user.id,
 						},
 					],
 				});
@@ -111,7 +113,7 @@ export function deleteApiKey({
 					success: false,
 					error_code: "database.error",
 					error_message: error?.message,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: apiKey,
 				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -126,7 +128,7 @@ export function deleteApiKey({
 				success: true,
 				error_code: null,
 				error_message: null,
-				user: ctx.context.session.user,
+				user: session.user,
 				apiKey: null,
 			});
 			return ctx.json({

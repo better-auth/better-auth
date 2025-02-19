@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
@@ -37,8 +37,10 @@ export function verifyApiKey({
 		async (ctx) => {
 			const { key } = ctx.body;
 
+			const session = await getSessionFromCtx(ctx);
+
 			// make sure that the user has a session.
-			if (!ctx.context.session) {
+			if (!session) {
 				opts.events?.({
 					event: "key.verify",
 					success: false,
@@ -53,7 +55,7 @@ export function verifyApiKey({
 			}
 
 			// make sure that the user is not banned.
-			if (ctx.context.session.user.banned === true) {
+			if (session.user.banned === true) {
 				opts.events?.({
 					event: "key.verify",
 					success: false,
@@ -92,7 +94,7 @@ export function verifyApiKey({
 					success: false,
 					error_code: "key.notFound",
 					error_message: ERROR_CODES.KEY_NOT_FOUND,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("NOT_FOUND", {
@@ -107,7 +109,7 @@ export function verifyApiKey({
 					success: false,
 					error_code: "key.disabled",
 					error_message: ERROR_CODES.KEY_DISABLED,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("FORBIDDEN", {
@@ -122,7 +124,7 @@ export function verifyApiKey({
 					success: false,
 					error_code: "key.expired",
 					error_message: ERROR_CODES.KEY_EXPIRED,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 
@@ -136,7 +138,7 @@ export function verifyApiKey({
 							},
 							{
 								field: "userId",
-								value: ctx.context.session.user.id,
+								value: session.user.id,
 							},
 						],
 					});
@@ -154,7 +156,7 @@ export function verifyApiKey({
 					success: false,
 					error_code: "key.useageExceeded",
 					error_message: ERROR_CODES.USAGE_EXCEEDED,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: null,
 				});
 				throw new APIError("FORBIDDEN", {
@@ -187,7 +189,7 @@ export function verifyApiKey({
 						success: false,
 						error_code: "database.error",
 						error_message: error?.message,
-						user: ctx.context.session.user,
+						user: session.user,
 						apiKey: apiKey,
 					});
 					throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -203,7 +205,7 @@ export function verifyApiKey({
 					success: false,
 					error_code: "key.rateLimited",
 					error_message: message,
-					user: ctx.context.session.user,
+					user: session.user,
 					apiKey: newApiKey,
 				});
 				throw new APIError("FORBIDDEN", {
@@ -218,7 +220,7 @@ export function verifyApiKey({
 				success: true,
 				error_code: null,
 				error_message: null,
-				user: ctx.context.session.user,
+				user: session.user,
 				apiKey: newApiKey,
 			});
 			return ctx.json({
