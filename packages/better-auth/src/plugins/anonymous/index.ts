@@ -192,7 +192,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 							return;
 						}
 						/**
-						 * Make sure the use had an anonymous session.
+						 * Make sure the user had an anonymous session.
 						 */
 						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
 							ctx,
