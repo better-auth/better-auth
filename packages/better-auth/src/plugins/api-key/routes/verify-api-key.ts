@@ -7,13 +7,19 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { PredefinedApiKeyOptions } from "./internal.types";
 import { isRateLimited } from "../rate-limit";
+import type { AuthContext } from "../../../types";
 
 export function verifyApiKey({
 	opts,
 	schema,
+	deleteAllExpiredApiKeys,
 }: {
 	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
 	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys(
+		ctx: AuthContext,
+		byPassLastCheckTime?: boolean,
+	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
@@ -131,7 +137,7 @@ export function verifyApiKey({
 							{
 								field: "userId",
 								value: ctx.context.session.user.id,
-							}
+							},
 						],
 					});
 				} catch (error) {
@@ -142,7 +148,7 @@ export function verifyApiKey({
 					message: ERROR_CODES.KEY_EXPIRED,
 				});
 			} else if (apiKey.remaining === 0) {
-                // if there are no more remaining requests, than the key is invalid
+				// if there are no more remaining requests, than the key is invalid
 				opts.events?.({
 					event: "key.verify",
 					success: false,
@@ -204,6 +210,8 @@ export function verifyApiKey({
 					message: message || "Rate limit exceeded.",
 				});
 			}
+
+			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
 				event: "key.verify",

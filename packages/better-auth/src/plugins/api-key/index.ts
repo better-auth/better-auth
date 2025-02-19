@@ -1,14 +1,13 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError, createAuthMiddleware } from "../../api";
-import type { AuthContext } from "../../types";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { mergeSchema } from "../../db";
-import * as routes from "./routes";
 import { apiKeySchema } from "./schema";
 import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
+import { createApiKeyRoutes } from "./routes";
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -19,10 +18,10 @@ export const ERROR_CODES = {
 	USER_BANNED: "User is banned",
 	UNAUTHORIZED_SESSION: "Unauthorized or invalid session",
 	KEY_NOT_FOUND: "API Key not found",
-    KEY_DISABLED: "API Key is disabled",
-    KEY_EXPIRED: "API Key has expired",
-    USAGE_EXCEEDED: "API Key has reached its usage limit",
-    KEY_NOT_RECOVERABLE: "API Key is not recoverable",
+	KEY_DISABLED: "API Key is disabled",
+	KEY_EXPIRED: "API Key has expired",
+	USAGE_EXCEEDED: "API Key has reached its usage limit",
+	KEY_NOT_RECOVERABLE: "API Key is not recoverable",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -84,6 +83,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			return hashed;
 		});
 
+	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
+
 	return {
 		id: "api-key",
 		$ERROR_CODES: ERROR_CODES,
@@ -142,42 +143,12 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			],
 		},
 		endpoints: {
-			createApiKey: routes.createApiKey({ keyGenerator, opts, schema }),
-			verifyApiKey: routes.verifyApiKey({ opts, schema }),
-			getApiKey: routes.getApiKey({ opts, schema }),
-			updateApiKey: routes.updateApiKey({ opts, schema }),
-			deleteApiKey: routes.deleteApiKey({ opts, schema }),
+			createApiKey: routes.createApiKey(),
+			verifyApiKey: routes.verifyApiKey(),
+			getApiKey: routes.getApiKey(),
+			updateApiKey: routes.updateApiKey(),
+			deleteApiKey: routes.deleteApiKey(),
 		},
 		schema: schema,
 	} satisfies BetterAuthPlugin;
 };
-
-let lastChecked: Date | null = null;
-
-function deleteAllExpiredApiKeys(
-	ctx: AuthContext,
-	byPassLastCheckTime = false,
-) {
-	if (lastChecked && !byPassLastCheckTime) {
-		const now = new Date();
-		const diff = now.getTime() - lastChecked.getTime();
-		if (diff < 10000) {
-			return;
-		}
-	}
-	lastChecked = new Date();
-	try {
-		return ctx.adapter.deleteMany({
-			model: "apiKey",
-			where: [
-				{
-					field: "expires",
-					operator: "lt",
-					value: new Date().getTime(),
-				},
-			],
-		});
-	} catch (error) {
-		ctx.logger.error(`Failed to delete expired API keys:`, error);
-	}
-}

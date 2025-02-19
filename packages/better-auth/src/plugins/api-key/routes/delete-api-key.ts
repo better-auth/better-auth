@@ -4,13 +4,16 @@ import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { AuthContext } from "../../../types";
 
 export function deleteApiKey({
 	opts,
 	schema,
+	deleteAllExpiredApiKeys
 }: {
 	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
 	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys(ctx: AuthContext, byPassLastCheckTime?: boolean): Promise<number> | undefined
 }) {
 	return createAuthEndpoint(
 		"/api-key/delete",
@@ -115,6 +118,8 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
+
+			deleteAllExpiredApiKeys(ctx.context)
 
 			opts.events?.({
 				event: "key.delete",

@@ -4,13 +4,19 @@ import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { AuthContext } from "../../../types";
 
 export function getApiKey({
 	opts,
 	schema,
+	deleteAllExpiredApiKeys,
 }: {
 	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
 	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys(
+		ctx: AuthContext,
+		byPassLastCheckTime?: boolean,
+	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(
 		"/api-key/get",
@@ -66,12 +72,12 @@ export function getApiKey({
 					{
 						field: "userId",
 						value: ctx.context.session.user.id,
-					}
+					},
 				],
 			});
 
 			if (!apiKey) {
-                // key is not found
+				// key is not found
 				opts.events?.({
 					event: "key.get",
 					success: false,
@@ -84,6 +90,7 @@ export function getApiKey({
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
 			}
+			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
 				event: "key.get",
@@ -96,7 +103,7 @@ export function getApiKey({
 			return ctx.json({
 				apiKey: {
 					...apiKey,
-                    key: undefined
+					key: undefined,
 				},
 			});
 		},

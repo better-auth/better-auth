@@ -6,17 +6,23 @@ import { getDate } from "../../../utils/date";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { AuthContext } from "../../../types";
 
 export function createApiKey({
 	keyGenerator,
 	opts,
 	schema,
+	deleteAllExpiredApiKeys,
 }: {
 	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
 		| Promise<string>
 		| string;
 	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
 	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys(
+		ctx: AuthContext,
+		byPassLastCheckTime?: boolean,
+	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -140,6 +146,8 @@ export function createApiKey({
 					message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 				});
 			}
+
+			deleteAllExpiredApiKeys(ctx.context);
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,

@@ -6,13 +6,16 @@ import type { ApiKey, ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from "./internal.types";
 import { isRateLimited } from "../rate-limit";
 import { getDate } from "../../../utils/date";
+import type { AuthContext } from "../../../types";
 
 export function updateApiKey({
 	opts,
 	schema,
+	deleteAllExpiredApiKeys
 }: {
 	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
 	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys(ctx: AuthContext, byPassLastCheckTime?: boolean): Promise<number> | undefined
 }) {
 	return createAuthEndpoint(
 		"/api-key/update",
@@ -198,6 +201,8 @@ export function updateApiKey({
 					message: message || "Rate limit exceeded.",
 				});
 			}
+
+			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
 				event: "key.update",
