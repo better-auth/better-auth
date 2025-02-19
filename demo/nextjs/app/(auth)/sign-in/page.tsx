@@ -10,19 +10,19 @@ import { toast } from "sonner";
 
 export default function Page() {
 	const router = useRouter();
-	// useEffect(() => {
-	// 	client.oneTap({
-	// 		fetchOptions: {
-	// 			onError: ({ error }) => {
-	// 				toast.error(error.message || "An error occurred");
-	// 			},
-	// 			onSuccess: () => {
-	// 				toast.success("Successfully signed in");
-	// 				router.push("/dashboard");
-	// 			},
-	// 		},
-	// 	});
-	// }, []);
+	useEffect(() => {
+		client.oneTap({
+			fetchOptions: {
+				onError: ({ error }) => {
+					toast.error(error.message || "An error occurred");
+				},
+				onSuccess: () => {
+					toast.success("Successfully signed in");
+					router.push("/dashboard");
+				},
+			},
+		});
+	}, []);
 
 	return (
 		<div className="w-full">

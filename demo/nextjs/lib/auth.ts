@@ -40,6 +40,15 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
+const PROFESSION_PRICE_ID = {
+	default: "price_1QtOfQEerAovSgjdueb6go9H",
+	annual: "price_1QtOg1EerAovSgjdwzNFMexz",
+};
+const STARTER_PRICE_ID = {
+	default: "price_1QtOenEerAovSgjdlxS290sB",
+	annual: "price_1QtOenEerAovSgjdn2YcLWbz",
+};
+
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	database: new Database("./stripe.db"),
@@ -152,25 +161,28 @@ export const auth = betterAuth({
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY!),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-			requireEmailVerification: true,
-			plans: [
-				{
-					name: "Starter",
-					priceId: "price_1QtOenEerAovSgjdlxS290sB",
-					annualDiscountPriceId: "price_1QtOenEerAovSgjdn2YcLWbz",
-					freeTrial: {
-						days: 7,
+			subscription: {
+				enabled: true,
+				requireEmailVerification: true,
+				plans: [
+					{
+						name: "Starter",
+						priceId: STARTER_PRICE_ID.default,
+						annualDiscountPriceId: STARTER_PRICE_ID.annual,
+						freeTrial: {
+							days: 7,
+						},
 					},
-				},
-				{
-					name: "Professional",
-					priceId: "price_1QtOfQEerAovSgjdueb6go9H",
-					annualDiscountPriceId: "price_1QtOg1EerAovSgjdwzNFMexz",
-				},
-				{
-					name: "Enterprise",
-				},
-			],
+					{
+						name: "Professional",
+						priceId: PROFESSION_PRICE_ID.default,
+						annualDiscountPriceId: PROFESSION_PRICE_ID.annual,
+					},
+					{
+						name: "Enterprise",
+					},
+				],
+			},
 		}),
 	],
 });

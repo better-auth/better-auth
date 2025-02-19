@@ -31,7 +31,9 @@ export const client = createAuthClient({
 		}),
 		oidcClient(),
 		genericOAuthClient(),
-		stripeClient(),
+		stripeClient({
+			subscription: true,
+		}),
 	],
 	fetchOptions: {
 		onError(e) {

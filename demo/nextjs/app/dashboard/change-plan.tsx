@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
-	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
@@ -14,10 +13,10 @@ import { client } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
 import { useId, useState } from "react";
-import { toast } from "sonner";
 
 function Component(props: {
 	currentPlan?: string;
+	isTrial?: boolean;
 }) {
 	const [selectedPlan, setSelectedPlan] = useState("starter");
 	const id = useId();
@@ -134,25 +133,23 @@ function Component(props: {
 						<Button
 							type="button"
 							className="w-full"
-							disabled={selectedPlan === props.currentPlan?.toLowerCase()}
+							disabled={
+								selectedPlan === props.currentPlan?.toLowerCase() &&
+								!props.isTrial
+							}
 							onClick={async () => {
 								if (selectedPlan === "enterprise") {
 									return;
 								}
-								await client.subscription.upgrade(
-									{
-										plan: selectedPlan,
-									},
-									{
-										onError: ({ error }) => {
-											toast.error(error.message || "An error occurred");
-										},
-									},
-								);
+								await client.subscription.upgrade({
+									plan: selectedPlan,
+								});
 							}}
 						>
 							{selectedPlan === props.currentPlan?.toLowerCase()
-								? "Current plan"
+								? props.isTrial
+									? "Upgrade"
+									: "Current Plan"
 								: selectedPlan === "starter"
 									? !props.currentPlan
 										? "Upgrade"
@@ -161,11 +158,20 @@ function Component(props: {
 										? "Upgrade"
 										: "Contact us"}
 						</Button>
-						<DialogClose asChild>
-							<Button type="button" variant="ghost" className="w-full">
-								Cancel
+						{props.currentPlan && (
+							<Button
+								type="button"
+								variant="destructive"
+								className="w-full"
+								onClick={async () => {
+									await client.subscription.cancel({
+										returnUrl: "/dashboard",
+									});
+								}}
+							>
+								Cancel Plan
 							</Button>
-						</DialogClose>
+						)}
 					</div>
 				</form>
 			</DialogContent>

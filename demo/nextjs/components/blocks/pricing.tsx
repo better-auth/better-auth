@@ -207,9 +207,7 @@ export function Pricing({
 								onClick={async () => {
 									await client.subscription.upgrade({
 										plan: plan.name.toLowerCase(),
-										cancelUrl: "/pricing",
 										successUrl: "/dashboard",
-										uiMode: "embedded",
 									});
 								}}
 								className={cn(

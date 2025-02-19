@@ -135,11 +135,14 @@ export default function UserCard(props: {
 						<EditUserDialog />
 					</div>
 					<div className="flex items-center justify-between">
-						<SubscriptionTierLabel
-							tier={subscription?.plan?.toLowerCase() as "starter"}
-						/>
+						<div>
+							<SubscriptionTierLabel
+								tier={subscription?.plan?.toLowerCase() as "starter"}
+							/>
+						</div>
 						<Component
 							currentPlan={subscription?.plan?.toLowerCase() as "starter"}
+							isTrial={subscription?.status === "trialing"}
 						/>
 					</div>
 				</div>
