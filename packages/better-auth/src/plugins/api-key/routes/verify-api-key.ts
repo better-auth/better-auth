@@ -2,19 +2,19 @@ import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
+import type { ApiKey } from "../types";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { PredefinedApiKeyOptions } from "./internal.types";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext } from "../../../types";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function verifyApiKey({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
+	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,

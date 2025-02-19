@@ -4,9 +4,11 @@ import { ERROR_CODES } from "..";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
-import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
+import { createHash } from "@better-auth/utils/hash";
+import { base64Url } from "@better-auth/utils/base64";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function createApiKey({
 	keyGenerator,
@@ -17,7 +19,7 @@ export function createApiKey({
 	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
 		| Promise<string>
 		| string;
-	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
+	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -43,10 +45,6 @@ export function createApiKey({
 					.optional()
 					.nullable()
 					.default(null),
-				enabled: z
-					.boolean({ description: "Whether the Api Key is enabled" })
-					.optional()
-					.default(true),
 				metadata: z.any({ description: "Metadata of the Api Key" }).optional(),
 				refillAmount: z
 					.number({
@@ -66,7 +64,6 @@ export function createApiKey({
 				expiresIn,
 				prefix,
 				remaining,
-				enabled,
 				metadata,
 				refillAmount,
 				refillInterval,
@@ -149,11 +146,47 @@ export function createApiKey({
 				});
 			}
 
+			if (expiresIn) {
+				const expiresIn_in_days = expiresIn * 86_400_000;
+				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidExpiration",
+						error_message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+					});
+				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidExpiration",
+						error_message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+					});
+				}
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,
 				prefix: prefix || opts.defaultPrefix,
+			});
+
+			const hash = await createHash("SHA-256").digest(
+				new TextEncoder().encode(key),
+			);
+			const hashed = base64Url.encode(new Uint8Array(hash), {
+				padding: false,
 			});
 
 			const apiKey = await ctx.context.adapter.create<ApiKey>({
@@ -164,8 +197,8 @@ export function createApiKey({
 					updatedAt: new Date(),
 					name: name ?? null,
 					prefix: prefix ?? opts.defaultPrefix ?? null,
-					key,
-					enabled: enabled ?? true,
+					key: hashed,
+					enabled: true,
 					expiresAt: expiresIn
 						? getDate(expiresIn, "ms")
 						: opts.keyExpiration.defaultExpiresIn
@@ -192,7 +225,10 @@ export function createApiKey({
 				user: session.user,
 				apiKey: apiKey,
 			});
-			return apiKey;
+			return ctx.json({
+				...apiKey,
+				key: key,
+			});
 		},
 	);
 }

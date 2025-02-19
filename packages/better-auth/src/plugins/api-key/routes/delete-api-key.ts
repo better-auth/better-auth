@@ -2,18 +2,21 @@ import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
-import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function deleteApiKey({
 	opts,
 	schema,
-	deleteAllExpiredApiKeys
+	deleteAllExpiredApiKeys,
 }: {
-	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
+	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
-	deleteAllExpiredApiKeys(ctx: AuthContext, byPassLastCheckTime?: boolean): Promise<number> | undefined
+	deleteAllExpiredApiKeys(
+		ctx: AuthContext,
+		byPassLastCheckTime?: boolean,
+	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(
 		"/api-key/delete",
@@ -121,7 +124,7 @@ export function deleteApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context)
+			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
 				event: "key.delete",

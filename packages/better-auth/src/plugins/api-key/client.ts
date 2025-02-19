@@ -5,6 +5,8 @@ export const apiKeyClient = () => {
 	return {
 		id: "api-key",
 		$InferServerPlugin: {} as ReturnType<typeof apiKey>,
-		pathMethods: {},
+		pathMethods: {
+			"/api-key/create": "POST",
+		},
 	} satisfies BetterAuthClientPlugin;
 };

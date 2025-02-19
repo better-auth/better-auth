@@ -2,18 +2,18 @@ import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
-import type { PredefinedApiKeyOptions } from "./internal.types";
+import type { ApiKey } from "../types";
 import { isRateLimited } from "../rate-limit";
 import { getDate } from "../../../utils/date";
 import type { AuthContext } from "../../../types";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function updateApiKey({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
+	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,

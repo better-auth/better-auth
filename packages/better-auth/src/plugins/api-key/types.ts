@@ -59,6 +59,18 @@ export type ApiKeyOptions = {
 		 * @default false
 		 */
 		disableCustomExpiresTime?: boolean;
+		/**
+		 * The minimum expiresIn value allowed to be set from the client. in days.
+		 *
+		 * @default 1
+		 */
+		minExpiresIn?: number;
+		/**
+		 * The maximum expiresIn value allowed to be set from the client. in days.
+		 *
+		 * @default 365
+		 */
+		maxExpiresIn?: number;
 	};
 	/**
 	 * Default rate limiting options.
@@ -119,6 +131,7 @@ export type ApiKeyOptions = {
 		 * * `key.disabled`
 		 * * `key.expired`
 		 * * `database.error`
+		 * * `invalidExpiration`
 		 */
 		error_code: ApiKeyFailedReasons | null;
 		/**
@@ -138,7 +151,12 @@ export type ApiKeyOptions = {
 	}) => void;
 };
 
-export type ApiKeyEvents = "key.create" | "key.update" | "key.verify" | "key.get" | "key.delete";
+export type ApiKeyEvents =
+	| "key.create"
+	| "key.update"
+	| "key.verify"
+	| "key.get"
+	| "key.delete";
 
 export type ApiKeyFailedReasons =
 	| "key.notFound"
@@ -150,6 +168,7 @@ export type ApiKeyFailedReasons =
 	| "request.forbidden"
 	| "key.expired"
 	| "database.error"
+	| "key.invalidExpiration";
 
 export type ApiKey = {
 	/**

@@ -22,6 +22,8 @@ export const ERROR_CODES = {
 	KEY_EXPIRED: "API Key has expired",
 	USAGE_EXCEEDED: "API Key has reached its usage limit",
 	KEY_NOT_RECOVERABLE: "API Key is not recoverable",
+	EXPIRES_IN_IS_TOO_SMALL: "The expiresIn is smaller than the predefined minimum value.",
+	EXPIRES_IN_IS_TOO_LARGE: "The expiresIn is larger than the predefined maximum value.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -38,6 +40,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			defaultExpiresIn: options?.keyExpiration?.defaultExpiresIn ?? null,
 			disableCustomExpiresTime:
 				options?.keyExpiration?.disableCustomExpiresTime ?? false,
+			maxExpiresIn: options?.keyExpiration?.maxExpiresIn ?? 365,
+			minExpiresIn: options?.keyExpiration?.minExpiresIn ?? 1,
 		},
 	} satisfies ApiKeyOptions;
 
@@ -74,13 +78,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				apiKey += characters[randomIndex];
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(apiKey),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
-			return hashed;
+			return apiKey;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });

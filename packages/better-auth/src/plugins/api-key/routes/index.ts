@@ -4,9 +4,18 @@ import type { ApiKey, ApiKeyOptions } from "../types";
 import { createApiKey } from "./create-api-key";
 import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
-import type { PredefinedApiKeyOptions } from "./internal.types";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
+
+export type PredefinedApiKeyOptions = ApiKeyOptions &
+	Required<
+		Pick<
+			ApiKeyOptions,
+			"apiKeyHeaders" | "defaultKeyLength" | "keyExpiration" | "rateLimit"
+		>
+	> & {
+		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
+	};
 
 export function createApiKeyRoutes({
 	keyGenerator,
@@ -16,7 +25,7 @@ export function createApiKeyRoutes({
 	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
 		| Promise<string>
 		| string;
-	opts: ApiKeyOptions & Required<Pick<ApiKeyOptions, PredefinedApiKeyOptions>>;
+	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {
 	let lastChecked: Date | null = null;
