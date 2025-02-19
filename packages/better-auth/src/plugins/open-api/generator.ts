@@ -290,7 +290,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					};
 					return acc;
 				},
-				{} as Record<string, any>,
+				{ id: { type: "string" } } as Record<string, any>,
 			),
 		};
 		return acc;
