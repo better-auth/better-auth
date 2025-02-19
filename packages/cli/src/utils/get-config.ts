@@ -10,10 +10,15 @@ import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 
+const insertServer = (path: string) => {
+	const lastDotIndex = path.lastIndexOf(".");
+	return `${path.slice(0, lastDotIndex)}.server${path.slice(lastDotIndex)}`;
+};
 let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
 
 possiblePaths = [
 	...possiblePaths,
+	...possiblePaths.map(insertServer),
 	...possiblePaths.map((it) => `lib/server/${it}`),
 	...possiblePaths.map((it) => `server/${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
