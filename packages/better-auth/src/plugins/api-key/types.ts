@@ -60,11 +60,22 @@ interface ApiKeyEventError_invalidNameLength extends ApiKeyEventError_base {
 	};
 }
 
+interface ApiKeyEventError_invalidExpiration extends ApiKeyEventError_base {
+	code: "key.invalidExpiration";
+	message: string;
+	details: {
+		minExpiresIn: number;
+		maxExpiresIn: number;
+		recievedExpiresIn: number;
+	};
+}
+
 export type ApiKeyEventError =
-	| ApiKeyEventError_base
 	| ApiKeyEventError_rateLimit
 	| ApiKeyEventError_invalidPrefixLength
-	| ApiKeyEventError_invalidNameLength;
+	| ApiKeyEventError_invalidNameLength
+	| ApiKeyEventError_invalidExpiration
+	| ApiKeyEventError_base;
 interface ApiKeyEvents_base {
 	event: ApiKeyEventTypes;
 	/**

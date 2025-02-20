@@ -206,6 +206,11 @@ export function createApiKey({
 						error: {
 							code: "key.invalidExpiration",
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+							details: {
+								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
+								recievedExpiresIn: expiresIn_in_days,
+								minExpiresIn: opts.keyExpiration.minExpiresIn,
+							}
 						},
 						user: session.user,
 						apiKey: null,
@@ -220,6 +225,11 @@ export function createApiKey({
 						error: {
 							code: "key.invalidExpiration",
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+							details: {
+								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
+								recievedExpiresIn: expiresIn_in_days,
+								minExpiresIn: opts.keyExpiration.minExpiresIn,
+							}
 						},
 						user: session.user,
 						apiKey: null,

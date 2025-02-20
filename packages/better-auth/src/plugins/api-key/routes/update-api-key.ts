@@ -205,13 +205,20 @@ export function updateApiKey({
 				if (expiresIn !== null) {
 					// if expires is not null, check if it's under the valid range
 					// if it IS null, this means the user wants to disable expiration time on the key
-					if (expiresIn < opts.keyExpiration.minExpiresIn) {
+					const expiresIn_in_days = expiresIn / 86_400_000;
+
+					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
 						opts.events?.({
 							event: "key.update",
 							success: false,
 							error: {
 								code: "key.invalidExpiration",
 								message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+								details: {
+									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
+									recievedExpiresIn: expiresIn_in_days,
+									minExpiresIn: opts.keyExpiration.minExpiresIn,
+								}
 							},
 							user: session.user,
 							apiKey: null,
@@ -219,13 +226,18 @@ export function updateApiKey({
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 						});
-					} else if (expiresIn > opts.keyExpiration.maxExpiresIn) {
+					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
 						opts.events?.({
 							event: "key.update",
 							success: false,
 							error: {
 								code: "key.invalidExpiration",
 								message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+								details: {
+									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
+									recievedExpiresIn: expiresIn_in_days,
+									minExpiresIn: opts.keyExpiration.minExpiresIn,
+								}
 							},
 							user: session.user,
 							apiKey: null,
