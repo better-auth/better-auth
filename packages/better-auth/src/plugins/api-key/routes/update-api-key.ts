@@ -271,7 +271,9 @@ export function updateApiKey({
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
 				}
-				newValues.metadata = metadata;
+				//@ts-ignore - we need this to be a string to save into DB.
+				newValues.metadata =
+					schema.apikey.fields.metadata.transform.input(metadata);
 			}
 			if (remaining !== undefined) {
 				if (remaining < opts.minimumRemaining) {
@@ -403,6 +405,11 @@ export function updateApiKey({
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
+
+			// transform metadata from string back to object
+			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
+				newApiKey.metadata as never as string,
+			);
 
 			opts.events?.({
 				event: "key.update",
