@@ -35,7 +35,7 @@ const createTransform = (
 		const f = schema[model].fields[field];
 		if (
 			f.type === "boolean" &&
-			type === "sqlite" &&
+			(type === "sqlite" || type === "mssql") &&
 			value !== null &&
 			value !== undefined
 		) {
@@ -51,7 +51,11 @@ const createTransform = (
 		const { type = "sqlite" } = config || {};
 
 		const f = schema[model].fields[field];
-		if (f.type === "boolean" && type === "sqlite" && value !== null) {
+		if (
+			f.type === "boolean" &&
+			(type === "sqlite" || type === "mssql") &&
+			value !== null
+		) {
 			return value === 1;
 		}
 		if (f.type === "date" && value) {
@@ -206,9 +210,7 @@ const createTransform = (
 			where: Where[],
 		) {
 			let res: any;
-			if (config?.type !== "mysql") {
-				res = await builder.returningAll().executeTakeFirst();
-			} else {
+			if (config?.type === "mysql") {
 				//this isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id. Change this if there is a better way.
 				await builder.execute();
 				const field = values.id ? "id" : where[0].field ? where[0].field : "id";
@@ -218,7 +220,13 @@ const createTransform = (
 					.selectAll()
 					.where(getField(model, field), "=", value)
 					.executeTakeFirst();
+				return res;
 			}
+			if (config?.type === "mssql") {
+				res = await builder.outputAll("inserted").executeTakeFirst();
+				return res;
+			}
+			res = await builder.returningAll().executeTakeFirst();
 			return res;
 		},
 		getModelName,
@@ -273,9 +281,12 @@ export const kyselyAdapter =
 				if (or) {
 					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 				}
-				query = query.limit(limit || 100);
-				if (offset) {
-					query = query.offset(offset);
+				if (config?.type === "mssql") {
+					if (!offset) {
+						query = query.top(limit || 100);
+					}
+				} else {
+					query = query.limit(limit || 100);
 				}
 				if (sortBy) {
 					query = query.orderBy(
@@ -283,6 +294,17 @@ export const kyselyAdapter =
 						sortBy.direction,
 					);
 				}
+				if (offset) {
+					if (config?.type === "mssql") {
+						if (!sortBy) {
+							query = query.orderBy(getField(model, "id"));
+						}
+						query = query.offset(offset).fetch(limit || 100);
+					} else {
+						query = query.offset(offset);
+					}
+				}
+
 				const res = await query.selectAll().execute();
 				if (!res) return [];
 				return res.map((r) => transformOutput(r, model));
@@ -318,6 +340,22 @@ export const kyselyAdapter =
 				}
 				const res = await query.execute();
 				return res.length;
+			},
+			async count(data) {
+				const { model, where } = data;
+				const { and, or } = convertWhereClause(model, where);
+				let query = db
+					.selectFrom(getModelName(model))
+					// a temporal solution for counting other than "*" - see more - https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted
+					.select(db.fn.count("id").as("count"));
+				if (and) {
+					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+				}
+				if (or) {
+					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+				}
+				const res = await query.execute();
+				return res[0].count as number;
 			},
 			async delete(data) {
 				const { model, where } = data;

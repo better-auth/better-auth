@@ -31,13 +31,16 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
-				const result = await toRun(data as any, context);
+				const result = await toRun(actualData as any, context);
 				if (result === false) {
 					return null;
 				}
 				const isObject = typeof result === "object" && "data" in result;
 				if (isObject) {
-					actualData = result.data as T;
+					actualData = {
+						...actualData,
+						...result.data,
+					};
 				}
 			}
 		}

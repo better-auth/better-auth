@@ -10,7 +10,7 @@ import { init } from "../init";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { z } from "zod";
 import { createAuthClient } from "../client";
-import { bearer } from "src/plugins";
+import { bearer } from "../plugins/bearer";
 
 describe("call", async () => {
 	const q = z.optional(
@@ -68,6 +68,10 @@ describe("call", async () => {
 						throw new Error("Test error");
 					}
 					if (ctx.query?.message === "throw redirect") {
+						throw ctx.redirect("/test");
+					}
+					if (ctx.query?.message === "redirect with additional header") {
+						ctx.setHeader("key", "value");
 						throw ctx.redirect("/test");
 					}
 					throw new APIError("BAD_REQUEST", {
@@ -150,7 +154,7 @@ describe("call", async () => {
 							});
 						}
 						if (ctx.context.returned instanceof APIError) {
-							throw new APIError("BAD_REQUEST", {
+							throw ctx.error("BAD_REQUEST", {
 								message: "from after hook",
 							});
 						}
@@ -226,7 +230,7 @@ describe("call", async () => {
 	});
 
 	it("should set cookies", async () => {
-		await api.testCookies({
+		const response = await api.testCookies({
 			body: {
 				cookies: [
 					{
@@ -235,9 +239,9 @@ describe("call", async () => {
 					},
 				],
 			},
+			returnHeaders: true,
 		});
-		const setCookies =
-			testPlugin.endpoints.testCookies.headers.get("set-cookie");
+		const setCookies = response.headers.get("set-cookie");
 		expect(setCookies).toContain("test-cookie=test-value");
 	});
 
@@ -276,17 +280,13 @@ describe("call", async () => {
 
 	it("should return Response object", async () => {
 		const response = await api.test({
-			_flag: "router",
-		});
-		expect(response).toBeInstanceOf(Response);
-		const response2 = await api.test({
 			asResponse: true,
 		});
-		expect(response2).toBeInstanceOf(Response);
+		expect(response).toBeInstanceOf(Response);
 	});
 
 	it("should set cookies on after hook", async () => {
-		await api.testCookies({
+		const response = await api.testCookies({
 			body: {
 				cookies: [
 					{
@@ -298,9 +298,9 @@ describe("call", async () => {
 			query: {
 				testAfterHook: "true",
 			},
+			returnHeaders: true,
 		});
-		const setCookies =
-			testPlugin.endpoints.testCookies.headers.get("set-cookie");
+		const setCookies = response.headers.get("set-cookie");
 		expect(setCookies).toContain("after=test");
 		expect(setCookies).toContain("test-cookie=test-value");
 	});
@@ -334,8 +334,24 @@ describe("call", async () => {
 			})
 			.catch((e) => {
 				expect(e).toBeInstanceOf(APIError);
+
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
+			});
+	});
+
+	it("should include base headers with redirect", async () => {
+		await api
+			.testThrow({
+				query: {
+					message: "redirect with additional header",
+				},
+			})
+			.catch((e) => {
+				expect(e).toBeInstanceOf(APIError);
+				expect(e.status).toBe("FOUND");
+				expect(e.headers.get("Location")).toBe("/test");
+				expect(e.headers.get("key")).toBe("value");
 			});
 	});
 
@@ -397,7 +413,6 @@ describe("call", async () => {
 				name: "test",
 			},
 		});
-
 		const session = await api.getSession({
 			headers: new Headers({
 				Authorization: `Bearer ${response?.token}`,
@@ -407,9 +422,9 @@ describe("call", async () => {
 	});
 
 	it("should fetch using a client", async () => {
-		const response = await client.$fetch("/test");
+		const response = await client.$fetch("/ok");
 		expect(response.data).toMatchObject({
-			success: "true",
+			ok: true,
 		});
 	});
 

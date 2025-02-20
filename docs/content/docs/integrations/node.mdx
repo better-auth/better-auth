@@ -3,7 +3,7 @@ title: Node Integration
 description: Integrate Better Auth with Node.
 ---
 
-Better Auth can be integrated with node based backed frameworks. The guide below will show you how to integrate Better Auth with express.
+Better Auth can be integrated with node based backend frameworks. The guide below will show you how to integrate Better Auth with express.
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
@@ -39,6 +39,30 @@ app.listen(port, () => {
 ```
 
 After completing the setup, start your server. Better Auth will be ready to use. You can send a `GET` request to the `/ok` endpoint (`/api/auth/ok`) to verify that the server is running.
+
+
+### Cors Configuration
+
+To add CORS (Cross-Origin Resource Sharing) support to your Express server when integrating Better Auth, you can use the `cors` middleware. Below is an updated example showing how to configure CORS for your server:
+
+```ts
+import express from "express";
+import cors from "cors"; // Import the CORS middleware
+import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth";
+
+const app = express();
+const port = 3005;
+
+// Configure CORS middleware
+app.use(
+  cors({
+    origin: "http://your-frontend-domain.com", // Replace with your frontend's origin
+    methods: ["GET", "POST", "PUT", "DELETE"], // Specify allowed HTTP methods
+    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  })
+);
+```
 
 ### Getting the User Session
 

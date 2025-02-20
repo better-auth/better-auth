@@ -15,7 +15,7 @@ export type Where = {
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default
-	value: string | number | boolean | string[] | number[];
+	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	connector?: "AND" | "OR"; //AND by default
 };
@@ -45,6 +45,10 @@ export type Adapter = {
 		};
 		offset?: number;
 	}) => Promise<T[]>;
+	count: (data: {
+		model: string;
+		where?: Where[];
+	}) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
 	 * if multiple where clauses are provided
@@ -80,7 +84,7 @@ export type AdapterSchemaCreation = {
 	code: string;
 	/**
 	 * Path to the file, including the file name and extension.
-	 * Relative paths are supported, with the current working directory devs as the base.
+	 * Relative paths are supported, with the current working directory of the developer's project as the base.
 	 */
 	path: string;
 	/**

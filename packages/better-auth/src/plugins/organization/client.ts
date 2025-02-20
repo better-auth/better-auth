@@ -164,7 +164,9 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 			{
 				matcher(path) {
 					return (
-						path === "/organization/create" || path === "/organization/delete"
+						path === "/organization/create" ||
+						path === "/organization/delete" ||
+						path === "/organization/update"
 					);
 				},
 				signal: "$listOrg",

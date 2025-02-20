@@ -3,7 +3,7 @@ import type { FieldAttribute } from ".";
 import type { AuthPluginSchema } from "../types/plugins";
 import type { BetterAuthOptions } from "../types/options";
 import { APIError } from "better-call";
-import type { Account, Session, User } from "src/types";
+import type { Account, Session, User } from "../types";
 
 export const accountSchema = z.object({
 	id: z.string(),

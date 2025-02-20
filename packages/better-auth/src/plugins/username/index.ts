@@ -1,19 +1,50 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
-import type { Account, User } from "../../types";
+import type { Account, InferOptionSchema, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
 import { sendVerificationEmailFn } from "../../api";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { TWO_FACTOR_ERROR_CODES } from "../two-factor/error-code";
+import { schema } from "./schema";
+import { mergeSchema } from "../../db/schema";
 
-export const username = () => {
+export type UsernameOptions = {
+	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * The minimum length of the username
+	 *
+	 * @default 3
+	 */
+	minUsernameLength?: number;
+	/**
+	 * The maximum length of the username
+	 *
+	 * @default 30
+	 */
+	maxUsernameLength?: number;
+	/**
+	 * A function to validate the username
+	 *
+	 * By default, the username should only contain alphanumeric characters and underscores
+	 */
+	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+};
+
+function defaultUsernameValidator(username: string) {
+	return /^[a-zA-Z0-9_]+$/.test(username);
+}
+
+export const username = (options?: UsernameOptions) => {
 	const ERROR_CODES = {
 		INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
 		EMAIL_NOT_VERIFIED: "email not verified",
 		UNEXPECTED_ERROR: "unexpected error",
 		USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
+		USERNAME_TOO_SHORT: "username is too short",
+		USERNAME_TOO_LONG: "username is too long",
+		INVALID_USERNAME: "username is invalid",
 	};
 	return {
 		id: "username",
@@ -63,7 +94,46 @@ export const username = () => {
 					},
 				},
 				async (ctx) => {
-					const user = await ctx.context.adapter.findOne<User>({
+					if (!ctx.body.username || !ctx.body.password) {
+						ctx.context.logger.error("Username or password not found");
+						throw new APIError("UNAUTHORIZED", {
+							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						});
+					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (ctx.body.username.length < minUsernameLength) {
+						ctx.context.logger.error("Username too short", {
+							username: ctx.body.username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (ctx.body.username.length > maxUsernameLength) {
+						ctx.context.logger.error("Username too long", {
+							username: ctx.body.username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					if (!validator(ctx.body.username)) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string }
+					>({
 						model: "user",
 						where: [
 							{
@@ -85,8 +155,8 @@ export const username = () => {
 						ctx.context.options.emailAndPassword?.requireEmailVerification
 					) {
 						await sendVerificationEmailFn(ctx, user);
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
 
@@ -135,7 +205,6 @@ export const username = () => {
 							status: 500,
 							body: {
 								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								status: 500,
 							},
 						});
 					}
@@ -150,6 +219,7 @@ export const username = () => {
 							id: user.id,
 							email: user.email,
 							emailVerified: user.emailVerified,
+							username: user.username,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -159,32 +229,46 @@ export const username = () => {
 				},
 			),
 		},
-		schema: {
-			user: {
-				fields: {
-					username: {
-						type: "string",
-						required: false,
-						unique: true,
-						returned: true,
-						transform: {
-							input(value) {
-								return value?.toString().toLowerCase();
-							},
-						},
-					},
-				},
-			},
-		},
+		schema: mergeSchema(schema, options?.schema),
 		hooks: {
 			before: [
 				{
 					matcher(context) {
-						return context.path === "/sign-up/email";
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
 						if (username) {
+							const minUsernameLength = options?.minUsernameLength || 3;
+							const maxUsernameLength = options?.maxUsernameLength || 30;
+							if (username.length < minUsernameLength) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_TOO_SHORT,
+								});
+							}
+
+							if (username.length > maxUsernameLength) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.USERNAME_TOO_LONG,
+								});
+							}
+
+							const validator =
+								options?.usernameValidator || defaultUsernameValidator;
+
+							const valid = await validator(username);
+							if (!valid) {
+								throw new APIError("UNPROCESSABLE_ENTITY", {
+									message: ERROR_CODES.INVALID_USERNAME,
+								});
+							}
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
@@ -199,6 +283,19 @@ export const username = () => {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
+					},
+					async handler(ctx) {
+						if (!ctx.body.displayUsername && ctx.body.username) {
+							ctx.body.displayUsername = ctx.body.username;
 						}
 					},
 				},

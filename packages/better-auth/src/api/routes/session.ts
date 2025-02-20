@@ -95,9 +95,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 
 				if (!sessionCookieToken) {
-					return ctx.json(null);
+					return null;
 				}
-
 				const sessionDataCookie = ctx.getCookie(
 					ctx.context.authCookies.sessionData.name,
 				);
@@ -157,7 +156,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
@@ -228,6 +226,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge,
 						},
 					);
+
 					return ctx.json({
 						session: updatedSession,
 						user: session.user,
@@ -268,11 +267,16 @@ export const getSessionFromCtx = async <
 			user: U & User;
 		};
 	}
+
 	const session = await getSession()({
 		...ctx,
-		_flag: "json",
+		asResponse: false,
 		headers: ctx.headers!,
-		query: config,
+		returnHeaders: false,
+		query: {
+			...config,
+			...ctx.query,
+		},
 	}).catch((e) => {
 		return null;
 	});
@@ -292,6 +296,16 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 		session,
 	};
 });
+
+export const requestOnlySessionMiddleware = createAuthMiddleware(
+	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session?.session && (ctx.request || ctx.headers)) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		return { session };
+	},
+);
 
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
@@ -361,15 +375,20 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			const sessions = await ctx.context.internalAdapter.listSessions(
-				ctx.context.session.user.id,
-			);
-			const activeSessions = sessions.filter((session) => {
-				return session.expiresAt > new Date();
-			});
-			return ctx.json(
-				activeSessions as unknown as Prettify<InferSession<Option>>[],
-			);
+			try {
+				const sessions = await ctx.context.internalAdapter.listSessions(
+					ctx.context.session.user.id,
+				);
+				const activeSessions = sessions.filter((session) => {
+					return session.expiresAt > new Date();
+				});
+				return ctx.json(
+					activeSessions as unknown as Prettify<InferSession<Option>>[],
+				);
+			} catch (e: any) {
+				ctx.context.logger.error(e);
+				throw ctx.error("INTERNAL_SERVER_ERROR");
+			}
 		},
 	);
 

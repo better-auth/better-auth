@@ -2,7 +2,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { getBaseURL } from "../utils/url";
 import { type WritableAtom } from "nanostores";
 import type { AtomListener, ClientOptions } from "./types";
-import { addCurrentURL, redirectPlugin } from "./fetch-plugins";
+import { redirectPlugin } from "./fetch-plugins";
 import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
 
@@ -19,6 +19,9 @@ export const getClientConfig = (options?: ClientOptions) => {
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
 		method: "GET",
 		jsonParser(text) {
+			if (!text) {
+				return null as any;
+			}
 			return parseJSON(text, {
 				strict: false,
 			});
@@ -35,7 +38,6 @@ export const getClientConfig = (options?: ClientOptions) => {
 			? [...(options?.fetchOptions?.plugins || []), ...pluginsFetchPlugins]
 			: [
 					redirectPlugin,
-					addCurrentURL,
 					...(options?.fetchOptions?.plugins || []),
 					...pluginsFetchPlugins,
 				],
@@ -61,7 +63,8 @@ export const getClientConfig = (options?: ClientOptions) => {
 					path === "/sign-out" ||
 					path === "/update-user" ||
 					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up")
+					path.startsWith("/sign-up") ||
+					path === "/delete-user"
 				);
 			},
 		},

@@ -33,7 +33,9 @@ type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
 							? never
 							: key extends string
 								? `use${Capitalize<key>}`
-								: never]: DeepReadonly<Ref<ReturnType<Atoms[key]["get"]>>>;
+								: never]: () => DeepReadonly<
+							Ref<ReturnType<Atoms[key]["get"]>>
+						>;
 					}
 				: {}
 			: {}

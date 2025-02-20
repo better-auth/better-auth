@@ -12,15 +12,6 @@ export const signInSocial = createAuthEndpoint(
 	"/sign-in/social",
 	{
 		method: "POST",
-		query: z
-			.object({
-				/**
-				 * Redirect to the current URL after the
-				 * user has signed in.
-				 */
-				currentURL: z.string().optional(),
-			})
-			.optional(),
 		body: z.object({
 			/**
 			 * Callback URL to redirect to after the user
@@ -122,6 +113,12 @@ export const signInSocial = createAuthEndpoint(
 						"ID token from the provider to sign in the user with id token",
 				},
 			),
+			scopes: z
+				.array(z.string(), {
+					description:
+						"Array of scopes to request from the provider. This will override the default scopes passed.",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -256,6 +253,7 @@ export const signInSocial = createAuthEndpoint(
 			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.body.scopes,
 		});
 
 		return c.json({
@@ -394,7 +392,7 @@ export const signInEmail = createAuthEndpoint(
 			!user.user.emailVerified
 		) {
 			if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-				throw new APIError("UNAUTHORIZED", {
+				throw new APIError("FORBIDDEN", {
 					message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
 				});
 			}

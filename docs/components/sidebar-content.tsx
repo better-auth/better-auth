@@ -1,10 +1,16 @@
 import {
+	BookOpenCheck,
 	CircleHelp,
+	FlaskConical,
+	GitFork,
+	HandHelping,
+	Gauge,
 	Key,
 	LucideAArrowDown,
 	LucideIcon,
 	Mail,
 	Mailbox,
+	NotebookPen,
 	Phone,
 	ScanFace,
 	ShieldCheck,
@@ -637,6 +643,67 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
+			{
+				title: "Spotify",
+				href: "/docs/authentication/spotify",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 256 256"
+						preserveAspectRatio="xMidYMid"
+					>
+						<path
+							d="M128 0C57.308 0 0 57.309 0 128c0 70.696 57.309 128 128 128 70.697 0 128-57.304 128-128C256 57.314 198.697.007 127.998.007l.001-.006Zm58.699 184.614c-2.293 3.76-7.215 4.952-10.975 2.644-30.053-18.357-67.885-22.515-112.44-12.335a7.981 7.981 0 0 1-9.552-6.007 7.968 7.968 0 0 1 6-9.553c48.76-11.14 90.583-6.344 124.323 14.276 3.76 2.308 4.952 7.215 2.644 10.975Zm15.667-34.853c-2.89 4.695-9.034 6.178-13.726 3.289-34.406-21.148-86.853-27.273-127.548-14.92-5.278 1.594-10.852-1.38-12.454-6.649-1.59-5.278 1.386-10.842 6.655-12.446 46.485-14.106 104.275-7.273 143.787 17.007 4.692 2.89 6.175 9.034 3.286 13.72v-.001Zm1.345-36.293C162.457 88.964 94.394 86.71 55.007 98.666c-6.325 1.918-13.014-1.653-14.93-7.978-1.917-6.328 1.65-13.012 7.98-14.935C93.27 62.027 168.434 64.68 215.929 92.876c5.702 3.376 7.566 10.724 4.188 16.405-3.362 5.69-10.73 7.565-16.4 4.187h-.006Z"
+							fill="currentColor"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "VK",
+				href: "/docs/authentication/vk",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 20 20"
+					>
+						<path
+							fill="currentColor"
+							fillRule="evenodd"
+							d="M17.802 12.298s1.617 1.597 2.017 2.336a.1.1 0 0 1 .018.035q.244.409.123.645c-.135.261-.592.392-.747.403h-2.858c-.199 0-.613-.052-1.117-.4c-.385-.269-.768-.712-1.139-1.145c-.554-.643-1.033-1.201-1.518-1.201a.6.6 0 0 0-.18.03c-.367.116-.833.639-.833 2.032c0 .436-.344.684-.585.684H9.674c-.446 0-2.768-.156-4.827-2.327C2.324 10.732.058 5.4.036 5.353c-.141-.345.155-.533.475-.533h2.886c.387 0 .513.234.601.444c.102.241.48 1.205 1.1 2.288c1.004 1.762 1.621 2.479 2.114 2.479a.53.53 0 0 0 .264-.07c.644-.354.524-2.654.494-3.128c0-.092-.001-1.027-.331-1.479c-.236-.324-.638-.45-.881-.496c.065-.094.203-.238.38-.323c.441-.22 1.238-.252 2.029-.252h.439c.858.012 1.08.067 1.392.146c.628.15.64.557.585 1.943c-.016.396-.033.842-.033 1.367c0 .112-.005.237-.005.364c-.019.711-.044 1.512.458 1.841a.4.4 0 0 0 .217.062c.174 0 .695 0 2.108-2.425c.62-1.071 1.1-2.334 1.133-2.429c.028-.053.112-.202.214-.262a.5.5 0 0 1 .236-.056h3.395c.37 0 .621.056.67.196c.082.227-.016.92-1.566 3.016c-.261.349-.49.651-.691.915c-1.405 1.844-1.405 1.937.083 3.337"
+							clipRule="evenodd"
+						/>
+					</svg>
+				),
+			},
+
+			{
+				title: "Others",
+				group: true,
+				icon: () => null,
+				href: "/docs/authentication/others",
+			},
+			{
+				title: "Other Social Providers",
+				href: "/docs/authentication/other-social-providers",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M11.5 2a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11M13 17.75a4.75 4.75 0 1 1 8.74 2.578l1.674 1.671l-1.413 1.415l-1.675-1.673A4.75 4.75 0 0 1 13 17.75M17.75 15a2.75 2.75 0 1 0 0 5.5a2.75 2.75 0 0 0 0-5.5m-5-1a6.22 6.22 0 0 0-1.25 3.75c0 1.641.633 3.135 1.667 4.25H2v-2a6 6 0 0 1 6-6z"
+						/>
+					</svg>
+				),
+			},
 		],
 	},
 	{
@@ -944,6 +1011,23 @@ export const contents: Content[] = [
 				href: "/docs/plugins/bearer",
 			},
 			{
+				title: "Captcha",
+				href: "/docs/plugins/captcha",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 48 48"
+					>
+						<path
+							fill="currentColor"
+							d="M38.023 18.932A6.3 6.3 0 0 0 42.505 13c0-4.056-2.9-7-8.238-7a14.3 14.3 0 0 0-6.829 1.665.369.369 0 0 0-.171.383v2.732c0 .171.043.212.256.129A11.552 11.552 0 0 1 33.669 9.2c3.756 0 5.336 1.834 5.336 4.224 0 2.732-2.3 4.183-6.061 4.183h-1.58c-.213 0-.256.129-.256.3V20.6c0 .171.086.256.3.256H33.2c4.225 0 7.042 1.537 7.042 4.951 0 2.691-1.878 4.993-6.487 4.993a18.98 18.98 0 0 1-6.655-1.748 10.11 10.11 0 0 0 .882-4.107c0-6.281-4.631-8.511-8.6-8.511A16.789 16.789 0 0 0 12 18.379V3a1 1 0 0 0-1-1l-1.99.007a1 1 0 0 0-.795.4L4.4 5.453a2 2 0 0 0-.4 1.2v.331a1 1 0 0 0 1 1h3v19a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-4.91a14.046 14.046 0 0 1 6.709-2.012c3.4 0 5.469 1.661 5.469 5 0 2.566-1.252 5.06-5.065 9.273a65.711 65.711 0 0 1-6.849 6.719.666.666 0 0 0-.226.558v1.891c0 .43.283.492.451.492H28.2c.317 0 .416-.113.531-.4l.627-2.6a.362.362 0 0 0-.046-.324.479.479 0 0 0-.4-.137h-5.795c-3.224 0-3.886 0-5.152.082a40.482 40.482 0 0 0 4.957-5.367c1-1.222 1.855-2.33 2.586-3.4A22.187 22.187 0 0 0 33.8 34c5.763 0 10.074-2.945 10.074-8.2-.003-4.395-3.374-6.315-5.851-6.868Z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Multi Session",
 				icon: () => (
 					<svg
@@ -1049,9 +1133,9 @@ export const contents: Content[] = [
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
 						className="lucide lucide-users"
 					>
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -1144,13 +1228,18 @@ export const contents: Content[] = [
 						<path
 							fill="none"
 							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="32"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="32"
 							d="M413.66 246.1H386a2 2 0 0 1-2-2v-77.24A38.86 38.86 0 0 0 345.14 128H267.9a2 2 0 0 1-2-2V98.34c0-27.14-21.5-49.86-48.64-50.33a49.53 49.53 0 0 0-50.4 49.51V126a2 2 0 0 1-2 2H87.62A39.74 39.74 0 0 0 48 167.62V238a2 2 0 0 0 2 2h26.91c29.37 0 53.68 25.48 54.09 54.85c.42 29.87-23.51 57.15-53.29 57.15H50a2 2 0 0 0-2 2v70.38A39.74 39.74 0 0 0 87.62 464H158a2 2 0 0 0 2-2v-20.93c0-30.28 24.75-56.35 55-57.06c30.1-.7 57 20.31 57 50.28V462a2 2 0 0 0 2 2h71.14A38.86 38.86 0 0 0 384 425.14v-78a2 2 0 0 1 2-2h28.48c27.63 0 49.52-22.67 49.52-50.4s-23.2-48.64-50.34-48.64"
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Optimize for Performance",
+				href: "/docs/guides/optimizing-for-performance",
+				icon: () => <Gauge className="size-4" />,
 			},
 		],
 	},
@@ -1196,6 +1285,42 @@ export const contents: Content[] = [
 				title: "FAQ",
 				href: "/docs/reference/faq",
 				icon: () => <CircleHelp className="w-4 h-4 text-current" />,
+			},
+		],
+	},
+	{
+		title: "Contribute",
+		Icon: () => <GitFork className="text-current size-4" />,
+		list: [
+			{
+				title: "Getting Started",
+				href: "/docs/contribute/getting-started",
+				icon: () => <BookOpenCheck className="text-current size-4" />,
+			},
+			{
+				title: "Areas to Contribute",
+				href: "/docs/contribute/areas-to-contribute",
+				icon: () => <HandHelping className="w-4 h-4 text-current" />,
+			},
+			// {
+			// 	title: "Database Adapters",
+			// 	href: "/docs/contribute/database-adapters",
+			// 	icon: () => <Plug className="w-4 h-4 text-current" />,
+			// },
+			{
+				title: "Testing",
+				href: "/docs/contribute/testing",
+				icon: () => <FlaskConical className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Documenting",
+				href: "/docs/contribute/documenting",
+				icon: () => <NotebookPen className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Security Issues",
+				href: "/docs/contribute/security-issues",
+				icon: () => <ShieldCheck className="w-4 h-4 text-current" />,
 			},
 		],
 	},

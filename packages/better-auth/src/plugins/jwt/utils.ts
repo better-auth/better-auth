@@ -1,4 +1,4 @@
-import { subtle, getRandomValues } from "uncrypto";
+import { subtle, getRandomValues } from "@better-auth/utils";
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();

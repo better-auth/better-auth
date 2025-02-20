@@ -35,7 +35,7 @@ function getRetryAfter(lastRequest: number, window: number) {
 }
 
 function createDBStorage(ctx: AuthContext, modelName?: string) {
-	const model = "rateLimit";
+	const model = ctx.options.rateLimit?.modelName || "rateLimit";
 	const db = ctx.adapter;
 	return {
 		get: async (key: string) => {
@@ -44,6 +44,11 @@ function createDBStorage(ctx: AuthContext, modelName?: string) {
 				where: [{ field: "key", value: key }],
 			});
 			const data = res[0];
+
+			if (typeof data?.lastRequest === "bigint") {
+				data.lastRequest = Number(data.lastRequest);
+			}
+
 			return data;
 		},
 		set: async (key: string, value: RateLimit, _update?: boolean) => {

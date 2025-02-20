@@ -112,22 +112,6 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     </Step>
  
     <Step>
-        ## Initialize Better Auth Client
-        
-        To initialize Better Auth in your Expo app, you need to call `createAuthClient` with the base url of your Better Auth backend. Make sure to import the client from `/react`.
-
-        ```ts title="src/auth-client.ts"
-        import { createAuthClient } from "better-auth/react";
-
-        export const authClient = createAuthClient({
-            baseURL: "http://localhost:8081", /* base url of your Better Auth backend. */
-        });
-        ```
-        <Callout>
-         Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
-        </Callout>
-    </Step>
-    <Step>
         ## Configure Metro Bundler
 
         To resolve better auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
@@ -379,6 +363,8 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ## Options
 
+### Expo Client
+
 **storage**: the storage mechanism used to cache the session data and cookies.
 
 ```ts title="src/auth-client.ts"
@@ -412,3 +398,10 @@ const authClient = createAuthClient({
     disableCache: true
 });
 ```
+
+
+### Expo Servers
+
+Server plugin options:
+
+**overrideOrigin**: Override the origin for expo API routes (default: false). Enable this if you're facing cors origin issues with expo API routes.

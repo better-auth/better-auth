@@ -2,11 +2,10 @@ import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { Context, Endpoint } from "better-call";
+import type { InputContext, Endpoint } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
-	StripEmptyObjects,
 	UnionToIntersection,
 } from "../types/helper";
 import type {
@@ -54,7 +53,7 @@ export type InferUserUpdateCtx<
 >;
 
 export type InferCtx<
-	C extends Context<any, any>,
+	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
 	? C["body"] & {
@@ -76,27 +75,6 @@ export type InferCtx<
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
-export type InferReturn<R, O extends ClientOptions> = R extends Record<
-	string,
-	any
->
-	? StripEmptyObjects<
-			{
-				user: R extends { user: any } ? InferUserFromClient<O> : never;
-				users: R extends { users: any[] } ? InferUserFromClient<O>[] : never;
-				session: R extends { session: any } ? InferSessionFromClient<O> : never;
-				sessions: R extends { sessions: any[] }
-					? InferSessionFromClient<O>[]
-					: never;
-			} & {
-				[key in Exclude<
-					keyof R,
-					"user" | "users" | "session" | "sessions"
-				>]: R[key];
-			}
-		>
-	: R;
-
 export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 	string,
 	infer T
@@ -113,11 +91,11 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 			: PathToObject<
 					T["path"],
 					T extends (ctx: infer C) => infer R
-						? C extends Context<any, any>
+						? C extends InputContext<any, any>
 							? <
 									FetchOptions extends BetterFetchOption<
-										C["body"],
-										C["query"],
+										Partial<C["body"]> & Record<string, any>,
+										Partial<C["query"]> & Record<string, any>,
 										C["params"]
 									>,
 								>(

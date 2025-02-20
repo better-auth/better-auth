@@ -53,7 +53,7 @@ export async function sendVerificationEmailFn(
 		ctx.context.options.emailVerification?.expiresIn,
 	);
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-		ctx.body.callbackURL || ctx.query?.currentURL || "/"
+		ctx.body.callbackURL || "/"
 	}`;
 	await ctx.context.options.emailVerification.sendVerificationEmail(
 		{
@@ -69,15 +69,6 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
-		query: z
-			.object({
-				currentURL: z
-					.string({
-						description: "The URL to use for email verification callback",
-					})
-					.optional(),
-			})
-			.optional(),
 		body: z.object({
 			email: z
 				.string({
@@ -274,6 +265,15 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.request,
 			);
 
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user: {
+					...session.user,
+					email: parsed.updateTo,
+					emailVerified: false,
+				},
+			});
+
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
@@ -305,7 +305,21 @@ export const verifyEmail = createAuthEndpoint(
 						message: "Failed to create session",
 					});
 				}
-				await setSessionCookie(ctx, { session, user: user.user });
+				await setSessionCookie(ctx, {
+					session,
+					user: {
+						...user.user,
+						emailVerified: true,
+					},
+				});
+			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+						emailVerified: true,
+					},
+				});
 			}
 		}
 

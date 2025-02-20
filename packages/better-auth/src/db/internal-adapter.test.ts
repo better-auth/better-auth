@@ -54,6 +54,7 @@ describe("adapter test", async () => {
 					},
 					async after(user, context) {
 						hookUserCreateAfter(user, context);
+						return;
 					},
 				},
 			},
@@ -162,5 +163,32 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(session.data?.session).toBeDefined();
+	});
+
+	it("should delete expired verification values on find", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		const value = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value).toMatchObject({
+			identifier: "test-id-1",
+		});
+		const value2 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value2).toBe(undefined);
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		const value3 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value3).toMatchObject({
+			identifier: "test-id-1",
+		});
+		const value4 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value4).toMatchObject({
+			identifier: "test-id-1",
+		});
 	});
 });

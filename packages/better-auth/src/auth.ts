@@ -8,6 +8,7 @@ import type {
 	InferUser,
 	PrettifyDeep,
 	Expand,
+	AuthContext,
 } from "./types";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
@@ -39,8 +40,12 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 				ctx.baseURL = baseURL;
 			}
 			ctx.trustedOrigins = [
-				...(options.trustedOrigins || []),
-				ctx.baseURL,
+				...(options.trustedOrigins
+					? Array.isArray(options.trustedOrigins)
+						? options.trustedOrigins
+						: options.trustedOrigins(request)
+					: []),
+				ctx.options.baseURL!,
 				url.origin,
 			];
 			const { handler } = router(ctx, options);
@@ -67,4 +72,5 @@ export type Auth = {
 	api: FilterActions<ReturnType<typeof router>["endpoints"]>;
 	options: BetterAuthOptions;
 	$ERROR_CODES: typeof BASE_ERROR_CODES;
+	$context: Promise<AuthContext>;
 };

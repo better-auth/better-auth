@@ -6,10 +6,8 @@
   "scripts": {
     "dev": "pnpm migrate:auth && astro dev --port 3000",
     "migrate:auth": "pnpx @better-auth/cli migrate",
-    "start": "astro dev",
     "build": "astro check && astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "preview": "astro preview"
   },
   "dependencies": {
     "@ark-ui/solid": "^3.13.0",
@@ -22,7 +20,7 @@
     "@kobalte/core": "^0.13.7",
     "@oslojs/encoding": "^1.1.0",
     "@types/better-sqlite3": "^7.6.12",
-    "astro": "^4.16.17",
+    "astro": "^4.16.18",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",

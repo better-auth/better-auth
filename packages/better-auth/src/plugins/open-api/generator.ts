@@ -1,9 +1,13 @@
-import type { Endpoint, EndpointOptions } from "better-call";
+import type {
+	Endpoint,
+	EndpointOptions,
+	OpenAPIParameter,
+	OpenAPISchemaType,
+} from "better-call";
 import { ZodObject, ZodOptional, ZodSchema } from "zod";
-import type { OpenAPISchemaType, OpenAPIParameter } from "better-call";
+import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 import type { AuthContext, BetterAuthOptions } from "../../types";
-import { getEndpoints } from "../../api";
 
 export interface Path {
 	get?: {
@@ -258,6 +262,15 @@ function getResponse(responses?: Record<string, any>) {
 	} as any;
 }
 
+function toOpenApiPath(path: string) {
+	// /reset-password/:token -> /reset-password/{token}
+	// replace all : with {}
+	return path
+		.split("/")
+		.map((part) => (part.startsWith(":") ? `{${part.slice(1)}}` : part))
+		.join("/");
+}
+
 export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const baseEndpoints = getEndpoints(ctx, {
 		...options,
@@ -277,7 +290,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					};
 					return acc;
 				},
-				{} as Record<string, any>,
+				{ id: { type: "string" } } as Record<string, any>,
 			),
 		};
 		return acc;
@@ -292,8 +305,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
+		const path = toOpenApiPath(value.path);
 		if (options.method === "GET") {
-			paths[value.path] = {
+			paths[path] = {
 				get: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
@@ -311,7 +325,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 
 		if (options.method === "POST") {
 			const body = getRequestBody(options);
-			paths[value.path] = {
+			paths[path] = {
 				post: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
@@ -364,8 +378,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		Object.entries(api).forEach(([key, value]) => {
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
+			const path = toOpenApiPath(value.path);
 			if (options.method === "GET") {
-				paths[value.path] = {
+				paths[path] = {
 					get: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
@@ -383,7 +398,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				};
 			}
 			if (options.method === "POST") {
-				paths[value.path] = {
+				paths[path] = {
 					post: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),

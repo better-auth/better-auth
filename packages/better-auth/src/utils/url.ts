@@ -18,7 +18,7 @@ function withPath(url: string, path = "/api/auth") {
 		return url;
 	}
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${url}${path}`;
+	return `${url.replace(/\/+$/, "")}${path}`;
 }
 
 export function getBaseURL(url?: string, path?: string) {
@@ -47,6 +47,15 @@ export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);
 		return parsedUrl.origin;
+	} catch (error) {
+		return null;
+	}
+}
+
+export function getProtocol(url: string) {
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.protocol;
 	} catch (error) {
 		return null;
 	}

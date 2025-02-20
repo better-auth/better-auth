@@ -97,13 +97,14 @@ On top of normal methods, the client provides hooks to easily access different r
         import { createAuthClient } from "better-auth/react"
         const { useSession } = createAuthClient() // [!code highlight]
     
-        export function User(){
+        export function User() {
             const {
                 data: session,
                 isPending, //loading state
-                error //error object 
+                error, //error object 
+                refetch //refetch the session
             } = useSession()
-            returns (
+            return (
                 //...
             )
         }
@@ -222,7 +223,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
 }, {
-    onSuccess(ctx){
+    onSuccess(ctx) {
             //      
     }
 })
@@ -233,7 +234,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
     fetchOptions: {
-        onSuccess(ctx){
+        onSuccess(ctx) {
             //      
         }
     },
@@ -257,7 +258,7 @@ const { data, error } = await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234"
 })
-if(error){
+if (error) {
     //handle error
 }
 ```
@@ -270,7 +271,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
 }, {
-    onError(ctx){
+    onError(ctx) {
         //handle error
     }
 })
@@ -280,7 +281,7 @@ await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
     fetchOptions: {
-        onError(ctx){
+        onError(ctx) {
             //handle error
         }
     }
@@ -291,7 +292,7 @@ Hooks like `useSession` also return an error object if there was an error fetchi
 
 ```ts title="auth-client.ts"
 const { data, error, isPending } = useSession()
-if(error){
+if (error) {
     //handle error
 }
 ```
@@ -303,21 +304,38 @@ The client instance contains $ERROR_CODES object that contains all the error cod
 ```ts title="auth-client.ts"
 const authClient = createAuthClient();
 
-const myCustomErrorCodes = {
-	[authClient.$ERROR_CODES.USER_ALREADY_EXISTS]: {
-		en: "User already exists",
-		es: "El usuario ya existe",
+type ErrorTypes = Partial<
+	Record<
+		keyof typeof client.$ERROR_CODES,
+		{
+			en: string;
+			es: string;
+		}
+	>
+>;
+
+const errorCodes = {
+	USER_ALREADY_EXISTS: {
+		en: "user already registered",
+		es: "usuario ya registrada",
 	},
+} satisfies ErrorTypes;
+
+const getErrorMessage = (code: string, lang: "en" | "es") => {
+	if (code in errorCodes) {
+		return errorCodes[code as keyof typeof errorCodes][lang];
+	}
+	return "";
 };
+
 
 const { error } = await authClient.signUp.email({
 	email: "user@email.com",
 	password: "password",
 	name: "User",
 });
-
-if (error?.message) {
-	alert(myCustomErrorCodes[error.message].en);
+if(error?.code){
+    alert(getErrorMessage(error.code), "en");
 }
 ```
 

@@ -43,9 +43,6 @@ export const auth = betterAuth({
 		dialect,
 		type: "sqlite",
 	},
-	session: {
-		freshAge: 0,
-	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
@@ -146,11 +143,11 @@ export const auth = betterAuth({
 		bearer(),
 		admin(),
 		multiSession(),
-		oneTap(),
 		oAuthProxy(),
 		nextCookies(),
 		oidcProvider({
 			loginPage: "/sign-in",
 		}),
+		oneTap(),
 	],
 });
