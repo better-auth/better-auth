@@ -239,7 +239,7 @@ interface ApiKeyOptionsBase {
 		 *
 		 * @default true
 		 */
-		enabled: boolean;
+		enabled?: boolean;
 		/**
 		 * The duration in milliseconds where each request is counted.
 		 *
