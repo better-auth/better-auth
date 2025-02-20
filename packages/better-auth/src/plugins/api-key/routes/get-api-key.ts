@@ -68,7 +68,7 @@ export function getApiKey({
 				});
 			}
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
 				model: schema.apikey.modelName,
 				where: [
 					{
@@ -98,7 +98,13 @@ export function getApiKey({
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
 			}
+
 			deleteAllExpiredApiKeys(ctx.context);
+
+			// convert metadata string back to object
+			apiKey.metadata = schema.apikey.fields.metadata.transform.output(
+				apiKey.metadata as never as string,
+			);
 
 			opts.events?.({
 				event: "key.get",
@@ -107,8 +113,8 @@ export function getApiKey({
 				user: session.user,
 				apiKey: apiKey,
 			});
-			let returningApiKey: Partial<ApiKey> = apiKey;
 
+			let returningApiKey: Partial<ApiKey> = apiKey;
 			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
 			delete returningApiKey["key"];
 
