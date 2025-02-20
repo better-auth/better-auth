@@ -111,12 +111,9 @@ export interface Subscription {
 	 */
 	priceId?: string;
 	/**
-	 * The user who subscribed to the plan
-	 */
-	userId: string;
-	/**
 	 * To what reference id the subscription belongs to
 	 * @example
+	 * - userId for a user
 	 * - workspace id for a saas platform
 	 * - website id for a hosting platform
 	 *
@@ -138,7 +135,20 @@ export interface Subscription {
 	/**
 	 * The billing cycle start date
 	 */
-	billingCycleStart: Date;
+	periodStart?: Date;
+	/**
+	 * The billing cycle end date
+	 */
+	periodEnd?: Date;
+	/**
+	 * Cancel at period end
+	 */
+	cancelAtPeriodEnd?: boolean;
+	/**
+	 * A field to group subscriptions so you can have multiple subscriptions
+	 * for one reference id
+	 */
+	groupId?: string;
 }
 
 export interface StripeOptions {
@@ -153,40 +163,36 @@ export interface StripeOptions {
 	 */
 	stripeWebhookSecret: string;
 	/**
-	 * Customer Configuration
+	 * Enable customer creation when a user signs up
 	 */
-	customer?: {
-		/**
-		 * Enable customer creation when a user signs up
-		 */
-		createOnSignUp?: boolean;
-		/**
-		 * A callback to run after a customer has been created
-		 * @param customer - Customer Data
-		 * @param stripeCustomer - Stripe Customer Data
-		 * @returns
-		 */
-		onCreate?: (
-			data: {
-				customer: Customer;
-				stripeCustomer: Stripe.Customer;
-			},
-			request?: Request,
-		) => Promise<void>;
-		/**
-		 * A custom function to get the customer create
-		 * params
-		 * @param data - data containing user and session
-		 * @returns
-		 */
-		getCustomerCreateParams?: (
-			data: {
-				user: User;
-				session: Session;
-			},
-			request?: Request,
-		) => Promise<{}>;
-	};
+	createCustomerOnSignUp?: boolean;
+	/**
+	 * A callback to run after a customer has been created
+	 * @param customer - Customer Data
+	 * @param stripeCustomer - Stripe Customer Data
+	 * @returns
+	 */
+	onCustomerCreate?: (
+		data: {
+			customer: Customer;
+			stripeCustomer: Stripe.Customer;
+			user: User;
+		},
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A custom function to get the customer create
+	 * params
+	 * @param data - data containing user and session
+	 * @returns
+	 */
+	getCustomerCreateParams?: (
+		data: {
+			user: User;
+			session: Session;
+		},
+		request?: Request,
+	) => Promise<{}>;
 	/**
 	 * Subscriptions
 	 */
@@ -302,6 +308,12 @@ export interface StripeOptions {
 			 * Tax calculation options
 			 */
 			options?: Stripe.TaxRateCreateParams;
+		};
+		/**
+		 * Enable organization subscription
+		 */
+		organization?: {
+			enabled: boolean;
 		};
 	};
 	onEvent?: (event: Stripe.Event) => Promise<void>;

@@ -20,15 +20,8 @@ import type {
 	StripeOptions,
 	Subscription,
 } from "./types";
-import { getPlanByName, getPlans, getSchema } from "./utils";
-
-export const stripeClient = new Stripe(`${process.env.STRIPE_SECRET_KEY}`, {
-	apiVersion: "2025-01-27.acacia",
-	appInfo: {
-		name: "Dub.co",
-		version: "0.1.0",
-	},
-});
+import { getPlanByName, getPlans } from "./utils";
+import { getSchema } from "./schema";
 
 const STRIPE_ERROR_CODES = {
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
@@ -219,15 +212,13 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 					model: "subscription",
 					where: [
 						{
-							field: "userId",
-							value: user.id,
+							field: "referenceId",
+							value: ctx.body.referenceId || user.id,
 						},
 					],
 				});
 				const existingSubscription = subscriptions.find(
-					(sub) =>
-						(sub.status === "active" || sub.status === "trialing") &&
-						sub.referenceId === referenceId,
+					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
 				if (
 					existingSubscription &&
@@ -250,8 +241,6 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 							stripeCustomerId: customer.stripeCustomerId as string,
 							status: "incomplete",
 							referenceId,
-							userId: user.id,
-							billingCycleStart: new Date(),
 						},
 					});
 					subscription = newSubscription;
@@ -475,6 +464,19 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 			}
 				? typeof subscriptionEndpoints
 				: {}),
+		},
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						user: {
+							create: {
+								async after(user) {},
+							},
+						},
+					},
+				},
+			};
 		},
 		schema: getSchema(options),
 	} satisfies BetterAuthPlugin;

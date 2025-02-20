@@ -35,7 +35,8 @@ export async function onCheckoutSessionCompleted(
 					plan: plan.name.toLowerCase(),
 					status: subscription.status,
 					updatedAt: new Date(),
-					billingCycleStart: new Date(subscription.current_period_start * 1000),
+					periodStart: new Date(subscription.current_period_start * 1000),
+					periodEnd: new Date(subscription.current_period_end * 1000),
 					...trial,
 				},
 				where: [
@@ -92,24 +93,24 @@ export async function onSubscriptionUpdated(
 		if (!subscription) {
 			return;
 		}
-		if (subscription.plan !== plan.name.toLowerCase()) {
-			await ctx.context.adapter.update({
-				model: "subscription",
-				update: {
-					plan: plan.name.toLowerCase(),
-					limits: plan.limits,
-					updatedAt: new Date(),
-					status: subscriptionUpdated.status,
-					cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+		await ctx.context.adapter.update({
+			model: "subscription",
+			update: {
+				plan: plan.name.toLowerCase(),
+				limits: plan.limits,
+				updatedAt: new Date(),
+				status: subscriptionUpdated.status,
+				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
+				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
+				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+			},
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: subscriptionUpdated.id,
 				},
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionUpdated.id,
-					},
-				],
-			});
-		}
+			],
+		});
 		const subscriptionCanceled =
 			subscriptionUpdated.status === "active" &&
 			subscriptionUpdated.cancel_at_period_end;

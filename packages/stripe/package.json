@@ -45,6 +45,9 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "tsup": "^8.3.5"
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.6.0",
+    "tsup": "^8.3.5",
+    "vitest": "^1.6.0"
   }
 }

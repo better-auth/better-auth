@@ -1,6 +1,6 @@
 import { defu } from "defu";
 import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter } from "./db";
+import { createInternalAdapter, getMigrations } from "./db";
 import { getAuthTables } from "./db/get-tables";
 import { getAdapter } from "./db/utils";
 import type {
@@ -26,6 +26,7 @@ import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
+import { BetterAuthError } from "./error";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -135,8 +136,19 @@ export const init = async (options: BetterAuthOptions) => {
 			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
+		async runMigrations() {
+			//only run migrations if database is provided and it's not an adapter
+			if (!options.database || "updateMany" in options.database) {
+				throw new BetterAuthError(
+					"Database is not provided or it's an adapter. Migrations are only supported with a database instance.",
+				);
+			}
+			const { runMigrations } = await getMigrations(options);
+			await runMigrations();
+		},
 	};
 	let { context } = runPluginInit(ctx);
+	context;
 	return context;
 };
 
@@ -198,6 +210,7 @@ export type AuthContext = {
 		checkPassword: typeof checkPassword;
 	};
 	tables: ReturnType<typeof getAuthTables>;
+	runMigrations: () => Promise<void>;
 };
 
 function runPluginInit(ctx: AuthContext) {
