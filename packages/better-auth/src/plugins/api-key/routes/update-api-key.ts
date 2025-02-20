@@ -57,8 +57,7 @@ export function updateApiKey({
 						description: "Expiration time of the Api Key in milliseconds",
 					})
 					.optional()
-					.nullable()
-					.default(null),
+					.nullable(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -188,7 +187,7 @@ export function updateApiKey({
 				newValues.enabled = enabled;
 			}
 			if (expiresIn !== undefined) {
-				if(opts.keyExpiration.disableCustomExpiresTime === true){
+				if (opts.keyExpiration.disableCustomExpiresTime === true) {
 					opts.events?.({
 						event: "key.update",
 						success: false,
@@ -203,10 +202,10 @@ export function updateApiKey({
 						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
 					});
 				}
-				if(expiresIn !== null){
+				if (expiresIn !== null) {
 					// if expires is not null, check if it's under the valid range
 					// if it IS null, this means the user wants to disable expiration time on the key
-					if(expiresIn < opts.keyExpiration.minExpiresIn){
+					if (expiresIn < opts.keyExpiration.minExpiresIn) {
 						opts.events?.({
 							event: "key.update",
 							success: false,
@@ -220,7 +219,7 @@ export function updateApiKey({
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 						});
-					}else if(expiresIn > opts.keyExpiration.maxExpiresIn){
+					} else if (expiresIn > opts.keyExpiration.maxExpiresIn) {
 						opts.events?.({
 							event: "key.update",
 							success: false,
@@ -273,6 +272,9 @@ export function updateApiKey({
 					},
 					apiKey: null,
 					user: session.user,
+				});
+				throw new APIError("BAD_REQUEST", {
+					message: ERROR_CODES.NO_VALUES_TO_UPDATE,
 				});
 			}
 
