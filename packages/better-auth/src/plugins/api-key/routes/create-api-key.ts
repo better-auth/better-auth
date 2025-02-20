@@ -181,7 +181,7 @@ export function createApiKey({
 			}
 
 			if (expiresIn) {
-				if(opts.keyExpiration.disableCustomExpiresTime === true){
+				if (opts.keyExpiration.disableCustomExpiresTime === true) {
 					opts.events?.({
 						event: "key.create",
 						success: false,
@@ -210,7 +210,7 @@ export function createApiKey({
 								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
 								recievedExpiresIn: expiresIn_in_days,
 								minExpiresIn: opts.keyExpiration.minExpiresIn,
-							}
+							},
 						},
 						user: session.user,
 						apiKey: null,
@@ -229,7 +229,7 @@ export function createApiKey({
 								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
 								recievedExpiresIn: expiresIn_in_days,
 								minExpiresIn: opts.keyExpiration.minExpiresIn,
-							}
+							},
 						},
 						user: session.user,
 						apiKey: null,
@@ -252,7 +252,7 @@ export function createApiKey({
 								maxRemaining: opts.maximumRemaining,
 								recievedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
-							}
+							},
 						},
 						user: session.user,
 						apiKey: null,
@@ -272,7 +272,7 @@ export function createApiKey({
 								maxRemaining: opts.maximumRemaining,
 								recievedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
-							}
+							},
 						},
 						user: session.user,
 						apiKey: null,
@@ -383,12 +383,22 @@ export function createApiKey({
 				padding: false,
 			});
 
+			let start: string | null = null;
+
+			if (opts.startingCharactersConfig.shouldStore) {
+				start = hashed.substring(
+					0,
+					opts.startingCharactersConfig.charactersLength,
+				);
+			}
+
 			let data: ApiKey = {
 				id: generateId(),
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
 				prefix: prefix ?? opts.defaultPrefix ?? null,
+				start: start,
 				key: hashed,
 				enabled: true,
 				expiresAt: expiresIn

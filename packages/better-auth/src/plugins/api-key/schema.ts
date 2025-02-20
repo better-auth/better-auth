@@ -17,6 +17,20 @@ export const apiKeySchema = ({
 					input: false,
 				},
 				/**
+				 * Shows the first 5 characters of the API key, excluding the prefix.
+				 * 
+				 * Example without prefix:
+				 * `start: du12g`
+				 * 
+				 * Example with prefix:
+				 * `start: hello_world_du12g`
+				 */
+				start: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+				/**
 				 * The prefix of the key.
 				 */
 				prefix: {

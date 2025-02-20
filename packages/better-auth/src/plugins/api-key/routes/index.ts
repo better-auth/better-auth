@@ -24,9 +24,11 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "minimumNameLength"
 			| "enableMetadata"
 			| "disableSessionForAPIKeys"
+			| "startingCharactersConfig"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
+		startingCharactersConfig: Required<ApiKeyOptions["startingCharactersConfig"]>;
 	};
 
 export function createApiKeyRoutes({

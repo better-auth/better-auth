@@ -167,6 +167,27 @@ interface ApiKeyOptionsBase {
 		prefix: string | undefined;
 	}) => string | Promise<string>;
 	/**
+	 * The configuration for storing the starting characters of the API key in the database.
+	 * 
+	 * Useful if you want to display the starting characters of an API key in the UI.
+	 */
+	startingCharactersConfig?: {
+		/**
+		 * Wether to store the starting characters in the database. If false, we will set `start` to `null`.
+		 * 
+		 * @default true
+		 */
+		shouldStore?: boolean;
+		/**
+		 * The length of the starting characters to store in the database.
+		 * 
+		 * This includes the prefix length.
+		 * 
+		 * @default 6
+		 */
+		charactersLength?: number;
+	}
+	/**
 	 * The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
 	 * @default 64
 	 */
@@ -333,6 +354,11 @@ export type ApiKey = {
 	 * The name of the key
 	 */
 	name: string | null;
+	/**
+	 * Shows the first few characters of the API key, including the prefix.
+	 * This allows you to show those few characters in the UI to make it easier for users to identify the API key.
+	 */
+	start: string | null;
 	/**
 	 * The API Key prefix. Stored as plain text.
 	 */

@@ -64,6 +64,10 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			maxExpiresIn: options?.keyExpiration?.maxExpiresIn ?? 365,
 			minExpiresIn: options?.keyExpiration?.minExpiresIn ?? 1,
 		},
+		startingCharactersConfig: {
+			shouldStore: options?.startingCharactersConfig?.shouldStore ?? true,
+			charactersLength: options?.startingCharactersConfig?.charactersLength ?? 6,
+		},
 		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
