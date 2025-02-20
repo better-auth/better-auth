@@ -161,9 +161,9 @@ export function updateApiKey({
 				newValues.refillAmount = refillAmount;
 			}
 
-			let newApiKey: ApiKey | null = apiKey;
+			let newApiKey: ApiKey = apiKey;
 				try {
-					newApiKey = await ctx.context.adapter.update<ApiKey>({
+					let result = await ctx.context.adapter.update<ApiKey>({
 						model: schema.apikey.modelName,
 						where: [
 							{
@@ -182,6 +182,7 @@ export function updateApiKey({
 							...newValues,
 						},
 					});
+					if(result) newApiKey = result;
 				} catch (error: any) {
 					opts.events?.({
 						event: "key.update",
@@ -208,10 +209,12 @@ export function updateApiKey({
 				user: session.user,
 				apiKey: newApiKey,
 			});
-			return ctx.json({
-				...newApiKey,
-				key: undefined,
-			});
+
+			let resApiKey:Partial<ApiKey> = newApiKey;
+			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
+			delete resApiKey["key"];
+
+			return ctx.json(newApiKey);
 		},
 	);
 }
