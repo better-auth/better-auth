@@ -62,21 +62,6 @@ The API Key plugin allows you to create and manage API keys for your application
 
 ### Create an API key
 
-To create an API key, you can use the `apiKey.create` function provided by the client. The `apiKey.create` function takes an object with the following properties:
-
-- `name`: The name of the API key.
-- `reference`: A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)
-- `remaining`: The number of requests remaining.
-- `prefix`: A prefix to your API Key. For example, the prefix of "xyz" can result the API key to "xyz_blahblahblahblah".
-- `length`: The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
-- `expires`: UNIX timestamp of when the API key expires.
-- `enabled`: Whether the key is enabled or not.
-- `rateLimit`: An object containing rate limit configurations.
-    - `rateLimit.enabled`: Whether rate limiting is enabled for the API key.
-    - `rateLimit.timeWindow`: The time window in milliseconds for rate limiting.
-    - `rateLimit.limit`: The maximum number of requests allowed in the time window.
-
-
 ```ts
 const data = await authClient.apiKey.create({
   reference: "my_user_id",
@@ -149,75 +134,6 @@ const apiKeys = await authClient.apiKey.list({
 });
 ```
 
-
-## Server only functions
-
-### Force rerolling an API key
-
-You can pass an API key ID to the `apiKey.forceReroll` function to force reroll the API key.
-
-The traditional rerolling process requires you to have an active session. This
-function on the other hand is ran on the server and will not require an active
-session.
-This is helpful if you want to have an automatic rerolling process for your API, or if the API key was created without an owner,
-then this function is able of rerolling the key as needed.
-
-Additional properties can allow you to configure the ne API key:
-
-- `prefix`: The prefix of the API key. (Default `undefined`)
-- `length`: The length of the API key. (Default `64`)
-
-```ts
-await auth.api.apiKey.forceReroll({
-  keyId: "my-key-id",
-  prefix: "test",
-  length: 64,
-});
-```
-
-### Force revoking an API key
-
-You can pass an API key ID to the `apiKey.forceRevoke` function to force revoke the API key.
-
-The traditional revoking process requires you to have an active session. This
-function on the other hand is ran on the server and will not require an active
-session.
-This is helpful if you want to have an automatic revoking process for your API, or if the API key was created without an owner,
-then this function is able of revoking the key as needed.
-
-```ts
-await auth.api.apiKey.forceRevoke({
-  keyId: "my-key-id",
-});
-```
-
-### Force updating an API key
-
-You can pass an API key ID to the `apiKey.forceUpdate` function to force update information on the API key.
-
-The traditional updating process requires you to have an active session. This
-function on the other hand is ran on the server and will not require an active
-session.
-This is helpful if you want to have an automatic updating process for your API, or if the API key was created without an owner,
-then this function is able of updating the key as needed.
-
-Properties that can be updated:
-
-- `name`: The name of the API key.
-- `remaining`: The number of requests remaining.
-- `expires`: The expiration date of the API key in Unix timestamp format.
-- `enabled`: Whether the API key is enabled or not.
-
-```ts
-await auth.api.apiKey.forceUpdate({
-  keyId: "my-key-id",
-  name: "new-name",
-  remaining: 10,
-  expires: new Date().getTime + 1000 * 60 * 60 * 24 * 7, // 1 week from now
-  enabled: true,
-});
-```
-
 ### Delete all expired API keys
 
 To delete all expired API keys, you can use the `apiKey.deleteAllExpiredApiKeys` function provided by the server auth instance.
@@ -225,8 +141,8 @@ This function will delete all API keys that have an expiration date and are expi
 
 <Callout>
   We automatically delete expired API keys every time any apiKey plugin
-  functions were called, however they are rate-limited to a 10 second cooldown
-  each call.
+  endpoints were called, however they are rate-limited to a 10 second cooldown
+  each call to prevent multiple calls to the database.
 </Callout>
 
 ```ts
@@ -242,94 +158,115 @@ Table: `apiKey`
     {
       name: "id",
       type: "string",
-      description: "The ID of the api key",
+      description: "The ID of the api key.",
       isUnique: true,
       isPrimaryKey: true,
     },
     {
-      name: "createdAt",
-      type: "Date",
-      description: "The date and time the API key was created",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "The date and time the API key was updated",
-    },
-    {
-      name: "lastVerifiedAt",
-      type: "Date",
-      description:
-        "The date and time the API key was last verified. (Excluding failed requests)",
+      name: "name",
+      type: "string",
+      description: "The name of the API key.",
       isOptional: true,
     },
     {
-      name: "createdBy",
+      name: "start",
       type: "string",
-      description: "The id of the user who created the API key",
-      isForeignKey: true,
+      description:
+        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+      isOptional: true,
     },
     {
-      name: "remaining",
-      type: "number",
-      description: "The number of requests remaining",
+      name: "prefix",
+      type: "string",
+      description: "The API Key prefix. Stored as plain text.",
       isOptional: true,
     },
     {
       name: "key",
       type: "string",
-      description: "The API key itself",
+      description: "The hashed API key itself.",
     },
     {
-      name: "reference",
+      name: "userId",
       type: "string",
-      description:
-        "A string that defines the context and ownership in which this API key is available. (Eg user ID, org ID, or any other ID)",
+      description: "The id of the user who created the API key.",
+      isForeignKey: true,
     },
     {
-      name: "expires",
+      name: "refillInterval",
       type: "number",
-      description:
-        "The expiration date of the API key in Unix timestamp format",
+      description: "The interval to refill the key in milliseconds.",
       isOptional: true,
     },
     {
-      name: "name",
-      type: "string",
-      description: "The name of the API key",
+      name: "refillAmount",
+      type: "number",
+      description: "The amount to refill the remaining count of the key.",
+      isOptional: true,
+    },
+    {
+      name: "lastRefillAt",
+      type: "Date",
+      description: "The date and time when the key was last refilled.",
       isOptional: true,
     },
     {
       name: "enabled",
       type: "boolean",
-      description: "Whether the API key is enabled",
-    },
-    {
-      name: "rateLimitEnabled",
-      type: "boolean",
-      description: "Whether the API key has rate limiting enabled",
+      description: "Whether the API key is enabled.",
     },
     {
       name: "rateLimitTimeWindow",
       type: "number",
-      description: "The time window in milliseconds for rate limiting",
+      description: "The time window in milliseconds for the rate limit.",
+      isOptional: true,
     },
     {
-      name: "rateLimitCount",
+      name: "rateLimitMax",
       type: "number",
-      description: "The number of requests allowed in the time window",
+      description:
+        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+      isOptional: true,
     },
     {
       name: "requestCount",
       type: "number",
       description:
-        "The number of requests made using this API key for the rate-limiter",
+        "The number of requests made within the rate limit time window.",
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining.",
+      isOptional: true,
     },
     {
       name: "lastRequest",
       type: "Date",
-      description:
-        "The last time a request was made to this key. Used for the rate-limiter",
+      description: "The date and time of the last request made to the key.",
+      isOptional: true,
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The date and time when the key will expire.",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created.",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated.",
+    },
+    {
+      name: "metadata",
+      type: "Object",
+      isOptional: true,
+      description: "Any additional metadata you want to store with the key.",
     },
   ]}
 />
