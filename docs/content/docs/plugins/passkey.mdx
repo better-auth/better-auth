@@ -103,8 +103,6 @@ const authClient = createAuthClient({
   ], // [!code highlight]
 });
 
-// ---cut---
-
 // Default behavior allows both platform and cross-platform passkeys
 const { data, error } = await authClient.passkey.addPasskey();
 ```

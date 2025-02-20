@@ -31,7 +31,7 @@ const getMetadata = (
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
-		userInfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
@@ -145,7 +145,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);
-					return metadata;
+					return ctx.json(metadata);
 				},
 			),
 			oAuth2authorize: createAuthEndpoint(
@@ -484,7 +484,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const requestedScopes = value.scope;
 					await ctx.context.internalAdapter.deleteVerificationValue(
-						code.toString(),
+						verificationValue.id,
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -549,7 +549,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						aud: client_id.toString(),
 						iat: Date.now(),
 						auth_time: ctx.context.session?.session.createdAt.getTime(),
-						nonce: body.nonce,
+						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 					})
@@ -639,6 +639,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
 					const userClaims = {
+						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
 						name: requestedScopes.includes("profile") ? user.name : undefined,
 						picture: requestedScopes.includes("profile")

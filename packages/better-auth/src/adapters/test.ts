@@ -165,6 +165,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 	});
 
 	test("should work with reference fields", async () => {
+		let token = null;
 		const user = await adapter.create<{ id: string } & Record<string, any>>({
 			model: "user",
 			data: {
@@ -176,7 +177,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				updatedAt: new Date(),
 			},
 		});
-		await adapter.create({
+		const session = await adapter.create({
 			model: "session",
 			data: {
 				id: "1",
@@ -187,6 +188,7 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				expiresAt: new Date(),
 			},
 		});
+		token = session.token;
 		const res = await adapter.findOne({
 			model: "session",
 			where: [
@@ -196,7 +198,19 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 				},
 			],
 		});
+		const resToken = await adapter.findOne({
+			model: "session",
+			where: [
+				{
+					field: "token",
+					value: token,
+				},
+			],
+		});
 		expect(res).toMatchObject({
+			userId: user.id,
+		});
+		expect(resToken).toMatchObject({
 			userId: user.id,
 		});
 	});

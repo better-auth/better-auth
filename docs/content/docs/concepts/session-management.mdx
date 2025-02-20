@@ -73,7 +73,7 @@ The `getSession` function retrieves the current active session.
 ```ts client="client.ts"
 import { authClient } from "@/lib/client"
 
-const session = await authClient.getSession()
+const { data: session } = await authClient.getSession()
 ```
 
 To learn how to customize the session response check the [Customizing Session Response](#customizing-session-response) section.
@@ -85,7 +85,7 @@ The `useSession` action provides a reactive way to access the current session.
 ```ts client="client.ts"
 import { authClient } from "@/lib/client"
 
-const session = await authClient.useSession()
+const { data: session } = authClient.useSession()
 ```
 
 ### List Sessions
@@ -239,8 +239,8 @@ const options = {
 
 export const auth = betterAuth({
     ...options,
-    plugins: [{
-        ...options.plugins,
+    plugins: [
+        ...(options.plugins ?? []),
         customSession(async ({ user, session }) => {
             // now both user and session will infer the fields added by plugins and your custom fields
             return {
@@ -248,7 +248,7 @@ export const auth = betterAuth({
                 session
             }
         }, options), // pass options here  // [!code highlight]
-    }]
+    ]
 })
 ```
 

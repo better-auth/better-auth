@@ -533,6 +533,16 @@ auth.api.addMember({
 })
 ```
 
+### Leave Organization
+
+To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.leave({
+    organizationId: "organization-id"
+})
+```    
+
 ## Access Control
 
 The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
@@ -831,6 +841,12 @@ Table Name: `invitation`
       name: "email", 
       type: "string", 
       description: "The email address of the user" 
+    },
+    { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
     },
     { 
       name: "organizationId", 

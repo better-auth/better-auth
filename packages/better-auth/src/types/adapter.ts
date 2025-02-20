@@ -15,7 +15,7 @@ export type Where = {
 		| "contains"
 		| "starts_with"
 		| "ends_with"; //eq by default
-	value: string | number | boolean | string[] | number[];
+	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	connector?: "AND" | "OR"; //AND by default
 };

@@ -16,7 +16,7 @@ The user table stores the user data. The user table has the following fields:
 - `createdAt`: The creation date of the user.
 - `updatedAt`: The last update date of the user.
 
-The user table can be extended by plugins to store additional data. When a plugin extends a user table it's inferred by the type system and can be used in the client.
+The user table can be extended using [additional fields](/docs/concepts/database#extending-core-schema) or by plugins to store additional data.
 
 ## Update User
 
@@ -109,9 +109,9 @@ Better Auth provides a utility to hard delete a user from your database. It's di
 export const auth = betterAuth({
     //...other config
     user: {
-        deleteUser: {
-            enabled: true // [!Code Highlight]
-        }
+        deleteUser: { // [!code highlight]
+            enabled: true // [!code highlight]
+        } // [!code highlight]
     }
 })
 ```

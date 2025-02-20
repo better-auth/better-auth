@@ -53,7 +53,7 @@ The Email OTP plugin allows user to sign-in, verify their email, or reset their 
 First, send an OTP to the user's email address.
 
 ```ts title="example.ts"
-await authClient.emailOtp.sendVerificationOtp({
+const { data, error } = await authClient.emailOtp.sendVerificationOtp({
     email: "user-email@email.com",
     type: "sign-in" // or "email-verification", "forget-password"
 })
@@ -64,7 +64,7 @@ await authClient.emailOtp.sendVerificationOtp({
 Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
 
 ```ts title="example.ts"
-const user = await authClient.signIn.emailOtp({
+const { data, error } = await authClient.signIn.emailOtp({
     email: "user-email@email.com",
     otp: "123456"
 })
@@ -77,7 +77,7 @@ If the user is not registered, they'll be automatically registered. If you want 
 To verify the user's email address, use the `verifyEmail()` method.
 
 ```ts title="example.ts"
-const user = await authClient.emailOtp.verifyEmail({
+const { data, error } = await authClient.emailOtp.verifyEmail({
     email: "user-email@email.com",
     otp: "123456"
 })
@@ -88,7 +88,7 @@ const user = await authClient.emailOtp.verifyEmail({
 To reset the user's password, use the `resetPassword()` method.
 
 ```ts title="example.ts"
-await authClient.emailOtp.resetPassword({
+const { data, error } = await authClient.emailOtp.resetPassword({
     email: "user-email@email.com",
     otp: "123456",
     password: "password"
