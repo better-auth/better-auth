@@ -47,6 +47,11 @@ export function updateApiKey({
 						description: "The refill amount",
 					})
 					.optional(),
+				refillInterval: z
+					.number({
+						description: "The refill interval",
+					})
+					.optional(),
 				metadata: z
 					.any({
 						description: "The metadata of the Api Key",
@@ -70,6 +75,7 @@ export function updateApiKey({
 				enabled,
 				metadata,
 				refillAmount,
+				refillInterval,
 				remaining,
 				name,
 			} = ctx.body;
@@ -218,7 +224,7 @@ export function updateApiKey({
 									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
 									recievedExpiresIn: expiresIn_in_days,
 									minExpiresIn: opts.keyExpiration.minExpiresIn,
-								}
+								},
 							},
 							user: session.user,
 							apiKey: null,
@@ -237,7 +243,7 @@ export function updateApiKey({
 									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
 									recievedExpiresIn: expiresIn_in_days,
 									minExpiresIn: opts.keyExpiration.minExpiresIn,
-								}
+								},
 							},
 							user: session.user,
 							apiKey: null,
@@ -268,7 +274,7 @@ export function updateApiKey({
 				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
-				if(remaining < opts.minimumRemaining){
+				if (remaining < opts.minimumRemaining) {
 					opts.events?.({
 						event: "key.update",
 						success: false,
@@ -287,7 +293,7 @@ export function updateApiKey({
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_REMAINING,
 					});
-				}else if(remaining > opts.maximumRemaining){
+				} else if (remaining > opts.maximumRemaining) {
 					opts.events?.({
 						event: "key.update",
 						success: false,
@@ -309,8 +315,38 @@ export function updateApiKey({
 				}
 				newValues.remaining = remaining;
 			}
-			if (refillAmount !== undefined) {
+			if (refillAmount !== undefined || refillInterval !== undefined) {
+				if (refillAmount !== undefined && refillInterval === undefined) {
+					opts.events?.({
+						event: "key.update",
+						success: false,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+						},
+						apiKey: null,
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					});
+				} else if (refillInterval !== undefined && refillAmount === undefined) {
+					opts.events?.({
+						event: "key.update",
+						success: false,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+						},
+						apiKey: null,
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					});
+				}
 				newValues.refillAmount = refillAmount;
+				newValues.refillInterval = refillInterval;
 			}
 
 			if (Object.keys(newValues).length === 0) {
