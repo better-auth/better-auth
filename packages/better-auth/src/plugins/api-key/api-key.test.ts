@@ -779,8 +779,8 @@ describe("api-key", async () => {
 		}
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("NOT_FOUND");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+		expect(result.error?.status).toEqual("FORBIDDEN");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_API_KEY);
 	});
 
 	let rateLimitedApiKey: ApiKey;
@@ -1658,7 +1658,7 @@ describe("api-key", async () => {
 			result.error = error;
 		}
 
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.status).toEqual("FORBIDDEN");
 		expect(result.error?.body?.message).toEqual(ERROR_CODES.INVALID_API_KEY);
 	});
 

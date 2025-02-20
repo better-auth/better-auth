@@ -74,6 +74,44 @@ export function verifyApiKey({
 				});
 			}
 
+			if (key.length < opts.defaultKeyLength) {
+				// if the key is shorter than the default key length, than we know the key is invalid.
+				// we can't check if the key is exactly equal to the default key length, because
+				// a prefix may be added to the key.
+				opts.events?.({
+					event: "key.verify",
+					success: false,
+					error: {
+						code: "key.invalid",
+						message: ERROR_CODES.INVALID_API_KEY,
+					},
+					user: session.user,
+					apiKey: null,
+				});
+				throw new APIError("FORBIDDEN", {
+					message: ERROR_CODES.INVALID_API_KEY,
+				});
+			}
+
+			if (
+				opts.customAPIKeyValidator &&
+				!opts.customAPIKeyValidator({ ctx, key })
+			) {
+				opts.events?.({
+					event: "key.verify",
+					success: false,
+					error: {
+						code: "key.invalid",
+						message: ERROR_CODES.INVALID_API_KEY,
+					},
+					user: session.user,
+					apiKey: null,
+				});
+				throw new APIError("FORBIDDEN", {
+					message: ERROR_CODES.INVALID_API_KEY,
+				});
+			}
+
 			const hash = await createHash("SHA-256").digest(
 				new TextEncoder().encode(key),
 			);
@@ -172,8 +210,8 @@ export function verifyApiKey({
 				}
 			}
 
-			let remaining: number | null = null;
-			let lastRefillAt: Date | null = null;
+			let remaining: number | null = apiKey.remaining;
+			let lastRefillAt: Date | null = apiKey.lastRefillAt;
 			if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 				opts.events?.({
@@ -208,20 +246,17 @@ export function verifyApiKey({
 				throw new APIError("FORBIDDEN", {
 					message: ERROR_CODES.KEY_EXPIRED,
 				});
-			} else if (apiKey.remaining !== null) {
-				remaining = apiKey.remaining;
+			} else if (remaining !== null) {
 				let now = new Date().getTime();
 				const refillInterval = apiKey.refillInterval;
 				const refillAmount = apiKey.refillAmount;
-				let lastTime = (apiKey.lastRefillAt ?? apiKey.createdAt).getTime();
-				let didRefill = false;
+				let lastTime = (lastRefillAt ?? apiKey.createdAt).getTime();
 
 				if (refillInterval && refillAmount) {
 					// if they provide refill info, then we should refill once the interval is reached.
 
 					const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
 					if (timeSinceLastRequest > refillInterval) {
-						didRefill = true;
 						remaining = refillAmount;
 						lastRefillAt = new Date();
 					}
@@ -247,13 +282,7 @@ export function verifyApiKey({
 				}
 			}
 
-			apiKey.refillInterval;
-
 			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
-
-			// console.log(`rate limit status: ${!success ? "RATE-LIMITED" : "OK"}`);
-			// console.log(`rate limit remaining: ${tryAgainIn}`);
-			// console.log(`updating values:`, update);
 
 			let newApiKey: ApiKey = apiKey;
 			try {

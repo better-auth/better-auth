@@ -38,7 +38,8 @@ export const ERROR_CODES = {
 	INVALID_USER_ID_FROM_API_KEY: "The user id from the API key is invalid.",
 	INVALID_API_KEY_GETTER_RETURN_TYPE:
 		"API Key getter returned an invalid key type. Expected string.",
-	SERVER_ONLY_PROPERTY: "The property you're trying to set can only be set from the server auth instance only.",
+	SERVER_ONLY_PROPERTY:
+		"The property you're trying to set can only be set from the server auth instance only.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -125,6 +126,24 @@ export const apiKey = (options?: ApiKeyOptions) => {
 						if (typeof key !== "string") {
 							throw new APIError("BAD_REQUEST", {
 								message: ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+							});
+						}
+
+						if (key.length < opts.defaultKeyLength) {
+							// if the key is shorter than the default key length, than we know the key is invalid.
+							// we can't check if the key is exactly equal to the default key length, because
+							// a prefix may be added to the key.
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.INVALID_API_KEY,
+							});
+						}
+
+						if (
+							opts.customAPIKeyValidator &&
+							!opts.customAPIKeyValidator({ ctx, key })
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.INVALID_API_KEY,
 							});
 						}
 

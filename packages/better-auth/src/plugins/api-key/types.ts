@@ -154,6 +154,13 @@ interface ApiKeyOptionsBase {
 	 */
 	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
 	/**
+	 * A custom function to validate the api key
+	 */
+	customAPIKeyValidator?: (options: {
+		ctx: GenericEndpointContext;
+		key: string;
+	}) => boolean;
+	/**
 	 * custom key generation function
 	 */
 	customKeyGenerator?: (options: {
@@ -168,25 +175,25 @@ interface ApiKeyOptionsBase {
 	}) => string | Promise<string>;
 	/**
 	 * The configuration for storing the starting characters of the API key in the database.
-	 * 
+	 *
 	 * Useful if you want to display the starting characters of an API key in the UI.
 	 */
 	startingCharactersConfig?: {
 		/**
 		 * Wether to store the starting characters in the database. If false, we will set `start` to `null`.
-		 * 
+		 *
 		 * @default true
 		 */
 		shouldStore?: boolean;
 		/**
 		 * The length of the starting characters to store in the database.
-		 * 
+		 *
 		 * This includes the prefix length.
-		 * 
+		 *
 		 * @default 6
 		 */
 		charactersLength?: number;
-	}
+	};
 	/**
 	 * The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
 	 * @default 64
@@ -339,6 +346,7 @@ export type ApiKeyFailedReasons =
 	| "key.expired"
 	| "database.error"
 	| "key.invalidExpiration"
+	| "key.invalid"
 	| "key.invalidRemaining"
 	| "key.invalidPrefixLength"
 	| "request.noValuesToUpdate"
