@@ -157,7 +157,7 @@ export const apiKeySchema = ({
 							return JSON.stringify(value);
 						},
 						output(value) {
-							if (!value) return undefined;
+							if (!value) return null;
 							return JSON.parse(value as string);
 						},
 					},
