@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { generateRandomString } from "../../../crypto";
+import { setSessionCookie } from "../../../cookies";
 
 export interface OTPOptions {
 	/**
@@ -59,6 +60,7 @@ export const otp2fa = (options?: OTPOptions) => {
 		period: (options?.period || 3) * 60 * 1000,
 	};
 	const twoFactorTable = "twoFactor";
+
 	/**
 	 * Generate OTP and send it to the user.
 	 */
@@ -178,11 +180,6 @@ export const otp2fa = (options?: OTPOptions) => {
 		},
 		async (ctx) => {
 			const user = ctx.context.session.user;
-			if (!user.twoFactorEnabled) {
-				throw new APIError("BAD_REQUEST", {
-					message: "two factor isn't enabled",
-				});
-			}
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
 				where: [
@@ -207,12 +204,34 @@ export const otp2fa = (options?: OTPOptions) => {
 				});
 			}
 			if (toCheckOtp.value === ctx.body.code) {
+				if (!user.twoFactorEnabled) {
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: true,
+						},
+					);
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					);
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.context.session.session.token,
+					);
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user: updatedUser,
+					});
+				}
 				return ctx.context.valid(ctx);
 			} else {
 				return ctx.context.invalid();
 			}
 		},
 	);
+
 	return {
 		id: "otp",
 		endpoints: {

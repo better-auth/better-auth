@@ -217,7 +217,10 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+
 		expect(res.data?.user?.banned).toBe(false);
+		expect(res.data?.user?.banExpires).toBeNull();
+		expect(res.data?.user?.banReason).toBeNull();
 	});
 
 	it("should allow admin to list user sessions", async () => {

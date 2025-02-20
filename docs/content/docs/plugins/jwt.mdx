@@ -17,7 +17,7 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { jwt, bearer } from "better-auth/plugins"
+import { jwt } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [ // [!code highlight]
