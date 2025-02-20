@@ -238,6 +238,10 @@ export const username = (options?: UsernameOptions) => {
 							context.path === "/sign-up/email" ||
 							context.path === "/update-user"
 						);
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
@@ -265,7 +269,6 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
-
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
