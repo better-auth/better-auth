@@ -484,7 +484,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const requestedScopes = value.scope;
 					await ctx.context.internalAdapter.deleteVerificationValue(
-						code.toString(),
+						verificationValue.id,
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -549,7 +549,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						aud: client_id.toString(),
 						iat: Date.now(),
 						auth_time: ctx.context.session?.session.createdAt.getTime(),
-						nonce: body.nonce,
+						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 					})
