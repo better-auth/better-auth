@@ -88,6 +88,10 @@ export function verifyApiKey({
 						field: "key",
 						value: hashed,
 					},
+					{
+						field: "userId",
+						value: session.user.id,
+					},
 				],
 			});
 
