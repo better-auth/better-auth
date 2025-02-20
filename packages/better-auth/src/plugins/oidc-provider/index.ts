@@ -639,6 +639,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
 					const userClaims = {
+						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
 						name: requestedScopes.includes("profile") ? user.name : undefined,
 						picture: requestedScopes.includes("profile")
