@@ -170,7 +170,8 @@ export function createApiKey({
 			}
 
 			if (expiresIn) {
-				const expiresIn_in_days = expiresIn * 86_400_000;
+				const expiresIn_in_days = expiresIn / 86_400_000;
+
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
 					opts.events?.({
 						event: "key.create",
