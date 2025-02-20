@@ -3,12 +3,13 @@ import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
-import type { apiKeySchema } from "../schema";
+import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
+import { parseInputData } from "../../../db";
 
 export function createApiKey({
 	keyGenerator,
@@ -31,9 +32,7 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z
-					.string({ description: "Name of the Api Key" })
-					.optional(),
+				name: z.string({ description: "Name of the Api Key" }).optional(),
 				expiresIn: z
 					.number({
 						description: "Expiration time of the Api Key in milliseconds",
@@ -112,7 +111,7 @@ export function createApiKey({
 
 			// if metadata is defined, than check that it's an object.
 			if (typeof metadata !== "undefined") {
-				if(opts.enableMetadata === false){
+				if (opts.enableMetadata === false) {
 					opts.events?.({
 						event: "key.create",
 						success: false,
@@ -125,7 +124,7 @@ export function createApiKey({
 						message: ERROR_CODES.METADATA_DISABLED,
 					});
 				}
-				if(typeof metadata !== "object"){
+				if (typeof metadata !== "object") {
 					opts.events?.({
 						event: "key.create",
 						success: false,
@@ -257,7 +256,7 @@ export function createApiKey({
 				}
 			}
 
-			if(name) {
+			if (name) {
 				if (name.length < opts.minimumNameLength) {
 					opts.events?.({
 						event: "key.create",
@@ -300,32 +299,43 @@ export function createApiKey({
 				padding: false,
 			});
 
+			let data: ApiKey = {
+				id: generateId(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				name: name ?? null,
+				prefix: prefix ?? opts.defaultPrefix ?? null,
+				key: hashed,
+				enabled: true,
+				expiresAt: expiresIn
+					? getDate(expiresIn, "ms")
+					: opts.keyExpiration.defaultExpiresIn
+						? getDate(opts.keyExpiration.defaultExpiresIn, "ms")
+						: null,
+				userId: session.user.id,
+				lastRefillAt: null,
+				lastRequest: null,
+				metadata: metadata ?? null,
+				rateLimitMax: opts.rateLimit.maxRequests ?? null,
+				rateLimitTimeWindow: opts.rateLimit.timeWindow ?? null,
+				remaining: remaining ?? null,
+				refillAmount: refillAmount ?? null,
+				refillInterval: refillInterval ?? null,
+				requestCount: 0,
+			};
+
+			const parseMetadata = parseInputData(
+				data,
+				apiKeySchema({
+					rateLimitMax: opts.rateLimit.maxRequests!,
+					timeWindow: opts.rateLimit.timeWindow!,
+				}).apikey,
+			);
+			data.metadata = parseMetadata.metadata ?? null;
+
 			const apiKey = await ctx.context.adapter.create<ApiKey>({
 				model: schema.apikey.modelName,
-				data: {
-					id: generateId(),
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					name: name ?? null,
-					prefix: prefix ?? opts.defaultPrefix ?? null,
-					key: hashed,
-					enabled: true,
-					expiresAt: expiresIn
-						? getDate(expiresIn, "ms")
-						: opts.keyExpiration.defaultExpiresIn
-							? getDate(opts.keyExpiration.defaultExpiresIn, "ms")
-							: null,
-					userId: session.user.id,
-					lastRefillAt: null,
-					lastRequest: null,
-					metadata: metadata ?? null,
-					rateLimitMax: opts.rateLimit.maxRequests ?? null,
-					rateLimitTimeWindow: opts.rateLimit.timeWindow ?? null,
-					remaining: remaining ?? null,
-					refillAmount: refillAmount ?? null,
-					refillInterval: refillInterval ?? null,
-					requestCount: 0,
-				},
+				data: data,
 			});
 
 			opts.events?.({
@@ -336,9 +346,11 @@ export function createApiKey({
 				user: session.user,
 				apiKey: apiKey,
 			});
+			
 			return ctx.json({
 				...apiKey,
 				key: key,
+				metadata: metadata ?? null,
 			});
 		},
 	);

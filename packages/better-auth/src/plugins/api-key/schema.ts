@@ -151,7 +151,7 @@ export const apiKeySchema = ({
 				metadata: {
 					type: "string",
 					required: false,
-					input: false,
+					input: true,
 					transform: {
 						input(value) {
 							return JSON.stringify(value);
