@@ -534,8 +534,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							banned: false,
+							banExpires: null,
+							banReason: null,
 						},
 					);
+
 					return ctx.json({
 						user: user,
 					});
