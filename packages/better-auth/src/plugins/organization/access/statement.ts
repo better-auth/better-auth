@@ -11,7 +11,7 @@ export const defaultAc = createAccessControl(defaultStatements);
 export const adminAc = defaultAc.newRole({
 	organization: ["update"],
 	invitation: ["create", "cancel"],
-	member: ["create"],
+	member: ["create", "update", "delete"],
 });
 
 export const ownerAc = defaultAc.newRole({
