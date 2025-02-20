@@ -34,17 +34,29 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 					>
 						{tokens.map((line, i) => {
 							const lineProps = getLineProps({ line, key: i });
-							return (<div key={i} className={lineProps.className}
-								style={lineProps.style}>
-								<span className="inline-block w-4 mr-3 text-gray-500 select-none">
-									{i + 1}
-								</span>
-								{line.map((token, key) => {
-									const tokenProps = getTokenProps({token, key})
-									return <span key={key} className={tokenProps.className} style={tokenProps.style} >{tokenProps.children}</span>
-
-								})}
-							</div>)
+							return (
+								<div
+									key={i}
+									className={lineProps.className}
+									style={lineProps.style}
+								>
+									<span className="inline-block w-4 mr-3 text-gray-500 select-none">
+										{i + 1}
+									</span>
+									{line.map((token, key) => {
+										const tokenProps = getTokenProps({ token, key });
+										return (
+											<span
+												key={key}
+												className={tokenProps.className}
+												style={tokenProps.style}
+											>
+												{tokenProps.children}
+											</span>
+										);
+									})}
+								</div>
+							);
 						})}
 					</pre>
 				)}
