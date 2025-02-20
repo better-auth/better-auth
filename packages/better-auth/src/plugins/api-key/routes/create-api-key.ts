@@ -315,7 +315,7 @@ export function createApiKey({
 				userId: session.user.id,
 				lastRefillAt: null,
 				lastRequest: null,
-				metadata: metadata ?? null,
+				metadata: null,
 				rateLimitMax: opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow: opts.rateLimit.timeWindow ?? null,
 				remaining: remaining ?? null,
@@ -324,14 +324,16 @@ export function createApiKey({
 				requestCount: 0,
 			};
 
-			const parseMetadata = parseInputData(
-				data,
-				apiKeySchema({
-					rateLimitMax: opts.rateLimit.maxRequests!,
-					timeWindow: opts.rateLimit.timeWindow!,
-				}).apikey,
-			);
-			data.metadata = parseMetadata.metadata ?? null;
+			if (metadata) {
+				const parseMetadata = parseInputData(
+					data,
+					apiKeySchema({
+						rateLimitMax: opts.rateLimit.maxRequests!,
+						timeWindow: opts.rateLimit.timeWindow!,
+					}).apikey,
+				);
+				data.metadata = parseMetadata.metadata ?? null;
+			}
 
 			const apiKey = await ctx.context.adapter.create<ApiKey>({
 				model: schema.apikey.modelName,
@@ -346,7 +348,7 @@ export function createApiKey({
 				user: session.user,
 				apiKey: apiKey,
 			});
-			
+
 			return ctx.json({
 				...apiKey,
 				key: key,
