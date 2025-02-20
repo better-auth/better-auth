@@ -84,6 +84,15 @@ export const apiKeySchema = ({
 					defaultValue: true,
 				},
 				/**
+				 * Whether the key has rate limiting enabled.
+				 */
+				rateLimitEnabled: {
+					type: "boolean",
+					required: false,
+					input: false,
+					defaultValue: true,
+				},
+				/**
 				 * The time window in milliseconds for the rate limit.
 				 */
 				rateLimitTimeWindow: {

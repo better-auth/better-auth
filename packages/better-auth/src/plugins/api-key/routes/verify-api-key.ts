@@ -282,7 +282,7 @@ export function verifyApiKey({
 				}
 			}
 
-			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
+			const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
 			let newApiKey: ApiKey = apiKey;
 			try {

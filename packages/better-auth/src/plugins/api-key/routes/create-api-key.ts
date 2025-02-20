@@ -77,6 +77,12 @@ export function createApiKey({
 							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
 					})
 					.optional(),
+				rateLimitEnabled: z
+					.boolean({
+						description:
+							"Whether the key has rate limiting enabled. Server Only Property.",
+					})
+					.optional(),
 			}),
 		},
 		async (ctx) => {
@@ -90,6 +96,7 @@ export function createApiKey({
 				refillInterval,
 				rateLimitMax,
 				rateLimitTimeWindow,
+				rateLimitEnabled
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -136,7 +143,8 @@ export function createApiKey({
 					refillAmount !== undefined ||
 					refillInterval !== undefined ||
 					rateLimitMax !== undefined ||
-					rateLimitTimeWindow !== undefined
+					rateLimitTimeWindow !== undefined ||
+					rateLimitEnabled !== undefined
 				) {
 					opts.events?.({
 						event: "key.create",
@@ -457,6 +465,7 @@ export function createApiKey({
 				remaining: remaining ?? null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
+				rateLimitEnabled: rateLimitEnabled ?? true,
 				requestCount: 0,
 			};
 

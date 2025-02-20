@@ -63,6 +63,23 @@ export function updateApiKey({
 					})
 					.optional()
 					.nullable(),
+				rateLimitEnabled: z
+					.boolean({
+						description: "Whether the key has rate limiting enabled.",
+					})
+					.optional(),
+				rateLimitTimeWindow: z
+					.number({
+						description:
+							"The duration in milliseconds where each request is counted.",
+					})
+					.optional(),
+				rateLimitMax: z
+					.number({
+						description:
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -78,6 +95,9 @@ export function updateApiKey({
 				refillInterval,
 				remaining,
 				name,
+				rateLimitEnabled,
+				rateLimitTimeWindow,
+				rateLimitMax,
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -351,6 +371,16 @@ export function updateApiKey({
 				newValues.refillInterval = refillInterval;
 			}
 
+			if(rateLimitEnabled !== undefined){
+				newValues.rateLimitEnabled = rateLimitEnabled;
+			}
+			if(rateLimitTimeWindow !== undefined){
+				newValues.rateLimitTimeWindow = rateLimitTimeWindow;
+			}
+			if(rateLimitMax !== undefined){
+				newValues.rateLimitMax = rateLimitMax;
+			}
+
 			if (Object.keys(newValues).length === 0) {
 				opts.events?.({
 					event: "key.update",
@@ -403,6 +433,8 @@ export function updateApiKey({
 					message: error?.message,
 				});
 			}
+
+
 
 			deleteAllExpiredApiKeys(ctx.context);
 

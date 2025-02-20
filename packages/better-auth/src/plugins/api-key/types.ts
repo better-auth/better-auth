@@ -400,6 +400,10 @@ export type ApiKey = {
 	 */
 	enabled: boolean;
 	/**
+	 * Whether the key has rate limiting enabled.
+	 */
+	rateLimitEnabled: boolean;
+	/**
 	 * The duration in milliseconds
 	 */
 	rateLimitTimeWindow: number | null;
