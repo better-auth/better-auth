@@ -572,6 +572,75 @@ describe("api-key", async () => {
 		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
 	});
 
+	it("should have the first 6 chracaters of the key as the start property", async () => {
+		const { data: apiKey } = await client.apiKey.create(
+			{},
+			{ headers: headers },
+		);
+
+		expect(apiKey?.start).toBeDefined();
+		expect(apiKey?.start?.length).toEqual(6);
+		expect(apiKey?.start).toEqual(apiKey?.key?.substring(0, 6));
+	});
+
+	it("should have the start property as null if shouldStore is false", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						startingCharactersConfig: {
+							shouldStore: false,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: headers },
+		);
+
+		expect(apiKey2?.start).toBeNull();
+	});
+
+	it("should use the defined chracatersLength if provided", async () => {
+		const customLength = 3;
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						startingCharactersConfig: {
+							shouldStore: true,
+							charactersLength: customLength,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const { data: apiKey2 } = await client.apiKey.create(
+			{},
+			{ headers: headers },
+		);
+
+		expect(apiKey2?.start).toBeDefined();
+		expect(apiKey2?.start?.length).toEqual(customLength);
+		expect(apiKey2?.start).toEqual(apiKey2?.key?.substring(0, customLength));
+	});
+
 	// =========================================================================
 	// VERIFY API KEY
 	// =========================================================================
@@ -1566,8 +1635,6 @@ describe("api-key", async () => {
 		});
 		expect(session2?.session).toBeDefined();
 	});
-
-	
 
 	// =========================================================================
 	// DELETE API KEY
