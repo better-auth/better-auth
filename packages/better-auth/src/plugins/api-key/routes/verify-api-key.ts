@@ -247,9 +247,9 @@ export function verifyApiKey({
 
 			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
 
-			console.log(`rate limit status: ${!success ? "RATE-LIMITED" : "OK"}`);
-			console.log(`rate limit remaining: ${tryAgainIn}`);
-			console.log(`updating values:`, update);
+			// console.log(`rate limit status: ${!success ? "RATE-LIMITED" : "OK"}`);
+			// console.log(`rate limit remaining: ${tryAgainIn}`);
+			// console.log(`updating values:`, update);
 
 			let newApiKey: ApiKey = apiKey;
 			try {
