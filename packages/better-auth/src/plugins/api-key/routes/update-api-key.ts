@@ -268,6 +268,45 @@ export function updateApiKey({
 				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
+				if(remaining < opts.minimumRemaining){
+					opts.events?.({
+						event: "key.update",
+						success: false,
+						error: {
+							code: "key.invalidRemaining",
+							message: ERROR_CODES.INVALID_REMAINING,
+							details: {
+								maxRemaining: opts.maximumRemaining,
+								recievedRemaining: remaining,
+								minRemaining: opts.minimumRemaining,
+							},
+						},
+						apiKey: null,
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_REMAINING,
+					});
+				}else if(remaining > opts.maximumRemaining){
+					opts.events?.({
+						event: "key.update",
+						success: false,
+						error: {
+							code: "key.invalidRemaining",
+							message: ERROR_CODES.INVALID_REMAINING,
+							details: {
+								maxRemaining: opts.maximumRemaining,
+								recievedRemaining: remaining,
+								minRemaining: opts.minimumRemaining,
+							},
+						},
+						apiKey: null,
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_REMAINING,
+					});
+				}
 				newValues.remaining = remaining;
 			}
 			if (refillAmount !== undefined) {

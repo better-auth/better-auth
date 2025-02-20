@@ -248,6 +248,11 @@ export function createApiKey({
 						error: {
 							code: "key.invalidRemaining",
 							message: ERROR_CODES.INVALID_REMAINING,
+							details: {
+								maxRemaining: opts.maximumRemaining,
+								recievedRemaining: remaining,
+								minRemaining: opts.minimumRemaining,
+							}
 						},
 						user: session.user,
 						apiKey: null,
@@ -263,6 +268,11 @@ export function createApiKey({
 						error: {
 							code: "key.invalidRemaining",
 							message: ERROR_CODES.INVALID_REMAINING,
+							details: {
+								maxRemaining: opts.maximumRemaining,
+								recievedRemaining: remaining,
+								minRemaining: opts.minimumRemaining,
+							}
 						},
 						user: session.user,
 						apiKey: null,

@@ -70,11 +70,22 @@ interface ApiKeyEventError_invalidExpiration extends ApiKeyEventError_base {
 	};
 }
 
+interface ApiKeyEventError_invalidRemaining extends ApiKeyEventError_base {
+	code: "key.invalidRemaining";
+	message: string;
+	details: {
+		minRemaining: number;
+		maxRemaining: number;
+		recievedRemaining: number;
+	};
+}
+
 export type ApiKeyEventError =
 	| ApiKeyEventError_rateLimit
 	| ApiKeyEventError_invalidPrefixLength
 	| ApiKeyEventError_invalidNameLength
 	| ApiKeyEventError_invalidExpiration
+	| ApiKeyEventError_invalidRemaining
 	| ApiKeyEventError_base;
 interface ApiKeyEvents_base {
 	event: ApiKeyEventTypes;
