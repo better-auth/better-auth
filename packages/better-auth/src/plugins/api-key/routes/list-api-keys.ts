@@ -5,7 +5,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-export function listApiKey({
+export function listApiKeys({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,

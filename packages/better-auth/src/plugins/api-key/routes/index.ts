@@ -6,7 +6,8 @@ import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
-import { listApiKey } from "./list-api-keys";
+import { listApiKeys } from "./list-api-keys";
+import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -28,7 +29,9 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
-		startingCharactersConfig: Required<ApiKeyOptions["startingCharactersConfig"]>;
+		startingCharactersConfig: Required<
+			ApiKeyOptions["startingCharactersConfig"]
+		>;
 	};
 
 export function createApiKeyRoutes({
@@ -83,6 +86,9 @@ export function createApiKeyRoutes({
 		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		listApiKeys: listApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		listApiKeys: listApiKeys({ opts, schema, deleteAllExpiredApiKeys }),
+		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
+			deleteAllExpiredApiKeys,
+		}),
 	};
 }
