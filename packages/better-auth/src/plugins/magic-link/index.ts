@@ -217,8 +217,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
 								emailVerified: true,
-								name: name || email,
-							});
+								name: name,
+							}, ctx);
 							user = newUser;
 							if (!user) {
 								throw ctx.redirect(
@@ -233,7 +233,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!user.emailVerified) {
 						await ctx.context.internalAdapter.updateUser(user.id, {
 							emailVerified: true,
-						});
+						}, ctx);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(

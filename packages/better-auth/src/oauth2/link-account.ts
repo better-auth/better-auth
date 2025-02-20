@@ -69,7 +69,7 @@ export async function handleOAuthUserInfo(
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
-				});
+				}, c);
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -93,6 +93,7 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.updateAccount(
 					hasBeenLinked.id,
 					updateData,
+					c
 				);
 			}
 		}
@@ -115,6 +116,7 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},
+					c,
 				)
 				.then((res) => res?.user);
 			if (
