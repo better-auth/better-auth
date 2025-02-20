@@ -21,6 +21,7 @@ import type {
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
+import { base64 } from "@better-auth/utils/base64";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -268,9 +269,41 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+					let { client_id, client_secret } = body;
+					const authorization =
+						ctx.request?.headers.get("authorization") || null;
+					if (
+						authorization &&
+						!client_id &&
+						!client_secret &&
+						authorization.startsWith("Basic ")
+					) {
+						try {
+							const encoded = authorization.replace("Basic ", "");
+							const decoded = new TextDecoder().decode(base64.decode(encoded));
+							if (!decoded.includes(":")) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							const [id, secret] = decoded.split(":");
+							if (!id || !secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							client_id = id;
+							client_secret = secret;
+						} catch (error) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+					}
 					const {
-						client_id,
-						client_secret,
 						grant_type,
 						code,
 						redirect_uri,
