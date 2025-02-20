@@ -6,11 +6,7 @@ import type {
 	User,
 	Verification,
 } from "../types";
-import type {
-	BetterAuthPlugin,
-	HookAfterHandler,
-	HookBeforeHandler,
-} from "./plugins";
+import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
