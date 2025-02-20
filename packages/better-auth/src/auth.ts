@@ -45,7 +45,7 @@ export const betterAuth = <O extends BetterAuthOptions>(options: O) => {
 						? options.trustedOrigins
 						: options.trustedOrigins(request)
 					: []),
-				ctx.baseURL,
+				ctx.options.baseURL!,
 				url.origin,
 			];
 			const { handler } = router(ctx, options);
