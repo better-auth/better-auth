@@ -38,6 +38,7 @@ export const ERROR_CODES = {
 	INVALID_USER_ID_FROM_API_KEY: "The user id from the API key is invalid.",
 	INVALID_API_KEY_GETTER_RETURN_TYPE:
 		"API Key getter returned an invalid key type. Expected string.",
+	SERVER_ONLY_PROPERTY: "The property you're trying to set can only be set from the server auth instance only.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -66,7 +67,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		},
 		startingCharactersConfig: {
 			shouldStore: options?.startingCharactersConfig?.shouldStore ?? true,
-			charactersLength: options?.startingCharactersConfig?.charactersLength ?? 6,
+			charactersLength:
+				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;

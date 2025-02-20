@@ -55,12 +55,26 @@ export function createApiKey({
 				metadata: z.any({ description: "Metadata of the Api Key" }).optional(),
 				refillAmount: z
 					.number({
-						description: "Amount to refill the remaining count of the Api Key",
+						description:
+							"Amount to refill the remaining count of the Api Key. Server Only Property",
 					})
 					.optional(),
 				refillInterval: z
 					.number({
-						description: "Interval to refill the Api Key in milliseconds",
+						description:
+							"Interval to refill the Api Key in milliseconds. Server Only Property.",
+					})
+					.optional(),
+				rateLimitTimeWindow: z
+					.number({
+						description:
+							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
+					})
+					.optional(),
+				rateLimitMax: z
+					.number({
+						description:
+							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. Server Only Property.",
 					})
 					.optional(),
 			}),
@@ -74,6 +88,8 @@ export function createApiKey({
 				metadata,
 				refillAmount,
 				refillInterval,
+				rateLimitMax,
+				rateLimitTimeWindow,
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -104,13 +120,38 @@ export function createApiKey({
 						code: "user.forbidden",
 						message: ERROR_CODES.USER_BANNED,
 					},
-					user: null,
+					user: session.user,
 					apiKey: null,
 				});
 
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.USER_BANNED,
 				});
+			}
+
+			if (typeof ctx.request !== "undefined") {
+				// if this endpoint was being called from the client,
+				// we must make sure they can't use server-only properties.
+				if (
+					refillAmount !== undefined ||
+					refillInterval !== undefined ||
+					rateLimitMax !== undefined ||
+					rateLimitTimeWindow !== undefined
+				) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.SERVER_ONLY_PROPERTY,
+						},
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
+					});
+				}
 			}
 
 			// if metadata is defined, than check that it's an object.
@@ -410,8 +451,9 @@ export function createApiKey({
 				lastRefillAt: null,
 				lastRequest: null,
 				metadata: null,
-				rateLimitMax: opts.rateLimit.maxRequests ?? null,
-				rateLimitTimeWindow: opts.rateLimit.timeWindow ?? null,
+				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
+				rateLimitTimeWindow:
+					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
 				remaining: remaining ?? null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,

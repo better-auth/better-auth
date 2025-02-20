@@ -350,6 +350,32 @@ describe("api-key", async () => {
 		);
 	});
 
+	it("should fail to create API key with custom refillAndAmount from client auth", async () => {
+		const apiKey = await client.apiKey.create(
+			{
+				refillAmount: 10,
+			},
+			{ headers },
+		);
+
+		expect(apiKey.data).toBeNull();
+		expect(apiKey.error).toBeDefined();
+		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
+		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+
+		const apiKey2 = await client.apiKey.create(
+			{
+				refillInterval: 1001,
+			},
+			{ headers },
+		);
+
+		expect(apiKey2.data).toBeNull();
+		expect(apiKey2.error).toBeDefined();
+		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
+		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+	});
+
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
 		let res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
@@ -639,6 +665,46 @@ describe("api-key", async () => {
 		expect(apiKey2?.start).toBeDefined();
 		expect(apiKey2?.start?.length).toEqual(customLength);
 		expect(apiKey2?.start).toEqual(apiKey2?.key?.substring(0, customLength));
+	});
+
+	it("should fail to create API key with custom rate-limit options from client auth", async () => {
+		const apiKey = await client.apiKey.create(
+			{
+				rateLimitMax: 15,
+			},
+			{ headers },
+		);
+
+		expect(apiKey.data).toBeNull();
+		expect(apiKey.error).toBeDefined();
+		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
+		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+
+		const apiKey2 = await client.apiKey.create(
+			{
+				rateLimitTimeWindow: 1001,
+			},
+			{ headers },
+		);
+
+		expect(apiKey2.data).toBeNull();
+		expect(apiKey2.error).toBeDefined();
+		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
+		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+	});
+
+	it("should successfully apply custom rate-limit options on the newly created API key", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				rateLimitMax: 15,
+				rateLimitTimeWindow: 1000,
+			},
+			headers
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey?.rateLimitMax).toEqual(15);
+		expect(apiKey?.rateLimitTimeWindow).toEqual(1000);
 	});
 
 	// =========================================================================

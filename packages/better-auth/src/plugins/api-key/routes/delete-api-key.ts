@@ -62,7 +62,7 @@ export function deleteApiKey({
 						code: "user.forbidden",
 						message: ERROR_CODES.USER_BANNED,
 					},
-					user: null,
+					user: session.user,
 					apiKey: null,
 				});
 
