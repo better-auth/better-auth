@@ -30,7 +30,7 @@ export interface EmailOTPOptions {
 	 */
 	expiresIn?: number;
 	/**
-	 * Function to create OTP
+	 * Custom function to generate otp
 	 */
 	generateOTP?: (
 		data: {
