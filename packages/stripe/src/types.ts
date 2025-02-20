@@ -323,9 +323,6 @@ export interface Customer {
 	id: string;
 	stripeCustomerId?: string;
 	userId: string;
-	name?: string;
-	email?: string;
-	country?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

@@ -22,5 +22,5 @@
 	},
 	"exclude": ["**/dist", "node_modules"],
 	"references": [],
-	"include": ["src/**/*"]
+	"include": ["src"]
 }

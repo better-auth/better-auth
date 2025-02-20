@@ -47,18 +47,6 @@ export const getSchema = (options: StripeOptions) => {
 						field: "id",
 					},
 				},
-				name: {
-					type: "string",
-					required: false,
-				},
-				email: {
-					type: "string",
-					required: false,
-				},
-				country: {
-					type: "string",
-					required: false,
-				},
 				createdAt: {
 					type: "date",
 					required: true,

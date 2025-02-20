@@ -102,7 +102,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
-						return [c.body.successURL, c.body.cancelURL];
+						return [c.body.successURL as string, c.body.cancelURL as string];
 					}),
 					referenceMiddleware("upgrade-subscription"),
 				],
@@ -471,7 +471,26 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 					databaseHooks: {
 						user: {
 							create: {
-								async after(user) {},
+								async after(user, ctx) {
+									if (ctx && options.createCustomerOnSignUp) {
+										const stripeCustomer = await client.customers.create({
+											email: user.email,
+											name: user.name,
+											metadata: {
+												userId: user.id,
+											},
+										});
+										await ctx.context.adapter.create({
+											model: "customer",
+											data: {
+												userId: user.id,
+												stripeCustomerId: stripeCustomer.id,
+												createdAt: new Date(),
+												updatedAt: new Date(),
+											},
+										});
+									}
+								},
 							},
 						},
 					},
