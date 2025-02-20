@@ -386,7 +386,7 @@ export function createApiKey({
 			let start: string | null = null;
 
 			if (opts.startingCharactersConfig.shouldStore) {
-				start = hashed.substring(
+				start = key.substring(
 					0,
 					opts.startingCharactersConfig.charactersLength,
 				);
