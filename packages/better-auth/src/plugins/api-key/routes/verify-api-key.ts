@@ -247,11 +247,8 @@ export function verifyApiKey({
 
 			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
 
-			console.log(`ratelimited?`, !success, update);
-
 			let newApiKey: ApiKey = apiKey;
 			if (update) {
-				console.log(`updating`);
 				try {
 					const key = await ctx.context.adapter.update<ApiKey>({
 						model: schema.apikey.modelName,
