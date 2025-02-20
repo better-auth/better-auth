@@ -645,7 +645,7 @@ export const createInternalAdapter = (
 				[
 					{
 						field: "email",
-						value: email,
+						value: email.toLowerCase(),
 					},
 				],
 				"user",
