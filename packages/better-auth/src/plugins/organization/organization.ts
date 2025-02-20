@@ -45,7 +45,6 @@ import {
 import {
 	createTeam,
 	listOrganizationTeams,
-	getTeam,
 	removeTeam,
 	updateTeam,
 } from "./routes/crud-team";
@@ -343,7 +342,6 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		listOrganizationTeams,
 		removeTeam,
 		updateTeam,
-		getTeam,
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -361,6 +359,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 				team: {
 					modelName: options?.schema?.team?.modelName,
 					fields: {
+						name: {
+							type: "string",
+							required: true,
+							fieldName: options?.schema?.team?.fields?.name,
+						},
 						organizationId: {
 							type: "string",
 							required: true,
@@ -370,20 +373,15 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 							},
 							fieldName: options?.schema?.team?.fields?.organizationId,
 						},
-						name: {
-							type: "string",
+						createdAt: {
+							type: "date",
 							required: true,
-							fieldName: options?.schema?.team?.fields?.name,
+							fieldName: options?.schema?.team?.fields?.createdAt,
 						},
-						description: {
-							type: "string",
+						updatedAt: {
+							type: "date",
 							required: false,
-							fieldName: options?.schema?.team?.fields?.description,
-						},
-						status: {
-							type: "string",
-							required: true,
-							fieldName: options?.schema?.team?.fields?.status,
+							fieldName: options?.schema?.team?.fields?.updatedAt,
 						},
 					},
 				},

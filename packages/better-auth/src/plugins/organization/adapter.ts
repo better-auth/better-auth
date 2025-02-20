@@ -431,10 +431,22 @@ export const getOrgAdapter = (
 					},
 				],
 			});
+			const members = await adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
 			if (!team) {
 				return null;
 			}
-			return team;
+			return {
+				...team,
+				members,
+			};
 		},
 		updateTeam: async (
 			teamId: string,

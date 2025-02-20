@@ -7,14 +7,7 @@ import { generateId } from "../../../utils";
 import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../organization";
-export const teamSchema = z.object({
-	id: z.string().default(generateId),
-	name: z.string().min(1, "Team name is required"),
-	description: z.optional(z.string().min(1, "Description is required")),
-	status: z.string().optional(), // Status of the team
-	organizationId: z.string().min(1, "Organization ID is required"),
-	createdAt: z.date(),
-});
+import { teamSchema } from "../schema";
 
 export const createTeam = <O extends OrganizationOptions | undefined>(
 	options?: O,
@@ -25,11 +18,7 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			method: "POST",
 			body: z.object({
 				organizationId: z.string().optional(),
-				data: z.object({
-					name: z.string(),
-					description: z.string().optional(),
-					status: z.string(),
-				}),
+				name: z.string(),
 			}),
 			use: [orgMiddleware],
 		},
@@ -77,11 +66,10 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			}
 			const createdTeam = await adapter.createTeam({
 				id: generateId(),
-				name: ctx.body.data.name,
-				description: ctx.body.data.description || "",
-				status: ctx.body.data.status,
+				name: ctx.body.name,
 				organizationId,
 				createdAt: new Date(),
+				updatedAt: new Date(),
 			});
 			return ctx.json(createdTeam);
 		},
@@ -167,73 +155,27 @@ export const updateTeam = createAuthEndpoint(
 
 		const updatedTeam = await adapter.updateTeam(team.id, {
 			name: ctx.body.data.name,
-			description: ctx.body.data.description,
-			status: ctx.body.data.status,
 		});
 
 		return ctx.json(updatedTeam);
 	},
 );
 
-export const getTeam = createAuthEndpoint(
-	"/organization/get-team",
-	{
-		method: "GET",
-		use: [orgMiddleware, orgSessionMiddleware],
-		query: z.object({
-			teamId: z.string({
-				description: "The team ID to fetch the details of the team",
-			}),
-		}),
-	},
-	async (ctx) => {
-		const session = ctx.context.session;
-		const organizationId = session.session.activeOrganizationId;
-
-		if (!organizationId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				},
-			});
-		}
-
-		const { teamId } = ctx.query;
-		if (!teamId) {
-			return ctx.json(null, {
-				status: 400,
-				body: {
-					message: "Team ID is required",
-				},
-			});
-		}
-
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-
-		const team = await adapter.findTeamById(teamId);
-		if (!team || team.organizationId !== organizationId) {
-			return ctx.json(null, {
-				status: 404,
-				body: {
-					message:
-						"Team not found or does not belong to the current organization.",
-				},
-			});
-		}
-
-		return ctx.json(team);
-	},
-);
 export const listOrganizationTeams = createAuthEndpoint(
 	"/organization/list-teams",
 	{
 		method: "GET",
+		query: z.optional(
+			z.object({
+				organizationId: z.string().optional(),
+			}),
+		),
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
-		const organizationId = session.session.activeOrganizationId;
+		const organizationId =
+			session.session.activeOrganizationId || ctx.query?.organizationId;
 
 		if (!organizationId) {
 			return ctx.json(null, {

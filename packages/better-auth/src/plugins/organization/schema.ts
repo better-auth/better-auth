@@ -41,12 +41,10 @@ export const invitationSchema = z.object({
 });
 export const teamSchema = z.object({
 	id: z.string().default(generateId),
-	name: z.string().min(1, "Team name is required"),
-	description: z.optional(z.string().min(1, "Description is required")),
-	metadata: z.record(z.string(), z.any()).optional(),
-	status: z.string().optional(), // status of the team
-	organizationId: z.string(), // Organization ID (required)
-	createdAt: z.date(), // Team creation date (required)
+	name: z.string().min(1),
+	organizationId: z.string(),
+	createdAt: z.date(),
+	updatedAt: z.date().optional(),
 });
 export type Organization = z.infer<typeof organizationSchema> &
 	Record<string, any>;

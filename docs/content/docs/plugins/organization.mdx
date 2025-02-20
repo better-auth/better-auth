@@ -732,6 +732,97 @@ const canCreateProject = client.organization.checkRolePermission({
 });
 ```
 
+## Teams
+
+Teams allow you to group members within an organization. You can enable teams by passing `teams.enabled` to the organization plugin.
+
+### Enabling Teams
+
+#### Server Setup
+To enable teams on the server, update your authentication configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            teams: {
+                enabled: true
+            }
+        })
+    ]
+})
+```
+
+#### Client Setup
+For client-side support, pass `teams.enabled` to the client plugin:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+export const authClient = createAuthClient({
+    plugins: [
+        organizationClient({
+            teams: {
+                enabled: true
+            }
+        })
+    ]
+})
+```
+
+### Database Migration
+Once teams are enabled, run the appropriate command to update your database schema.
+
+For the built-in database:
+```bash
+npx @better-auth/cli migrate
+```
+
+For custom adapters:
+```bash
+npx @better-auth/cli generate
+```
+
+## Managing Teams
+
+### Creating a Team
+Use the `createTeam` function to add a new team to an organization:
+
+```ts title="auth-client.ts"
+await authClient.organization.createTeam({
+    name: "My Team"
+})
+```
+
+> **Note:** Once teams are enabled, `getFullOrganization` will return all teams within an organization.
+
+### Updating a Team
+Modify a team's details using `updateTeam`:
+
+```ts title="auth-client.ts"
+await authClient.organization.updateTeam({
+    name: "Updated Team Name"
+})
+```
+
+### Listing Teams
+Retrieve all teams within an organization using `listTeams`:
+
+```ts
+await authClient.organization.listTeams()
+```
+
+To fetch teams for a specific organization, pass an `organizationId`:
+
+```ts
+await authClient.organization.listTeams({
+    organizationId: "org-id"
+})
+```
+
+
 ## Schema
 
 The organization plugin adds the following tables to the database:
@@ -877,6 +968,44 @@ You need to add one more field to the session table to store the active organiza
     },
   ]}
   />
+
+### Teams (optional)
+
+Table Name: `team`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each team",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the team" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was created" 
+    },
+    { 
+      name: "updatedAt", 
+      type: "Date", 
+      isOptional: true,
+      description: "Timestamp of when the team was created" 
+    },
+  ]}
+  />
+/>
 
 ### Customizing the Schema
 
