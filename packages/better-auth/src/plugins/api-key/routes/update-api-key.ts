@@ -27,6 +27,11 @@ export function updateApiKey({
 				keyId: z.string({
 					description: "The id of the Api Key",
 				}),
+				name: z
+					.string({
+						description: "The name of the key",
+					})
+					.optional(),
 				enabled: z
 					.boolean({
 						description: "Whether the Api Key is enabled or not",
@@ -60,8 +65,15 @@ export function updateApiKey({
 			},
 		},
 		async (ctx) => {
-			const { keyId, expiresIn, enabled, metadata, refillAmount, remaining } =
-				ctx.body;
+			const {
+				keyId,
+				expiresIn,
+				enabled,
+				metadata,
+				refillAmount,
+				remaining,
+				name,
+			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
 
@@ -127,13 +139,103 @@ export function updateApiKey({
 				});
 			}
 
-
 			let newValues: Partial<ApiKey> = {};
+
+			if (name !== undefined) {
+				if (name.length < opts.minimumNameLength) {
+					opts.events?.({
+						success: false,
+						event: "key.update",
+						apiKey: null,
+						error: {
+							code: "key.invalidNameLength",
+							message: ERROR_CODES.INVALID_NAME_LENGTH,
+							details: {
+								maxLength: opts.maximumNameLength,
+								recievedLength: name.length,
+								minLength: opts.minimumNameLength,
+							},
+						},
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_NAME_LENGTH,
+					});
+				} else if (name.length > opts.maximumNameLength) {
+					opts.events?.({
+						success: false,
+						event: "key.update",
+						apiKey: null,
+						error: {
+							code: "key.invalidNameLength",
+							message: ERROR_CODES.INVALID_NAME_LENGTH,
+							details: {
+								maxLength: opts.maximumNameLength,
+								recievedLength: name.length,
+								minLength: opts.minimumNameLength,
+							},
+						},
+						user: session.user,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_NAME_LENGTH,
+					});
+				}
+				newValues.name = name;
+			}
 
 			if (enabled !== undefined) {
 				newValues.enabled = enabled;
 			}
 			if (expiresIn !== undefined) {
+				if(opts.keyExpiration.disableCustomExpiresTime === true){
+					opts.events?.({
+						event: "key.update",
+						success: false,
+						error: {
+							code: "key.disabledExpiration",
+							message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
+						},
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
+					});
+				}
+				if(expiresIn !== null){
+					// if expires is not null, check if it's under the valid range
+					// if it IS null, this means the user wants to disable expiration time on the key
+					if(expiresIn < opts.keyExpiration.minExpiresIn){
+						opts.events?.({
+							event: "key.update",
+							success: false,
+							error: {
+								code: "key.invalidExpiration",
+								message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+							},
+							user: session.user,
+							apiKey: null,
+						});
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						});
+					}else if(expiresIn > opts.keyExpiration.maxExpiresIn){
+						opts.events?.({
+							event: "key.update",
+							success: false,
+							error: {
+								code: "key.invalidExpiration",
+								message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+							},
+							user: session.user,
+							apiKey: null,
+						});
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						});
+					}
+				}
 				newValues.expiresAt = expiresIn ? getDate(expiresIn, "ms") : null;
 			}
 			if (metadata !== undefined) {
@@ -161,45 +263,56 @@ export function updateApiKey({
 				newValues.refillAmount = refillAmount;
 			}
 
-			let newApiKey: ApiKey = apiKey;
-				try {
-					let result = await ctx.context.adapter.update<ApiKey>({
-						model: schema.apikey.modelName,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-							{
-								field: "userId",
-								value: session.user.id,
-							},
-						],
-						update: {
-							lastRequest: new Date(),
-							remaining:
-								apiKey.remaining === null ? null : apiKey.remaining - 1,
-							...newValues,
-						},
-					});
-					if(result) newApiKey = result;
-				} catch (error: any) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "database.error",
-							message: error?.message,
-						},
-						user: session.user,
-						apiKey: apiKey,
-					});
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: error?.message,
-					});
-				}
+			if (Object.keys(newValues).length === 0) {
+				opts.events?.({
+					event: "key.update",
+					success: false,
+					error: {
+						code: "request.noValuesToUpdate",
+						message: ERROR_CODES.NO_VALUES_TO_UPDATE,
+					},
+					apiKey: null,
+					user: session.user,
+				});
+			}
 
-	
+			let newApiKey: ApiKey = apiKey;
+			try {
+				let result = await ctx.context.adapter.update<ApiKey>({
+					model: schema.apikey.modelName,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
+					update: {
+						lastRequest: new Date(),
+						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
+						...newValues,
+					},
+				});
+				if (result) newApiKey = result;
+			} catch (error: any) {
+				opts.events?.({
+					event: "key.update",
+					success: false,
+					error: {
+						code: "database.error",
+						message: error?.message,
+					},
+					user: session.user,
+					apiKey: apiKey,
+				});
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: error?.message,
+				});
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
@@ -210,7 +323,7 @@ export function updateApiKey({
 				apiKey: newApiKey,
 			});
 
-			let resApiKey:Partial<ApiKey> = newApiKey;
+			let resApiKey: Partial<ApiKey> = newApiKey;
 			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
 			delete resApiKey["key"];
 

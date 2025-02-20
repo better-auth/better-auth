@@ -31,6 +31,8 @@ export const ERROR_CODES = {
 	INVALID_NAME_LENGTH: "The name length is either too large or too small.",
 	METADATA_DISABLED: "Metadata is disabled.",
 	RATE_LIMIT_EXCEEDED: "Rate limit exceeded.",
+	NO_VALUES_TO_UPDATE: "No values to update.",
+	KEY_DISABLED_EXPIRATION: "Custom key expiration values are disabled.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {

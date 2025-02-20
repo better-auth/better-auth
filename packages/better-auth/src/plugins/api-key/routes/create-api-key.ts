@@ -181,6 +181,22 @@ export function createApiKey({
 			}
 
 			if (expiresIn) {
+				if(opts.keyExpiration.disableCustomExpiresTime === true){
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error: {
+							code: "key.disabledExpiration",
+							message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
+						},
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
+					});
+				}
+
 				const expiresIn_in_days = expiresIn / 86_400_000;
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {

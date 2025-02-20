@@ -14,6 +14,7 @@ interface ApiKeyEventError_base {
 	 * * `user.forbidden`
 	 * * `key.useageExceeded`
 	 * * `key.rateLimited`
+	 * * `key.disabledExpiration`
 	 * * `user.unauthorized`
 	 * * `key.disabled`
 	 * * `key.expired`
@@ -22,6 +23,7 @@ interface ApiKeyEventError_base {
 	 * * `key.invalidRemaining`
 	 * * `key.invalidPrefixLength`
 	 * * `key.invalidNameLength`
+	 * * `request.noValuesToUpdate`
 	 */
 	code: ApiKeyFailedReasons;
 	/**
@@ -296,6 +298,8 @@ export type ApiKeyFailedReasons =
 	| "key.invalidExpiration"
 	| "key.invalidRemaining"
 	| "key.invalidPrefixLength"
+	| "request.noValuesToUpdate"
+	| "key.disabledExpiration"
 	| "key.invalidNameLength";
 
 export type ApiKey = {
