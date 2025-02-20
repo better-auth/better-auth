@@ -30,6 +30,7 @@ export const ERROR_CODES = {
 	INVALID_PREFIX_LENGTH: "The prefix length is either too large or too small.",
 	INVALID_NAME_LENGTH: "The name length is either too large or too small.",
 	METADATA_DISABLED: "Metadata is disabled.",
+	RATE_LIMIT_EXCEEDED: "Rate limit exceeded.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {

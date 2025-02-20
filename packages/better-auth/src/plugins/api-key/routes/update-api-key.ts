@@ -3,7 +3,6 @@ import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { isRateLimited } from "../rate-limit";
 import { getDate } from "../../../utils/date";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -71,8 +70,10 @@ export function updateApiKey({
 				opts.events?.({
 					event: "key.update",
 					success: false,
-					error_code: "user.unauthorized",
-					error_message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					error: {
+						code: "user.unauthorized",
+						message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -86,8 +87,10 @@ export function updateApiKey({
 				opts.events?.({
 					event: "key.update",
 					success: false,
-					error_code: "user.forbidden",
-					error_message: ERROR_CODES.USER_BANNED,
+					error: {
+						code: "user.forbidden",
+						message: ERROR_CODES.USER_BANNED,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -112,8 +115,10 @@ export function updateApiKey({
 				opts.events?.({
 					event: "key.update",
 					success: false,
-					error_code: "key.notFound",
-					error_message: ERROR_CODES.KEY_NOT_FOUND,
+					error: {
+						code: "key.notFound",
+						message: ERROR_CODES.KEY_NOT_FOUND,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -122,7 +127,6 @@ export function updateApiKey({
 				});
 			}
 
-			const { message, success, update } = isRateLimited(apiKey);
 
 			let newValues: Partial<ApiKey> = {};
 
@@ -137,8 +141,10 @@ export function updateApiKey({
 					opts.events?.({
 						event: "key.update",
 						success: false,
-						error_code: "request.forbidden",
-						error_message: ERROR_CODES.INVALID_METADATA_TYPE,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.INVALID_METADATA_TYPE,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -156,7 +162,6 @@ export function updateApiKey({
 			}
 
 			let newApiKey: ApiKey | null = apiKey;
-			if (update) {
 				try {
 					newApiKey = await ctx.context.adapter.update<ApiKey>({
 						model: schema.apikey.modelName,
@@ -181,8 +186,10 @@ export function updateApiKey({
 					opts.events?.({
 						event: "key.update",
 						success: false,
-						error_code: "database.error",
-						error_message: error?.message,
+						error: {
+							code: "database.error",
+							message: error?.message,
+						},
 						user: session.user,
 						apiKey: apiKey,
 					});
@@ -190,30 +197,14 @@ export function updateApiKey({
 						message: error?.message,
 					});
 				}
-			}
 
-			// If rate limit failed.
-			if (success === false) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error_code: "key.rateLimited",
-					error_message: message,
-					user: session.user,
-					apiKey: newApiKey,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: message || "Rate limit exceeded.",
-				});
-			}
-
+	
 			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
 				event: "key.update",
 				success: true,
-				error_code: null,
-				error_message: null,
+				error: null,
 				user: session.user,
 				apiKey: newApiKey,
 			});

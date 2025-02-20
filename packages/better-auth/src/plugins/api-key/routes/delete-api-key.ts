@@ -41,8 +41,10 @@ export function deleteApiKey({
 				opts.events?.({
 					event: "key.delete",
 					success: false,
-					error_code: "user.unauthorized",
-					error_message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					error: {
+						code: "user.unauthorized",
+						message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -56,8 +58,10 @@ export function deleteApiKey({
 				opts.events?.({
 					event: "key.delete",
 					success: false,
-					error_code: "user.forbidden",
-					error_message: ERROR_CODES.USER_BANNED,
+					error: {
+						code: "user.forbidden",
+						message: ERROR_CODES.USER_BANNED,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -86,8 +90,10 @@ export function deleteApiKey({
 				opts.events?.({
 					event: "key.delete",
 					success: false,
-					error_code: "key.notFound",
-					error_message: ERROR_CODES.KEY_NOT_FOUND,
+					error: {
+						code: "key.notFound",
+						message: ERROR_CODES.KEY_NOT_FOUND,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -114,8 +120,10 @@ export function deleteApiKey({
 				opts.events?.({
 					event: "key.delete",
 					success: false,
-					error_code: "database.error",
-					error_message: error?.message,
+					error: {
+						code: "database.error",
+						message: error?.message,
+					},
 					user: session.user,
 					apiKey: apiKey,
 				});
@@ -129,8 +137,7 @@ export function deleteApiKey({
 			opts.events?.({
 				event: "key.delete",
 				success: true,
-				error_code: null,
-				error_message: null,
+				error: null,
 				user: session.user,
 				apiKey: null,
 			});

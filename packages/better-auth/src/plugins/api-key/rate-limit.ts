@@ -1,8 +1,10 @@
+import { ERROR_CODES } from ".";
 import type { ApiKey } from "./types";
 
 interface RateLimitResult {
 	success: boolean;
 	message: string | null;
+	tryAgainIn: number | null;
 	update: Partial<ApiKey> | null;
 }
 
@@ -30,6 +32,7 @@ export function isRateLimited(
             success: true,
             message: null,
             update: null,
+			tryAgainIn: null
         }
     }
 
@@ -39,6 +42,7 @@ export function isRateLimited(
 			success: true,
 			message: null,
 			update: { lastRequest: now, requestCount: 1 },
+			tryAgainIn: null,
 		};
 	}
 
@@ -50,6 +54,7 @@ export function isRateLimited(
 			success: true,
 			message: null,
 			update: { lastRequest: now, requestCount: 1 },
+			tryAgainIn: null
 		};
 	}
 
@@ -57,10 +62,9 @@ export function isRateLimited(
 		// Rate limit exceeded.
 		return {
 			success: false,
-			message: `Rate limit exceeded. Try again in ${Math.ceil(
-				rateLimitTimeWindow - timeSinceLastRequest,
-			)} seconds.`,
+			message: ERROR_CODES.RATE_LIMIT_EXCEEDED,
 			update: null,
+			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
 		};
 	}
 
@@ -69,6 +73,7 @@ export function isRateLimited(
 	return {
 		success: true,
 		message: null,
+		tryAgainIn: null,
 		update: { lastRequest: now, requestCount: requestCount },
 	};
 }

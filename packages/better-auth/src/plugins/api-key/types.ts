@@ -5,14 +5,9 @@ import type {
 } from "../../types";
 import type { apiKeySchema } from "./schema";
 
-interface ApiKeyEvents_base {
-	event: ApiKeyEventTypes;
+interface ApiKeyEventError_base {
 	/**
-	 * if the event was successful, this will be true. Otherwise it will be false.
-	 */
-	success: boolean;
-	/**
-	 * if the event wasn't successful, the error code will be passed here. Otherwise it will be null.
+	 * Error code
 	 *
 	 * Possible values are:
 	 * * `key.notFound`
@@ -28,11 +23,56 @@ interface ApiKeyEvents_base {
 	 * * `key.invalidPrefixLength`
 	 * * `key.invalidNameLength`
 	 */
-	error_code: ApiKeyFailedReasons | null;
+	code: ApiKeyFailedReasons;
 	/**
-	 * if the event wasn't successful, the error message will be passed here. Otherwise it will be null.
+	 * Error message
 	 */
-	error_message: string | null;
+	message: string;
+}
+
+interface ApiKeyEventError_rateLimit extends ApiKeyEventError_base {
+	code: "key.rateLimited";
+	message: string;
+	details: {
+		tryAgainIn: number;
+	};
+}
+
+interface ApiKeyEventError_invalidPrefixLength extends ApiKeyEventError_base {
+	code: "key.invalidPrefixLength";
+	message: string;
+	details: {
+		minLength: number;
+		maxLength: number;
+		recievedLength: number;
+	};
+}
+
+interface ApiKeyEventError_invalidNameLength extends ApiKeyEventError_base {
+	code: "key.invalidNameLength";
+	message: string;
+	details: {
+		minLength: number;
+		maxLength: number;
+		recievedLength: number;
+	};
+}
+
+export type ApiKeyEventError =
+	| ApiKeyEventError_base
+	| ApiKeyEventError_rateLimit
+	| ApiKeyEventError_invalidPrefixLength
+	| ApiKeyEventError_invalidNameLength;
+interface ApiKeyEvents_base {
+	event: ApiKeyEventTypes;
+	/**
+	 * if the event was successful, this will be true. Otherwise it will be false.
+	 */
+	success: boolean;
+	/**
+	 * if the event wasn't successful, the error object will be passed here. Otherwise it will be null.
+	 */
+	error: ApiKeyEventError | null;
 	/**
 	 * User object.
 	 *
@@ -224,14 +264,7 @@ interface ApiKeyOptionsBase {
 	/**
 	 * capture events. Useful for analytical purposes.
 	 */
-	events?: ({
-		event,
-		success,
-		user,
-		apiKey,
-		error_code,
-		error_message,
-	}: ApiKeyEvents) => void;
+	events?: ({ event, success, user, apiKey, error }: ApiKeyEvents) => void;
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *

@@ -83,8 +83,10 @@ export function createApiKey({
 				opts.events?.({
 					event: "key.create",
 					success: false,
-					error_code: "user.unauthorized",
-					error_message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					error: {
+						code: "user.unauthorized",
+						message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -98,8 +100,10 @@ export function createApiKey({
 				opts.events?.({
 					event: "key.create",
 					success: false,
-					error_code: "user.forbidden",
-					error_message: ERROR_CODES.USER_BANNED,
+					error: {
+						code: "user.forbidden",
+						message: ERROR_CODES.USER_BANNED,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -115,8 +119,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "request.forbidden",
-						error_message: ERROR_CODES.METADATA_DISABLED,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.METADATA_DISABLED,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -128,8 +134,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "request.forbidden",
-						error_message: ERROR_CODES.INVALID_METADATA_TYPE,
+						error: {
+							code: "request.forbidden",
+							message: ERROR_CODES.INVALID_METADATA_TYPE,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -144,8 +152,10 @@ export function createApiKey({
 				opts.events?.({
 					event: "key.create",
 					success: false,
-					error_code: "request.forbidden",
-					error_message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					error: {
+						code: "request.forbidden",
+						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -158,8 +168,10 @@ export function createApiKey({
 				opts.events?.({
 					event: "key.create",
 					success: false,
-					error_code: "request.forbidden",
-					error_message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					error: {
+						code: "request.forbidden",
+						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -175,8 +187,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidExpiration",
-						error_message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						error: {
+							code: "key.invalidExpiration",
+							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -187,8 +201,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidExpiration",
-						error_message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						error: {
+							code: "key.invalidExpiration",
+							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -203,8 +219,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidRemaining",
-						error_message: ERROR_CODES.INVALID_REMAINING,
+						error: {
+							code: "key.invalidRemaining",
+							message: ERROR_CODES.INVALID_REMAINING,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -216,8 +234,10 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidRemaining",
-						error_message: ERROR_CODES.INVALID_REMAINING,
+						error: {
+							code: "key.invalidRemaining",
+							message: ERROR_CODES.INVALID_REMAINING,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -232,8 +252,15 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidPrefixLength",
-						error_message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+						error: {
+							code: "key.invalidPrefixLength",
+							message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+							details: {
+								minLength: opts.minimumPrefixLength,
+								maxLength: opts.maximumPrefixLength,
+								recievedLength: prefix.length,
+							},
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -245,8 +272,15 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidPrefixLength",
-						error_message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+						error: {
+							code: "key.invalidPrefixLength",
+							message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+							details: {
+								minLength: opts.minimumPrefixLength,
+								maxLength: opts.maximumPrefixLength,
+								recievedLength: prefix.length,
+							},
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -261,8 +295,15 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidNameLength",
-						error_message: ERROR_CODES.INVALID_NAME_LENGTH,
+						error: {
+							code: "key.invalidNameLength",
+							message: ERROR_CODES.INVALID_NAME_LENGTH,
+							details: {
+								minLength: opts.minimumNameLength,
+								maxLength: opts.maximumNameLength,
+								recievedLength: name.length,
+							},
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -274,8 +315,15 @@ export function createApiKey({
 					opts.events?.({
 						event: "key.create",
 						success: false,
-						error_code: "key.invalidNameLength",
-						error_message: ERROR_CODES.INVALID_NAME_LENGTH,
+						error: {
+							code: "key.invalidNameLength",
+							message: ERROR_CODES.INVALID_NAME_LENGTH,
+							details: {
+								minLength: opts.minimumNameLength,
+								maxLength: opts.maximumNameLength,
+								recievedLength: name.length,
+							},
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -343,8 +391,7 @@ export function createApiKey({
 			opts.events?.({
 				event: "key.create",
 				success: true,
-				error_code: null,
-				error_message: null,
+				error: null,
 				user: session.user,
 				apiKey: apiKey,
 			});

@@ -44,8 +44,10 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "user.unauthorized",
-					error_message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					error: {
+						code: "user.unauthorized",
+						message: ERROR_CODES.UNAUTHORIZED_SESSION,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -59,8 +61,10 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "user.forbidden",
-					error_message: ERROR_CODES.USER_BANNED,
+					error: {
+						code: "user.forbidden",
+						message: ERROR_CODES.USER_BANNED,
+					},
 					user: null,
 					apiKey: null,
 				});
@@ -92,8 +96,10 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "key.notFound",
-					error_message: ERROR_CODES.KEY_NOT_FOUND,
+					error: {
+						code: "key.notFound",
+						message: ERROR_CODES.KEY_NOT_FOUND,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -107,8 +113,10 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "key.disabled",
-					error_message: ERROR_CODES.KEY_DISABLED,
+					error: {
+						code: "key.disabled",
+						message: ERROR_CODES.KEY_DISABLED,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -125,8 +133,10 @@ export function verifyApiKey({
 					opts.events?.({
 						event: "key.verify",
 						success: false,
-						error_code: "key.expired",
-						error_message: ERROR_CODES.KEY_EXPIRED,
+						error: {
+							code: "key.expired",
+							message: ERROR_CODES.KEY_EXPIRED,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -165,8 +175,10 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "key.expired",
-					error_message: ERROR_CODES.KEY_EXPIRED,
+					error: {
+						code: "key.expired",
+						message: ERROR_CODES.KEY_EXPIRED,
+					},
 					user: session.user,
 					apiKey: null,
 				});
@@ -216,8 +228,10 @@ export function verifyApiKey({
 					opts.events?.({
 						event: "key.verify",
 						success: false,
-						error_code: "key.useageExceeded",
-						error_message: ERROR_CODES.USAGE_EXCEEDED,
+						error: {
+							code: "key.useageExceeded",
+							message: ERROR_CODES.USAGE_EXCEEDED,
+						},
 						user: session.user,
 						apiKey: null,
 					});
@@ -231,10 +245,13 @@ export function verifyApiKey({
 
 			apiKey.refillInterval;
 
-			const { message, success, update } = isRateLimited(apiKey);
+			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
+
+			console.log(`ratelimited?`, !success, update);
 
 			let newApiKey: ApiKey = apiKey;
 			if (update) {
+				console.log(`updating`);
 				try {
 					const key = await ctx.context.adapter.update<ApiKey>({
 						model: schema.apikey.modelName,
@@ -245,7 +262,7 @@ export function verifyApiKey({
 							},
 						],
 						update: {
-							lastRequest: new Date(),
+							...update,
 							remaining,
 							lastRefillAt,
 						},
@@ -255,8 +272,10 @@ export function verifyApiKey({
 					opts.events?.({
 						event: "key.verify",
 						success: false,
-						error_code: "database.error",
-						error_message: error?.message,
+						error: {
+							code: "database.error",
+							message: error?.message,
+						},
 						user: session.user,
 						apiKey: apiKey,
 					});
@@ -271,8 +290,13 @@ export function verifyApiKey({
 				opts.events?.({
 					event: "key.verify",
 					success: false,
-					error_code: "key.rateLimited",
-					error_message: message,
+					error: {
+						code: "key.rateLimited",
+						message: message!,
+						details: {
+							tryAgainIn: tryAgainIn!,
+						},
+					},
 					user: session.user,
 					apiKey: newApiKey,
 				});
@@ -286,8 +310,7 @@ export function verifyApiKey({
 			opts.events?.({
 				event: "key.verify",
 				success: true,
-				error_code: null,
-				error_message: null,
+				error: null,
 				user: session.user,
 				apiKey: newApiKey,
 			});
