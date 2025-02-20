@@ -9,16 +9,17 @@ describe("api-key", async () => {
 		{
 			plugins: [
 				apiKey({
-					// events({ event, success, user, apiKey, error_code, error_message }) {
-					// 	console.log({
-					// 		event,
-					// 		success,
-					// 		user,
-					// 		apiKey,
-					// 		error_code,
-					// 		error_message,
-					// 	});
-					// },
+					events({ event, success, user, apiKey, error }) {
+						// if (!success) {
+						// 	console.log({
+						// 		event,
+						// 		success,
+						// 		user,
+						// 		apiKey,
+						// 		error,
+						// 	});
+						// }
+					},
 					enableMetadata: true,
 				}),
 			],
@@ -263,8 +264,8 @@ describe("api-key", async () => {
 					apiKey({
 						enableMetadata: true,
 						keyExpiration: {
-							disableCustomExpiresTime: true
-						}
+							disableCustomExpiresTime: true,
+						},
 					}),
 				],
 			},
@@ -288,13 +289,15 @@ describe("api-key", async () => {
 				headers,
 			});
 			result.data = apiKey2;
-		} catch (error:any) {
+		} catch (error: any) {
 			result.error = error;
 		}
 
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_DISABLED_EXPIRATION);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+		);
 	});
 
 	it("should create an API key with an expiresIn that's smaller than the allowed minimum", async () => {
@@ -889,11 +892,429 @@ describe("api-key", async () => {
 			headers,
 		});
 
-
 		expect(apiKey).toBeDefined();
 		expect(apiKey.name).not.toEqual(firstApiKey.name);
 		expect(apiKey.name).toEqual(newName);
 	});
+
+	it("should fail to update api key name with a length larger than the allowed maximum", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					name: "test-api-key-that-is-longer-than-the-allowed-maximum",
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+	});
+
+	it("should fail to update api key name with a length smaller than the allowed minimum", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					name: "",
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+	});
+
+	it("should fail to update api key with no values to update", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+	});
+
+	it("should update api key expiresIn value", async () => {
+		const expiresIn = 1000 * 60 * 60 * 24 * 7; // 7 days
+		const expectedResult = new Date().getTime() + expiresIn;
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				expiresIn: expiresIn,
+			},
+			headers,
+		});
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.expiresAt).toBeDefined();
+		expect(apiKey.expiresAt?.getTime()).toBeGreaterThanOrEqual(expectedResult);
+	});
+
+	it("should fail to update expiresIn value if `disableCustomExpiresTime` is enabled", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							disableCustomExpiresTime: true,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
+
+		if (!firstApiKey) return;
+
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					expiresIn: 1000 * 60 * 60 * 24 * 7, // 7 days
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+		);
+	});
+
+	it("should fail to update expiresIn value if it's smaller than the allowed minimum", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							minExpiresIn: 1,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
+
+		if (!firstApiKey) return;
+
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					expiresIn: 0,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+		);
+	});
+
+	it("should fail to update expiresIn value if it's larger than the allowed maximum", async () => {
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							maxExpiresIn: 1,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
+		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
+
+		if (!firstApiKey) return;
+
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					expiresIn: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+		);
+	});
+
+	it("should update API key remaining count", async () => {
+		const remaining = 100;
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				remaining: remaining,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.remaining).toEqual(remaining);
+	});
+
+	it("should fail to update the remaining count if it's smaller than the allowed minimum", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					remaining: 0,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
+	});
+
+	it("should fail to update the remaining count if it's larger than the allowed maximum", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					remaining: Number.MAX_SAFE_INTEGER,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
+	});
+
+	it("should fail update the refillInterval value since it requires refillAmount as well", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					refillInterval: 1000,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");	
+		expect(result.error?.body.message).toEqual(ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED);
+	});
+
+	it("should fail update the refillAmount value since it requires refillInterval as well", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					refillAmount: 10,
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED);
+	});
+
+	it("should update the refillInterval and refillAmount value", async () => {
+		const refillInterval = 10000;
+		const refillAmount = 100;
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				refillInterval: refillInterval,
+				refillAmount: refillAmount,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.refillInterval).toEqual(refillInterval);
+		expect(apiKey.refillAmount).toEqual(refillAmount);
+	});
+
+	it('should update api key enable value', async () => {
+		const newValue = false;
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				enabled: newValue,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.enabled).toEqual(newValue);
+	})
+
+	it("should fail to update metadata with invalid metadata type", async () => {
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.updateApiKey({
+				body: {
+					keyId: firstApiKey.id,
+					metadata: "invalid",
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("BAD_REQUEST");
+		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_METADATA_TYPE);
+	});
+
+	it("should update metadata with valid metadata type", async () => {
+		const metadata = {
+			test: "test-123",
+		};
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				metadata: metadata,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.metadata).toEqual(metadata);
+	});
+
+	it("update api key's returned metadata should be an object", async () => {
+		const metadata = {
+			test: "test-12345",
+		};
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: firstApiKey.id,
+				metadata: metadata,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.metadata?.test).toBeDefined();
+		expect(apiKey.metadata?.test).toEqual(metadata.test);
+	});
+	
 
 	// =========================================================================
 	// DELETE API KEY
