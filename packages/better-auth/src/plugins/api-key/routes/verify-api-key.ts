@@ -247,39 +247,41 @@ export function verifyApiKey({
 
 			const { message, success, update, tryAgainIn } = isRateLimited(apiKey);
 
+			console.log(`rate limit status: ${!success ? "RATE-LIMITED" : "OK"}`);
+			console.log(`rate limit remaining: ${tryAgainIn}`);
+			console.log(`updating values:`, update);
+
 			let newApiKey: ApiKey = apiKey;
-			if (update) {
-				try {
-					const key = await ctx.context.adapter.update<ApiKey>({
-						model: schema.apikey.modelName,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-						update: {
-							...update,
-							remaining,
-							lastRefillAt,
+			try {
+				const key = await ctx.context.adapter.update<ApiKey>({
+					model: schema.apikey.modelName,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
 						},
-					});
-					if (key) newApiKey = key;
-				} catch (error: any) {
-					opts.events?.({
-						event: "key.verify",
-						success: false,
-						error: {
-							code: "database.error",
-							message: error?.message,
-						},
-						user: session.user,
-						apiKey: apiKey,
-					});
-					throw new APIError("INTERNAL_SERVER_ERROR", {
+					],
+					update: {
+						...update,
+						remaining,
+						lastRefillAt,
+					},
+				});
+				if (key) newApiKey = key;
+			} catch (error: any) {
+				opts.events?.({
+					event: "key.verify",
+					success: false,
+					error: {
+						code: "database.error",
 						message: error?.message,
-					});
-				}
+					},
+					user: session.user,
+					apiKey: apiKey,
+				});
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: error?.message,
+				});
 			}
 
 			// If rate limit failed.

@@ -26,15 +26,15 @@ export function isRateLimited(
 	const rateLimitMax = apiKey.rateLimitMax;
 	let requestCount = apiKey.requestCount;
 
-    if(rateLimitTimeWindow === null || rateLimitMax === null){
-        // Rate limiting is disabled.
-        return {
-            success: true,
-            message: null,
-            update: null,
-			tryAgainIn: null
-        }
-    }
+	if (rateLimitTimeWindow === null || rateLimitMax === null) {
+		// Rate limiting is disabled.
+		return {
+			success: true,
+			message: null,
+			update: null,
+			tryAgainIn: null,
+		};
+	}
 
 	if (lastRequest === null) {
 		// No previous requests, so allow the first one.
@@ -46,7 +46,7 @@ export function isRateLimited(
 		};
 	}
 
-	const timeSinceLastRequest = (now.getTime() - lastRequest.getTime()) / 1000; // in seconds
+	const timeSinceLastRequest = now.getTime() - lastRequest.getTime();
 
 	if (timeSinceLastRequest > rateLimitTimeWindow) {
 		// Time window has passed, reset the request count.
@@ -54,7 +54,7 @@ export function isRateLimited(
 			success: true,
 			message: null,
 			update: { lastRequest: now, requestCount: 1 },
-			tryAgainIn: null
+			tryAgainIn: null,
 		};
 	}
 
