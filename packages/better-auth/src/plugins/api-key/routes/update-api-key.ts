@@ -214,7 +214,7 @@ export function updateApiKey({
 			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
 			delete resApiKey["key"];
 
-			return ctx.json(newApiKey);
+			return ctx.json(resApiKey);
 		},
 	);
 }
