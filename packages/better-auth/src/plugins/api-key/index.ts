@@ -8,6 +8,7 @@ import { getIp } from "../../utils/get-request-ip";
 import { getDate } from "../../utils/date";
 import type { ApiKey, ApiKeyOptions } from "./types";
 import { createApiKeyRoutes } from "./routes";
+import type { User } from "../../types";
 
 export const ERROR_CODES = {
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
@@ -33,6 +34,10 @@ export const ERROR_CODES = {
 	RATE_LIMIT_EXCEEDED: "Rate limit exceeded.",
 	NO_VALUES_TO_UPDATE: "No values to update.",
 	KEY_DISABLED_EXPIRATION: "Custom key expiration values are disabled.",
+	INVALID_API_KEY: "Invalid API key.",
+	INVALID_USER_ID_FROM_API_KEY: "The user id from the API key is invalid.",
+	INVALID_API_KEY_GETTER_RETURN_TYPE:
+		"API Key getter returned an invalid key type. Expected string.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -81,7 +86,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 					}
 				}
 			} else {
-				ctx.headers?.get(opts.apiKeyHeaders);
+				return ctx.headers?.get(opts.apiKeyHeaders);
 			}
 		});
 
@@ -106,9 +111,16 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) => !!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) =>
+						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
+
+						if (typeof key !== "string") {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+							});
+						}
 
 						const hash = await createHash("SHA-256").digest(
 							new TextEncoder().encode(key),
@@ -127,19 +139,33 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							],
 						});
 
-						const user = await ctx.context.internalAdapter.findUserById("");
-
-						if (!user || !apiKey) {
-							throw new APIError("UNAUTHORIZED");
+						if (!apiKey) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_API_KEY,
+							});
+						}
+						let user: User;
+						try {
+							const userResult = await ctx.context.internalAdapter.findUserById(
+								apiKey.userId,
+							);
+							if (!userResult) {
+								throw new APIError("UNAUTHORIZED", {
+									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+								});
+							}
+							user = userResult;
+						} catch (error) {
+							throw error;
 						}
 
-						ctx.context.session = {
+						const session = {
 							user,
 							session: {
 								id: apiKey.id,
 								token: key,
 								userId: user.id,
-								userAgent: ctx.request?.headers.get("user-agent"),
+								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
 									? getIp(ctx.request, ctx.context.options)
 									: null,
@@ -153,6 +179,15 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									),
 							},
 						};
+						ctx.context.session = session;
+
+						if (ctx.path === "/get-session") {
+							return session;
+						} else {
+							return {
+								context: ctx,
+							};
+						}
 					}),
 				},
 			],
@@ -163,7 +198,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			getApiKey: routes.getApiKey,
 			updateApiKey: routes.updateApiKey,
 			deleteApiKey: routes.deleteApiKey,
-			listApiKeys: routes.listApiKeys
+			listApiKeys: routes.listApiKeys,
 		},
 		schema: schema,
 	} satisfies BetterAuthPlugin;
