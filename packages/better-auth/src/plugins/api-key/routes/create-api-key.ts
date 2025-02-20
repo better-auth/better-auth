@@ -31,7 +31,9 @@ export function createApiKey({
 		{
 			method: "POST",
 			body: z.object({
-				name: z.string({ description: "Name of the Api Key" }).optional(),
+				name: z
+					.string({ description: "Name of the Api Key" })
+					.optional(),
 				expiresIn: z
 					.number({
 						description: "Expiration time of the Api Key in milliseconds",
@@ -39,7 +41,13 @@ export function createApiKey({
 					.optional()
 					.nullable()
 					.default(null),
-				prefix: z.string({ description: "Prefix of the Api Key" }).optional(),
+				prefix: z
+					.string({ description: "Prefix of the Api Key" })
+					.regex(/^[a-zA-Z0-9_-]+$/, {
+						message:
+							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
+					})
+					.optional(),
 				remaining: z
 					.number({ description: "Remaining number of requests" })
 					.optional()
@@ -103,18 +111,33 @@ export function createApiKey({
 			}
 
 			// if metadata is defined, than check that it's an object.
-			if (typeof metadata !== "undefined" && typeof metadata !== "object") {
-				opts.events?.({
-					event: "key.create",
-					success: false,
-					error_code: "request.forbidden",
-					error_message: ERROR_CODES.INVALID_METADATA_TYPE,
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.INVALID_METADATA_TYPE,
-				});
+			if (typeof metadata !== "undefined") {
+				if(opts.enableMetadata === false){
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "request.forbidden",
+						error_message: ERROR_CODES.METADATA_DISABLED,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.METADATA_DISABLED,
+					});
+				}
+				if(typeof metadata !== "object"){
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "request.forbidden",
+						error_message: ERROR_CODES.INVALID_METADATA_TYPE,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_METADATA_TYPE,
+					});
+				}
 			}
 
 			// make sure that if they pass a refill amount, they also pass a refill interval
@@ -171,6 +194,93 @@ export function createApiKey({
 					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+					});
+				}
+			}
+
+			if (typeof remaining === "number") {
+				if (remaining < opts.minimumRemaining) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidRemaining",
+						error_message: ERROR_CODES.INVALID_REMAINING,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_REMAINING,
+					});
+				}
+				if (remaining > opts.maximumRemaining) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidRemaining",
+						error_message: ERROR_CODES.INVALID_REMAINING,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_REMAINING,
+					});
+				}
+			}
+
+			if (prefix) {
+				if (prefix.length < opts.minimumPrefixLength) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidPrefixLength",
+						error_message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+					});
+				}
+				if (prefix.length > opts.maximumPrefixLength) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidPrefixLength",
+						error_message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
+					});
+				}
+			}
+
+			if(name) {
+				if (name.length < opts.minimumNameLength) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidNameLength",
+						error_message: ERROR_CODES.INVALID_NAME_LENGTH,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_NAME_LENGTH,
+					});
+				}
+				if (name.length > opts.maximumNameLength) {
+					opts.events?.({
+						event: "key.create",
+						success: false,
+						error_code: "key.invalidNameLength",
+						error_message: ERROR_CODES.INVALID_NAME_LENGTH,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
 				}
 			}

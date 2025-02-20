@@ -22,8 +22,14 @@ export const ERROR_CODES = {
 	KEY_EXPIRED: "API Key has expired",
 	USAGE_EXCEEDED: "API Key has reached its usage limit",
 	KEY_NOT_RECOVERABLE: "API Key is not recoverable",
-	EXPIRES_IN_IS_TOO_SMALL: "The expiresIn is smaller than the predefined minimum value.",
-	EXPIRES_IN_IS_TOO_LARGE: "The expiresIn is larger than the predefined maximum value.",
+	EXPIRES_IN_IS_TOO_SMALL:
+		"The expiresIn is smaller than the predefined minimum value.",
+	EXPIRES_IN_IS_TOO_LARGE:
+		"The expiresIn is larger than the predefined maximum value.",
+	INVALID_REMAINING: "The remaining count is either too large or too small.",
+	INVALID_PREFIX_LENGTH: "The prefix length is either too large or too small.",
+	INVALID_NAME_LENGTH: "The name length is either too large or too small.",
+	METADATA_DISABLED: "Metadata is disabled.",
 };
 
 export const apiKey = (options?: ApiKeyOptions) => {
@@ -31,6 +37,13 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
 		defaultKeyLength: options?.defaultKeyLength || 64,
+		maximumRemaining: options?.maximumRemaining ?? 1_000_000,
+		minimumRemaining: options?.minimumRemaining ?? 1,
+		maximumPrefixLength: options?.maximumPrefixLength ?? 32,
+		minimumPrefixLength: options?.minimumPrefixLength ?? 1,
+		maximumNameLength: options?.maximumNameLength ?? 32,
+		minimumNameLength: options?.minimumNameLength ?? 1,
+		enableMetadata: options?.enableMetadata ?? false,
 		rateLimit: {
 			enabled: options?.rateLimit?.enabled ?? true,
 			timeWindow: options?.rateLimit?.timeWindow ?? 1000 * 60 * 60 * 24,
@@ -43,6 +56,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			maxExpiresIn: options?.keyExpiration?.maxExpiresIn ?? 365,
 			minExpiresIn: options?.keyExpiration?.minExpiresIn ?? 1,
 		},
+		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -89,7 +103,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) => !!getter(ctx),
+					matcher: (ctx) => !!getter(ctx) && opts.disableSessionForAPIKeys === false,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 

@@ -117,6 +117,49 @@ export function verifyApiKey({
 				});
 			}
 
+			// key is expired
+			if (apiKey.expiresAt) {
+				const now = new Date().getTime();
+				const expiresAt = apiKey.expiresAt.getTime();
+				if (now > expiresAt) {
+					opts.events?.({
+						event: "key.verify",
+						success: false,
+						error_code: "key.expired",
+						error_message: ERROR_CODES.KEY_EXPIRED,
+						user: session.user,
+						apiKey: null,
+					});
+
+					try {
+						ctx.context.adapter.delete({
+							model: schema.apikey.modelName,
+							where: [
+								{
+									field: "id",
+									value: apiKey.id,
+								},
+								{
+									field: "userId",
+									value: session.user.id,
+								},
+							],
+						});
+					} catch (error) {
+						ctx.context.logger.error(
+							`Failed to delete expired API keys:`,
+							error,
+						);
+					}
+
+					throw new APIError("FORBIDDEN", {
+						message: ERROR_CODES.KEY_EXPIRED,
+					});
+				}
+			}
+
+			let remaining: number | null = null;
+			let lastRefillAt: Date | null = null;
 			if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 				opts.events?.({
@@ -149,27 +192,51 @@ export function verifyApiKey({
 				throw new APIError("FORBIDDEN", {
 					message: ERROR_CODES.KEY_EXPIRED,
 				});
-			} else if (apiKey.remaining === 0) {
-				// if there are no more remaining requests, than the key is invalid
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error_code: "key.useageExceeded",
-					error_message: ERROR_CODES.USAGE_EXCEEDED,
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: ERROR_CODES.USAGE_EXCEEDED,
-				});
+			} else if (apiKey.remaining !== null) {
+				remaining = apiKey.remaining;
+				let now = new Date().getTime();
+				const refillInterval = apiKey.refillInterval;
+				const refillAmount = apiKey.refillAmount;
+				let lastTime = (apiKey.lastRefillAt ?? apiKey.createdAt).getTime();
+				let didRefill = false;
+
+				if (refillInterval && refillAmount) {
+					// if they provide refill info, then we should refill once the interval is reached.
+
+					const timeSinceLastRequest = (now - lastTime) / (1000 * 60 * 60 * 24); // in days
+					if (timeSinceLastRequest > refillInterval) {
+						didRefill = true;
+						remaining = refillAmount;
+						lastRefillAt = new Date();
+					}
+				}
+
+				if (remaining === 0) {
+					// if there are no more remaining requests, than the key is invalid
+					opts.events?.({
+						event: "key.verify",
+						success: false,
+						error_code: "key.useageExceeded",
+						error_message: ERROR_CODES.USAGE_EXCEEDED,
+						user: session.user,
+						apiKey: null,
+					});
+					throw new APIError("FORBIDDEN", {
+						message: ERROR_CODES.USAGE_EXCEEDED,
+					});
+				} else {
+					remaining--;
+				}
 			}
+
+			apiKey.refillInterval;
 
 			const { message, success, update } = isRateLimited(apiKey);
 
-			let newApiKey: ApiKey | null = apiKey;
+			let newApiKey: ApiKey = apiKey;
 			if (update) {
 				try {
-					newApiKey = await ctx.context.adapter.update<ApiKey>({
+					const key = await ctx.context.adapter.update<ApiKey>({
 						model: schema.apikey.modelName,
 						where: [
 							{
@@ -179,10 +246,11 @@ export function verifyApiKey({
 						],
 						update: {
 							lastRequest: new Date(),
-							remaining:
-								apiKey.remaining === null ? null : apiKey.remaining - 1,
+							remaining,
+							lastRefillAt,
 						},
 					});
+					if (key) newApiKey = key;
 				} catch (error: any) {
 					opts.events?.({
 						event: "key.verify",
@@ -223,12 +291,14 @@ export function verifyApiKey({
 				user: session.user,
 				apiKey: newApiKey,
 			});
+
+			let resApiKey: Partial<ApiKey> = newApiKey;
+			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
+			delete resApiKey["key"];
+
 			return ctx.json({
 				valid: true,
-				key: {
-					...newApiKey,
-					key: undefined,
-				},
+				key: resApiKey,
 			});
 		},
 	);

@@ -11,7 +11,18 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
 		Pick<
 			ApiKeyOptions,
-			"apiKeyHeaders" | "defaultKeyLength" | "keyExpiration" | "rateLimit"
+			| "apiKeyHeaders"
+			| "defaultKeyLength"
+			| "keyExpiration"
+			| "rateLimit"
+			| "maximumRemaining"
+			| "minimumRemaining"
+			| "maximumPrefixLength"
+			| "minimumPrefixLength"
+			| "maximumNameLength"
+			| "minimumNameLength"
+			| "enableMetadata"
+			| "disableSessionForAPIKeys"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

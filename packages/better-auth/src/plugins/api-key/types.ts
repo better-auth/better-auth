@@ -5,7 +5,81 @@ import type {
 } from "../../types";
 import type { apiKeySchema } from "./schema";
 
-export type ApiKeyOptions = {
+interface ApiKeyEvents_base {
+	event: ApiKeyEventTypes;
+	/**
+	 * if the event was successful, this will be true. Otherwise it will be false.
+	 */
+	success: boolean;
+	/**
+	 * if the event wasn't successful, the error code will be passed here. Otherwise it will be null.
+	 *
+	 * Possible values are:
+	 * * `key.notFound`
+	 * * `user.forbidden`
+	 * * `key.useageExceeded`
+	 * * `key.rateLimited`
+	 * * `user.unauthorized`
+	 * * `key.disabled`
+	 * * `key.expired`
+	 * * `database.error`
+	 * * `key.invalidExpiration`
+	 * * `key.invalidRemaining`
+	 * * `key.invalidPrefixLength`
+	 * * `key.invalidNameLength`
+	 */
+	error_code: ApiKeyFailedReasons | null;
+	/**
+	 * if the event wasn't successful, the error message will be passed here. Otherwise it will be null.
+	 */
+	error_message: string | null;
+	/**
+	 * User object.
+	 *
+	 * If the event failed due to an unauthorized user, than this will be null.
+	 */
+	user: User | null;
+}
+
+interface ApiKeyListEvent extends ApiKeyEvents_base {
+	event: "key.list";
+	apiKey: ApiKey[] | null;
+}
+
+interface ApiKeyGetEvent extends ApiKeyEvents_base {
+	event: "key.get";
+	apiKey: ApiKey | null;
+}
+
+interface ApiKeyVerifyEvent extends ApiKeyEvents_base {
+	event: "key.verify";
+	apiKey: ApiKey | null;
+}
+
+interface ApiKeyUpdateEvent extends ApiKeyEvents_base {
+	event: "key.update";
+	apiKey: ApiKey | null;
+}
+
+interface ApiKeyDeleteEvent extends ApiKeyEvents_base {
+	event: "key.delete";
+	apiKey: ApiKey | null;
+}
+
+interface ApiKeyCreateEvent extends ApiKeyEvents_base {
+	event: "key.create";
+	apiKey: ApiKey | null;
+}
+
+export type ApiKeyEvents =
+	| ApiKeyListEvent
+	| ApiKeyGetEvent
+	| ApiKeyVerifyEvent
+	| ApiKeyUpdateEvent
+	| ApiKeyDeleteEvent
+	| ApiKeyCreateEvent;
+
+interface ApiKeyOptionsBase {
 	/**
 	 * The header name to check for api key
 	 * @default "x-api-key"
@@ -39,6 +113,50 @@ export type ApiKeyOptions = {
 	 * Note: We recommend you append an underscore to the prefix to make the prefix more identifiable. (eg `hello_`)
 	 */
 	defaultPrefix?: string;
+	/**
+	 * The maximum remaining count that can be applied to a key.
+	 *
+	 * @default 1_000_000
+	 */
+	maximumRemaining?: number;
+	/**
+	 * The minimum remaining count that can be applied to a key.
+	 *
+	 * Note: This does not reflect the remaining count decreasing. Once this hits 0, then the key is invalid.
+	 *
+	 * @default 1
+	 */
+	minimumRemaining?: number;
+	/**
+	 * The maximum length of the prefix.
+	 *
+	 * @default 32
+	 */
+	maximumPrefixLength?: number;
+	/**
+	 * The minimum length of the prefix.
+	 *
+	 * @default 1
+	 */
+	minimumPrefixLength?: number;
+	/**
+	 * The maximum length of the name.
+	 *
+	 * @default 32
+	 */
+	maximumNameLength?: number;
+	/**
+	 * The minimum length of the name.
+	 *
+	 * @default 1
+	 */
+	minimumNameLength?: number;
+	/**
+	 * Whether to enable metadata for an API key.
+	 *
+	 * @default false
+	 */
+	enableMetadata?: boolean;
 	/**
 	 * Customize the key expiration.
 	 */
@@ -113,49 +231,23 @@ export type ApiKeyOptions = {
 		apiKey,
 		error_code,
 		error_message,
-	}: {
-		event: ApiKeyEvents;
-		/**
-		 * if the event was successful, this will be true. Otherwise it will be false.
-		 */
-		success: boolean;
-		/**
-		 * if the event wasn't successful, the error code will be passed here. Otherwise it will be null.
-		 *
-		 * Possible values are:
-		 * * `key.notFound`
-		 * * `user.forbidden`
-		 * * `key.useageExceeded`
-		 * * `key.rateLimited`
-		 * * `user.unauthorized`
-		 * * `key.disabled`
-		 * * `key.expired`
-		 * * `database.error`
-		 * * `invalidExpiration`
-		 */
-		error_code: ApiKeyFailedReasons | null;
-		/**
-		 * if the event wasn't successful, the error message will be passed here. Otherwise it will be null.
-		 */
-		error_message: string | null;
-		/**
-		 * User object.
-		 *
-		 * If the event failed due to an unauthorized user, than this will be null.
-		 */
-		user: User | null;
-		/**
-		 * If the event failed, this will likely be null.
-		 */
-		apiKey: ApiKey | null;
-	}) => void;
-};
+	}: ApiKeyEvents) => void;
+	/**
+	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
+	 *
+	 * @default false
+	 */
+	disableSessionForAPIKeys?: boolean;
+}
 
-export type ApiKeyEvents =
+export type ApiKeyOptions = ApiKeyOptionsBase;
+
+export type ApiKeyEventTypes =
 	| "key.create"
 	| "key.update"
 	| "key.verify"
 	| "key.get"
+	| "key.list"
 	| "key.delete";
 
 export type ApiKeyFailedReasons =
@@ -168,7 +260,10 @@ export type ApiKeyFailedReasons =
 	| "request.forbidden"
 	| "key.expired"
 	| "database.error"
-	| "key.invalidExpiration";
+	| "key.invalidExpiration"
+	| "key.invalidRemaining"
+	| "key.invalidPrefixLength"
+	| "key.invalidNameLength";
 
 export type ApiKey = {
 	/**

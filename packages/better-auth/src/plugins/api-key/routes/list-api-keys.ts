@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
@@ -19,24 +18,17 @@ export function getApiKey({
 	): Promise<number> | undefined;
 }) {
 	return createAuthEndpoint(
-		"/api-key/get",
+		"/api-key/list",
 		{
 			method: "GET",
-			body: z.object({
-				id: z.string({
-					description: "The id of the Api Key",
-				}),
-			}),
 		},
 		async (ctx) => {
-			const { id } = ctx.body;
-
 			const session = await getSessionFromCtx(ctx);
 
 			// make sure that the user has a session.
 			if (!session) {
 				opts.events?.({
-					event: "key.get",
+					event: "key.list",
 					success: false,
 					error_code: "user.unauthorized",
 					error_message: ERROR_CODES.UNAUTHORIZED_SESSION,
@@ -51,7 +43,7 @@ export function getApiKey({
 			// make sure that the user is not banned.
 			if (session.user.banned === true) {
 				opts.events?.({
-					event: "key.get",
+					event: "key.list",
 					success: false,
 					error_code: "user.forbidden",
 					error_message: ERROR_CODES.USER_BANNED,
@@ -64,13 +56,9 @@ export function getApiKey({
 				});
 			}
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+			const apiKey = await ctx.context.adapter.findMany<ApiKey>({
 				model: schema.apikey.modelName,
 				where: [
-					{
-						field: "id",
-						value: id,
-					},
 					{
 						field: "userId",
 						value: session.user.id,
@@ -78,34 +66,23 @@ export function getApiKey({
 				],
 			});
 
-			if (!apiKey) {
-				// key is not found
-				opts.events?.({
-					event: "key.get",
-					success: false,
-					error_code: "key.notFound",
-					error_message: ERROR_CODES.KEY_NOT_FOUND,
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
-			}
 			deleteAllExpiredApiKeys(ctx.context);
 
 			opts.events?.({
-				event: "key.get",
+				event: "key.list",
 				success: true,
 				error_code: null,
 				error_message: null,
 				user: session.user,
 				apiKey: apiKey,
 			});
-			let returningApiKey: Partial<ApiKey> = apiKey;
 
-			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
-			delete returningApiKey["key"];
+			let returningApiKey: Partial<ApiKey>[] = apiKey.map((x) => {
+				let returningApiKey: Partial<ApiKey> = x;
+				// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
+				delete returningApiKey["key"];
+				return returningApiKey;
+			});
 
 			return ctx.json(returningApiKey);
 		},
