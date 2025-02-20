@@ -6,6 +6,7 @@ import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
+import { listApiKey } from "./list-api-keys";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -80,5 +81,6 @@ export function createApiKeyRoutes({
 		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
+		listApiKeys: listApiKey({ opts, schema, deleteAllExpiredApiKeys }),
 	};
 }

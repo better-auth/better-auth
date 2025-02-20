@@ -5,7 +5,7 @@ import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-export function getApiKey({
+export function listApiKey({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
@@ -60,7 +60,7 @@ export function getApiKey({
 				});
 			}
 
-			const apiKey = await ctx.context.adapter.findMany<ApiKey>({
+			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
 				model: schema.apikey.modelName,
 				where: [
 					{
@@ -72,15 +72,25 @@ export function getApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
+			// transform metadata from string to obj
+			apiKeys = apiKeys.map((apiKey) => {
+				return {
+					...apiKey,
+					metadata: schema.apikey.fields.metadata.transform.output(
+						apiKey.metadata as never as string,
+					),
+				}
+			})
+
 			opts.events?.({
 				event: "key.list",
 				success: true,
 				error: null,
 				user: session.user,
-				apiKey: apiKey,
+				apiKey: apiKeys,
 			});
 
-			let returningApiKey: Partial<ApiKey>[] = apiKey.map((x) => {
+			let returningApiKey: Partial<ApiKey>[] = apiKeys.map((x) => {
 				let returningApiKey: Partial<ApiKey> = x;
 				// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
 				delete returningApiKey["key"];
