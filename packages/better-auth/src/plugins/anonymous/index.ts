@@ -113,7 +113,7 @@ export const anonymous = (options?: AnonymousOptions) => {
 						name: "Anonymous",
 						createdAt: new Date(),
 						updatedAt: new Date(),
-					});
+					}, ctx);
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,

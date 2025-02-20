@@ -324,7 +324,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						{
 							email,
 							emailVerified: true,
-						},
+						},ctx
 					);
 
 					if (
@@ -442,7 +442,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							email,
 							emailVerified: true,
 							name: email,
-						});
+						}, ctx);
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
 							ctx.request,
@@ -468,7 +468,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					if (!user.user.emailVerified) {
 						await ctx.context.internalAdapter.updateUser(user.user.id, {
 							emailVerified: true,
-						});
+						}, ctx);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -638,11 +638,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							providerId: "credential",
 							accountId: user.user.id,
 							password: passwordHash,
-						});
+						}, ctx);
 					} else {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
+							ctx
 						);
 					}
 

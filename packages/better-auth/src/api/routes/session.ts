@@ -273,7 +273,10 @@ export const getSessionFromCtx = async <
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
-		query: config,
+		query: {
+			...config,
+			...ctx.query,
+		},
 	}).catch((e) => {
 		return null;
 	});
