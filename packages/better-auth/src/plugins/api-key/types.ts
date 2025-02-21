@@ -46,7 +46,7 @@ interface ApiKeyEventError_invalidPrefixLength extends ApiKeyEventError_base {
 	details: {
 		minLength: number;
 		maxLength: number;
-		recievedLength: number;
+		receivedLength: number;
 	};
 }
 
@@ -56,7 +56,7 @@ interface ApiKeyEventError_invalidNameLength extends ApiKeyEventError_base {
 	details: {
 		minLength: number;
 		maxLength: number;
-		recievedLength: number;
+		receivedLength: number;
 	};
 }
 
@@ -66,7 +66,7 @@ interface ApiKeyEventError_invalidExpiration extends ApiKeyEventError_base {
 	details: {
 		minExpiresIn: number;
 		maxExpiresIn: number;
-		recievedExpiresIn: number;
+		receivedExpiresIn: number;
 	};
 }
 
@@ -76,7 +76,7 @@ interface ApiKeyEventError_invalidRemaining extends ApiKeyEventError_base {
 	details: {
 		minRemaining: number;
 		maxRemaining: number;
-		recievedRemaining: number;
+		receivedRemaining: number;
 	};
 }
 
@@ -338,7 +338,7 @@ export type ApiKeyEventTypes =
 export type ApiKeyFailedReasons =
 	| "key.notFound"
 	| "user.forbidden"
-	| "key.useageExceeded"
+	| "key.usageExceeded"
 	| "key.rateLimited"
 	| "user.unauthorized"
 	| "key.disabled"

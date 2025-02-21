@@ -59,7 +59,7 @@ export function updateApiKey({
 					.optional(),
 				expiresIn: z
 					.number({
-						description: "Expiration time of the Api Key in milliseconds",
+						description: "Expiration time of the Api Key in seconds",
 					})
 					.optional()
 					.nullable(),
@@ -177,7 +177,7 @@ export function updateApiKey({
 							message: ERROR_CODES.INVALID_NAME_LENGTH,
 							details: {
 								maxLength: opts.maximumNameLength,
-								recievedLength: name.length,
+								receivedLength: name.length,
 								minLength: opts.minimumNameLength,
 							},
 						},
@@ -196,7 +196,7 @@ export function updateApiKey({
 							message: ERROR_CODES.INVALID_NAME_LENGTH,
 							details: {
 								maxLength: opts.maximumNameLength,
-								recievedLength: name.length,
+								receivedLength: name.length,
 								minLength: opts.minimumNameLength,
 							},
 						},
@@ -231,7 +231,7 @@ export function updateApiKey({
 				if (expiresIn !== null) {
 					// if expires is not null, check if it's under the valid range
 					// if it IS null, this means the user wants to disable expiration time on the key
-					const expiresIn_in_days = expiresIn / 86_400_000;
+					const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
 						opts.events?.({
@@ -242,7 +242,7 @@ export function updateApiKey({
 								message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 								details: {
 									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-									recievedExpiresIn: expiresIn_in_days,
+									receivedExpiresIn: expiresIn_in_days,
 									minExpiresIn: opts.keyExpiration.minExpiresIn,
 								},
 							},
@@ -261,7 +261,7 @@ export function updateApiKey({
 								message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 								details: {
 									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-									recievedExpiresIn: expiresIn_in_days,
+									receivedExpiresIn: expiresIn_in_days,
 									minExpiresIn: opts.keyExpiration.minExpiresIn,
 								},
 							},
@@ -273,7 +273,7 @@ export function updateApiKey({
 						});
 					}
 				}
-				newValues.expiresAt = expiresIn ? getDate(expiresIn, "ms") : null;
+				newValues.expiresAt = expiresIn ? getDate(expiresIn, "sec") : null;
 			}
 			if (metadata !== undefined) {
 				if (typeof metadata !== "object") {
@@ -305,7 +305,7 @@ export function updateApiKey({
 							message: ERROR_CODES.INVALID_REMAINING,
 							details: {
 								maxRemaining: opts.maximumRemaining,
-								recievedRemaining: remaining,
+								receivedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
 							},
 						},
@@ -324,7 +324,7 @@ export function updateApiKey({
 							message: ERROR_CODES.INVALID_REMAINING,
 							details: {
 								maxRemaining: opts.maximumRemaining,
-								recievedRemaining: remaining,
+								receivedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
 							},
 						},
@@ -371,13 +371,13 @@ export function updateApiKey({
 				newValues.refillInterval = refillInterval;
 			}
 
-			if(rateLimitEnabled !== undefined){
+			if (rateLimitEnabled !== undefined) {
 				newValues.rateLimitEnabled = rateLimitEnabled;
 			}
-			if(rateLimitTimeWindow !== undefined){
+			if (rateLimitTimeWindow !== undefined) {
 				newValues.rateLimitTimeWindow = rateLimitTimeWindow;
 			}
-			if(rateLimitMax !== undefined){
+			if (rateLimitMax !== undefined) {
 				newValues.rateLimitMax = rateLimitMax;
 			}
 
@@ -433,8 +433,6 @@ export function updateApiKey({
 					message: error?.message,
 				});
 			}
-
-
 
 			deleteAllExpiredApiKeys(ctx.context);
 

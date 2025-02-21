@@ -35,7 +35,7 @@ export function createApiKey({
 				name: z.string({ description: "Name of the Api Key" }).optional(),
 				expiresIn: z
 					.number({
-						description: "Expiration time of the Api Key in milliseconds",
+						description: "Expiration time of the Api Key in seconds",
 					})
 					.optional()
 					.nullable()
@@ -96,7 +96,7 @@ export function createApiKey({
 				refillInterval,
 				rateLimitMax,
 				rateLimitTimeWindow,
-				rateLimitEnabled
+				rateLimitEnabled,
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -118,25 +118,7 @@ export function createApiKey({
 				});
 			}
 
-			// make sure that the user is not banned.
-			if (session.user.banned === true) {
-				opts.events?.({
-					event: "key.create",
-					success: false,
-					error: {
-						code: "user.forbidden",
-						message: ERROR_CODES.USER_BANNED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
-
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.USER_BANNED,
-				});
-			}
-
-			if (typeof ctx.request !== "undefined") {
+			if (ctx.request) {
 				// if this endpoint was being called from the client,
 				// we must make sure they can't use server-only properties.
 				if (
@@ -163,7 +145,7 @@ export function createApiKey({
 			}
 
 			// if metadata is defined, than check that it's an object.
-			if (typeof metadata !== "undefined") {
+			if (metadata) {
 				if (opts.enableMetadata === false) {
 					opts.events?.({
 						event: "key.create",
@@ -246,7 +228,7 @@ export function createApiKey({
 					});
 				}
 
-				const expiresIn_in_days = expiresIn / 86_400_000;
+				const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
 					opts.events?.({
@@ -257,7 +239,7 @@ export function createApiKey({
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 							details: {
 								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-								recievedExpiresIn: expiresIn_in_days,
+								receivedExpiresIn: expiresIn_in_days,
 								minExpiresIn: opts.keyExpiration.minExpiresIn,
 							},
 						},
@@ -276,7 +258,7 @@ export function createApiKey({
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 							details: {
 								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-								recievedExpiresIn: expiresIn_in_days,
+								receivedExpiresIn: expiresIn_in_days,
 								minExpiresIn: opts.keyExpiration.minExpiresIn,
 							},
 						},
@@ -289,7 +271,7 @@ export function createApiKey({
 				}
 			}
 
-			if (typeof remaining === "number") {
+			if (remaining) {
 				if (remaining < opts.minimumRemaining) {
 					opts.events?.({
 						event: "key.create",
@@ -299,7 +281,7 @@ export function createApiKey({
 							message: ERROR_CODES.INVALID_REMAINING,
 							details: {
 								maxRemaining: opts.maximumRemaining,
-								recievedRemaining: remaining,
+								receivedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
 							},
 						},
@@ -319,7 +301,7 @@ export function createApiKey({
 							message: ERROR_CODES.INVALID_REMAINING,
 							details: {
 								maxRemaining: opts.maximumRemaining,
-								recievedRemaining: remaining,
+								receivedRemaining: remaining,
 								minRemaining: opts.minimumRemaining,
 							},
 						},
@@ -343,7 +325,7 @@ export function createApiKey({
 							details: {
 								minLength: opts.minimumPrefixLength,
 								maxLength: opts.maximumPrefixLength,
-								recievedLength: prefix.length,
+								receivedLength: prefix.length,
 							},
 						},
 						user: session.user,
@@ -363,7 +345,7 @@ export function createApiKey({
 							details: {
 								minLength: opts.minimumPrefixLength,
 								maxLength: opts.maximumPrefixLength,
-								recievedLength: prefix.length,
+								receivedLength: prefix.length,
 							},
 						},
 						user: session.user,
@@ -386,7 +368,7 @@ export function createApiKey({
 							details: {
 								minLength: opts.minimumNameLength,
 								maxLength: opts.maximumNameLength,
-								recievedLength: name.length,
+								receivedLength: name.length,
 							},
 						},
 						user: session.user,
@@ -406,7 +388,7 @@ export function createApiKey({
 							details: {
 								minLength: opts.minimumNameLength,
 								maxLength: opts.maximumNameLength,
-								recievedLength: name.length,
+								receivedLength: name.length,
 							},
 						},
 						user: session.user,
@@ -425,10 +407,8 @@ export function createApiKey({
 				prefix: prefix || opts.defaultPrefix,
 			});
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
+			const hash = await createHash("SHA-256").digest(key);
+			const hashed = base64Url.encode(hash, {
 				padding: false,
 			});
 
@@ -451,9 +431,9 @@ export function createApiKey({
 				key: hashed,
 				enabled: true,
 				expiresAt: expiresIn
-					? getDate(expiresIn, "ms")
+					? getDate(expiresIn, "sec")
 					: opts.keyExpiration.defaultExpiresIn
-						? getDate(opts.keyExpiration.defaultExpiresIn, "ms")
+						? getDate(opts.keyExpiration.defaultExpiresIn, "sec")
 						: null,
 				userId: session.user.id,
 				lastRefillAt: null,

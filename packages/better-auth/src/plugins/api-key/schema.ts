@@ -110,9 +110,9 @@ export const apiKeySchema = ({
 					input: false,
 					defaultValue: rateLimitMax,
 				},
-                /**
-                 * The number of requests made within the rate limit time window
-                 */
+				/**
+				 * The number of requests made within the rate limit time window
+				 */
 				requestCount: {
 					type: "number",
 					required: false,

@@ -268,7 +268,7 @@ export function verifyApiKey({
 						event: "key.verify",
 						success: false,
 						error: {
-							code: "key.useageExceeded",
+							code: "key.usageExceeded",
 							message: ERROR_CODES.USAGE_EXCEEDED,
 						},
 						user: session.user,
@@ -282,7 +282,10 @@ export function verifyApiKey({
 				}
 			}
 
-			const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
+			const { message, success, update, tryAgainIn } = isRateLimited(
+				apiKey,
+				opts,
+			);
 
 			let newApiKey: ApiKey = apiKey;
 			try {

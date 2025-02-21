@@ -699,7 +699,7 @@ describe("api-key", async () => {
 				rateLimitMax: 15,
 				rateLimitTimeWindow: 1000,
 			},
-			headers
+			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
