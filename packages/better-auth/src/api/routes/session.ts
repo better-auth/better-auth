@@ -12,10 +12,10 @@ import type {
 	GenericEndpointContext,
 	InferSession,
 	InferUser,
-	Prettify,
 	Session,
 	User,
 } from "../../types";
+import type { Prettify } from "../../types/helper";
 import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";

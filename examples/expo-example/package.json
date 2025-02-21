@@ -59,6 +59,6 @@
     "@types/jest": "^29.5.14",
     "@types/react": "^18.3.14",
     "@types/react-test-renderer": "^18.3.1",
-    "typescript": "~5.3.3"
+    "typescript": "^5.7.2"
   }
 }

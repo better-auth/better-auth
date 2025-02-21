@@ -59,17 +59,20 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
-					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
-					userId: dbUser.user.id,
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				}, c);
+				await c.context.internalAdapter.linkAccount(
+					{
+						providerId: account.providerId,
+						accountId: userInfo.id.toString(),
+						userId: dbUser.user.id,
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					},
+					c,
+				);
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -93,7 +96,7 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.updateAccount(
 					hasBeenLinked.id,
 					updateData,
-					c
+					c,
 				);
 			}
 		}

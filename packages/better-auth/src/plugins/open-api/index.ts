@@ -1,6 +1,8 @@
 import { generator } from "./generator";
 import { logo } from "./logo";
-import type { BetterAuthPlugin, LiteralString } from "../../types";
+import type { BetterAuthPlugin } from "../../types";
+import type { LiteralString } from "../../types/helper";
+
 import { APIError, createAuthEndpoint } from "../../api";
 
 const getHTML = (apiReference: Record<string, any>) => `<!doctype html>

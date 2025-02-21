@@ -103,7 +103,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							user.id,
 							{
 								twoFactorEnabled: true,
-							},ctx
+							},
+							ctx,
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
@@ -203,7 +204,8 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						user.id,
 						{
 							twoFactorEnabled: false,
-						},ctx
+						},
+						ctx,
 					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
