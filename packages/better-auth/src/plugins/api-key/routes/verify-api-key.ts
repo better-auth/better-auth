@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
+import { createAuthEndpoint } from "../../../api";
 import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -37,59 +37,17 @@ export function verifyApiKey({
 		async (ctx) => {
 			const { key } = ctx.body;
 
-			const session = await getSessionFromCtx(ctx);
-
-			// make sure that the user has a session.
-			if (!session) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error: {
-						code: "user.unauthorized",
-						message: ERROR_CODES.UNAUTHORIZED_SESSION,
-					},
-					user: null,
-					apiKey: null,
-				});
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
-			}
-
-			// make sure that the user is not banned.
-			if (session.user.banned === true) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error: {
-						code: "user.forbidden",
-						message: ERROR_CODES.USER_BANNED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
-
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.USER_BANNED,
-				});
-			}
-
 			if (key.length < opts.defaultKeyLength) {
 				// if the key is shorter than the default key length, than we know the key is invalid.
 				// we can't check if the key is exactly equal to the default key length, because
 				// a prefix may be added to the key.
-				opts.events?.({
-					event: "key.verify",
-					success: false,
+				return ctx.json({
+					valid: false,
 					error: {
-						code: "key.invalid",
 						message: ERROR_CODES.INVALID_API_KEY,
+						code: "KEY_NOT_FOUND" as const,
 					},
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: ERROR_CODES.INVALID_API_KEY,
+					key: null,
 				});
 			}
 
@@ -97,18 +55,13 @@ export function verifyApiKey({
 				opts.customAPIKeyValidator &&
 				!opts.customAPIKeyValidator({ ctx, key })
 			) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
+				return ctx.json({
+					valid: false,
 					error: {
-						code: "key.invalid",
 						message: ERROR_CODES.INVALID_API_KEY,
+						code: "KEY_NOT_FOUND" as const,
 					},
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: ERROR_CODES.INVALID_API_KEY,
+					key: null,
 				});
 			}
 
@@ -126,44 +79,30 @@ export function verifyApiKey({
 						field: "key",
 						value: hashed,
 					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
 				],
 			});
 
 			// No api key found
 			if (!apiKey) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
+				return ctx.json({
+					valid: false,
 					error: {
-						code: "key.notFound",
 						message: ERROR_CODES.KEY_NOT_FOUND,
+						code: "KEY_NOT_FOUND" as const,
 					},
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
+					key: null,
 				});
 			}
 
 			// key is disabled
 			if (apiKey.enabled === false) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
+				return ctx.json({
+					valid: false,
 					error: {
-						code: "key.disabled",
-						message: ERROR_CODES.KEY_DISABLED,
+						message: ERROR_CODES.USAGE_EXCEEDED,
+						code: "KEY_DISABLED" as const,
 					},
-					user: session.user,
-					apiKey: null,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: ERROR_CODES.KEY_DISABLED,
+					key: null,
 				});
 			}
 
@@ -172,17 +111,6 @@ export function verifyApiKey({
 				const now = new Date().getTime();
 				const expiresAt = apiKey.expiresAt.getTime();
 				if (now > expiresAt) {
-					opts.events?.({
-						event: "key.verify",
-						success: false,
-						error: {
-							code: "key.expired",
-							message: ERROR_CODES.KEY_EXPIRED,
-						},
-						user: session.user,
-						apiKey: null,
-					});
-
 					try {
 						ctx.context.adapter.delete({
 							model: schema.apikey.modelName,
@@ -190,10 +118,6 @@ export function verifyApiKey({
 								{
 									field: "id",
 									value: apiKey.id,
-								},
-								{
-									field: "userId",
-									value: session.user.id,
 								},
 							],
 						});
@@ -204,27 +128,22 @@ export function verifyApiKey({
 						);
 					}
 
-					throw new APIError("FORBIDDEN", {
-						message: ERROR_CODES.KEY_EXPIRED,
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.USAGE_EXCEEDED,
+							code: "KEY_EXPIRED" as const,
+						},
+						key: null,
 					});
 				}
 			}
 
-			let remaining: number | null = apiKey.remaining;
-			let lastRefillAt: Date | null = apiKey.lastRefillAt;
+			let remaining = apiKey.remaining;
+			let lastRefillAt = apiKey.lastRefillAt;
+
 			if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error: {
-						code: "key.expired",
-						message: ERROR_CODES.KEY_EXPIRED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
-
 				try {
 					ctx.context.adapter.delete({
 						model: schema.apikey.modelName,
@@ -233,18 +152,19 @@ export function verifyApiKey({
 								field: "id",
 								value: apiKey.id,
 							},
-							{
-								field: "userId",
-								value: session.user.id,
-							},
 						],
 					});
 				} catch (error) {
 					ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 				}
 
-				throw new APIError("FORBIDDEN", {
-					message: ERROR_CODES.KEY_EXPIRED,
+				return ctx.json({
+					valid: false,
+					error: {
+						message: ERROR_CODES.USAGE_EXCEEDED,
+						code: "KEY_EXPIRED" as const,
+					},
+					key: null,
 				});
 			} else if (remaining !== null) {
 				let now = new Date().getTime();
@@ -264,18 +184,17 @@ export function verifyApiKey({
 
 				if (remaining === 0) {
 					// if there are no more remaining requests, than the key is invalid
-					opts.events?.({
-						event: "key.verify",
-						success: false,
+
+					// throw new APIError("FORBIDDEN", {
+					// 	message: ERROR_CODES.USAGE_EXCEEDED,
+					// });
+					return ctx.json({
+						valid: false,
 						error: {
-							code: "key.usageExceeded",
 							message: ERROR_CODES.USAGE_EXCEEDED,
+							code: "USAGE_EXCEEDED" as const,
 						},
-						user: session.user,
-						apiKey: null,
-					});
-					throw new APIError("FORBIDDEN", {
-						message: ERROR_CODES.USAGE_EXCEEDED,
+						key: null,
 					});
 				} else {
 					remaining--;
@@ -286,77 +205,38 @@ export function verifyApiKey({
 				apiKey,
 				opts,
 			);
-
-			let newApiKey: ApiKey = apiKey;
-			try {
-				const key = await ctx.context.adapter.update<ApiKey>({
-					model: schema.apikey.modelName,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-					update: {
-						...update,
-						remaining,
-						lastRefillAt,
+			const newApiKey = await ctx.context.adapter.update<ApiKey>({
+				model: schema.apikey.modelName,
+				where: [
+					{
+						field: "id",
+						value: apiKey.id,
 					},
-				});
-				if (key) newApiKey = key;
-			} catch (error: any) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error: {
-						code: "database.error",
-						message: error?.message,
-					},
-					user: session.user,
-					apiKey: apiKey,
-				});
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: error?.message,
-				});
-			}
-
-			// If rate limit failed.
-			if (success === false) {
-				opts.events?.({
-					event: "key.verify",
-					success: false,
-					error: {
-						code: "key.rateLimited",
-						message: message!,
-						details: {
-							tryAgainIn: tryAgainIn!,
-						},
-					},
-					user: session.user,
-					apiKey: newApiKey,
-				});
-				throw new APIError("FORBIDDEN", {
-					message: message || "Rate limit exceeded.",
-				});
-			}
-
-			deleteAllExpiredApiKeys(ctx.context);
-
-			opts.events?.({
-				event: "key.verify",
-				success: true,
-				error: null,
-				user: session.user,
-				apiKey: newApiKey,
+				],
+				update: {
+					...update,
+					remaining,
+					lastRefillAt,
+				},
 			});
-
-			let resApiKey: Partial<ApiKey> = newApiKey;
-			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
-			delete resApiKey["key"];
-
+			if (success === false) {
+				return ctx.json({
+					valid: false,
+					error: {
+						message,
+						code: "RATE_LIMITED" as const,
+						details: {
+							tryAgainIn,
+						},
+					},
+					key: null,
+				});
+			}
+			deleteAllExpiredApiKeys(ctx.context);
 			return ctx.json({
 				valid: true,
-				key: resApiKey,
+				error: null,
+				key: newApiKey,
 			});
 		},
 	);

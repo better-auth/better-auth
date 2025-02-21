@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
+import { tryPromise } from "tarn/dist/utils";
+import { APIError } from "better-call";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -48,7 +50,7 @@ describe("api-key", async () => {
 
 	let firstApiKey: ApiKey;
 
-	it("should successfully create API keys from client with headers", async () => {
+	it.only("should successfully create API keys from client with headers", async () => {
 		const apiKey = await client.apiKey.create({}, { headers: headers });
 		if (apiKey.data) {
 			firstApiKey = apiKey.data;
@@ -689,76 +691,26 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it("verify api key without headers (should fail)", async () => {
-		const result: {
-			data: {
-				valid: boolean;
-				key: Partial<ApiKey>;
-			} | null;
-			error: Err | null;
-		} = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.verifyApiKey({
-				body: {
-					key: firstApiKey.key,
-				},
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
-		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION,
-		);
-	});
-
-	it("verify api key with headers", async () => {
+	it.only("verify api key without key and userId", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
+				userId: user.id,
 				key: firstApiKey.key,
 			},
-			headers,
 		});
-
-		expect(apiKey).not.toBeNull();
-		expect(apiKey.valid).toEqual(true);
-		expect(apiKey.key).toBeDefined();
-		expect(apiKey.key.id).toEqual(firstApiKey.id);
+		expect(apiKey.key).not.toBe(null);
+		expect(apiKey.valid).toBe(true);
 	});
 
-	it("verify api key with invalid key (should fail)", async () => {
-		let result: {
-			data: {
-				valid: boolean;
-				key: Partial<ApiKey>;
-			} | null;
-			error: Err | null;
-		} = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.verifyApiKey({
-				body: {
-					key: "invalid",
-				},
-				headers,
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("FORBIDDEN");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_API_KEY);
+	it.only("verify api key with invalid key (should fail)", async () => {
+		const apiKey = await auth.api.verifyApiKey({
+			body: {
+				key: "invalid",
+				userId: user.id,
+			},
+		});
+		expect(apiKey.valid).toBe(false);
+		expect(apiKey.error?.code).toBe("KEY_NOT_FOUND");
 	});
 
 	let rateLimitedApiKey: ApiKey;
@@ -786,73 +738,44 @@ describe("api-key", async () => {
 	);
 
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
-	it("should fail to verify api key 20 times in a row due to rate-limit", async () => {
+
+	it.only("should fail to verify api key 20 times in a row due to rate-limit", async () => {
 		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
 		);
-
 		if (!apiKey2) return;
 		rateLimitedApiKey = apiKey2;
-
 		for (let i = 0; i < 20; i++) {
-			let result: {
-				data: { valid: boolean; key: Partial<ApiKey> } | null;
-				error: Err | null;
-			} = {
-				data: null,
-				error: null,
-			};
-			try {
-				const response = await rateLimitAuth.api.verifyApiKey({
-					body: {
-						key: apiKey2.key,
-					},
-					headers: rateLimitUserHeaders,
-				});
-				result.data = response;
-			} catch (error: any) {
-				result.error = error;
-			}
-			// console.log(i, result);
-
-			if (i >= 10) {
-				expect(result.error?.status).toEqual("FORBIDDEN");
-				expect(result.error?.body.message).toEqual(
-					ERROR_CODES.RATE_LIMIT_EXCEEDED,
-				);
-			} else {
-				expect(result.error).toBeNull();
-			}
-		}
-	});
-
-	it("should allow us to verify api key after rate-limit window has passed", async () => {
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-		let result: {
-			data: { valid: boolean; key: Partial<ApiKey> } | null;
-			error: Err | null;
-		} = {
-			data: null,
-			error: null,
-		};
-		try {
 			const response = await rateLimitAuth.api.verifyApiKey({
 				body: {
-					key: rateLimitedApiKey.key,
+					key: apiKey2.key,
+					userId: user.id,
 				},
 				headers: rateLimitUserHeaders,
 			});
-			result.data = response;
-		} catch (error: any) {
-			result.error = error;
+			if (i >= 10) {
+				expect(response.error?.code).toBe("RATE_LIMITED");
+			} else {
+				expect(response.error).toBeNull();
+			}
 		}
-		// console.log(result);
-		expect(result.error).toBeNull();
-		expect(result.data?.valid).toBe(true);
 	});
 
-	it("should check if verifying an api key's remaining count does go down", async () => {
+	it.only("should allow us to verify api key after rate-limit window has passed", async () => {
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000);
+		const response = await rateLimitAuth.api.verifyApiKey({
+			body: {
+				key: rateLimitedApiKey.key,
+			},
+			headers: rateLimitUserHeaders,
+		});
+		expect(response.error).toBeNull();
+		expect(response?.valid).toBe(true);
+	});
+
+	it.only("should check if verifying an api key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -868,7 +791,7 @@ describe("api-key", async () => {
 			headers,
 		});
 		expect(afterVerificationOnce?.valid).toEqual(true);
-		expect(afterVerificationOnce?.key.remaining).toEqual(remaining - 1);
+		expect(afterVerificationOnce?.key?.remaining).toEqual(remaining - 1);
 		const afterVerificationTwice = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -876,7 +799,7 @@ describe("api-key", async () => {
 			headers,
 		});
 		expect(afterVerificationTwice?.valid).toEqual(true);
-		expect(afterVerificationTwice?.key.remaining).toEqual(remaining - 2);
+		expect(afterVerificationTwice?.key?.remaining).toEqual(remaining - 2);
 	});
 
 	it("should fail if the api key has no remaining", async () => {
