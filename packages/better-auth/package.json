@@ -387,8 +387,8 @@
         "default": "./dist/plugins/oauth-proxy.js"
       },
       "require": {
-        "types": "./dist/plugins/oauth-proxy..d.cts",
-        "default": "./dist/plugins/oauth-proxy..cjs"
+        "types": "./dist/plugins/oauth-proxy.d.cts",
+        "default": "./dist/plugins/oauth-proxy.cjs"
       }
     },
     "./plugins/organization": {
