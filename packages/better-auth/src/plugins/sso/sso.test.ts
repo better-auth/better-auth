@@ -172,6 +172,22 @@ describe("SSO", async () => {
 		const callbackURL = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
+
+	it("should signin with SSO provider with providerId", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
+		);
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		expect(callbackURL).toContain("/dashboard");
+	});
 });
 
 describe("provisioning", async (ctx) => {

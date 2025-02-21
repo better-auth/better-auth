@@ -233,6 +233,12 @@ export const sso = (options?: SSOOptions) => {
 								description: "The slug of the organization to sign in with",
 							})
 							.optional(),
+						providerId: z
+							.string({
+								description:
+									"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+							})
+							.optional(),
 						domain: z
 							.string({
 								description: "The domain of the provider.",
@@ -303,10 +309,11 @@ export const sso = (options?: SSOOptions) => {
 				},
 				async (ctx) => {
 					const body = ctx.body;
-					let { email, organizationSlug, domain } = body;
-					if (!email && !organizationSlug && !domain) {
+					let { email, organizationSlug, providerId, domain } = body;
+					if (!email && !organizationSlug && !domain && !providerId) {
 						throw new APIError("BAD_REQUEST", {
-							message: "email, organizationSlug or domain is required",
+							message:
+								"email, organizationSlug, domain or providerId is required",
 						});
 					}
 					domain = body.domain || email?.split("@")[1];
@@ -334,8 +341,12 @@ export const sso = (options?: SSOOptions) => {
 							model: "ssoProvider",
 							where: [
 								{
-									field: orgId ? "organizationId" : "domain",
-									value: orgId || domain!,
+									field: providerId
+										? "providerId"
+										: orgId
+											? "organizationId"
+											: "domain",
+									value: providerId || orgId || domain!,
 								},
 							],
 						})
