@@ -283,10 +283,12 @@ export const kyselyAdapter =
 				}
 				if (config?.type === "mssql") {
 					if (!offset) {
-						query = query.top(limit || 100);
+						query = query.top(limit || 1000);
 					}
 				} else {
-					query = query.limit(limit || 100);
+					if (limit) {
+						query = query.limit(limit);
+					}
 				}
 				if (sortBy) {
 					query = query.orderBy(
