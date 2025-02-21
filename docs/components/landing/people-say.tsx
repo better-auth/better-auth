@@ -46,17 +46,7 @@ const testimonials = [
 		image: "",
 		social: <Icons.x />,
 	},
-	{
-		name: "Tim⚡Dev",
-		profession: "Developer",
-		link: "https://x.com/TimOConnellDev/status/1845273839506530404",
-		description:
-			"I love the js ecosystem. There’s always something disruptive happening. Just heard about @better_auth",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1835593762833354752/1bN3_d3F_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
+
 	{
 		name: "Nizzy",
 		profession: "engineer @calcom",
@@ -65,6 +55,17 @@ const testimonials = [
 			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
 		avatar:
 			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Dax",
+		profession: "Creator of SST",
+		link: "https://x.com/thdxr/status/1866222656468705426",
+		description:
+			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed SaaS options are still 'better' but should be the exception and not the default",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1602333093485891584/mmVqjFNI_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -114,7 +115,7 @@ const testimonials = [
 	{
 		name: "Vybhav Bhargav",
 		description: "better-auth is a work of art.",
-		profession: "founding engineer @glyfspace",
+		profession: "Founding engineer @glyfspace",
 		avatar:
 			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
 		link: "https://x.com/vybhavab/status/1891589126513684669",
@@ -124,7 +125,7 @@ const testimonials = [
 		name: "Shreyas Mididoddi",
 		description:
 			"dang!! Didn't think I would but absolutely loving @better_auth",
-		profession: "founding engineer @glyfspace",
+		profession: "Senior Developer",
 		avatar:
 			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
 		link: "https://x.com/vybhavab/status/1891589126513684669",
