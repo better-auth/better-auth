@@ -115,6 +115,7 @@ export const oneTap = (options?: OneTapOptions) =>
 								providerId: "google",
 								accountId: sub,
 							},
+							ctx
 						);
 						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {

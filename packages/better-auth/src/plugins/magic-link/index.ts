@@ -214,11 +214,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!options.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser({
-								email: email,
-								emailVerified: true,
-								name: name || email,
-							});
+							const newUser = await ctx.context.internalAdapter.createUser(
+								{
+									email: email,
+									emailVerified: true,
+									name: name || "",
+								},
+								ctx,
+							);
 							user = newUser;
 							if (!user) {
 								throw ctx.redirect(
@@ -231,9 +234,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
-							emailVerified: true,
-						});
+						await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								emailVerified: true,
+							},
+							ctx,
+						);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(

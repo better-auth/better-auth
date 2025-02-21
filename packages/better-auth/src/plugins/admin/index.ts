@@ -142,7 +142,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						session: {
 							create: {
-								async before(session) {
+								async before(session, context) {
 									const user = (await ctx.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
@@ -152,11 +152,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											user.banExpires &&
 											user.banExpires.getTime() < Date.now()
 										) {
-											await ctx.internalAdapter.updateUser(session.userId, {
-												banned: false,
-												banReason: null,
-												banExpires: null,
-											});
+											await ctx.internalAdapter.updateUser(
+												session.userId,
+												{
+													banned: false,
+													banReason: null,
+													banExpires: null,
+												},
+												context,
+											);
 											return;
 										}
 										return false;
@@ -234,6 +238,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						{
 							role: ctx.body.role,
 						},
+						ctx,
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
@@ -318,12 +323,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.linkAccount({
-						accountId: user.id,
-						providerId: "credential",
-						password: hashedPassword,
-						userId: user.id,
-					});
+					await ctx.context.internalAdapter.linkAccount(
+						{
+							accountId: user.id,
+							providerId: "credential",
+							password: hashedPassword,
+							userId: user.id,
+						},
+						ctx,
+					);
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -562,8 +570,12 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							banned: false,
+							banExpires: null,
+							banReason: null,
 						},
+						ctx,
 					);
+
 					return ctx.json({
 						user: user,
 					});
@@ -638,6 +650,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
+						ctx,
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -705,6 +718,8 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
+						ctx,
+						true,
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -21,6 +21,7 @@ import type {
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
+import { base64 } from "@better-auth/utils/base64";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -268,9 +269,41 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+					let { client_id, client_secret } = body;
+					const authorization =
+						ctx.request?.headers.get("authorization") || null;
+					if (
+						authorization &&
+						!client_id &&
+						!client_secret &&
+						authorization.startsWith("Basic ")
+					) {
+						try {
+							const encoded = authorization.replace("Basic ", "");
+							const decoded = new TextDecoder().decode(base64.decode(encoded));
+							if (!decoded.includes(":")) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							const [id, secret] = decoded.split(":");
+							if (!id || !secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							client_id = id;
+							client_secret = secret;
+						} catch (error) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+					}
 					const {
-						client_id,
-						client_secret,
 						grant_type,
 						code,
 						redirect_uri,
@@ -479,7 +512,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const requestedScopes = value.scope;
 					await ctx.context.internalAdapter.deleteVerificationValue(
-						code.toString(),
+						verificationValue.id,
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -544,7 +577,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						aud: client_id.toString(),
 						iat: Date.now(),
 						auth_time: ctx.context.session?.session.createdAt.getTime(),
-						nonce: body.nonce,
+						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 					})
@@ -634,6 +667,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
 					const userClaims = {
+						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
 						name: requestedScopes.includes("profile") ? user.name : undefined,
 						picture: requestedScopes.includes("profile")

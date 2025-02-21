@@ -447,7 +447,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							{
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
-							},
+							},ctx
 						);
 						return ctx.json({
 							status: true,
@@ -488,7 +488,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 									: ctx.body.phoneNumber,
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
-							});
+							}, ctx);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -498,7 +498,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					} else {
 						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							[opts.phoneNumberVerified]: true,
-						});
+						},ctx);
 					}
 
 					if (!user) {

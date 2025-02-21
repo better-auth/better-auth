@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     better-call:
-      specifier: ^1.0.1
-      version: 1.0.1
+      specifier: ^1.0.2
+      version: 1.0.2
 
 overrides:
   mdast-util-frontmatter: 2.0.1
@@ -1461,7 +1461,7 @@ importers:
         version: 13.0.0(encoding@0.1.13)
       better-call:
         specifier: 'catalog:'
-        version: 1.0.1
+        version: 1.0.2
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -9883,8 +9883,8 @@ packages:
   better-call@1.0.0-beta.5:
     resolution: {integrity: sha512-0Jzk5+58hnJWJpGIcrvmxLTqKGjtNGkAQ9zpSKvCC860TUJGdNHvK661pQ5JYKNnbcKORA52xglu4T/MqKJyrQ==}
 
-  better-call@1.0.1:
-    resolution: {integrity: sha512-Z3DT2A290JiXvg5HXpyi3GrlfZnS3bGCrZ7Bii8pkDJC2DUUlWoRxpHDPISAl93lk1LLfuZoMsOZiMDfZ8B68w==}
+  better-call@1.0.2:
+    resolution: {integrity: sha512-1Nb8uaQpSVGgklwOuwJLsiL8ns6lQJB+KwBIAPa6YvPR9DPAXPQqfXBJWObz8N07p+BVF3WFK1+rIl/356TZig==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -30615,7 +30615,7 @@ snapshots:
       set-cookie-parser: 2.7.1
       uncrypto: 0.1.3
 
-  better-call@1.0.1:
+  better-call@1.0.2:
     dependencies:
       '@better-fetch/fetch': 1.1.12
       rou3: 0.5.1

@@ -325,6 +325,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							email,
 							emailVerified: true,
 						},
+						ctx,
 					);
 
 					if (
@@ -438,11 +439,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
-						const newUser = await ctx.context.internalAdapter.createUser({
-							email,
-							emailVerified: true,
-							name: email,
-						});
+						const newUser = await ctx.context.internalAdapter.createUser(
+							{
+								email,
+								emailVerified: true,
+								name: "",
+							},
+							ctx,
+						);
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
 							ctx.request,
@@ -466,9 +470,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 
 					if (!user.user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.user.id, {
-							emailVerified: true,
-						});
+						await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								emailVerified: true,
+							},
+							ctx,
+						);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -633,16 +641,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						(account) => account.providerId === "credential",
 					);
 					if (!account) {
-						await ctx.context.internalAdapter.createAccount({
-							userId: user.user.id,
-							providerId: "credential",
-							accountId: user.user.id,
-							password: passwordHash,
-						});
+						await ctx.context.internalAdapter.createAccount(
+							{
+								userId: user.user.id,
+								providerId: "credential",
+								accountId: user.user.id,
+								password: passwordHash,
+							},
+							ctx,
+						);
 					} else {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
+							ctx,
 						);
 					}
 

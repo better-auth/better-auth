@@ -1,6 +1,8 @@
 import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import Database from "better-sqlite3";
+import { createInternalAdapter } from "./internal-adapter";
+import { getAdapter } from "./utils";
 import { init } from "../init";
 import { getMigrations } from "./get-migration";
 import { SqliteDialect } from "kysely";
@@ -12,10 +14,10 @@ describe("adapter test", async () => {
 	});
 	const map = new Map();
 	let id = 1;
-	const pluginHookUserCreateBefore = vi.fn();
-	const pluginHookUserCreateAfter = vi.fn();
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const pluginHookUserCreateBefore = vi.fn();
+	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
 		database: {
 			dialect: sqliteDialect,
@@ -46,12 +48,12 @@ describe("adapter test", async () => {
 		databaseHooks: {
 			user: {
 				create: {
-					async before(user) {
-						hookUserCreateBefore(user);
+					async before(user, context) {
+						hookUserCreateBefore(user, context);
 						return { data: user };
 					},
-					async after(user) {
-						hookUserCreateAfter(user);
+					async after(user, context) {
+						hookUserCreateAfter(user, context);
 						return;
 					},
 				},
@@ -66,13 +68,12 @@ describe("adapter test", async () => {
 							databaseHooks: {
 								user: {
 									create: {
-										async before(user) {
-											pluginHookUserCreateBefore(user);
+										async before(user, context) {
+											pluginHookUserCreateBefore(user, context);
 											return { data: user };
 										},
-										async after(user) {
-											pluginHookUserCreateAfter(user);
-											return;
+										async after(user, context) {
+											pluginHookUserCreateAfter(user, context);
 										},
 									},
 								},

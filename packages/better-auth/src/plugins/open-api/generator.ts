@@ -290,7 +290,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					};
 					return acc;
 				},
-				{} as Record<string, any>,
+				{ id: { type: "string" } } as Record<string, any>,
 			),
 		};
 		return acc;
@@ -426,10 +426,26 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			description: "API Reference for your Better Auth Instance",
 			version: "1.1.0",
 		},
-		components,
+		components: {
+			...components,
+			securitySchemes: {
+				apiKeyCookie: {
+					type: "apiKey",
+					in: "cookie",
+					name: "apiKeyCookie",
+					description: "API Key authentication via cookie",
+				},
+				bearerAuth: {
+					type: "http",
+					scheme: "bearer",
+					description: "Bearer token authentication",
+				},
+			},
+		},
 		security: [
 			{
 				apiKeyCookie: [],
+				bearerAuth: [],
 			},
 		],
 		servers: [
