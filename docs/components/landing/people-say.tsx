@@ -26,13 +26,13 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Kevin Kern",
-		profession: "Developer",
-		link: "https://x.com/kregenrek/status/1855395938262831140",
+		name: "Lazar Nikolov",
+		profession: "Software Engineer & Educator",
+		link: "https://x.com/NikolovLazar/status/1888992999872331985",
 		description:
-			"Digging into better-auth.com this weekend. Check it out really cool lib",
+			"I didn't know  @better_auth was THAT good. I'm implementing it in TanStack Start and I can't believe how good the DX is. This is my favorite stack now (along with  @DrizzleORM and @shadcn ui).",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1849574174785732608/ltlLcyaT_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1838045335282745344/sCjDaZ2-_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -58,24 +58,13 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Yared Y Tegegn",
-		profession: "Developer",
-		link: "https://x.com/yared_ow/status/1848435855309873453",
+		name: "Nizzy",
+		profession: "engineer @calcom",
+		link: "https://x.com/NizzyABI/status/1889178812459422162",
 		description:
-			"It took me only 30 minutes to setup auth in my project thanks to @better_auth. Hands down, the best auth library I have ever used.",
+			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1854956005391532033/aLu4S0pU_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Paul Jasper",
-		profession: "Indie hacker",
-		link: "https://x.com/pauljasperdev/status/1854938664645558279",
-		description:
-			"Solved auth for my next project and I’m pretty happy with it: @better_auth with @prisma serverless database. What a great team!",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1788425134170066944/wPanxB4f_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -91,13 +80,13 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Yusuf Mansur Özer",
-		profession: "Developer",
-		link: "https://x.com/ymansurozer/status/1855579561875943731",
+		name: "Omar McAdam",
+		profession: "Creator of AugmentedHQ",
+		link: "https://x.com/McPizza0/status/1879526862046839249",
 		description:
-			"Better Auth looks so nice and complete. Will definitely try it out after v1. I am currently with Nuxt Auth Utils it is great to start but Better Auth might be the way to go for bigger projects. 👀",
+			"if you're building a code project in 2025 use @better_auth. It has everything you need now and everything you'll need at scale. dont take this suggestion lightly..",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1532002119972274177/D3SKwakL_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1889741029470801920/6J25rfKo_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -110,6 +99,35 @@ const testimonials = [
 		avatar:
 			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
 		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Guillermo Rauch",
+		profession: "CEO of Vercel",
+		link: "https://x.com/rauchg/status/1871628287962906846",
+		description: "Great project & maintainer",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1783856060249595904/8TfcCN0r_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Vybhav Bhargav",
+		description: "better-auth is a work of art.",
+		profession: "founding engineer @glyfspace",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
+		link: "https://x.com/vybhavab/status/1891589126513684669",
+		social: <Icons.x />,
+	},
+	{
+		name: "Shreyas Mididoddi",
+		description:
+			"dang!! Didn't think I would but absolutely loving @better_auth",
+		profession: "founding engineer @glyfspace",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
+		link: "https://x.com/vybhavab/status/1891589126513684669",
 		social: <Icons.x />,
 	},
 ];
