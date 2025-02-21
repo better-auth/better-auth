@@ -9,6 +9,7 @@ import babelPresetReact from "@babel/preset-react";
 import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import { getTsconfigInfo } from "./get-tsconfig-info";
 
 let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
 
@@ -25,25 +26,14 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function stripJsonComments(jsonString: string): string {
-	return jsonString
-		.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
-			g ? "" : m,
-		)
-		.replace(/,(?=\s*[}\]])/g, "");
-}
-
 function getPathAliases(cwd: string): Record<string, string> | null {
 	const tsConfigPath = path.join(cwd, "tsconfig.json");
 	if (!fs.existsSync(tsConfigPath)) {
 		return null;
 	}
 	try {
-		const tsConfigContent = fs.readFileSync(tsConfigPath, "utf8");
-		const strippedTsConfigContent = stripJsonComments(tsConfigContent);
-		const tsConfig = JSON.parse(strippedTsConfigContent);
+		const tsConfig = getTsconfigInfo(cwd);
 		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
-
 		const result: Record<string, string> = {};
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {

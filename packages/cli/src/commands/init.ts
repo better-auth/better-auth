@@ -381,7 +381,10 @@ export async function initAction(opts: any) {
 
 	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
-
+	if (!envFiles.length) {
+		log.warn("No .env files found. Please create an env file first.");
+		process.exit(0);
+	}
 	let targetEnvFile: string;
 	if (envFiles.includes(".env")) targetEnvFile = ".env";
 	else if (envFiles.includes(".env.local")) targetEnvFile = ".env.local";
@@ -454,6 +457,10 @@ export async function initAction(opts: any) {
 				} else if (shouldAdd === "no") {
 					log.info(`Skipping ENV step.`);
 				} else if (shouldAdd === "other") {
+					if (!envFiles.length) {
+						cancel("No env files found. Please create an env file first.");
+						process.exit(0);
+					}
 					const envFilesToUpdate = await multiselect({
 						message: "Select the .env files you want to update",
 						options: envFiles.map((x) => ({
@@ -859,7 +866,7 @@ export async function initAction(opts: any) {
 
 					if (dependencies.length !== 0) {
 						log.info(
-							`There are ${dependencies.length} dependencies for your plugins of choice.`,
+							`There are ${dependencies.length} dependencies to install.`,
 						);
 						const shouldInstallDeps = await confirm({
 							message: `Would you like us to install dependencies?`,
