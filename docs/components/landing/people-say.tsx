@@ -15,17 +15,6 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Sébastien Chopin",
-		profession: "Creator of Nuxt & NuxtLabs",
-		link: "https://x.com/Atinux/status/1853751424561336322",
-		description:
-			"When @better_auth meets @nuxt_hub to build full-stack Nuxt apps on Cloudflare (using D1 & KV).",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1862505215624142848/7tSrng8r_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
 		name: "Lazar Nikolov",
 		profession: "Software Engineer & Educator",
 		link: "https://x.com/NikolovLazar/status/1888992999872331985",
@@ -46,26 +35,37 @@ const testimonials = [
 		image: "",
 		social: <Icons.x />,
 	},
-
 	{
-		name: "Nizzy",
-		profession: "engineer @calcom",
-		link: "https://x.com/NizzyABI/status/1889178812459422162",
+		name: "Sébastien Chopin",
+		profession: "Creator of Nuxt & NuxtLabs",
+		link: "https://x.com/Atinux/status/1853751424561336322",
 		description:
-			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
+			"When @better_auth meets @nuxt_hub to build full-stack Nuxt apps on Cloudflare (using D1 & KV).",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1862505215624142848/7tSrng8r_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
+
 	{
 		name: "Dax",
 		profession: "Creator of SST",
 		link: "https://x.com/thdxr/status/1866222656468705426",
 		description:
-			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed SaaS options are still 'better' but should be the exception and not the default",
+			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
 		avatar:
 			"https://pbs.twimg.com/profile_images/1602333093485891584/mmVqjFNI_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Dagmawi Babi",
+		profession: "Developer",
+		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
+		description:
+			"@better_auth exceeded all expectations, and it's just getting started",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -92,17 +92,6 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Dagmawi Babi",
-		profession: "Developer",
-		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
-		description:
-			"@better_auth exceeded all expectations, and it's just getting started",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
 		name: "Guillermo Rauch",
 		profession: "CEO of Vercel",
 		link: "https://x.com/rauchg/status/1871628287962906846",
@@ -112,6 +101,18 @@ const testimonials = [
 		image: "",
 		social: <Icons.x />,
 	},
+	{
+		name: "Nizzy",
+		profession: "engineer @calcom",
+		link: "https://x.com/NizzyABI/status/1889178812459422162",
+		description:
+			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+
 	{
 		name: "Vybhav Bhargav",
 		description: "better-auth is a work of art.",
