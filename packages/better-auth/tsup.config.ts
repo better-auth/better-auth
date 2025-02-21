@@ -32,6 +32,7 @@ export default defineConfig((env) => {
 			"plugins/admin": "./src/plugins/admin/index.ts",
 			"plugins/anonymous": "./src/plugins/anonymous/index.ts",
 			"plugins/bearer": "./src/plugins/bearer/index.ts",
+			"plugins/captcha": "./src/plugins/captcha/index.ts",
 			"plugins/custom-session": "./src/plugins/custom-session/index.ts",
 			"plugins/email-otp": "./src/plugins/email-otp/index.ts",
 			"plugins/generic-oauth": "./src/plugins/generic-oauth/index.ts",
