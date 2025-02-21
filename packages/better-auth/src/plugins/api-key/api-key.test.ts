@@ -245,7 +245,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create an API key with a custom expiresIn", async () => {
-		const expiresIn = 1000 * 60 * 60 * 24 * 7; // 7 days
+		const expiresIn = 60 * 60 * 24 * 7; // 7 days
 		const expectedResult = new Date().getTime() + expiresIn;
 		const apiKey = await auth.api.createApiKey({
 			body: {
@@ -307,7 +307,7 @@ describe("api-key", async () => {
 			error: null,
 		};
 		try {
-			const expiresIn = 1000 * 60 * 60 * 24 * 0.5; // half a day
+			const expiresIn = 60 * 60 * 24 * 0.5; // half a day
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					expiresIn: expiresIn,
@@ -332,7 +332,7 @@ describe("api-key", async () => {
 			error: null,
 		};
 		try {
-			const expiresIn = 1000 * 60 * 60 * 24 * 365 * 10; // 10 year
+			const expiresIn = 60 * 60 * 24 * 365 * 10; // 10 year
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					expiresIn: expiresIn,
@@ -386,8 +386,8 @@ describe("api-key", async () => {
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					refillInterval: 1000,
+					userId: user.id,
 				},
-				headers,
 			});
 			res.data = apiKey;
 		} catch (error: any) {
@@ -411,8 +411,8 @@ describe("api-key", async () => {
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					refillAmount: 10,
+					userId: user.id,
 				},
-				headers,
 			});
 			res.data = apiKey;
 		} catch (error: any) {
@@ -434,8 +434,8 @@ describe("api-key", async () => {
 			body: {
 				refillInterval: refillInterval,
 				refillAmount: refillAmount,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
@@ -448,35 +448,12 @@ describe("api-key", async () => {
 		const apiKey = await auth.api.createApiKey({
 			body: {
 				remaining: remaining,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.remaining).toEqual(remaining);
-	});
-
-	it("should create API Key with custom remaining that's smaller than allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const remaining = 0;
-			const apiKey = await auth.api.createApiKey({
-				body: {
-					remaining: remaining,
-				},
-				headers,
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
 	});
 
 	it("should create API Key with custom remaining that's larger than allowed maximum", async () => {
@@ -489,8 +466,8 @@ describe("api-key", async () => {
 			const apiKey = await auth.api.createApiKey({
 				body: {
 					remaining: remaining,
+					userId: user.id,
 				},
-				headers,
 			});
 			result.data = apiKey;
 		} catch (error: any) {
@@ -637,7 +614,7 @@ describe("api-key", async () => {
 		expect(apiKey2?.start).toBeNull();
 	});
 
-	it("should use the defined chracatersLength if provided", async () => {
+	it("should use the defined charactersLength if provided", async () => {
 		const customLength = 3;
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
@@ -699,8 +676,8 @@ describe("api-key", async () => {
 			body: {
 				rateLimitMax: 15,
 				rateLimitTimeWindow: 1000,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();

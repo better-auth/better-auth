@@ -124,7 +124,8 @@ export function createApiKey({
 					refillInterval !== undefined ||
 					rateLimitMax !== undefined ||
 					rateLimitTimeWindow !== undefined ||
-					rateLimitEnabled !== undefined
+					rateLimitEnabled !== undefined ||
+					remaining !== null
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
