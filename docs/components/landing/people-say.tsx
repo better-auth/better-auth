@@ -26,6 +26,16 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
+		name: "Theo - t3.gg",
+		profession: "CEO of t3.chat",
+		link: "https://x.com/theo/status/1879769267866120341",
+		description: "Very exciting project and a super easy rec",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1799982162831396865/Fnol01I1_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
 		name: "Jonathan Wilke",
 		profession: "Creator of Supastarter",
 		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
