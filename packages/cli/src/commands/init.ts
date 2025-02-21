@@ -379,6 +379,16 @@ export async function initAction(opts: any) {
 			...defaultFormatOptions,
 		});
 
+	// ===== package.json =====
+	let packageInfo: Record<string, any>;
+	try {
+		packageInfo = getPackageInfo(cwd);
+	} catch (error) {
+		log.error(`❌ Couldn't read your package.json file. (dir: ${cwd})`);
+		log.error(JSON.stringify(error, null, 2));
+		process.exit(1);
+	}
+
 	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
 	if (!envFiles.length) {
@@ -392,119 +402,6 @@ export async function initAction(opts: any) {
 		targetEnvFile = ".env.development";
 	else if (envFiles.length === 1) targetEnvFile = envFiles[0];
 	else targetEnvFile = "none";
-
-	if (targetEnvFile !== "none") {
-		try {
-			const fileContents = await fs.readFile(
-				path.join(cwd, targetEnvFile),
-				"utf8",
-			);
-			const parsed = parse(fileContents);
-			let isMissingSecret = false;
-			let isMissingUrl = false;
-			if (parsed.BETTER_AUTH_SECRET === undefined) isMissingSecret = true;
-			if (parsed.BETTER_AUTH_URL === undefined) isMissingUrl = true;
-			if (isMissingSecret || isMissingUrl) {
-				let txt = "";
-				if (isMissingSecret && !isMissingUrl)
-					txt = chalk.bold(`BETTER_AUTH_SECRET`);
-				else if (!isMissingSecret && isMissingUrl)
-					txt = chalk.bold(`BETTER_AUTH_URL`);
-				else
-					txt =
-						chalk.bold.underline(`BETTER_AUTH_SECRET`) +
-						` and ` +
-						chalk.bold.underline(`BETTER_AUTH_URL`);
-				log.warn(`Missing ${txt} in ${targetEnvFile}`);
-
-				const shouldAdd = await select({
-					message: `Do you want to add ${txt} to ${targetEnvFile}?`,
-					options: [
-						{ label: "Yes", value: "yes" },
-						{ label: "No", value: "no" },
-						{ label: "Choose other file(s)", value: "other" },
-					],
-				});
-				if (isCancel(shouldAdd)) {
-					cancel(`✋ Operation cancelled.`);
-					process.exit(0);
-				}
-				let envs: string[] = [];
-				if (isMissingSecret) {
-					envs.push("BETTER_AUTH_SECRET");
-				}
-				if (isMissingUrl) {
-					envs.push("BETTER_AUTH_URL");
-				}
-				if (shouldAdd === "yes") {
-					try {
-						await updateEnvs({
-							files: [path.join(cwd, targetEnvFile)],
-							envs: envs,
-							isCommented: false,
-						});
-					} catch (error) {
-						log.error(`Failed to add ENV variables to ${targetEnvFile}`);
-						log.error(JSON.stringify(error, null, 2));
-						process.exit(1);
-					}
-					log.success(`🚀 ENV variables successfully added!`);
-					if (isMissingUrl) {
-						log.info(
-							`Be sure to update your BETTER_AUTH_URL according to your app's needs.`,
-						);
-					}
-				} else if (shouldAdd === "no") {
-					log.info(`Skipping ENV step.`);
-				} else if (shouldAdd === "other") {
-					if (!envFiles.length) {
-						cancel("No env files found. Please create an env file first.");
-						process.exit(0);
-					}
-					const envFilesToUpdate = await multiselect({
-						message: "Select the .env files you want to update",
-						options: envFiles.map((x) => ({
-							value: path.join(cwd, x),
-							label: x,
-						})),
-						required: false,
-					});
-					if (isCancel(envFilesToUpdate)) {
-						cancel("✋ Operation cancelled.");
-						process.exit(0);
-					}
-					if (envFilesToUpdate.length === 0) {
-						log.info("No .env files to update. Skipping...");
-					} else {
-						try {
-							await updateEnvs({
-								files: envFilesToUpdate,
-								envs: envs,
-								isCommented: false,
-							});
-						} catch (error) {
-							log.error(`Failed to update .env files:`);
-							log.error(JSON.stringify(error, null, 2));
-							process.exit(1);
-						}
-						log.success(`🚀 ENV files successfully updated!`);
-					}
-				}
-			}
-		} catch (error) {
-			// if fails, ignore, and do not proceed with ENV operations.
-		}
-	}
-
-	// ===== package.json =====
-	let packageInfo: Record<string, any>;
-	try {
-		packageInfo = getPackageInfo(cwd);
-	} catch (error) {
-		log.error(`❌ Couldn't read your package.json file. (dir: ${cwd})`);
-		log.error(JSON.stringify(error, null, 2));
-		process.exit(1);
-	}
 
 	// ===== tsconfig.json =====
 	let tsconfigInfo: Record<string, any>;
@@ -705,7 +602,6 @@ export async function initAction(opts: any) {
 	}
 
 	// ===== create auth config =====
-	let configStatus: "created" | "skip" | "exists" = "exists";
 	let current_user_config = "";
 	let database: SupportedDatabases | null = null;
 	let add_plugins: SupportedPlugin[] = [];
@@ -723,8 +619,6 @@ export async function initAction(opts: any) {
 			process.exit(0);
 		}
 		if (shouldCreateAuthConfig === "yes") {
-			configStatus = "created";
-
 			const shouldSetupDb = await confirm({
 				message: `Would you like to set up your ${chalk.bold(`database`)}?`,
 				initialValue: true,
@@ -915,11 +809,9 @@ export async function initAction(opts: any) {
 				process.exit(1);
 			}
 		} else if (shouldCreateAuthConfig === "no") {
-			configStatus = "skip";
 			log.info(`Skipping auth config file creation.`);
 		}
 	} else {
-		configStatus = "exists";
 		log.message();
 		log.success(`Found auth config file. ${chalk.gray(`(${config_path})`)}`);
 		log.message();
@@ -1018,6 +910,109 @@ export async function initAction(opts: any) {
 				`(${authClientConfigPath})`,
 			)}`,
 		);
+	}
+
+	if (targetEnvFile !== "none") {
+		try {
+			const fileContents = await fs.readFile(
+				path.join(cwd, targetEnvFile),
+				"utf8",
+			);
+			const parsed = parse(fileContents);
+			let isMissingSecret = false;
+			let isMissingUrl = false;
+			if (parsed.BETTER_AUTH_SECRET === undefined) isMissingSecret = true;
+			if (parsed.BETTER_AUTH_URL === undefined) isMissingUrl = true;
+			if (isMissingSecret || isMissingUrl) {
+				let txt = "";
+				if (isMissingSecret && !isMissingUrl)
+					txt = chalk.bold(`BETTER_AUTH_SECRET`);
+				else if (!isMissingSecret && isMissingUrl)
+					txt = chalk.bold(`BETTER_AUTH_URL`);
+				else
+					txt =
+						chalk.bold.underline(`BETTER_AUTH_SECRET`) +
+						` and ` +
+						chalk.bold.underline(`BETTER_AUTH_URL`);
+				log.warn(`Missing ${txt} in ${targetEnvFile}`);
+
+				const shouldAdd = await select({
+					message: `Do you want to add ${txt} to ${targetEnvFile}?`,
+					options: [
+						{ label: "Yes", value: "yes" },
+						{ label: "No", value: "no" },
+						{ label: "Choose other file(s)", value: "other" },
+					],
+				});
+				if (isCancel(shouldAdd)) {
+					cancel(`✋ Operation cancelled.`);
+					process.exit(0);
+				}
+				let envs: string[] = [];
+				if (isMissingSecret) {
+					envs.push("BETTER_AUTH_SECRET");
+				}
+				if (isMissingUrl) {
+					envs.push("BETTER_AUTH_URL");
+				}
+				if (shouldAdd === "yes") {
+					try {
+						await updateEnvs({
+							files: [path.join(cwd, targetEnvFile)],
+							envs: envs,
+							isCommented: false,
+						});
+					} catch (error) {
+						log.error(`Failed to add ENV variables to ${targetEnvFile}`);
+						log.error(JSON.stringify(error, null, 2));
+						process.exit(1);
+					}
+					log.success(`🚀 ENV variables successfully added!`);
+					if (isMissingUrl) {
+						log.info(
+							`Be sure to update your BETTER_AUTH_URL according to your app's needs.`,
+						);
+					}
+				} else if (shouldAdd === "no") {
+					log.info(`Skipping ENV step.`);
+				} else if (shouldAdd === "other") {
+					if (!envFiles.length) {
+						cancel("No env files found. Please create an env file first.");
+						process.exit(0);
+					}
+					const envFilesToUpdate = await multiselect({
+						message: "Select the .env files you want to update",
+						options: envFiles.map((x) => ({
+							value: path.join(cwd, x),
+							label: x,
+						})),
+						required: false,
+					});
+					if (isCancel(envFilesToUpdate)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					if (envFilesToUpdate.length === 0) {
+						log.info("No .env files to update. Skipping...");
+					} else {
+						try {
+							await updateEnvs({
+								files: envFilesToUpdate,
+								envs: envs,
+								isCommented: false,
+							});
+						} catch (error) {
+							log.error(`Failed to update .env files:`);
+							log.error(JSON.stringify(error, null, 2));
+							process.exit(1);
+						}
+						log.success(`🚀 ENV files successfully updated!`);
+					}
+				}
+			}
+		} catch (error) {
+			// if fails, ignore, and do not proceed with ENV operations.
+		}
 	}
 
 	outro(outroText);
