@@ -11,4 +11,4 @@ catalogs:
     react: 18.3.1
     react-dom: 18.3.1
 catalog:
-  "better-call": "^1.0.1"
+  "better-call": "^1.0.2"
