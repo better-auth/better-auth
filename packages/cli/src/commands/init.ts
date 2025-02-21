@@ -604,7 +604,7 @@ export async function initAction(opts: any) {
 				s2.stop(
 					`Better Auth installed ${chalk.greenBright(
 						`successfully`,
-					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)}ms)`)}`,
+					)}! ${chalk.gray(`(${formatMilliseconds(Date.now() - start)})`)}`,
 				);
 			} catch (error: any) {
 				s2.stop(`Failed to install Better Auth:`);
