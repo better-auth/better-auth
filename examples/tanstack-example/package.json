@@ -20,7 +20,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "peerDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.1",
@@ -33,7 +33,7 @@
     "@tanstack/start": "^1.86.1",
     "@types/ua-parser-js": "^0.7.39",
     "@vitejs/plugin-react": "^4.3.4",
-    "better-auth": "^0.6.2",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

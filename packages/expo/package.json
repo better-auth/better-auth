@@ -49,7 +49,7 @@
     "better-auth": "workspace:*"
   },
   "dependencies": {
-    "better-call": "1.0.0-beta.4",
+    "better-call": "catalog:",
     "zod": "^3.23.8"
   },
   "files": [

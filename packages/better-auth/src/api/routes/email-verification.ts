@@ -247,7 +247,8 @@ export const verifyEmail = createAuthEndpoint(
 				{
 					email: parsed.updateTo,
 					emailVerified: false,
-				},ctx
+				},
+				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -290,9 +291,13 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
-			emailVerified: true,
-		},ctx);
+		await ctx.context.internalAdapter.updateUserByEmail(
+			parsed.email,
+			{
+				emailVerified: true,
+			},
+			ctx,
+		);
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {

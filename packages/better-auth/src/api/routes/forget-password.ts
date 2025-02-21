@@ -263,17 +263,24 @@ export const resetPassword = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount({
-				userId,
-				providerId: "credential",
-				password: hashedPassword,
-				accountId: userId,
-			}, ctx);
+			await ctx.context.internalAdapter.createAccount(
+				{
+					userId,
+					providerId: "credential",
+					password: hashedPassword,
+					accountId: userId,
+				},
+				ctx,
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
-		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword, ctx);
+		await ctx.context.internalAdapter.updatePassword(
+			userId,
+			hashedPassword,
+			ctx,
+		);
 		return ctx.json({
 			status: true,
 		});

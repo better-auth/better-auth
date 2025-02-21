@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth/plugins";
+import type { BetterAuthPlugin } from "../../plugins";
 import type { Provider } from "./types";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { CAPTCHA_ERROR_CODES } from "./error-codes";
