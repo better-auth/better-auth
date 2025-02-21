@@ -224,7 +224,7 @@ export const prismaAdapter =
 
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
-					take: limit,
+					...(limit ? { take: limit } : {}),
 					skip: offset || 0,
 					...(sortBy?.field
 						? {
