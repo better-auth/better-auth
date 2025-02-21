@@ -42,7 +42,7 @@ const testimonials = [
 		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
 		description: "fuck, @better_auth is just so good",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1849386198537560064/NKFdXusJ_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1884529433979068416/AhfbeVEh_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
