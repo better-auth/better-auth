@@ -40,6 +40,13 @@ export function createApiKey({
 					.optional()
 					.nullable()
 					.default(null),
+
+				userId: z
+					.string({
+						description:
+							"User Id of the user that the Api Key belongs to. Useful for server-side only.",
+					})
+					.optional(),
 				prefix: z
 					.string({ description: "Prefix of the Api Key" })
 					.regex(/^[a-zA-Z0-9_-]+$/, {
@@ -100,25 +107,16 @@ export function createApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-
-			// make sure that the user has a session.
-			if (!session) {
-				opts.events?.({
-					event: "key.create",
-					success: false,
-					error: {
-						code: "user.unauthorized",
-						message: ERROR_CODES.UNAUTHORIZED_SESSION,
-					},
-					user: null,
-					apiKey: null,
-				});
+			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const user =
+				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+			if (!user?.id) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
 			}
 
-			if (ctx.request) {
+			if (authRequired) {
 				// if this endpoint was being called from the client,
 				// we must make sure they can't use server-only properties.
 				if (
@@ -128,16 +126,6 @@ export function createApiKey({
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined
 				) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
 					});
@@ -147,31 +135,11 @@ export function createApiKey({
 			// if metadata is defined, than check that it's an object.
 			if (metadata) {
 				if (opts.enableMetadata === false) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.METADATA_DISABLED,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.METADATA_DISABLED,
 					});
 				}
 				if (typeof metadata !== "object") {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.INVALID_METADATA_TYPE,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
@@ -180,32 +148,12 @@ export function createApiKey({
 
 			// make sure that if they pass a refill amount, they also pass a refill interval
 			if (refillAmount && !refillInterval) {
-				opts.events?.({
-					event: "key.create",
-					success: false,
-					error: {
-						code: "request.forbidden",
-						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
 				throw new APIError("BAD_REQUEST", {
 					message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 				});
 			}
 			// make sure that if they pass a refill interval, they also pass a refill amount
 			if (refillInterval && !refillAmount) {
-				opts.events?.({
-					event: "key.create",
-					success: false,
-					error: {
-						code: "request.forbidden",
-						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
 				throw new APIError("BAD_REQUEST", {
 					message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 				});
@@ -213,16 +161,6 @@ export function createApiKey({
 
 			if (expiresIn) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.disabledExpiration",
-							message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
 					});
@@ -231,40 +169,10 @@ export function createApiKey({
 				const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidExpiration",
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-							details: {
-								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-								receivedExpiresIn: expiresIn_in_days,
-								minExpiresIn: opts.keyExpiration.minExpiresIn,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 					});
 				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidExpiration",
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-							details: {
-								maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-								receivedExpiresIn: expiresIn_in_days,
-								minExpiresIn: opts.keyExpiration.minExpiresIn,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 					});
@@ -273,41 +181,11 @@ export function createApiKey({
 
 			if (remaining) {
 				if (remaining < opts.minimumRemaining) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidRemaining",
-							message: ERROR_CODES.INVALID_REMAINING,
-							details: {
-								maxRemaining: opts.maximumRemaining,
-								receivedRemaining: remaining,
-								minRemaining: opts.minimumRemaining,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_REMAINING,
 					});
 				}
 				if (remaining > opts.maximumRemaining) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidRemaining",
-							message: ERROR_CODES.INVALID_REMAINING,
-							details: {
-								maxRemaining: opts.maximumRemaining,
-								receivedRemaining: remaining,
-								minRemaining: opts.minimumRemaining,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_REMAINING,
 					});
@@ -316,41 +194,11 @@ export function createApiKey({
 
 			if (prefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidPrefixLength",
-							message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-							details: {
-								minLength: opts.minimumPrefixLength,
-								maxLength: opts.maximumPrefixLength,
-								receivedLength: prefix.length,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
 					});
 				}
 				if (prefix.length > opts.maximumPrefixLength) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidPrefixLength",
-							message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-							details: {
-								minLength: opts.minimumPrefixLength,
-								maxLength: opts.maximumPrefixLength,
-								receivedLength: prefix.length,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
 					});
@@ -359,41 +207,11 @@ export function createApiKey({
 
 			if (name) {
 				if (name.length < opts.minimumNameLength) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidNameLength",
-							message: ERROR_CODES.INVALID_NAME_LENGTH,
-							details: {
-								minLength: opts.minimumNameLength,
-								maxLength: opts.maximumNameLength,
-								receivedLength: name.length,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
 				}
 				if (name.length > opts.maximumNameLength) {
-					opts.events?.({
-						event: "key.create",
-						success: false,
-						error: {
-							code: "key.invalidNameLength",
-							message: ERROR_CODES.INVALID_NAME_LENGTH,
-							details: {
-								minLength: opts.minimumNameLength,
-								maxLength: opts.maximumNameLength,
-								receivedLength: name.length,
-							},
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
@@ -435,7 +253,7 @@ export function createApiKey({
 					: opts.keyExpiration.defaultExpiresIn
 						? getDate(opts.keyExpiration.defaultExpiresIn, "sec")
 						: null,
-				userId: session.user.id,
+				userId: user.id,
 				lastRefillAt: null,
 				lastRequest: null,
 				metadata: null,
@@ -464,15 +282,6 @@ export function createApiKey({
 				model: schema.apikey.modelName,
 				data: data,
 			});
-
-			opts.events?.({
-				event: "key.create",
-				success: true,
-				error: null,
-				user: session.user,
-				apiKey: apiKey,
-			});
-
 			return ctx.json({
 				...apiKey,
 				key: key,

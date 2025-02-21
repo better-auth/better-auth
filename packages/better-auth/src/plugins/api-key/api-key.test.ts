@@ -84,7 +84,7 @@ describe("api-key", async () => {
 		statusCode: string;
 	}
 
-	it("should fail to create API Keys from server without headers", async () => {
+	it("should fail to create API Keys from server without headers and userId", async () => {
 		let res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
@@ -103,10 +103,11 @@ describe("api-key", async () => {
 		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
 	});
 
-	it("should successfully create API keys from server with headers", async () => {
+	it("should successfully create API keys from server with userId", async () => {
 		const apiKey = await auth.api.createApiKey({
-			body: {},
-			headers,
+			body: {
+				userId: user.id,
+			},
 		});
 
 		expect(apiKey).not.toBeNull();
