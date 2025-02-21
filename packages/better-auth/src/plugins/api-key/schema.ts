@@ -17,7 +17,7 @@ export const apiKeySchema = ({
 					input: false,
 				},
 				/**
-				 * Shows the first few characters of the API key, excluding the prefix.
+				 * Shows the first few characters of the API key
 				 * This allows you to show those few characters in the UI to make it easier for users to identify the API key.
 				 */
 				start: {
