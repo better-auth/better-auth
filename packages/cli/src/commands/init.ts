@@ -382,7 +382,7 @@ export async function initAction(opts: any) {
 	// ===== ENV files =====
 	const envFiles = await getEnvFiles(cwd);
 	if (!envFiles.length) {
-		log.warn("No .env files found. Please create an env file first.");
+		outro("❌ No .env files found. Please create an env file first.");
 		process.exit(0);
 	}
 	let targetEnvFile: string;
