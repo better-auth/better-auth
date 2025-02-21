@@ -4,6 +4,7 @@ import type { OAuthProvider } from "../oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../utils/logger";
 import { decodeJwt } from "jose";
+import { base64 } from "@better-auth/utils/base64";
 
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	sub: string;
@@ -89,8 +90,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 						try {
 							const response = context.response.clone();
 							const pictureBuffer = await response.arrayBuffer();
-							const pictureBase64 =
-								Buffer.from(pictureBuffer).toString("base64");
+							const pictureBase64 = base64.encode(pictureBuffer);
 							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
 						} catch (e) {
 							logger.error(
