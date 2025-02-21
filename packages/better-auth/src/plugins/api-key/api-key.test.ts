@@ -1080,7 +1080,7 @@ describe("api-key", async () => {
 	});
 
 	it("should update api key expiresIn value", async () => {
-		const expiresIn = 1000 * 60 * 60 * 24 * 7; // 7 days
+		const expiresIn = 60 * 60 * 24 * 7; // 7 days
 		const expectedResult = new Date().getTime() + expiresIn;
 		const apiKey = await auth.api.updateApiKey({
 			body: {
