@@ -1,10 +1,15 @@
+"use client";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggler";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 import { NavLink } from "./nav-link";
+import { useSearchContext } from "fumadocs-ui/provider";
+import { loglib } from "@loglib/tracker";
+import { Search } from "lucide-react";
 import { Logo } from "./logo";
 
 export const Navbar = () => {
+	const { setOpenSearch } = useSearchContext();
 	return (
 		<div className="flex flex-col sticky top-0 bg-background backdrop-blur-md z-30">
 			<nav className="md:grid grid-cols-12 md:border-b top-0 flex items-center justify-between ">
@@ -20,6 +25,18 @@ export const Navbar = () => {
 					</div>
 				</Link>
 				<div className="md:col-span-10 flex items-center justify-end relative">
+					<div
+						className="flex items-center gap-2 py-3.5 md:py-4 h-full px-4 bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
+						onClick={() => {
+							setOpenSearch(true);
+							loglib.track("navbar-search-open");
+						}}
+					>
+						<Search className="w-4 h-4" />
+						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
+							Search <span className="lg:hidden">...</span> <span className="hidden lg:inline">documentation...</span>
+						</p>
+					</div>
 					<ul className="md:flex items-center divide-x w-max hidden shrink-0">
 						{navMenu.map((menu, i) => (
 							<NavLink key={menu.name} href={menu.path}>
