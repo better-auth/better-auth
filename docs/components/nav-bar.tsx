@@ -34,7 +34,7 @@ export const Navbar = () => {
 					>
 						<Search className="w-4 h-4" />
 						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-700 to-gray-800 dark:from-gray-500 dark:to-stone-400 bg-clip-text">
-							Search <span className="lg:hidden">...</span> <span className="hidden lg:inline">documentation...</span>
+							 <span className="lg:hidden">Search...</span> <span className="hidden lg:inline">Search documentation...</span>
 						</p>
 					</div>
 					<ul className="md:flex items-center divide-x w-max hidden shrink-0">
