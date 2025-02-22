@@ -626,7 +626,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 			rejectAppInvitation: createAuthEndpoint(
 				"/reject-invitation",
 				{
-					method: "GET",
+					method: "POST",
 					query: z
 						.object({
 							callbackURL: z

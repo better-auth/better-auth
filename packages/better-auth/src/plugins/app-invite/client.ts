@@ -16,5 +16,11 @@ export const appInviteClient = <
 	return {
 		id: "app-invite",
 		$InferServerPlugin: {} as ReturnType<typeof appInvite<O>>,
+		pathMethods: {
+			"/invite-user": "POST",
+			"/accept-invitation": "POST",
+			"/reject-invitation": "POST",
+			"/cancel-invitation": "POST",
+		}
 	} satisfies BetterAuthClientPlugin;
 };
