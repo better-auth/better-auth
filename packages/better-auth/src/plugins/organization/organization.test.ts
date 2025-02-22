@@ -569,7 +569,7 @@ describe("access control", async (it) => {
 	);
 
 	it("should return success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permission: {
 				project: ["create"],
@@ -588,7 +588,7 @@ describe("access control", async (it) => {
 	});
 
 	it("should return not success", async () => {
-		const canCreateProject = checkRolePermission({
+		const canCreateProject = await checkRolePermission({
 			role: "admin",
 			permission: {
 				project: ["delete"],
@@ -600,7 +600,7 @@ describe("access control", async (it) => {
 	it("should return not success", async () => {
 		let error: BetterAuthError | null = null;
 		try {
-			checkRolePermission({
+			await checkRolePermission({
 				role: "admin",
 				permission: {
 					project: ["read"],
