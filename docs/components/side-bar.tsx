@@ -4,10 +4,9 @@ import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 
 import { AsideLink } from "@/components/ui/aside-link";
 import { Suspense, useEffect, useState } from "react";
-import { useSearchContext } from "fumadocs-ui/provider";
 import { usePathname, useRouter } from "next/navigation";
 import { contents, examples } from "./sidebar-content";
-import { ChevronDownIcon, Search } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -21,7 +20,6 @@ import { cn } from "@/lib/utils";
 export default function ArticleLayout() {
 	const [currentOpen, setCurrentOpen] = useState<number>(0);
 
-	const { setOpenSearch } = useSearchContext();
 	const pathname = usePathname();
 
 	function getDefaultValue() {
@@ -120,19 +118,6 @@ export default function ArticleLayout() {
 							</SelectItem>
 						</SelectContent>
 					</Select>
-					<div
-						className="flex items-center gap-2 p-2 px-4 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
-						onClick={() => {
-							setOpenSearch(true);
-							loglib.track("sidebar-search-open");
-						}}
-					>
-						<Search className="w-4 h-4" />
-						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
-							Search documentation...
-						</p>
-					</div>
-
 					<MotionConfig
 						transition={{ duration: 0.4, type: "spring", bounce: 0 }}
 					>
