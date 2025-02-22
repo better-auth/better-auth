@@ -328,7 +328,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: "Role not found!",
+						message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 					},
 				});
 			}
