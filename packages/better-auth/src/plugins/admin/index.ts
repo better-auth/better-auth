@@ -534,8 +534,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						ctx.body.userId,
 						{
 							banned: false,
+							banExpires: null,
+							banReason: null,
 						},
 					);
+
 					return ctx.json({
 						user: user,
 					});
@@ -677,6 +680,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
+						true,
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {

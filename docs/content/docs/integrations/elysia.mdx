@@ -15,71 +15,78 @@ We need to mount the handler to Elysia endpoint.
 import { Elysia } from "elysia";
 import { auth } from "./auth";
 
-const betterAuthView = (context: Context) => {
-  const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
-  // validate request method
-  if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
-    return auth.handler(context.request);
-  }
-  else {
-    context.error(405)
-  }
-}
-
-const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
+const app = new Elysia().mount(auth.handler).listen(3000);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
 );
 ```
 
-### Middleware
+### CORS
 
-You can use [derive](https://elysiajs.com/essential/handler.html#derive) to provide session and user information before pass to view.
+To configure cors, you can use the `cors` plugin from `@elysiajs/cors`.
+
+```ts
+import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
+
+import { auth } from "./auth";
+
+const app = new Elysia()
+  .use(
+    cors({
+      origin: "http://localhost:3001",
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  )
+  .mount(auth.handler)
+  .listen(3000);
+
+console.log(
+  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
+);
+```
+
+### Macro
+
+You can use [macro](https://elysiajs.com/patterns/macro.html#macro) with [resolve](https://elysiajs.com/essential/handler.html#resolve) to provide session and user information before pass to view.
 
 ```ts
 import { Elysia } from "elysia";
 import { auth } from "./auth";
 
 // user middleware (compute user and session and pass to routes)
-const userMiddleware = async (request: Request) => {
-  const session = await auth.api.getSession({ headers: request.headers });
+const betterAuth = new Elysia({ name: "better-auth" })
+  .mount(auth.handler)
+  .macro({
+    auth: {
+      async resolve({ error, request: { headers } }) {
+        const session = await auth.api.getSession({
+          headers,
+        });
 
-  if (!session) {
-    return {
-      user: null,
-      session: null
-    }
-  }
+        if (!session) return error(401);
 
-  return {
-    user: session.user,
-    session: session.session
-  }
-}
-
-// user info view
-// type User can be export from `typeof auth.$Infer.Session.user`
-// type Session can be export from `typeof auth.$Infer.Session.session`
-const userInfo = (user: User | null, session: Session | null) => {
-  return {
-    user: user,
-    session: session
-  }
-}
+        return {
+          user: session.user,
+          session: session.session,
+        };
+      },
+    },
+  });
 
 const app = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
-  // about betterAuthView code, please check `Mount the handler` topic 
-  .all("/api/auth/*", betterAuthView)
-  // Example custom endpoint
-  .get("/user", ({ user, session }) => userInfo(user, session))
+  .use(betterAuth)
+  .get("/user", ({ user }) => user, {
+    auth: true,
+  })
   .listen(3000);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
 );
-
 ```
 
 This will allow you to access the `user` and `session` object in all of your routes.

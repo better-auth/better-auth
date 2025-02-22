@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { type Passkey, passkey, passkeyClient } from ".";
+import { type Passkey, passkey } from ".";
 import { createAuthClient } from "../../client";
+import { passkeyClient } from "./client";
 
 describe("passkey", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
