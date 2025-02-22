@@ -102,7 +102,10 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					if (!role) {
 						return false;
 					}
-					const isAuthorized = await role?.authorize(data.permission as any, data.role);
+					const isAuthorized = await role?.authorize(
+						data.permission as any,
+						data.role,
+					);
 					return isAuthorized.success;
 				},
 			},

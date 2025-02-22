@@ -11,12 +11,12 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 		roles: typeof defaultRoles & {
 			[key: string]: Role<{}>;
 		};
-    authorize?: Role["authorize"];
+		authorize?: Role["authorize"];
 		getSession: (context: Context<any, any>) => Promise<{
-				session: Session & {
-					activeOrganizationId?: string;
-				};
-				user: User;
+			session: Session & {
+				activeOrganizationId?: string;
+			};
+			user: User;
 		}>;
 	};
 });

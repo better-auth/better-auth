@@ -65,7 +65,7 @@ export interface OrganizationOptions {
 		| boolean
 		| ((user: User) => Promise<boolean> | boolean);
 
-	authorize?: Role["authorize"]
+	authorize?: Role["authorize"];
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -375,14 +375,17 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						});
 					}
 					const role = (ctx.context as any).authorize
-            ? { authorize: (ctx.context as any).authorize }
-            : roles[member.role as keyof typeof roles];
+						? { authorize: (ctx.context as any).authorize }
+						: roles[member.role as keyof typeof roles];
 					if (!role) {
 						throw new APIError("BAD_REQUEST", {
 							message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 						});
 					}
-					const result = await role.authorize(ctx.body.permission as any, member.role);
+					const result = await role.authorize(
+						ctx.body.permission as any,
+						member.role,
+					);
 					if (result.error) {
 						return ctx.json(
 							{

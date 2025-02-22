@@ -69,6 +69,10 @@ export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
 export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, role: string, connector?: Connector) => Promise<AuthorizeResponse> | AuthorizeResponse;
+	authorize: (
+		request: any,
+		role: string,
+		connector?: Connector,
+	) => Promise<AuthorizeResponse> | AuthorizeResponse;
 	statements: TStatements;
 };
