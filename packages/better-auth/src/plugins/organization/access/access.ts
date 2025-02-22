@@ -28,8 +28,9 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 		statements,
 		authorize<K extends keyof TStatements>(
 			request: Subset<K, TStatements>,
+			role: string,
 			connector?: Connector,
-		): AuthorizeResponse {
+		): Promise<AuthorizeResponse> | AuthorizeResponse {
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
 			)) {
@@ -68,6 +69,6 @@ export type AccessControl<TStatements extends Statements = Statements> =
 	ReturnType<typeof createAccessControl<TStatements>>;
 
 export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, connector?: Connector) => AuthorizeResponse;
+	authorize: (request: any, role: string, connector?: Connector) => Promise<AuthorizeResponse> | AuthorizeResponse;
 	statements: TStatements;
 };

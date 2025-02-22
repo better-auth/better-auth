@@ -82,7 +82,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 				Member: {} as Member,
 			},
 			organization: {
-				checkRolePermission: <
+				checkRolePermission: async <
 					R extends O extends { roles: any }
 						? keyof O["roles"]
 						: "admin" | "member" | "owner",
@@ -102,7 +102,7 @@ export const organizationClient = <O extends OrganizationClientOptions>(
 					if (!role) {
 						return false;
 					}
-					const isAuthorized = role?.authorize(data.permission as any);
+					const isAuthorized = await role?.authorize(data.permission as any, data.role);
 					return isAuthorized.success;
 				},
 			},

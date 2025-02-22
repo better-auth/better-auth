@@ -65,24 +65,7 @@ export interface OrganizationOptions {
 		| boolean
 		| ((user: User) => Promise<boolean> | boolean);
 
-	/**
-	 * Custom function to get a role based on the role name.
-	 * This allows you to implement your own role resolution logic.
-	 *
-	 * @example
-	 * ```ts
-	 * getRole: async (roleName) => {
-	 *   const roleFromDB = await db.roles.findOne({ name: roleName });
-	 *   return {
-	 *     authorize: (request) => ({
-	 *       success: roleFromDB.permissions.includes(request.permission),
-	 *       error: 'Not authorized'
-	 *     })
-	 *   };
-	 * }
-	 * ```
-	 */
-	getRole?: (roleName: string) => Promise<Role> | Role;
+	authorize?: Role["authorize"]
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -284,13 +267,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
 		roles,
-		getRole: async (roleName: string) => {
-			if (options?.getRole) {
-				return await options.getRole(roleName);
-			}
-			const role = roles[roleName as keyof typeof roles];
-			return role;
-		},
+		authorize: options?.authorize,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
 			return await getSessionFromCtx(context);
@@ -397,13 +374,15 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role: Role = await (ctx.context as any).getRole(member.role);
+					const role = (ctx.context as any).authorize
+            ? { authorize: (ctx.context as any).authorize }
+            : roles[member.role as keyof typeof roles];
 					if (!role) {
 						throw new APIError("BAD_REQUEST", {
 							message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 						});
 					}
-					const result = role.authorize(ctx.body.permission as any);
+					const result = await role.authorize(ctx.body.permission as any, member.role);
 					if (result.error) {
 						return ctx.json(
 							{

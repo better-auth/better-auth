@@ -11,7 +11,7 @@ export const orgMiddleware = createAuthMiddleware(async (ctx) => {
 		roles: typeof defaultRoles & {
 			[key: string]: Role<{}>;
 		};
-		getRole: (roleName: string) => Promise<Role>;
+    authorize?: Role["authorize"];
 		getSession: (context: Context<any, any>) => Promise<{
 				session: Session & {
 					activeOrganizationId?: string;
