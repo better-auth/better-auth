@@ -9,6 +9,7 @@ import type { OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
+import { hasPermission } from "../has-permission";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -184,20 +185,23 @@ export const removeMember = createAuthEndpoint(
 		const isLeaving =
 			session.user.email === ctx.body.memberIdOrEmail ||
 			member.id === ctx.body.memberIdOrEmail;
-		const isOwner =
-			toBeRemovedMember.role ===
-			(ctx.context.orgOptions?.creatorRole || "owner");
-		if (isOwner) {
+		const roles = member.role.split(",");
+		const isOwnerLeaving =
+			isLeaving &&
+			roles.includes(ctx.context.orgOptions?.creatorRole || "owner");
+		if (isOwnerLeaving) {
 			throw new APIError("BAD_REQUEST", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 			});
 		}
-		const canDeleteMember =
-			isLeaving ||
-			role.authorize({
+		const canDeleteMember = hasPermission({
+			role: member.role,
+			options: ctx.context.orgOptions,
+			permission: {
 				member: ["delete"],
-			}).success;
+			},
+		});
 		if (!canDeleteMember) {
 			throw new APIError("UNAUTHORIZED", {
 				message:
@@ -229,7 +233,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.string() as unknown as InferRolesFromOption<O>,
+				role: z
+					.string()
+					.or(z.array(z.string())) as unknown as InferRolesFromOption<O>,
 				memberId: z.string(),
 				/**
 				 * If not provided, the active organization will be used
@@ -338,10 +344,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			 * If the member is not an owner, they cannot update the role of another member
 			 * as an owner.
 			 */
-			const hasPermission = role.authorize({
-				member: ["update"],
-			});
-			if (hasPermission.error) {
+			const canUpdateMember =
+				role.authorize({
+					member: ["update"],
+				}).error ||
+				(ctx.body.role === "owner" && member.role !== "owner");
+			if (!canUpdateMember) {
 				return ctx.json(null, {
 					body: {
 						message: "You are not allowed to update this member",
@@ -349,10 +357,15 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					status: 403,
 				});
 			}
+			if (!ctx.body.role) {
+				throw new APIError("BAD_REQUEST");
+			}
 
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				ctx.body.role as string,
+				Array.isArray(ctx.body.role)
+					? ctx.body.role?.join(",")
+					: (ctx.body.role as string),
 			);
 			if (!updatedMember) {
 				return ctx.json(null, {

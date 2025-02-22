@@ -6,10 +6,9 @@ import type {
 	InferPluginTypes,
 	InferSession,
 	InferUser,
-	PrettifyDeep,
-	Expand,
 	AuthContext,
 } from "./types";
+import type { PrettifyDeep, Expand } from "./types/helper";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";

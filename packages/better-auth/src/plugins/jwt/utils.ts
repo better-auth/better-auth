@@ -1,4 +1,5 @@
 import { subtle, getRandomValues } from "@better-auth/utils";
+import { base64 } from "@better-auth/utils/base64";
 
 async function deriveKey(secretKey: string): Promise<CryptoKey> {
 	const enc = new TextEncoder();
@@ -41,10 +42,8 @@ export async function encryptPrivateKey(
 		enc.encode(privateKey),
 	);
 
-	const encryptedPrivateKey = Buffer.from(new Uint8Array(ciphertext)).toString(
-		"base64",
-	);
-	const ivBase64 = Buffer.from(iv).toString("base64");
+	const encryptedPrivateKey = base64.encode(ciphertext);
+	const ivBase64 = base64.encode(iv);
 
 	return {
 		encryptedPrivateKey,
@@ -64,10 +63,8 @@ export async function decryptPrivateKey(
 	const key = await deriveKey(secretKey);
 	const { encryptedPrivateKey, iv } = encryptedPrivate;
 
-	const ivBuffer = Uint8Array.from(Buffer.from(iv, "base64"));
-	const ciphertext = Uint8Array.from(
-		Buffer.from(encryptedPrivateKey, "base64"),
-	);
+	const ivBuffer = base64.decode(iv);
+	const ciphertext = base64.decode(encryptedPrivateKey);
 
 	const decrypted = await subtle.decrypt(
 		{

@@ -133,7 +133,7 @@ describe("SSO", async () => {
 		} catch (e) {
 			expect(e).toMatchObject({
 				status: "BAD_REQUEST",
-				cause: {
+				body: {
 					message: "Invalid issuer. Must be a valid URL",
 				},
 			});
@@ -290,7 +290,7 @@ describe("provisioning", async (ctx) => {
 			headers,
 		});
 		const member = org?.members.find(
-			(m) => m.user.email === "sso-user@localhost:8000.com",
+			(m: any) => m.user.email === "sso-user@localhost:8000.com",
 		);
 		expect(member).toMatchObject({
 			role: "member",

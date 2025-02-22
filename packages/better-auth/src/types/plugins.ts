@@ -1,11 +1,15 @@
-import type { APIError, Endpoint } from "better-call";
 import type { Migration } from "kysely";
-import type { AuthEndpoint } from "../api/call";
+import { type AuthMiddleware } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
-import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
+import type {
+	DeepPartial,
+	LiteralString,
+	UnionToIntersection,
+} from "../types/helper";
 
 import type { AuthContext, BetterAuthOptions } from ".";
+import type { Endpoint } from "better-call";
 
 export type AuthPluginSchema = {
 	[table in string]: {
@@ -16,32 +20,6 @@ export type AuthPluginSchema = {
 		modelName?: string;
 	};
 };
-
-export type HookBeforeHandler = (context: HookEndpointContext) => Promise<
-	| void
-	| {
-			context?: Partial<HookEndpointContext>;
-	  }
-	| Response
-	| {
-			response: Record<string, any>;
-			body: any;
-			_flag: "json";
-	  }
->;
-
-export type HookAfterHandler = (context: HookEndpointContext) => Promise<
-	| void
-	| {
-			responseHeader?: Headers;
-	  }
-	| Response
-	| {
-			response: Record<string, any>;
-			body: any;
-			_flag: "json";
-	  }
->;
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
@@ -54,7 +32,7 @@ export type BetterAuthPlugin = {
 		options?: Partial<BetterAuthOptions>;
 	} | void;
 	endpoints?: {
-		[key: string]: AuthEndpoint;
+		[key: string]: Endpoint;
 	};
 	middlewares?: {
 		path: string;
@@ -81,16 +59,11 @@ export type BetterAuthPlugin = {
 	hooks?: {
 		before?: {
 			matcher: (context: HookEndpointContext) => boolean;
-			handler: HookBeforeHandler;
+			handler: AuthMiddleware;
 		}[];
 		after?: {
-			matcher: (
-				context: HookEndpointContext<{
-					returned: APIError | Response | Record<string, any>;
-					endpoint: Endpoint;
-				}>,
-			) => boolean;
-			handler: HookAfterHandler;
+			matcher: (context: HookEndpointContext) => boolean;
+			handler: AuthMiddleware;
 		}[];
 	};
 	/**

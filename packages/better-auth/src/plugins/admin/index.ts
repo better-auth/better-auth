@@ -66,6 +66,12 @@ export interface AdminOptions {
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * List of user ids that should have admin access
+	 *
+	 * If this is set, the `adminRole` option is ignored
+	 */
+	adminUserIds?: string[];
 }
 
 export const admin = <O extends AdminOptions>(options?: O) => {
@@ -88,6 +94,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 			throw new APIError("UNAUTHORIZED");
 		}
 		const user = session.user as UserWithRole;
+
+		if (options?.adminUserIds?.includes(user.id)) {
+			return {
+				session: {
+					user: user,
+					session: session.session,
+				},
+			};
+		}
 		if (
 			!user.role ||
 			(Array.isArray(opts.adminRole)
@@ -127,7 +142,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						},
 						session: {
 							create: {
-								async before(session) {
+								async before(session, context) {
 									const user = (await ctx.internalAdapter.findUserById(
 										session.userId,
 									)) as UserWithRole;
@@ -137,11 +152,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 											user.banExpires &&
 											user.banExpires.getTime() < Date.now()
 										) {
-											await ctx.internalAdapter.updateUser(session.userId, {
-												banned: false,
-												banReason: null,
-												banExpires: null,
-											});
+											await ctx.internalAdapter.updateUser(
+												session.userId,
+												{
+													banned: false,
+													banReason: null,
+													banExpires: null,
+												},
+												context,
+											);
 											return;
 										}
 										return false;
@@ -162,7 +181,6 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const response =
 							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
-
 						if (!response) {
 							return;
 						}
@@ -220,6 +238,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 						{
 							role: ctx.body.role,
 						},
+						ctx,
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
@@ -304,12 +323,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.linkAccount({
-						accountId: user.id,
-						providerId: "credential",
-						password: hashedPassword,
-						userId: user.id,
-					});
+					await ctx.context.internalAdapter.linkAccount(
+						{
+							accountId: user.id,
+							providerId: "credential",
+							password: hashedPassword,
+							userId: user.id,
+						},
+						ctx,
+					);
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -397,6 +419,15 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 															$ref: "#/components/schemas/User",
 														},
 													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													offset: {
+														type: ["number", "undefined"],
+													},
 												},
 											},
 										},
@@ -437,12 +468,17 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								: undefined,
 							where.length ? where : undefined,
 						);
+						const total = await ctx.context.internalAdapter.countTotalUsers();
 						return ctx.json({
 							users: users as UserWithRole[],
+							total: total,
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined,
 						});
 					} catch (e) {
 						return ctx.json({
 							users: [],
+							total: 0,
 						});
 					}
 				},
@@ -537,6 +573,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 							banExpires: null,
 							banReason: null,
 						},
+						ctx,
 					);
 
 					return ctx.json({
@@ -613,6 +650,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
+						ctx,
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -680,6 +718,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
+						ctx,
 						true,
 					);
 					if (!session) {

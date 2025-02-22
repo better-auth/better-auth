@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { getCookies, type BetterAuthOptions } from "../index";
+import { getCookies } from "../cookies";
+import type { BetterAuthOptions } from "../types/options";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
