@@ -21,6 +21,6 @@ export const appInviteClient = <
 			"/accept-invitation": "POST",
 			"/reject-invitation": "POST",
 			"/cancel-invitation": "POST",
-		}
+		},
 	} satisfies BetterAuthClientPlugin;
 };

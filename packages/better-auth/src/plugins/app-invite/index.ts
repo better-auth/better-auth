@@ -164,25 +164,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 									content: {
 										"application/json": {
 											schema: {
-												type: "object",
-												properties: {
-													id: {
-														type: "string",
-													},
-													email: {
-														type: "string",
-													},
-													inviterId: {
-														type: "string",
-													},
-													status: {
-														type: "string",
-													},
-													expiresAt: {
-														type: "string",
-													},
-												},
-												required: ["id", "inviterId", "status", "expiresAt"],
+												$ref: "#/components/schemas/AppInvitation",
 											},
 										},
 									},
@@ -277,6 +259,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 									content: {
 										"application/json": {
 											schema: {
+												$ref: "#/components/schemas/AppInvitation",
 												type: "object",
 												properties: {
 													id: {
@@ -736,31 +719,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 								content: {
 									"application/json": {
 										schema: {
-											type: "object",
-											properties: {
-												id: {
-													type: "string",
-												},
-												email: {
-													type: "string",
-												},
-												inviterId: {
-													type: "string",
-												},
-												status: {
-													type: "string",
-												},
-												expiresAt: {
-													type: "string",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"inviterId",
-												"status",
-												"expiresAt",
-											],
+											$ref: "#/components/schemas/AppInvitation",
 										},
 									},
 								},

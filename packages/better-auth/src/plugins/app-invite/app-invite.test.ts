@@ -272,9 +272,7 @@ describe("App Invite", async (it) => {
 					const res = await client.rejectInvitation({
 						invitationId: invitation.id,
 					});
-					expect(res.error?.code).toBe(
-						"THIS_APP_INVITATION_CANT_BE_REJECTED",
-					);
+					expect(res.error?.code).toBe("THIS_APP_INVITATION_CANT_BE_REJECTED");
 					break;
 				}
 			}
