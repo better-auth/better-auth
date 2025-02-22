@@ -582,13 +582,47 @@ export const changeEmail = createAuthEndpoint(
 		 * If the email is not verified, we can update the email
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
-			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+			const existing = await ctx.context.internalAdapter.findUserByEmail(
+				ctx.body.newEmail,
+			);
+			if (existing) {
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message: BASE_ERROR_CODES.USER_ALREADY_EXISTS,
+				});
+			}
+			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
 					email: ctx.body.newEmail,
 				},
 				ctx,
 			);
+
+			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+				const token = await createEmailVerificationToken(
+					ctx.context.secret,
+					ctx.context.session.user.email,
+					ctx.body.newEmail,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
+				const url = `${
+					ctx.context.baseURL
+				}/verify-email?token=${token}&callbackURL=${
+					ctx.body.callbackURL || "/"
+				}`;
+				await ctx.context.options.emailVerification.sendVerificationEmail(
+					{
+						user: {
+							...ctx.context.session.user,
+							email: ctx.body.newEmail,
+						},
+						url,
+						token,
+					},
+					ctx.request,
+				);
+			}
+
 			return ctx.json({
 				status: true,
 			});
