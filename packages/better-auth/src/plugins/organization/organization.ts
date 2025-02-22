@@ -31,6 +31,7 @@ import {
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
+	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
@@ -42,13 +43,10 @@ import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import {
-	ownerAc,
-	adminAc,
-	memberAc,
-	defaultAc,
 	defaultRoles,
 	defaultStatements,
 } from "./access";
+import { hasPermission } from "./has-permission";
 
 export interface OrganizationOptions {
 	/**
@@ -240,26 +238,26 @@ export interface OrganizationOptions {
  * });
  * ```
  */
-export const organization = Object.assign(
-	<O extends OrganizationOptions>(options?: O) => {
-		const endpoints = {
-			createOrganization,
-			updateOrganization,
-			deleteOrganization,
-			setActiveOrganization,
-			getFullOrganization,
-			listOrganizations,
-			createInvitation: createInvitation(options as O),
-			cancelInvitation,
-			acceptInvitation,
-			getInvitation,
-			rejectInvitation,
-			addMember: addMember<O>(),
-			removeMember,
-			updateMemberRole: updateMemberRole(options as O),
-			getActiveMember,
-			leaveOrganization,
-		};
+export const organization = <O extends OrganizationOptions>(options?: O) => {
+	const endpoints = {
+		createOrganization,
+		updateOrganization,
+		deleteOrganization,
+		setActiveOrganization,
+		getFullOrganization,
+		listOrganizations,
+		createInvitation: createInvitation(options as O),
+		cancelInvitation,
+		acceptInvitation,
+		getInvitation,
+		rejectInvitation,
+		checkOrganizationSlug,
+		addMember: addMember<O>(),
+		removeMember,
+		updateMemberRole: updateMemberRole(options as O),
+		getActiveMember,
+		leaveOrganization,
+	};
 
 		const roles = {
 			...defaultRoles,
@@ -275,70 +273,69 @@ export const organization = Object.assign(
 			},
 		});
 
-		type DefaultStatements = typeof defaultStatements;
-		type Statements = O["ac"] extends AccessControl<infer S>
-			? S extends Record<string, any>
-				? S & DefaultStatements
-				: DefaultStatements
-			: DefaultStatements;
-		return {
-			id: "organization",
-			endpoints: {
-				...api,
-				organizationHasPermission: createAuthEndpoint(
-					"/organization/has-permission",
-					{
-						method: "POST",
-						requireHeaders: true,
-						body: z.object({
-							organizationId: z.string().optional(),
-							permission: z.record(z.string(), z.array(z.string())),
-						}) as unknown as ZodObject<{
-							permission: ZodObject<{
-								[key in keyof Statements]: ZodOptional<
-									//@ts-expect-error TODO: fix this
-									ZodArray<ZodLiteral<Statements[key][number]>>
-								>;
-							}>;
-							organizationId: ZodOptional<ZodString>;
-						}>,
-						use: [orgSessionMiddleware],
-						metadata: {
-							openapi: {
-								description: "Check if the user has permission",
-								requestBody: {
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S extends Record<string, any>
+			? S & DefaultStatements
+			: DefaultStatements
+		: DefaultStatements;
+	return {
+		id: "organization",
+		endpoints: {
+			...api,
+			organizationHasPermission: createAuthEndpoint(
+				"/organization/has-permission",
+				{
+					method: "POST",
+					requireHeaders: true,
+					body: z.object({
+						organizationId: z.string().optional(),
+						permission: z.record(z.string(), z.array(z.string())),
+					}) as unknown as ZodObject<{
+						permission: ZodObject<{
+							[key in keyof Statements]: ZodOptional<
+								//@ts-expect-error TODO: fix this
+								ZodArray<ZodLiteral<Statements[key][number]>>
+							>;
+						}>;
+						organizationId: ZodOptional<ZodString>;
+					}>,
+					use: [orgSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+												},
+											},
+											required: ["permission"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													permission: {
-														type: "object",
-														description: "The permission to check",
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
 													},
 												},
-												required: ["permission"],
-											},
-										},
-									},
-								},
-								responses: {
-									"200": {
-										description: "Success",
-										content: {
-											"application/json": {
-												schema: {
-													type: "object",
-													properties: {
-														error: {
-															type: "string",
-														},
-														success: {
-															type: "boolean",
-														},
-													},
-													required: ["success"],
-												},
+												required: ["success"],
 											},
 										},
 									},
@@ -346,209 +343,193 @@ export const organization = Object.assign(
 							},
 						},
 					},
-					async (ctx) => {
-						if (
-							!ctx.body.permission ||
-							Object.keys(ctx.body.permission).length > 1
-						) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									"invalid permission check. you can only check one resource permission at a time.",
-							});
-						}
-						const activeOrganizationId =
-							ctx.body.organizationId ||
-							ctx.context.session.session.activeOrganizationId;
-						if (!activeOrganizationId) {
-							throw new APIError("BAD_REQUEST", {
-								message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-							});
-						}
-						const adapter = getOrgAdapter(ctx.context);
-						const member = await adapter.findMemberByOrgId({
-							userId: ctx.context.session.user.id,
-							organizationId: activeOrganizationId,
+				},
+				async (ctx) => {
+					if (
+						!ctx.body.permission ||
+						Object.keys(ctx.body.permission).length > 1
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"invalid permission check. you can only check one resource permission at a time.",
 						});
-						if (!member) {
-							throw new APIError("UNAUTHORIZED", {
-								message:
-									ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-							});
-						}
-						const role = roles[member.role as keyof typeof roles];
-						const result = role.authorize(ctx.body.permission as any);
-						if (result.error) {
-							return ctx.json(
-								{
-									error: result.error,
-									success: false,
-								},
-								{
-									status: 403,
-								},
-							);
-						}
-						return ctx.json({
-							error: null,
-							success: true,
-						});
-					},
-				),
-			},
-			schema: {
-				session: {
-					fields: {
-						activeOrganizationId: {
-							type: "string",
-							required: false,
-							fieldName: options?.schema?.session?.fields?.activeOrganizationId,
-						},
-					},
-				},
-				organization: {
-					modelName: options?.schema?.organization?.modelName,
-					fields: {
-						name: {
-							type: "string",
-							required: true,
-							sortable: true,
-							fieldName: options?.schema?.organization?.fields?.name,
-						},
-						slug: {
-							type: "string",
-							unique: true,
-							sortable: true,
-							fieldName: options?.schema?.organization?.fields?.slug,
-						},
-						logo: {
-							type: "string",
-							required: false,
-							fieldName: options?.schema?.organization?.fields?.logo,
-						},
-						createdAt: {
-							type: "date",
-							required: true,
-							fieldName: options?.schema?.organization?.fields?.createdAt,
-						},
-						metadata: {
-							type: "string",
-							required: false,
-							fieldName: options?.schema?.organization?.fields?.metadata,
-						},
-					},
-				},
-				member: {
-					modelName: options?.schema?.member?.modelName,
-					fields: {
-						organizationId: {
-							type: "string",
-							required: true,
-							references: {
-								model: "organization",
-								field: "id",
-							},
-							fieldName: options?.schema?.member?.fields?.organizationId,
-						},
-						userId: {
-							type: "string",
-							required: true,
-							fieldName: options?.schema?.member?.fields?.userId,
-							references: {
-								model: "user",
-								field: "id",
-							},
-						},
-						role: {
-							type: "string",
-							required: true,
-							sortable: true,
-							defaultValue: "member",
-							fieldName: options?.schema?.member?.fields?.role,
-						},
-						createdAt: {
-							type: "date",
-							required: true,
-							fieldName: options?.schema?.member?.fields?.createdAt,
-						},
-					},
-				},
-				invitation: {
-					modelName: options?.schema?.invitation?.modelName,
-					fields: {
-						organizationId: {
-							type: "string",
-							required: true,
-							references: {
-								model: "organization",
-								field: "id",
-							},
-							fieldName: options?.schema?.invitation?.fields?.organizationId,
-						},
-						email: {
-							type: "string",
-							required: true,
-							sortable: true,
-							fieldName: options?.schema?.invitation?.fields?.email,
-						},
-						role: {
-							type: "string",
-							required: false,
-							sortable: true,
-							fieldName: options?.schema?.invitation?.fields?.role,
-						},
-						status: {
-							type: "string",
-							required: true,
-							sortable: true,
-							defaultValue: "pending",
-							fieldName: options?.schema?.invitation?.fields?.status,
-						},
-						expiresAt: {
-							type: "date",
-							required: true,
-							fieldName: options?.schema?.invitation?.fields?.expiresAt,
-						},
-						inviterId: {
-							type: "string",
-							references: {
-								model: "user",
-								field: "id",
-							},
-							fieldName: options?.schema?.invitation?.fields?.inviterId,
-							required: true,
-						},
-					},
-				},
-			},
-			$Infer: {
-				Organization: {} as Organization,
-				Invitation: {} as Invitation,
-				Member: {} as Member,
-				ActiveOrganization: {} as Prettify<
-					Organization & {
-						members: Prettify<
-							Member & {
-								user: {
-									id: string;
-									name: string;
-									email: string;
-									image?: string | null;
-								};
-							}
-						>[];
-						invitations: Invitation[];
 					}
-				>,
+					const activeOrganizationId =
+						ctx.body.organizationId ||
+						ctx.context.session.session.activeOrganizationId;
+					if (!activeOrganizationId) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+						});
+					}
+					const adapter = getOrgAdapter(ctx.context);
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId: activeOrganizationId,
+					});
+					if (!member) {
+						throw new APIError("UNAUTHORIZED", {
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+						});
+					}
+					const result = hasPermission({
+						role: member.role,
+						options: options as OrganizationOptions,
+						permission: ctx.body.permission as any,
+					});
+					return ctx.json({
+						error: null,
+						success: true,
+					});
+				},
+			),
+		},
+		schema: {
+			session: {
+				fields: {
+					activeOrganizationId: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+					},
+				},
 			},
-			$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		} satisfies BetterAuthPlugin;
-	},
-	{
-		defaultStatements,
-		defaultRoles,
-		defaultAc,
-		ownerAc,
-		adminAc,
-		memberAc,
-	},
-);
+			organization: {
+				modelName: options?.schema?.organization?.modelName,
+				fields: {
+					name: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.name,
+					},
+					slug: {
+						type: "string",
+						unique: true,
+						sortable: true,
+						fieldName: options?.schema?.organization?.fields?.slug,
+					},
+					logo: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.logo,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.organization?.fields?.createdAt,
+					},
+					metadata: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.organization?.fields?.metadata,
+					},
+				},
+			},
+			member: {
+				modelName: options?.schema?.member?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.member?.fields?.organizationId,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.userId,
+						references: {
+							model: "user",
+							field: "id",
+						},
+					},
+					role: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "member",
+						fieldName: options?.schema?.member?.fields?.role,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.member?.fields?.createdAt,
+					},
+				},
+			},
+			invitation: {
+				modelName: options?.schema?.invitation?.modelName,
+				fields: {
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.organizationId,
+					},
+					email: {
+						type: "string",
+						required: true,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.email,
+					},
+					role: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.role,
+					},
+					status: {
+						type: "string",
+						required: true,
+						sortable: true,
+						defaultValue: "pending",
+						fieldName: options?.schema?.invitation?.fields?.status,
+					},
+					expiresAt: {
+						type: "date",
+						required: true,
+						fieldName: options?.schema?.invitation?.fields?.expiresAt,
+					},
+					inviterId: {
+						type: "string",
+						references: {
+							model: "user",
+							field: "id",
+						},
+						fieldName: options?.schema?.invitation?.fields?.inviterId,
+						required: true,
+					},
+				},
+			},
+		},
+		$Infer: {
+			Organization: {} as Organization,
+			Invitation: {} as Invitation,
+			Member: {} as Member,
+			ActiveOrganization: {} as Prettify<
+				Organization & {
+					members: Prettify<
+						Member & {
+							user: {
+								id: string;
+								name: string;
+								email: string;
+								image?: string | null;
+							};
+						}
+					>[];
+					invitations: Invitation[];
+				}
+			>,
+		},
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
+	} satisfies BetterAuthPlugin;
+};

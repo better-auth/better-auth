@@ -43,7 +43,7 @@ describe("additionalFields", async () => {
 					nonRequiredFiled: "non-required-field",
 				},
 			})
-			.catch((e) => {});
+			.catch(() => {});
 
 		const client = createAuthClient({
 			plugins: [

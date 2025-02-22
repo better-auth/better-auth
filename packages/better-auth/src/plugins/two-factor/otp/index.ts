@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { generateRandomString } from "../../../crypto";
+import { setSessionCookie } from "../../../cookies";
 
 export interface OTPOptions {
 	/**
@@ -59,6 +60,7 @@ export const otp2fa = (options?: OTPOptions) => {
 		period: (options?.period || 3) * 60 * 1000,
 	};
 	const twoFactorTable = "twoFactor";
+
 	/**
 	 * Generate OTP and send it to the user.
 	 */
@@ -66,6 +68,16 @@ export const otp2fa = (options?: OTPOptions) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
+			body: z
+				.object({
+					/**
+					 * if true, the device will be trusted
+					 * for 30 days. It'll be refreshed on
+					 * every sign in request within this time.
+					 */
+					trustDevice: z.boolean().optional(),
+				})
+				.optional(),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
 				openapi: {
@@ -134,6 +146,12 @@ export const otp2fa = (options?: OTPOptions) => {
 				code: z.string({
 					description: "The otp code to verify",
 				}),
+				/**
+				 * if true, the device will be trusted
+				 * for 30 days. It'll be refreshed on
+				 * every sign in request within this time.
+				 */
+				trustDevice: z.boolean().optional(),
 			}),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
@@ -162,11 +180,6 @@ export const otp2fa = (options?: OTPOptions) => {
 		},
 		async (ctx) => {
 			const user = ctx.context.session.user;
-			if (!user.twoFactorEnabled) {
-				throw new APIError("BAD_REQUEST", {
-					message: "two factor isn't enabled",
-				});
-			}
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
 				where: [
@@ -185,19 +198,40 @@ export const otp2fa = (options?: OTPOptions) => {
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${user.id}`,
 				);
-
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
 			}
 			if (toCheckOtp.value === ctx.body.code) {
-				return ctx.context.valid();
+				if (!user.twoFactorEnabled) {
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: true,
+						},
+					);
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						ctx.request,
+						false,
+						ctx.context.session.session,
+					);
+					await ctx.context.internalAdapter.deleteSession(
+						ctx.context.session.session.token,
+					);
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user: updatedUser,
+					});
+				}
+				return ctx.context.valid(ctx);
 			} else {
 				return ctx.context.invalid();
 			}
 		},
 	);
+
 	return {
 		id: "otp",
 		endpoints: {

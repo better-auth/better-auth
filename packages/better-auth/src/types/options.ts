@@ -1,19 +1,23 @@
 import type { Dialect, Kysely, MysqlPool, PostgresPool } from "kysely";
-import type { Account, Session, User, Verification } from "../types";
 import type {
-	BetterAuthPlugin,
-	HookAfterHandler,
-	HookBeforeHandler,
-} from "./plugins";
+	Account,
+	GenericEndpointContext,
+	Session,
+	User,
+	Verification,
+} from "../types";
+import type { BetterAuthPlugin } from "./plugins";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AdapterInstance, SecondaryStorage } from "./adapter";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import type { FieldAttribute } from "../db";
 import type { Models, RateLimit } from "./models";
-import type { AuthContext, LiteralUnion, OmitId } from ".";
+import type { AuthContext } from ".";
 import type { CookieOptions } from "better-call";
 import type { Database } from "better-sqlite3";
 import type { Logger } from "../utils";
+import type { AuthMiddleware } from "../plugins";
+import type { LiteralUnion, OmitId } from "./helper";
 
 export type BetterAuthOptions = {
 	/**
@@ -426,8 +430,19 @@ export type BetterAuthOptions = {
 	 * Verification configuration
 	 */
 	verification?: {
+		/**
+		 * Change the modelName of the verification table
+		 */
 		modelName?: string;
+		/**
+		 * Map verification fields
+		 */
 		fields?: Partial<Record<keyof OmitId<Verification>, string>>;
+		/**
+		 * disable cleaning up expired values when a verification value is
+		 * fetched
+		 */
+		disableCleanup?: boolean;
 	};
 	/**
 	 * List of trusted origins.
@@ -625,7 +640,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the user will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (user: User) => Promise<
+				before?: (
+					user: User,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -635,7 +653,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is created.
 				 */
-				after?: (user: User) => Promise<void>;
+				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -643,7 +661,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the user will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (user: Partial<User>) => Promise<
+				before?: (
+					user: Partial<User>,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -653,7 +674,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a user is updated.
 				 */
-				after?: (user: User) => Promise<void>;
+				after?: (user: User, context?: GenericEndpointContext) => Promise<void>;
 			};
 		};
 		/**
@@ -666,7 +687,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the session will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (session: Session) => Promise<
+				before?: (
+					session: Session,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -676,7 +700,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a session is updated.
 				 */
-				after?: (session: Session) => Promise<void>;
+				after?: (
+					session: Session,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			/**
 			 * Update hook
@@ -687,7 +714,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the session will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (session: Partial<Session>) => Promise<
+				before?: (
+					session: Partial<Session>,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -697,7 +727,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a session is updated.
 				 */
-				after?: (session: Session) => Promise<void>;
+				after?: (
+					session: Session,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**
@@ -710,7 +743,10 @@ export type BetterAuthOptions = {
 				 * If the hook returns false, the account will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (account: Account) => Promise<
+				before?: (
+					account: Account,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -720,7 +756,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a account is created.
 				 */
-				after?: (account: Account) => Promise<void>;
+				after?: (
+					account: Account,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			/**
 			 * Update hook
@@ -731,7 +770,10 @@ export type BetterAuthOptions = {
 				 * If the hook returns false, the user will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (account: Partial<Account>) => Promise<
+				before?: (
+					account: Partial<Account>,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -741,7 +783,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a account is updated.
 				 */
-				after?: (account: Account) => Promise<void>;
+				after?: (
+					account: Account,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 		/**
@@ -754,7 +799,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the verification will not be created.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (verification: Verification) => Promise<
+				before?: (
+					verification: Verification,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -764,7 +812,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a verification is created.
 				 */
-				after?: (verification: Verification) => Promise<void>;
+				after?: (
+					verification: Verification,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 			update?: {
 				/**
@@ -772,7 +823,10 @@ export type BetterAuthOptions = {
 				 * if the hook returns false, the verification will not be updated.
 				 * If the hook returns an object, it'll be used instead of the original data
 				 */
-				before?: (verification: Partial<Verification>) => Promise<
+				before?: (
+					verification: Partial<Verification>,
+					context?: GenericEndpointContext,
+				) => Promise<
 					| boolean
 					| void
 					| {
@@ -782,7 +836,10 @@ export type BetterAuthOptions = {
 				/**
 				 * Hook that is called after a verification is updated.
 				 */
-				after?: (verification: Verification) => Promise<void>;
+				after?: (
+					verification: Verification,
+					context?: GenericEndpointContext,
+				) => Promise<void>;
 			};
 		};
 	};
@@ -811,11 +868,11 @@ export type BetterAuthOptions = {
 		/**
 		 * Before a request is processed
 		 */
-		before?: HookBeforeHandler;
+		before?: AuthMiddleware;
 		/**
 		 * After a request is processed
 		 */
-		after?: HookAfterHandler;
+		after?: AuthMiddleware;
 	};
 	/**
 	 * Disabled paths

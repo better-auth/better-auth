@@ -101,6 +101,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					image,
 					...additionalFields,
 				},
+				ctx,
 			);
 			/**
 			 * Update the session cookie with the new user data
@@ -289,12 +290,15 @@ export const setPassword = createAuthEndpoint(
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
-			await ctx.context.internalAdapter.linkAccount({
-				userId: session.user.id,
-				providerId: "credential",
-				accountId: session.user.id,
-				password: passwordHash,
-			});
+			await ctx.context.internalAdapter.linkAccount(
+				{
+					userId: session.user.id,
+					providerId: "credential",
+					accountId: session.user.id,
+					password: passwordHash,
+				},
+				ctx,
+			);
 			return ctx.json({
 				status: true,
 			});
@@ -475,9 +479,6 @@ export const deleteUserCallback = createAuthEndpoint(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			if (token) {
-				await ctx.context.internalAdapter.deleteVerificationValue(token.id);
-			}
 			throw new APIError("NOT_FOUND", {
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
@@ -586,6 +587,7 @@ export const changeEmail = createAuthEndpoint(
 				{
 					email: ctx.body.newEmail,
 				},
+				ctx,
 			);
 			return ctx.json({
 				status: true,

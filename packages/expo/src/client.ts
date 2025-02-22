@@ -192,8 +192,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							url,
 							options: {
 								...options,
-								signal: new AbortController().signal,
-							} as BetterFetchOption,
+							},
 						};
 					}
 					options = options || {};

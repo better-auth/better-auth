@@ -75,6 +75,12 @@ export interface AdminOptions {
 	roles?: {
 		[key in string]?: Role<any>;
 	};
+	/**
+	 * List of user ids that should have admin access
+	 *
+	 * If this is set, the `adminRole` option is ignored
+	 */
+	adminUserIds?: string[];
 }
 
 export const admin = Object.assign(
@@ -125,6 +131,7 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const canSetRole = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -143,6 +150,7 @@ export const admin = Object.assign(
 						{
 							role: ctx.body.role,
 						},
+						ctx
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
@@ -205,6 +213,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canCreateUser = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -246,7 +255,7 @@ export const admin = Object.assign(
 						providerId: "credential",
 						password: hashedPassword,
 						userId: user.id,
-					});
+					}, ctx);
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -334,6 +343,15 @@ export const admin = Object.assign(
 															$ref: "#/components/schemas/User",
 														},
 													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													offset: {
+														type: ["number", "undefined"],
+													},
 												},
 											},
 										},
@@ -346,6 +364,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canListUsers = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -388,12 +407,17 @@ export const admin = Object.assign(
 								: undefined,
 							where.length ? where : undefined,
 						);
+						const total = await ctx.context.internalAdapter.countTotalUsers()
 						return ctx.json({
 							users: users as UserWithRole[],
+							total: total,
+							limit: Number(ctx.query?.limit) || undefined,
+							offset: Number(ctx.query?.offset) || undefined
 						});
 					} catch (e) {
 						return ctx.json({
 							users: [],
+							total: 0
 						});
 					}
 				},
@@ -439,6 +463,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canListSessions = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -498,6 +523,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -514,6 +540,8 @@ export const admin = Object.assign(
 						ctx.body.userId,
 						{
 							banned: false,
+							banExpires: null,
+							banReason: null
 						},
 					);
 					return ctx.json({
@@ -575,6 +603,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canBanUser = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -604,6 +633,7 @@ export const admin = Object.assign(
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
+						ctx
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -652,6 +682,7 @@ export const admin = Object.assign(
 				},
 				async (ctx) => {
 					const canImpersonateUser = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -685,6 +716,8 @@ export const admin = Object.assign(
 								? getDate(options.impersonationSessionDuration, "sec")
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
+						ctx,
+						true
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -799,6 +832,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canRevokeSession = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -858,6 +892,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canRevokeSession = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -916,6 +951,7 @@ export const admin = Object.assign(
 				async (ctx) => {
 					const session = ctx.context.session;
 					const canDeleteUser = hasPermission({
+						userId: ctx.context.session.user.id,
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
@@ -1117,6 +1153,7 @@ export const admin = Object.assign(
 
 						const session = ctx.context.session;
 						const result = hasPermission({
+							userId: ctx.context.session.user.id,
 							role: session.user.role,
 							options: options as AdminOptions,
 							permission: ctx.body.permission as any,

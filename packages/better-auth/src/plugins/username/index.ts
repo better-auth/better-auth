@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../api/call";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { APIError } from "better-call";
 import type { Account, InferOptionSchema, User } from "../../types";
@@ -131,7 +131,9 @@ export const username = (options?: UsernameOptions) => {
 						});
 					}
 
-					const user = await ctx.context.adapter.findOne<User>({
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string }
+					>({
 						model: "user",
 						where: [
 							{
@@ -203,7 +205,6 @@ export const username = (options?: UsernameOptions) => {
 							status: 500,
 							body: {
 								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-								status: 500,
 							},
 						});
 					}
@@ -218,6 +219,7 @@ export const username = (options?: UsernameOptions) => {
 							id: user.id,
 							email: user.email,
 							emailVerified: user.emailVerified,
+							username: user.username,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -236,8 +238,12 @@ export const username = (options?: UsernameOptions) => {
 							context.path === "/sign-up/email" ||
 							context.path === "/update-user"
 						);
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
 					},
-					async handler(ctx) {
+					handler: createAuthMiddleware(async (ctx) => {
 						const username = ctx.body.username;
 						if (username) {
 							const minUsernameLength = options?.minUsernameLength || 3;
@@ -263,7 +269,6 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
-
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
@@ -278,6 +283,19 @@ export const username = (options?: UsernameOptions) => {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
+					},
+					async handler(ctx) {
+						if (!ctx.body.displayUsername && ctx.body.username) {
+							ctx.body.displayUsername = ctx.body.username;
 						}
 					},
 				},

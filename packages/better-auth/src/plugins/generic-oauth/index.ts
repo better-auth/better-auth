@@ -287,6 +287,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -382,7 +388,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -538,7 +546,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						: null;
 
 					if (link) {
-						if (link.email !== userInfo.email.toLowerCase()) {
+						if (
+							ctx.context.options.account?.accountLinking
+								?.allowDifferentEmails !== true &&
+							link.email !== userInfo.email.toLowerCase()
+						) {
 							return redirectOnError("email_doesn't_match");
 						}
 						const newAccount = await ctx.context.internalAdapter.createAccount({
