@@ -175,12 +175,14 @@ export const removeMember = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = await ctx.context.getRole(member.role);
 		if (!role) {
 			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				message:
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 			});
 		}
+
 		const isLeaving =
 			session.user.email === ctx.body.memberIdOrEmail ||
 			member.id === ctx.body.memberIdOrEmail;
@@ -313,8 +315,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				});
 			}
-			const role = ctx.context.roles[member.role];
-			if (!role) {
+			let role;
+			try {
+				role = await ctx.context.getRole(member.role);
+			} catch (error) {
 				return ctx.json(null, {
 					status: 400,
 					body: {

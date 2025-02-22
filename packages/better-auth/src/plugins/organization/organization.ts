@@ -64,6 +64,25 @@ export interface OrganizationOptions {
 	allowUserToCreateOrganization?:
 		| boolean
 		| ((user: User) => Promise<boolean> | boolean);
+
+	/**
+	 * Custom function to get a role based on the role name.
+	 * This allows you to implement your own role resolution logic.
+	 *
+	 * @example
+	 * ```ts
+	 * getRole: async (roleName) => {
+	 *   const roleFromDB = await db.roles.findOne({ name: roleName });
+	 *   return {
+	 *     authorize: (request) => ({
+	 *       success: roleFromDB.permissions.includes(request.permission),
+	 *       error: 'Not authorized'
+	 *     })
+	 *   };
+	 * }
+	 * ```
+	 */
+	getRole?: (roleName: string) => Promise<Role> | Role;
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -265,6 +284,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
 		roles,
+		getRole: async (roleName: string) => {
+			if (options?.getRole) {
+				return await options.getRole(roleName);
+			}
+			const role = roles[roleName as keyof typeof roles];
+			return role;
+		},
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
 			return await getSessionFromCtx(context);
@@ -371,7 +397,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role = roles[member.role as keyof typeof roles];
+					const role: Role = await (ctx.context as any).getRole(member.role);
+					if (!role) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+						});
+					}
 					const result = role.authorize(ctx.body.permission as any);
 					if (result.error) {
 						return ctx.json(

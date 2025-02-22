@@ -218,7 +218,7 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = await ctx.context.getRole(member.role);
 		if (!role) {
 			return ctx.json(null, {
 				status: 400,
@@ -307,7 +307,7 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = await ctx.context.getRole(member.role);
 		if (!role) {
 			return ctx.json(null, {
 				status: 400,

@@ -113,7 +113,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const role = ctx.context.roles[member.role];
+			const role = await ctx.context.getRole(member.role);
 			if (!role) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
@@ -391,7 +391,13 @@ export const cancelInvitation = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
-		const canCancel = ctx.context.roles[member.role].authorize({
+		const role = await ctx.context.getRole(member.role);
+		if (!role) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+			});
+		}
+		const canCancel = role.authorize({
 			invitation: ["cancel"],
 		});
 		if (canCancel.error) {
