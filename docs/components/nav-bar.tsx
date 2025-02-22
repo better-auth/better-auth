@@ -26,14 +26,14 @@ export const Navbar = () => {
 				</Link>
 				<div className="md:col-span-10 flex items-center justify-end relative">
 					<div
-						className="flex items-center gap-2 py-3.5 md:py-4 h-full px-4 bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
+						className="flex items-center gap-2 py-3.5 md:py-4 h-full px-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-stone-900 dark:to-stone-950/80"
 						onClick={() => {
 							setOpenSearch(true);
 							loglib.track("navbar-search-open");
 						}}
 					>
 						<Search className="w-4 h-4" />
-						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-500 to-stone-400 bg-clip-text">
+						<p className="text-sm text-transparent bg-gradient-to-tr from-gray-700 to-gray-800 dark:from-gray-500 dark:to-stone-400 bg-clip-text">
 							Search <span className="lg:hidden">...</span> <span className="hidden lg:inline">documentation...</span>
 						</p>
 					</div>
