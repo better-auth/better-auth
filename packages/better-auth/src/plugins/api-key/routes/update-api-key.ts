@@ -27,6 +27,7 @@ export function updateApiKey({
 				keyId: z.string({
 					description: "The id of the Api Key",
 				}),
+				userId: z.string().optional(),
 				name: z
 					.string({
 						description: "The name of the key",
@@ -81,9 +82,6 @@ export function updateApiKey({
 					})
 					.optional(),
 			}),
-			metadata: {
-				SERVER_ONLY: true,
-			},
 		},
 		async (ctx) => {
 			const {
@@ -101,40 +99,30 @@ export function updateApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-
-			// make sure that the user has a session.
-			if (!session) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error: {
-						code: "user.unauthorized",
-						message: ERROR_CODES.UNAUTHORIZED_SESSION,
-					},
-					user: null,
-					apiKey: null,
-				});
+			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const user =
+				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+			if (!user?.id) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
 			}
 
-			// make sure that the user is not banned.
-			if (session.user.banned === true) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error: {
-						code: "user.forbidden",
-						message: ERROR_CODES.USER_BANNED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
-
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.USER_BANNED,
-				});
+			if (authRequired) {
+				// if this endpoint was being called from the client,
+				// we must make sure they can't use server-only properties.
+				if (
+					refillAmount !== undefined ||
+					refillInterval !== undefined ||
+					rateLimitMax !== undefined ||
+					rateLimitTimeWindow !== undefined ||
+					rateLimitEnabled !== undefined ||
+					remaining !== undefined
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
+					});
+				}
 			}
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -144,21 +132,14 @@ export function updateApiKey({
 						field: "id",
 						value: keyId,
 					},
+					{
+						field: "userId",
+						value: user.id,
+					},
 				],
 			});
 
-			// No api key found
 			if (!apiKey) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error: {
-						code: "key.notFound",
-						message: ERROR_CODES.KEY_NOT_FOUND,
-					},
-					user: session.user,
-					apiKey: null,
-				});
 				throw new APIError("NOT_FOUND", {
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
@@ -168,40 +149,10 @@ export function updateApiKey({
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
-					opts.events?.({
-						success: false,
-						event: "key.update",
-						apiKey: null,
-						error: {
-							code: "key.invalidNameLength",
-							message: ERROR_CODES.INVALID_NAME_LENGTH,
-							details: {
-								maxLength: opts.maximumNameLength,
-								receivedLength: name.length,
-								minLength: opts.minimumNameLength,
-							},
-						},
-						user: session.user,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
 				} else if (name.length > opts.maximumNameLength) {
-					opts.events?.({
-						success: false,
-						event: "key.update",
-						apiKey: null,
-						error: {
-							code: "key.invalidNameLength",
-							message: ERROR_CODES.INVALID_NAME_LENGTH,
-							details: {
-								maxLength: opts.maximumNameLength,
-								receivedLength: name.length,
-								minLength: opts.minimumNameLength,
-							},
-						},
-						user: session.user,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_NAME_LENGTH,
 					});
@@ -214,16 +165,6 @@ export function updateApiKey({
 			}
 			if (expiresIn !== undefined) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "key.disabledExpiration",
-							message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
 					});
@@ -234,40 +175,10 @@ export function updateApiKey({
 					const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
-						opts.events?.({
-							event: "key.update",
-							success: false,
-							error: {
-								code: "key.invalidExpiration",
-								message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-								details: {
-									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-									receivedExpiresIn: expiresIn_in_days,
-									minExpiresIn: opts.keyExpiration.minExpiresIn,
-								},
-							},
-							user: session.user,
-							apiKey: null,
-						});
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 						});
 					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
-						opts.events?.({
-							event: "key.update",
-							success: false,
-							error: {
-								code: "key.invalidExpiration",
-								message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-								details: {
-									maxExpiresIn: opts.keyExpiration.maxExpiresIn,
-									receivedExpiresIn: expiresIn_in_days,
-									minExpiresIn: opts.keyExpiration.minExpiresIn,
-								},
-							},
-							user: session.user,
-							apiKey: null,
-						});
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 						});
@@ -277,16 +188,6 @@ export function updateApiKey({
 			}
 			if (metadata !== undefined) {
 				if (typeof metadata !== "object") {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.INVALID_METADATA_TYPE,
-						},
-						user: session.user,
-						apiKey: null,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
@@ -296,73 +197,14 @@ export function updateApiKey({
 					schema.apikey.fields.metadata.transform.input(metadata);
 			}
 			if (remaining !== undefined) {
-				if (remaining < opts.minimumRemaining) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "key.invalidRemaining",
-							message: ERROR_CODES.INVALID_REMAINING,
-							details: {
-								maxRemaining: opts.maximumRemaining,
-								receivedRemaining: remaining,
-								minRemaining: opts.minimumRemaining,
-							},
-						},
-						apiKey: null,
-						user: session.user,
-					});
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_REMAINING,
-					});
-				} else if (remaining > opts.maximumRemaining) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "key.invalidRemaining",
-							message: ERROR_CODES.INVALID_REMAINING,
-							details: {
-								maxRemaining: opts.maximumRemaining,
-								receivedRemaining: remaining,
-								minRemaining: opts.minimumRemaining,
-							},
-						},
-						apiKey: null,
-						user: session.user,
-					});
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_REMAINING,
-					});
-				}
 				newValues.remaining = remaining;
 			}
 			if (refillAmount !== undefined || refillInterval !== undefined) {
 				if (refillAmount !== undefined && refillInterval === undefined) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-						},
-						apiKey: null,
-						user: session.user,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 					});
 				} else if (refillInterval !== undefined && refillAmount === undefined) {
-					opts.events?.({
-						event: "key.update",
-						success: false,
-						error: {
-							code: "request.forbidden",
-							message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-						},
-						apiKey: null,
-						user: session.user,
-					});
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 					});
@@ -382,16 +224,6 @@ export function updateApiKey({
 			}
 
 			if (Object.keys(newValues).length === 0) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error: {
-						code: "request.noValuesToUpdate",
-						message: ERROR_CODES.NO_VALUES_TO_UPDATE,
-					},
-					apiKey: null,
-					user: session.user,
-				});
 				throw new APIError("BAD_REQUEST", {
 					message: ERROR_CODES.NO_VALUES_TO_UPDATE,
 				});
@@ -408,7 +240,7 @@ export function updateApiKey({
 						},
 						{
 							field: "userId",
-							value: session.user.id,
+							value: user.id,
 						},
 					],
 					update: {
@@ -419,16 +251,6 @@ export function updateApiKey({
 				});
 				if (result) newApiKey = result;
 			} catch (error: any) {
-				opts.events?.({
-					event: "key.update",
-					success: false,
-					error: {
-						code: "database.error",
-						message: error?.message,
-					},
-					user: session.user,
-					apiKey: apiKey,
-				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
@@ -441,18 +263,9 @@ export function updateApiKey({
 				newApiKey.metadata as never as string,
 			);
 
-			opts.events?.({
-				event: "key.update",
-				success: true,
-				error: null,
-				user: session.user,
-				apiKey: newApiKey,
-			});
-
 			let resApiKey: Partial<ApiKey> = newApiKey;
 			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
 			delete resApiKey["key"];
-
 			return ctx.json(resApiKey);
 		},
 	);

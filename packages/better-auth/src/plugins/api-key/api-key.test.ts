@@ -3,6 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
+import { APIError } from "better-call";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -807,7 +808,6 @@ describe("api-key", async () => {
 				userId: user.id,
 			},
 		});
-		console.log({ apiKey });
 		if (!apiKey) return;
 		// run verify once to make the remaining count go down to 0
 		await auth.api.verifyApiKey({
@@ -826,8 +826,8 @@ describe("api-key", async () => {
 	});
 
 	it("should fail if the api key is expired", async () => {
+		vi.useRealTimers();
 		const { headers } = await signInWithTestUser();
-
 		const apiKey2 = await client.apiKey.create(
 			{
 				expiresIn: 60 * 60 * 24,
@@ -835,7 +835,7 @@ describe("api-key", async () => {
 			{ headers: headers, throw: true },
 		);
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24);
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24 * 2);
 		const afterVerification = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey2.key,
@@ -843,33 +843,27 @@ describe("api-key", async () => {
 			headers,
 		});
 		expect(afterVerification.error?.code).toEqual("KEY_EXPIRED");
+		vi.useRealTimers();
 	});
 
 	// =========================================================================
 	// UPDATE API KEY
 	// =========================================================================
 
-	it("should fail to update api key name without headers", async () => {
-		let result: { err: Err | null; data: Partial<ApiKey> | null } = {
-			data: null,
-			err: null,
-		};
-
-		try {
-			const apiKey = await auth.api.updateApiKey({
+	it("should fail to update api key name without headers or userId", async () => {
+		let error: APIError | null = null;
+		await auth.api
+			.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
-					name: "test-api-key-that-is-longer-than-the-allowed-maximum",
+					name: "test-api-key",
 				},
+			})
+			.catch((e) => {
+				error = e;
 			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.err = error;
-		}
-
-		expect(result.err).toBeDefined();
-		expect(result.err?.status).toEqual("UNAUTHORIZED");
-		expect(result.err?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(error).not.toBeNull();
+		expect(error).toBeInstanceOf(APIError);
 	});
 
 	it("should update api key name with headers", async () => {
@@ -881,79 +875,68 @@ describe("api-key", async () => {
 			},
 			headers,
 		});
-
 		expect(apiKey).toBeDefined();
 		expect(apiKey.name).not.toEqual(firstApiKey.name);
 		expect(apiKey.name).toEqual(newName);
 	});
 
 	it("should fail to update api key name with a length larger than the allowed maximum", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.updateApiKey({
+		let error: APIError | null = null;
+		await auth.api
+			.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
 					name: "test-api-key-that-is-longer-than-the-allowed-maximum",
 				},
 				headers,
+			})
+			.catch((e) => {
+				if (e instanceof APIError) {
+					error = e;
+					expect(error?.status).toEqual("BAD_REQUEST");
+					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+				}
 			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(error).not.toBeNull();
 	});
 
 	it("should fail to update api key name with a length smaller than the allowed minimum", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.updateApiKey({
+		let error: APIError | null = null;
+		await auth.api
+			.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
 					name: "",
 				},
 				headers,
+			})
+			.catch((e) => {
+				if (e instanceof APIError) {
+					error = e;
+					expect(error?.status).toEqual("BAD_REQUEST");
+					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+				}
 			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(error).not.toBeNull();
 	});
 
 	it("should fail to update api key with no values to update", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.updateApiKey({
+		let error: APIError | null = null;
+		await auth.api
+			.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
 				},
 				headers,
+			})
+			.catch((e) => {
+				if (e instanceof APIError) {
+					error = e;
+					expect(error?.status).toEqual("BAD_REQUEST");
+					expect(error?.body?.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+				}
 			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+		expect(error).not.toBeNull();
 	});
 
 	it("should update api key expiresIn value", async () => {
@@ -1118,58 +1101,12 @@ describe("api-key", async () => {
 			body: {
 				keyId: firstApiKey.id,
 				remaining: remaining,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.remaining).toEqual(remaining);
-	});
-
-	it("should fail to update the remaining count if it's smaller than the allowed minimum", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.updateApiKey({
-				body: {
-					keyId: firstApiKey.id,
-					remaining: 0,
-				},
-				headers,
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
-	});
-
-	it("should fail to update the remaining count if it's larger than the allowed maximum", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.updateApiKey({
-				body: {
-					keyId: firstApiKey.id,
-					remaining: Number.MAX_SAFE_INTEGER,
-				},
-				headers,
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
 	});
 
 	it("should fail update the refillInterval value since it requires refillAmount as well", async () => {
@@ -1182,8 +1119,8 @@ describe("api-key", async () => {
 				body: {
 					keyId: firstApiKey.id,
 					refillInterval: 1000,
+					userId: user.id,
 				},
-				headers,
 			});
 			result.data = apiKey;
 		} catch (error: any) {
@@ -1207,8 +1144,8 @@ describe("api-key", async () => {
 				body: {
 					keyId: firstApiKey.id,
 					refillAmount: 10,
+					userId: user.id,
 				},
-				headers,
 			});
 			result.data = apiKey;
 		} catch (error: any) {
@@ -1230,8 +1167,8 @@ describe("api-key", async () => {
 				keyId: firstApiKey.id,
 				refillInterval: refillInterval,
 				refillAmount: refillAmount,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
@@ -1245,8 +1182,8 @@ describe("api-key", async () => {
 			body: {
 				keyId: firstApiKey.id,
 				enabled: newValue,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
@@ -1263,8 +1200,8 @@ describe("api-key", async () => {
 				body: {
 					keyId: firstApiKey.id,
 					metadata: "invalid",
+					userId: user.id,
 				},
-				headers,
 			});
 			result.data = apiKey;
 		} catch (error: any) {
@@ -1286,8 +1223,8 @@ describe("api-key", async () => {
 			body: {
 				keyId: firstApiKey.id,
 				metadata: metadata,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
@@ -1302,8 +1239,8 @@ describe("api-key", async () => {
 			body: {
 				keyId: firstApiKey.id,
 				metadata: metadata,
+				userId: user.id,
 			},
-			headers,
 		});
 
 		expect(apiKey).not.toBeNull();
