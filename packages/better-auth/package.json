@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.0-beta.11",
+  "version": "1.2.0-beta.12",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -387,8 +387,8 @@
         "default": "./dist/plugins/oauth-proxy.js"
       },
       "require": {
-        "types": "./dist/plugins/oauth-proxy..d.cts",
-        "default": "./dist/plugins/oauth-proxy..cjs"
+        "types": "./dist/plugins/oauth-proxy.d.cts",
+        "default": "./dist/plugins/oauth-proxy.cjs"
       }
     },
     "./plugins/organization": {
