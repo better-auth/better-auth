@@ -42,10 +42,7 @@ import {
 import type { Invitation, Member, Organization } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import {
-	defaultRoles,
-	defaultStatements,
-} from "./access";
+import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
 export interface OrganizationOptions {
@@ -259,19 +256,19 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		leaveOrganization,
 	};
 
-		const roles = {
-			...defaultRoles,
-			...options?.roles,
-		};
+	const roles = {
+		...defaultRoles,
+		...options?.roles,
+	};
 
-		const api = shimContext(endpoints, {
-			orgOptions: options || {},
-			roles,
-			getSession: async (context: AuthContext) => {
-				//@ts-expect-error
-				return await getSessionFromCtx(context);
-			},
-		});
+	const api = shimContext(endpoints, {
+		orgOptions: options || {},
+		roles,
+		getSession: async (context: AuthContext) => {
+			//@ts-expect-error
+			return await getSessionFromCtx(context);
+		},
+	});
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
