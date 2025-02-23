@@ -37,6 +37,7 @@ export function createApiKey({
 					.number({
 						description: "Expiration time of the Api Key in seconds",
 					})
+					.min(1)
 					.optional()
 					.nullable()
 					.default(null),
@@ -56,6 +57,7 @@ export function createApiKey({
 					.optional(),
 				remaining: z
 					.number({ description: "Remaining number of requests" })
+					.min(0)
 					.optional()
 					.nullable()
 					.default(null),
@@ -65,6 +67,7 @@ export function createApiKey({
 						description:
 							"Amount to refill the remaining count of the Api Key. Server Only Property",
 					})
+					.min(1)
 					.optional(),
 				refillInterval: z
 					.number({
