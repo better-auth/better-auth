@@ -108,7 +108,6 @@ describe("App Invite", async (it) => {
 				},
 			);
 
-			console.log(res)
 			expect(res.data?.token).toBeDefined();
 			expect(res.data?.user.email).toBe("email1@test.com");
 			expect(res.data?.user.name).toBe("Test User");
