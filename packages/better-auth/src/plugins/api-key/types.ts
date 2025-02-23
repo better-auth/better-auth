@@ -1,149 +1,6 @@
-import type {
-	GenericEndpointContext,
-	InferOptionSchema,
-	User,
-} from "../../types";
+import type { GenericEndpointContext, InferOptionSchema } from "../../types";
 import type { apiKeySchema } from "./schema";
-
-interface ApiKeyEventError_base {
-	/**
-	 * Error code
-	 *
-	 * Possible values are:
-	 * * `key.notFound`
-	 * * `user.forbidden`
-	 * * `key.useageExceeded`
-	 * * `key.rateLimited`
-	 * * `key.disabledExpiration`
-	 * * `user.unauthorized`
-	 * * `key.disabled`
-	 * * `key.expired`
-	 * * `database.error`
-	 * * `key.invalidExpiration`
-	 * * `key.invalidRemaining`
-	 * * `key.invalidPrefixLength`
-	 * * `key.invalidNameLength`
-	 * * `request.noValuesToUpdate`
-	 */
-	code: ApiKeyFailedReasons;
-	/**
-	 * Error message
-	 */
-	message: string;
-}
-
-interface ApiKeyEventError_rateLimit extends ApiKeyEventError_base {
-	code: "key.rateLimited";
-	message: string;
-	details: {
-		tryAgainIn: number;
-	};
-}
-
-interface ApiKeyEventError_invalidPrefixLength extends ApiKeyEventError_base {
-	code: "key.invalidPrefixLength";
-	message: string;
-	details: {
-		minLength: number;
-		maxLength: number;
-		receivedLength: number;
-	};
-}
-
-interface ApiKeyEventError_invalidNameLength extends ApiKeyEventError_base {
-	code: "key.invalidNameLength";
-	message: string;
-	details: {
-		minLength: number;
-		maxLength: number;
-		receivedLength: number;
-	};
-}
-
-interface ApiKeyEventError_invalidExpiration extends ApiKeyEventError_base {
-	code: "key.invalidExpiration";
-	message: string;
-	details: {
-		minExpiresIn: number;
-		maxExpiresIn: number;
-		receivedExpiresIn: number;
-	};
-}
-
-interface ApiKeyEventError_invalidRemaining extends ApiKeyEventError_base {
-	code: "key.invalidRemaining";
-	message: string;
-	details: {
-		minRemaining: number;
-		maxRemaining: number;
-		receivedRemaining: number;
-	};
-}
-
-export type ApiKeyEventError =
-	| ApiKeyEventError_rateLimit
-	| ApiKeyEventError_invalidPrefixLength
-	| ApiKeyEventError_invalidNameLength
-	| ApiKeyEventError_invalidExpiration
-	| ApiKeyEventError_invalidRemaining
-	| ApiKeyEventError_base;
-interface ApiKeyEvents_base {
-	event: ApiKeyEventTypes;
-	/**
-	 * if the event was successful, this will be true. Otherwise it will be false.
-	 */
-	success: boolean;
-	/**
-	 * if the event wasn't successful, the error object will be passed here. Otherwise it will be null.
-	 */
-	error: ApiKeyEventError | null;
-	/**
-	 * User object.
-	 *
-	 * If the event failed due to an unauthorized user, than this will be null.
-	 */
-	user: User | null;
-}
-
-interface ApiKeyListEvent extends ApiKeyEvents_base {
-	event: "key.list";
-	apiKey: ApiKey[] | null;
-}
-
-interface ApiKeyGetEvent extends ApiKeyEvents_base {
-	event: "key.get";
-	apiKey: ApiKey | null;
-}
-
-interface ApiKeyVerifyEvent extends ApiKeyEvents_base {
-	event: "key.verify";
-	apiKey: ApiKey | null;
-}
-
-interface ApiKeyUpdateEvent extends ApiKeyEvents_base {
-	event: "key.update";
-	apiKey: ApiKey | null;
-}
-
-interface ApiKeyDeleteEvent extends ApiKeyEvents_base {
-	event: "key.delete";
-	apiKey: ApiKey | null;
-}
-
-interface ApiKeyCreateEvent extends ApiKeyEvents_base {
-	event: "key.create";
-	apiKey: ApiKey | null;
-}
-
-export type ApiKeyEvents =
-	| ApiKeyListEvent
-	| ApiKeyGetEvent
-	| ApiKeyVerifyEvent
-	| ApiKeyUpdateEvent
-	| ApiKeyDeleteEvent
-	| ApiKeyCreateEvent;
-
-interface ApiKeyOptionsBase {
+export interface ApiKeyOptions {
 	/**
 	 * The header name to check for api key
 	 * @default "x-api-key"
@@ -300,44 +157,12 @@ interface ApiKeyOptionsBase {
 	 */
 	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>>;
 	/**
-	 * capture events. Useful for analytical purposes.
-	 */
-	events?: ({ event, success, user, apiKey, error }: ApiKeyEvents) => void;
-	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
 	 * @default false
 	 */
 	disableSessionForAPIKeys?: boolean;
 }
-
-export type ApiKeyOptions = ApiKeyOptionsBase;
-
-export type ApiKeyEventTypes =
-	| "key.create"
-	| "key.update"
-	| "key.verify"
-	| "key.get"
-	| "key.list"
-	| "key.delete";
-
-export type ApiKeyFailedReasons =
-	| "key.notFound"
-	| "user.forbidden"
-	| "key.usageExceeded"
-	| "key.rateLimited"
-	| "user.unauthorized"
-	| "key.disabled"
-	| "request.forbidden"
-	| "key.expired"
-	| "database.error"
-	| "key.invalidExpiration"
-	| "key.invalid"
-	| "key.invalidRemaining"
-	| "key.invalidPrefixLength"
-	| "request.noValuesToUpdate"
-	| "key.disabledExpiration"
-	| "key.invalidNameLength";
 
 export type ApiKey = {
 	/**

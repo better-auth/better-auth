@@ -10,17 +10,6 @@ describe("api-key", async () => {
 		{
 			plugins: [
 				apiKey({
-					events({ event, success, user, apiKey, error }) {
-						// if (!success) {
-						// 	console.log({
-						// 		event,
-						// 		success,
-						// 		user,
-						// 		apiKey,
-						// 		error,
-						// 	});s
-						// }
-					},
 					enableMetadata: true,
 				}),
 			],
