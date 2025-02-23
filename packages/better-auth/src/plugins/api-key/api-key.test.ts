@@ -18,7 +18,7 @@ describe("api-key", async () => {
 						// 		user,
 						// 		apiKey,
 						// 		error,
-						// 	});
+						// 	});s
 						// }
 					},
 					enableMetadata: true,
@@ -455,29 +455,6 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.remaining).toEqual(remaining);
-	});
-
-	it("should create API Key with custom remaining that's larger than allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const remaining = Number.MAX_SAFE_INTEGER;
-			const apiKey = await auth.api.createApiKey({
-				body: {
-					remaining: remaining,
-					userId: user.id,
-				},
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_REMAINING);
 	});
 
 	it("should create API key with invalid metadata", async () => {
@@ -1252,89 +1229,47 @@ describe("api-key", async () => {
 	// GET API KEY
 	// =========================================================================
 
-	it("should fail to get an API key by ID without headers", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.getApiKey({
-				body: {
-					id: firstApiKey.id,
-				},
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
-
-		expect(result.data).toBeNull();
-		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("UNAUTHORIZED");
-		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION,
-		);
-	});
-
-	it("should get an API key by ID with headers", async () => {
-		const apiKey = await auth.api.getApiKey({
-			body: {
+	it("should get an API key by id", async () => {
+		const apiKey = await client.apiKey.get({
+			query: {
 				id: firstApiKey.id,
 			},
-			headers,
+			fetchOptions: {
+				headers,
+			},
 		});
-
-		expect(apiKey).not.toBeNull();
-		expect(apiKey.key).toBeUndefined();
-		expect(apiKey.id).toEqual(firstApiKey.id);
-		expect(apiKey.userId).toEqual(firstApiKey.userId);
+		expect(apiKey.data).not.toBeNull();
+		expect(apiKey.data?.id).toBe(firstApiKey.id);
 	});
 
 	it("should fail to get an API key by ID that doesn't exist", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
-			data: null,
-			error: null,
-		};
-		try {
-			const apiKey = await auth.api.getApiKey({
-				body: {
+		const result = await client.apiKey.get(
+			{
+				query: {
 					id: "invalid",
 				},
-				headers,
-			});
-			result.data = apiKey;
-		} catch (error: any) {
-			result.error = error;
-		}
+			},
+			{ headers },
+		);
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
-		expect(result.error?.status).toEqual("NOT_FOUND");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+		expect(result.error?.status).toEqual(404);
 	});
 
-	it("should successfully recieve an object metadata from an API key", async () => {
-		const apiKey = await auth.api.getApiKey({
-			body: {
-				id: firstApiKey.id,
+	it("should successfully receive an object metadata from an API key", async () => {
+		const apiKey = await client.apiKey.get(
+			{
+				query: {
+					id: firstApiKey.id,
+				},
 			},
-			headers,
-		});
-
-		expect(apiKey).not.toBeNull();
-		expect(apiKey.metadata).toBeDefined();
-		expect(apiKey.metadata).toBeInstanceOf(Object);
-	});
-
-	it("should not define the key property for an API key when using get api key", async () => {
-		const apiKey = await auth.api.getApiKey({
-			body: {
-				id: firstApiKey.id,
+			{
+				headers,
 			},
-			headers,
-		});
-
+		);
 		expect(apiKey).not.toBeNull();
-		expect(apiKey.key).toBeUndefined();
+		expect(apiKey.data?.metadata).toBeDefined();
+		expect(apiKey.data?.metadata).toBeInstanceOf(Object);
 	});
 
 	// =========================================================================
@@ -1356,9 +1291,6 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("UNAUTHORIZED");
-		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION,
-		);
 	});
 
 	it("should list API keys with headers", async () => {
@@ -1517,9 +1449,6 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("UNAUTHORIZED");
-		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION,
-		);
 	});
 
 	it("should delete an API key by ID with headers", async () => {

@@ -1,5 +1,4 @@
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
-import { ERROR_CODES } from "..";
+import { createAuthEndpoint, sessionMiddleware } from "../../../api";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { AuthContext } from "../../../types";
@@ -21,45 +20,10 @@ export function listApiKeys({
 		"/api-key/list",
 		{
 			method: "GET",
+			use: [sessionMiddleware],
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
-
-			// make sure that the user has a session.
-			if (!session) {
-				opts.events?.({
-					event: "key.list",
-					success: false,
-					error: {
-						code: "user.unauthorized",
-						message: ERROR_CODES.UNAUTHORIZED_SESSION,
-					},
-					user: null,
-					apiKey: null,
-				});
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
-			}
-
-			// make sure that the user is not banned.
-			if (session.user.banned === true) {
-				opts.events?.({
-					event: "key.list",
-					success: false,
-					error: {
-						code: "user.forbidden",
-						message: ERROR_CODES.USER_BANNED,
-					},
-					user: session.user,
-					apiKey: null,
-				});
-
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.USER_BANNED,
-				});
-			}
-
+			const session = ctx.context.session;
 			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
 				model: schema.apikey.modelName,
 				where: [
@@ -71,23 +35,13 @@ export function listApiKeys({
 			});
 
 			deleteAllExpiredApiKeys(ctx.context);
-
-			// transform metadata from string to obj
 			apiKeys = apiKeys.map((apiKey) => {
 				return {
 					...apiKey,
 					metadata: schema.apikey.fields.metadata.transform.output(
 						apiKey.metadata as never as string,
 					),
-				}
-			})
-
-			opts.events?.({
-				event: "key.list",
-				success: true,
-				error: null,
-				user: session.user,
-				apiKey: apiKeys,
+				};
 			});
 
 			let returningApiKey: Partial<ApiKey>[] = apiKeys.map((x) => {

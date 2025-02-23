@@ -25,7 +25,6 @@ export function deleteAllExpiredApiKeysEndpoint({
 					"[API KEY PLUGIN] Failed to delete expired API keys:",
 					error,
 				);
-
 				return ctx.json({
 					success: false,
 					error: error,
