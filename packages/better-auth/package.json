@@ -211,6 +211,16 @@
         "default": "./dist/node.cjs"
       }
     },
+    "./nestjs": {
+      "import": {
+        "types": "./dist/nestjs.d.ts",
+        "default": "./dist/nestjs.js"
+      },
+      "require": {
+        "types": "./dist/nestjs.d.cts",
+        "default": "./dist/nestjs.cjs"
+      }
+    },
     "./adapters/prisma": {
       "import": {
         "types": "./dist/adapters/prisma.d.ts",
@@ -501,6 +511,9 @@
       "next-js": [
         "./dist/next-js.d.ts"
       ],
+      "nestjs": [
+        "./dist/nestjs.d.ts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma.d.ts"
       ],
@@ -567,6 +580,8 @@
     }
   },
   "devDependencies": {
+    "@nestjs/common": "^11.0.10",
+    "@nestjs/core": "^11.0.1",
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/pg": "^8.11.10",
