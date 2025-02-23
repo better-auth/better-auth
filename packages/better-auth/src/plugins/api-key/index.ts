@@ -47,8 +47,6 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
 		defaultKeyLength: options?.defaultKeyLength || 64,
-		maximumRemaining: options?.maximumRemaining ?? 1_000_000,
-		minimumRemaining: options?.minimumRemaining ?? 1,
 		maximumPrefixLength: options?.maximumPrefixLength ?? 32,
 		minimumPrefixLength: options?.minimumPrefixLength ?? 1,
 		maximumNameLength: options?.maximumNameLength ?? 32,
