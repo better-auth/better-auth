@@ -179,20 +179,6 @@ export function createApiKey({
 					});
 				}
 			}
-
-			if (remaining) {
-				if (remaining < opts.minimumRemaining) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_REMAINING,
-					});
-				}
-				if (remaining > opts.maximumRemaining) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_REMAINING,
-					});
-				}
-			}
-
 			if (prefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
 					throw new APIError("BAD_REQUEST", {
@@ -261,7 +247,7 @@ export function createApiKey({
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
 					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
-				remaining: remaining ?? null,
+				remaining: remaining || refillAmount || null,
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled: rateLimitEnabled ?? true,

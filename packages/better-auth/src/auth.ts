@@ -9,7 +9,7 @@ import type {
 	PrettifyDeep,
 	Expand,
 	AuthContext,
-} from "./types";
+} from "./types/helper";
 import { getBaseURL } from "./utils/url";
 import type { FilterActions, InferAPI } from "./types";
 import { BASE_ERROR_CODES } from "./error/codes";

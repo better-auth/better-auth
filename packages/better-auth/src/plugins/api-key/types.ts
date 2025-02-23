@@ -206,20 +206,6 @@ interface ApiKeyOptionsBase {
 	 */
 	defaultPrefix?: string;
 	/**
-	 * The maximum remaining count that can be applied to a key.
-	 *
-	 * @default 1_000_000
-	 */
-	maximumRemaining?: number;
-	/**
-	 * The minimum remaining count that can be applied to a key.
-	 *
-	 * Note: This does not reflect the remaining count decreasing. Once this hits 0, then the key is invalid.
-	 *
-	 * @default 1
-	 */
-	minimumRemaining?: number;
-	/**
 	 * The maximum length of the prefix.
 	 *
 	 * @default 32

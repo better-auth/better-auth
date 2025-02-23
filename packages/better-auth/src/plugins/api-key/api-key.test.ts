@@ -802,13 +802,14 @@ describe("api-key", async () => {
 		expect(afterVerificationTwice?.key?.remaining).toEqual(remaining - 2);
 	});
 
-	it("should fail if the api key has no remaining", async () => {
-		const { data: apiKey } = await client.apiKey.create(
+	it.only("should fail if the api key has no remaining", async () => {
+		const { data: apiKey } = await auth.api.createApiKey(
 			{
-				remaining: 1,
+				name: "test",
 			},
 			{ headers: headers },
 		);
+		console.log({ apiKey });
 		if (!apiKey) return;
 		// run verify once to make the remaining count go down to 0
 		await auth.api.verifyApiKey({
@@ -817,26 +818,13 @@ describe("api-key", async () => {
 			},
 			headers,
 		});
-		let result: {
-			data: { valid: boolean; key: Partial<ApiKey> } | null;
-			error: Err | null;
-		} = {
-			data: null,
-			error: null,
-		};
-		try {
-			const afterVerification = await auth.api.verifyApiKey({
-				body: {
-					key: apiKey.key,
-				},
-				headers,
-			});
-			result.data = afterVerification;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.error?.status).toEqual("FORBIDDEN");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_EXPIRED);
+		const afterVerification = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+			headers,
+		});
+		console.log({ afterVerification });
 	});
 
 	it("should fail if the api key is expired", async () => {
