@@ -17,8 +17,6 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "defaultKeyLength"
 			| "keyExpiration"
 			| "rateLimit"
-			| "maximumRemaining"
-			| "minimumRemaining"
 			| "maximumPrefixLength"
 			| "minimumPrefixLength"
 			| "maximumNameLength"

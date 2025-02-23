@@ -131,7 +131,7 @@ export function verifyApiKey({
 					return ctx.json({
 						valid: false,
 						error: {
-							message: ERROR_CODES.USAGE_EXCEEDED,
+							message: ERROR_CODES.KEY_EXPIRED,
 							code: "KEY_EXPIRED" as const,
 						},
 						key: null,
@@ -162,7 +162,7 @@ export function verifyApiKey({
 					valid: false,
 					error: {
 						message: ERROR_CODES.USAGE_EXCEEDED,
-						code: "KEY_EXPIRED" as const,
+						code: "USAGE_EXCEEDED" as const,
 					},
 					key: null,
 				});

@@ -3,8 +3,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
-import { tryPromise } from "tarn/dist/utils";
-import { APIError } from "better-call";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -50,7 +48,7 @@ describe("api-key", async () => {
 
 	let firstApiKey: ApiKey;
 
-	it.only("should successfully create API keys from client with headers", async () => {
+	it("should successfully create API keys from client with headers", async () => {
 		const apiKey = await client.apiKey.create({}, { headers: headers });
 		if (apiKey.data) {
 			firstApiKey = apiKey.data;
@@ -691,7 +689,7 @@ describe("api-key", async () => {
 	// VERIFY API KEY
 	// =========================================================================
 
-	it.only("verify api key without key and userId", async () => {
+	it("verify api key without key and userId", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
 				userId: user.id,
@@ -702,7 +700,7 @@ describe("api-key", async () => {
 		expect(apiKey.valid).toBe(true);
 	});
 
-	it.only("verify api key with invalid key (should fail)", async () => {
+	it("verify api key with invalid key (should fail)", async () => {
 		const apiKey = await auth.api.verifyApiKey({
 			body: {
 				key: "invalid",
@@ -739,7 +737,7 @@ describe("api-key", async () => {
 
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
 
-	it.only("should fail to verify api key 20 times in a row due to rate-limit", async () => {
+	it("should fail to verify api key 20 times in a row due to rate-limit", async () => {
 		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
@@ -762,7 +760,7 @@ describe("api-key", async () => {
 		}
 	});
 
-	it.only("should allow us to verify api key after rate-limit window has passed", async () => {
+	it("should allow us to verify api key after rate-limit window has passed", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 		const response = await rateLimitAuth.api.verifyApiKey({
@@ -775,7 +773,7 @@ describe("api-key", async () => {
 		expect(response?.valid).toBe(true);
 	});
 
-	it.only("should check if verifying an api key's remaining count does go down", async () => {
+	it("should check if verifying an api key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
 			{
@@ -802,13 +800,13 @@ describe("api-key", async () => {
 		expect(afterVerificationTwice?.key?.remaining).toEqual(remaining - 2);
 	});
 
-	it.only("should fail if the api key has no remaining", async () => {
-		const { data: apiKey } = await auth.api.createApiKey(
-			{
-				name: "test",
+	it("should fail if the api key has no remaining", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining: 1,
+				userId: user.id,
 			},
-			{ headers: headers },
-		);
+		});
 		console.log({ apiKey });
 		if (!apiKey) return;
 		// run verify once to make the remaining count go down to 0
@@ -824,59 +822,27 @@ describe("api-key", async () => {
 			},
 			headers,
 		});
-		console.log({ afterVerification });
+		expect(afterVerification.error?.code).toBe("USAGE_EXCEEDED");
 	});
 
 	it("should fail if the api key is expired", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
-			{
-				plugins: [
-					apiKey({
-						keyExpiration: {
-							minExpiresIn: 1,
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
-				},
-			},
-		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: apiKey2 } = await client.apiKey.create(
+		const apiKey2 = await client.apiKey.create(
 			{
-				expiresIn: 100,
+				expiresIn: 60 * 60 * 24,
 			},
-			{ headers: headers },
+			{ headers: headers, throw: true },
 		);
-
-		if (!apiKey2) return;
-
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-
-		let result: {
-			data: { valid: boolean; key: Partial<ApiKey> } | null;
-			error: Err | null;
-		} = {
-			data: null,
-			error: null,
-		};
-		try {
-			const afterVerification = await auth.api.verifyApiKey({
-				body: {
-					key: apiKey2.key,
-				},
-				headers,
-			});
-			result.data = afterVerification;
-		} catch (error: any) {
-			result.error = error;
-		}
-		expect(result.error?.status).toEqual("FORBIDDEN");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_DISABLED);
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24);
+		const afterVerification = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey2.key,
+			},
+			headers,
+		});
+		expect(afterVerification.error?.code).toEqual("KEY_EXPIRED");
 	});
 
 	// =========================================================================
