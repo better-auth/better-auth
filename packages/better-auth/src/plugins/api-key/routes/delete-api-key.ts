@@ -72,16 +72,6 @@ export function deleteApiKey({
 					],
 				});
 			} catch (error: any) {
-				opts.events?.({
-					event: "key.delete",
-					success: false,
-					error: {
-						code: "database.error",
-						message: error?.message,
-					},
-					user: session.user,
-					apiKey: apiKey,
-				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
@@ -89,13 +79,6 @@ export function deleteApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			opts.events?.({
-				event: "key.delete",
-				success: true,
-				error: null,
-				user: session.user,
-				apiKey: null,
-			});
 			return ctx.json({
 				success: true,
 			});
