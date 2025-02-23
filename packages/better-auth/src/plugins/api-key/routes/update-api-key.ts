@@ -42,6 +42,7 @@ export function updateApiKey({
 					.number({
 						description: "The number of remaining requests",
 					})
+					.min(1)
 					.optional(),
 				refillAmount: z
 					.number({
@@ -62,6 +63,7 @@ export function updateApiKey({
 					.number({
 						description: "Expiration time of the Api Key in seconds",
 					})
+					.min(1)
 					.optional()
 					.nullable(),
 				rateLimitEnabled: z
