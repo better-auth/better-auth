@@ -50,7 +50,7 @@
     "@tsparticles/slim": "^3.7.1",
     "@types/better-sqlite3": "^7.6.12",
     "@vercel/og": "^0.6.4",
-    "better-auth": "^0.8.8",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

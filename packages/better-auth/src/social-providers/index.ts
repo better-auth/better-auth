@@ -1,4 +1,4 @@
-import type { Prettify } from "../types";
+import type { Prettify } from "../types/helper";
 import { apple } from "./apple";
 import { discord } from "./discord";
 import { facebook } from "./facebook";

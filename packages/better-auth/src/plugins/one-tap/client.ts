@@ -1,6 +1,6 @@
 import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin } from "../../types";
-import { generateRandomString } from "../../crypto";
+import { generateRandomString } from "../../crypto/random";
 
 declare global {
 	interface Window {

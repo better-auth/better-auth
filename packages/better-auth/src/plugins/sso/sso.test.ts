@@ -290,7 +290,7 @@ describe("provisioning", async (ctx) => {
 			headers,
 		});
 		const member = org?.members.find(
-			(m) => m.user.email === "sso-user@localhost:8000.com",
+			(m: any) => m.user.email === "sso-user@localhost:8000.com",
 		);
 		expect(member).toMatchObject({
 			role: "member",

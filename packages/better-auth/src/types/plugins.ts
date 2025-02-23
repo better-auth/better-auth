@@ -2,7 +2,11 @@ import type { Migration } from "kysely";
 import { type AuthMiddleware } from "../api/call";
 import type { FieldAttribute } from "../db/field";
 import type { HookEndpointContext } from ".";
-import type { DeepPartial, LiteralString, UnionToIntersection } from ".";
+import type {
+	DeepPartial,
+	LiteralString,
+	UnionToIntersection,
+} from "../types/helper";
 
 import type { AuthContext, BetterAuthOptions } from ".";
 import type { Endpoint } from "better-call";
