@@ -19,7 +19,7 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 			session: Session;
 		};
 		roles: typeof defaultRoles & {
-			[key: string]: Role<{}>;
+			[key: string]: Role;
 		};
 	};
 });

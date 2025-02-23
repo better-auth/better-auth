@@ -281,6 +281,16 @@
         "default": "./dist/plugins/admin.cjs"
       }
     },
+    "./plugins/admin/access": {
+      "import": {
+        "types": "./dist/plugins/admin/access.d.ts",
+        "default": "./dist/plugins/admin/access.js"
+      },
+      "require": {
+        "types": "./dist/plugins/admin/access.d.cts",
+        "default": "./dist/plugins/admin/access.cjs"
+      }
+    },
     "./plugins/anonymous": {
       "import": {
         "types": "./dist/plugins/anonymous.d.ts",
@@ -521,6 +531,9 @@
       ],
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
+      ],
+      "plugins/admin/access": [
+        "./dist/plugins/admin/access.d.ts"
       ],
       "plugins/anonymous": [
         "./dist/plugins/anonymous.d.ts"

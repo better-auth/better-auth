@@ -275,8 +275,10 @@ By default, there are two roles:
 By default, there is one resource with eight actions.
 
 **user**:
+  `create` `list` `set-role` `ban` `impersonate` `delete`
 
-    `create` `list` `set-role` `ban` `list-sessions` `revoke-sessions` `impersonate` `delete`
+**session**:
+  `list-sessions` `revoke-sessions`
 
 The admin have full control over all the resources and actions. The user have no control over any of those actions.
 
@@ -335,10 +337,10 @@ the plugin providers easy way to define your own set of permission for each role
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
-    import { admin } from "better-auth/plugins/admin";
+    import { defaultStatements, adminAc } from "better-auth/plugins/admin/access";
 
     const statement = {
-        ...admin.defaultStatements, // [!code highlight]
+        ...defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
 
@@ -346,7 +348,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...admin.adminAc.statements, // [!code highlight]
+        ...adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -404,21 +406,7 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `adminHasPermission` action provided by the `api` to check the permission of the user.
-
-```ts title="api.ts"
-import { auth } from "@/auth";
-auth.api.adminHasPermission({
-  headers: await headers(),
-  body: {
-    permission: {
-      project: ["create"], // This must match the structure in your access control
-    },
-  },
-});
-```
-
-If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client.
+To check the permission of the user, you can use the `hasPermission` function provided by the client.
 
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
@@ -427,6 +415,31 @@ const canCreateProject = await authClient.admin.hasPermission({
   },
 });
 ```
+
+If you want to use the server instead to check if a user has a permission, you can use `adminHasPermission` action provided by the `api` to check the permission of the user.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+auth.api.adminHasPermission({
+  body: {
+    userId: 'id', //the user id
+    permission: {
+      project: ["create"], // This must match the structure in your access control
+    },
+  },
+});
+
+//you can also just pass the role directly
+auth.api.adminHasPermission({
+  body: {
+   role: "admin",
+    permission: {
+      project: ["create"], // This must match the structure in your access control
+    },
+  },
+});
+```
+
 
 **Check Role Permission**:
 

@@ -15,7 +15,7 @@ export type Subset<
 };
 
 export type Statements = {
-	readonly [resource: string]: readonly string[];
+	readonly [resource: string]: readonly LiteralString[];
 };
 
 export type AccessControl<TStatements extends Statements = Statements> =

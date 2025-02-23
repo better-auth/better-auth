@@ -2,9 +2,9 @@ import { defaultRoles } from "./access";
 import type { AdminOptions } from "./admin";
 
 export const hasPermission = (input: {
-	userId: string; // TODO: Make optional
+	userId: string;
 	role?: string;
-	options: AdminOptions;
+	options?: AdminOptions;
 	permission: {
 		[key: string]: string[];
 	};
@@ -12,9 +12,8 @@ export const hasPermission = (input: {
 	if (input.options?.adminUserIds?.includes(input.userId)) {
 		return true;
 	}
-
-	const roles = (input.role || input.options.defaultRole || "user").split(",");
-	const acRoles = input.options.roles || defaultRoles;
+	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+	const acRoles = input.options?.roles || defaultRoles;
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
 		const result = _role?.authorize(input.permission);

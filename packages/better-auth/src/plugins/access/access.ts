@@ -72,6 +72,7 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 				error: "Not authorized",
 			};
 		},
+		statements,
 	};
 }
 
@@ -82,5 +83,6 @@ export function createAccessControl<const TStatements extends Statements>(
 		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
 			return role<Subset<K, TStatements>>(statements);
 		},
+		statements: s,
 	};
 }

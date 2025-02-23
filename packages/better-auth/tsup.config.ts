@@ -30,6 +30,7 @@ export default defineConfig((env) => {
 			"next-js": "./src/integrations/next-js.ts",
 			node: "./src/integrations/node.ts",
 			"plugins/admin": "./src/plugins/admin/index.ts",
+			"plugins/admin/access": "./src/plugins/admin/access/index.ts",
 			"plugins/anonymous": "./src/plugins/anonymous/index.ts",
 			"plugins/bearer": "./src/plugins/bearer/index.ts",
 			"plugins/captcha": "./src/plugins/captcha/index.ts",

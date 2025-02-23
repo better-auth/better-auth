@@ -1,7 +1,7 @@
 import { BetterAuthError } from "../../error";
 import type { BetterAuthClientPlugin } from "../../types";
 import { type AccessControl, type Role } from "../access";
-import { adminAc, defaultRoles, defaultStatements, userAc } from "./access";
+import { adminAc, defaultStatements, userAc } from "./access";
 import type { admin } from "./admin";
 
 interface AdminClientOptions {
@@ -11,72 +11,62 @@ interface AdminClientOptions {
 	};
 }
 
-export const adminClient = Object.assign(
-	<O extends AdminClientOptions>(options?: O) => {
-		type DefaultStatements = typeof defaultStatements;
-		type Statements = O["ac"] extends AccessControl<infer S>
-			? S extends Record<string, Array<any>>
-				? S & DefaultStatements
-				: DefaultStatements
-			: DefaultStatements;
-		const roles = {
-			admin: adminAc,
-			user: userAc,
-			...options?.roles,
-		};
+export const adminClient = <O extends AdminClientOptions>(options?: O) => {
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
+	const roles = {
+		admin: adminAc,
+		user: userAc,
+		...options?.roles,
+	};
 
-		return {
-			id: "better-auth-client",
-			$InferServerPlugin: {} as ReturnType<
-				typeof admin<{
-					ac: O["ac"] extends AccessControl
-						? O["ac"]
-						: AccessControl<DefaultStatements>;
-					roles: O["roles"] extends Record<string, Role>
-						? O["roles"]
-						: {
-								admin: Role;
-								user: Role;
-							};
-				}>
-			>,
-			getActions: ($fetch) => ({
-				admin: {
-					checkRolePermission: <
-						R extends O extends { roles: any }
-							? keyof O["roles"]
-							: "admin" | "user",
-					>(data: {
-						role: R;
-						permission: {
-							//@ts-expect-error fix this later
-							[key in keyof Statements]?: Statements[key][number][];
+	return {
+		id: "better-auth-client",
+		$InferServerPlugin: {} as ReturnType<
+			typeof admin<{
+				ac: O["ac"] extends AccessControl
+					? O["ac"]
+					: AccessControl<DefaultStatements>;
+				roles: O["roles"] extends Record<string, Role>
+					? O["roles"]
+					: {
+							admin: Role;
+							user: Role;
 						};
-					}) => {
-						if (Object.keys(data.permission).length > 1) {
-							throw new BetterAuthError(
-								"you can only check one resource permission at a time.",
-							);
-						}
-						const role = roles[data.role as unknown as "admin"];
-						if (!role) {
-							return false;
-						}
-						const isAuthorized = role?.authorize(data.permission as any);
-						return isAuthorized.success;
-					},
+			}>
+		>,
+		getActions: ($fetch) => ({
+			admin: {
+				checkRolePermission: <
+					R extends O extends { roles: any }
+						? keyof O["roles"]
+						: "admin" | "user",
+				>(data: {
+					role: R;
+					permission: {
+						//@ts-expect-error fix this later
+						[key in keyof Statements]?: Statements[key][number][];
+					};
+				}) => {
+					if (Object.keys(data.permission).length > 1) {
+						throw new BetterAuthError(
+							"you can only check one resource permission at a time.",
+						);
+					}
+					const role = roles[data.role as unknown as "admin"];
+					if (!role) {
+						return false;
+					}
+					const isAuthorized = role?.authorize(data.permission as any);
+					return isAuthorized.success;
 				},
-			}),
-			pathMethods: {
-				"/admin/list-users": "GET",
-				"/admin/stop-impersonating": "POST",
 			},
-		} satisfies BetterAuthClientPlugin;
-	},
-	{
-		defaultStatements,
-		defaultRoles,
-		adminAc,
-		userAc,
-	},
-);
+		}),
+		pathMethods: {
+			"/admin/list-users": "GET",
+			"/admin/stop-impersonating": "POST",
+		},
+	} satisfies BetterAuthClientPlugin;
+};

@@ -1,4 +1,4 @@
-import { z, ZodObject, ZodOptional } from "zod";
+import { z } from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -18,10 +18,9 @@ import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
-import { shimContext } from "../../utils/shim";
 import { adminMiddleware } from "./call";
 import { ADMIN_ERROR_CODES } from "./error-codes";
-import { adminAc, defaultRoles, defaultStatements, userAc } from "./access";
+import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
 export interface UserWithRole extends User {
@@ -73,7 +72,7 @@ export interface AdminOptions {
 	 * Custom permissions for roles.
 	 */
 	roles?: {
-		[key in string]?: Role<any>;
+		[key in string]?: Role;
 	};
 	/**
 	 * List of user ids that should have admin access
@@ -83,14 +82,84 @@ export interface AdminOptions {
 	adminUserIds?: string[];
 }
 
-export const admin = Object.assign(
-	<O extends AdminOptions>(options?: O) => {
-		const opts = {
-			defaultRole: "user",
-			...options,
-		};
+export const admin = <O extends AdminOptions>(options?: O) => {
+	const opts = {
+		defaultRole: "user",
+		...options,
+	};
+	type DefaultStatements = typeof defaultStatements;
+	type Statements = O["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
+	return {
+		id: "admin",
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						user: {
+							create: {
+								async before(user) {
+									return {
+										data: {
+											role: options?.defaultRole ?? "user",
+											...user,
+										},
+									};
+								},
+							},
+						},
+						session: {
+							create: {
+								async before(session) {
+									const user = (await ctx.internalAdapter.findUserById(
+										session.userId,
+									)) as UserWithRole;
 
-		const endpoints = {
+									if (user.banned) {
+										if (
+											user.banExpires &&
+											user.banExpires.getTime() < Date.now()
+										) {
+											await ctx.internalAdapter.updateUser(session.userId, {
+												banned: false,
+												banReason: null,
+												banExpires: null,
+											});
+											return;
+										}
+										return false;
+									}
+								},
+							},
+						},
+					},
+				},
+			};
+		},
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path === "/list-sessions";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const response =
+							await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
+
+						if (!response) {
+							return;
+						}
+						const newJson = response.filter((session) => {
+							return !session.impersonatedBy;
+						});
+
+						return ctx.json(newJson);
+					}),
+				},
+			],
+		},
+		endpoints: {
 			setRole: createAuthEndpoint(
 				"/admin/set-role",
 				{
@@ -225,7 +294,6 @@ export const admin = Object.assign(
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 						});
 					}
-
 					const existUser = await ctx.context.internalAdapter.findUserByEmail(
 						ctx.body.email,
 					);
@@ -470,7 +538,7 @@ export const admin = Object.assign(
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
-							user: ["list-sessions"],
+							session: ["list"],
 						},
 					});
 					if (!canListSessions) {
@@ -839,7 +907,7 @@ export const admin = Object.assign(
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
-							user: ["revoke-sessions"],
+							session: ["revoke"],
 						},
 					});
 					if (!canRevokeSession) {
@@ -899,7 +967,7 @@ export const admin = Object.assign(
 						role: session.user.role,
 						options: ctx.context.adminOptions,
 						permission: {
-							user: ["revoke-sessions"],
+							session: ["revoke"],
 						},
 					});
 					if (!canRevokeSession) {
@@ -995,189 +1063,116 @@ export const admin = Object.assign(
 					});
 				},
 			),
-		};
-
-		const roles = {
-			...defaultRoles,
-			...options?.roles,
-		};
-
-		const api = shimContext(endpoints, {
-			adminOptions: options || {},
-			roles,
-		});
-
-		type DefaultStatements = typeof defaultStatements;
-		type Statements = O["ac"] extends AccessControl<infer S>
-			? S extends Record<string, any>
-				? S & DefaultStatements
-				: DefaultStatements
-			: DefaultStatements;
-
-		return {
-			id: "admin",
-			init(ctx) {
-				return {
-					options: {
-						databaseHooks: {
-							user: {
-								create: {
-									async before(user) {
-										return {
-											data: {
-												role: options?.defaultRole ?? "user",
-												...user,
+			userHasPermission: createAuthEndpoint(
+				"/admin/has-permission",
+				{
+					method: "POST",
+					body: z.object({
+						permission: z.record(z.string(), z.array(z.string())),
+						userId: z.string().optional(),
+						role: z.string().optional(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Check if the user has permission",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												permission: {
+													type: "object",
+													description: "The permission to check",
+												},
 											},
-										};
+											required: ["permission"],
+										},
 									},
 								},
 							},
-							session: {
-								create: {
-									async before(session) {
-										const user = (await ctx.internalAdapter.findUserById(
-											session.userId,
-										)) as UserWithRole;
-
-										if (user.banned) {
-											if (
-												user.banExpires &&
-												user.banExpires.getTime() < Date.now()
-											) {
-												await ctx.internalAdapter.updateUser(session.userId, {
-													banned: false,
-													banReason: null,
-													banExpires: null,
-												});
-												return;
-											}
-											return false;
-										}
-									},
-								},
-							},
-						},
-					},
-				};
-			},
-			hooks: {
-				after: [
-					{
-						matcher(context) {
-							return context.path === "/list-sessions";
-						},
-						handler: createAuthMiddleware(async (ctx) => {
-							const response =
-								await getEndpointResponse<SessionWithImpersonatedBy[]>(ctx);
-
-							if (!response) {
-								return;
-							}
-							const newJson = response.filter((session) => {
-								return !session.impersonatedBy;
-							});
-
-							return ctx.json(newJson);
-						}),
-					},
-				],
-			},
-			endpoints: {
-				...api,
-				adminHasPermission: createAuthEndpoint(
-					"/admin/has-permission",
-					{
-						method: "POST",
-						requireHeaders: true,
-						body: z.object({
-							permission: z.record(z.string(), z.array(z.string())),
-						}) as unknown as ZodObject<{
-							permission: ZodObject<{
-								[key in keyof Statements]: ZodOptional<
-									//@ts-expect-error TODO: fix this
-									ZodArray<ZodLiteral<Statements[key][number]>>
-								>;
-							}>;
-						}>,
-						use: [adminMiddleware],
-						metadata: {
-							openapi: {
-								description: "Check if the user has permission",
-								requestBody: {
+							responses: {
+								"200": {
+									description: "Success",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													permission: {
-														type: "object",
-														description: "The permission to check",
+													error: {
+														type: "string",
+													},
+													success: {
+														type: "boolean",
 													},
 												},
-												required: ["permission"],
-											},
-										},
-									},
-								},
-								responses: {
-									"200": {
-										description: "Success",
-										content: {
-											"application/json": {
-												schema: {
-													type: "object",
-													properties: {
-														error: {
-															type: "string",
-														},
-														success: {
-															type: "boolean",
-														},
-													},
-													required: ["success"],
-												},
+												required: ["success"],
 											},
 										},
 									},
 								},
 							},
 						},
+						$Infer: {
+							body: {} as {
+								permission: {
+									//@ts-expect-error
+									[key in keyof Statements]?: Array<Statements[key][number]>;
+								};
+								userId?: string;
+								role?: string;
+							},
+						},
 					},
-					async (ctx) => {
-						if (
-							!ctx.body.permission ||
-							Object.keys(ctx.body.permission).length > 1
-						) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									"invalid permission check. you can only check one resource permission at a time.",
-							});
-						}
-						const session = ctx.context.session;
-						const result = hasPermission({
-							userId: ctx.context.session.user.id,
-							role: session.user.role,
-							options: options as AdminOptions,
-							permission: ctx.body.permission as any,
+				},
+				async (ctx) => {
+					if (
+						!ctx.body.permission ||
+						Object.keys(ctx.body.permission).length > 1
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"invalid permission check. you can only check one resource permission at a time.",
 						});
-						return ctx.json({
-							error: null,
-							success: result,
+					}
+					const session = ctx.context.session;
+
+					if (
+						!session &&
+						(ctx.request || ctx.headers) &&
+						!ctx.body.userId &&
+						!ctx.body.role
+					) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					const user =
+						session?.user ||
+						((await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId as string,
+						)) as { role?: string; id: string }) ||
+						(ctx.body.role ? { id: "", role: ctx.body.role } : null);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user not found",
 						});
-					},
-				),
-			},
-			$ERROR_CODES: ADMIN_ERROR_CODES,
-			schema: mergeSchema(schema, opts.schema),
-		} satisfies BetterAuthPlugin;
-	},
-	{
-		defaultStatements,
-		defaultRoles,
-		adminAc,
-		userAc,
-	},
-);
+					}
+					const result = hasPermission({
+						userId: user.id,
+						role: user.role,
+						options: options as AdminOptions,
+						permission: ctx.body.permission as any,
+					});
+					return ctx.json({
+						error: null,
+						success: result,
+					});
+				},
+			),
+		},
+		$ERROR_CODES: ADMIN_ERROR_CODES,
+		schema: mergeSchema(schema, opts.schema),
+	} satisfies BetterAuthPlugin;
+};
 
 const schema = {
 	user: {
