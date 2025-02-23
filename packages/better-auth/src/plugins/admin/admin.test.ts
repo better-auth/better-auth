@@ -37,6 +37,7 @@ describe("Admin plugin", async () => {
 			customFetchImpl,
 		},
 		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
