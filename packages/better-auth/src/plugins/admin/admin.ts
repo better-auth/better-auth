@@ -150,7 +150,7 @@ export const admin = Object.assign(
 						{
 							role: ctx.body.role,
 						},
-						ctx
+						ctx,
 					);
 					return ctx.json({
 						user: updatedUser as UserWithRole,
@@ -250,12 +250,15 @@ export const admin = Object.assign(
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.linkAccount({
-						accountId: user.id,
-						providerId: "credential",
-						password: hashedPassword,
-						userId: user.id,
-					}, ctx);
+					await ctx.context.internalAdapter.linkAccount(
+						{
+							accountId: user.id,
+							providerId: "credential",
+							password: hashedPassword,
+							userId: user.id,
+						},
+						ctx,
+					);
 					return ctx.json({
 						user: user as UserWithRole,
 					});
@@ -407,17 +410,17 @@ export const admin = Object.assign(
 								: undefined,
 							where.length ? where : undefined,
 						);
-						const total = await ctx.context.internalAdapter.countTotalUsers()
+						const total = await ctx.context.internalAdapter.countTotalUsers();
 						return ctx.json({
 							users: users as UserWithRole[],
 							total: total,
 							limit: Number(ctx.query?.limit) || undefined,
-							offset: Number(ctx.query?.offset) || undefined
+							offset: Number(ctx.query?.offset) || undefined,
 						});
 					} catch (e) {
 						return ctx.json({
 							users: [],
-							total: 0
+							total: 0,
 						});
 					}
 				},
@@ -541,7 +544,7 @@ export const admin = Object.assign(
 						{
 							banned: false,
 							banExpires: null,
-							banReason: null
+							banReason: null,
 						},
 					);
 					return ctx.json({
@@ -633,7 +636,7 @@ export const admin = Object.assign(
 									? getDate(options.defaultBanExpiresIn, "sec")
 									: undefined,
 						},
-						ctx
+						ctx,
 					);
 					//revoke all sessions
 					await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
@@ -717,7 +720,7 @@ export const admin = Object.assign(
 								: getDate(60 * 60, "sec"), // 1 hour
 						},
 						ctx,
-						true
+						true,
 					);
 					if (!session) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -1150,7 +1153,6 @@ export const admin = Object.assign(
 									"invalid permission check. you can only check one resource permission at a time.",
 							});
 						}
-
 						const session = ctx.context.session;
 						const result = hasPermission({
 							userId: ctx.context.session.user.id,
@@ -1158,7 +1160,6 @@ export const admin = Object.assign(
 							options: options as AdminOptions,
 							permission: ctx.body.permission as any,
 						});
-
 						return ctx.json({
 							error: null,
 							success: result,

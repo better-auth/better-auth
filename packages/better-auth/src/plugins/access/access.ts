@@ -1,35 +1,24 @@
-import type { StatementsPrimitive as Statements, Subset } from "./types";
+import { BetterAuthError } from "../../error";
+import type { Statements, Subset } from "./types";
 
-type Connector = "OR" | "AND";
-
-type AuthorizeResponse =
+export type AuthortizeResponse =
 	| { success: false; error: string }
-	| { success: true; error?: undefined };
-
-function parsingError(message: string, path: string): Error {
-	const error = new Error(message);
-	(error as any).path = path;
-	return error;
-}
-
-export function createAccessControl<
-	TStatements extends Statements = Statements,
->(s: TStatements) {
-	const statements = s;
-	return {
-		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
-			return role<Subset<K, TStatements>>(statements);
-		},
-	};
-}
+	| { success: true; error?: never };
 
 export function role<TStatements extends Statements>(statements: TStatements) {
 	return {
-		statements,
 		authorize<K extends keyof TStatements>(
-			request: Subset<K, TStatements>,
-			connector?: Connector,
-		): AuthorizeResponse {
+			request: {
+				[key in K]?:
+					| TStatements[key]
+					| {
+							actions: TStatements[key];
+							connector: "OR" | "AND";
+					  };
+			},
+			connector: "OR" | "AND" = "AND",
+		): AuthortizeResponse {
+			let success = false;
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
 			)) {
@@ -40,20 +29,42 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 						error: `You are not allowed to access resource: ${requestedResource}`,
 					};
 				}
-				const success =
-					connector === "OR"
-						? (requestedActions as string[]).some((requestedAction) =>
-								allowedActions.includes(requestedAction),
-							)
-						: (requestedActions as string[]).every((requestedAction) =>
+				if (Array.isArray(requestedActions)) {
+					success = (requestedActions as string[]).every((requestedAction) =>
+						allowedActions.includes(requestedAction),
+					);
+				} else {
+					if (typeof requestedActions === "object") {
+						const actions = requestedActions as {
+							actions: string[];
+							connector: "OR" | "AND";
+						};
+						if (actions.connector === "OR") {
+							success = actions.actions.some((requestedAction) =>
 								allowedActions.includes(requestedAction),
 							);
-				if (success) {
-					return { success: true };
+						} else {
+							success = actions.actions.every((requestedAction) =>
+								allowedActions.includes(requestedAction),
+							);
+						}
+					} else {
+						throw new BetterAuthError("Invalid access control request");
+					}
 				}
+				if (success && connector === "OR") {
+					return { success };
+				}
+				if (!success && connector === "AND") {
+					return {
+						success: false,
+						error: `unauthorized to access resource "${requestedResource}"`,
+					};
+				}
+			}
+			if (success) {
 				return {
-					success: false,
-					error: `Unauthorized to access resource "${requestedResource}"`,
+					success,
 				};
 			}
 			return {
@@ -64,10 +75,12 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 	};
 }
 
-export type AccessControl<TStatements extends Statements = Statements> =
-	ReturnType<typeof createAccessControl<TStatements>>;
-
-export type Role<TStatements extends Statements = Record<string, any>> = {
-	authorize: (request: any, connector?: Connector) => AuthorizeResponse;
-	statements: TStatements;
-};
+export function createAccessControl<const TStatements extends Statements>(
+	s: TStatements,
+) {
+	return {
+		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
+			return role<Subset<K, TStatements>>(statements);
+		},
+	};
+}
