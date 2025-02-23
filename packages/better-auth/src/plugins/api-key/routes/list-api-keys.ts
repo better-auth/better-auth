@@ -44,10 +44,8 @@ export function listApiKeys({
 				};
 			});
 
-			let returningApiKey: Partial<ApiKey>[] = apiKeys.map((x) => {
-				let returningApiKey: Partial<ApiKey> = x;
-				// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
-				delete returningApiKey["key"];
+			let returningApiKey = apiKeys.map((x) => {
+				const { key, ...returningApiKey } = x;
 				return returningApiKey;
 			});
 

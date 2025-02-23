@@ -233,10 +233,13 @@ export function verifyApiKey({
 				});
 			}
 			deleteAllExpiredApiKeys(ctx.context);
+
+			const { key: _, ...returningApiKey } = newApiKey ?? { key: 1 };
+
 			return ctx.json({
 				valid: true,
 				error: null,
-				key: newApiKey,
+				key: newApiKey === null ? null : returningApiKey,
 			});
 		},
 	);

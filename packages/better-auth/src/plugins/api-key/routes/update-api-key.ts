@@ -263,10 +263,9 @@ export function updateApiKey({
 				newApiKey.metadata as never as string,
 			);
 
-			let resApiKey: Partial<ApiKey> = newApiKey;
-			// biome-ignore lint/performance/noDelete: If we set this to `undefined`, the obj will still contain the `key` property, which looks ugly.
-			delete resApiKey["key"];
-			return ctx.json(resApiKey);
+			const { key, ...returningApiKey } = newApiKey;
+
+			return ctx.json(returningApiKey);
 		},
 	);
 }
