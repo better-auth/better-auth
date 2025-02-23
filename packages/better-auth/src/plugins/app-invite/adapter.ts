@@ -14,6 +14,7 @@ export const getAppInviteAdapter = (
 			user,
 		}: {
 			invitation: {
+				name?: string;
 				email?: string;
 				domainWhitelist?: string;
 			};
@@ -26,6 +27,7 @@ export const getAppInviteAdapter = (
 			const invite = await adapter.create<AppInvitationInput, AppInvitation>({
 				model: "appInvitation",
 				data: {
+					name: !!invitation.email ? invitation.name : undefined,
 					email: invitation.email,
 					status: "pending",
 					expiresAt,

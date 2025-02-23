@@ -75,6 +75,7 @@ export const auth = betterAuth({
       async sendInvitationEmail(data) {
         const inviteLink = `https://example.com/accept-invitation/${data.id}`;
         sendAppInvitation({
+          name: data.name,
           email: data.email,
           invitedByUsername: data.inviter.name,
           invitedByEmail: data.inviter.email,
@@ -110,8 +111,8 @@ When a user receives an invitation email, they can click on the invitation link 
 ```ts title="auth-client.ts"
 await authClient.acceptInvitation({
   invitationId: "invitation-id",
-  name: "John Doe",
-  email: "test@email.com", // must be set for personal invites
+  name: "John Doe", // overridden if predefined in the invitation
+  email: "test@email.com", // must be set for public invites
   password: "password123456",
   // ... additional user data
 });
@@ -158,6 +159,12 @@ Table Name: `app_invitation`
       type: "string",
       description: "Unique identifier for each invitation",
       isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the user",
+      isOptional: true
     },
     {
       name: "email",

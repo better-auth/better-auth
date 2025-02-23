@@ -58,6 +58,10 @@ export interface AppInviteOptions {
 			 */
 			id: string;
 			/**
+			 * the name of the user
+			 */
+			name?: string;
+			/**
 			 * the email of the user
 			 */
 			email: string;
@@ -137,9 +141,16 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					method: "POST",
 					use: [sessionMiddleware],
 					body: z.object({
+						name: z
+							.string({
+								description:
+									"The name of the user to invite (Only for personal invitations)",
+							})
+							.optional(),
 						email: z
 							.string({
-								description: "The email address of the user to invite",
+								description:
+									"The email address of the user to invite (Only for personal invitations)",
 							})
 							.optional(),
 						resend: z
@@ -151,7 +162,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						domainWhitelist: z
 							.string({
 								description:
-									"A comma separated list of domains that are allowed to accept the invitation. (Only available for public invitations)",
+									"A comma separated list of domains that are allowed to accept the invitation. (Only for public invitations)",
 							})
 							.optional(),
 					}),
@@ -222,6 +233,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 
 					const invitation = await adapter.createInvitation({
 						invitation: {
+							name: ctx.body.name,
 							email: ctx.body.email,
 							domainWhitelist: ctx.body.domainWhitelist,
 						},
@@ -232,6 +244,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						await options.sendInvitationEmail?.(
 							{
 								id: invitation.id,
+								name: invitation.name,
 								email: invitation.email,
 								inviter: session.user,
 							},
@@ -265,6 +278,9 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 													id: {
 														type: "string",
 													},
+													name: {
+														type: "string",
+													},
 													email: {
 														type: "string",
 													},
@@ -283,7 +299,6 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 												},
 												required: [
 													"id",
-													"email",
 													"inviterId",
 													"status",
 													"expiresAt",
@@ -353,7 +368,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 							body: {} as {
 								invitationId: string;
 
-								name: string;
+								name?: string;
 								email?: string;
 								password: string;
 							} & (O["$Infer"] extends {
@@ -384,7 +399,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 													description: "The password of the user",
 												},
 											},
-											required: ["name", "password"],
+											required: ["password"],
 										},
 									},
 								},
@@ -444,11 +459,13 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					const body = {
 						...(bodyData as any),
 						email: invitation.email || bodyData.email,
+						name: invitation.name || bodyData.name,
 					} as User & {
 						password: string;
 					} & {
 						[key: string]: any;
 					};
+					console.log({ body });
 					const { name, email, password, image, ...additionalFields } = body;
 					const isValidEmail = z.string().email().safeParse(email);
 
@@ -776,6 +793,12 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 				modelName:
 					options?.schema?.appInvitation?.modelName || "app_invitation",
 				fields: {
+					name: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.appInvitation?.fields?.name,
+					},
 					email: {
 						type: "string",
 						required: false,

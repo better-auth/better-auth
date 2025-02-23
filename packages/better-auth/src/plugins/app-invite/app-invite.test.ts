@@ -93,13 +93,13 @@ describe("App Invite", async (it) => {
 				headers: user.headers,
 				body: {
 					email: "email1@test.com",
+					name: "Test User",
 				},
 			});
 			const headers = new Headers();
 			const res = await client.acceptInvitation(
 				{
 					invitationId: invitation.id,
-					name: "Test Name",
 					password: "password",
 					newField: "new-field",
 				},
@@ -108,8 +108,10 @@ describe("App Invite", async (it) => {
 				},
 			);
 
+			console.log(res)
 			expect(res.data?.token).toBeDefined();
-			expect(res.data?.user.id).toBeDefined();
+			expect(res.data?.user.email).toBe("email1@test.com");
+			expect(res.data?.user.name).toBe("Test User");
 			const accounts = await db.findMany({
 				model: "account",
 				where: [

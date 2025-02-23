@@ -7,6 +7,7 @@ export const appInvitationStatus = z
 
 export const appInvitationSchema = z.object({
 	id: z.string().default(generateId),
+	name: z.string().optional(),
 	email: z.string().optional(),
 	status: appInvitationStatus,
 	/**
