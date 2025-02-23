@@ -5,8 +5,7 @@ on:
         types: 
           - opened
           - synchronize
-    push: 
-        branches: main
+    push: {}
     merge_group: {}
 
 jobs:
