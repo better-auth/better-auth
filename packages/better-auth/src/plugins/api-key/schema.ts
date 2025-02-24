@@ -1,4 +1,5 @@
 import type { AuthPluginSchema } from "..";
+import parseJSON from "../../client/parser";
 
 export const apiKeySchema = ({
 	timeWindow,
@@ -174,9 +175,9 @@ export const apiKeySchema = ({
 						input(value) {
 							return JSON.stringify(value);
 						},
-						output(value) {
+						async output(value) {
 							if (!value) return null;
-							return JSON.parse(value as string);
+							return parseJSON<any>(value as string);
 						},
 					},
 				},
