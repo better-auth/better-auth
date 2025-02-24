@@ -998,7 +998,7 @@ describe("api-key", async () => {
 			const apiKey = await auth.api.updateApiKey({
 				body: {
 					keyId: firstApiKey.id,
-					expiresIn: 0,
+					expiresIn: 1,
 				},
 				headers,
 			});
