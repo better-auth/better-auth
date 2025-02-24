@@ -9,8 +9,8 @@ The API Key plugin allows you to create and manage API keys for your application
 
 - Create, manage, and verify API keys
 - [Built-in rate limiting](/docs/plugins/api-key#rate-limiting)
-- Custom expiration times, remaining count, and refill systems
-- Custom metadata
+- [Custom expiration times, remaining count, and refill systems](/docs/plugins/api-key#remaining-refill-and-expiration)
+- [metadata for API keys](/docs/plugins/api-key#metadata)
 - Custom prefix
 - [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys)
 
@@ -490,8 +490,8 @@ const apiKey = await auth.api.createApiKey({
 You can then retrieve the metadata from the API key object.
 ```ts
 const apiKey = await auth.api.getApiKey({
-  query: {
-    id: "your_api_key_id_here",
+  body: {
+    keyId: "your_api_key_id_here",
   },
 });
 
