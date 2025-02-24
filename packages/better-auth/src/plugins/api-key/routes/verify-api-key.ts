@@ -239,7 +239,7 @@ export function verifyApiKey({
 			return ctx.json({
 				valid: true,
 				error: null,
-				key: newApiKey === null ? null : returningApiKey,
+				key: newApiKey === null ? null : returningApiKey as Omit<ApiKey, "key">,
 			});
 		},
 	);
