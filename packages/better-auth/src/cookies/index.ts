@@ -148,6 +148,14 @@ export async function setSessionCookie(
 	dontRememberMe?: boolean,
 	overrides?: Partial<CookieOptions>,
 ) {
+	const dontRememberMeCookie = await ctx.getSignedCookie(
+		ctx.context.authCookies.dontRememberToken.name,
+		ctx.context.secret,
+	);
+	// if dontRememberMe is not set, use the cookie value
+	dontRememberMe =
+		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
+
 	const options = ctx.context.authCookies.sessionToken.options;
 	const maxAge = dontRememberMe
 		? undefined
@@ -192,7 +200,10 @@ export async function setSessionCookie(
 	}
 }
 
-export function deleteSessionCookie(ctx: GenericEndpointContext) {
+export function deleteSessionCookie(
+	ctx: GenericEndpointContext,
+	skipDontRememberMe?: boolean,
+) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
@@ -201,10 +212,12 @@ export function deleteSessionCookie(ctx: GenericEndpointContext) {
 		...ctx.context.authCookies.sessionData.options,
 		maxAge: 0,
 	});
-	ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-		...ctx.context.authCookies.dontRememberToken.options,
-		maxAge: 0,
-	});
+	if (!skipDontRememberMe) {
+		ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+			...ctx.context.authCookies.dontRememberToken.options,
+			maxAge: 0,
+		});
+	}
 }
 
 export function parseCookies(cookieHeader: string) {

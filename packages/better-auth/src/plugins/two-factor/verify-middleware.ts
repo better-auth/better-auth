@@ -40,9 +40,14 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					message: "invalid two factor cookie",
 				});
 			}
+			const dontRememberMe = await ctx.getSignedCookie(
+				ctx.context.authCookies.dontRememberToken.name,
+				ctx.context.secret,
+			);
 			const session = await ctx.context.internalAdapter.createSession(
 				userId,
 				ctx.request,
+				!!dontRememberMe,
 			);
 			if (!session) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
