@@ -1,5 +1,6 @@
 import type { appInvite } from ".";
 import type { BetterAuthClientPlugin } from "../../types";
+import type { AppInvitation } from "./schema";
 
 export const appInviteClient = <
 	O extends {
@@ -16,6 +17,11 @@ export const appInviteClient = <
 	return {
 		id: "app-invite",
 		$InferServerPlugin: {} as ReturnType<typeof appInvite<O>>,
+		getActions: ($fetch) => ({
+			$Infer: {
+				AppInvitation: {} as AppInvitation,
+			},
+		}),
 		pathMethods: {
 			"/invite-user": "POST",
 			"/accept-invitation": "POST",
