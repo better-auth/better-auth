@@ -56,7 +56,7 @@ export function createApiKey({
 					})
 					.optional(),
 				remaining: z
-					.number({ description: "Remaining number of requests" })
+					.number({ description: "Remaining number of requests. Server side only" })
 					.min(0)
 					.optional()
 					.nullable()
