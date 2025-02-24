@@ -5,7 +5,7 @@ import {
 	originCheck,
 	sessionMiddleware,
 } from "../../api";
-import type { BetterAuthPlugin, User } from "../../types";
+import type { BetterAuthPlugin, User, Where } from "../../types";
 import { APP_INVITE_ERROR_CODES } from "./error-codes";
 import type { AppInvitation } from "./schema";
 import { getAppInviteAdapter } from "./adapter";
@@ -14,9 +14,11 @@ import { parseUserInput } from "../../db";
 import { isDevelopment } from "../../utils/env";
 import { setSessionCookie } from "../../cookies";
 
+const x: AppInviteOptions = {};
+
 export interface AppInviteOptions {
 	/**
-	 * Define wheter a user is allowed to send invitations.
+	 * Define whether a user is allowed to send invitations.
 	 *
 	 * You can also pass a function that returns a boolean.
 	 *
@@ -33,7 +35,7 @@ export interface AppInviteOptions {
 		| boolean
 		| ((user: User, type: "personal" | "public") => Promise<boolean> | boolean);
 	/**
-	 * Define wheter a user is allowed to cancel invitations.
+	 * Define whether a user is allowed to cancel invitations.
 	 *
 	 * By default users can only cancel invitations issued by themself.
 	 */
@@ -168,6 +170,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "createAppInvitation",
 							description: "Invite a user to the app",
 							responses: {
 								"200": {
@@ -265,6 +268,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "getAppInvitation",
 							description: "Get an invitation by ID",
 							responses: {
 								"200": {
@@ -378,6 +382,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 								: {}),
 						},
 						openapi: {
+							operationId: "acceptAppInvitation",
 							description:
 								"Accept an app invitation that has been issued by another user",
 							requestBody: {
@@ -465,7 +470,6 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					} & {
 						[key: string]: any;
 					};
-					console.log({ body });
 					const { name, email, password, image, ...additionalFields } = body;
 					const isValidEmail = z.string().email().safeParse(email);
 
@@ -645,6 +649,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					use: [originCheck((ctx) => ctx.query?.callbackURL)],
 					metadata: {
 						openapi: {
+							operationId: "rejectAppInvitation",
 							description: "Reject an app invitation",
 							requestBody: {
 								content: {
@@ -729,6 +734,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					}),
 					use: [sessionMiddleware],
 					openapi: {
+						operationId: "cancelAppInvitation",
 						description: "Cancel an app invitation",
 						responses: {
 							"200": {
@@ -772,6 +778,155 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 					return ctx.json(canceledI);
 				},
 			),
+			listAppInvitations: createAuthEndpoint(
+				"/list-invitations",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+					query: z.object({
+						searchValue: z
+							.string({
+								description: "The value to search for",
+							})
+							.optional(),
+						searchField: z
+							.enum(["name", "email", "domainWhitelist"], {
+								description:
+									"The field to search in, defaults to email. Can be `email`, `name` or `domainWhitelist`",
+							})
+							.optional(),
+						searchOperator: z
+							.enum(["contains", "starts_with", "ends_with"], {
+								description:
+									"The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`",
+							})
+							.optional(),
+						limit: z
+							.string({
+								description: "The numbers of invitations to return",
+							})
+							.or(z.number())
+							.optional(),
+						offset: z
+							.string({
+								description: "The offset to start from",
+							})
+							.or(z.number())
+							.optional(),
+						sortBy: z
+							.string({
+								description: "The field to sort by",
+							})
+							.optional(),
+						sortDirection: z
+							.enum(["asc", "desc"], {
+								description: "The direction to sort by",
+							})
+							.optional(),
+						filterField: z
+							.string({
+								description: "The field to filter by",
+							})
+							.optional(),
+						filterValue: z
+							.string({
+								description: "The value to filter by",
+							})
+							.or(z.number())
+							.optional(),
+						filterOperator: z
+							.enum(["eq", "ne", "lt", "lte", "gt", "gte"], {
+								description: "The operator to use for the filter",
+							})
+							.optional(),
+					}),
+					metadata: {
+						openapi: {
+							operationId: "listAppInvitations",
+							summary: "List issued invitations",
+							description: "List issued invitations",
+							responses: {
+								200: {
+									description: "List of issued invitations",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													invitations: {
+														type: "array",
+														items: {
+															$ref: "#/components/schemas/AppInvitation",
+														},
+													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													offset: {
+														type: ["number", "undefined"],
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const where: Where[] = [];
+
+					if (ctx.query?.searchValue) {
+						where.push({
+							field: ctx.query.searchField || "email",
+							operator: ctx.query.searchOperator || "contains",
+							value: ctx.query.searchValue,
+						});
+					}
+
+					if (ctx.query?.filterValue && ctx.query.filterField !== "inviterId") {
+						where.push({
+							field: ctx.query.filterField || "email",
+							operator: ctx.query.filterOperator || "eq",
+							value: ctx.query.filterValue,
+						});
+					}
+
+					const adapter = await getAppInviteAdapter(ctx.context, options);
+
+					try {
+						const limit = Number(ctx.query?.limit) || undefined;
+						const offset = Number(ctx.query?.offset) || undefined;
+
+						const invitations = await adapter.listInvitationsByIssuer({
+							userId: ctx.context.session.user.id,
+							where,
+							limit,
+							offset,
+							sortBy: ctx.query?.sortBy
+								? {
+										field: ctx.query.sortBy,
+										direction: ctx.query.sortDirection || "asc",
+									}
+								: undefined,
+						});
+
+						return ctx.json({
+							invitations,
+							limit,
+							offset,
+						});
+					} catch (e) {
+						return ctx.json({
+							invitations: [],
+						});
+					}
+				},
+			),
 		},
 		rateLimit: [
 			{
@@ -780,6 +935,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						path.startsWith("/accept-invitation") ||
 						path.startsWith("/reject-invitation") ||
 						path.startsWith("/cancel-invitation") ||
+						path.startsWith("/list-invitations") ||
 						path.startsWith("/invite-user") ||
 						path.startsWith("/get-app-invitation")
 					);

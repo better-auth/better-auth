@@ -365,4 +365,16 @@ describe("App Invite", async (it) => {
 		});
 		expect(res.error?.status).toBe(403);
 	});
+
+	it("should allow listing invitations issued by the user", async () => {
+		const res = await client.listInvitations({
+			query: {
+				limit: 2,
+			},
+			fetchOptions: {
+				headers: user.headers,
+			},
+		});
+		expect(res.data?.invitations.length).toBeGreaterThanOrEqual(1);
+	});
 });

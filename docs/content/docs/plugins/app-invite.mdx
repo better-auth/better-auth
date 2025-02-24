@@ -146,6 +146,48 @@ await authClient.getAppInvitation({
 });
 ```
 
+### List Invitations
+
+Allows an user to list all invitations issued by themself.
+
+```ts title="auth-client"
+await authClient.listInvitations({
+  query: {
+    limit: 10,
+  },
+});
+```
+
+By default 100 invitations are returned. You can adjust the limit and offset using the following query parameters:
+
+- `searchField`: The field to search on, which can be `email`, `name` or `domainWhitelist`.
+- `searchOperator`: The operator to use for the search. It can be `contains`, `starts_with`, or `ends_with`.
+- `searchValue`: The value to search for.
+- `limit`: The number of invitations to return.
+- `offset`: The number of invitations to skip.
+- `sortBy`: The field to sort the invitations by.
+- `sortDirection`: The direction to sort the invitations by. Defaults to `asc`.
+- `filterField`: The field to filter the invitations by.
+- `filterOperator`: The operator to use for the filter. It can be `eq`, `ne`, `lt`, `lte`, `gt` or `gte`.
+- `filterValue`: The value to filter the invitations by.
+
+```ts title="auth-client"
+await authClient.listInvitations({
+  query: {
+    searchField: "domainWhitelist",
+    searchOperator: "contains",
+    searchValue: "example.com",
+    limit: 10,
+    offset: 0,
+    sortBy: "createdAt",
+    sortDirection: "desc",
+    filterField: "expiresAt",
+    filterOperator: "lt",
+    filterValue: new Date().toISOString(),
+  },
+});
+```
+
 ## Schema
 
 The plugin requires an additional table in the database.
@@ -164,7 +206,7 @@ Table Name: `app_invitation`
       name: "name",
       type: "string",
       description: "The name of the user",
-      isOptional: true
+      isOptional: true,
     },
     {
       name: "email",

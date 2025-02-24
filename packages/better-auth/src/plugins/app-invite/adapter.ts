@@ -1,5 +1,5 @@
 import type { AppInviteOptions } from ".";
-import type { AuthContext, User } from "../../types";
+import type { AuthContext, User, Where } from "../../types";
 import { getDate } from "../../utils/date";
 import { type AppInvitationInput, type AppInvitation } from "./schema";
 
@@ -72,6 +72,31 @@ export const getAppInviteAdapter = (
 			}
 
 			return undefined;
+		},
+		listInvitationsByIssuer: async (data: {
+			userId: string;
+			where?: Where[];
+			limit?: number;
+			offset?: number;
+			sortBy?: {
+				field: string;
+				direction: "asc" | "desc";
+			};
+		}) => {
+			const where = data.where || [];
+
+			where.push({
+				field: "inviterId",
+				operator: "eq",
+				value: data.userId,
+			});
+
+			const invitations = await adapter.findMany<AppInvitation>({
+				model: "appInvitation",
+				where,
+			});
+
+			return invitations;
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
