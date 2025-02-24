@@ -61,8 +61,9 @@ export class BetterAuthModule implements NestModule {
 	constructor(@Inject("BETTER_AUTH_OPTIONS") private readonly auth: Auth) {}
 
 	configure(consumer: MiddlewareConsumer) {
-		consumer.apply(toNodeHandler(this.auth)).forRoutes({
-			path: "api/auth/*path",
+		const handler = toNodeHandler(this.auth);
+		consumer.apply(handler).forRoutes({
+			path: "/api/auth/*path",
 			method: RequestMethod.ALL,
 		});
 		this.logger.log("BetterAuthModule initialized");
