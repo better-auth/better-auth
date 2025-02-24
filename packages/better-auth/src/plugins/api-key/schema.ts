@@ -175,7 +175,7 @@ export const apiKeySchema = ({
 						input(value) {
 							return JSON.stringify(value);
 						},
-						async output(value) {
+						output(value) {
 							if (!value) return null;
 							return parseJSON<any>(value as string);
 						},
