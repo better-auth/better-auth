@@ -188,6 +188,23 @@ describe("Origin Check", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	it("should allow query params in calback url", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://localhost:3000",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "/dashboard?test=123",
+		});
+		expect(res.data?.user).toBeDefined();
+	});
 	it("shouldn't work with callback url with double slash", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
