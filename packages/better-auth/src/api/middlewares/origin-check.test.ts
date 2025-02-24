@@ -187,6 +187,24 @@ describe("Origin Check", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	it("shouldn't work with callback url with double slash", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://localhost:3000",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "//evil.com",
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should work with GET requests", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "https://sub-domain.my-site.com",

@@ -113,7 +113,13 @@ export async function setCookieCache(
 				).getTime(),
 				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
 					ctx.context.secret,
-					JSON.stringify(session),
+					JSON.stringify({
+						...session,
+						expiresAt: getDate(
+							ctx.context.authCookies.sessionData.options.maxAge || 60,
+							"sec",
+						).getTime(),
+					}),
 				),
 			}),
 			{

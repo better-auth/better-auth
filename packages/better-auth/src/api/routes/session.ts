@@ -118,7 +118,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (sessionDataPayload) {
 					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
 						ctx.context.secret,
-						JSON.stringify(sessionDataPayload.session),
+						JSON.stringify({
+							...sessionDataPayload.session,
+							expiresAt: sessionDataPayload.expiresAt,
+						}),
 						sessionDataPayload.signature,
 					);
 					if (!isValid) {
