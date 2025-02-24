@@ -12,8 +12,13 @@ export const getSchema = (options: StripeOptions) => {
 				referenceId: {
 					type: "string",
 					required: true,
+					unique: true,
 				},
 				stripeCustomerId: {
+					type: "string",
+					required: false,
+				},
+				stripeSubscriptionId: {
 					type: "string",
 					required: false,
 				},
@@ -21,11 +26,11 @@ export const getSchema = (options: StripeOptions) => {
 					type: "string",
 					defaultValue: "incomplete",
 				},
-				seats: {
-					type: "number",
+				periodStart: {
+					type: "date",
 					required: false,
 				},
-				periodStart: {
+				periodEnd: {
 					type: "date",
 					required: false,
 				},
@@ -33,6 +38,10 @@ export const getSchema = (options: StripeOptions) => {
 					type: "boolean",
 					required: false,
 					defaultValue: false,
+				},
+				seats: {
+					type: "number",
+					required: false,
 				},
 			},
 		},
