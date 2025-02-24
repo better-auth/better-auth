@@ -149,6 +149,10 @@ export interface Subscription {
 	 * for one reference id
 	 */
 	groupId?: string;
+	/**
+	 * Number of seats for the subscription (useful for team plans)
+	 */
+	seats?: number;
 }
 
 export interface StripeOptions {

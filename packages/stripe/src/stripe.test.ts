@@ -1,4 +1,4 @@
-import { betterAuth, type GenericEndpointContext } from "better-auth";
+import { betterAuth } from "better-auth";
 import { stripe } from ".";
 import Stripe from "stripe";
 import { createAuthClient } from "better-auth/client";
@@ -6,7 +6,6 @@ import { stripeClient } from "./client";
 import type { Customer, StripeOptions, Subscription } from "./types";
 import { bearer } from "better-auth/plugins";
 import { setCookieToHeader } from "better-auth/cookies";
-import { onCheckoutSessionCompleted } from "./hooks";
 
 describe("stripe", async () => {
 	const _stripe = new Stripe(process.env.STRIPE_KEY!);
@@ -70,7 +69,7 @@ describe("stripe", async () => {
 		};
 	}
 
-	it("should create a custom on sign up", async () => {
+	it("should create a customer on sign up", async () => {
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
 		});

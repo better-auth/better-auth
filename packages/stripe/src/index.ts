@@ -82,6 +82,11 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 					plan: z.string(),
 					referenceId: z.string().optional(),
 					metadata: z.record(z.string(), z.any()).optional(),
+					seats: z
+						.number({
+							description: "Number of seats to upgrade to (if applicable)",
+						})
+						.optional(),
 					uiMode: z.enum(["embedded", "hosted"]).default("hosted"),
 					successUrl: z
 						.string({
@@ -241,6 +246,7 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 							stripeCustomerId: customer.stripeCustomerId as string,
 							status: "incomplete",
 							referenceId,
+							seats: ctx.body.seats || 1,
 						},
 					});
 					subscription = newSubscription;
@@ -275,7 +281,12 @@ export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
 							}),
 					success_url: getUrl(ctx, ctx.body.successUrl),
 					cancel_url: getUrl(ctx, ctx.body.cancelUrl),
-					line_items: [{ price: plan.priceId, quantity: 1 }],
+					line_items: [
+						{
+							price: plan.priceId,
+							quantity: ctx.body.seats || 1,
+						},
+					],
 					mode: "subscription",
 					client_reference_id: referenceId,
 					...params,

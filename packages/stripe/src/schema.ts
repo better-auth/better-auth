@@ -21,6 +21,10 @@ export const getSchema = (options: StripeOptions) => {
 					type: "string",
 					defaultValue: "incomplete",
 				},
+				seats: {
+					type: "number",
+					required: false,
+				},
 				periodStart: {
 					type: "date",
 					required: false,

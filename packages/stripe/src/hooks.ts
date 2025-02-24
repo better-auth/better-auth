@@ -21,6 +21,7 @@ export async function onCheckoutSessionCompleted(
 	if (plan) {
 		const referenceId = checkoutSession?.metadata?.referenceId;
 		const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+		const seats = subscription.items.data[0].quantity;
 		if (referenceId && subscriptionId) {
 			const trial =
 				subscription.trial_start && subscription.trial_end
@@ -37,6 +38,7 @@ export async function onCheckoutSessionCompleted(
 					updatedAt: new Date(),
 					periodStart: new Date(subscription.current_period_start * 1000),
 					periodEnd: new Date(subscription.current_period_end * 1000),
+					seats,
 					...trial,
 				},
 				where: [
@@ -93,6 +95,7 @@ export async function onSubscriptionUpdated(
 		if (!subscription) {
 			return;
 		}
+		const seats = subscriptionUpdated.items.data[0].quantity;
 		await ctx.context.adapter.update({
 			model: "subscription",
 			update: {
@@ -103,6 +106,7 @@ export async function onSubscriptionUpdated(
 				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
 				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				seats,
 			},
 			where: [
 				{
