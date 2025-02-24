@@ -53,6 +53,7 @@
     "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
     "better-call": "0.2.3-beta.2",
+    "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
     "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",

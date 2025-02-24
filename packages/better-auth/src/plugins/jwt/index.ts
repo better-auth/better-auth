@@ -238,8 +238,9 @@ export const jwt = (options?: JwtOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
+						const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 						const { publicKey, privateKey } = await generateKeyPair(
-							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							alg,
 							options?.jwks?.keyPairConfig ?? {
 								crv: "Ed25519",
 								extractable: true,
@@ -255,7 +256,7 @@ export const jwt = (options?: JwtOptions) => {
 							id: ctx.context.generateId({
 								model: "jwks",
 							}),
-							publicKey: JSON.stringify(publicWebKey),
+							publicKey: JSON.stringify({ alg, ...publicWebKey }),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
 										await symmetricEncrypt({
@@ -273,6 +274,7 @@ export const jwt = (options?: JwtOptions) => {
 							keys: [
 								{
 									...publicWebKey,
+									alg,
 									kid: jwk.id,
 								},
 							],

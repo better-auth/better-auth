@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { admin, type UserWithRole } from ".";
+import { admin, type UserWithRole } from "./admin";
 import { adminClient } from "./client";
+import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
 
 describe("Admin plugin", async () => {
@@ -37,6 +38,7 @@ describe("Admin plugin", async () => {
 			customFetchImpl,
 		},
 		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
@@ -217,7 +219,10 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
+
 		expect(res.data?.user?.banned).toBe(false);
+		expect(res.data?.user?.banExpires).toBeNull();
+		expect(res.data?.user?.banReason).toBeNull();
 	});
 
 	it("should allow admin to list user sessions", async () => {
@@ -270,7 +275,6 @@ describe("Admin plugin", async () => {
 				headers,
 			},
 		});
-		console.log(res);
 		expect(res.data?.length).toBe(2);
 	});
 
@@ -378,5 +382,131 @@ describe("Admin plugin", async () => {
 		);
 
 		expect(res.data?.success).toBe(true);
+	});
+});
+
+describe("access control", async (it) => {
+	const ac = createAccessControl({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete", "update-many"],
+	});
+
+	const adminAc = ac.newRole({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
+	});
+	const userAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+
+	const { signInWithTestUser, signInWithUser, cookieSetter, auth } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							admin: adminAc,
+							user: userAc,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Admin",
+				},
+			},
+		);
+
+	const client = createAuthClient({
+		plugins: [
+			adminClient({
+				ac,
+				roles: {
+					admin: adminAc,
+					user: userAc,
+				},
+			}),
+		],
+	});
+
+	const { headers, user } = await signInWithTestUser();
+
+	it("should validate on the client", async () => {
+		const canCreateOrder = client.admin.checkRolePermission({
+			role: "admin",
+			permission: {
+				order: ["create"],
+			},
+		});
+		expect(canCreateOrder).toBe(true);
+
+		const canCreateUser = client.admin.checkRolePermission({
+			role: "user",
+			permission: {
+				user: ["create"],
+			},
+		});
+		expect(canCreateUser).toBe(false);
+	});
+
+	it("should validate using userId", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+		const canUpdateManyOrder = await auth.api.userHasPermission({
+			body: {
+				userId: user.id,
+				permission: {
+					order: ["update-many"],
+				},
+			},
+		});
+		expect(canUpdateManyOrder.success).toBe(false);
+	});
+
+	it("should validate using role", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				role: "admin",
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+		const canUpdateOrder = await auth.api.userHasPermission({
+			body: {
+				role: "user",
+				permission: {
+					order: ["update"],
+				},
+			},
+		});
+		expect(canUpdateOrder.success).toBe(false);
 	});
 });

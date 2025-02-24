@@ -133,11 +133,16 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 				return redirectOnError("account_already_linked");
 			}
-			const newAccount = await c.context.internalAdapter.createAccount({
-				userId: link.userId,
-				providerId: provider.id,
-				accountId: userInfo.id,
-			}, c);
+			const newAccount = await c.context.internalAdapter.createAccount(
+				{
+					userId: link.userId,
+					providerId: provider.id,
+					accountId: userInfo.id,
+					...tokens,
+					scope: tokens.scopes?.join(","),
+				},
+				c,
+			);
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}

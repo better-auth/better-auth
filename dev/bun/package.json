@@ -9,14 +9,13 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.7.2"
   },
   "dependencies": {
     "@noble/ciphers": "^0.6.0",
     "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
-    "oslo": "^1.2.1",
     "pg": "^8.13.1"
   }
 }

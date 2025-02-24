@@ -208,6 +208,7 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
 			context?: GenericEndpointContext,
+			overrideAll?: boolean,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const { id: _, ...rest } = override || {};
@@ -227,6 +228,7 @@ export const createInternalAdapter = (
 				token: generateId(32),
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
 				data,
@@ -679,7 +681,7 @@ export const createInternalAdapter = (
 				[
 					{
 						field: "email",
-						value: email,
+						value: email.toLowerCase(),
 					},
 				],
 				"user",
@@ -688,7 +690,11 @@ export const createInternalAdapter = (
 			);
 			return user;
 		},
-		updatePassword: async (userId: string, password: string, context?: GenericEndpointContext,) => {
+		updatePassword: async (
+			userId: string,
+			password: string,
+			context?: GenericEndpointContext,
+		) => {
 			await updateManyWithHooks(
 				{
 					password,
@@ -705,7 +711,7 @@ export const createInternalAdapter = (
 				],
 				"account",
 				undefined,
-				context
+				context,
 			);
 		},
 		findAccounts: async (userId: string) => {

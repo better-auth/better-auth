@@ -105,15 +105,18 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
-					const newUser = await ctx.context.internalAdapter.createUser({
-						id,
-						email,
-						emailVerified: false,
-						isAnonymous: true,
-						name: "Anonymous",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					}, ctx);
+					const newUser = await ctx.context.internalAdapter.createUser(
+						{
+							id,
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name: "Anonymous",
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						ctx,
+					);
 					if (!newUser) {
 						throw ctx.error("INTERNAL_SERVER_ERROR", {
 							message: ERROR_CODES.FAILED_TO_CREATE_USER,

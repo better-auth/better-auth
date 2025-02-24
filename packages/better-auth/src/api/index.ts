@@ -133,6 +133,9 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 
 	return createRouter(api, {
 		routerContext: ctx,
+		openapi: {
+			disabled: true,
+		},
 		basePath,
 		routerMiddleware: [
 			{

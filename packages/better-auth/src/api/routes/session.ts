@@ -12,10 +12,10 @@ import type {
 	GenericEndpointContext,
 	InferSession,
 	InferUser,
-	Prettify,
 	Session,
 	User,
 } from "../../types";
+import type { Prettify } from "../../types/helper";
 import { safeJSONParse } from "../../utils/json";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -34,17 +34,21 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * and fetch the session from the database
 					 */
 					disableCookieCache: z
-						.boolean({
-							description:
-								"Disable cookie cache and fetch session from database",
-						})
-						.or(z.string().transform((v) => v === "true"))
+						.optional(
+							z
+								.boolean({
+									description:
+										"Disable cookie cache and fetch session from database",
+								})
+								.or(z.string().transform((v) => v === "true")),
+						)
 						.optional(),
 					disableRefresh: z
 						.boolean({
 							description:
 								"Disable session refresh. Useful for checking session status, without updating the session",
 						})
+						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 				}),
 			),
@@ -169,7 +173,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
-
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled

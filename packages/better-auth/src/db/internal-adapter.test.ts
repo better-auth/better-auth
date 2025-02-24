@@ -1,8 +1,6 @@
 import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import Database from "better-sqlite3";
-import { createInternalAdapter } from "./internal-adapter";
-import { getAdapter } from "./utils";
 import { init } from "../init";
 import { getMigrations } from "./get-migration";
 import { SqliteDialect } from "kysely";

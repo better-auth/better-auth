@@ -239,8 +239,8 @@ const options = {
 
 export const auth = betterAuth({
     ...options,
-    plugins: [{
-        ...options.plugins,
+    plugins: [
+        ...(options.plugins ?? []),
         customSession(async ({ user, session }) => {
             // now both user and session will infer the fields added by plugins and your custom fields
             return {
@@ -248,7 +248,7 @@ export const auth = betterAuth({
                 session
             }
         }, options), // pass options here  // [!code highlight]
-    }]
+    ]
 })
 ```
 
