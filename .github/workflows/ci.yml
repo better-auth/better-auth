@@ -5,7 +5,10 @@ on:
         types: 
           - opened
           - synchronize
-    push: {}
+    push:
+      branches:
+        - main
+        - 'v**'
     merge_group: {}
 
 jobs:
