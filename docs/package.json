@@ -97,7 +97,7 @@
     "tailwindcss-animate": "^1.0.7",
     "unist-util-visit": "^5.0.0",
     "vaul": "^0.9.9",
-    "zod": "^3.23.8"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/js-beautify": "^1.14.3",
