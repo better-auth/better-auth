@@ -1,12 +1,5 @@
 import { APIError } from "better-call";
-import {
-	type ZodArray,
-	type ZodLiteral,
-	type ZodObject,
-	type ZodOptional,
-	ZodString,
-	z,
-} from "zod";
+import { z } from "zod";
 import type { AuthPluginSchema, Session, User } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
@@ -48,6 +41,8 @@ import {
 import type { Invitation, Member, Organization, Team } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { defaultRoles, defaultStatements } from "./access";
+import { hasPermission } from "./has-permission";
 
 type Schema<T> = {
 	modelName?: string;
@@ -333,6 +328,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
 		getActiveMember,
+		leaveOrganization,
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -503,7 +499,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					});
 					return ctx.json({
 						error: null,
-						success: true,
+						success: result,
 					});
 				},
 			),
