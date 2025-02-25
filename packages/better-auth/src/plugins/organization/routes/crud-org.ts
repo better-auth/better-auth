@@ -148,7 +148,6 @@ export const createOrganization = createAuthEndpoint(
 					id: generateId(),
 					organizationId: organization.id,
 					name: `${organization.name}`,
-					status: teamStatus,
 					createdAt: new Date(),
 				}));
 
