@@ -75,13 +75,20 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 							ctx.context.secret,
 							`${user.id}!${session.token}`,
 						);
-
 						await ctx.setSignedCookie(
 							trustDeviceCookie.name,
 							`${token}!${session.token}`,
 							ctx.context.secret,
 							trustDeviceCookie.attributes,
 						);
+						// delete the dont remember me cookie
+						ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+							maxAge: 0,
+						});
+						// delete the two factor cookie
+						ctx.setCookie(cookieName.name, "", {
+							maxAge: 0,
+						});
 					}
 					return ctx.json({
 						token: session.token,
