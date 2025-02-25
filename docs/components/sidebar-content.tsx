@@ -922,11 +922,7 @@ export const contents: Content[] = [
 					</svg>
 				),
 			},
-			{
-				title: "API Key",
-				href: "/docs/plugins/api-key",
-				icon: () => <KeyRound className="size-4" />
-			},
+
 			{
 				title: "Authorization",
 				group: true,
@@ -954,6 +950,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "API Key",
+				href: "/docs/plugins/api-key",
+				icon: () => <KeyRound className="size-4" />,
 			},
 			{
 				title: "Organization",
