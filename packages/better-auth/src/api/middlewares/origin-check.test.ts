@@ -141,6 +141,34 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
+	it("should work with list of trusted origins", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://trusted.com",
+				},
+			},
+		});
+		const res = await client.forgetPassword({
+			email: testUser.email,
+			redirectTo: "http://localhost:5000/reset-password",
+		});
+		expect(res.data?.status).toBeTruthy();
+
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				query: {
+					currentURL: "http://localhost:5000",
+				},
+			},
+		});
+		expect(res2.data?.user).toBeDefined();
+	});
+
 	it("should work with wildcard trusted origins", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "https://sub-domain.my-site.com",
@@ -157,6 +185,54 @@ describe("Origin Check", async (it) => {
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
 		expect(res.data?.user).toBeDefined();
+	});
+
+	it("shouldn't work with callback url with double slash", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://localhost:3000",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "//evil.com",
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("shouldn't work with callback url with malicious", async (ctx) => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "https://localhost:3000",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "/%5C/evil.com",
+		});
+		expect(res.error?.status).toBe(403);
+		const res2 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: `/\/\/evil.com`,
+		});
+		expect(res2.error?.status).toBe(403);
+		const res3 = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "/%5C/evil.com",
+		});
+		expect(res3.error?.status).toBe(403);
 	});
 
 	it("should work with GET requests", async (ctx) => {

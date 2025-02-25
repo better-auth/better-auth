@@ -41,4 +41,6 @@ export const ORGANIZATION_ERROR_CODES = {
 	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS:
 		"You have reached the maximum number of teams",
 	UNABLE_TO_REMOVE_LAST_TEAM: "Unable to remove last team",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER:
+		"You are not allowed to update this member",
 } as const;

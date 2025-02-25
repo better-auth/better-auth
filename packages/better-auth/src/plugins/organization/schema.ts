@@ -57,7 +57,13 @@ export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
 export type InferZodRolesFromOption<O extends OrganizationOptions | undefined> =
 	ZodLiteral<
-		O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner"
+		O extends {
+			roles: {
+				[key: string]: any;
+			};
+		}
+			? keyof O["roles"] | (keyof O["roles"])[]
+			: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
 	>;
 export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
 	O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";

@@ -13,12 +13,7 @@ import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
 import type { BetterAuthPlugin } from "../../types/plugins";
 import { shimContext } from "../../utils/shim";
-import {
-	type AccessControl,
-	type Role,
-	defaultRoles,
-	type defaultStatements,
-} from "./access";
+import { type AccessControl, type Role } from "../access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import {
@@ -31,10 +26,12 @@ import {
 import {
 	addMember,
 	getActiveMember,
+	leaveOrganization,
 	removeMember,
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
+	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
@@ -331,6 +328,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		acceptInvitation,
 		getInvitation,
 		rejectInvitation,
+		checkOrganizationSlug,
 		addMember: addMember<O>(),
 		removeMember,
 		updateMemberRole: updateMemberRole(options as O),
@@ -399,9 +397,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
-		? S extends Record<string, any>
-			? S & DefaultStatements
-			: DefaultStatements
+		? S
 		: DefaultStatements;
 	return {
 		id: "organization",
@@ -417,17 +413,18 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					body: z.object({
 						organizationId: z.string().optional(),
 						permission: z.record(z.string(), z.array(z.string())),
-					}) as unknown as ZodObject<{
-						permission: ZodObject<{
-							[key in keyof Statements]: ZodOptional<
-								//@ts-expect-error TODO: fix this
-								ZodArray<ZodLiteral<Statements[key][number]>>
-							>;
-						}>;
-						organizationId: ZodOptional<ZodString>;
-					}>,
+					}),
 					use: [orgSessionMiddleware],
 					metadata: {
+						$Infer: {
+							body: {} as {
+								permission: {
+									//@ts-expect-error
+									[key in keyof Statements]?: Array<Statements[key][number]>;
+								};
+								organizationId?: string;
+							},
+						},
 						openapi: {
 							description: "Check if the user has permission",
 							requestBody: {
@@ -499,19 +496,11 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role = roles[member.role as keyof typeof roles];
-					const result = role.authorize(ctx.body.permission as any);
-					if (result.error) {
-						return ctx.json(
-							{
-								error: result.error,
-								success: false,
-							},
-							{
-								status: 403,
-							},
-						);
-					}
+					const result = hasPermission({
+						role: member.role,
+						options: options as OrganizationOptions,
+						permission: ctx.body.permission as any,
+					});
 					return ctx.json({
 						error: null,
 						success: true,

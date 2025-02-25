@@ -156,7 +156,10 @@ const ChangelogPage = async () => {
 								</h2>
 							),
 							h3: (props) => (
-								<h3 className="text-xl tracking-tighter" {...props} />
+								<h3 className="text-xl tracking-tighter py-1" {...props}>
+									{props.children?.toString()?.trim()}
+									<hr className="h-[1px] my-1 mb-2 bg-input" />
+								</h3>
 							),
 							p: (props) => <p className="my-0 ml-10 text-sm" {...props} />,
 							ul: (props) => (

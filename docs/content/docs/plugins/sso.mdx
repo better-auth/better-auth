@@ -145,8 +145,7 @@ const res = await authClient.signIn.sso({
 
 or you can specify the domain:
 
-
-```
+```ts title="sign-in-domain.ts"
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
@@ -158,6 +157,15 @@ You can also sign in using the organization slug if a provider is associated wit
 ```ts title="sign-in-org.ts"
 const res = await authClient.signIn.sso({
     organizationSlug: "example-org",
+    callbackURL: "/dashboard",
+});
+```
+
+Alternatively, you can sign in using the provider's ID:
+
+```ts title="sign-in-provider-id.ts"
+const res = await authClient.signIn.sso({
+    providerId: "example-provider-id",
     callbackURL: "/dashboard",
 });
 ```

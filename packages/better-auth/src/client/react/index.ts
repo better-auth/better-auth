@@ -87,6 +87,7 @@ export function createAuthClient<Option extends ClientOptions>(
 				data: Session;
 				isPending: boolean;
 				error: BetterFetchError | null;
+				refetch: () => void;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;
@@ -98,9 +99,5 @@ export function createAuthClient<Option extends ClientOptions>(
 			>;
 		};
 }
-
-export type * from "@better-fetch/fetch";
-//@ts-expect-error
-export type * from "zod";
 
 export { useStore };

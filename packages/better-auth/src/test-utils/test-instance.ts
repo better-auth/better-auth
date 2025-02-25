@@ -172,7 +172,6 @@ export async function getTestInstance<
 		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-
 			fetchOptions: {
 				//@ts-expect-error
 				onSuccess(context) {

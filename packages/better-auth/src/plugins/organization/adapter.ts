@@ -118,6 +118,20 @@ export const getOrgAdapter = (
 				},
 			};
 		},
+		listMembers: async (data: {
+			organizationId: string;
+		}) => {
+			const members = await adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+				],
+			});
+			return members;
+		},
 		findMemberByOrgId: async (data: {
 			userId: string;
 			organizationId: string;
