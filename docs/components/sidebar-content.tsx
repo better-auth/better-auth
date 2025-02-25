@@ -759,9 +759,9 @@ export const contents: Content[] = [
 				href: "/docs/integrations/hono",
 			},
 			{
-				title: "Node",
-				icon: Icons.node,
-				href: "/docs/integrations/node",
+				title: "Express",
+				icon: Icons.express,
+				href: "/docs/integrations/express",
 			},
 			{
 				title: "Elysia",

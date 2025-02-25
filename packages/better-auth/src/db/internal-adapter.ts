@@ -184,6 +184,7 @@ export const createInternalAdapter = (
 			request: Request | Headers | undefined,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
+			overrideAll?: boolean,
 		) => {
 			const headers = request instanceof Request ? request.headers : request;
 			const { id: _, ...rest } = override || {};
@@ -203,6 +204,7 @@ export const createInternalAdapter = (
 				token: generateId(32),
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
 				data,
@@ -645,7 +647,7 @@ export const createInternalAdapter = (
 				[
 					{
 						field: "email",
-						value: email,
+						value: email.toLowerCase(),
 					},
 				],
 				"user",

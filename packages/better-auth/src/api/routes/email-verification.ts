@@ -259,7 +259,11 @@ export const verifyEmail = createAuthEndpoint(
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					url: `${
+						ctx.context.baseURL
+					}/verify-email?token=${newToken}&callbackURL=${
+						ctx.query.callbackURL || "/"
+					}`,
 					token: newToken,
 				},
 				ctx.request,

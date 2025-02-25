@@ -138,7 +138,8 @@ export async function handleOAuthUserInfo(
 					c.request,
 				);
 			}
-		} catch (e) {
+		} catch (e: any) {
+			logger.error(e);
 			if (e instanceof APIError) {
 				return {
 					error: e.message,

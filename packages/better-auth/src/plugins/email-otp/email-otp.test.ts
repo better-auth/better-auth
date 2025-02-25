@@ -398,3 +398,39 @@ describe("custom rate limiting storage", async () => {
 		expect(response.error?.status).not.toBe(429);
 	});
 });
+
+describe("custom generate otpFn", async () => {
+	const { client, testUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP(data, request) {},
+					generateOTP(data, request) {
+						return "123456";
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should generate otp", async () => {
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(res.data?.success).toBe(true);
+	});
+
+	it("should verify email with otp", async () => {
+		const res = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: "123456",
+		});
+		expect(res.data?.status).toBe(true);
+	});
+});

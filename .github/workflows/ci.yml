@@ -15,6 +15,14 @@ jobs:
               with:
                     fetch-depth: 0
 
+            - name: Cache turbo build setup
+              uses: actions/cache@v4
+              with:
+                path: .turbo
+                key: ${{ runner.os }}-turbo-${{ github.sha }}
+                restore-keys: |
+                  ${{ runner.os }}-turbo-
+
             - uses: pnpm/action-setup@v4
 
             - uses: actions/setup-node@v4

@@ -886,5 +886,3 @@ const schema = {
 		},
 	},
 } satisfies AuthPluginSchema;
-
-export * from "./client";

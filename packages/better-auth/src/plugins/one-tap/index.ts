@@ -2,7 +2,7 @@ import { z } from "zod";
 import { APIError, createAuthEndpoint } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import type { BetterAuthPlugin } from "../../types";
-import { betterFetch } from "@better-fetch/fetch";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 import { toBoolean } from "../../utils/boolean";
 
 interface OneTapOptions {
@@ -12,6 +12,13 @@ interface OneTapOptions {
 	 * @default false
 	 */
 	disableSignup?: boolean;
+	/**
+	 * Google Client ID
+	 *
+	 * If a client ID is provided in the social provider configuration,
+	 * it will be used.
+	 */
+	clientId?: string;
 }
 
 export const oneTap = (options?: OneTapOptions) =>
@@ -61,63 +68,84 @@ export const oneTap = (options?: OneTapOptions) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
-					const { data, error } = await betterFetch<{
-						email: string;
-						email_verified: string;
-						name: string;
-						picture: string;
-						sub: string;
-					}>("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken);
-					if (error) {
-						return ctx.json({
-							error: "Invalid token",
+					let payload: any;
+					try {
+						const JWKS = createRemoteJWKSet(
+							new URL("https://www.googleapis.com/oauth2/v3/certs"),
+						);
+						const { payload: verifiedPayload } = await jwtVerify(
+							idToken,
+							JWKS,
+							{
+								issuer: ["https://accounts.google.com", "accounts.google.com"],
+								audience:
+									options?.clientId ||
+									ctx.context.options.socialProviders?.google?.clientId,
+							},
+						);
+						payload = verifiedPayload;
+					} catch (error) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
 						});
 					}
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						data.email,
-					);
+					const { email, email_verified, name, picture, sub } = payload;
+					if (!email) {
+						return ctx.json({ error: "Email not available in token" });
+					}
+
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						if (options?.disableSignup) {
 							throw new APIError("BAD_GATEWAY", {
 								message: "User not found",
 							});
 						}
-						const user = await ctx.context.internalAdapter.createOAuthUser(
+						const newUser = await ctx.context.internalAdapter.createOAuthUser(
 							{
-								email: data.email,
-								emailVerified: toBoolean(data.email_verified),
-								name: data.name,
-								image: data.picture,
+								email,
+								emailVerified:
+									typeof email_verified === "boolean"
+										? email_verified
+										: toBoolean(email_verified),
+								name,
+								image: picture,
 							},
 							{
 								providerId: "google",
-								accountId: data.sub,
+								accountId: sub,
 							},
 						);
-						if (!user) {
+						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
 								message: "Could not create user",
 							});
 						}
 						const session = await ctx.context.internalAdapter.createSession(
-							user?.user.id,
+							newUser.user.id,
 							ctx.request,
 						);
 						await setSessionCookie(ctx, {
-							user: user.user,
+							user: newUser.user,
 							session,
 						});
 						return ctx.json({
 							token: session.token,
 							user: {
-								id: user.user.id,
-								email: user.user.email,
-								emailVerified: user.user.emailVerified,
-								name: user.user.name,
-								image: user.user.image,
-								createdAt: user.user.createdAt,
-								updatedAt: user.user.updatedAt,
+								id: newUser.user.id,
+								email: newUser.user.email,
+								emailVerified: newUser.user.emailVerified,
+								name: newUser.user.name,
+								image: newUser.user.image,
+								createdAt: newUser.user.createdAt,
+								updatedAt: newUser.user.updatedAt,
 							},
+						});
+					}
+					const account = await ctx.context.internalAdapter.findAccount(sub);
+					if (!account) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Google sub doesn't match",
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
