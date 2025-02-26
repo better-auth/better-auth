@@ -12,6 +12,7 @@ import { dropbox } from "./dropbox";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
 import { reddit } from "./reddit";
+import { trakt } from "./trakt";
 import { z } from "zod";
 export const socialProviders = {
 	apple,
@@ -27,6 +28,7 @@ export const socialProviders = {
 	linkedin,
 	gitlab,
 	reddit,
+	trakt,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -63,3 +65,4 @@ export * from "./dropbox";
 export * from "./linkedin";
 export * from "./gitlab";
 export * from "./reddit";
+export * from "./trakt";
