@@ -48,27 +48,25 @@ export default function ResetPassword() {
 				</CardHeader>
 				<CardContent>
 					<form onSubmit={handleSubmit}>
-						<div className="grid w-full items-center gap-2">
-							<div className="flex flex-col space-y-1.5">
-								<Label htmlFor="email">New password</Label>
+						<div className="grid w-full items-center gap-3">
+							<Label className="flex flex-col gap-2">
+								New password
 								<PasswordInput
-									id="password"
 									value={password}
 									onChange={(e) => setPassword(e.target.value)}
 									autoComplete="password"
 									placeholder="Password"
 								/>
-							</div>
-							<div className="flex flex-col space-y-1.5">
-								<Label htmlFor="email">Confirm password</Label>
+							</Label>
+							<Label className="flex flex-col gap-2" >
+								Confirm password
 								<PasswordInput
-									id="password"
 									value={confirmPassword}
 									onChange={(e) => setConfirmPassword(e.target.value)}
 									autoComplete="password"
 									placeholder="Password"
 								/>
-							</div>
+							</Label>
 						</div>
 						{error && (
 							<Alert variant="destructive" className="mt-4">
