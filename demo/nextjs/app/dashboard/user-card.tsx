@@ -72,7 +72,7 @@ export default function UserCard(props: {
 		useState<boolean>(false);
 	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
 
-	const removeActiveSession = (id: string) => 
+	const removeActiveSession = (id: string) =>
 		setActiveSessions(activeSessions.filter((session) => session.id !== id));
 
 	return (
@@ -171,7 +171,7 @@ export default function UserCard(props: {
 													toast.error(res.error.message);
 												} else {
 													toast.success("Session terminated successfully");
-													removeActiveSession(session.id)
+													removeActiveSession(session.id);
 												}
 												if (session.id === props.session?.session.id)
 													router.refresh();
