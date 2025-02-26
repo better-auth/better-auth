@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, InferOptionSchema } from "../../types";
+import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {
 	/**
@@ -162,6 +163,20 @@ export interface ApiKeyOptions {
 	 * @default false
 	 */
 	disableSessionForAPIKeys?: boolean;
+	/**
+	 * Permissions for the API key.
+	 */
+	permissions?: {
+		/**
+		 * The default permissions for the API key.
+		 */
+		defaultPermissions?:
+			| Statements
+			| ((
+					userId: string,
+					ctx: GenericEndpointContext,
+			  ) => Statements | Promise<Statements>);
+	};
 }
 
 export type ApiKey = {
@@ -250,4 +265,8 @@ export type ApiKey = {
 	 * Extra metadata about the apiKey
 	 */
 	metadata: Record<string, any> | null;
+	/**
+	 * Permissions for the api key
+	 */
+	permissions?: string;
 };

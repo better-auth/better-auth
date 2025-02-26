@@ -10,6 +10,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
 import { parseInputData } from "../../../db";
+import { safeJSONParse } from "../../../utils/json";
 
 export function createApiKey({
 	keyGenerator,
@@ -56,7 +57,9 @@ export function createApiKey({
 					})
 					.optional(),
 				remaining: z
-					.number({ description: "Remaining number of requests. Server side only" })
+					.number({
+						description: "Remaining number of requests. Server side only",
+					})
 					.min(0)
 					.optional()
 					.nullable()
@@ -93,6 +96,7 @@ export function createApiKey({
 							"Whether the key has rate limiting enabled. Server Only Property.",
 					})
 					.optional(),
+				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
 		},
 		async (ctx) => {
@@ -104,6 +108,7 @@ export function createApiKey({
 				metadata,
 				refillAmount,
 				refillInterval,
+				permissions,
 				rateLimitMax,
 				rateLimitTimeWindow,
 				rateLimitEnabled,
@@ -128,6 +133,7 @@ export function createApiKey({
 					rateLimitMax !== undefined ||
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
+					permissions !== undefined ||
 					remaining !== null
 				) {
 					throw new APIError("BAD_REQUEST", {
@@ -229,6 +235,16 @@ export function createApiKey({
 				);
 			}
 
+			const defaultPermissions = opts.permissions?.defaultPermissions
+				? typeof opts.permissions.defaultPermissions === "function"
+					? await opts.permissions.defaultPermissions(user.id, ctx)
+					: opts.permissions.defaultPermissions
+				: undefined;
+			const permissionsToApply = permissions
+				? JSON.stringify(permissions)
+				: defaultPermissions
+					? JSON.stringify(defaultPermissions)
+					: undefined;
 			let data: ApiKey = {
 				id: generateId(),
 				createdAt: new Date(),
@@ -255,6 +271,7 @@ export function createApiKey({
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled: rateLimitEnabled ?? true,
 				requestCount: 0,
+				permissions: permissionsToApply,
 			};
 
 			if (metadata) {
@@ -276,6 +293,9 @@ export function createApiKey({
 				...apiKey,
 				key: key,
 				metadata: metadata ?? null,
+				permissions: apiKey.permissions
+					? safeJSONParse(apiKey.permissions)
+					: null,
 			});
 		},
 	);

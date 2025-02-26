@@ -164,6 +164,11 @@ export const apiKeySchema = ({
 					required: true,
 					input: false,
 				},
+				permissions: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 				/**
 				 * Any additional metadata you want to store with the key.
 				 */

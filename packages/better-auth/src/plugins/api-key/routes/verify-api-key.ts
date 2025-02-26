@@ -8,6 +8,8 @@ import { createHash } from "@better-auth/utils/hash";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { safeJSONParse } from "../../../utils/json";
+import { role } from "../../access";
 
 export function verifyApiKey({
 	opts,
@@ -29,6 +31,9 @@ export function verifyApiKey({
 				key: z.string({
 					description: "The key to verify",
 				}),
+				requiredPermissions: z
+					.record(z.string(), z.array(z.string()))
+					.optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -139,6 +144,36 @@ export function verifyApiKey({
 				}
 			}
 
+			const requiredPermissions = ctx.body.requiredPermissions;
+			const apiKeyPermissions = apiKey.permissions
+				? safeJSONParse(apiKey.permissions)
+				: null;
+
+			if (requiredPermissions) {
+				if (!apiKeyPermissions) {
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.KEY_NOT_FOUND,
+							code: "KEY_NOT_FOUND" as const,
+						},
+						key: null,
+					});
+				}
+				const r = role(apiKeyPermissions as any);
+				const result = r.authorize(requiredPermissions);
+				if (!result.success) {
+					return ctx.json({
+						valid: false,
+						error: {
+							message: ERROR_CODES.KEY_NOT_FOUND,
+							code: "KEY_NOT_FOUND" as const,
+						},
+						key: null,
+					});
+				}
+			}
+
 			let remaining = apiKey.remaining;
 			let lastRefillAt = apiKey.lastRefillAt;
 
@@ -239,7 +274,8 @@ export function verifyApiKey({
 			return ctx.json({
 				valid: true,
 				error: null,
-				key: newApiKey === null ? null : returningApiKey as Omit<ApiKey, "key">,
+				key:
+					newApiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
 			});
 		},
 	);

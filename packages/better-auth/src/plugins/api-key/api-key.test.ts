@@ -11,6 +11,11 @@ describe("api-key", async () => {
 			plugins: [
 				apiKey({
 					enableMetadata: true,
+					permissions: {
+						defaultPermissions: {
+							files: ["read"],
+						},
+					},
 				}),
 			],
 		},
@@ -1472,5 +1477,127 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
 		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+	});
+
+	it("should create an API key with permissions", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+		});
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.permissions).toEqual(permissions);
+	});
+
+	it("should create an API key with default permissions", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.permissions).toEqual({
+			files: ["read"],
+		});
+	});
+
+	it("should verify an API key with matching permissions", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+				requiredPermissions: {
+					files: ["read"],
+				},
+			},
+		});
+
+		expect(result.valid).toBe(true);
+		expect(result.error).toBeNull();
+	});
+
+	it("should fail to verify an API key with non-matching permissions", async () => {
+		const permissions = {
+			files: ["read"],
+			users: ["read"],
+		};
+
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				permissions,
+				userId: user.id,
+			},
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+				requiredPermissions: {
+					files: ["write"],
+				},
+			},
+		});
+
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("KEY_NOT_FOUND");
+	});
+
+	it("should fail to verify when required permissions are specified but API key has no permissions", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+				requiredPermissions: {
+					files: ["write"],
+				},
+			},
+		});
+
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("KEY_NOT_FOUND");
+	});
+
+	it("should update an API key with permissions", async () => {
+		const permissions = {
+			files: ["read", "write"],
+			users: ["read"],
+		};
+		const createdApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+		expect(createdApiKey.permissions).not.toEqual(permissions);
+		const apiKey = await auth.api.updateApiKey({
+			body: {
+				keyId: createdApiKey.id,
+				permissions,
+				userId: user.id,
+			},
+		});
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.permissions).toEqual(permissions);
 	});
 });

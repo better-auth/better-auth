@@ -83,6 +83,10 @@ export function updateApiKey({
 							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.",
 					})
 					.optional(),
+				permissions: z
+					.record(z.string(), z.array(z.string()))
+					.optional()
+					.nullable(),
 			}),
 		},
 		async (ctx) => {
@@ -95,6 +99,7 @@ export function updateApiKey({
 				refillInterval,
 				remaining,
 				name,
+				permissions,
 				rateLimitEnabled,
 				rateLimitTimeWindow,
 				rateLimitMax,
@@ -119,7 +124,8 @@ export function updateApiKey({
 					rateLimitMax !== undefined ||
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
-					remaining !== undefined
+					remaining !== undefined ||
+					permissions !== undefined
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
@@ -225,6 +231,10 @@ export function updateApiKey({
 				newValues.rateLimitMax = rateLimitMax;
 			}
 
+			if (permissions !== undefined) {
+				newValues.permissions = JSON.stringify(permissions);
+			}
+
 			if (Object.keys(newValues).length === 0) {
 				throw new APIError("BAD_REQUEST", {
 					message: ERROR_CODES.NO_VALUES_TO_UPDATE,
@@ -264,6 +274,7 @@ export function updateApiKey({
 			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
 				newApiKey.metadata as never as string,
 			);
+			newApiKey.permissions = JSON.parse(newApiKey.permissions as string);
 
 			const { key, ...returningApiKey } = newApiKey;
 
