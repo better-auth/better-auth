@@ -28,7 +28,7 @@ export const createInternalAdapter = (
 
 	return {
 		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User>,
+			user: Omit<User, "id" | "createdAt" | "updatedAt"> & Partial<User> & Record<string, any> ,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {

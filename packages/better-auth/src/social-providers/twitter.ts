@@ -124,9 +124,9 @@ export const twitter = (options: TwitterOption) => {
 				tokenEndpoint: "https://api.x.com/2/oauth2/token",
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const { data: profile, error } = await betterFetch<TwitterProfile>(
 				"https://api.x.com/2/users/me?user.fields=profile_image_url",
@@ -140,7 +140,7 @@ export const twitter = (options: TwitterOption) => {
 			if (error) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.data.id,

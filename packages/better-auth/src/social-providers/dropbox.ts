@@ -51,9 +51,9 @@ export const dropbox = (options: DropboxOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const { data: profile, error } = await betterFetch<DropboxProfile>(
 				"https://api.dropboxapi.com/2/users/get_current_account",
@@ -68,7 +68,7 @@ export const dropbox = (options: DropboxOptions) => {
 			if (error) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.account_id,

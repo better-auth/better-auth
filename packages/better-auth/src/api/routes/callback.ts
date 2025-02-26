@@ -67,7 +67,7 @@ export const callbackOAuth = createAuthEndpoint(
 				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
 			);
 		}
-		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
+		const { codeVerifier, callbackURL, link, errorURL, newUserURL, additionalData } =
 			await parseState(c);
 
 		let tokens: OAuth2Tokens;
@@ -84,7 +84,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 		const userInfo = await provider
-			.getUserInfo(tokens)
+			.getUserInfo(tokens, additionalData)
 			.then((res) => res?.user);
 
 		function redirectOnError(error: string) {

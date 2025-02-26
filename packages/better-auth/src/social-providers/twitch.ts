@@ -55,9 +55,9 @@ export const twitch = (options: TwitchOptions) => {
 				tokenEndpoint: "https://id.twitch.tv/oauth2/token",
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			const idToken = token.idToken;
 			if (!idToken) {
@@ -65,7 +65,7 @@ export const twitch = (options: TwitchOptions) => {
 				return null;
 			}
 			const profile = decodeJwt(idToken) as TwitchProfile;
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.sub,

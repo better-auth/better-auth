@@ -67,9 +67,9 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			if (!token.idToken) {
 				return null;
@@ -103,7 +103,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					},
 				},
 			);
-			const userMap = await options.mapProfileToUser?.(user);
+			const userMap = await options.mapProfileToUser?.(user, additionalData);
 			return {
 				user: {
 					id: user.sub,

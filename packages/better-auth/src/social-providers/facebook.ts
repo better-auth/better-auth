@@ -90,9 +90,9 @@ export const facebook = (options: FacebookOptions) => {
 			return true;
 		},
 
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 
 			if (token.idToken) {
@@ -121,7 +121,7 @@ export const facebook = (options: FacebookOptions) => {
 				const userMap = await options.mapProfileToUser?.({
 					...user,
 					email_verified: true,
-				});
+				}, additionalData);
 
 				return {
 					user: {
@@ -152,7 +152,7 @@ export const facebook = (options: FacebookOptions) => {
 			if (error) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.id,

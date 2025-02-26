@@ -97,7 +97,7 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,

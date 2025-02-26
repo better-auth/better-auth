@@ -120,9 +120,9 @@ export const apple = (options: AppleOptions) => {
 			}
 			return !!jwtClaims;
 		},
-		async getUserInfo(token) {
+		async getUserInfo(token, additionalData) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token);
+				return options.getUserInfo(token, additionalData);
 			}
 			if (!token.idToken) {
 				return null;
@@ -134,7 +134,7 @@ export const apple = (options: AppleOptions) => {
 			const name = profile.user
 				? `${profile.user.name.firstName} ${profile.user.name.lastName}`
 				: profile.email;
-			const userMap = await options.mapProfileToUser?.(profile);
+			const userMap = await options.mapProfileToUser?.(profile, additionalData);
 			return {
 				user: {
 					id: profile.sub,
