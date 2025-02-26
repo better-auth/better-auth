@@ -1,6 +1,7 @@
 import {
 	createParamDecorator,
 	Inject,
+	Injectable,
 	Logger,
 	Module,
 	RequestMethod,
@@ -25,10 +26,22 @@ export const Session = createParamDecorator(
 	},
 );
 
-class BetterAuthGuard implements CanActivate {
+@Injectable()
+export class AuthService {
+	constructor(
+		@Inject("AUTH_OPTIONS")
+		private readonly auth: Auth,
+	) {}
+
+	get api() {
+		return this.auth.api;
+	}
+}
+
+export class AuthGuard implements CanActivate {
 	constructor(
 		private readonly reflector: Reflector,
-		@Inject("BETTER_AUTH_OPTIONS")
+		@Inject("AUTH_OPTIONS")
 		private readonly auth: Auth,
 	) {}
 
@@ -55,10 +68,10 @@ class BetterAuthGuard implements CanActivate {
 }
 
 @Module({})
-export class BetterAuthModule implements NestModule {
-	private logger = new Logger(BetterAuthModule.name);
+export class AuthModule implements NestModule {
+	private logger = new Logger(AuthModule.name);
 
-	constructor(@Inject("BETTER_AUTH_OPTIONS") private readonly auth: Auth) {}
+	constructor(@Inject("AUTH_OPTIONS") private readonly auth: Auth) {}
 
 	configure(consumer: MiddlewareConsumer) {
 		const handler = toNodeHandler(this.auth);
@@ -66,19 +79,26 @@ export class BetterAuthModule implements NestModule {
 			path: "/api/auth/*path",
 			method: RequestMethod.ALL,
 		});
-		this.logger.log("BetterAuthModule initialized");
+		this.logger.log("AuthModule initialized");
 	}
 
 	static forRoot(auth: Auth) {
 		return {
-			module: BetterAuthModule,
+			module: AuthModule,
 			providers: [
 				{
-					provide: "BETTER_AUTH_OPTIONS",
+					provide: "AUTH_OPTIONS",
 					useValue: auth,
 				},
+				AuthService,
 			],
-			exports: [],
+			exports: [
+				{
+					provide: "AUTH_OPTIONS",
+					useValue: auth,
+				},
+				AuthService,
+			],
 		};
 	}
 }
