@@ -1,5 +1,6 @@
+
+import { sql } from 'drizzle-orm';
 import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-			
 export const user = pgTable("user", {
 					id: text("id").primaryKey(),
 					name: text('name').notNull(),
@@ -9,7 +10,8 @@ export const user = pgTable("user", {
  createdAt: timestamp('created_at').notNull(),
  updatedAt: timestamp('updated_at').notNull(),
  twoFactorEnabled: boolean('two_factor_enabled'),
- username: text('username').unique()
+ username: text('username').unique(),
+ arrayCol: text('array_col').array().notNull().default(sql`ARRAY[]::text[]`)
 				});
 
 export const session = pgTable("session", {

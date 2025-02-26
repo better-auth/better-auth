@@ -23,10 +23,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	);
 	const bigint = databaseType !== "sqlite" ? "bigint" : "";
 	const text = databaseType === "mysql" ? "varchar, text" : "text";
-	let code = `import { ${databaseType}Table, ${text}, ${int}${
+	let code = `
+import { sql } from 'drizzle-orm';
+import { ${databaseType}Table, ${text}, ${int}${
 		hasBigint ? `, ${bigint}` : ""
-	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";
-			`;
+	}, ${timestampAndBoolean} } from "drizzle-orm/${databaseType}-core";`;
 
 	const fileExist = existsSync(filePath);
 
@@ -35,10 +36,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			? `${tables[table].modelName}s`
 			: tables[table].modelName;
 		const fields = tables[table].fields;
+
 		function getType(name: string, field: FieldAttribute) {
 			name = convertToSnakeCase(name);
+
+			// Handle array types (string[], boolean[], etc.)
+			if (field.type.endsWith("[]")) {
+				const arrayType = field.type.slice(0, -2); // remove '[]'
+				return getTypeForArray(name, arrayType, field); // Use a helper function to handle array types
+			}
+
 			const type = field.type;
-			const typeMap = {
+			if (!type || !["string", "boolean", "number", "date"].includes(type)) {
+				throw new Error(`Invalid field type: ${type} for field: ${name}`);
+			}
+
+			const typeMap: Record<string, Record<string, string>> = {
 				string: {
 					sqlite: `text('${name}')`,
 					pg: `text('${name}')`,
@@ -68,7 +81,62 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `timestamp('${name}')`,
 				},
 			} as const;
-			return typeMap[type as "boolean"][(databaseType as "sqlite") || "sqlite"];
+
+			return typeMap[type][(databaseType as "sqlite") || "sqlite"];
+		}
+
+		function getTypeForArray(
+			name: string,
+			arrayType: string,
+			field: FieldAttribute,
+		) {
+			const arrayTypeMap: Record<string, Record<string, string>> = {
+				string: {
+					sqlite: `text('${name}' , { mode: 'json' }).notNull()
+              .$type<string[]>()
+              .default(sql\`(json_array())\`)`,
+					pg: `text('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
+					mysql: `json('${name}')
+              .$type<string[]>()
+              .notNull()
+              .default([])`,
+				},
+				boolean: {
+					sqlite: `integer('${name}', { mode: "json" }).notNull()
+              .$type<boolean[]>()
+              .default(sql\`(json_array())\`) `,
+					pg: `boolean('${name}').array().notNull().default(sql\`ARRAY[]::text[]\`)`,
+					mysql: `json('${name}')
+              .$type<boolean[]>()
+              .notNull()
+              .default([])`,
+				},
+				number: {
+					sqlite: `integer('${name}' , { mode: "json" }).notNull()
+              .$type<number[]>()
+              .default(sql\`(json_array())\`) `,
+					pg: field.bigint
+						? `bigint('${name}', { mode: 'number' }).array().notNull().default(sql\`ARRAY[]::integer[]\`),`
+						: `integer('${name}').array().notNull().default(sql\`ARRAY[]::integer[]\`)`,
+
+					mysql: `json('${name}')
+              .$type<number[]>()
+              .notNull()
+              .default([])`,
+				},
+				date: {
+					sqlite: `integer('${name}', { mode: "json" }).notNull()
+              .$type<date[]>()
+              .default(sql\`(json_array())\`) `,
+					pg: `timestamp('${name}').array().notNull().default(sql\`ARRAY[]::timestamp[]\`)`,
+					mysql: `json('${name}')
+              .$type<date[]>()
+              .notNull()
+              .default([])`,
+				},
+			};
+
+			return arrayTypeMap[arrayType][(databaseType as "sqlite") || "sqlite"];
 		}
 		const id =
 			databaseType === "mysql"

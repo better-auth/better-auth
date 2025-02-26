@@ -97,6 +97,14 @@ describe("generate", async () => {
 						schema: {},
 					},
 				),
+
+				user: {
+					additionalFields: {
+						arrayCol: {
+							type: "string[]",
+						},
+					},
+				},
 				plugins: [twoFactor(), username()],
 			},
 		});
