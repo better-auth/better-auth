@@ -802,7 +802,7 @@ export const createInternalAdapter = (
 					where: [
 						{
 							field: "expiresAt",
-							value: new Date().toISOString(),
+							value: new Date(),
 							operator: "lt",
 						},
 					],

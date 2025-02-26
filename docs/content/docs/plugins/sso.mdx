@@ -161,6 +161,15 @@ const res = await authClient.signIn.sso({
 });
 ```
 
+Alternatively, you can sign in using the provider's ID:
+
+```ts title="sign-in-provider-id.ts"
+const res = await authClient.signIn.sso({
+    providerId: "example-provider-id",
+    callbackURL: "/dashboard",
+});
+```
+
 To use the server api you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
