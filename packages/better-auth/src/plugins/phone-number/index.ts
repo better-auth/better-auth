@@ -41,6 +41,17 @@ export interface PhoneNumberOptions {
 		request?: Request,
 	) => Promise<void> | void;
 	/**
+	 * Custom function to verify the OTP code
+	 * 
+	 * @param data - Object containing phoneNumber and code
+	 * @param request - The request object
+	 * @returns boolean indicating whether the code is valid
+	 */
+	verifyOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<boolean> | boolean;
+	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
 	 */
@@ -404,24 +415,40 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						ctx.body.phoneNumber,
 					);
 
-					if (!otp || otp.expiresAt < new Date()) {
-						if (otp && otp.expiresAt < new Date()) {
-							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					if (opts.verifyOTP) {
+						const isValid = await opts.verifyOTP(
+							{
+								phoneNumber: ctx.body.phoneNumber,
+								code: ctx.body.code,
+							},
+							ctx.request
+						);
+
+						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
-								message: "OTP expired",
+								message: "Invalid OTP",
 							});
 						}
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.OTP_NOT_FOUND,
-						});
-					}
-					if (otp.value !== ctx.body.code) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
-						});
-					}
+					} else {
+						if (!otp || otp.expiresAt < new Date()) {
+							if (otp && otp.expiresAt < new Date()) {
+								await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+								throw new APIError("BAD_REQUEST", {
+									message: "OTP expired",
+								});
+							}
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.OTP_NOT_FOUND,
+							});
+						}
+						if (otp.value !== ctx.body.code) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OTP",
+							});
+						}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					}
 
 					if (ctx.body.updatePhoneNumber) {
 						const session = await getSessionFromCtx(ctx);

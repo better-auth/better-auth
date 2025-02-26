@@ -269,3 +269,69 @@ describe("verify phone-number", async (it) => {
 		expect(res.data?.status).toBe(true);
 	});
 });
+
+describe("custom verifyOTP function", async (it) => {
+	let otp = "";
+	let customVerifyCalled = false;
+	let verifiedPhoneNumber = "";
+	let verifiedCode = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				async verifyOTP({ phoneNumber, code }) {
+					customVerifyCalled = true;
+					verifiedPhoneNumber = phoneNumber;
+					verifiedCode = code;
+					// Custom verification logic: only verify if code starts with "1"
+					return code.startsWith("1");
+				}
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const testPhoneNumber = "+251911121314";
+
+	it("should use custom verification function", async () => {
+		// Send OTP
+		const sendRes = await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		expect(sendRes.error).toBe(null);
+		
+		// Verify with an invalid code (not starting with 1)
+		const invalidRes = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: "999999", // This should fail as it doesn't start with "1"
+		});
+		
+		expect(customVerifyCalled).toBe(true);
+		expect(verifiedPhoneNumber).toBe(testPhoneNumber);
+		expect(verifiedCode).toBe("999999");
+		expect(invalidRes.error?.status).toBe(400);
+		
+		// Reset the flag
+		customVerifyCalled = false;
+		
+		// Verify with a valid code (starting with 1)
+		const validRes = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: "123456", // This should succeed as it starts with "1"
+		});
+		
+		expect(customVerifyCalled).toBe(true);
+		expect(validRes.error).toBe(null);
+		expect(validRes.data?.status).toBe(true);
+	});
+});
