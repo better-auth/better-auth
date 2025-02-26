@@ -13,7 +13,6 @@ describe("cookies", async () => {
 			{
 				onResponse(context) {
 					const setCookie = context.response.headers.get("set-cookie");
-					console;
 					expect(setCookie).toBeDefined();
 					expect(setCookie).toContain("Path=/");
 					expect(setCookie).toContain("HttpOnly");

@@ -34,17 +34,21 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					 * and fetch the session from the database
 					 */
 					disableCookieCache: z
-						.boolean({
-							description:
-								"Disable cookie cache and fetch session from database",
-						})
-						.or(z.string().transform((v) => v === "true"))
+						.optional(
+							z
+								.boolean({
+									description:
+										"Disable cookie cache and fetch session from database",
+								})
+								.or(z.string().transform((v) => v === "true")),
+						)
 						.optional(),
 					disableRefresh: z
 						.boolean({
 							description:
 								"Disable session refresh. Useful for checking session status, without updating the session",
 						})
+						.or(z.string().transform((v) => v === "true"))
 						.optional(),
 				}),
 			),
@@ -115,7 +119,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (sessionDataPayload) {
 					const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
 						ctx.context.secret,
-						JSON.stringify(sessionDataPayload.session),
+						JSON.stringify({
+							...sessionDataPayload.session,
+							expiresAt: sessionDataPayload.expiresAt,
+						}),
 						sessionDataPayload.signature,
 					);
 					if (!isValid) {
@@ -171,7 +178,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
-
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled
@@ -268,11 +274,12 @@ export const getSessionFromCtx = async <
 			user: U & User;
 		};
 	}
+
 	const session = await getSession()({
 		...ctx,
 		_flag: "json",
 		headers: ctx.headers!,
-		query: config,
+		query: { ...ctx.query, ...config },
 	}).catch((e) => {
 		return null;
 	});

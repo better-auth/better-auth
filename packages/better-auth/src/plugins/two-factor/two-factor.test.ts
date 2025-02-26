@@ -113,17 +113,25 @@ describe("two factor", async () => {
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
+			rememberMe: false,
 			fetchOptions: {
-				onSuccess(context) {
+				onResponse(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
 						"cookie",
 						`better-auth.two_factor=${
 							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
 						}`,
 					);
 				},
@@ -151,11 +159,15 @@ describe("two factor", async () => {
 			code: OTP,
 			fetchOptions: {
 				headers,
-				onSuccess(context) {
+				onResponse(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBeDefined();
+					// max age should be undefined because we are not using remember me
+					expect(
+						parsed.get("better-auth.session_token")?.["max-age"],
+					).not.toBeDefined();
 				},
 			},
 		});
