@@ -289,7 +289,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
-						deleteSessionCookie(ctx);
+						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,

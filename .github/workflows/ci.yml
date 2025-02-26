@@ -35,6 +35,10 @@ jobs:
               run: pnpm install
 
             - name: Build
+              env:
+                TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+                TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+                TURBO_REMOTE_ONLY: true
               run: pnpm build
             
             - name: Start Docker Containers
@@ -44,12 +48,23 @@ jobs:
                 sleep 10
             
             - name: Lint
+              env:
+                TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+                TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+                TURBO_REMOTE_ONLY: true
               run: pnpm lint
             
             - name: Test
+              env:
+                TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+                TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
               run: pnpm test
 
             - name: Typecheck
+              env:
+                TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+                TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+                TURBO_REMOTE_ONLY: true
               run: pnpm typecheck
 
             - name: Stop Docker Containers

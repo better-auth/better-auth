@@ -39,9 +39,14 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					message: "invalid two factor cookie",
 				});
 			}
+			const dontRememberMe = await ctx.getSignedCookie(
+				ctx.context.authCookies.dontRememberToken.name,
+				ctx.context.secret,
+			);
 			const session = await ctx.context.internalAdapter.createSession(
 				userId,
 				ctx.request,
+				!!dontRememberMe,
 			);
 			if (!session) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -69,13 +74,20 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 							ctx.context.secret,
 							`${user.id}!${session.token}`,
 						);
-
 						await ctx.setSignedCookie(
 							trustDeviceCookie.name,
 							`${token}!${session.token}`,
 							ctx.context.secret,
 							trustDeviceCookie.attributes,
 						);
+						// delete the dont remember me cookie
+						ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+							maxAge: 0,
+						});
+						// delete the two factor cookie
+						ctx.setCookie(cookieName.name, "", {
+							maxAge: 0,
+						});
 					}
 					return ctx.json({
 						token: session.token,
