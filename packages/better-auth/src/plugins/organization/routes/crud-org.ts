@@ -218,7 +218,9 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = ctx.context.authorize
+			? { authorize: ctx.context.authorize }
+			: ctx.context.roles[member.role];
 		if (!role) {
 			return ctx.json(null, {
 				status: 400,
@@ -227,9 +229,12 @@ export const updateOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const canUpdateOrg = role.authorize({
-			organization: ["update"],
-		});
+		const canUpdateOrg = await role.authorize(
+			{
+				organization: ["update"],
+			},
+			member.role,
+		);
 		if (canUpdateOrg.error) {
 			return ctx.json(null, {
 				body: {
@@ -307,7 +312,9 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = ctx.context.authorize
+			? { authorize: ctx.context.authorize }
+			: ctx.context.roles[member.role];
 		if (!role) {
 			return ctx.json(null, {
 				status: 400,
@@ -316,9 +323,12 @@ export const deleteOrganization = createAuthEndpoint(
 				},
 			});
 		}
-		const canDeleteOrg = role.authorize({
-			organization: ["delete"],
-		});
+		const canDeleteOrg = await role.authorize(
+			{
+				organization: ["delete"],
+			},
+			member.role,
+		);
 		if (canDeleteOrg.error) {
 			throw new APIError("FORBIDDEN", {
 				message:

@@ -175,12 +175,15 @@ export const removeMember = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
-		const role = ctx.context.roles[member.role];
+		const role = ctx.context.authorize
+			? { authorize: ctx.context.authorize }
+			: ctx.context.roles[member.role];
 		if (!role) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 			});
 		}
+
 		const isLeaving =
 			session.user.email === ctx.body.memberIdOrEmail ||
 			member.id === ctx.body.memberIdOrEmail;
@@ -195,9 +198,14 @@ export const removeMember = createAuthEndpoint(
 		}
 		const canDeleteMember =
 			isLeaving ||
-			role.authorize({
-				member: ["delete"],
-			}).success;
+			(
+				await role.authorize(
+					{
+						member: ["delete"],
+					},
+					member.role,
+				)
+			).success;
 		if (!canDeleteMember) {
 			throw new APIError("UNAUTHORIZED", {
 				message:
@@ -313,7 +321,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				});
 			}
-			const role = ctx.context.roles[member.role];
+			const role = ctx.context.authorize
+				? { authorize: ctx.context.authorize }
+				: ctx.context.roles[member.role];
 			if (!role) {
 				return ctx.json(null, {
 					status: 400,
@@ -338,9 +348,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			 * If the member is not an owner, they cannot update the role of another member
 			 * as an owner.
 			 */
-			const hasPermission = role.authorize({
-				member: ["update"],
-			});
+			const hasPermission = await role.authorize(
+				{
+					member: ["update"],
+				},
+				member.role,
+			);
 			if (hasPermission.error) {
 				return ctx.json(null, {
 					body: {

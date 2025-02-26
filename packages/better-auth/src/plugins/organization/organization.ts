@@ -64,6 +64,8 @@ export interface OrganizationOptions {
 	allowUserToCreateOrganization?:
 		| boolean
 		| ((user: User) => Promise<boolean> | boolean);
+
+	authorize?: Role["authorize"];
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
@@ -265,6 +267,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
 		roles,
+		authorize: options?.authorize,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
 			return await getSessionFromCtx(context);
@@ -371,8 +374,18 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 						});
 					}
-					const role = roles[member.role as keyof typeof roles];
-					const result = role.authorize(ctx.body.permission as any);
+					const role = (ctx.context as any).authorize
+						? { authorize: (ctx.context as any).authorize }
+						: roles[member.role as keyof typeof roles];
+					if (!role) {
+						throw new APIError("BAD_REQUEST", {
+							message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+						});
+					}
+					const result = await role.authorize(
+						ctx.body.permission as any,
+						member.role,
+					);
 					if (result.error) {
 						return ctx.json(
 							{
