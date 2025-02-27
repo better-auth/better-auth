@@ -41,6 +41,17 @@ export interface PhoneNumberOptions {
 		request?: Request,
 	) => Promise<void> | void;
 	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 */
+	sendForgetPasswordOTP?: (
+		data: { phoneNumber: string; code: string },
+		request?: Request,
+	) => Promise<void> | void;
+	/**
 	 * Expiry time of the OTP code in seconds
 	 * @default 300
 	 */
@@ -111,6 +122,8 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
 		UNEXPECTED_ERROR: "Unexpected error",
 		OTP_NOT_FOUND: "OTP not found",
+		OTP_EXPIRED: "OTP expired",
+		INVALID_OTP: "Invalid OTP",
 	} as const;
 	return {
 		id: "phone-number",
@@ -406,7 +419,6 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					if (!otp || otp.expiresAt < new Date()) {
 						if (otp && otp.expiresAt < new Date()) {
-							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 							throw new APIError("BAD_REQUEST", {
 								message: "OTP expired",
 							});
@@ -436,6 +448,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 								[opts.phoneNumber]: ctx.body.phoneNumber,
 								[opts.phoneNumberVerified]: true,
 							},
+							ctx,
 						);
 						return ctx.json({
 							status: true,
@@ -465,18 +478,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					});
 					if (!user) {
 						if (options?.signUpOnVerification) {
-							user = await ctx.context.internalAdapter.createUser({
-								email: options.signUpOnVerification.getTempEmail(
-									ctx.body.phoneNumber,
-								),
-								name: options.signUpOnVerification.getTempName
-									? options.signUpOnVerification.getTempName(
-											ctx.body.phoneNumber,
-										)
-									: ctx.body.phoneNumber,
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-								[opts.phoneNumberVerified]: true,
-							});
+							user = await ctx.context.internalAdapter.createUser(
+								{
+									email: options.signUpOnVerification.getTempEmail(
+										ctx.body.phoneNumber,
+									),
+									name: options.signUpOnVerification.getTempName
+										? options.signUpOnVerification.getTempName(
+												ctx.body.phoneNumber,
+											)
+										: ctx.body.phoneNumber,
+									[opts.phoneNumber]: ctx.body.phoneNumber,
+									[opts.phoneNumberVerified]: true,
+								},
+								ctx,
+							);
 							if (!user) {
 								throw new APIError("INTERNAL_SERVER_ERROR", {
 									message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -484,9 +500,13 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							}
 						}
 					} else {
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							[opts.phoneNumberVerified]: true,
-						});
+						user = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								[opts.phoneNumberVerified]: true,
+							},
+							ctx,
+						);
 					}
 
 					if (!user) {
@@ -552,6 +572,103 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 							createdAt: user.createdAt,
 							updatedAt: user.updatedAt,
 						} as UserWithPhoneNumber,
+					});
+				},
+			),
+			forgetPasswordPhoneNumber: createAuthEndpoint(
+				"/phone-number/forget-password",
+				{
+					method: "POST",
+					body: z.object({
+						phoneNumber: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
+						model: "user",
+						where: [
+							{
+								value: ctx.body.phoneNumber,
+								field: opts.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "phone number isn't registered",
+						});
+					}
+					const code = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: code,
+						identifier: `${ctx.body.phoneNumber}-forget-password`,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
+					await options?.sendForgetPasswordOTP?.(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx.request,
+					);
+					return ctx.json({
+						status: true,
+					});
+				},
+			),
+			resetPasswordPhoneNumber: createAuthEndpoint(
+				"/phone-number/reset-password",
+				{
+					method: "POST",
+					body: z.object({
+						otp: z.string(),
+						phoneNumber: z.string(),
+						newPassword: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const verification =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`${ctx.body.phoneNumber}-forget-password`,
+						);
+					if (!verification) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_NOT_FOUND,
+						});
+					}
+					if (verification.expiresAt < new Date()) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
+						});
+					}
+					if (verification.value !== ctx.body.otp) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+					const user = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "phoneNumber",
+								value: ctx.body.phoneNumber,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.UNEXPECTED_ERROR,
+						});
+					}
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.newPassword,
+					);
+					await ctx.context.internalAdapter.updatePassword(
+						user.id,
+						hashedPassword,
+					);
+					return ctx.json({
+						status: true,
 					});
 				},
 			),

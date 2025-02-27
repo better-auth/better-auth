@@ -43,7 +43,8 @@
 			".nuxt",
 			".source",
 			".expo",
-			".cache"
+			".cache",
+			"dev/cloudflare/drizzle"
 		]
 	}
 }

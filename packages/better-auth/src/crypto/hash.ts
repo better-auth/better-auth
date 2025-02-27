@@ -1,11 +1,12 @@
 import { constantTimeEqual } from "./buffer";
 import { createHash } from "@better-auth/utils/hash";
+import { base64 } from "@better-auth/utils/base64";
 
 export async function hashToBase64(
 	data: string | ArrayBuffer,
 ): Promise<string> {
 	const buffer = await createHash("SHA-256").digest(data);
-	return Buffer.from(buffer).toString("base64");
+	return base64.encode(buffer);
 }
 
 export async function compareHash(
@@ -15,6 +16,6 @@ export async function compareHash(
 	const buffer = await createHash("SHA-256").digest(
 		typeof data === "string" ? new TextEncoder().encode(data) : data,
 	);
-	const hashBuffer = Buffer.from(hash, "base64");
+	const hashBuffer = base64.decode(hash);
 	return constantTimeEqual(buffer, hashBuffer);
 }

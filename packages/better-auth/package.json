@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.1.22-beta.2",
+  "version": "1.2.0-beta.17",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=16192 tsup --clean --dts",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=16000 tsup --clean --dts",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4000' tsup --watch --sourcemap",
     "dev:dts": "cross-env NODE_OPTIONS='--max-old-space-size=16192' tsup --watch --dts",
     "test": "pnpm prisma:push && vitest",
@@ -291,6 +291,16 @@
         "default": "./dist/plugins/admin.cjs"
       }
     },
+    "./plugins/admin/access": {
+      "import": {
+        "types": "./dist/plugins/admin/access.d.ts",
+        "default": "./dist/plugins/admin/access.js"
+      },
+      "require": {
+        "types": "./dist/plugins/admin/access.d.cts",
+        "default": "./dist/plugins/admin/access.cjs"
+      }
+    },
     "./plugins/anonymous": {
       "import": {
         "types": "./dist/plugins/anonymous.d.ts",
@@ -535,6 +545,9 @@
       "plugins/admin": [
         "./dist/plugins/admin.d.ts"
       ],
+      "plugins/admin/access": [
+        "./dist/plugins/admin/access.d.ts"
+      ],
       "plugins/anonymous": [
         "./dist/plugins/anonymous.d.ts"
       ],
@@ -604,22 +617,23 @@
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
     "tsup": "^8.3.5",
-    "typescript": "5.6.1-rc",
-    "vitest": "^3.0.7",
+    "typescript": "^5.7.2",
+    "vitest": "^1.6.0",
     "vue": "^3.5.13"
   },
   "dependencies": {
     "@better-auth/utils": "0.2.3",
-    "@better-fetch/fetch": "^1.1.15",
+    "@better-fetch/fetch": "^1.1.14-beta.2",
     "@noble/ciphers": "^0.6.0",
     "@noble/hashes": "^1.6.1",
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0",
-    "better-call": "0.3.3",
+    "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^5.9.6",
     "kysely": "^0.27.4",
     "nanostores": "^0.11.3",
+    "valibot": "1.0.0-beta.15",
     "zod": "^3.24.1"
   },
   "overrides": {
