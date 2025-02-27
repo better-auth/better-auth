@@ -121,7 +121,6 @@ describe("mssql", async () => {
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
 		const { runMigrations, toBeAdded, toBeCreated } = await getMigrations(opts);
-		console.log({ toBeAdded, toBeCreated });
 		await runMigrations();
 	});
 	const mssql = new Kysely({

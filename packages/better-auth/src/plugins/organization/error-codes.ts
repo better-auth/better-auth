@@ -33,4 +33,6 @@ export const ORGANIZATION_ERROR_CODES = {
 		"Inviter is no longer a member of the organization",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
 		"you are not allowed to invite user with this role",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER:
+		"You are not allowed to update this member",
 } as const;

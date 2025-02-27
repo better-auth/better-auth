@@ -96,7 +96,7 @@ export default async function Page({
 				/>
 
 				<Cards className="mt-16">
-					{prevPage && (
+					{prevPage ? (
 						<Card
 							href={prevPage.url}
 							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
@@ -109,8 +109,10 @@ export default async function Page({
 								</div>
 							}
 						/>
+					) : (
+						<div></div>
 					)}
-					{nextPage && (
+					{nextPage ? (
 						<Card
 							href={nextPage.url}
 							description={<>{nextPage.data.description}</>}
@@ -123,6 +125,8 @@ export default async function Page({
 							}
 							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
 						/>
+					) : (
+						<div></div>
 					)}
 				</Cards>
 			</DocsBody>
@@ -224,7 +228,8 @@ function getPageLinks(path: string) {
 	}
 
 	const pages = source.getPages();
-	const next_page2 = pages.find((x) => x.url === next_page.href);
-	const prev_page2 = pages.find((x) => x.url === prev_page.href);
+	let next_page2 = pages.find((x) => x.url === next_page.href);
+	let prev_page2 = pages.find((x) => x.url === prev_page.href);
+	if (path === "/docs/introduction") prev_page2 = undefined;
 	return { nextPage: next_page2, prevPage: prev_page2 };
 }

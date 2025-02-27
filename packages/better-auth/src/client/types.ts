@@ -63,6 +63,7 @@ export interface ClientOptions {
 	fetchOptions?: BetterFetchOption;
 	plugins?: BetterAuthClientPlugin[];
 	baseURL?: string;
+	basePath?: string;
 	disableDefaultFetchPlugins?: boolean;
 }
 

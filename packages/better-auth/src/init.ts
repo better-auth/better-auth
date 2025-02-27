@@ -7,7 +7,6 @@ import type {
 	Adapter,
 	BetterAuthOptions,
 	BetterAuthPlugin,
-	LiteralUnion,
 	Models,
 	SecondaryStorage,
 	Session,
@@ -26,6 +25,7 @@ import { generateId } from "./utils";
 import { env, isProduction } from "./utils/env";
 import { checkPassword } from "./utils/password";
 import { getBaseURL } from "./utils/url";
+import type { LiteralUnion } from "./types/helper";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);
@@ -250,7 +250,7 @@ function getTrustedOrigins(options: BetterAuthOptions) {
 		return [];
 	}
 	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins) {
+	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
 		trustedOrigins.push(...options.trustedOrigins);
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
