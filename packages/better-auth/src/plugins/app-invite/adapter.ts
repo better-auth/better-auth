@@ -73,27 +73,29 @@ export const getAppInviteAdapter = (
 
 			return undefined;
 		},
-		listInvitationsByIssuer: async (data: {
-			userId: string;
-			where?: Where[];
-			limit?: number;
-			offset?: number;
+		listInvitationsByIssuer: async (
+			inviterId: string,
+			limit?: number,
+			offset?: number,
 			sortBy?: {
 				field: string;
 				direction: "asc" | "desc";
-			};
-		}) => {
-			const where = data.where || [];
-
-			where.push({
-				field: "inviterId",
-				operator: "eq",
-				value: data.userId,
-			});
-
+			},
+			where?: Where[],
+		) => {
 			const invitations = await adapter.findMany<AppInvitation>({
 				model: "appInvitation",
-				where,
+				where: [
+					...(where || []),
+					{
+						field: "inviterId",
+						operator: "eq",
+						value: inviterId,
+					},
+				],
+				limit,
+				offset,
+				sortBy,
 			});
 
 			return invitations;

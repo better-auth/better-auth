@@ -902,18 +902,18 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 						const limit = Number(ctx.query?.limit) || undefined;
 						const offset = Number(ctx.query?.offset) || undefined;
 
-						const invitations = await adapter.listInvitationsByIssuer({
-							userId: ctx.context.session.user.id,
-							where,
-							limit,
-							offset,
-							sortBy: ctx.query?.sortBy
+						const invitations = await adapter.listInvitationsByIssuer(
+							ctx.context.session.user.id,
+							Number(ctx.query?.limit) || undefined,
+							Number(ctx.query?.offset) || undefined,
+							ctx.query?.sortBy
 								? {
 										field: ctx.query.sortBy,
 										direction: ctx.query.sortDirection || "asc",
 									}
 								: undefined,
-						});
+							where.length ? where : undefined,
+						);
 
 						return ctx.json({
 							invitations,
