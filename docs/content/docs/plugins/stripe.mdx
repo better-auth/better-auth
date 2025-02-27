@@ -124,9 +124,10 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         Create a webhook endpoint in your Stripe dashboard pointing to:
 
         ```
-        https://your-domain.com/api/stripe/webhook
+        https://your-domain.com/api/auth/stripe/webhook
         ```
-
+        `/api/auth` is the default path for the auth server.
+        
         Make sure to select at least these events:
         - `checkout.session.completed`
         - `customer.subscription.updated`
@@ -224,17 +225,16 @@ await client.subscription.upgrade({
 });
 ```
 
-This will create a Checkout Session and return a URL that you can redirect the user to:
+This will create a Checkout Session and redirect the user to the Stripe Checkout page.
 
 ```ts
-const { data } = await client.subscription.upgrade({
+const { error } = await client.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing"
 });
-
-if (data.redirect) {
-    window.location.href = data.url;
+if(error) {
+    alert(error.message);
 }
 ```
 
@@ -296,13 +296,16 @@ subscription: {
     // ... other options
     authorizeReference: async ({ user, session, referenceId, action }) => {
         // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription") {
-            const org = await db.organizations.findUnique({
-                where: { id: referenceId }
+        if (action === "upgrade-subscription" || action === "cancel-subscription") {
+            const org = await db.member.findFirst({
+                where: {
+                    organizationId: referenceId,
+                    userId: user.id
+                }   
             });
-            return org.ownerId === user.id;
+            return org?.role === "owner"
         }
-        return false;
+        return true;
     }
 }
 ```
@@ -370,7 +373,7 @@ You can configure trial periods for your plans:
     priceId: "price_0987654321",
     freeTrial: {
         days: 14,
-        forNewUsersOnly: true,
+        forNewUsersOnly: true, // only new users can start a trial
         onTrialStart: async (subscription) => {
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
