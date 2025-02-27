@@ -452,17 +452,18 @@ The expiration time is the expiration date of the API key.
 
 ### How does it work?
 
+#### Remaining:
 Whenever an API key is used, the `remaining` count is updated.  
 If the `remaining` count is `null`, then there is no cap to key usage.  
 Otherwise, the `remaining` count is decremented by 1.  
 If the `remaining` count is 0, then the API key is disabled & removed.
 
+#### refillInterval & refillAmount:
 Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null`.  
 This means that the API key will not be refilled automatically.  
-However, if the `refillInterval` is set, then the API key will be refilled automatically.  
-This means that the `refillAmount` will be used to refill the API key.  
-If the `refillAmount` is `null`, then the API key will be refilled with the `remaining` count.
+However, if `refillInterval` & `refillAmount` are set, then the API key will be refilled accordingly.
 
+#### Expiration:
 Whenever an API key is created, the `expiresAt` is set to `null`.  
 This means that the API key will never expire.  
 However, if the `expiresIn` is set, then the API key will expire after the `expiresIn` time.
