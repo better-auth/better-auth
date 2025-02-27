@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import { vi } from "vitest";
 import { stripe } from ".";
 import { stripeClient } from "./client";
-import type { Customer, StripeOptions, Subscription } from "./types";
+import type { StripeOptions, Subscription } from "./types";
 
 describe("stripe", async () => {
 	const mockStripe = {
@@ -124,18 +124,17 @@ describe("stripe", async () => {
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
 		});
-		const res = await ctx.adapter.findOne<Customer>({
-			model: "customer",
+		const res = await ctx.adapter.findOne<User>({
+			model: "user",
 			where: [
 				{
-					field: "userId",
+					field: "id",
 					value: userRes.user.id,
 				},
 			],
 		});
 		expect(res).toMatchObject({
 			id: expect.any(String),
-			userId: userRes.user.id,
 			stripeCustomerId: expect.any(String),
 		});
 	});

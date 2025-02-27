@@ -46,33 +46,18 @@ export const getSchema = (options: StripeOptions) => {
 			},
 		},
 	} satisfies AuthPluginSchema;
-	const customer = {
-		customer: {
+	const user = {
+		user: {
 			fields: {
 				stripeCustomerId: {
 					type: "string",
-					required: true,
-				},
-				userId: {
-					type: "string",
-					references: {
-						model: "user",
-						field: "id",
-					},
-				},
-				createdAt: {
-					type: "date",
-					required: true,
-				},
-				updatedAt: {
-					type: "date",
-					required: true,
+					required: false,
 				},
 			},
 		},
 	} satisfies AuthPluginSchema;
 	return {
 		...(options.subscription?.enabled ? subscriptions : {}),
-		...customer,
-	} as typeof customer & typeof subscriptions;
+		...user,
+	} as typeof user & typeof subscriptions;
 };

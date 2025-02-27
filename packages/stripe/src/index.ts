@@ -12,13 +12,7 @@ import {
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
-import type {
-	Customer,
-	InputCustomer,
-	InputSubscription,
-	StripeOptions,
-	Subscription,
-} from "./types";
+import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByName, getPlans } from "./utils";
 import { getSchema } from "./schema";
 
@@ -128,16 +122,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 					});
 				}
-				let customer = await ctx.context.adapter.findOne<Customer>({
-					model: "customer",
-					where: [
-						{
-							field: "userId",
-							value: user.id,
-						},
-					],
-				});
-				if (!customer) {
+				let customerId = user.stripeCustomerId;
+				if (!customerId) {
 					try {
 						const stripeCustomer = await client.customers.create(
 							{
@@ -152,18 +138,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								idempotencyKey: generateRandomString(32, "a-z", "0-9"),
 							},
 						);
-						customer = await ctx.context.adapter.create<
-							InputCustomer,
-							Customer
-						>({
-							model: "customer",
-							data: {
-								userId: user.id,
+						await ctx.context.adapter.update({
+							model: "user",
+							update: {
 								stripeCustomerId: stripeCustomer.id,
-								createdAt: new Date(),
-								updatedAt: new Date(),
 							},
+							where: [
+								{
+									field: "id",
+									value: user.id,
+								},
+							],
 						});
+						customerId = stripeCustomer.id;
 					} catch (e: any) {
 						ctx.context.logger.error(e);
 						throw new APIError("BAD_REQUEST", {
@@ -172,19 +159,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				}
 
-				const activeSubscription = customer.stripeCustomerId
+				const activeSubscription = customerId
 					? await client.subscriptions
 							.list({
-								customer: customer.stripeCustomerId,
+								customer: customerId,
 								status: "active",
 							})
 							.then((res) => res.data[0])
 							.catch((e) => null)
 					: null;
-				if (activeSubscription && customer.stripeCustomerId) {
+				if (activeSubscription && customerId) {
 					const { url } = await client.billingPortal.sessions
 						.create({
-							customer: customer.stripeCustomerId,
+							customer: customerId,
 							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
 							flow_data: {
 								type: "subscription_update_confirm",
@@ -242,7 +229,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						model: "subscription",
 						data: {
 							plan: plan.name.toLowerCase(),
-							stripeCustomerId: customer.stripeCustomerId as string,
+							stripeCustomerId: customerId,
 							status: "incomplete",
 							referenceId,
 							seats: ctx.body.seats || 1,
@@ -267,9 +254,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				);
 
 				const checkoutSession = await client.checkout.sessions.create({
-					...(customer.stripeCustomerId
+					...(customerId
 						? {
-								customer: customer.stripeCustomerId,
+								customer: customerId,
 								customer_update: {
 									name: "auto",
 									address: "auto",
@@ -490,14 +477,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										await ctx.context.adapter.create({
-											model: "customer",
-											data: {
-												userId: user.id,
+										await ctx.context.adapter.update({
+											model: "user",
+											update: {
 												stripeCustomerId: stripeCustomer.id,
-												createdAt: new Date(),
-												updatedAt: new Date(),
 											},
+											where: [
+												{
+													field: "id",
+													value: user.id,
+												},
+											],
 										});
 									}
 								},
