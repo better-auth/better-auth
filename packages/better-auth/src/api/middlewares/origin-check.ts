@@ -49,7 +49,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				matchesPattern(url, origin) ||
 				(url?.startsWith("/") &&
 					label !== "origin" &&
-					/^\/(?![\\/%])[\w\-./]*$/.test(url)),
+					/^\/(?!\/|\\|%2f|%5c)[\w\-./]*(?:\?[\w\-./=&%]*)?$/.test(url)),
 		);
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -106,7 +106,7 @@ export const originCheck = (
 					matchesPattern(url, origin) ||
 					(url?.startsWith("/") &&
 						label !== "origin" &&
-						/^\/(?![\\/%])[\w\-./]*$/.test(url)),
+						/^\/(?!\/|\\|%2f|%5c)[\w\-./]*(?:\?[\w\-./=&%]*)?$/.test(url)),
 			);
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);

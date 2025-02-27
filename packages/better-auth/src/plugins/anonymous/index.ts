@@ -44,7 +44,7 @@ export interface AnonymousOptions {
 	 */
 	disableDeleteAnonymousUser?: boolean;
 	/**
-	 * Custom schema for the admin plugin
+	 * Custom schema for the anonymous plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
