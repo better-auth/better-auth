@@ -127,7 +127,8 @@ export const auth = createAuth({
   advanced: {
     defaultCookieAttributes: {
       sameSite: "none",
-      secure: true
+      secure: true,
+			partitioned: true // New browser standards will mandate this for foreign cookies
     }
   }
 })
@@ -141,7 +142,8 @@ export const auth = createAuth({
     cookies: {
       sessionToken: {
         sameSite: "none",
-        secure: true
+        secure: true,
+				partitioned: true // New browser standards will mandate this for foreign cookies
       }
     }
   }
