@@ -427,6 +427,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
+						error_description: z
+							.string({
+								description: "The error description, if any",
+							})
+							.optional(),
 						state: z
 							.string({
 								description: "The state parameter from the OAuth2 request",
@@ -457,11 +462,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.options.baseURL}?error=${
+							`${defaultErrorURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
-							}`,
+							}&error_description=${ctx.query.error_description}`,
 						);
 					}
 					const provider = options.config.find(
