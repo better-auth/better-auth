@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@better-fetch/fetch':
+      specifier: ^1.1.15
+      version: 1.1.15
     better-call:
       specifier: ^1.0.2
       version: 1.0.2
@@ -55,7 +58,7 @@ importers:
   demo/nextjs:
     dependencies:
       '@better-fetch/fetch':
-        specifier: ^1.1.15
+        specifier: 'catalog:'
         version: 1.1.15
       '@hookform/resolvers':
         specifier: ^3.9.1
@@ -364,7 +367,7 @@ importers:
   docs:
     dependencies:
       '@better-fetch/fetch':
-        specifier: ^1.1.15
+        specifier: 'catalog:'
         version: 1.1.15
       '@codesandbox/sandpack-react':
         specifier: ^2.19.10
@@ -1665,8 +1668,8 @@ importers:
         version: 3.24.1
     devDependencies:
       '@better-fetch/fetch':
-        specifier: 1.1.14-beta.2
-        version: 1.1.14-beta.2
+        specifier: 'catalog:'
+        version: 1.1.15
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
