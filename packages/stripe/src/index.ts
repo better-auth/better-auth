@@ -1,7 +1,6 @@
 import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
-	type Expand,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
@@ -42,7 +41,7 @@ const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	}`;
 };
 
-export const stripe = <O extends StripeOptions>(options: Expand<O>) => {
+export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
 	const referenceMiddleware = (

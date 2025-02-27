@@ -1,0 +1,40 @@
+---
+title: Stripe
+description: Stripe plugin for Better Auth to manage subscriptions and payments.
+---
+
+The stripe plugin is a plugin for Better Auth to manage subscriptions and payments. Payment and authentication are usually tightly coupled, so this plugin tries to make it easier for you to integrate Stripe into your application.
+
+## Features
+
+- Create Customers automatically when a user signs up.
+- Create and manage plans and subscriptions.
+- Handles webhooks for subscriptions and invoices.
+- Exposes `onEvent` hooks to handle any webhook without having to worry about the signature.
+- and more...
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Install the plugin
+
+        First, install the plugin:
+
+        ```package-install
+        @better-auth/stripe
+        ```
+        <Callout>
+        If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+        </Callout>
+    </Step>
+    <Step>
+        ### Install the Stripe SDK
+
+        Next, install the Stripe SDK on your server:
+
+        ```package-install
+        stripe
+        ```
+    </Step>
+</Steps>
