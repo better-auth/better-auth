@@ -164,6 +164,9 @@ export const apiKeySchema = ({
 					required: true,
 					input: false,
 				},
+				/**
+				 * The permissions of the key.
+				 */
 				permissions: {
 					type: "string",
 					required: false,

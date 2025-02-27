@@ -667,6 +667,20 @@ Custom schema for the api key plugin.
 
 An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.  
 
+`permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
+
+Permissions for the API key.
+
+Read more about permissions [here](/docs/plugins/api-key#permissions).
+
+<Accordions>
+  <Accordion title="permissions Options">
+    `defaultPermissions` <span className="opacity-70">`Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>)`</span>
+
+    The default permissions for the API key.
+  </Accordion>
+</Accordions>
+
 ---
 
 ## Schema
@@ -786,6 +800,12 @@ Table: `apiKey`
       name: "updatedAt",
       type: "Date",
       description: "The date and time the API key was updated.",
+    },
+    {
+      name: "permissions",
+      type: "string",
+      description: "The permissions of the key.",
+      isOptional: true,
     },
     {
       name: "metadata",
