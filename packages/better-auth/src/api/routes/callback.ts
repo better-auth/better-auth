@@ -24,6 +24,8 @@ export const callbackOAuth = createAuthEndpoint(
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
+		const defaultErrorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -41,9 +43,15 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
+		if (error) {
+			throw c.redirect(
+				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
+			);
+		}
+
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
+			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
 		}
 		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
 			await parseState(c);
