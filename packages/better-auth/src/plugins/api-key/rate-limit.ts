@@ -35,7 +35,7 @@ export function isRateLimited(
 			update: { lastRequest: now },
 			tryAgainIn: null,
 		};
-		
+
 	if (apiKey.rateLimitEnabled === false)
 		return {
 			success: true,
