@@ -18,6 +18,14 @@ export type AuthPluginSchema = {
 		};
 		disableMigration?: boolean;
 		modelName?: string;
+		/**
+		 * Wether to use secondary storage, and fallback to primary storage if not found
+		 * 
+		 * Read more here: 
+		 * 
+		 * @link https://www.better-auth.com/docs/concepts/database#secondary-storage
+		 */
+		useSecondaryStorage?: boolean;
 	};
 };
 
