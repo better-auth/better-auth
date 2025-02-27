@@ -43,8 +43,8 @@ export async function onCheckoutSessionCompleted(
 				},
 				where: [
 					{
-						field: "referenceId",
-						value: referenceId,
+						field: "id",
+						value: subscriptionId,
 					},
 				],
 			});
@@ -143,33 +143,38 @@ export async function onSubscriptionDeleted(
 		return;
 	}
 	const subscriptionDeleted = event.data.object as Stripe.Subscription;
-	const stripeId = subscriptionDeleted.customer.toString();
-	const subscription = await ctx.context.adapter.findOne<Subscription>({
-		model: "subscription",
-		where: [
-			{
-				field: "stripeSubscriptionId",
-				value: stripeId,
-			},
-		],
-	});
-	if (subscription) {
-		await ctx.context.adapter.update({
+	const subscriptionId = subscriptionDeleted.metadata?.subscriptionId;
+	const stripeSubscription = await options.stripeClient.subscriptions.retrieve(
+		subscriptionId as string,
+	);
+	if (stripeSubscription.status === "canceled") {
+		const subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
 				{
-					field: "stripeSubscriptionId",
-					value: stripeId,
+					field: "id",
+					value: subscriptionId,
 				},
 			],
-			update: {
-				status: "canceled",
-			},
 		});
-		await options.subscription.onSubscriptionDeleted?.({
-			event,
-			stripeSubscription: subscriptionDeleted,
-			subscription,
-		});
+		if (subscription) {
+			await ctx.context.adapter.update({
+				model: "subscription",
+				where: [
+					{
+						field: "id",
+						value: subscription.id,
+					},
+				],
+				update: {
+					status: "canceled",
+				},
+			});
+			await options.subscription.onSubscriptionDeleted?.({
+				event,
+				stripeSubscription: subscriptionDeleted,
+				subscription,
+			});
+		}
 	}
 }
