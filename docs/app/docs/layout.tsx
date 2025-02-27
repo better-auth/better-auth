@@ -5,19 +5,19 @@ import ArticleLayout from "@/components/side-bar";
 import { DocsNavBarMobile } from "@/components/nav-mobile";
 
 export default function Layout({ children }: { children: ReactNode }) {
-	return (
-		<DocsLayout
-			{...docsOptions}
-			sidebar={{
-				component: (
-					<div className="mr-[--fd-sidebar-width]">
-						<ArticleLayout />
-					</div>
-				),
-			}}
-		>
-			<DocsNavBarMobile />
-			{children}
-		</DocsLayout>
-	);
+  return (
+    <DocsLayout
+      {...docsOptions}
+      sidebar={{
+        component: (
+          <div className="mr-[--fd-sidebar-width]">
+            <ArticleLayout />
+          </div>
+        ),
+      }}
+    >
+      <DocsNavBarMobile />
+      {children}
+    </DocsLayout>
+  );
 }
