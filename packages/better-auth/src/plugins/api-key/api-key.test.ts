@@ -1523,7 +1523,7 @@ describe("api-key", async () => {
 		const result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
-				requiredPermissions: {
+				permissions: {
 					files: ["read"],
 				},
 			},
@@ -1549,7 +1549,7 @@ describe("api-key", async () => {
 		const result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
-				requiredPermissions: {
+				permissions: {
 					files: ["write"],
 				},
 			},
@@ -1569,7 +1569,7 @@ describe("api-key", async () => {
 		const result = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
-				requiredPermissions: {
+				permissions: {
 					files: ["write"],
 				},
 			},

@@ -31,9 +31,7 @@ export function verifyApiKey({
 				key: z.string({
 					description: "The key to verify",
 				}),
-				requiredPermissions: z
-					.record(z.string(), z.array(z.string()))
-					.optional(),
+				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -144,7 +142,7 @@ export function verifyApiKey({
 				}
 			}
 
-			const requiredPermissions = ctx.body.requiredPermissions;
+			const requiredPermissions = ctx.body.permissions;
 			const apiKeyPermissions = apiKey.permissions
 				? safeJSONParse(apiKey.permissions)
 				: null;

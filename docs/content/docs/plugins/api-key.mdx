@@ -89,7 +89,9 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
       ```
     </Tab>
     <Tab value="Server">
-      ```ts
+    on the server, you can create an API key for a user by passing the `userId` property in the body. And allows you to add any properties you want to the API key.
+
+    ```ts
       const apiKey = await auth.api.createApiKey({
           body: {
             name: "My API Key",
@@ -104,9 +106,8 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
             rateLimitTimeWindow: 1000 * 60 * 60 * 24, // everyday
             rateLimitMax: 100, // every day, they can use up to 100 requests
             rateLimitEnabled: true,
-            userId: user.id, // the user id. Helpful if you do not have the user headers to create this key. Otherwise, do not define this property.
+            userId: user.id, // the user id to create the API key for
           },
-          headers: user_headers, // if you want to create an API key for a user, but do not have the headers, you can just pass `userId` in the body.
       });
       ```
     </Tab>
@@ -116,7 +117,7 @@ All API keys are assigned to a user. If you're creating an API key on the server
 
 #### Properties
 
-All properties are optonal. However if you pass a `refillAmount`, you must also pass a `refillInterval`, and vice versa.
+All properties are optional. However if you pass a `refillAmount`, you must also pass a `refillInterval`, and vice versa.
 
 - `name`?: The name of the API key.
 - `expiresIn`?: The expiration time of the API key in seconds. If not provided, the API key will never expire.
@@ -131,11 +132,18 @@ All properties are optonal. However if you pass a `refillAmount`, you must also 
 - `rateLimitTimeWindow`?: The duration in milliseconds where each request is counted. Once the `rateLimitMax` is reached, the request will be rejected until the `timeWindow` has passed, at which point the time window will be reset.
 - `rateLimitMax`?: The maximum number of requests allowed within the `rateLimitTimeWindow`.
 - `rateLimitEnabled`?: Whether rate limiting is enabled for the API key.
+- `permissions`?: Permissions for the API key, structured as a record mapping resource types to arrays of allowed actions.
+
+```ts
+const example = {
+  projects: ["read", "read-write"]
+}
+```
 - `userId`?: The ID of the user associated with the API key. When creating an API Key, you must pass the headers of the user who will own the key. However if you do not have the headers, you can pass this field, which will allow you to bypass the need for headers.
 
 #### Result
 
-The result is the `ApiKey` object which includes the `key` value for you to use.
+It'll return the `ApiKey` object which includes the `key` value for you to use.
 Otherwise if it throws, it will throw an `APIError`.
 
 ---
@@ -148,14 +156,27 @@ Otherwise if it throws, it will throw an `APIError`.
 const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
+    userId: "userId",
   },
-  headers: user_headers, // the headers of the user who owns the API key
+});
+
+//with permissions check
+const { valid, error, key } = await auth.api.verifyApiKey({
+  body: {
+    key: "your_api_key_here",
+    userId: "userId",
+    permissions: {
+      projects: ["read", "read-write"]
+    }
+  },
 });
 ```
 
 #### Properties
 
 - `key`: The API Key to validate
+- `userId`: The user id to check against the API key.
+- `permissions`?: The permissions to check against the API key.
 
 #### Result
 
@@ -177,18 +198,19 @@ type Result = {
 const key = await auth.api.getApiKey({
   body: {
     keyId: "your_api_key_id_here",
+    userId: "userId",
   },
-  headers: user_headers,
 });
 ```
 
 #### Properties
 
 - `keyId`: The API Key id to get information on.
+- `userId`: The user id to check against the API key.
 
 #### Result
 
-You'll recieve everything about the API key details, except for the `key` value itself.
+You'll receive everything about the API key details, except for the `key` value itself.
 If it fails, it will throw an `APIError`.
 
 ```ts
@@ -201,30 +223,45 @@ type Result = Omit<ApiKey, "key">;
 
 <Endpoint method="POST" path="/api-key/update" isServerOnly />
 
-```ts
-const updatedApiKey = await auth.api.updateApiKey({
-  body: {
-    keyId: "your_api_key_id_here", // Required. Everything else is optional.
-    userId: user.id,
-    name: "New API Key Name",
-    enabled: false,
-    remaining: 100,
-    refillAmount: null,
-    refillInterval: null,
-    metadata: null,
-    expiresIn: 60 * 60 * 24 * 7,
-    rateLimitEnabled: false,
-    rateLimitTimeWindow: 1000 * 60 * 60 * 24,
-    rateLimitMax: 100,
-  },
-  headers: user_headers, // if `userId` was provided, than this can be not defined
-});
-```
+<Tabs items={['Client', 'Server']}>
+    <Tab value="Client">
+      ```ts
+      const { data: apiKey, error } = await authClient.apiKey.update({
+        keyId: "your_api_key_id_here",
+        name: "New API Key Name",
+        enabled: false,
+      });
+      ```
+    </Tab>
+    <Tab value="Server">
+    You can update an API key on the server by passing the `keyId` and any other properties you want to update.
+      ```ts
+      const apiKey = await auth.api.updateApiKey({
+        body: {
+          keyId: "your_api_key_id_here",
+          name: "New API Key Name",
+          userId: "userId",
+          enabled: false,
+          remaining: 100,
+          refillAmount: null,
+          refillInterval: null,
+          metadata: null,
+          expiresIn: 60 * 60 * 24 * 7,
+          rateLimitEnabled: false,
+          rateLimitTimeWindow: 1000 * 60 * 60 * 24,
+          rateLimitMax: 100,
+        },
+      });
+      ```
+    </Tab>
+</Tabs>
 
 #### Properties
-
+  <DividerText>Client</DividerText>
 - `keyId`: The API key Id to update on.
-  <DividerText>Optional values to update</DividerText>
+- `name`?: Update the key name.
+
+  <DividerText>Server Only</DividerText>
 - `userId`?: Update the user id who owns this key.
 - `name`?: Update the key name.
 - `enabled`?: Update whether the API key is enabled or not.
@@ -240,7 +277,7 @@ const updatedApiKey = await auth.api.updateApiKey({
 #### Result
 
 If fails, throws `APIError`.
-Otherwise, you'll recieve the API Key details, except for the `key` value itself.
+Otherwise, you'll receive the API Key details, except for the `key` value itself.
 
 ---
 
@@ -260,8 +297,8 @@ Otherwise, you'll recieve the API Key details, except for the `key` value itself
       const apiKey = await auth.api.deleteApiKey({
         body: {
           keyId: "your_api_key_id_here",
+          userId: "userId", 
         },
-        headers: user_headers,
       });
       ```
     </Tab>
@@ -274,7 +311,7 @@ Otherwise, you'll recieve the API Key details, except for the `key` value itself
 #### Result
 
 If fails, throws `APIError`.
-Otherwise, you'll recieve:
+Otherwise, you'll receive:
 
 ```ts
 type Result = {
@@ -306,7 +343,7 @@ type Result = {
 #### Result
 
 If fails, throws `APIError`.
-Otherwise, you'll recieve:
+Otherwise, you'll receive:
 
 ```ts
 type Result = ApiKey[]
@@ -324,7 +361,7 @@ await auth.api.deleteAllExpiredApiKeys();
 
 <Callout>
   We automatically delete expired API keys every time any apiKey plugin
-  endpoints were called, however they are rate-limited to a 10 second cooldown
+  endpoints were called, however they are rate-limited to a 10 second cool down
   each call to prevent multiple calls to the database.
 </Callout>
 
@@ -757,3 +794,120 @@ Table: `apiKey`
     },
   ]}
 />
+
+## Permissions
+
+API keys can have permissions associated with them, allowing you to control access at a granular level. Permissions are structured as a record of resource types to arrays of allowed actions.
+
+### Setting Default Permissions
+
+You can configure default permissions that will be applied to all newly created API keys:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: {
+          files: ["read"],
+          users: ["read"]
+        }
+      }
+    })
+  ]
+})
+```
+
+You can also provide a function that returns permissions dynamically:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: async (userId, ctx) => {
+          // Fetch user role or other data to determine permissions
+          return {
+            files: ["read"],
+            users: ["read"]
+          };
+        }
+      }
+    })
+  ]
+})
+```
+
+### Creating API Keys with Permissions
+
+When creating an API key, you can specify custom permissions:
+
+```ts
+const apiKey = await auth.api.createApiKey({
+  body: {
+    name: "My API Key",
+    permissions: {
+      files: ["read", "write"],
+      users: ["read"]
+    },
+    userId: "userId"
+  },
+});
+```
+
+### Verifying API Keys with Required Permissions
+
+When verifying an API key, you can check if it has the required permissions:
+
+```ts
+const result = await auth.api.verifyApiKey({
+  body: {
+    key: "your_api_key_here",
+    permissions: {
+      files: ["read"]
+    }
+  }
+});
+
+if (result.valid) {
+  // API key is valid and has the required permissions
+} else {
+  // API key is invalid or doesn't have the required permissions
+}
+```
+
+### Updating API Key Permissions
+
+You can update the permissions of an existing API key:
+
+```ts
+const apiKey = await auth.api.updateApiKey({
+  body: {
+    keyId: existingApiKeyId,
+    permissions: {
+      files: ["read", "write", "delete"],
+      users: ["read", "write"]
+    }
+  },
+  headers: user_headers,
+});
+```
+
+### Permissions Structure
+
+Permissions follow a resource-based structure:
+
+```ts
+type Permissions = {
+  [resourceType: string]: string[];
+};
+
+// Example:
+const permissions = {
+  files: ["read", "write", "delete"],
+  users: ["read"],
+  projects: ["read", "write"]
+};
+```
+
+When verifying an API key, all required permissions must be present in the API key's permissions for validation to succeed.
