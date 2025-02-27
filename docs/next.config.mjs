@@ -21,10 +21,10 @@ export default withMDX({
 		];
 	},
 	serverExternalPackages: [
-		'ts-morph',
-		'typescript',
-		'oxc-transform',
-		'@shikijs/twoslash',
+		"ts-morph",
+		"typescript",
+		"oxc-transform",
+		"@shikijs/twoslash",
 	],
 	images: {
 		remotePatterns: [
