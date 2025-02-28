@@ -169,6 +169,12 @@ export type BetterAuthOptions = {
 		 */
 		enabled: boolean;
 		/**
+		 * Disable email and password sign up
+		 *
+		 * @default false
+		 */
+		disableSignUp?: boolean;
+		/**
 		 * Require email verification before a session
 		 * can be created for the user.
 		 *
