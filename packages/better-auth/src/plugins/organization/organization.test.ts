@@ -3,7 +3,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
-import { createAccessControl } from "./access";
+import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { BetterAuthError } from "../../error";
 
@@ -267,7 +267,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers } = await signInWithTestUser();
+		const { headers, user } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -287,6 +287,27 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member.data?.role).toBe("admin");
+	});
+
+	it("should allow setting multiple roles", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const c = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["member", "admin"],
+			memberId: org.data?.members[1].id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(c.data?.role).toBe("member,admin");
 	});
 
 	const adminUser = {
@@ -343,19 +364,7 @@ describe("organization", async (it) => {
 		});
 	});
 
-	it("shouldn't allow removing owner from organization", async () => {
-		const { headers } = await signInWithTestUser();
-		const res = await client.organization.removeMember({
-			organizationId: organizationId,
-			memberIdOrEmail: "test2@test.com",
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(res.error?.status).toBe(400);
-	});
-
-	it("shouldn't allow updating owner role", async () => {
+	it("shouldn't allow updating owner role if you're not owner", async () => {
 		const { headers } = await signInWithTestUser();
 		const { members } = await client.organization.getFullOrganization({
 			query: {
@@ -366,15 +375,19 @@ describe("organization", async (it) => {
 				throw: true,
 			},
 		});
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
 		const res = await client.organization.updateMemberRole({
 			organizationId: organizationId,
 			role: "admin",
 			memberId: members.find((m) => m.role === "owner")?.id!,
 			fetchOptions: {
-				headers,
+				headers: adminHeaders,
 			},
 		});
-		expect(res.error?.status).toBe(400);
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow removing member from organization", async () => {
@@ -396,7 +409,6 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,

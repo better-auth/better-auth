@@ -287,6 +287,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -382,7 +388,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -549,6 +557,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userId: link.userId,
 							providerId: provider.providerId,
 							accountId: userInfo.id,
+							accessToken: tokens.accessToken,
+							refreshToken: tokens.refreshToken,
+							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+							scope: tokens.scopes?.join(","),
 						});
 						if (!newAccount) {
 							return redirectOnError("unable_to_link_account");

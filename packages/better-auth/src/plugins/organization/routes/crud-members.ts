@@ -9,6 +9,7 @@ import type { OrganizationOptions } from "../organization";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { BASE_ERROR_CODES } from "../../../error/codes";
+import { hasPermission } from "../has-permission";
 
 export const addMember = <O extends OrganizationOptions>() =>
 	createAuthEndpoint(
@@ -181,23 +182,37 @@ export const removeMember = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 			});
 		}
-		const isLeaving =
-			session.user.email === ctx.body.memberIdOrEmail ||
-			member.id === ctx.body.memberIdOrEmail;
-		const isOwner =
-			toBeRemovedMember.role ===
-			(ctx.context.orgOptions?.creatorRole || "owner");
+		const roles = toBeRemovedMember.role.split(",");
+		const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+		const isOwner = roles.includes(creatorRole);
 		if (isOwner) {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+			if (member.role !== creatorRole) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+				});
+			}
+			const members = await adapter.listMembers({
+				organizationId: organizationId,
 			});
+			const owners = members.filter((member) => {
+				const roles = member.role.split(",");
+				return roles.includes(creatorRole);
+			});
+			if (owners.length <= 1) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+				});
+			}
 		}
-		const canDeleteMember =
-			isLeaving ||
-			role.authorize({
+		const canDeleteMember = hasPermission({
+			role: member.role,
+			options: ctx.context.orgOptions,
+			permission: {
 				member: ["delete"],
-			}).success;
+			},
+		});
 		if (!canDeleteMember) {
 			throw new APIError("UNAUTHORIZED", {
 				message:
@@ -229,7 +244,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.string() as unknown as InferRolesFromOption<O>,
+				role: z
+					.string()
+					.or(z.array(z.string())) as unknown as InferRolesFromOption<O>,
 				memberId: z.string(),
 				/**
 				 * If not provided, the active organization will be used
@@ -281,24 +298,24 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			const roleToSet: string[] = Array.isArray(ctx.body.role)
+				? (ctx.body.role as string[])
+				: ctx.body.role
+					? [ctx.body.role as string]
+					: [];
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
 			if (!member) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
 			const toBeUpdatedMember =
@@ -306,60 +323,55 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					? await adapter.findMemberById(ctx.body.memberId)
 					: member;
 			if (!toBeUpdatedMember) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
 			const role = ctx.context.roles[member.role];
 			if (!role) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			if (
-				toBeUpdatedMember.role === creatorRole ||
-				(ctx.body.role === creatorRole && member.role !== creatorRole)
+				(toBeUpdatedMember.role === creatorRole &&
+					member.role !== creatorRole) ||
+				(roleToSet.includes(creatorRole) && member.role !== creatorRole)
 			) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: "You are not allowed to update this member",
-					},
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
 			}
 			/**
 			 * If the member is not an owner, they cannot update the role of another member
 			 * as an owner.
 			 */
-			const hasPermission = role.authorize({
-				member: ["update"],
-			});
-			if (hasPermission.error) {
-				return ctx.json(null, {
-					body: {
-						message: "You are not allowed to update this member",
-					},
-					status: 403,
+			const canUpdateMember =
+				role.authorize({
+					member: ["update"],
+				}).success ||
+				(ctx.body.role === "owner" && member.role === "owner");
+			if (!canUpdateMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				});
+			}
+			if (!ctx.body.role) {
+				throw new APIError("BAD_REQUEST");
 			}
 
 			const updatedMember = await adapter.updateMember(
 				ctx.body.memberId,
-				ctx.body.role as string,
+				Array.isArray(ctx.body.role)
+					? ctx.body.role?.join(",")
+					: (ctx.body.role as string),
 			);
 			if (!updatedMember) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
 			return ctx.json(updatedMember);

@@ -1,16 +1,23 @@
-# Security Policy
+## Security Policy
 
-## CSRF Protection
+### Reporting a Vulnerability
 
-Better Auth protects against CSRF by enforcing strict origin checks and setting cookies with the `SameSite` attribute. As a best practice, any GET request should be designed to avoid modifying resources. If a GET request does alter data, such as in an OAuth callback, additional safeguards (e.g., state parameter verification) must be implemented. Any request containing cookies but missing an `Origin` or `Referer` header is rejected. Requests with these headers that don’t match `trustedOrigins` are also discarded.
+If you believe you've found a security vulnerability, please follow these steps:
 
+1. Do not disclose the vulnerability publicly until it has been addressed by our team.
+2. Email your findings to `security@better-auth.com` Include:
+    - A description of the vulnerability
+    - Steps to reproduce the vulnerability
+    - Potential impact of the vulnerability
+    - Any suggestions for mitigation
+    - Any other relevant information
+3. We will respond to your report within 72 hours.
+4. If the issue is confirmed, we will release a patch as soon as possible.
 
-## Open Redirect Protection
+### Disclosure Policy
 
-Any endpoint added to a Better Auth instance, whether from a plugin or the core, should only use `callbackURL`, `currentURL`, or `redirectTo` for redirecting users post-action. These values are validated against `trustedOrigins` for security. Additionally, no endpoint handling GET requests should modify resources unless it has its own protection mechanisms in place.
+If the issue is confirmed, we will release a patch as soon as possible. Once a patch is released, we will disclose the issue publicly. If 90 days has elapsed and we still don't have a fix, we will disclose the issue publicly.
 
-## Reporting a Vulnerability
+## Supported Versions
 
-If you discover a security vulnerability within Better Auth, please send an e-mail to security@better-auth.com.
-
-All reports will be promptly addressed, and you'll be credited accordingly.
+We only support the latest version of Better Auth. Older versions are not supported.
