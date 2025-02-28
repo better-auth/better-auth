@@ -86,6 +86,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
+		allowPlainCodeChallengeMethod: true,
 		...options,
 		scopes: [
 			"openid",
