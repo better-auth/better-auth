@@ -6,8 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "fumadocs-mdx"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
