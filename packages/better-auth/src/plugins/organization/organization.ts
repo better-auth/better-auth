@@ -83,7 +83,7 @@ export interface OrganizationOptions {
 	/**
 	 * The number of memberships a user can have in an organization.
 	 *
-	 * @default "unlimited"
+	 * @default 100
 	 */
 	membershipLimit?: number;
 	/**

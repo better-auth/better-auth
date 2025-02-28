@@ -43,4 +43,6 @@ export const ORGANIZATION_ERROR_CODES = {
 	UNABLE_TO_REMOVE_LAST_TEAM: "Unable to remove last team",
 	YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER:
 		"You are not allowed to update this member",
+	ORGANIZATION_MEMBERSHIP_LIMIT_REACHED:
+		"Organization membership limit reached",
 } as const;
