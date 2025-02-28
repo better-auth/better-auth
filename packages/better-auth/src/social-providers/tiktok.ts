@@ -129,7 +129,7 @@ export const tiktok = (options: TiktokOptions) => {
 			return new URL(
 				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
 					",",
-				)}&response_type=code&client_key=${options.clientId}&client_secret=${
+				)}&response_type=code&client_key=${options.clientKey}&client_secret=${
 					options.clientSecret
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
