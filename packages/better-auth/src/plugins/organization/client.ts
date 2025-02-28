@@ -1,8 +1,11 @@
 import { atom } from "nanostores";
 import type {
+	InferInvitation,
+	InferMember,
 	Invitation,
 	Member,
 	Organization,
+	Team,
 } from "../../plugins/organization/schema";
 import type { Prettify } from "../../types/helper";
 import { type AccessControl, type Role } from "../access";
@@ -20,9 +23,12 @@ import {
 } from "./access";
 
 interface OrganizationClientOptions {
-	ac: AccessControl;
-	roles: {
+	ac?: AccessControl;
+	roles?: {
 		[key in string]: Role;
+	};
+	teams?: {
+		enabled: boolean;
 	};
 }
 
@@ -34,7 +40,7 @@ export const organizationClient = Object.assign(
 
 		type DefaultStatements = typeof defaultStatements;
 		type Statements = O["ac"] extends AccessControl<infer S>
-			? S
+			? S & DefaultStatements
 			: DefaultStatements;
 		const roles = {
 			admin: adminAc,
@@ -42,6 +48,17 @@ export const organizationClient = Object.assign(
 			owner: ownerAc,
 			...options?.roles,
 		};
+
+		type OrganizationReturn = O["teams"] extends { enabled: true }
+			? {
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: Team[];
+				} & Organization
+			: {
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & Organization;
 		return {
 			id: "organization",
 			$InferServerPlugin: {} as ReturnType<
@@ -56,28 +73,18 @@ export const organizationClient = Object.assign(
 								member: Role;
 								owner: Role;
 							};
+					teams: {
+						enabled: O["teams"] extends { enabled: true } ? true : false;
+					};
 				}>
 			>,
 			getActions: ($fetch) => ({
 				$Infer: {
-					ActiveOrganization: {} as Prettify<
-						Organization & {
-							members: Prettify<
-								Member & {
-									user: {
-										id: string;
-										name: string;
-										email: string;
-										image?: string | null;
-									};
-								}
-							>[];
-							invitations: Invitation[];
-						}
-					>,
+					ActiveOrganization: {} as Prettify<OrganizationReturn>,
 					Organization: {} as Organization,
-					Invitation: {} as Invitation,
-					Member: {} as Member,
+					Invitation: {} as InferInvitation<O>,
+					Member: {} as InferInvitation<O>,
+					Team: {} as Team,
 				},
 				organization: {
 					checkRolePermission: <
