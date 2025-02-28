@@ -5,28 +5,51 @@ import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "@/lib/auth-client";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { Key, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
+
+const signInSchema = z.object({
+	email: z.string().email("Invalid email address"),
+	password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [rememberMe, setRememberMe] = useState(false);
+	const [errors, setErrors] = useState({ email: "", password: "" });
+	const [isValid, setIsValid] = useState(false);
+	const [touched, setTouched] = useState({ email: false, password: false });
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
+
+	useEffect(() => {
+		const validationResult = signInSchema.safeParse({ email, password });
+		if (!validationResult.success) {
+			const newErrors: any = {};
+			validationResult.error.errors.forEach((err) => {
+				newErrors[err.path[0]] = err.message;
+			});
+			setErrors(newErrors);
+			setIsValid(false);
+		} else {
+			setErrors({ email: "", password: "" });
+			setIsValid(true);
+		}
+	}, [email, password]);
+
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
 			<CardHeader>
@@ -46,9 +69,13 @@ export default function SignIn() {
 							required
 							onChange={(e) => {
 								setEmail(e.target.value);
+								setTouched((prev) => ({ ...prev, email: true }));
 							}}
 							value={email}
 						/>
+						{touched.email && errors.email && (
+							<p className="text-red-500 text-sm">{errors.email}</p>
+						)}
 					</div>
 					<div className="grid gap-2">
 						<div className="flex items-center">
@@ -63,24 +90,21 @@ export default function SignIn() {
 						<PasswordInput
 							id="password"
 							value={password}
-							onChange={(e) => setPassword(e.target.value)}
+							onChange={(e) => {
+								setPassword(e.target.value);
+								setTouched((prev) => ({ ...prev, password: true }));
+							}}
 							autoComplete="password"
 							placeholder="Password"
 						/>
+						{touched.password && errors.password && (
+							<p className="text-red-500 text-sm">{errors.password}</p>
+						)}
 					</div>
-					<div className="flex items-center gap-2">
-						<Checkbox
-							onClick={() => {
-								setRememberMe(!rememberMe);
-							}}
-						/>
-						<Label>Remember me</Label>
-					</div>
-
 					<Button
 						type="submit"
 						className="w-full"
-						disabled={loading}
+						disabled={!isValid || loading}
 						onClick={async () => {
 							await signIn.email(
 								{
@@ -90,21 +114,16 @@ export default function SignIn() {
 									rememberMe,
 								},
 								{
-									onRequest: () => {
-										setLoading(true);
-									},
-									onResponse: () => {
-										setLoading(false);
-									},
-									onError: (ctx) => {
-										toast.error(ctx.error.message);
-									},
+									onRequest: () => setLoading(true),
+									onResponse: () => setLoading(false),
+									onError: (ctx) => toast.error(ctx.error.message),
 								},
 							);
 						}}
 					>
 						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
 					</Button>
+
 					<div className="grid grid-cols-4 gap-2">
 						<Button
 							variant="outline"
@@ -262,34 +281,8 @@ export default function SignIn() {
 							</svg>
 						</Button>
 					</div>
-					<Button
-						variant="outline"
-						className="gap-2"
-						onClick={async () => {
-							await signIn.passkey({
-								fetchOptions: {
-									onSuccess(context) {
-										router.push("/dashboard");
-									},
-									onError(context) {
-										toast.error(context.error.message);
-									},
-								},
-							});
-						}}
-					>
-						<Key size={16} />
-						Sign-in with Passkey
-					</Button>
 				</div>
 			</CardContent>
-			<CardFooter>
-				<div className="flex justify-center w-full border-t py-4">
-					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
-					</p>
-				</div>
-			</CardFooter>
 		</Card>
 	);
 }

@@ -40,6 +40,9 @@ export default withMDX({
 			{
 				hostname: "github.com",
 			},
+			{
+				hostname: "hebbkx1anhila5yf.public.blob.vercel-storage.com",
+			},
 		],
 	},
 	devIndicators: {
