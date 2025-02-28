@@ -248,7 +248,7 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
 	});
 
-	it.only("should not create user when sign ups are disabled", async () => {
+	it("should not create user when sign ups are disabled", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				email: "oauth2-signup-disabled@test.com",
@@ -303,7 +303,7 @@ describe("oauth2", async () => {
 		);
 	});
 
-	it.only("should create user when sign ups are disabled and sign up is requested", async () => {
+	it("should create user when sign ups are disabled and sign up is requested", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				email: "oauth2-signup-disabled-and-requested@test.com",
