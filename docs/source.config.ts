@@ -3,38 +3,38 @@ import { defineConfig } from "fumadocs-mdx/config";
 import { remarkInstall } from "fumadocs-docgen";
 import { z } from "zod";
 export default defineConfig({
-  mdxOptions: {
-    remarkPlugins: [
-      [
-        remarkInstall,
-        {
-          persist: {
-            id: "persist-install",
-          },
-        },
-      ],
-    ],
-  },
+	mdxOptions: {
+		remarkPlugins: [
+			[
+				remarkInstall,
+				{
+					persist: {
+						id: "persist-install",
+					},
+				},
+			],
+		],
+	},
 });
 
 export const changelog = defineCollections({
-  type: "doc",
-  dir: "./content/changelog",
-  schema: z.object({
-    title: z.string(),
-  }),
+	type: "doc",
+	dir: "./content/changelog",
+	schema: z.object({
+		title: z.string(),
+	}),
 });
 
 export const versions = defineCollections({
-  type: "doc",
-  dir: "./content/v",
-  schema: z.object({
-    title: z.string(),
-    description: z.string(),
-    date: z.date(),
-  }),
+	type: "doc",
+	dir: "./content/v",
+	schema: z.object({
+		title: z.string(),
+		description: z.string(),
+		date: z.date(),
+	}),
 });
 
 export const { docs, meta } = defineDocs({
-  dir: "./content/docs",
+	dir: "./content/docs",
 });
