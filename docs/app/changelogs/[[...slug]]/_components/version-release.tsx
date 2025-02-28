@@ -57,7 +57,7 @@ export default function VersionRelease({
 				</div>
 			</div>
 
-			<div className="flex">
+			{/* <div className="flex">
 				<div className="flex-1 overflow-auto">
 					<div className="max-w-4xl sticky top-0 space-y-2 mx-auto px-4">
 						<div className="size-full absolute top-0 left-0 bg-[length:65px_65px] opacity-5 bg-[url(/plus.svg)] bg-repeat w-full h-full" />
@@ -69,7 +69,7 @@ export default function VersionRelease({
 						</p>
 					</div>
 				</div>
-			</div>
+			</div> */}
 
 			{/* Main Content */}
 			<div className="bg-black max-w-6xl mx-auto text-white/90 flex-grow">

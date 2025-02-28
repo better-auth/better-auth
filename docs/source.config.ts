@@ -17,17 +17,9 @@ export default defineConfig({
 	},
 });
 
-export const changelog = defineCollections({
+export const changelogs = defineCollections({
 	type: "doc",
-	dir: "./content/changelog",
-	schema: z.object({
-		title: z.string(),
-	}),
-});
-
-export const versions = defineCollections({
-	type: "doc",
-	dir: "./content/v",
+	dir: "./content/changelogs",
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
