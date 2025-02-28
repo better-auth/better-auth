@@ -6,7 +6,8 @@
   "module": "dist/index.mjs",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild",
+    "build": "unbuild --clean",
+    "dev": "unbuild --watch",
     "stub": "unbuild --stub"
   },
   "exports": {

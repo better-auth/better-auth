@@ -9,7 +9,10 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "unbuild",
+    "build": "unbuild --clean && pnpm build:types",
+    "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
+    "dev:types": "tsc --project tsconfig.declarations.json --watch",
+    "build:types": "tsc --project tsconfig.declarations.json",
     "stub": "unbuild --stub",
     "test": "pnpm prisma:push && vitest",
     "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",

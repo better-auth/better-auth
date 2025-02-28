@@ -9,6 +9,7 @@ export default defineBuildConfig({
 		},
 	},
 	outDir: "dist",
+	clean: false,
 	externals: [
 		"better-auth",
 		"better-call",

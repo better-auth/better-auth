@@ -1,7 +1,6 @@
 import { defineBuildConfig } from "unbuild";
 
 export default defineBuildConfig({
-	declaration: true,
 	rollup: {
 		emitCJS: true,
 		esbuild: {
@@ -9,6 +8,8 @@ export default defineBuildConfig({
 		},
 	},
 	outDir: "dist",
+	clean: false,
+	failOnWarn: false,
 	externals: [
 		"prisma",
 		"@prisma/client",
