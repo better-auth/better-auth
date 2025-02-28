@@ -29,6 +29,7 @@ export async function validateAuthorizationCode({
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
+	options.clientKey && body.set("client_key", options.clientKey);
 	deviceId && body.set("device_id", deviceId);
 	body.set("redirect_uri", options.redirectURI || redirectURI);
 	if (authentication === "basic") {
