@@ -212,7 +212,7 @@ importers:
         version: 11.13.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -545,7 +545,7 @@ importers:
         version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1599,6 +1599,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.26.0
         version: 7.26.0(@babel/core@7.26.0)
+      '@clack/prompts':
+        specifier: ^0.10.0
+        version: 0.10.0
       '@mrleebo/prisma-ast':
         specifier: ^0.12.0
         version: 0.12.0
@@ -1638,12 +1641,18 @@ importers:
       get-tsconfig:
         specifier: ^4.8.1
         version: 4.8.1
+      prettier:
+        specifier: ^3.4.2
+        version: 3.4.2
       prisma:
         specifier: ^5.22.0
         version: 5.22.0
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
+      semver:
+        specifier: ^7.7.1
+        version: 7.7.1
       tinyexec:
         specifier: ^0.3.1
         version: 0.3.1
@@ -1654,6 +1663,9 @@ importers:
         specifier: ^3.23.8
         version: 3.24.1
     devDependencies:
+      '@types/diff':
+        specifier: ^7.0.1
+        version: 7.0.1
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -2809,6 +2821,12 @@ packages:
 
   '@chevrotain/utils@10.5.0':
     resolution: {integrity: sha512-hBzuU5+JjB2cqNZyszkDHZgOSrUUT8V3dhgRl8Q9Gp6dAj/H5+KILGjbhDpc3Iy9qmqlm/akuOI2ut9VUtzJxQ==}
+
+  '@clack/core@0.4.1':
+    resolution: {integrity: sha512-Pxhij4UXg8KSr7rPek6Zowm+5M22rbd2g1nfojHJkxp5YkFqiZ2+YLEM/XGVIzvGOcM0nqjIFxrpDwWRZYWYjA==}
+
+  '@clack/prompts@0.10.0':
+    resolution: {integrity: sha512-H3rCl6CwW1NdQt9rE3n373t7o5cthPv7yUoxF2ytZvyvlJv89C5RYMJu83Hed8ODgys5vpBU0GKxIRG83jd8NQ==}
 
   '@cloudflare/kv-asset-handler@0.3.4':
     resolution: {integrity: sha512-YLPHc8yASwjNkmcDMQMY35yiWjoKAKnhUbPRszBRS0YgH+IXtsMp61j+yTcnCE3oO2DgP0U3iejLC8FTtKDC8Q==}
@@ -9065,6 +9083,9 @@ packages:
 
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
+
+  '@types/diff@7.0.1':
+    resolution: {integrity: sha512-R/BHQFripuhW6XPXy05hIvXJQdQ4540KnTvEFHSLjXfHYM41liOLKgIJEyYYiQe796xpaMHfe4Uj/p7Uvng2vA==}
 
   '@types/estree-jsx@1.0.5':
     resolution: {integrity: sha512-52CcUVNFyfb1A2ALocQw/Dd1BQFNmSdkuC3BkZ6iqhdMfQz7JWOFRuJFloOzjk+6WijU56m9oKXFAXc7o3Towg==}
@@ -22055,6 +22076,17 @@ snapshots:
 
   '@chevrotain/utils@10.5.0': {}
 
+  '@clack/core@0.4.1':
+    dependencies:
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
+
+  '@clack/prompts@0.10.0':
+    dependencies:
+      '@clack/core': 0.4.1
+      picocolors: 1.1.1
+      sisteransi: 1.0.5
+
   '@cloudflare/kv-asset-handler@0.3.4':
     dependencies:
       mime: 3.0.0
@@ -23074,7 +23106,7 @@ snapshots:
       connect: 3.7.0
       debug: 4.4.0(supports-color@9.4.0)
       env-editor: 0.4.2
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       form-data: 3.0.2
       freeport-async: 2.0.0
       fs-extra: 8.1.0
@@ -24038,7 +24070,7 @@ snapshots:
       estree-util-is-identifier-name: 3.0.0
       estree-util-scope: 1.0.0
       estree-walker: 3.0.3
-      hast-util-to-jsx-runtime: 2.3.2
+      hast-util-to-jsx-runtime: 2.3.5
       markdown-extensions: 2.0.0
       recma-build-jsx: 1.0.0
       recma-jsx: 1.0.0(acorn@8.14.0)
@@ -27269,7 +27301,7 @@ snapshots:
       '@react-native-community/cli-tools': 13.6.9(encoding@0.1.13)
       chalk: 4.1.2
       execa: 5.1.1
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
     transitivePeerDependencies:
       - encoding
 
@@ -27279,7 +27311,7 @@ snapshots:
       chalk: 4.1.2
       cosmiconfig: 5.2.1
       deepmerge: 4.3.1
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       joi: 17.13.3
     transitivePeerDependencies:
       - encoding
@@ -27337,7 +27369,7 @@ snapshots:
       '@react-native-community/cli-tools': 13.6.9(encoding@0.1.13)
       chalk: 4.1.2
       execa: 5.1.1
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       fast-xml-parser: 4.5.0
       ora: 5.4.1
     transitivePeerDependencies:
@@ -28903,7 +28935,7 @@ snapshots:
       '@tanstack/virtual-file-routes': 1.81.9
       prettier: 3.4.2
       tsx: 4.19.2
-      zod: 3.24.1
+      zod: 3.24.2
 
   '@tanstack/router-plugin@1.86.0(vite@6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -28924,7 +28956,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.6
       chokidar: 3.6.0
       unplugin: 1.16.0
-      zod: 3.24.1
+      zod: 3.24.2
     optionalDependencies:
       vite: 6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
     transitivePeerDependencies:
@@ -29398,6 +29430,8 @@ snapshots:
   '@types/debug@4.1.12':
     dependencies:
       '@types/ms': 0.7.34
+
+  '@types/diff@7.0.1': {}
 
   '@types/estree-jsx@1.0.5':
     dependencies:
@@ -34317,7 +34351,7 @@ snapshots:
       '@expo/spawn-async': 1.7.2
       chalk: 4.1.2
       commander: 7.2.0
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       find-up: 5.0.0
       fs-extra: 9.1.0
       require-from-string: 2.0.2
@@ -35127,7 +35161,7 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  geist@1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
       next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
@@ -35327,7 +35361,7 @@ snapshots:
     dependencies:
       array-union: 2.1.0
       dir-glob: 3.0.1
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       ignore: 5.3.2
       merge2: 1.4.1
       slash: 3.0.0
@@ -35335,7 +35369,7 @@ snapshots:
   globby@14.0.2:
     dependencies:
       '@sindresorhus/merge-streams': 2.3.0
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       ignore: 5.3.2
       path-type: 5.0.0
       slash: 5.1.0
@@ -38917,7 +38951,7 @@ snapshots:
 
   node-abi@3.71.0:
     dependencies:
-      semver: 7.6.3
+      semver: 7.7.1
 
   node-abort-controller@3.1.1: {}
 
@@ -41385,7 +41419,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.6
       '@types/hast': 3.0.4
-      hast-util-to-estree: 3.1.0
+      hast-util-to-estree: 3.1.2
     transitivePeerDependencies:
       - supports-color
 
@@ -41805,7 +41839,7 @@ snapshots:
 
   sass@1.83.1:
     dependencies:
-      chokidar: 4.0.1
+      chokidar: 4.0.3
       immutable: 5.0.3
       source-map-js: 1.2.1
     optionalDependencies:
@@ -43499,7 +43533,7 @@ snapshots:
       '@vue-macros/common': 1.15.0(rollup@4.31.0)(vue@3.5.13(typescript@5.7.2))
       ast-walker-scope: 0.6.2
       chokidar: 3.6.0
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       json5: 2.2.3
       local-pkg: 0.5.1
       magic-string: 0.30.14
@@ -43899,7 +43933,7 @@ snapshots:
       defu: 6.1.4
       es-module-lexer: 1.5.4
       esbuild: 0.20.2
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       get-port-please: 3.1.2
       h3: 1.13.0
       hookable: 5.5.3
@@ -43918,7 +43952,7 @@ snapshots:
       unenv: 1.10.0
       unstorage: 1.13.1(@azure/identity@4.6.0)(ioredis@5.4.1)
       vite: 6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
-      zod: 3.24.1
+      zod: 3.24.2
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -44002,7 +44036,7 @@ snapshots:
       chalk: 4.1.2
       chokidar: 3.6.0
       commander: 8.3.0
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       fs-extra: 11.3.0
       npm-run-path: 4.0.1
       strip-ansi: 6.0.1

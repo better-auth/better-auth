@@ -21,11 +21,9 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				email: z.string({
 					description: "The email address of the user to invite",
 				}),
-				role: z
-					.string({
-						description: "The role to assign to the user",
-					})
-					.or(z.array(z.string())) as unknown as InferRolesFromOption<O>,
+				role: z.string({
+					description: "The role to assign to the user",
+				}),
 				organizationId: z
 					.string({
 						description: "The organization ID to invite the user to",
@@ -37,8 +35,44 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 							"Resend the invitation email, if the user is already invited",
 					})
 					.optional(),
+				teamId: z
+					.string({
+						description: "The team ID to invite the user to",
+					})
+					.optional(),
 			}),
 			metadata: {
+				$Infer: {
+					body: {} as {
+						/**
+						 * The email address of the user
+						 * to invite
+						 */
+						email: string;
+						/**
+						 * The role to assign to the user
+						 */
+						role: InferRolesFromOption<O>;
+						/**
+						 * The organization ID to invite
+						 * the user to
+						 */
+						organizationId?: string;
+						/**
+						 * Resend the invitation email, if
+						 * the user is already invited
+						 */
+						resend?: boolean;
+					} & (O extends { teams: { enabled: true } }
+						? {
+								/**
+								 * The team the user is
+								 * being invited to.
+								 */
+								teamId?: string;
+							}
+						: {}),
+				},
 				openapi: {
 					description: "Invite a user to an organization",
 					responses: {
@@ -159,7 +193,6 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
 				});
 			}
-
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					role: Array.isArray(ctx.body.role)
@@ -167,6 +200,11 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						: (ctx.body.role as string),
 					email: ctx.body.email,
 					organizationId: organizationId,
+					...("teamId" in ctx.body
+						? {
+								teamId: ctx.body.teamId,
+							}
+						: {}),
 				},
 				user: session.user,
 			});
@@ -189,6 +227,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 						...member,
 						user: session.user,
 					},
+					invitation,
 				},
 				ctx.request,
 			);
@@ -265,11 +304,21 @@ export const acceptInvitation = createAuthEndpoint(
 			invitationId: ctx.body.invitationId,
 			status: "accepted",
 		});
+		if (!acceptedI) {
+			throw new APIError("BAD_REQUEST", {
+				message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+			});
+		}
 		const member = await adapter.createMember({
 			organizationId: invitation.organizationId,
 			userId: session.user.id,
 			role: invitation.role,
 			createdAt: new Date(),
+			...("teamId" in acceptedI
+				? {
+						teamId: acceptedI.teamId,
+					}
+				: {}),
 		});
 		await adapter.setActiveOrganization(
 			session.session.token,
