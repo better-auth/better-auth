@@ -1,6 +1,6 @@
 import { changelogs } from "@/app/source";
 import { notFound } from "next/navigation";
-import { absoluteUrl } from "@/lib/utils";
+import { absoluteUrl, formatDate } from "@/lib/utils";
 import DatabaseTable from "@/components/mdx/database-tables";
 import { cn } from "@/lib/utils";
 import { Step, Steps } from "fumadocs-ui/components/steps";
@@ -21,6 +21,7 @@ import { IconLink } from "../_components/changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "../_components/icons";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
+import { Calendar } from "lucide-react";
 
 export default async function Page({
 	params,
@@ -30,6 +31,7 @@ export default async function Page({
 	const { slug } = await params;
 	const page = changelogs.getPage(slug);
 	if (!slug) {
+		//@ts-ignore
 		return <ChangelogPage />;
 	}
 	if (!page) {
@@ -38,12 +40,6 @@ export default async function Page({
 	const MDX = page.data?.body;
 	const toc = page.data?.toc;
 	const { title, description, date } = page.data;
-	let tocContent = toc.map((t) => {
-		return {
-			id: t.url,
-			title: (t.title as { props: { children: string } }).props.children,
-		};
-	});
 	return (
 		<div className="grid md:grid-cols-2 items-start">
 			<div className="bg-gradient-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
@@ -52,11 +48,16 @@ export default async function Page({
 
 				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
 					<h1 className="mt-14 font-sans font-semibold tracking-tighter text-5xl">
-						{title}
+						{title}{" "}
 					</h1>
-					<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+
+					<p className="text-sm text-gray-600 dark:text-gray-300">
 						{description}
 					</p>
+					<div className="text-gray-600 dark:text-gray-300 flex items-center gap-x-1">
+						<Calendar className="w-4 h-4" />
+						<p>{formatDate(date)}</p>
+					</div>
 					<hr className="h-px bg-gray-300 mt-5" />
 					<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300 gap-x-1 gap-y-3 sm:gap-x-2">
 						<IconLink
