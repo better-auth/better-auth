@@ -127,11 +127,13 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [freshSessionMiddleware],
-					query: z.object({
-						authenticatorAttachment: z
-							.enum(["platform", "cross-platform"])
-							.optional(),
-					}),
+					query: z
+						.object({
+							authenticatorAttachment: z
+								.enum(["platform", "cross-platform"])
+								.optional(),
+						})
+						.optional(),
 					metadata: {
 						client: false,
 						openapi: {
@@ -280,7 +282,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							residentKey: "preferred",
 							userVerification: "preferred",
 							...(opts.authenticatorSelection || {}),
-							...(ctx.query.authenticatorAttachment
+							...(ctx.query?.authenticatorAttachment
 								? {
 										authenticatorAttachment: ctx.query.authenticatorAttachment,
 									}
