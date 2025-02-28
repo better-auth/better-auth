@@ -116,7 +116,9 @@ export default function SignIn() {
 								{
 									onRequest: () => setLoading(true),
 									onResponse: () => setLoading(false),
-									onError: (ctx) => toast.error(ctx.error.message),
+									onError: (ctx) => {
+										toast.error(ctx.error.message);
+									},
 								},
 							);
 						}}
