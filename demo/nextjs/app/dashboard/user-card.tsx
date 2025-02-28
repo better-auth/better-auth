@@ -60,8 +60,8 @@ export default function UserCard(props: {
 	activeSessions: Session["session"][];
 }) {
 	const router = useRouter();
-	const { data } = useSession();
-	const session = data || props.session;
+	const { data, isPending } = useSession();
+	const session = data;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
@@ -70,6 +70,7 @@ export default function UserCard(props: {
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
+
 	return (
 		<Card>
 			<CardHeader>

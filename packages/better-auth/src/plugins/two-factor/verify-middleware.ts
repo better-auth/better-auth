@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
+import type { GenericEndpointContext } from "../../types";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
@@ -54,7 +55,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 				});
 			}
 			return {
-				valid: async () => {
+				valid: async (ctx: GenericEndpointContext) => {
 					await setSessionCookie(ctx, {
 						session,
 						user,
@@ -114,7 +115,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 			};
 		}
 		return {
-			valid: async () => {
+			valid: async (ctx: GenericEndpointContext) => {
 				return ctx.json({
 					token: session.session.token,
 					user: {

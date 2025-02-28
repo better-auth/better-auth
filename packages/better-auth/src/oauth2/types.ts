@@ -25,6 +25,7 @@ export interface OAuthProvider<
 		code: string;
 		redirectURI: string;
 		codeVerifier?: string;
+		deviceId?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
 		user: {
@@ -54,6 +55,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * The scopes you want to request from the provider
 	 */
 	scope?: string[];
+	/**
+	 * Remove default scopes of the provider
+	 */
+	disableDefaultScope?: boolean;
 	/**
 	 * The redirect URL for your application. This is where the provider will
 	 * redirect the user after the sign in process. Make sure this URL is

@@ -24,6 +24,7 @@ import type {
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
+import { base64 } from "@better-auth/utils/base64";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -237,8 +238,8 @@ export const passkey = (options?: PasskeyOptions) => {
 							},
 						],
 					});
-					const userID = new Uint8Array(
-						Buffer.from(generateRandomString(32, "a-z", "0-9")),
+					const userID = new TextEncoder().encode(
+						generateRandomString(32, "a-z", "0-9"),
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
@@ -547,7 +548,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							credential,
 							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credential.publicKey).toString("base64");
+						const pubKey = base64.encode(credential.publicKey);
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
@@ -668,9 +669,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							credential: {
 								id: passkey.credentialID,
-								publicKey: new Uint8Array(
-									Buffer.from(passkey.publicKey, "base64"),
-								),
+								publicKey: base64.decode(passkey.publicKey),
 								counter: passkey.counter,
 								transports: passkey.transports?.split(
 									",",

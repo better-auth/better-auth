@@ -227,7 +227,6 @@ describe("Origin Check", async (it) => {
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
-				// @ts-expect-error - query is not defined in the type
 				query: {
 					currentURL: "http://localhost:5000",
 				},
