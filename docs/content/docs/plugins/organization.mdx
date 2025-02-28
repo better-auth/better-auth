@@ -505,7 +505,8 @@ To remove you can use `organization.removeMember`
 ```ts title="auth-client.ts"
 //remove member
 await authClient.organization.removeMember({
-    memberId: "member-id"
+    memberIdOrEmail: "member-id", // this can also be the email of the member
+    organizationId: "organization-id" // optional, by default it will use the active organization
 })
 ```
 
