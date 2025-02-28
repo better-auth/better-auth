@@ -866,6 +866,15 @@ export type BetterAuthOptions = {
 		 * @param ctx - Auth context
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+		/**
+		 * The url to redirect to on error
+		 *
+		 * When errorURL is provided, the error will be added to the url as a query parameter
+		 * and the user will be redirected to the errorURL.
+		 *
+		 * @default - "/api/auth/error"
+		 */
+		errorURL?: string;
 	};
 	/**
 	 * Hooks
