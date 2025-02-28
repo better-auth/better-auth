@@ -46,6 +46,6 @@ export default withMDX({
 		],
 	},
 	devIndicators: {
-		appIsrStatus: false
-	}
+		appIsrStatus: false,
+	},
 });

@@ -2,7 +2,6 @@ import {
 	BookOpenCheck,
 	CircleHelp,
 	FlaskConical,
-	GitFork,
 	HandHelping,
 	Gauge,
 	Key,
@@ -18,12 +17,10 @@ import {
 	Users2,
 	UserSquare2,
 	Database,
-	DatabaseZap,
 	KeyRound,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
-import Image from "next/image";
 
 interface Content {
 	title: string;
