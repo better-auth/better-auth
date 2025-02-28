@@ -3,6 +3,7 @@
 exports[`init > should match config 1`] = `
 {
   "adapter": {
+    "count": [Function],
     "create": [Function],
     "delete": [Function],
     "deleteMany": [Function],
@@ -51,6 +52,7 @@ exports[`init > should match config 1`] = `
   "createAuthCookie": [Function],
   "generateId": [Function],
   "internalAdapter": {
+    "countTotalUsers": [Function],
     "createAccount": [Function],
     "createOAuthUser": [Function],
     "createSession": [Function],

@@ -101,3 +101,4 @@ export function createAuthClient<Option extends ClientOptions>(
 }
 
 export { useStore };
+export type * from "@better-fetch/fetch";

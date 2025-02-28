@@ -96,7 +96,7 @@ If a user was registered using OAuth or other providers, they won't have a passw
 
 ```ts
 await auth.api.setPassword({
-    newPassword: "password",
+    body: { newPassword: "password" },
     headers: //
 });
 ```

@@ -15,6 +15,37 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
+		name: "Lazar Nikolov",
+		profession: "Software Engineer & Educator",
+		link: "https://x.com/NikolovLazar/status/1888992999872331985",
+		description:
+			"I didn't know  @better_auth was THAT good. I'm implementing it in TanStack Start and I can't believe how good the DX is. This is my favorite stack now (along with  @DrizzleORM and @shadcn ui).",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1838045335282745344/sCjDaZ2-_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Theo - t3.gg",
+		profession: "CEO of t3.chat",
+		link: "https://x.com/theo/status/1879769267866120341",
+		description: "Very exciting project and a super easy rec",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1799982162831396865/Fnol01I1_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Jonathan Wilke",
+		profession: "Creator of Supastarter",
+		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
+		description: "fuck, @better_auth is just so good",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1884529433979068416/AhfbeVEh_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
 		name: "Sébastien Chopin",
 		profession: "Creator of Nuxt & NuxtLabs",
 		link: "https://x.com/Atinux/status/1853751424561336322",
@@ -25,57 +56,26 @@ const testimonials = [
 		image: "",
 		social: <Icons.x />,
 	},
+
 	{
-		name: "Kevin Kern",
+		name: "Dax",
+		profession: "Creator of SST",
+		link: "https://x.com/thdxr/status/1866222656468705426",
+		description:
+			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1602333093485891584/mmVqjFNI_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Dagmawi Babi",
 		profession: "Developer",
-		link: "https://x.com/kregenrek/status/1855395938262831140",
+		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
 		description:
-			"Digging into better-auth.com this weekend. Check it out really cool lib",
+			"@better_auth exceeded all expectations, and it's just getting started",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1849574174785732608/ltlLcyaT_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Jonathan Wilke",
-		profession: "Creator of Supastarter",
-		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
-		description: "fuck, @better_auth is just so good",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1849386198537560064/NKFdXusJ_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Tim⚡Dev",
-		profession: "Developer",
-		link: "https://x.com/TimOConnellDev/status/1845273839506530404",
-		description:
-			"I love the js ecosystem. There’s always something disruptive happening. Just heard about @better_auth",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1835593762833354752/1bN3_d3F_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Yared Y Tegegn",
-		profession: "Developer",
-		link: "https://x.com/yared_ow/status/1848435855309873453",
-		description:
-			"It took me only 30 minutes to setup auth in my project thanks to @better_auth. Hands down, the best auth library I have ever used.",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1854956005391532033/aLu4S0pU_400x400.jpg",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Paul Jasper",
-		profession: "Indie hacker",
-		link: "https://x.com/pauljasperdev/status/1854938664645558279",
-		description:
-			"Solved auth for my next project and I’m pretty happy with it: @better_auth with @prisma serverless database. What a great team!",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1788425134170066944/wPanxB4f_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -91,25 +91,55 @@ const testimonials = [
 		social: <Icons.x />,
 	},
 	{
-		name: "Yusuf Mansur Özer",
-		profession: "Developer",
-		link: "https://x.com/ymansurozer/status/1855579561875943731",
+		name: "Omar McAdam",
+		profession: "Creator of AugmentedHQ",
+		link: "https://x.com/McPizza0/status/1879526862046839249",
 		description:
-			"Better Auth looks so nice and complete. Will definitely try it out after v1. I am currently with Nuxt Auth Utils it is great to start but Better Auth might be the way to go for bigger projects. 👀",
+			"if you're building a code project in 2025 use @better_auth. It has everything you need now and everything you'll need at scale. dont take this suggestion lightly..",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1532002119972274177/D3SKwakL_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1889741029470801920/6J25rfKo_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},
 	{
-		name: "Dagmawi Babi",
-		profession: "Developer",
-		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
-		description:
-			"@better_auth exceeded all expectations, and it's just getting started",
+		name: "Guillermo Rauch",
+		profession: "CEO of Vercel",
+		link: "https://x.com/rauchg/status/1871628287962906846",
+		description: "Great project & maintainer",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1783856060249595904/8TfcCN0r_400x400.jpg",
 		image: "",
+		social: <Icons.x />,
+	},
+	{
+		name: "Nizzy",
+		profession: "engineer @calcom",
+		link: "https://x.com/NizzyABI/status/1889178812459422162",
+		description:
+			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
+		image: "",
+		social: <Icons.x />,
+	},
+
+	{
+		name: "Vybhav Bhargav",
+		description: "better-auth is a work of art.",
+		profession: "Founding engineer @glyfspace",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
+		link: "https://x.com/vybhavab/status/1891589126513684669",
+		social: <Icons.x />,
+	},
+	{
+		name: "Shreyas Mididoddi",
+		description:
+			"dang!! Didn't think I would but absolutely loving @better_auth",
+		profession: "Senior Developer",
+		avatar:
+			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
+		link: "https://x.com/vybhavab/status/1891589126513684669",
 		social: <Icons.x />,
 	},
 ];

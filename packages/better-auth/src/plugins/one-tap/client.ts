@@ -1,6 +1,5 @@
 import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin } from "../../types";
-import { generateRandomString } from "../../crypto";
 
 declare global {
 	interface Window {
@@ -143,7 +142,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							auto_select: autoSelect,
 							cancel_on_tap_outside: cancelOnTapOutside,
 							context: contextValue,
-							nonce: generateRandomString(16),
+
 							...options.additionalOptions,
 						});
 

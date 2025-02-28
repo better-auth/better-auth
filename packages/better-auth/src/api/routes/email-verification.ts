@@ -248,6 +248,7 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
+				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -259,7 +260,11 @@ export const verifyEmail = createAuthEndpoint(
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					url: `${
+						ctx.context.baseURL
+					}/verify-email?token=${newToken}&callbackURL=${
+						ctx.query.callbackURL || "/"
+					}`,
 					token: newToken,
 				},
 				ctx.request,
@@ -290,9 +295,13 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
-			emailVerified: true,
-		});
+		await ctx.context.internalAdapter.updateUserByEmail(
+			parsed.email,
+			{
+				emailVerified: true,
+			},
+			ctx,
+		);
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {
