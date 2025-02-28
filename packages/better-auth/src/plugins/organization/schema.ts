@@ -78,6 +78,12 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			organizationId: string;
 			role: InferRolesFromOption<O>;
 			createdAt: Date;
+			userId: string;
+			user: {
+				email: string;
+				name: string;
+				image?: string;
+			};
 		}
 	: {
 			id: string;
@@ -85,6 +91,12 @@ export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
 			createdAt: Date;
 			role: InferRolesFromOption<O>;
 			teamId?: string;
+			userId: string;
+			user: {
+				email: string;
+				name: string;
+				image?: string;
+			};
 		};
 
 export type InferInvitation<O extends OrganizationOptions> =

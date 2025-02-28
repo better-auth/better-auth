@@ -315,7 +315,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		createOrganization,
 		updateOrganization,
 		deleteOrganization,
-		setActiveOrganization,
+		setActiveOrganization: setActiveOrganization<O>(),
 		getFullOrganization: getFullOrganization<O>(),
 		listOrganizations,
 		createInvitation: createInvitation(options as O),

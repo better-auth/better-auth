@@ -23,7 +23,8 @@
 		"dist",
 		"**/*.test.ts",
 		"**/*.spec.ts",
-		"**/test/**/*.ts"
+		"**/test/**/*.ts",
+		"**/test-utils/**/*.ts"
 	],
 	"references": [],
 	"include": ["src/**/*"]

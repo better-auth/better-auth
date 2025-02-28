@@ -497,38 +497,40 @@ export const getFullOrganization = <O extends OrganizationOptions>() =>
 		},
 	);
 
-export const setActiveOrganization = createAuthEndpoint(
-	"/organization/set-active",
-	{
-		method: "POST",
-		body: z.object({
-			organizationId: z
-				.string({
-					description:
-						"The organization id to set as active. It can be null to unset the active organization",
-				})
-				.nullable()
-				.optional(),
-			organizationSlug: z
-				.string({
-					description:
-						"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
-				})
-				.optional(),
-		}),
-		use: [orgSessionMiddleware, orgMiddleware],
-		metadata: {
-			openapi: {
-				description: "Set the active organization",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									description: "The organization",
-									$ref: "#/components/schemas/Organization",
+export const setActiveOrganization = <O extends OrganizationOptions>() => {
+	return createAuthEndpoint(
+		"/organization/set-active",
+		{
+			method: "POST",
+			body: z.object({
+				organizationId: z
+					.string({
+						description:
+							"The organization id to set as active. It can be null to unset the active organization",
+					})
+					.nullable()
+					.optional(),
+				organizationSlug: z
+					.string({
+						description:
+							"The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided",
+					})
+					.optional(),
+			}),
+			use: [orgSessionMiddleware, orgMiddleware],
+			metadata: {
+				openapi: {
+					description: "Set the active organization",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The organization",
+										$ref: "#/components/schemas/Organization",
+									},
 								},
 							},
 						},
@@ -536,63 +538,73 @@ export const setActiveOrganization = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const session = ctx.context.session;
-		let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
-		if (organizationId === null) {
-			const sessionOrgId = session.session.activeOrganizationId;
-			if (!sessionOrgId) {
+		async (ctx) => {
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const session = ctx.context.session;
+			let organizationId = ctx.body.organizationSlug || ctx.body.organizationId;
+			if (organizationId === null) {
+				const sessionOrgId = session.session.activeOrganizationId;
+				if (!sessionOrgId) {
+					return ctx.json(null);
+				}
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 				return ctx.json(null);
+			}
+			if (!organizationId) {
+				const sessionOrgId = session.session.activeOrganizationId;
+				if (!sessionOrgId) {
+					return ctx.json(null);
+				}
+				organizationId = sessionOrgId;
+			}
+			const organization = await adapter.findFullOrganization({
+				organizationId,
+				isSlug: !!ctx.body.organizationSlug,
+			});
+			const isMember = organization?.members.find(
+				(member) => member.userId === session.user.id,
+			);
+			if (!isMember) {
+				await adapter.setActiveOrganization(session.session.token, null);
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
 			}
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
-				null,
+				organization.id,
 			);
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,
 			});
-			return ctx.json(null);
-		}
-		if (!organizationId) {
-			const sessionOrgId = session.session.activeOrganizationId;
-			if (!sessionOrgId) {
-				return ctx.json(null);
-			}
-			organizationId = sessionOrgId;
-		}
-		const organization = await adapter.findFullOrganization({
-			organizationId,
-			isSlug: !!ctx.body.organizationSlug,
-		});
-		const isMember = organization?.members.find(
-			(member) => member.userId === session.user.id,
-		);
-		if (!isMember) {
-			await adapter.setActiveOrganization(session.session.token, null);
-			throw new APIError("FORBIDDEN", {
-				message:
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-			});
-		}
-		if (!organization) {
-			throw new APIError("BAD_REQUEST", {
-				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-			});
-		}
-		const updatedSession = await adapter.setActiveOrganization(
-			session.session.token,
-			organization.id,
-		);
-		await setSessionCookie(ctx, {
-			session: updatedSession,
-			user: session.user,
-		});
-		return ctx.json(organization);
-	},
-);
+			type OrganizationReturn = O["teams"] extends { enabled: true }
+				? {
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: Team[];
+					} & Organization
+				: {
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & Organization;
+			return ctx.json(organization as unknown as OrganizationReturn);
+		},
+	);
+};
 
 export const listOrganizations = createAuthEndpoint(
 	"/organization/list",

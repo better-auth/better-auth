@@ -80,7 +80,7 @@ export const organizationClient = Object.assign(
 			>,
 			getActions: ($fetch) => ({
 				$Infer: {
-					ActiveOrganization: {} as Prettify<OrganizationReturn>,
+					ActiveOrganization: {} as OrganizationReturn,
 					Organization: {} as Organization,
 					Invitation: {} as InferInvitation<O>,
 					Member: {} as InferInvitation<O>,
