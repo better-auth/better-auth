@@ -4,12 +4,12 @@ import { loader } from "fumadocs-core/source";
 import { createOpenAPI } from "fumadocs-openapi/server";
 
 export const source = loader({
-	baseUrl: "/docs",
-	source: createMDXSource(docs, meta),
+  baseUrl: "/docs",
+  source: createMDXSource(docs, meta),
 });
 
 export const v = loader({
-	baseUrl: "/v",
-	source: createMDXSource(versions, meta),
+  baseUrl: "/v",
+  source: createMDXSource(versions),
 });
 export const openapi = createOpenAPI({});
