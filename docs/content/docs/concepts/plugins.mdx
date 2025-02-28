@@ -391,7 +391,8 @@ const myPlugin = {
 A middleware that checks if the client has a valid session. If the client has a valid session, it'll add the session data to the context object.
 
 ```ts title="plugin.ts"
-import {  createAuthMiddleware, sessionMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/plugins";
+import { sessionMiddleware } from "better-auth/api";
 
 const myPlugin = ()=>{
     return {

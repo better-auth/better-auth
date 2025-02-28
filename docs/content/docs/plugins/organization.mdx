@@ -103,6 +103,17 @@ const auth = betterAuth({
 })
 ```
 
+#### Check if organization slug is taken
+
+To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
+
+- `slug`: The slug of the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.checkSlug({
+    slug: "my-org",
+});
+```
 
 ### List User's Organizations
 
@@ -439,7 +450,7 @@ To invite users to an organization, you can use the `invite` function provided b
 ```ts title="invitation.ts"
 await authClient.organization.inviteMember({
     email: "test@email.com",
-    role: "admin",
+    role: "admin", //this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -505,7 +516,7 @@ To update the role of a member in an organization, you can use the `organization
 ```ts title="auth-client.ts"
 await authClient.organization.updateMemberRole({
     memberId: "member-id",
-    role: "admin"
+    role: "admin" // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -533,6 +544,16 @@ auth.api.addMember({
 })
 ```
 
+### Leave Organization
+
+To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.leave({
+    organizationId: "organization-id"
+})
+```    
+
 ## Access Control
 
 The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
@@ -547,6 +568,9 @@ By default, there are three roles in the organization:
 
 `member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
 
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
 
 ### Permissions
 
@@ -621,13 +645,14 @@ the plugin providers easy way to define your own set of permission for each role
     }); // [!code highlight]
     ```
 
-      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
-    import { createAccessControl, defaultStatements, adminAc } from "better-auth/plugins/access";
+    import { createAccessControl } from "better-auth/plugins/access";
+    import { organization } from 'better-auth/plugins/organization'
 
     const statement = { 
-        ...defaultStatements, // [!code highlight]
+        ...organization.defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
     
@@ -635,7 +660,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...adminAc.statements, // [!code highlight]
+        ...organization.adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -671,7 +696,7 @@ the plugin providers easy way to define your own set of permission for each role
         ```ts title="auth-client"
         import { createAuthClient } from "better-auth/client"
         import { organizationClient } from "better-auth/client/plugins"
-        import { ac } from "@/auth/permissions"
+        import { ac, owner, admin, member, myCustomRole } from "@/auth/permissions"
 
         export const client = createAuthClient({
             plugins: [
@@ -695,11 +720,11 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+You can use the `organizationHasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.hasPermission({
+    auth.api.organizationHasPermission({
         headers: await headers(),
         body: {
             permission: {
@@ -831,6 +856,12 @@ Table Name: `invitation`
       name: "email", 
       type: "string", 
       description: "The email address of the user" 
+    },
+    { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
     },
     { 
       name: "organizationId", 

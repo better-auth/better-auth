@@ -2,7 +2,7 @@ import type {
 	BetterFetchOption,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { Context, Endpoint } from "better-call";
+import type { InputContext, Endpoint } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
@@ -53,7 +53,7 @@ export type InferUserUpdateCtx<
 >;
 
 export type InferCtx<
-	C extends Context<any, any>,
+	C extends InputContext<any, any>,
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
 	? C["body"] & {
@@ -91,11 +91,11 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 			: PathToObject<
 					T["path"],
 					T extends (ctx: infer C) => infer R
-						? C extends Context<any, any>
+						? C extends InputContext<any, any>
 							? <
 									FetchOptions extends BetterFetchOption<
-										C["body"] & Record<string, any>,
-										C["query"] & Record<string, any>,
+										Partial<C["body"]> & Record<string, any>,
+										Partial<C["query"]> & Record<string, any>,
 										C["params"]
 									>,
 								>(

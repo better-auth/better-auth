@@ -4,7 +4,6 @@ import { MongoClient } from "mongodb";
 import { runAdapterTest } from "../test";
 import { mongodbAdapter } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
-
 describe("adapter test", async () => {
 	const dbClient = async (connectionString: string, dbName: string) => {
 		const client = new MongoClient(connectionString);

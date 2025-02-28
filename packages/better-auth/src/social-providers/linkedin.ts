@@ -27,8 +27,11 @@ export const linkedin = (options: LinkedInOptions) => {
 		id: "linkedin",
 		name: "Linkedin",
 		createAuthorizationURL: async ({ state, scopes, redirectURI }) => {
-			const _scopes = scopes || ["profile", "email", "openid"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["profile", "email", "openid"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "linkedin",
 				options,
@@ -41,7 +44,7 @@ export const linkedin = (options: LinkedInOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return await validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});

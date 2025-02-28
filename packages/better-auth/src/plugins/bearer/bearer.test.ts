@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { bearer } from ".";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("bearer", async () => {
-	const { client, auth, testUser } = await getTestInstance({
-		plugins: [bearer()],
-	});
+	const { client, auth, testUser } = await getTestInstance(
+		{},
+		{
+			disableTestUser: true,
+		},
+	);
 
 	let token: string;
 	it("should get session", async () => {
-		await client.signIn.email(
+		await client.signUp.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
+				name: testUser.name,
 			},
 			{
 				onSuccess: (ctx) => {
@@ -23,7 +26,7 @@ describe("bearer", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
-					authorization: `Bearer ${token}`,
+					Authorization: `Bearer ${token}`,
 				},
 			},
 		});
@@ -34,11 +37,11 @@ describe("bearer", async () => {
 		const sessions = await client.listSessions({
 			fetchOptions: {
 				headers: {
-					authorization: `Bearer ${token}`,
+					Authorization: `Bearer ${token}`,
 				},
 			},
 		});
-		expect(sessions.data).toHaveLength(2);
+		expect(sessions.data).toHaveLength(1);
 	});
 
 	it("should work on server actions", async () => {

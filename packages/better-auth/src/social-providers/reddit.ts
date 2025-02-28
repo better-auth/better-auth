@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, getOAuth2Tokens } from "../oauth2";
+import { base64 } from "@better-auth/utils/base64";
 
 export interface RedditProfile {
 	id: string;
@@ -20,9 +21,9 @@ export const reddit = (options: RedditOptions) => {
 		id: "reddit",
 		name: "Reddit",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["identity"];
+			const _scopes = options.disableDefaultScope ? [] : ["identity"];
 			options.scope && _scopes.push(...options.scope);
-
+			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "reddit",
 				options,
@@ -43,9 +44,9 @@ export const reddit = (options: RedditOptions) => {
 				"content-type": "application/x-www-form-urlencoded",
 				accept: "text/plain",
 				"user-agent": "better-auth",
-				Authorization: `Basic ${Buffer.from(
+				Authorization: `Basic ${base64.encode(
 					`${options.clientId}:${options.clientSecret}`,
-				).toString("base64")}`,
+				)}`,
 			};
 
 			const { data, error } = await betterFetch<object>(

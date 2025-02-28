@@ -47,7 +47,7 @@ const grid = [
 	},
 	{
 		title: "Social Sign-on",
-		description: "multiple social sign-on providers",
+		description: "Multiple social sign-on providers",
 	},
 	{
 		title: "Organization & Access Control",

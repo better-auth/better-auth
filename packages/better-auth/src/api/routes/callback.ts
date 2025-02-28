@@ -9,6 +9,7 @@ import { createAuthEndpoint } from "../call";
 const schema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	device_id: z.string().optional(),
 	error_description: z.string().optional(),
 	state: z.string().optional(),
 });
@@ -38,7 +39,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 		}
 
-		const { code, error, state, error_description } = queryOrBody;
+		const { code, error, state, error_description, device_id } = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
@@ -75,6 +76,7 @@ export const callbackOAuth = createAuthEndpoint(
 			tokens = await provider.validateAuthorizationCode({
 				code: code,
 				codeVerifier,
+				deviceId: device_id,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			});
 		} catch (e) {
@@ -131,11 +133,16 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 				return redirectOnError("account_already_linked");
 			}
-			const newAccount = await c.context.internalAdapter.createAccount({
-				userId: link.userId,
-				providerId: provider.id,
-				accountId: userInfo.id,
-			});
+			const newAccount = await c.context.internalAdapter.createAccount(
+				{
+					userId: link.userId,
+					providerId: provider.id,
+					accountId: userInfo.id,
+					...tokens,
+					scope: tokens.scopes?.join(","),
+				},
+				c,
+			);
 			if (!newAccount) {
 				return redirectOnError("unable_to_link_account");
 			}

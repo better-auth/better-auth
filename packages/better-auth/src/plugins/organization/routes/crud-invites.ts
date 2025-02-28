@@ -7,6 +7,7 @@ import { type InferRolesFromOption } from "../schema";
 import { APIError } from "better-call";
 import type { OrganizationOptions } from "../organization";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
 
 export const createInvitation = <O extends OrganizationOptions | undefined>(
 	option: O,
@@ -20,9 +21,11 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				email: z.string({
 					description: "The email address of the user to invite",
 				}),
-				role: z.string({
-					description: "The role to assign to the user",
-				}) as unknown as InferRolesFromOption<O>,
+				role: z
+					.string({
+						description: "The role to assign to the user",
+					})
+					.or(z.array(z.string())) as unknown as InferRolesFromOption<O>,
 				organizationId: z
 					.string({
 						description: "The organization ID to invite the user to",
@@ -113,16 +116,14 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const role = ctx.context.roles[member.role];
-			if (!role) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-				});
-			}
-			const canInvite = role.authorize({
-				invitation: ["create"],
+			const canInvite = hasPermission({
+				role: member.role,
+				options: ctx.context.orgOptions,
+				permission: {
+					invitation: ["create"],
+				},
 			});
-			if (canInvite.error) {
+			if (!canInvite) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
@@ -161,7 +162,9 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 
 			const invitation = await adapter.createInvitation({
 				invitation: {
-					role: ctx.body.role as string,
+					role: Array.isArray(ctx.body.role)
+						? ctx.body.role.join(",")
+						: (ctx.body.role as string),
 					email: ctx.body.email,
 					organizationId: organizationId,
 				},
@@ -180,7 +183,7 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 				{
 					id: invitation.id,
 					role: invitation.role as string,
-					email: invitation.email,
+					email: invitation.email.toLowerCase(),
 					organization: organization,
 					inviter: {
 						...member,
@@ -391,10 +394,14 @@ export const cancelInvitation = createAuthEndpoint(
 				message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 			});
 		}
-		const canCancel = ctx.context.roles[member.role].authorize({
-			invitation: ["cancel"],
+		const canCancel = hasPermission({
+			role: member.role,
+			options: ctx.context.orgOptions,
+			permission: {
+				invitation: ["cancel"],
+			},
 		});
-		if (canCancel.error) {
+		if (!canCancel) {
 			throw new APIError("FORBIDDEN", {
 				message:
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,

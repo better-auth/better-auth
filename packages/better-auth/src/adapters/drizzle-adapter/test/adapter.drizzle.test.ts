@@ -45,7 +45,6 @@ describe("Drizzle Adapter Tests", async () => {
 	let pg: Pool;
 	let postgres: Kysely<any>;
 	let opts: BetterAuthOptions;
-
 	pg = createTestPool();
 	postgres = createKyselyInstance(pg);
 	opts = createTestOptions(pg);
@@ -55,7 +54,6 @@ describe("Drizzle Adapter Tests", async () => {
 	afterAll(async () => {
 		await cleanupDatabase(postgres);
 	});
-
 	const db = drizzle(pg);
 	const adapter = drizzleAdapter(db, { provider: "pg", schema });
 

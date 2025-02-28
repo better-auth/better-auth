@@ -1,15 +1,9 @@
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
 import * as SecureStore from "expo-secure-store";
-import Constants from "expo-constants";
-
-export const getBaseUrl = () => {
-	const debuggerHost = Constants.expoConfig?.hostUri;
-	return `http://${"localhost"}:8081`;
-};
 
 export const authClient = createAuthClient({
-	baseURL: getBaseUrl(),
+	baseURL: "http://localhost:8081",
 	disableDefaultFetchPlugins: true,
 	plugins: [
 		expoClient({

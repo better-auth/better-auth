@@ -11,7 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@better-fetch/fetch": "1.1.12",
+    "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^3.9.1",
     "@libsql/client": "^0.12.0",
     "@libsql/kysely-libsql": "^0.4.1",
@@ -50,12 +50,13 @@
     "@tanstack/react-query": "^5.62.3",
     "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
-    "better-call": "0.2.3-beta.2",
+    "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
     "consola": "^3.2.3",
+    "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.1",
     "framer-motion": "^11.13.1",

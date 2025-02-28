@@ -260,6 +260,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 					{
 						twoFactorEnabled: true,
 					},
+					ctx,
 				);
 				const newSession = await ctx.context.internalAdapter
 					.createSession(
@@ -280,8 +281,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 					user: updatedUser,
 				});
 			}
-
-			return ctx.context.valid();
+			return ctx.context.valid(ctx);
 		},
 	);
 	return {

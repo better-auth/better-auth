@@ -24,6 +24,7 @@ import type {
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
+import { base64 } from "@better-auth/utils/base64";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -237,13 +238,13 @@ export const passkey = (options?: PasskeyOptions) => {
 							},
 						],
 					});
-					const userID = new Uint8Array(
-						Buffer.from(generateRandomString(32, "a-z", "0-9")),
+					const userID = new TextEncoder().encode(
+						generateRandomString(32, "a-z", "0-9"),
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
 						rpName: opts.rpName || ctx.context.appName,
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
@@ -406,7 +407,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const options = await generateAuthenticationOptions({
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userVerification: "preferred",
 						...(userPasskeys.length
 							? {
@@ -529,7 +530,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
@@ -547,7 +548,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							credential,
 							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credential.publicKey).toString("base64");
+						const pubKey = base64.encode(credential.publicKey);
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
@@ -665,12 +666,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							credential: {
 								id: passkey.credentialID,
-								publicKey: new Uint8Array(
-									Buffer.from(passkey.publicKey, "base64"),
-								),
+								publicKey: base64.decode(passkey.publicKey),
 								counter: passkey.counter,
 								transports: passkey.transports?.split(
 									",",
@@ -886,5 +885,3 @@ const schema = {
 		},
 	},
 } satisfies AuthPluginSchema;
-
-export * from "./client";

@@ -248,6 +248,7 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
+				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -259,11 +260,24 @@ export const verifyEmail = createAuthEndpoint(
 			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}`,
+					url: `${
+						ctx.context.baseURL
+					}/verify-email?token=${newToken}&callbackURL=${
+						ctx.query.callbackURL || "/"
+					}`,
 					token: newToken,
 				},
 				ctx.request,
 			);
+
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user: {
+					...session.user,
+					email: parsed.updateTo,
+					emailVerified: false,
+				},
+			});
 
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
@@ -281,9 +295,13 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
-		await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
-			emailVerified: true,
-		});
+		await ctx.context.internalAdapter.updateUserByEmail(
+			parsed.email,
+			{
+				emailVerified: true,
+			},
+			ctx,
+		);
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
 			if (!currentSession || currentSession.user.email !== parsed.email) {
@@ -296,7 +314,21 @@ export const verifyEmail = createAuthEndpoint(
 						message: "Failed to create session",
 					});
 				}
-				await setSessionCookie(ctx, { session, user: user.user });
+				await setSessionCookie(ctx, {
+					session,
+					user: {
+						...user.user,
+						emailVerified: true,
+					},
+				});
+			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+						emailVerified: true,
+					},
+				});
 			}
 		}
 

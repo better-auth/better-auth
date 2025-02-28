@@ -1,5 +1,6 @@
 import type { ZodSchema } from "zod";
-import type { BetterAuthOptions, LiteralString } from "../types";
+import type { BetterAuthOptions } from "../types";
+import type { LiteralString } from "../types/helper";
 
 export type FieldType =
 	| "string"

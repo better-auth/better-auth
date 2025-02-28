@@ -32,8 +32,11 @@ export const facebook = (options: FacebookOptions) => {
 		id: "facebook",
 		name: "Facebook",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["email", "public_profile"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "public_profile"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
@@ -46,7 +49,7 @@ export const facebook = (options: FacebookOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
 			});

@@ -11,7 +11,7 @@ html {
 }
 
 @layer base {
-  :root  {
+  :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
@@ -36,9 +36,9 @@ html {
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%
+    --chart-5: 27 87% 67%;
   }
-  .dark  {
+  .dark {
     --background: 0 0% 2%;
     --foreground: 0 0% 98%;
     --card: 240 10% 0%;
@@ -66,9 +66,6 @@ html {
   }
 }
 
-
-
-
 @layer base {
   * {
     @apply border-border;
@@ -76,9 +73,4 @@ html {
   body {
     @apply bg-background text-foreground;
   }
-}
-
-/* hide scrollbar */
-::-webkit-scrollbar {
-  display: none;
 }

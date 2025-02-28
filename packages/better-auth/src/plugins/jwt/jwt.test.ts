@@ -24,6 +24,19 @@ describe("jwt", async (it) => {
 		},
 	});
 
+	it("should get a token", async () => {
+		let token = "";
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+		expect(token.length).toBeGreaterThan(10);
+	});
+
 	it("Get a token", async () => {
 		const token = await client.token({
 			fetchOptions: {

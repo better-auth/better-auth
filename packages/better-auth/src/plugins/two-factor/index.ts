@@ -104,6 +104,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 							{
 								twoFactorEnabled: true,
 							},
+							ctx,
 						);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
@@ -204,6 +205,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						{
 							twoFactorEnabled: false,
 						},
+						ctx,
 					);
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
@@ -289,7 +291,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						/**
 						 * remove the session cookie. It's set by the sign in credential
 						 */
-						deleteSessionCookie(ctx);
+						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,

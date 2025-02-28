@@ -1,0 +1,79 @@
+---
+title: Captcha
+description: Captcha plugin
+---
+
+The **Captcha Plugin** integrates bot protection into your Better Auth system by adding captcha verification for key endpoints. This plugin ensures that only human users can perform actions like signing up, signing in, or resetting passwords. Two providers are currently supported: [Google reCAPTCHA](https://developers.google.com/recaptcha) and [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/).
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { captcha } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+        plugins: [ // [!code highlight]
+            captcha({ // [!code highlight]
+                provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
+                secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+            }), // [!code highlight]
+        ], // [!code highlight]
+    });
+    ```
+
+  </Step>
+  <Step>
+    ### Add the captcha token to your request headers
+
+    Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
+
+    ```ts
+    await authClient.signIn.email({
+        email: "user@example.com",
+        password: "secure-password",
+        fetchOptions: { // [!code highlight]
+            headers: { // [!code highlight]
+                "x-captcha-response": turnstileToken, // [!code highlight]
+            }, // [!code highlight]
+        },
+    });
+    ```
+
+    - To implement Cloudflare Turnstile on the client side, see the official [Cloudflare Turnstile documentation](https://developers.cloudflare.com/turnstile/) or use a library like [react-turnstile](https://www.npmjs.com/package/@marsidev/react-turnstile).
+    - To implement Google reCAPTCHA on the client side, see the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use a library like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha).
+
+  </Step>
+</Steps>
+
+## How it works
+
+<Steps>
+  <Step>
+    The plugin acts as a middleware: it intercepts all `POST` requests to configured endpoints (see `endpoints`
+    in the [Plugin Options](#plugin-options) section).
+  </Step>
+  <Step>
+    it validates the captcha token on the server, by calling the captcha provider's `/siteverify`.
+  </Step>
+  <Step>
+    - if the token is missing, gets rejected by the captcha provider, or if the `/siteverify` endpoint is
+    unavailable, the plugin returns an error and interrupts the request.
+    - if the token is accepted by the captcha provider, the middleware returns `undefined`, meaning the request is allowed to proceed.
+
+  </Step>
+</Steps>
+
+## Plugin Options
+
+- **`provider` (required)**
+  Your captcha provider. Supported values are `cloudflare-turnstile` and `google-recaptcha`.
+- **`secretKey` (required)**
+  Your captcha provider secret key used for the server-side validation of captcha tokens.
+- **`endpoints` (optional)**
+  An array of paths where captcha validation is enforced. Defaults to: `["/sign-up", "/sign-in", "/forget-password"]`.
+- **`siteVerifyURLOverride` (optional)**
+  Overrides the endpoint URL for the captcha verification request.

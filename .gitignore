@@ -192,3 +192,5 @@ android/
 
 .vercel
 .vinxi
+# Turborepo
+.turbo

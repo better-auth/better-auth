@@ -75,9 +75,11 @@ export async function verifyBackupCode(
 }
 
 export async function getBackupCodes(backupCodes: string, key: string) {
-	const secret = Buffer.from(
-		await symmetricDecrypt({ key, data: backupCodes }),
-	).toString("utf-8");
+	const secret = new TextDecoder("utf-8").decode(
+		new TextEncoder().encode(
+			await symmetricDecrypt({ key, data: backupCodes }),
+		),
+	);
 	const data = JSON.parse(secret);
 	const result = z.array(z.string()).safeParse(data);
 	if (result.success) {

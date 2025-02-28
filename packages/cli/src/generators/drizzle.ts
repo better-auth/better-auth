@@ -89,7 +89,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											usePlural
 												? `${attr.references.model}s`
 												: attr.references.model
-										}.${attr.references.field})`
+										}.${attr.references.field}, { onDelete: 'cascade' })`
 									: ""
 							}`;
 						})

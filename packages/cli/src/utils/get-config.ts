@@ -10,7 +10,14 @@ import fs from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 
-let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
+let possiblePaths = [
+	"auth.ts",
+	"auth.tsx",
+	"auth.js",
+	"auth.jsx",
+	"auth.server.js",
+	"auth.server.ts",
+];
 
 possiblePaths = [
 	...possiblePaths,

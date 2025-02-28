@@ -2,6 +2,7 @@ import { constantTimeEqual } from "./buffer";
 import { scryptAsync } from "@noble/hashes/scrypt";
 import { getRandomValues } from "@better-auth/utils";
 import { hex } from "@better-auth/utils/hex";
+import { hexToBytes } from "@noble/hashes/utils";
 
 const config = {
 	N: 16384,
@@ -32,5 +33,5 @@ export const verifyPassword = async ({
 }: { hash: string; password: string }) => {
 	const [salt, key] = hash.split(":");
 	const targetKey = await generateKey(password, salt!);
-	return constantTimeEqual(targetKey, new Uint8Array(Buffer.from(key, "hex")));
+	return constantTimeEqual(targetKey, hexToBytes(key));
 };

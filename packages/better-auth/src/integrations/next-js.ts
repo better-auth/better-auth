@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "../types";
 import { cookies } from "next/headers";
 import { parseSetCookieHeader } from "../cookies";
+import { createAuthMiddleware } from "../plugins";
 
 export function toNextJsHandler(
 	auth:
@@ -27,8 +28,8 @@ export const nextCookies = () => {
 					matcher(ctx) {
 						return true;
 					},
-					handler: async (ctx) => {
-						const returned = ctx.responseHeader;
+					handler: createAuthMiddleware(async (ctx) => {
+						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
@@ -55,7 +56,7 @@ export const nextCookies = () => {
 							});
 							return;
 						}
-					},
+					}),
 				},
 			],
 		},

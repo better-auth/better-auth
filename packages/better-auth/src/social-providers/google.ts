@@ -53,9 +53,11 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
-			const _scopes = scopes || ["email", "profile", "openid"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "profile", "openid"];
 			options.scope && _scopes.push(...options.scope);
-
+			scopes && _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
@@ -78,7 +80,7 @@ export const google = (options: GoogleOptions) => {
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
@@ -105,7 +107,8 @@ export const google = (options: GoogleOptions) => {
 			}
 			const isValid =
 				tokenInfo.aud === options.clientId &&
-				tokenInfo.iss === "https://accounts.google.com";
+				(tokenInfo.iss === "https://accounts.google.com" ||
+					tokenInfo.iss === "accounts.google.com");
 			return isValid;
 		},
 		async getUserInfo(token) {

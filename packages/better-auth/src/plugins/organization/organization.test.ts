@@ -3,32 +3,33 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from "./organization";
 import { createAuthClient } from "../../client";
 import { organizationClient } from "./client";
-import { createAccessControl } from "./access";
+import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { BetterAuthError } from "../../error";
 
 describe("organization", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
-		user: {
-			modelName: "users",
-		},
-		plugins: [
-			organization({
-				async sendInvitationEmail(data, request) {},
-				schema: {
-					organization: {
-						modelName: "team",
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					async sendInvitationEmail(data, request) {},
+					schema: {
+						organization: {
+							modelName: "team",
+						},
+						member: {
+							modelName: "teamMembers",
+						},
 					},
-					member: {
-						modelName: "teamMembers",
-					},
-				},
-			}),
-		],
-		logger: {
-			level: "error",
-		},
-	});
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -266,7 +267,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers } = await signInWithTestUser();
+		const { headers, user } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -286,6 +287,27 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member.data?.role).toBe("admin");
+	});
+
+	it("should allow setting multiple roles", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const c = await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["member", "admin"],
+			memberId: org.data?.members[1].id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(c.data?.role).toBe("member,admin");
 	});
 
 	const adminUser = {
@@ -312,6 +334,62 @@ describe("organization", async (it) => {
 		);
 	});
 
+	it("should allow leaving organization", async () => {
+		const newUser = {
+			email: "leave@org.com",
+			name: "leaving member",
+			password: "password",
+		};
+		const headers = new Headers();
+		const res = await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(headers),
+		});
+		const member = await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: res.data?.user.id!,
+				role: "admin",
+			},
+		});
+		const leaveRes = await client.organization.leave(
+			{
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+		expect(leaveRes.data).toMatchObject({
+			userId: res.data?.user.id!,
+		});
+	});
+
+	it("shouldn't allow updating owner role if you're not owner", async () => {
+		const { headers } = await signInWithTestUser();
+		const { members } = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const res = await client.organization.updateMemberRole({
+			organizationId: organizationId,
+			role: "admin",
+			memberId: members.find((m) => m.role === "owner")?.id!,
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow removing member from organization", async () => {
 		const { headers } = await signInWithTestUser();
 		const orgBefore = await client.organization.getFullOrganization({
@@ -326,12 +404,11 @@ describe("organization", async (it) => {
 		expect(orgBefore.data?.members.length).toBe(4);
 		await client.organization.removeMember({
 			organizationId: organizationId,
-			memberIdOrEmail: "test2@test.com",
+			memberIdOrEmail: adminUser.email,
 			fetchOptions: {
 				headers,
 			},
 		});
-
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,

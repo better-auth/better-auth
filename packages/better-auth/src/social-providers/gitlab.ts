@@ -81,8 +81,9 @@ export const gitlab = (options: GitlabOptions) => {
 			codeVerifier,
 			redirectURI,
 		}) => {
-			const _scopes = scopes || ["read_user"];
+			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: issuerId,
 				options,
@@ -96,7 +97,7 @@ export const gitlab = (options: GitlabOptions) => {
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
 				code,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				codeVerifier,
 				tokenEndpoint,

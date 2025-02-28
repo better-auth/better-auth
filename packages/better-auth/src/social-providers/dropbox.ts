@@ -30,8 +30,9 @@ export const dropbox = (options: DropboxOptions) => {
 			codeVerifier,
 			redirectURI,
 		}) => {
-			const _scopes = scopes || ["account_info.read"];
+			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "dropbox",
 				options,
@@ -46,7 +47,7 @@ export const dropbox = (options: DropboxOptions) => {
 			return await validateAuthorizationCode({
 				code,
 				codeVerifier,
-				redirectURI: options.redirectURI || redirectURI,
+				redirectURI,
 				options,
 				tokenEndpoint,
 			});

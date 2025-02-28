@@ -81,6 +81,7 @@ describe("oauth-proxy", async () => {
 			},
 		});
 	});
+
 	it("shouldn't redirect to proxy url on same origin", async () => {
 		const { client } = await getTestInstance({
 			plugins: [oAuthProxy()],

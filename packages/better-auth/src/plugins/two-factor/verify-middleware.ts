@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import type { UserWithTwoFactor } from "./types";
 import { createHMAC } from "@better-auth/utils/hmac";
+import type { GenericEndpointContext } from "../../types";
 
 export const verifyTwoFactorMiddleware = createAuthMiddleware(
 	{
@@ -39,9 +40,14 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 					message: "invalid two factor cookie",
 				});
 			}
+			const dontRememberMe = await ctx.getSignedCookie(
+				ctx.context.authCookies.dontRememberToken.name,
+				ctx.context.secret,
+			);
 			const session = await ctx.context.internalAdapter.createSession(
 				userId,
 				ctx.request,
+				!!dontRememberMe,
 			);
 			if (!session) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -49,7 +55,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 				});
 			}
 			return {
-				valid: async () => {
+				valid: async (ctx: GenericEndpointContext) => {
 					await setSessionCookie(ctx, {
 						session,
 						user,
@@ -69,13 +75,20 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 							ctx.context.secret,
 							`${user.id}!${session.token}`,
 						);
-
 						await ctx.setSignedCookie(
 							trustDeviceCookie.name,
 							`${token}!${session.token}`,
 							ctx.context.secret,
 							trustDeviceCookie.attributes,
 						);
+						// delete the dont remember me cookie
+						ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
+							maxAge: 0,
+						});
+						// delete the two factor cookie
+						ctx.setCookie(cookieName.name, "", {
+							maxAge: 0,
+						});
 					}
 					return ctx.json({
 						token: session.token,
@@ -102,7 +115,7 @@ export const verifyTwoFactorMiddleware = createAuthMiddleware(
 			};
 		}
 		return {
-			valid: async () => {
+			valid: async (ctx: GenericEndpointContext) => {
 				return ctx.json({
 					token: session.session.token,
 					user: {
