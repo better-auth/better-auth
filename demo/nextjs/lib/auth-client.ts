@@ -10,6 +10,7 @@ import {
 	genericOAuthClient,
 } from "better-auth/client/plugins";
 import { toast } from "sonner";
+import { stripeClient } from "@better-auth/stripe/client";
 
 export const client = createAuthClient({
 	plugins: [
@@ -30,6 +31,9 @@ export const client = createAuthClient({
 		}),
 		oidcClient(),
 		genericOAuthClient(),
+		stripeClient({
+			subscription: true,
+		}),
 	],
 	fetchOptions: {
 		onError(e) {
