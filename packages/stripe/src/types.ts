@@ -301,18 +301,6 @@ export interface StripeOptions {
 					params?: Stripe.Checkout.SessionCreateParams;
 					options?: Stripe.RequestOptions;
 			  };
-		taxCollection?: {
-			/**
-			 * Enable tax calculation
-			 *
-			 * @default false
-			 */
-			enabled?: boolean;
-			/**
-			 * Tax calculation options
-			 */
-			options?: Stripe.TaxRateCreateParams;
-		};
 		/**
 		 * Enable organization subscription
 		 */

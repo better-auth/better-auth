@@ -12,7 +12,6 @@ export const getSchema = (options: StripeOptions) => {
 				referenceId: {
 					type: "string",
 					required: true,
-					unique: true,
 				},
 				stripeCustomerId: {
 					type: "string",

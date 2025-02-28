@@ -13,6 +13,7 @@ import { client } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
 import { useId, useState } from "react";
+import { toast } from "sonner";
 
 function Component(props: {
 	currentPlan?: string;
@@ -141,9 +142,16 @@ function Component(props: {
 								if (selectedPlan === "enterprise") {
 									return;
 								}
-								await client.subscription.upgrade({
-									plan: selectedPlan,
-								});
+								await client.subscription.upgrade(
+									{
+										plan: selectedPlan,
+									},
+									{
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+									},
+								);
 							}}
 						>
 							{selectedPlan === props.currentPlan?.toLowerCase()

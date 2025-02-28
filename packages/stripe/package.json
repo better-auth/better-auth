@@ -13,8 +13,8 @@
   "description": "Stripe plugin for Better Auth",
   "scripts": {
     "test": "vitest",
-    "build": "tsup --dts --clean",
-    "dev": "tsup --watch --sourcemap --dts"
+    "build": "unbuild",
+    "dev": "unbuild --watch"
   },
   "exports": {
     ".": {

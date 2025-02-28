@@ -41,12 +41,12 @@ if (!dialect) {
 }
 
 const PROFESSION_PRICE_ID = {
-	default: "price_1QtOfQEerAovSgjdueb6go9H",
-	annual: "price_1QtOg1EerAovSgjdwzNFMexz",
+	default: "price_1QxWZ5LUjnrYIrml5Dnwnl0X",
+	annual: "price_1QxWZTLUjnrYIrmlyJYpwyhz",
 };
 const STARTER_PRICE_ID = {
-	default: "price_1QtOenEerAovSgjdlxS290sB",
-	annual: "price_1QtOenEerAovSgjdn2YcLWbz",
+	default: "price_1QxWWtLUjnrYIrmleljPKszG",
+	annual: "price_1QxWYqLUjnrYIrmlonqPThVF",
 };
 
 export const auth = betterAuth({
