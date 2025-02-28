@@ -84,8 +84,8 @@ export const getPasskeyActions = (
 			name?: string;
 
 			/**
-			 * The type of attachment for the passkey. This is used to
-			 * determine the type of attachment for the passkey.
+			 * The type of attachment for the passkey. Defaults to both
+			 * platform and cross-platform allowed, with platform preferred.
 			 */
 			authenticatorAttachment?: "platform" | "cross-platform";
 
