@@ -32,16 +32,32 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 						className={`${className} text-sm p-4 w-fit overflow-scroll  max-h-[400px] rounded-md`}
 						style={style}
 					>
-						{tokens.map((line, i) => (
-							<div key={i} {...getLineProps({ line, key: i })}>
-								<span className="inline-block w-4 mr-3 text-gray-500 select-none">
-									{i + 1}
-								</span>
-								{line.map((token, key) => (
-									<span key={key} {...getTokenProps({ token, key })} />
-								))}
-							</div>
-						))}
+						{tokens.map((line, i) => {
+							const lineProps = getLineProps({ line, key: i });
+							return (
+								<div
+									key={i}
+									className={lineProps.className}
+									style={lineProps.style}
+								>
+									<span className="inline-block w-4 mr-3 text-gray-500 select-none">
+										{i + 1}
+									</span>
+									{line.map((token, key) => {
+										const tokenProps = getTokenProps({ token, key });
+										return (
+											<span
+												key={key}
+												className={tokenProps.className}
+												style={tokenProps.style}
+											>
+												{tokenProps.children}
+											</span>
+										);
+									})}
+								</div>
+							);
+						})}
 					</pre>
 				)}
 			</Highlight>
