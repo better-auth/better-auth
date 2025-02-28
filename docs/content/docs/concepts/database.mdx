@@ -686,6 +686,7 @@ export const auth = betterAuth({
 })
 ```
 
+
 #### Throwing Errors
 If you want to stop the database hook from proceeding, you can throw errors using the `APIError` class imported from `better-auth/api`.
 
@@ -698,7 +699,10 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          if (user.isAgreedToTerms === false) { // Your special condition.
+          const userExtended = user as typeof user & {
+            isAgreedToTerms: boolean;
+          };
+          if (userExtended.isAgreedToTerms === false) { // Your special condition.
             // Send the API error.
             throw new APIError("BAD_REQUEST", {
               message: "User must agree to the TOS before signing up.",
@@ -713,6 +717,9 @@ export const auth = betterAuth({
   }
 })
 ```
+
+#### Using Addional Fields
+When working with database hooks, type inference for additional fields isn't automatically available. You'll need to manually cast the types for the time being.
 
 
 ## Plugins Schema
