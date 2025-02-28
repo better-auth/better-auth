@@ -221,7 +221,7 @@ importers:
         version: 11.13.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -557,7 +557,7 @@ importers:
         version: 14.0.2(@types/react-dom@18.3.2)(@types/react@18.3.14)(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
       geist:
         specifier: ^1.3.1
-        version: 1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
+        version: 1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))
       input-otp:
         specifier: ^1.4.1
         version: 1.4.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1718,6 +1718,30 @@ importers:
       vitest:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@22.10.7)(happy-dom@15.11.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
+
+  packages/stripe:
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.12
+      better-auth:
+        specifier: workspace:^
+        version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 1.0.3
+      better-sqlite3:
+        specifier: ^11.6.0
+        version: 11.6.0
+      stripe:
+        specifier: ^17.7.0
+        version: 17.7.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.0(@types/node@22.10.7)(happy-dom@15.11.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
+      zod:
+        specifier: ^3.24.1
+        version: 3.24.2
 
 packages:
 
@@ -8963,6 +8987,9 @@ packages:
 
   '@types/bun@1.2.4':
     resolution: {integrity: sha512-QtuV5OMR8/rdKJs213iwXDpfVvnskPXY/S0ZiFbsTjQZycuqPbMW8Gf/XhLfwE5njW8sxI2WjISURXPlHypMFA==}
+
+  '@types/canvas-confetti@1.9.0':
+    resolution: {integrity: sha512-aBGj/dULrimR1XDZLtG9JwxX1b4HPRF6CX9Yfwh3NvstZEm1ZL7RBnel4keCPSqs1ANRu1u2Aoz9R+VmtjYuTg==}
 
   '@types/chrome@0.0.258':
     resolution: {integrity: sha512-vicJi6cg2zaFuLmLY7laG6PHBknjKFusPYlaKQ9Zlycskofy71rStlGvW07MUuqUIVorZf8k5KH+zeTTGcH2dQ==}
@@ -24445,7 +24472,7 @@ snapshots:
 
   '@nuxt/devtools-wizard@1.6.0':
     dependencies:
-      consola: 3.2.3
+      consola: 3.4.0
       diff: 7.0.0
       execa: 7.2.0
       global-directory: 4.0.1
@@ -28938,7 +28965,7 @@ snapshots:
       '@tanstack/virtual-file-routes': 1.81.9
       prettier: 3.4.2
       tsx: 4.19.2
-      zod: 3.24.1
+      zod: 3.24.2
 
   '@tanstack/router-plugin@1.86.0(vite@6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
     dependencies:
@@ -28959,7 +28986,7 @@ snapshots:
       babel-dead-code-elimination: 1.0.6
       chokidar: 3.6.0
       unplugin: 1.16.0
-      zod: 3.24.1
+      zod: 3.24.2
     optionalDependencies:
       vite: 6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
     transitivePeerDependencies:
@@ -29289,6 +29316,8 @@ snapshots:
   '@types/bun@1.2.4':
     dependencies:
       bun-types: 1.2.4
+
+  '@types/canvas-confetti@1.9.0': {}
 
   '@types/chrome@0.0.258':
     dependencies:
@@ -35164,7 +35193,7 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.3.1(next@15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
+  geist@1.3.1(next@15.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)):
     dependencies:
       next: 15.1.2(@babel/core@7.26.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
 
@@ -41846,7 +41875,7 @@ snapshots:
 
   sass@1.83.1:
     dependencies:
-      chokidar: 4.0.1
+      chokidar: 4.0.3
       immutable: 5.0.3
       source-map-js: 1.2.1
     optionalDependencies:
@@ -42683,8 +42712,8 @@ snapshots:
       superstruct: 2.0.2
       valibot: 1.0.0-beta.15(typescript@5.7.2)
       yup: 1.4.0
-      zod: 3.24.1
-      zod-to-json-schema: 3.23.5(zod@3.24.1)
+      zod: 3.24.2
+      zod-to-json-schema: 3.23.5(zod@3.24.2)
     transitivePeerDependencies:
       - '@types/json-schema'
       - typescript
@@ -43964,7 +43993,7 @@ snapshots:
       unenv: 1.10.0
       unstorage: 1.13.1(@azure/identity@4.6.0)(ioredis@5.4.1)
       vite: 6.0.11(@types/node@22.10.7)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
-      zod: 3.24.1
+      zod: 3.24.2
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -44149,7 +44178,7 @@ snapshots:
     dependencies:
       esbuild: 0.24.2
       postcss: 8.4.49
-      rollup: 4.31.0
+      rollup: 4.34.8
     optionalDependencies:
       '@types/node': 22.10.7
       fsevents: 2.3.3
@@ -44746,6 +44775,11 @@ snapshots:
   zod-to-json-schema@3.23.5(zod@3.24.1):
     dependencies:
       zod: 3.24.1
+
+  zod-to-json-schema@3.23.5(zod@3.24.2):
+    dependencies:
+      zod: 3.24.2
+    optional: true
 
   zod-to-ts@1.2.0(typescript@5.7.2)(zod@3.24.1):
     dependencies:

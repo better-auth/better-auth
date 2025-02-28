@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@better-auth/stripe": "workspace:*",
-    "@better-fetch/fetch": "1.1.12",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^3.9.1",
     "@libsql/client": "^0.12.0",
@@ -53,7 +52,6 @@
     "@tanstack/react-query": "^5.62.3",
     "@types/better-sqlite3": "^7.6.12",
     "better-auth": "workspace:*",
-    "better-call": "0.2.3-beta.2",
     "better-call": "catalog:",
     "better-sqlite3": "^11.6.0",
     "canvas-confetti": "^1.9.3",
