@@ -290,12 +290,12 @@ export const acceptInvitation = createAuthEndpoint(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 			});
 		}
-		const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+		const membershipLimit = ctx.context.orgOptions?.membershipLimit;
 		const members = await adapter.listMembers({
 			organizationId: invitation.organizationId,
 		});
 
-		if (members.length >= membershipLimit) {
+		if (membershipLimit && members.length >= membershipLimit) {
 			throw new APIError("FORBIDDEN", {
 				message: ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 			});

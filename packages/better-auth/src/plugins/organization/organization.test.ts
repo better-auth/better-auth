@@ -16,7 +16,7 @@ describe("organization", async (it) => {
 			},
 			plugins: [
 				organization({
-					membershipLimit: 5,
+					membershipLimit: 6,
 					async sendInvitationEmail(data, request) {},
 					schema: {
 						organization: {
@@ -639,8 +639,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(getFullOrganization.data?.members.length).toBe(5);
-		console.log(getFullOrganization.data);
+		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
 });
 

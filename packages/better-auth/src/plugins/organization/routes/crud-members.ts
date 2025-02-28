@@ -72,10 +72,10 @@ export const addMember = <O extends OrganizationOptions>() =>
 				});
 			}
 
-			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit;
 			const members = await adapter.listMembers({ organizationId: orgId });
 
-			if (members.length >= membershipLimit) {
+			if (membershipLimit && members.length >= membershipLimit) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
