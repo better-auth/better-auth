@@ -11,7 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@better-fetch/fetch": "1.1.12",
+    "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^3.9.1",
     "@libsql/client": "^0.12.0",
     "@libsql/kysely-libsql": "^0.4.1",
@@ -56,6 +56,7 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
     "consola": "^3.2.3",
+    "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.1",
     "framer-motion": "^11.13.1",

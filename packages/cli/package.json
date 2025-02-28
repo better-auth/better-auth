@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.2.0-beta.16",
+  "version": "1.2.0-beta.17",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
   "repository": {
@@ -10,10 +10,10 @@
   },
   "main": "./dist/index.mjs",
   "scripts": {
-    "dev": "tsup --watch --sourcemap",
+    "build": "unbuild",
+    "stub": "unbuild --stub",
     "start": "node ./dist/index.mjs",
-    "test": "vitest",
-    "build": "tsup --clean"
+    "test": "vitest"
   },
   "publishConfig": {
     "executableFiles": [
@@ -24,8 +24,8 @@
   "bin": "./dist/index.mjs",
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
     "vitest": "^1.6.0"
   },
   "dependencies": {

@@ -20,7 +20,7 @@ describe("SSO", async () => {
 	});
 
 	afterAll(async () => {
-		await server.stop();
+		await server.stop().catch(() => {});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
