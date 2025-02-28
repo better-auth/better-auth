@@ -18,7 +18,9 @@
 		"strict": true,
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true,
-		"downlevelIteration": true
+		"downlevelIteration": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true
 	},
 	"exclude": ["**/dist", "node_modules"],
 	"references": [],

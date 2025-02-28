@@ -774,6 +774,11 @@ export const contents: Content[] = [
 				icon: LucideAArrowDown,
 			},
 			{
+				title: "NestJS",
+				icon: Icons.nestJS,
+				href: "/docs/integrations/nestjs",
+			},
+			{
 				title: "Hono",
 				icon: Icons.hono,
 				href: "/docs/integrations/hono",

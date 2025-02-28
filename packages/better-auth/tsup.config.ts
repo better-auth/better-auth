@@ -28,6 +28,7 @@ export default defineConfig((env) => {
 			"svelte-kit": "./src/integrations/svelte-kit.ts",
 			"solid-start": "./src/integrations/solid-start.ts",
 			"next-js": "./src/integrations/next-js.ts",
+			nestjs: "./src/integrations/nestjs.ts",
 			node: "./src/integrations/node.ts",
 			"plugins/admin": "./src/plugins/admin/index.ts",
 			"plugins/admin/access": "./src/plugins/admin/access/index.ts",

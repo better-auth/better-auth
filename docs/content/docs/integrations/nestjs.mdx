@@ -1,0 +1,158 @@
+---
+title: NestJS Integration
+description: Integrate Better Auth with NestJS.
+---
+
+This guide will show you how to integrate Better Auth with [NestJS](https://nestjs.com/).
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+## Basic Setup
+
+The simplest way to integrate Better Auth with NestJS is to import the `AuthModule` in your root module:
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { AuthModule } from 'better-auth/nestjs';
+import { auth } from "./auth";
+
+@Module({
+  imports: [
+    AuthModule.forRoot(auth),
+  ],
+})
+export class AppModule {}
+```
+
+This will automatically:
+- Mount the Better Auth handler at `/api/auth/*`
+- Set up proper CORS configuration
+- Configure session handling
+
+## Custom Hooks
+
+The NestJS integration provides decorators to easily create hooks that integrate with NestJS's dependency injection system:
+
+```ts title="hooks/sign-up.hook.ts"
+import { Injectable } from "@nestjs/common";
+import { BeforeHook, AuthContext } from "better-auth/nest";
+import { SignUpService } from "./sign-up.service";
+
+@Injectable()
+export class SignUpHook {
+    constructor(private readonly signUpService: SignUpService) {}
+
+    @BeforeHook('/sign-up/email')
+    async handle(ctx: AuthContext) {
+        // Custom logic like enforcing email domain registration
+        // Can throw APIError if validation fails
+        await this.signUpService.execute(ctx);
+    }
+}
+```
+
+Register your hooks in a module:
+
+```ts title="auth/auth.module.ts"
+import { Module } from '@nestjs/common';
+import { SignUpHook } from './hooks/sign-up.hook';
+import { SignUpService } from './sign-up.service';
+
+@Module({
+  providers: [SignUpHook, SignUpService],
+})
+export class AuthModule {}
+```
+
+## Advanced Configuration
+
+You can customize the AuthModule configuration using `forRoot`:
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { AuthModule } from 'better-auth/nestjs';
+import { auth } from "./auth";
+
+@Module({
+  imports: [
+    AuthModule.forRoot(auth, {
+      path: '/custom/auth', // Custom mount path
+      cors: {
+        origin: ['http://localhost:3000'],
+        credentials: true,
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+## Getting the User Session
+
+You can access the user session in your controllers using the `Session` decorator:
+
+```ts title="user.controller.ts"
+import { Controller, Get } from '@nestjs/common';
+import { Session } from 'better-auth/nestjs';
+import type { UserSession } from 'better-auth';
+
+@Controller('users')
+export class UserController {
+  @Get('me')
+  async getProfile(@Session() session: UserSession) {
+    return session;
+  }
+}
+```
+
+## Using with Database Adapters
+
+If you're using a database adapter (like Prisma), you can configure it using NestJS's dependency injection:
+
+```ts title="auth/auth.module.ts"
+import { Module } from '@nestjs/common';
+import { AuthModule } from 'better-auth/nestjs';
+import { PrismaService } from './prisma.service';
+import { auth } from './auth';
+
+@Module({
+  imports: [
+    AuthModule.forRootAsync({
+      useFactory: (prisma: PrismaService) => {
+        return {
+          auth: auth.withAdapter({
+            // Your adapter configuration using prisma
+            adapter: createPrismaAdapter(prisma),
+          }),
+        };
+      },
+      inject: [PrismaService],
+    }),
+  ],
+  providers: [PrismaService],
+})
+export class AppModule {}
+```
+
+## Error Handling
+
+Better Auth errors are automatically converted to NestJS HTTP exceptions. You can create a custom exception filter if you need to customize error handling:
+
+```ts title="auth/auth-exception.filter.ts"
+import { ExceptionFilter, Catch, ArgumentsHost } from '@nestjs/common';
+import { APIError } from 'better-auth';
+
+@Catch(APIError)
+export class AuthExceptionFilter implements ExceptionFilter {
+  catch(exception: APIError, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse();
+
+    response.status(exception.status).json({
+      statusCode: exception.status,
+      message: exception.message,
+      code: exception.code,
+    });
+  }
+}
+```
