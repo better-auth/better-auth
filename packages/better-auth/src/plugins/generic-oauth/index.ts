@@ -108,9 +108,13 @@ interface GenericOAuthConfig {
 	authorizationUrlParams?: Record<string, string>;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
-	 * sign-in need to be calle dwith with requestSignUp as true to create new users.
+	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
 	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -478,7 +482,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL, requestSignUp, newUserURL } = parsedState;
+					const {
+						callbackURL,
+						codeVerifier,
+						errorURL,
+						requestSignUp,
+						newUserURL,
+					} = parsedState;
 					const code = ctx.query.code;
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -557,7 +567,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
-						disableSignUp: provider.disableImplicitSignUp && !requestSignUp,
+						disableSignUp:
+							(provider.disableImplicitSignUp && !requestSignUp) ||
+							provider.disableSignUp,
 					});
 
 					function redirectOnError(error: string) {

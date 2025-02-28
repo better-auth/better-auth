@@ -168,7 +168,9 @@ export const callbackOAuth = createAuthEndpoint(
 				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
-			disableSignUp: provider.disableImplicitSignUp && !requestSignUp,
+			disableSignUp:
+				(provider.disableImplicitSignUp && !requestSignUp) ||
+				provider.disableSignUp,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

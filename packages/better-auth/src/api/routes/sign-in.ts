@@ -232,7 +232,9 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
-				disableSignUp: provider.disableImplicitSignUp && !c.body.requestSignUp,
+				disableSignUp:
+					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
+					provider.disableSignUp,
 			});
 			if (data.error) {
 				throw new APIError("UNAUTHORIZED", {
