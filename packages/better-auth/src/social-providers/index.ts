@@ -40,7 +40,6 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	...(keyof typeof socialProviders)[],
 ];
 
-export type SocialProviderList = typeof socialProviderList;
 
 export const SocialProviderListEnum = z.enum(socialProviderList, {
 	description: "OAuth2 provider to use",
