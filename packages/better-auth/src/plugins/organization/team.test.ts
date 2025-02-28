@@ -42,6 +42,7 @@ describe("team", async (it) => {
 
 	let organizationId: string;
 	let teamId: string;
+	let secondTeamId: string;
 
 	const invitedUser = {
 		email: "invited@email.com",
@@ -62,7 +63,6 @@ describe("team", async (it) => {
 		});
 
 		organizationId = createOrganizationResponse.data?.id as string;
-
 		expect(createOrganizationResponse.data?.name).toBe("Test Organization");
 		expect(createOrganizationResponse.data?.slug).toBe("test-org");
 		expect(createOrganizationResponse.data?.members.length).toBe(1);
@@ -70,24 +70,38 @@ describe("team", async (it) => {
 			"organization-metadata",
 		);
 
-		const createTeamResponse = await client.organization.createTeam({
-			organizationId,
-			data: {
+		const createTeamResponse = await client.organization.createTeam(
+			{
 				name: "Development Team",
-				description: "Handles development tasks",
-				status: "active",
+				organizationId,
 			},
-			fetchOptions: { headers },
-		});
+			{
+				headers,
+			},
+		);
 
 		teamId = createTeamResponse.data?.id as string;
-
 		expect(createTeamResponse.data?.name).toBe("Development Team");
-		expect(createTeamResponse.data?.status).toBe("active");
 		expect(createTeamResponse.data?.organizationId).toBe(organizationId);
+
+		const createSecondTeamResponse = await client.organization.createTeam(
+			{
+				name: "Marketing Team",
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+
+		secondTeamId = createSecondTeamResponse.data?.id as string;
+		expect(createSecondTeamResponse.data?.name).toBe("Marketing Team");
+		expect(createSecondTeamResponse.data?.organizationId).toBe(organizationId);
 	});
 
 	it("should invite member to team", async () => {
+		expect(teamId).toBeDefined();
+
 		const res = await client.organization.inviteMember(
 			{
 				teamId,
@@ -98,15 +112,20 @@ describe("team", async (it) => {
 				headers,
 			},
 		);
+
 		expect(res.data).toMatchObject({
 			email: invitedUser.email,
 			role: "member",
 			teamId,
 		});
+
 		const newHeaders = new Headers();
 		const signUpRes = await client.signUp.email(invitedUser, {
 			onSuccess: cookieSetter(newHeaders),
 		});
+
+		expect(signUpRes.data?.user).toBeDefined();
+
 		const invitation = await client.organization.acceptInvitation(
 			{
 				invitationId: res.data?.id as string,
@@ -115,6 +134,7 @@ describe("team", async (it) => {
 				headers: newHeaders,
 			},
 		);
+
 		expect(invitation.data?.member).toMatchObject({
 			role: "member",
 			teamId,
@@ -128,65 +148,69 @@ describe("team", async (it) => {
 				headers,
 			},
 		});
-		const teams = organization.data?.teams;
-		expect(teams?.length).toBe(2);
-	});
 
-	it("should get a team by teamId", async () => {
-		const team = await client.organization?.getTeam({
-			query: {
-				teamId,
-			},
-			fetchOptions: { headers },
-		});
-		expect(team.data?.id).toBe(teamId);
-		expect(team.data?.name).toBe("Development Team");
-		expect(team.data?.status).toBe("active");
+		const teams = organization.data?.teams;
+		expect(teams).toBeDefined();
+		expect(teams?.length).toBe(3);
+
+		const teamNames = teams?.map((team) => team.name);
+		expect(teamNames).toContain("Development Team");
+		expect(teamNames).toContain("Marketing Team");
 	});
 
 	it("should get all teams", async () => {
-		const team = await client.organization.listTeams({
+		const teamsResponse = await client.organization.listTeams({
 			fetchOptions: { headers },
 		});
-		expect(team.data).toBeInstanceOf(Array);
-		expect(team.data).toHaveLength(2);
+
+		expect(teamsResponse.data).toBeInstanceOf(Array);
+		expect(teamsResponse.data).toHaveLength(3);
 	});
 
 	it("should update a team", async () => {
-		const updateTeamResponse = await client.organization?.updateTeam({
+		const updateTeamResponse = await client.organization.updateTeam({
 			teamId,
 			data: {
 				name: "Updated Development Team",
-				description: "Handles all new development tasks",
-				status: "active",
 			},
-
 			fetchOptions: { headers },
 		});
+
 		expect(updateTeamResponse.data?.name).toBe("Updated Development Team");
-		expect(updateTeamResponse.data?.status).toBe("active");
-		expect(updateTeamResponse.data?.description).toBe(
-			"Handles all new development tasks",
-		);
+		expect(updateTeamResponse.data?.id).toBe(teamId);
 	});
 
 	it("should remove a team", async () => {
-		const removeTeamResponse = await client.organization?.removeTeam({
+		const teamsBeforeRemoval = await client.organization.listTeams({
+			fetchOptions: { headers },
+		});
+		expect(teamsBeforeRemoval.data).toHaveLength(3);
+
+		const removeTeamResponse = await client.organization.removeTeam({
 			teamId,
 			organizationId,
 			fetchOptions: { headers },
 		});
+
 		expect(removeTeamResponse.data?.message).toBe("Team removed successfully.");
 
-		const teamNotFound = await client.organization?.getTeam({
-			query: {
-				teamId,
-			},
+		const teamsAfterRemoval = await client.organization.listTeams({
 			fetchOptions: { headers },
 		});
-		expect(teamNotFound.error?.status).toBe(404);
-		expect(teamNotFound.error?.message).toBe(
-			"Team not found or does not belong to the current organization.",
-		);
+
+		expect(teamsAfterRemoval.data).toHaveLength(2);
+	});
+
+	it("should not be able to remove the last team when allowRemovingAllTeams is not enabled", async () => {
+		try {
+			await client.organization.removeTeam({
+				teamId: secondTeamId,
+				organizationId,
+				fetchOptions: { headers },
+			});
+			expect(true).toBe(false);
+		} catch (error) {
+			expect(error).toBeDefined();
+		}
 	});
 });

@@ -35,6 +35,11 @@ export const createInvitation = <O extends OrganizationOptions | undefined>(
 							"Resend the invitation email, if the user is already invited",
 					})
 					.optional(),
+				teamId: z
+					.string({
+						description: "The team ID to invite the user to",
+					})
+					.optional(),
 			}),
 			metadata: {
 				$Infer: {

@@ -251,7 +251,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			metadata: {
 				$Infer: {
 					body: {} as {
-						role: InferRolesFromOption<O>;
+						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
 						memberId: string;
 						/**
 						 * If not provided, the active organization will be used

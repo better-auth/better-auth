@@ -40,9 +40,7 @@ export const organizationClient = Object.assign(
 
 		type DefaultStatements = typeof defaultStatements;
 		type Statements = O["ac"] extends AccessControl<infer S>
-			? S extends Record<string, Array<any>>
-				? S & DefaultStatements
-				: DefaultStatements
+			? S & DefaultStatements
 			: DefaultStatements;
 		const roles = {
 			admin: adminAc,

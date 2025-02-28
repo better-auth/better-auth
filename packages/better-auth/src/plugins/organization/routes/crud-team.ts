@@ -23,14 +23,10 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			use: [orgMiddleware],
 		},
 		async (ctx) => {
-			const session =
-				ctx.body.organizationId || ctx.body.organizationId === null
-					? await getSessionFromCtx(ctx)
-					: null;
+			const session = await getSessionFromCtx(ctx);
 			const organizationId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
-
-			if ((!session && ctx.request) || ctx.headers) {
+			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");
 			}
 
