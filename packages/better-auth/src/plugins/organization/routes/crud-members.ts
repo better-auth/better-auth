@@ -61,10 +61,21 @@ export const addMember = <O extends OrganizationOptions>() =>
 				email: user.email,
 				organizationId: orgId,
 			});
+
 			if (alreadyMember) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
+
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const members = await adapter.listMembers({ organizationId: orgId });
+
+			if (members.length >= membershipLimit) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				});
 			}
 

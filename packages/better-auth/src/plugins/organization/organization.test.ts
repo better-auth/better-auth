@@ -6,6 +6,7 @@ import { organizationClient } from "./client";
 import { createAccessControl } from "../access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { BetterAuthError } from "../../error";
+import { APIError } from "better-call";
 
 describe("organization", async (it) => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
@@ -15,6 +16,7 @@ describe("organization", async (it) => {
 			},
 			plugins: [
 				organization({
+					membershipLimit: 5,
 					async sendInvitationEmail(data, request) {},
 					schema: {
 						organization: {
@@ -511,6 +513,121 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(member?.role).toBe("admin");
+	});
+
+	it("should respect membershipLimit when adding members to organization", async () => {
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test-5-membership-limit",
+				slug: "test-5-membership-limit",
+			},
+			headers,
+		});
+
+		const users = [
+			"user1@emial.com",
+			"user2@email.com",
+			"user3@email.com",
+			"user4@email.com",
+		];
+
+		for (const user of users) {
+			const newUser = await auth.api.signUpEmail({
+				body: {
+					email: user,
+					password: "password",
+					name: user,
+				},
+			});
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					Authorization: `Bearer ${newUser?.token}`,
+				}),
+			});
+			await auth.api.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session?.user.id!,
+					role: "admin",
+				},
+			});
+		}
+
+		const userOverLimit = {
+			email: "shouldthrowerror@email.com",
+			password: "password",
+			name: "name",
+		};
+
+		// test api method
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: userOverLimit.email,
+				password: userOverLimit.password,
+				name: userOverLimit.name,
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
+		await auth.api
+			.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session?.user.id!,
+					role: "admin",
+				},
+			})
+			.catch((e: APIError) => {
+				expect(e).not.toBeNull();
+				expect(e).toBeInstanceOf(APIError);
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+				);
+			});
+
+		// test client method
+		const invite = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: userOverLimit.email,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data) throw new Error("Invitation not created");
+		await client.signUp.email({
+			email: userOverLimit.email,
+			password: userOverLimit.password,
+			name: userOverLimit.name,
+		});
+		const { res, headers: headers2 } = await signInWithUser(
+			userOverLimit.email,
+			userOverLimit.password,
+		);
+
+		const invitation = await client.organization.acceptInvitation({
+			invitationId: invite.data.id,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(invitation.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+		);
+
+		const getFullOrganization = await client.organization.getFullOrganization({
+			query: {
+				organizationId: org?.id,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(getFullOrganization.data?.members.length).toBe(5);
+		console.log(getFullOrganization.data);
 	});
 });
 
