@@ -292,15 +292,17 @@ export const drizzleAdapter =
 				const clause = where ? convertWhereClause(where, model) : [];
 
 				const sortFn = sortBy?.direction === "desc" ? desc : asc;
-				const builder = db.select().from(schemaModel);
+				let builder = db.select().from(schemaModel);
 				if (limit) {
-					builder.limit(limit);
+					builder = builder.limit(limit);
 				}
 				if (offset) {
-					builder.offset(offset);
+					builder = builder.offset(offset);
 				}
 				if (sortBy?.field) {
-					builder.orderBy(sortFn(schemaModel[getField(model, sortBy?.field)]));
+					builder = builder.orderBy(
+						sortFn(schemaModel[getField(model, sortBy?.field)]),
+					);
 				}
 				const res = (await builder.where(...clause)) as any[];
 				return res.map((r) => transformOutput(r, model));
