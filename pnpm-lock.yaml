@@ -1720,13 +1720,17 @@ importers:
         version: 1.6.0(@types/node@22.10.7)(happy-dom@15.11.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
 
   packages/stripe:
+    dependencies:
+      better-auth:
+        specifier: workspace:^
+        version: link:../better-auth
+      zod:
+        specifier: ^3.24.1
+        version: 3.24.2
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.12
         version: 7.6.12
-      better-auth:
-        specifier: workspace:^
-        version: link:../better-auth
       better-call:
         specifier: 'catalog:'
         version: 1.0.3
@@ -1739,9 +1743,6 @@ importers:
       vitest:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@22.10.7)(happy-dom@15.11.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
-      zod:
-        specifier: ^3.24.1
-        version: 3.24.2
 
 packages:
 
