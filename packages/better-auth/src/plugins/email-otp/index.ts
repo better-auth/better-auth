@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError, createAuthEndpoint, createAuthMiddleware } from "../../api";
 import type { BetterAuthPlugin } from "../../types";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { setSessionCookie } from "../../cookies";
+import { getEndpointResponse } from "../../utils/plugin-helper";
 
 export interface EmailOTPOptions {
 	/**
@@ -118,7 +119,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const email = ctx.body.email;
 					const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 					if (!emailRegex.test(email)) {
-						throw new APIError("BAD_REQUEST", {
+						throw ctx.error("BAD_REQUEST", {
 							message: ERROR_CODES.INVALID_EMAIL,
 						});
 					}
@@ -315,9 +316,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
@@ -343,6 +341,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							email,
 							emailVerified: true,
 						},
+						ctx,
 					);
 
 					if (
@@ -436,9 +435,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
@@ -459,11 +455,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								message: ERROR_CODES.USER_NOT_FOUND,
 							});
 						}
-						const newUser = await ctx.context.internalAdapter.createUser({
-							email,
-							emailVerified: true,
-							name: "",
-						});
+						const newUser = await ctx.context.internalAdapter.createUser(
+							{
+								email,
+								emailVerified: true,
+								name: "",
+							},
+							ctx,
+						);
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.id,
 							ctx.request,
@@ -487,9 +486,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 
 					if (!user.user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.user.id, {
-							emailVerified: true,
-						});
+						await ctx.context.internalAdapter.updateUser(
+							user.user.id,
+							{
+								emailVerified: true,
+							},
+							ctx,
+						);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -637,9 +640,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("BAD_REQUEST", {
 							message: ERROR_CODES.OTP_EXPIRED,
 						});
@@ -660,16 +660,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						(account) => account.providerId === "credential",
 					);
 					if (!account) {
-						await ctx.context.internalAdapter.createAccount({
-							userId: user.user.id,
-							providerId: "credential",
-							accountId: user.user.id,
-							password: passwordHash,
-						});
+						await ctx.context.internalAdapter.createAccount(
+							{
+								userId: user.user.id,
+								providerId: "credential",
+								accountId: user.user.id,
+								password: passwordHash,
+							},
+							ctx,
+						);
 					} else {
 						await ctx.context.internalAdapter.updatePassword(
 							user.user.id,
 							passwordHash,
+							ctx,
 						);
 					}
 
@@ -688,19 +692,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							opts.sendVerificationOnSignUp
 						);
 					},
-					async handler(ctx) {
-						const response = ctx.context.returned;
-						if (response instanceof APIError) {
-							return;
-						}
-						const email =
-							response && "email" in response
-								? response.email
-								: response instanceof Response
-									? response.status === 200
-										? ctx.body.email
-										: null
-									: null;
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<{
+							user: { email: string };
+						}>(ctx);
+						const email = response?.user.email;
 						if (email) {
 							const otp = opts.generateOTP(
 								{ email, type: ctx.body.type },
@@ -720,7 +716,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								ctx.request,
 							);
 						}
-					},
+					}),
 				},
 			],
 		},
