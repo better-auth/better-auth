@@ -1,13 +1,5 @@
-import {
-	APIError,
-	type Endpoint,
-	type EndpointResponse,
-	createEndpointCreator,
-	createMiddleware,
-	createMiddlewareCreator,
-} from "better-call";
+import { createEndpoint, createMiddleware } from "better-call";
 import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types/options";
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -18,7 +10,7 @@ export const optionsMiddleware = createMiddleware(async () => {
 	return {} as AuthContext;
 });
 
-export const createAuthMiddleware = createMiddlewareCreator({
+export const createAuthMiddleware = createMiddleware.create({
 	use: [
 		optionsMiddleware,
 		/**
@@ -26,25 +18,16 @@ export const createAuthMiddleware = createMiddlewareCreator({
 		 */
 		createMiddleware(async () => {
 			return {} as {
-				returned?: APIError | Response | Record<string, any>;
-				endpoint: Endpoint;
+				returned?: unknown;
+				responseHeaders?: Headers;
 			};
 		}),
 	],
 });
 
-export const createAuthEndpoint = createEndpointCreator({
+export const createAuthEndpoint = createEndpoint.create({
 	use: [optionsMiddleware],
 });
 
-export type AuthEndpoint = Endpoint<
-	(ctx: {
-		options: BetterAuthOptions;
-		body: any;
-		query: any;
-		params: any;
-		headers: Headers;
-	}) => Promise<EndpointResponse>
->;
-
+export type AuthEndpoint = ReturnType<typeof createAuthEndpoint>;
 export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;

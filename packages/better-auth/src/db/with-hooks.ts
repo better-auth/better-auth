@@ -1,4 +1,10 @@
-import type { Adapter, BetterAuthOptions, Models, Where } from "../types";
+import type {
+	Adapter,
+	BetterAuthOptions,
+	GenericEndpointContext,
+	Models,
+	Where,
+} from "../types";
 
 export function getWithHooks(
 	adapter: Adapter,
@@ -19,18 +25,22 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
+		context?: GenericEndpointContext,
 	) {
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
 			if (toRun) {
-				const result = await toRun(data as any);
+				const result = await toRun(actualData as any, context);
 				if (result === false) {
 					return null;
 				}
 				const isObject = typeof result === "object" && "data" in result;
 				if (isObject) {
-					actualData = result.data as T;
+					actualData = {
+						...actualData,
+						...result.data,
+					};
 				}
 			}
 		}
@@ -49,7 +59,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
 			if (toRun) {
-				await toRun(created as any);
+				await toRun(created as any, context);
 			}
 		}
 
@@ -64,13 +74,14 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
+		context?: GenericEndpointContext,
 	) {
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
-				const result = await toRun(data as any);
+				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
 				}
@@ -95,7 +106,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				await toRun(updated as any);
+				await toRun(updated as any, context);
 			}
 		}
 		return updated;
@@ -109,13 +120,14 @@ export function getWithHooks(
 			fn: (data: Record<string, any>) => void | Promise<any>;
 			executeMainFn?: boolean;
 		},
+		context?: GenericEndpointContext,
 	) {
 		let actualData = data;
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.before;
 			if (toRun) {
-				const result = await toRun(data as any);
+				const result = await toRun(data as any, context);
 				if (result === false) {
 					return null;
 				}
@@ -140,7 +152,7 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				await toRun(updated as any);
+				await toRun(updated as any, context);
 			}
 		}
 
