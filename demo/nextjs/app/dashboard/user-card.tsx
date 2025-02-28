@@ -66,8 +66,8 @@ export default function UserCard(props: {
 	subscription?: Subscription;
 }) {
 	const router = useRouter();
-	const { data } = useSession();
-	const session = data || props.session;
+	const { data, isPending } = useSession();
+	const session = data;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");

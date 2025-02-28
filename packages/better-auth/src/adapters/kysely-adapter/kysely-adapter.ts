@@ -31,6 +31,9 @@ const createTransform = (
 	}
 
 	function transformValueToDB(value: any, model: string, field: string) {
+		if (field === "id") {
+			return value;
+		}
 		const { type = "sqlite" } = config || {};
 		const f = schema[model].fields[field];
 		if (
@@ -138,13 +141,14 @@ const createTransform = (
 			};
 
 			w.forEach((condition) => {
-				const {
+				let {
 					field: _field,
 					value,
 					operator = "=",
 					connector = "AND",
 				} = condition;
 				const field = getField(model, _field);
+				value = transformValueToDB(value, model, _field);
 				const expr = (eb: any) => {
 					if (operator.toLowerCase() === "in") {
 						return eb(field, "in", Array.isArray(value) ? value : [value]);

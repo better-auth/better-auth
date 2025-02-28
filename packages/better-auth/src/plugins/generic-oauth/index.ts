@@ -557,6 +557,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userId: link.userId,
 							providerId: provider.providerId,
 							accountId: userInfo.id,
+							accessToken: tokens.accessToken,
+							refreshToken: tokens.refreshToken,
+							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+							scope: tokens.scopes?.join(","),
 						});
 						if (!newAccount) {
 							return redirectOnError("unable_to_link_account");
