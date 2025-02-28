@@ -8,6 +8,8 @@ import type {
 	MemberInput,
 	Organization,
 	OrganizationInput,
+	Team,
+	TeamInput,
 } from "./schema";
 import { BetterAuthError } from "../../error";
 import type { AuthContext } from "../../types";
@@ -209,7 +211,10 @@ export const getOrgAdapter = (
 		createMember: async (data: MemberInput) => {
 			const member = await adapter.create<MemberInput>({
 				model: "member",
-				data: data,
+				data: {
+					...data,
+					createdAt: new Date(),
+				},
 			});
 			return member;
 		},
@@ -330,9 +335,11 @@ export const getOrgAdapter = (
 		findFullOrganization: async ({
 			organizationId,
 			isSlug,
+			includeTeams,
 		}: {
 			organizationId: string;
 			isSlug?: boolean;
+			includeTeams?: boolean;
 		}) => {
 			const org = await adapter.findOne<Organization>({
 				model: "organization",
@@ -341,7 +348,7 @@ export const getOrgAdapter = (
 			if (!org) {
 				return null;
 			}
-			const [invitations, members] = await Promise.all([
+			const [invitations, members, teams] = await Promise.all([
 				adapter.findMany<Invitation>({
 					model: "invitation",
 					where: [{ field: "organizationId", value: org.id }],
@@ -350,6 +357,12 @@ export const getOrgAdapter = (
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
 				}),
+				includeTeams
+					? adapter.findMany<Team>({
+							model: "team",
+							where: [{ field: "organizationId", value: org.id }],
+						})
+					: null,
 			]);
 
 			if (!org) return null;
@@ -383,6 +396,7 @@ export const getOrgAdapter = (
 				...org,
 				invitations,
 				members: membersWithUsers,
+				teams,
 			};
 		},
 		listOrganizations: async (userId: string) => {
@@ -414,6 +428,130 @@ export const getOrgAdapter = (
 			});
 			return organizations;
 		},
+		createTeam: async (data: TeamInput) => {
+			const team = await adapter.create<TeamInput, Team>({
+				model: "team",
+				data,
+			});
+			return team;
+		},
+		findTeamById: async (teamId: string) => {
+			const team = await adapter.findOne<Team>({
+				model: "team",
+				where: [
+					{
+						field: "id",
+						value: teamId,
+					},
+				],
+			});
+			const members = await adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
+			if (!team) {
+				return null;
+			}
+			return {
+				...team,
+				members,
+			};
+		},
+		updateTeam: async (
+			teamId: string,
+			data: { name?: string; description?: string; status?: string },
+		) => {
+			const team = await adapter.update<Team>({
+				model: "team",
+				where: [
+					{
+						field: "id",
+						value: teamId,
+					},
+				],
+				update: {
+					...data,
+				},
+			});
+			return team;
+		},
+
+		deleteTeam: async (teamId: string) => {
+			const team = await adapter.delete<Team>({
+				model: "team",
+				where: [
+					{
+						field: "id",
+						value: teamId,
+					},
+				],
+			});
+			return team;
+		},
+
+		listTeams: async (organizationId: string) => {
+			const teams = await adapter.findMany({
+				model: "team",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			return teams;
+		},
+
+		createTeamInvitation: async ({
+			email,
+			role,
+			teamId,
+			organizationId,
+			inviterId,
+			expiresIn = 1000 * 60 * 60 * 48, // Default expiration: 48 hours
+		}: {
+			email: string;
+			role: string;
+			teamId: string;
+			organizationId: string;
+			inviterId: string;
+			expiresIn?: number;
+		}) => {
+			const expiresAt = getDate(expiresIn); // Get expiration date
+
+			const invitation = await adapter.create<InvitationInput, Invitation>({
+				model: "invitation",
+				data: {
+					email,
+					role,
+					organizationId,
+					teamId,
+					inviterId,
+					status: "pending",
+					expiresAt,
+				},
+			});
+
+			return invitation;
+		},
+		findInvitationsByTeamId: async (teamId: string) => {
+			const invitations = await adapter.findMany<Invitation>({
+				model: "invitation",
+				where: [
+					{
+						field: "teamId",
+						value: teamId,
+					},
+				],
+			});
+			return invitations;
+		},
+
 		createInvitation: async ({
 			invitation,
 			user,
@@ -422,6 +560,7 @@ export const getOrgAdapter = (
 				email: string;
 				role: string;
 				organizationId: string;
+				teamId?: string;
 			};
 			user: User;
 		}) => {
@@ -432,12 +571,10 @@ export const getOrgAdapter = (
 			const invite = await adapter.create<InvitationInput, Invitation>({
 				model: "invitation",
 				data: {
-					email: invitation.email,
-					role: invitation.role,
-					organizationId: invitation.organizationId,
 					status: "pending",
 					expiresAt,
 					inviterId: user.id,
+					...invitation,
 				},
 			});
 
