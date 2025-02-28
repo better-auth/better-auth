@@ -20,7 +20,7 @@ describe("SSO", async () => {
 	});
 
 	afterAll(async () => {
-		await server.stop();
+		await server.stop().catch(() => {});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
@@ -133,7 +133,7 @@ describe("SSO", async () => {
 		} catch (e) {
 			expect(e).toMatchObject({
 				status: "BAD_REQUEST",
-				cause: {
+				body: {
 					message: "Invalid issuer. Must be a valid URL",
 				},
 			});
@@ -161,6 +161,22 @@ describe("SSO", async () => {
 			body: {
 				email: "my-email@test.com",
 				domain: "localhost.com",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
+		);
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should signin with SSO provider with providerId", async () => {
+		const res = await auth.api.signInSSO({
+			body: {
+				providerId: "test",
 				callbackURL: "/dashboard",
 			},
 		});
@@ -290,7 +306,7 @@ describe("provisioning", async (ctx) => {
 			headers,
 		});
 		const member = org?.members.find(
-			(m) => m.user.email === "sso-user@localhost:8000.com",
+			(m: any) => m.user.email === "sso-user@localhost:8000.com",
 		);
 		expect(member).toMatchObject({
 			role: "member",

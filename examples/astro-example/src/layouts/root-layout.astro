@@ -4,31 +4,31 @@ import "../app.css";
 
 <script is:inline>
   const getThemePreference = () => {
-      if (
-          typeof localStorage !== "undefined" &&
-          localStorage.getItem("theme")
-      ) {
-          return localStorage.getItem("theme");
-      }
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
+    if (
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem("theme")
+    ) {
+      return localStorage.getItem("theme");
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   };
 
   const setColorMode = () => {
-      const isDark = getThemePreference() === "dark";
-      document.documentElement.classList[isDark ? "add" : "remove"]("dark");
+    const isDark = getThemePreference() === "dark";
+    document.documentElement.classList[isDark ? "add" : "remove"]("dark");
   };
 
   if (typeof localStorage !== "undefined") {
-      const observer = new MutationObserver(() => {
-          const isDark = document.documentElement.classList.contains("dark");
-          localStorage.setItem("theme", isDark ? "dark" : "light");
-      });
-      observer.observe(document.documentElement, {
-          attributes: true,
-          attributeFilter: ["class"],
-      });
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
   }
 
   setColorMode();
@@ -38,15 +38,16 @@ import "../app.css";
 
 
 <html>
+  <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
     <title>Astro</title>
   </head>
-    <body class="w-full h-screen flex-col items-center flex justify-center">
+  <body class="w-full h-screen flex-col items-center flex justify-center">
     <div class="w-1/2 flex justify-center">
       <slot /> 
     </div>
-    </body>
+  </body>
 </html>

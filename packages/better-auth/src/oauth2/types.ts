@@ -25,6 +25,7 @@ export interface OAuthProvider<
 		code: string;
 		redirectURI: string;
 		codeVerifier?: string;
+		deviceId?: string;
 	}) => Promise<OAuth2Tokens>;
 	getUserInfo: (token: OAuth2Tokens) => Promise<{
 		user: {
@@ -55,11 +56,20 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	scope?: string[];
 	/**
+	 * Remove default scopes of the provider
+	 */
+	disableDefaultScope?: boolean;
+	/**
 	 * The redirect URL for your application. This is where the provider will
 	 * redirect the user after the sign in process. Make sure this URL is
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string;
+	/**
+	 * The client key of your application
+	 * Tiktok Social Provider uses this field instead of clientId
+	 */
+	clientKey?: string;
 	/**
 	 * Disable provider from allowing users to sign in
 	 * with this provider with an id token sent from the

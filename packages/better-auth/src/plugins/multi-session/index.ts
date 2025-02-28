@@ -58,7 +58,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== undefined);
+					).filter((v) => v !== null);
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
@@ -232,21 +232,17 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookieString = ctx.responseHeader.get("set-cookie");
+						const cookieString = ctx.context.responseHeaders?.get("set-cookie");
 						if (!cookieString) return;
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
-						const sessionToken = setCookies.get(
-							sessionCookieConfig.name,
-						)?.value;
+						const sessionToken = ctx.context.newSession?.session.token;
 						if (!sessionToken) return;
-
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
-						const rawSession = sessionToken.split(".")[0];
-						if (!rawSession) {
+						if (!sessionToken) {
 							return;
 						}
-						const cookieName = `${sessionCookieConfig.name}_multi-${rawSession}`;
+						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken}`;
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
@@ -261,7 +257,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 
 						await ctx.setSignedCookie(
 							cookieName,
-							rawSession,
+							sessionToken,
 							ctx.context.secret,
 							sessionCookieConfig.options,
 						);

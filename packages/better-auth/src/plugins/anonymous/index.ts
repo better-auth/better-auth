@@ -31,12 +31,12 @@ export interface AnonymousOptions {
 	 */
 	onLinkAccount?: (data: {
 		anonymousUser: {
-			user: UserWithAnonymous;
-			session: Session;
+			user: UserWithAnonymous & Record<string, any>;
+			session: Session & Record<string, any>;
 		};
 		newUser: {
-			user: User;
-			session: Session;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 		};
 	}) => Promise<void> | void;
 	/**
@@ -44,7 +44,7 @@ export interface AnonymousOptions {
 	 */
 	disableDeleteAnonymousUser?: boolean;
 	/**
-	 * Custom schema for the admin plugin
+	 * Custom schema for the anonymous plugin
 	 */
 	schema?: InferOptionSchema<typeof schema>;
 }
@@ -105,22 +105,21 @@ export const anonymous = (options?: AnonymousOptions) => {
 						options || {};
 					const id = ctx.context.generateId({ model: "user" });
 					const email = `temp-${id}@${emailDomainName}`;
-					const newUser = await ctx.context.internalAdapter.createUser({
-						id,
-						email,
-						emailVerified: false,
-						isAnonymous: true,
-						name: "Anonymous",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
+					const newUser = await ctx.context.internalAdapter.createUser(
+						{
+							id,
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name: "Anonymous",
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						ctx,
+					);
 					if (!newUser) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: ERROR_CODES.FAILED_TO_CREATE_USER,
-								status: 500,
-							},
+						throw ctx.error("INTERNAL_SERVER_ERROR", {
+							message: ERROR_CODES.FAILED_TO_CREATE_USER,
 						});
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -156,23 +155,19 @@ export const anonymous = (options?: AnonymousOptions) => {
 		hooks: {
 			after: [
 				{
-					matcher(context) {
-						const setCookie = context.responseHeader.get("set-cookie");
-						const hasSessionToken = setCookie?.includes(
-							context.context.authCookies.sessionToken.name,
-						);
+					matcher(ctx) {
 						return (
-							!!hasSessionToken &&
-							(context.path.startsWith("/sign-in") ||
-								context.path.startsWith("/callback") ||
-								context.path.startsWith("/oauth2/callback") ||
-								context.path.startsWith("/magic-link/verify") ||
-								context.path.startsWith("/email-otp/verify-email"))
+							ctx.path.startsWith("/sign-in") ||
+							ctx.path.startsWith("/sign-up") ||
+							ctx.path.startsWith("/callback") ||
+							ctx.path.startsWith("/oauth2/callback") ||
+							ctx.path.startsWith("/magic-link/verify") ||
+							ctx.path.startsWith("/email-otp/verify-email")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const headers = ctx.responseHeader;
-						const setCookie = headers.get("set-cookie");
+						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+
 						/**
 						 * We can consider the user is about to sign in or sign up
 						 * if the response contains a session token.

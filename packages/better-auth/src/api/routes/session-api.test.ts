@@ -481,12 +481,19 @@ describe("cookie cache", async () => {
 	});
 
 	it("should disable cookie cache", async () => {
-		await client.getSession({
+		const ctx = await auth.$context;
+
+		const s = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
+		expect(s.data?.user.emailVerified).toBe(false);
+		await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+			emailVerified: true,
+		});
 		expect(fn).toHaveBeenCalledTimes(1);
+
 		const session = await client.getSession({
 			query: {
 				disableCookieCache: true,
@@ -495,6 +502,7 @@ describe("cookie cache", async () => {
 				headers,
 			},
 		});
+		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(3);
 	});
