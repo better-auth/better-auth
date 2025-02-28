@@ -129,6 +129,7 @@ export const getOrgAdapter = (
 						value: data.organizationId,
 					},
 				],
+				limit: options?.membershipLimit || 100,
 			});
 			return members;
 		},
@@ -356,6 +357,7 @@ export const getOrgAdapter = (
 				adapter.findMany<Member>({
 					model: "member",
 					where: [{ field: "organizationId", value: org.id }],
+					limit: options?.membershipLimit || 100,
 				}),
 				includeTeams
 					? adapter.findMany<Team>({
@@ -408,6 +410,7 @@ export const getOrgAdapter = (
 						value: userId,
 					},
 				],
+				limit: options?.membershipLimit || 100,
 			});
 
 			if (!members || members.length === 0) {
