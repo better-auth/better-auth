@@ -1,4 +1,4 @@
-import { source, v } from "@/app/source";
+import { source, changelogs } from "@/app/source";
 import {
 	DocsNavbarMobileBtn,
 	DocsNavbarMobileTitle,
@@ -27,7 +27,7 @@ export const docsOptions = {
 	...baseOptions,
 	tree: source.pageTree,
 };
-export const versionOptions = {
+export const changelogOptions = {
 	...baseOptions,
-	tree: v.pageTree,
+	tree: changelogs.pageTree,
 };

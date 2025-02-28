@@ -1,9 +1,77 @@
 ---
 title: 1.2 Release
-description: API Keys, Captcha, Stripe, Teams and more.
+description: Stripe, Captcha, API Keys, Teams, Init CLI, and more.
 date: 2025-02-27
 ---
 
-# 1.2 Release
+# Better Auth 1.2 – Stripe, Captcha, API Keys, Teams, Init CLI, and more
 
-Version 1.2 is an important release packed with new features and improvements. Including [Stripe Plugin](/docs/plugins/stripe), [Captcha](/docs/plugins/captcha), [API Keys](docs/plugins/api-keys), [Teams in organization](/docs/plugins/organization), [Init CLI](/docs/concepts/cli#init) and many more.
+```bash title="Install the latest version"
+npm install better-auth@1.2.0
+```
+
+---
+
+
+## 🔌 New Plugins
+
+### **Stripe Plugin (Beta)**
+Seamless Stripe integration for customer management, subscriptions, and webhooks. [Learn more](/docs/plugins/stripe)
+
+### **Captcha Plugin**
+Protect your authentication flows with Google reCAPTCHA and Cloudflare Turnstile. Works for signup, signin, and password resets. [Learn more](/docs/plugins/captcha)
+
+### **API Key Plugin**
+Generate and manage API keys with rate limiting, expiration, and metadata. Supports session creation from API keys. [Learn more](/docs/plugins/api-keys)
+
+---
+
+## 🔄 Plugin Enhancements
+
+### **Username Plugin**
+- Added `displayName` for case-insensitive lookups while preserving original formatting.
+- Built-in validation to simplify setup.
+
+<Callout type="info">
+If you're using the Username plugin, make sure to add the `displayName` field to your schema.
+</Callout>
+
+### **Organization Plugin**
+- **Teams & Access Control** – Custom roles and permissions for org members, no extra work needed. [Learn more](/docs/plugins/organization)
+- **Multiple Roles per User** – Assign more than one role to a user.
+
+### **Admin Plugin**
+Manage roles and permissions directly within the admin panel. [Learn more](/docs/plugins/admin)
+
+---
+
+## 🎭 New Social Providers
+- TikTok
+- Roblox
+- VK
+
+---
+
+## 🚀 Performance Boosts
+We rewrote **better-call** (the core library behind Better Auth) to fix TypeScript editor lag. Your IDE should now feel much snappier when working with Better Auth.
+
+---
+
+## ⚡ CLI Enhancements
+### **`init` Command**
+The CLI now includes an `init` command to speed up setup:
+- Scaffold new projects
+- Generate schemas
+- Run migrations
+
+[Learn more](/docs/concepts/cli)
+
+---
+
+## 🛠 Bug Fixes & Stability Improvements
+A lot of fixes and refinements to make everything smoother, faster, and more reliable. Check out the [changelog](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/CHANGELOG.md) for more details.
+
+---
+
+**Upgrade now and take advantage of these powerful new features!** 🚀
+
