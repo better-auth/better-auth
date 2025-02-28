@@ -10,24 +10,49 @@ Version 1.2 is a major release with many new features and improvements. Includin
 
 ## Stripe
 
-The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+Integrating payment processing, subscription management, and billing on top of your auth configs. The `@better-auth/stripe` package provides tools to handle customers, checkout sessions, and subscriptions.
 
-```bash title="Terminal"
-npx @better-auth/cli@latest generate
+### Installation
+
+Install the Stripe integration package:
+
+```bash
+npm install @better-auth/stripe
 ```
 
-- `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
-- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
-- `--y` - Skip the confirmation prompt and generate the schema directly.
+### Usage
+
+Set up Stripe in your Better Auth configuration as Plugin:
+
+````typescript
+import { betterAuth } from "better-auth";
+import { stripe } from "@better-auth/stripe";
+
+const auth = betterAuth({
+  adapter: memoryAdapter(),
+  plugins: [
+    stripe({
+      apiKey: "your_stripe_api_key",
+      webhookSecret: "your_webhook_secret",
+    }),
+  ],
+});
 
 ## API keys
+Manage API keys with built-in security, rate-limiting, and usage tracking. Create, update, delete, and validate keys while enforcing custom limits or metadata.
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you’re using the built-in Kysely adapter.
+### Installation
+Add the API key plugin:
 
-```bash title="Terminal"
-npx @better-auth/cli@latest migrate
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [apiKey()],
+});
+
 ```
-
 ## Captcha
 
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
@@ -48,3 +73,4 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 ```bash title="Terminal"
 npx @better-auth/cli@latest secret
 ```
+````
