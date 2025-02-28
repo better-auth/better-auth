@@ -17,6 +17,7 @@ import {
 	UserCircle,
 	Users2,
 	UserSquare2,
+	Plug,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -1191,7 +1192,7 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Create Your First Plugin",
+				title: "Your First Plugin",
 				href: "/docs/guides/your-first-plugin",
 				icon: () => (
 					<svg
@@ -1214,6 +1215,11 @@ export const contents: Content[] = [
 						<path d="m15 5 4 4" />
 					</svg>
 				),
+			},
+			{
+				title: "Creating a Database Adapter",
+				href: "/docs/guides/creating-a-database-adapter",
+				icon: () => <Plug className="size-4" />,
 			},
 			{
 				title: "Browser Extension Guide",
