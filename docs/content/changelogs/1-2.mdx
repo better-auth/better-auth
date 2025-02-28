@@ -6,7 +6,7 @@ date: 2025-02-27
 
 # Better Auth 1.2 – Stripe, Captcha, API Keys, Teams, Init CLI, and more
 
-```bash title="Install the latest version"
+```package-install 
 npm install better-auth@1.2.0
 ```
 
@@ -16,7 +16,7 @@ npm install better-auth@1.2.0
 ## 🔌 New Plugins
 
 ### **Stripe Plugin (Beta)**
-Seamless Stripe integration for customer management, subscriptions, and webhooks. [Learn more](/docs/plugins/stripe)
+Stripe integration for customer management, subscriptions, and webhooks. [Learn more](/docs/plugins/stripe)
 
 ### **Captcha Plugin**
 Protect your authentication flows with Google reCAPTCHA and Cloudflare Turnstile. Works for signup, signin, and password resets. [Learn more](/docs/plugins/captcha)
@@ -30,7 +30,7 @@ Generate and manage API keys with rate limiting, expiration, and metadata. Suppo
 
 ### **Username Plugin**
 - Added `displayName` for case-insensitive lookups while preserving original formatting.
-- Built-in validation to simplify setup.
+- Built-in validation.
 
 <Callout type="info">
 If you're using the Username plugin, make sure to add the `displayName` field to your schema.
@@ -41,8 +41,8 @@ If you're using the Username plugin, make sure to add the `displayName` field to
 - **Multiple Roles per User** – Assign more than one role to a user.
 
 ### **Admin Plugin**
-Manage roles and permissions directly within the admin panel. [Learn more](/docs/plugins/admin)
-
+- Manage roles and permissions directly within the admin panel. [Learn more](/docs/plugins/admin)
+- `adminUserIds` option to grant specific users admin privileges. [Learn more](/docs/plugins/admin#usage)
 ---
 
 ## 🎭 New Social Providers
@@ -52,12 +52,26 @@ Manage roles and permissions directly within the admin panel. [Learn more](/docs
 
 ---
 
+## ✨ Core Enhancements
+
+- **Auto Cleanup** for expired verification data
+- **Improved Google One Tap** integration with JWT verification and enhanced prompt handling
+- **Phone-based Password Reset** functionality
+- **Provider Control Options**:
+  - Disable signups for specific providers
+  - Disable implicit signups for specific providers
+  - Control default scopes and allow custom scopes on request
+- **Enhanced Database Hooks** with additional context information
+
+---
+
 ## 🚀 Performance Boosts
 We rewrote **better-call** (the core library behind Better Auth) to fix TypeScript editor lag. Your IDE should now feel much snappier when working with Better Auth.
 
 ---
 
 ## ⚡ CLI Enhancements
+
 ### **`init` Command**
 The CLI now includes an `init` command to speed up setup:
 - Scaffold new projects
@@ -73,5 +87,8 @@ A lot of fixes and refinements to make everything smoother, faster, and more rel
 
 ---
 
-**Upgrade now and take advantage of these powerful new features!** 🚀
+```package-install
+npm install better-auth@1.2.0
+```
 
+**Upgrade now and take advantage of these powerful new features!** 🚀
