@@ -101,7 +101,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 			<div />
 			<div className="relative flex-auto">
 				<Timeline />
-				<main className="grid ml-auto grid-cols-12 col-span-5 ml-auto space-y-20 py-20 sm:space-y-32 sm:py-32">
+				<main className="grid grid-cols-12 col-span-5 ml-auto space-y-20 py-20 sm:space-y-32 sm:py-32">
 					{children}
 				</main>
 			</div>

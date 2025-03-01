@@ -41,8 +41,8 @@ export default async function Page({
 	const toc = page.data?.toc;
 	const { title, description, date } = page.data;
 	return (
-		<div className="grid md:grid-cols-2 items-start">
-			<div className="bg-gradient-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+		<div className="md:grid md:grid-cols-2 items-start">
+			<div className="bg-gradient-to-tr hidden md:block overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 
@@ -93,7 +93,7 @@ export default async function Page({
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
 				<Link
 					href="/changelogs"
-					className="mb-6 inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+					className="mb-6 hidden md:inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
