@@ -166,15 +166,8 @@ export async function generateMetadata({
 	const page = changelogs.getPage(slug);
 	if (page == null) notFound();
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og-release`);
-	const { title, description, date } = page.data;
-	const dateString = formatDate(date);
-	const pageSlug = page.file.path;
-	url.searchParams.set("type", "Version Release");
-	url.searchParams.set("mode", "dark");
-	url.searchParams.set("heading", `${title}`);
-	url.searchParams.set("description", `${description}`);
-	url.searchParams.set("date", `${dateString}`);
+	const url = new URL(`${baseUrl}/release-og/${slug.join("")}.png`);
+	const { title, description } = page.data;
 
 	return {
 		title,
