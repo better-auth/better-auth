@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -17,6 +18,7 @@ model User {
   updatedAt        DateTime
   twoFactorEnabled Boolean?
   username         String?
+  displayUsername  String?     @db.Text
   sessions         Session[]
   accounts         Account[]
   twofactors       TwoFactor[]

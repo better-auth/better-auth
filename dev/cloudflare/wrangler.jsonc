@@ -1,0 +1,14 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "cloudflare",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-02-14",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_id": "d1-db-id",
+			"database_name": "db",
+			"migrations_dir": "./drizzle"
+		}
+	]
+}

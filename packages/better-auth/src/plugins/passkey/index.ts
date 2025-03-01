@@ -24,6 +24,7 @@ import type {
 import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { mergeSchema } from "../../db/schema";
+import { base64 } from "@better-auth/utils/base64";
 
 interface WebAuthnChallengeValue {
 	expectedChallenge: string;
@@ -61,6 +62,13 @@ export interface PasskeyOptions {
 	 * pass this value.
 	 */
 	origin?: string | null;
+
+	/**
+	 * Allow customization of the authenticatorSelection options
+	 * during passkey registration.
+	 */
+	authenticatorSelection?: AuthenticatorSelectionCriteria;
+
 	/**
 	 * Advanced options
 	 */
@@ -119,6 +127,13 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [freshSessionMiddleware],
+					query: z
+						.object({
+							authenticatorAttachment: z
+								.enum(["platform", "cross-platform"])
+								.optional(),
+						})
+						.optional(),
 					metadata: {
 						client: false,
 						openapi: {
@@ -126,6 +141,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							responses: {
 								200: {
 									description: "Success",
+									parameters: {
+										query: {
+											authenticatorAttachment: {
+												description: `Type of authenticator to use for registration. 
+                          "platform" for device-specific authenticators, 
+                          "cross-platform" for authenticators that can be used across devices.`,
+												required: false,
+											},
+										},
+									},
 									content: {
 										"application/json": {
 											schema: {
@@ -227,7 +252,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					const session = ctx.context.session;
+					const { session } = ctx.context;
 					const userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 						model: "passkey",
 						where: [
@@ -237,13 +262,13 @@ export const passkey = (options?: PasskeyOptions) => {
 							},
 						],
 					});
-					const userID = new Uint8Array(
-						Buffer.from(generateRandomString(32, "a-z", "0-9")),
+					const userID = new TextEncoder().encode(
+						generateRandomString(32, "a-z", "0-9"),
 					);
 					let options: PublicKeyCredentialCreationOptionsJSON;
 					options = await generateRegistrationOptions({
 						rpName: opts.rpName || ctx.context.appName,
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userID,
 						userName: session.user.email || session.user.id,
 						attestationType: "none",
@@ -256,7 +281,12 @@ export const passkey = (options?: PasskeyOptions) => {
 						authenticatorSelection: {
 							residentKey: "preferred",
 							userVerification: "preferred",
-							authenticatorAttachment: "platform",
+							...(opts.authenticatorSelection || {}),
+							...(ctx.query?.authenticatorAttachment
+								? {
+										authenticatorAttachment: ctx.query.authenticatorAttachment,
+									}
+								: {}),
 						},
 					});
 					const id = generateId(32);
@@ -406,7 +436,7 @@ export const passkey = (options?: PasskeyOptions) => {
 						});
 					}
 					const options = await generateAuthenticationOptions({
-						rpID: getRpID(opts, ctx.context.baseURL),
+						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userVerification: "preferred",
 						...(userPasskeys.length
 							? {
@@ -529,7 +559,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							requireUserVerification: false,
 						});
 						const { verified, registrationInfo } = verification;
@@ -547,7 +577,7 @@ export const passkey = (options?: PasskeyOptions) => {
 							credential,
 							credentialType,
 						} = registrationInfo;
-						const pubKey = Buffer.from(credential.publicKey).toString("base64");
+						const pubKey = base64.encode(credential.publicKey);
 						const newPasskey: Passkey = {
 							name: ctx.body.name,
 							userId: userData.id,
@@ -665,12 +695,10 @@ export const passkey = (options?: PasskeyOptions) => {
 							response: resp as AuthenticationResponseJSON,
 							expectedChallenge,
 							expectedOrigin: origin,
-							expectedRPID: getRpID(opts, ctx.context.baseURL),
+							expectedRPID: getRpID(opts, ctx.context.options.baseURL),
 							credential: {
 								id: passkey.credentialID,
-								publicKey: new Uint8Array(
-									Buffer.from(passkey.publicKey, "base64"),
-								),
+								publicKey: base64.decode(passkey.publicKey),
 								counter: passkey.counter,
 								transports: passkey.transports?.split(
 									",",
@@ -886,5 +914,3 @@ const schema = {
 		},
 	},
 } satisfies AuthPluginSchema;
-
-export * from "./client";

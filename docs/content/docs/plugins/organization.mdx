@@ -103,6 +103,17 @@ const auth = betterAuth({
 })
 ```
 
+#### Check if organization slug is taken
+
+To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
+
+- `slug`: The slug of the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.checkSlug({
+    slug: "my-org",
+});
+```
 
 ### List User's Organizations
 
@@ -439,7 +450,7 @@ To invite users to an organization, you can use the `invite` function provided b
 ```ts title="invitation.ts"
 await authClient.organization.inviteMember({
     email: "test@email.com",
-    role: "admin",
+    role: "admin", //this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -494,7 +505,8 @@ To remove you can use `organization.removeMember`
 ```ts title="auth-client.ts"
 //remove member
 await authClient.organization.removeMember({
-    memberId: "member-id"
+    memberIdOrEmail: "member-id", // this can also be the email of the member
+    organizationId: "organization-id" // optional, by default it will use the active organization
 })
 ```
 
@@ -505,7 +517,7 @@ To update the role of a member in an organization, you can use the `organization
 ```ts title="auth-client.ts"
 await authClient.organization.updateMemberRole({
     memberId: "member-id",
-    role: "admin"
+    role: "admin" // this can also be an array for multiple roles (e.g. ["admin", "sale"])
 })
 ```
 
@@ -533,6 +545,16 @@ auth.api.addMember({
 })
 ```
 
+### Leave Organization
+
+To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.leave({
+    organizationId: "organization-id"
+})
+```    
+
 ## Access Control
 
 The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
@@ -547,6 +569,9 @@ By default, there are three roles in the organization:
 
 `member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
 
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
 
 ### Permissions
 
@@ -621,13 +646,14 @@ the plugin providers easy way to define your own set of permission for each role
     }); // [!code highlight]
     ```
 
-      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatement` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
-    import { createAccessControl, defaultStatements, adminAc } from "better-auth/plugins/access";
+    import { createAccessControl } from "better-auth/plugins/access";
+    import { organization } from 'better-auth/plugins/organization'
 
     const statement = { 
-        ...defaultStatements, // [!code highlight]
+        ...organization.defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
     
@@ -635,7 +661,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...adminAc.statements, // [!code highlight]
+        ...organization.adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -671,7 +697,7 @@ the plugin providers easy way to define your own set of permission for each role
         ```ts title="auth-client"
         import { createAuthClient } from "better-auth/client"
         import { organizationClient } from "better-auth/client/plugins"
-        import { ac } from "@/auth/permissions"
+        import { ac, owner, admin, member, myCustomRole } from "@/auth/permissions"
 
         export const client = createAuthClient({
             plugins: [
@@ -695,11 +721,11 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+You can use the `organizationHasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.hasPermission({
+    auth.api.organizationHasPermission({
         headers: await headers(),
         body: {
             permission: {
@@ -731,6 +757,97 @@ const canCreateProject = client.organization.checkRolePermission({
 	role: "admin",
 });
 ```
+
+## Teams
+
+Teams allow you to group members within an organization. You can enable teams by passing `teams.enabled` to the organization plugin.
+
+### Enabling Teams
+
+#### Server Setup
+To enable teams on the server, update your authentication configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            teams: {
+                enabled: true
+            }
+        })
+    ]
+})
+```
+
+#### Client Setup
+For client-side support, pass `teams.enabled` to the client plugin:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+export const authClient = createAuthClient({
+    plugins: [
+        organizationClient({
+            teams: {
+                enabled: true
+            }
+        })
+    ]
+})
+```
+
+### Database Migration
+Once teams are enabled, run the appropriate command to update your database schema.
+
+For the built-in database:
+```bash
+npx @better-auth/cli migrate
+```
+
+For custom adapters:
+```bash
+npx @better-auth/cli generate
+```
+
+## Managing Teams
+
+### Creating a Team
+Use the `createTeam` function to add a new team to an organization:
+
+```ts title="auth-client.ts"
+await authClient.organization.createTeam({
+    name: "My Team"
+})
+```
+
+> **Note:** Once teams are enabled, `getFullOrganization` will return all teams within an organization.
+
+### Updating a Team
+Modify a team's details using `updateTeam`:
+
+```ts title="auth-client.ts"
+await authClient.organization.updateTeam({
+    name: "Updated Team Name"
+})
+```
+
+### Listing Teams
+Retrieve all teams within an organization using `listTeams`:
+
+```ts
+await authClient.organization.listTeams()
+```
+
+To fetch teams for a specific organization, pass an `organizationId`:
+
+```ts
+await authClient.organization.listTeams({
+    organizationId: "org-id"
+})
+```
+
 
 ## Schema
 
@@ -833,6 +950,12 @@ Table Name: `invitation`
       description: "The email address of the user" 
     },
     { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
+    },
+    { 
       name: "organizationId", 
       type: "string", 
       description: "The id of the organization",
@@ -877,6 +1000,44 @@ You need to add one more field to the session table to store the active organiza
     },
   ]}
   />
+
+### Teams (optional)
+
+Table Name: `team`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each team",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the team" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was created" 
+    },
+    { 
+      name: "updatedAt", 
+      type: "Date", 
+      isOptional: true,
+      description: "Timestamp of when the team was created" 
+    },
+  ]}
+  />
+/>
 
 ### Customizing the Schema
 

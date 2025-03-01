@@ -1,5 +1,5 @@
-import { createPreset } from "fumadocs-ui/tailwind-plugin";
 import defaultTheme from "tailwindcss/defaultTheme";
+import { createPreset } from "fumadocs-ui/tailwind-plugin";
 const colors = require("tailwindcss/colors");
 const {
 	default: flattenColorPalette,
@@ -15,7 +15,6 @@ export default {
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
 		"../node_modules/fumadocs-ui/dist/**/*.js",
-		"../node_modules/fumadocs-openapi/dist/**/*.js",
 	],
 	presets: [
 		createPreset({

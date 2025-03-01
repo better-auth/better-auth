@@ -224,7 +224,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			expect(res.length).toBe(2);
 		},
 	);
-
 	test.skipIf(testSkips.shouldWorkWithReferenceFields)(
 		"should work with reference fields",
 		async () => {
@@ -264,7 +263,6 @@ export async function runAdapterTest(opts: AdapterTestOptions) {
 			});
 		},
 	);
-
 	test.skipIf(testSkips.shouldFindManyWithSortBy)(
 		"should find many with sortBy",
 		async () => {
