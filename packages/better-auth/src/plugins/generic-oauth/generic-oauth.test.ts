@@ -267,7 +267,7 @@ describe("oauth2", async () => {
 						{
 							providerId: "test2",
 							discoveryUrl:
-								"http://localhost:8080/.well-known/openid-configuration",
+								"http://localhost:8081/.well-known/openid-configuration",
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -291,7 +291,7 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 		});
-		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
 		const callbackURL = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -322,7 +322,7 @@ describe("oauth2", async () => {
 						{
 							providerId: "test2",
 							discoveryUrl:
-								"http://localhost:8080/.well-known/openid-configuration",
+								"http://localhost:8081/.well-known/openid-configuration",
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
@@ -347,7 +347,7 @@ describe("oauth2", async () => {
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
 		});
-		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
 		const callbackURL = await simulateOAuthFlow(
 			res.data?.url || "",
