@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "unbuild --clean && pnpm build:types",
+    "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",

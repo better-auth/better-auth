@@ -7,6 +7,7 @@ export default defineBuildConfig({
 			treeShaking: true,
 		},
 	},
+	declaration: true,
 	outDir: "dist",
 	clean: false,
 	failOnWarn: false,
