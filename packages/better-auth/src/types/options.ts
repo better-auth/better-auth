@@ -250,6 +250,16 @@ export type BetterAuthOptions = {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  userId: "user_id"
+		 * }
+		 * ```
+		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
 		 * Additional fields for the session
