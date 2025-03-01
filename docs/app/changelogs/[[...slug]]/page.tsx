@@ -91,26 +91,6 @@ export default async function Page({
 			</div>
 			<div className="px-4 relative md:px-8 pb-12 md:py-12">
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
-				<Link
-					href="/changelogs"
-					className="mb-6 hidden md:inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="16"
-						height="16"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="mr-2"
-					>
-						<path d="m15 18-6-6 6-6" />
-					</svg>
-					Back to Changelogs
-				</Link>
 				<DocsBody>
 					<MDX
 						components={{
