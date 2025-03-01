@@ -1,4 +1,5 @@
 import defaultTheme from "tailwindcss/defaultTheme";
+import { createPreset } from "fumadocs-ui/tailwind-plugin";
 const colors = require("tailwindcss/colors");
 const {
 	default: flattenColorPalette,
@@ -13,7 +14,12 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
-		"../node_modules/fumadocs-ui/dist/**/*.js"
+		"../node_modules/fumadocs-ui/dist/**/*.js",
+	],
+	presets: [
+		createPreset({
+			preset: "dusk",
+		}),
 	],
 	plugins: [
 		require("tailwindcss-animate"),
