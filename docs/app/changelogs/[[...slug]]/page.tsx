@@ -23,6 +23,10 @@ import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import { CalendarClockIcon } from "lucide-react";
 
+const metaTitle = "Changelogs";
+const metaDescription = "Latest changes , fixes and updates.";
+const ogImage = "https://better-auth.com/release-og/changelog-og.png";
+
 export default async function Page({
 	params,
 }: {
@@ -139,8 +143,25 @@ export async function generateMetadata({
 	const { slug } = await params;
 	if (!slug) {
 		return {
-			title: "Changelogs",
-			description: "Changelogs",
+			metadataBase: new URL("https://better-auth.com/changelogs"),
+			title: metaTitle,
+			description: metaDescription,
+			openGraph: {
+				title: metaTitle,
+				description: metaDescription,
+				images: [
+					{
+						url: ogImage,
+					},
+				],
+				url: "https://better-auth.com/changelogs",
+			},
+			twitter: {
+				card: "summary_large_image",
+				title: metaTitle,
+				description: metaDescription,
+				images: [ogImage],
+			},
 		};
 	}
 	const page = changelogs.getPage(slug);

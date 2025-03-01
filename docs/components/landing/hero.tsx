@@ -81,7 +81,7 @@ export default function Hero() {
 									</svg>
 									<Link href={"/changelogs/1-2"}>
 										<span className="bg-gradient-to-tr from-stone-800 to-black  px-2 py-1 rounded-none mb-1">
-											<span className="text-xs tracking-tighter font-mono mb-0 underline underline-offset-4">
+											<span className="text-xs text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
 												v1.2 is out
 											</span>
 											<CornerRightUp className="inline ml-1 mb-[0.8px] w-3 h-3" />
