@@ -1,4 +1,4 @@
-import { changelogs } from "@/app/source";
+import { changelogsSource } from "@/app/source";
 import { notFound } from "next/navigation";
 import { absoluteUrl, formatDate } from "@/lib/utils";
 import DatabaseTable from "@/components/mdx/database-tables";
@@ -29,7 +29,7 @@ export default async function Page({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = changelogs.getPage(slug);
+	const page = changelogsSource.getPage(slug);
 	if (!slug) {
 		//@ts-ignore
 		return <ChangelogPage />;
@@ -163,7 +163,7 @@ export async function generateMetadata({
 			description: "Changelogs",
 		};
 	}
-	const page = changelogs.getPage(slug);
+	const page = changelogsSource.getPage(slug);
 	if (page == null) notFound();
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og-release`);
@@ -203,7 +203,7 @@ export async function generateMetadata({
 }
 
 export function generateStaticParams() {
-	return changelogs.generateParams();
+	return changelogsSource.generateParams();
 }
 
 const Icon = ({ className, ...rest }: any) => {

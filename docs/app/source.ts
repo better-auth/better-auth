@@ -1,12 +1,13 @@
-import { changelogCollection, docs } from "@/.source";
-import { createMDXSource } from "fumadocs-mdx";
+import { changelogs, docs } from "@/.source";
 import { loader } from "fumadocs-core/source";
+import { createMDXSource } from "fumadocs-mdx";
 
 export const source = loader({
 	baseUrl: "/docs",
 	source: docs.toFumadocsSource(),
 });
-export const changelogs = loader({
+
+export const changelogsSource = loader({
 	baseUrl: "/changelogs",
-	source: createMDXSource(changelogCollection),
+	source: createMDXSource(changelogs),
 });
