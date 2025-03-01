@@ -1,4 +1,3 @@
-import { createPreset } from "fumadocs-ui/tailwind-plugin";
 import defaultTheme from "tailwindcss/defaultTheme";
 const colors = require("tailwindcss/colors");
 const {
@@ -15,11 +14,6 @@ export default {
 		"./app/**/*.{ts,tsx}",
 		"./content/**/*.{md,mdx}",
 		"../node_modules/fumadocs-ui/dist/**/*.js"
-	],
-	presets: [
-		createPreset({
-			preset: "dusk",
-		}),
 	],
 	plugins: [
 		require("tailwindcss-animate"),
