@@ -32,6 +32,10 @@ export const auth = betterAuth({
 
 **redirectURI** Custom redirect URI for the provider. By default, it uses `/api/auth/callback/${providerName}`.
 
+**disableImplicitSignUp:** Disables implicit sign-up. In order to sign up a user, `requestSignUp` needs to be set to `true` when signing in.
+
+**disableSignUp:** Disables sign-up for new users.
+
 **disableIdTokenSignIn:** Disables the use of the ID token for sign-in. By default, it’s enabled for some providers like Google and Apple.
 
 **verifyIdToken** A custom function to verify the ID token.

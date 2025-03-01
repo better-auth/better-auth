@@ -107,6 +107,15 @@ interface GenericOAuthConfig {
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?: Record<string, string>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -291,6 +300,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.array(z.string(), {
 								message:
 									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
+						requestSignUp: z
+							.boolean({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 							})
 							.optional(),
 					}),
@@ -484,8 +499,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL, newUserURL, link } =
-						parsedState;
+					const {
+						callbackURL,
+						codeVerifier,
+						errorURL,
+						requestSignUp,
+						newUserURL,
+						link,
+					} = parsedState;
 					const code = ctx.query.code;
 
 					function redirectOnError(error: string) {
@@ -599,6 +620,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						disableSignUp:
+							(provider.disableImplicitSignUp && !requestSignUp) ||
+							provider.disableSignUp,
 					});
 
 					if (result.error) {
