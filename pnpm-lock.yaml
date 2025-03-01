@@ -510,6 +510,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.12
         version: 7.6.12
+      '@vercel/analytics':
+        specifier: ^1.5.0
+        version: 1.5.0(@remix-run/react@2.15.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.7.2))(@sveltejs/kit@2.9.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(next@15.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)(svelte@4.2.19)(vue-router@4.5.0(vue@3.5.13(typescript@5.7.2)))(vue@3.5.13(typescript@5.7.2))
       '@vercel/og':
         specifier: ^0.6.4
         version: 0.6.4
@@ -9394,6 +9397,32 @@ packages:
 
   '@vee-validate/zod@4.14.7':
     resolution: {integrity: sha512-UD0Tfyz1cKKd7BinnUztqKL+oeMjg/T4ZEguN/uZV4DsR9z7gdrD0lOuOU7aVl9UpVK6NM7MhDka35Lj7b/DTw==}
+
+  '@vercel/analytics@1.5.0':
+    resolution: {integrity: sha512-MYsBzfPki4gthY5HnYN7jgInhAZ7Ac1cYDoRWFomwGHWEX7odTEzbtg9kf/QSo7XEsEAqlQugA6gJ2WS2DEa3g==}
+    peerDependencies:
+      '@remix-run/react': ^2
+      '@sveltejs/kit': ^1 || ^2
+      next: '>= 13'
+      react: ^18 || ^19 || ^19.0.0-rc
+      svelte: '>= 4'
+      vue: ^3
+      vue-router: ^4
+    peerDependenciesMeta:
+      '@remix-run/react':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+      vue-router:
+        optional: true
 
   '@vercel/nft@0.27.5':
     resolution: {integrity: sha512-b2A7M+4yMHdWKY7xCC+kBEcnMrpaSE84CnuauTjhKKoCEeej0byJMAB8h/RBVnw/HdZOAFVcxR0Izr3LL24FwA==}
@@ -28507,6 +28536,25 @@ snapshots:
       tiny-glob: 0.2.9
       vite: 5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
 
+  '@sveltejs/kit@2.9.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
+    dependencies:
+      '@sveltejs/vite-plugin-svelte': 3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
+      '@types/cookie': 0.6.0
+      cookie: 0.6.0
+      devalue: 5.1.1
+      esm-env: 1.2.1
+      import-meta-resolve: 4.1.0
+      kleur: 4.1.5
+      magic-string: 0.30.14
+      mrmime: 2.0.0
+      sade: 1.8.1
+      set-cookie-parser: 2.7.1
+      sirv: 3.0.0
+      svelte: 4.2.19
+      tiny-glob: 0.2.9
+      vite: 6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
+    optional: true
+
   '@sveltejs/vite-plugin-svelte-inspector@2.1.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)))(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))':
     dependencies:
       '@sveltejs/vite-plugin-svelte': 3.1.2(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))
@@ -28515,6 +28563,16 @@ snapshots:
       vite: 5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
     transitivePeerDependencies:
       - supports-color
+
+  '@sveltejs/vite-plugin-svelte-inspector@2.1.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
+    dependencies:
+      '@sveltejs/vite-plugin-svelte': 3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
+      debug: 4.4.0(supports-color@9.4.0)
+      svelte: 4.2.19
+      vite: 6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
 
   '@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))':
     dependencies:
@@ -28529,6 +28587,21 @@ snapshots:
       vitefu: 0.2.5(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0))
     transitivePeerDependencies:
       - supports-color
+
+  '@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))':
+    dependencies:
+      '@sveltejs/vite-plugin-svelte-inspector': 2.1.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
+      debug: 4.4.0(supports-color@9.4.0)
+      deepmerge: 4.3.1
+      kleur: 4.1.5
+      magic-string: 0.30.14
+      svelte: 4.2.19
+      svelte-hmr: 0.16.0(svelte@4.2.19)
+      vite: 6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
+      vitefu: 0.2.5(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
 
   '@svgr/babel-plugin-add-jsx-attribute@6.5.1(@babel/core@7.26.0)':
     dependencies:
@@ -29809,6 +29882,16 @@ snapshots:
     transitivePeerDependencies:
       - vue
 
+  '@vercel/analytics@1.5.0(@remix-run/react@2.15.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.7.2))(@sveltejs/kit@2.9.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(next@15.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1))(react@18.3.1)(svelte@4.2.19)(vue-router@4.5.0(vue@3.5.13(typescript@5.7.2)))(vue@3.5.13(typescript@5.7.2))':
+    optionalDependencies:
+      '@remix-run/react': 2.15.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.7.2)
+      '@sveltejs/kit': 2.9.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)))(svelte@4.2.19)(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0))
+      next: 15.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.83.1)
+      react: 18.3.1
+      svelte: 4.2.19
+      vue: 3.5.13(typescript@5.7.2)
+      vue-router: 4.5.0(vue@3.5.13(typescript@5.7.2))
+
   '@vercel/nft@0.27.5(encoding@0.1.13)':
     dependencies:
       '@mapbox/node-pre-gyp': 1.0.11(encoding@0.1.13)
@@ -30250,6 +30333,13 @@ snapshots:
       '@vue/compiler-ssr': 3.3.4
       '@vue/shared': 3.3.4
       vue: 3.3.4
+
+  '@vue/server-renderer@3.5.13(vue@3.5.13(typescript@5.7.2))':
+    dependencies:
+      '@vue/compiler-ssr': 3.5.13
+      '@vue/shared': 3.5.13
+      vue: 3.5.13(typescript@5.7.2)
+    optional: true
 
   '@vue/server-renderer@3.5.13(vue@3.5.13(typescript@5.8.2))':
     dependencies:
@@ -44081,9 +44171,31 @@ snapshots:
       tsx: 4.19.2
       yaml: 2.6.0
 
+  vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0):
+    dependencies:
+      esbuild: 0.24.2
+      postcss: 8.4.49
+      rollup: 4.34.8
+    optionalDependencies:
+      '@types/node': 22.3.0
+      fsevents: 2.3.3
+      jiti: 2.4.2
+      less: 4.2.1
+      lightningcss: 1.27.0
+      sass: 1.83.1
+      terser: 5.36.0
+      tsx: 4.19.2
+      yaml: 2.6.0
+    optional: true
+
   vitefu@0.2.5(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)):
     optionalDependencies:
       vite: 5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)
+
+  vitefu@0.2.5(vite@6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)):
+    optionalDependencies:
+      vite: 6.0.11(@types/node@22.3.0)(jiti@2.4.2)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)(tsx@4.19.2)(yaml@2.6.0)
+    optional: true
 
   vitefu@1.0.4(vite@5.4.14(@types/node@22.10.7)(less@4.2.1)(lightningcss@1.27.0)(sass@1.83.1)(terser@5.36.0)):
     optionalDependencies:
@@ -44296,6 +44408,12 @@ snapshots:
 
   vue-devtools-stub@0.1.0: {}
 
+  vue-router@4.5.0(vue@3.5.13(typescript@5.7.2)):
+    dependencies:
+      '@vue/devtools-api': 6.6.4
+      vue: 3.5.13(typescript@5.7.2)
+    optional: true
+
   vue-router@4.5.0(vue@3.5.13(typescript@5.8.2)):
     dependencies:
       '@vue/devtools-api': 6.6.4
@@ -44314,6 +44432,17 @@ snapshots:
       '@vue/runtime-dom': 3.3.4
       '@vue/server-renderer': 3.3.4(vue@3.3.4)
       '@vue/shared': 3.3.4
+
+  vue@3.5.13(typescript@5.7.2):
+    dependencies:
+      '@vue/compiler-dom': 3.5.13
+      '@vue/compiler-sfc': 3.5.13
+      '@vue/runtime-dom': 3.5.13
+      '@vue/server-renderer': 3.5.13(vue@3.5.13(typescript@5.7.2))
+      '@vue/shared': 3.5.13
+    optionalDependencies:
+      typescript: 5.7.2
+    optional: true
 
   vue@3.5.13(typescript@5.8.2):
     dependencies:

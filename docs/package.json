@@ -50,6 +50,7 @@
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.7.1",
     "@types/better-sqlite3": "^7.6.12",
+    "@vercel/analytics": "^1.5.0",
     "@vercel/og": "^0.6.4",
     "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
