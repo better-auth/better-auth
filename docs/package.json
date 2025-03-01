@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
@@ -44,6 +44,7 @@
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@scalar/nextjs-api-reference": "^0.4.104",
+    "@shikijs/langs": "^3.1.0",
     "@tabler/icons-react": "^3.24.0",
     "@tsparticles/engine": "^3.7.1",
     "@tsparticles/react": "^3.0.0",

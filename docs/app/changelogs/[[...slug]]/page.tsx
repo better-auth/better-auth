@@ -183,7 +183,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`v/${pageSlug}`),
+			url: absoluteUrl(`changelogs/${slug.join("")}`),
 			images: [
 				{
 					url: url.toString(),
@@ -205,24 +205,3 @@ export async function generateMetadata({
 export function generateStaticParams() {
 	return changelogs.generateParams();
 }
-
-const Icon = ({ className, ...rest }: any) => {
-	return (
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			fill="none"
-			viewBox="0 0 24 24"
-			width={24}
-			height={30}
-			strokeWidth="1"
-			stroke="currentColor"
-			{...rest}
-			className={cn(
-				"dark:text-white/50 text-black/50 size-6 absolute",
-				className,
-			)}
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m6-6H6" />
-		</svg>
-	);
-};
