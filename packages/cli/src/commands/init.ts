@@ -753,49 +753,52 @@ export async function initAction(opts: any) {
 							log.success(`🚀 ENV files successfully updated!`);
 						}
 					}
-
-					if (dependencies.length !== 0) {
-						log.info(
-							`There are ${dependencies.length} dependencies to install.`,
-						);
-						const shouldInstallDeps = await confirm({
-							message: `Would you like us to install dependencies?`,
-						});
-						if (isCancel(shouldInstallDeps)) {
-							cancel("✋ Operation cancelled.");
-							process.exit(0);
+				}
+				if (dependencies.length !== 0) {
+					log.info(
+						`There are ${
+							dependencies.length
+						} dependencies to install. (${dependencies
+							.map((x) => chalk.green(x))
+							.join(", ")})`,
+					);
+					const shouldInstallDeps = await confirm({
+						message: `Would you like us to install dependencies?`,
+					});
+					if (isCancel(shouldInstallDeps)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					if (shouldInstallDeps) {
+						const s = spinner({ indicator: "dots" });
+						if (packageManagerPreference === undefined) {
+							packageManagerPreference = await getPackageManager();
 						}
-						if (shouldInstallDeps) {
-							const s = spinner({ indicator: "dots" });
-							if (packageManagerPreference === undefined) {
-								packageManagerPreference = await getPackageManager();
-							}
-							s.start(
-								`Installing dependencies using ${chalk.bold(
-									packageManagerPreference,
-								)}...`,
+						s.start(
+							`Installing dependencies using ${chalk.bold(
+								packageManagerPreference,
+							)}...`,
+						);
+						try {
+							const start = Date.now();
+							await installDependencies({
+								dependencies: dependencies,
+								packageManager: packageManagerPreference,
+								cwd: cwd,
+							});
+							s.stop(
+								`Dependencies installed ${chalk.greenBright(
+									`successfully`,
+								)} ${chalk.gray(
+									`(${formatMilliseconds(Date.now() - start)})`,
+								)}`,
 							);
-							try {
-								const start = Date.now();
-								await installDependencies({
-									dependencies: dependencies,
-									packageManager: packageManagerPreference,
-									cwd: cwd,
-								});
-								s.stop(
-									`Dependencies installed ${chalk.greenBright(
-										`successfully`,
-									)} ${chalk.gray(
-										`(${formatMilliseconds(Date.now() - start)})`,
-									)}`,
-								);
-							} catch (error: any) {
-								s.stop(
-									`Failed to install dependencies using ${packageManagerPreference}:`,
-								);
-								log.error(error.message);
-								process.exit(1);
-							}
+						} catch (error: any) {
+							s.stop(
+								`Failed to install dependencies using ${packageManagerPreference}:`,
+							);
+							log.error(error.message);
+							process.exit(1);
 						}
 					}
 				}
