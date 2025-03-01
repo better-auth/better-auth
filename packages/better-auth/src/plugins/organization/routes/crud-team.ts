@@ -8,6 +8,7 @@ import { getSessionFromCtx } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { OrganizationOptions } from "../organization";
 import { teamSchema } from "../schema";
+import { hasPermission } from "../has-permission";
 
 export const createTeam = <O extends OrganizationOptions | undefined>(
 	options?: O,
@@ -31,17 +32,38 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 			}
 
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
-
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const existingTeams = await adapter.listTeams(organizationId);
+			if (session) {
+				const member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
+				});
+				if (!member) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+					});
+				}
+				const canCreate = hasPermission({
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permission: {
+						team: ["create"],
+					},
+				});
+				if (!canCreate) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION,
+					});
+				}
+			}
 
+			const existingTeams = await adapter.listTeams(organizationId);
 			const maximum =
 				typeof ctx.context.orgOptions.teams?.maximumTeams === "function"
 					? await ctx.context.orgOptions.teams?.maximumTeams(
@@ -79,12 +101,12 @@ export const removeTeam = createAuthEndpoint(
 			teamId: z.string(),
 			organizationId: z.string().optional(),
 		}),
-		use: [orgMiddleware, orgSessionMiddleware],
+		use: [orgMiddleware],
 	},
 	async (ctx) => {
-		const session = ctx.context.session;
+		const session = await getSessionFromCtx(ctx);
 		const organizationId =
-			ctx.body.organizationId || session.session.activeOrganizationId;
+			ctx.body.organizationId || session?.session.activeOrganizationId;
 		if (!organizationId) {
 			return ctx.json(null, {
 				status: 400,
@@ -93,10 +115,38 @@ export const removeTeam = createAuthEndpoint(
 				},
 			});
 		}
-
+		if (!session && (ctx.request || ctx.headers)) {
+			throw new APIError("UNAUTHORIZED");
+		}
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-		const team = await adapter.findTeamById(ctx.body.teamId);
+		if (session) {
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId,
+			});
 
+			if (!member || member.teamId === ctx.body.teamId) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+				});
+			}
+
+			const canRemove = hasPermission({
+				role: member.role,
+				options: ctx.context.orgOptions,
+				permission: {
+					team: ["delete"],
+				},
+			});
+			if (!canRemove) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION,
+				});
+			}
+		}
+		const team = await adapter.findTeamById(ctx.body.teamId);
 		if (!team || team.organizationId !== organizationId) {
 			throw new APIError("BAD_REQUEST", {
 				message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
@@ -139,8 +189,33 @@ export const updateTeam = createAuthEndpoint(
 				},
 			});
 		}
-
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const member = await adapter.findMemberByOrgId({
+			userId: session.user.id,
+			organizationId,
+		});
+
+		if (!member) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
+			});
+		}
+
+		const canUpdate = hasPermission({
+			role: member.role,
+			options: ctx.context.orgOptions,
+			permission: {
+				team: ["update"],
+			},
+		});
+		if (!canUpdate) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
+			});
+		}
+
 		const team = await adapter.findTeamById(ctx.body.teamId);
 
 		if (!team || team.organizationId !== organizationId) {
@@ -181,8 +256,16 @@ export const listOrganizationTeams = createAuthEndpoint(
 				},
 			});
 		}
-
 		const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+		const member = await adapter.findMemberByOrgId({
+			userId: session?.user.id,
+			organizationId: organizationId || "",
+		});
+
+		if (!member) {
+			throw new APIError("FORBIDDEN");
+		}
+
 		const teams = await adapter.listTeams(organizationId);
 
 		return ctx.json(teams);

@@ -3,6 +3,7 @@ import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
 import {
@@ -59,14 +60,16 @@ export const multiSession = (options?: MultiSessionConfig) => {
 								),
 						)
 					).filter((v) => v !== null);
+
+					const s = await getSessionFromCtx(ctx);
+					console.log({ sessionTokens, s });
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
-
+					console.log({ sessions });
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-
 					return ctx.json(validSessions);
 				},
 			),
