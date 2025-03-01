@@ -442,6 +442,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
+						error_description: z
+							.string({
+								description: "The error description, if any",
+							})
+							.optional(),
 						state: z
 							.string({
 								description: "The state parameter from the OAuth2 request",
@@ -472,11 +477,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.options.baseURL}?error=${
+							`${defaultErrorURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
-							}`,
+							}&error_description=${ctx.query.error_description}`,
 						);
 					}
 					const provider = options.config.find(
@@ -500,6 +508,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						link,
 					} = parsedState;
 					const code = ctx.query.code;
+
+					function redirectOnError(error: string) {
+						throw ctx.redirect(
+							`${
+								errorURL || callbackURL || `${ctx.context.baseURL}/error`
+							}?error=${error}`,
+						);
+					}
 
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
@@ -539,9 +555,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: "",
 							e,
 						);
-						throw ctx.redirect(
-							`${errorURL}?error=oauth_code_verification_failed`,
-						);
+						throw redirectOnError("oauth_code_verification_failed");
 					}
 
 					if (!tokens) {
@@ -557,9 +571,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					if (!userInfo?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=email_is_missing`,
-						);
+						throw redirectOnError("email_is_missing");
 					}
 
 					const mapUser = provider.mapProfileToUser
@@ -613,13 +625,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							provider.disableSignUp,
 					});
 
-					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
-					}
 					if (result.error) {
 						return redirectOnError(result.error.split(" ").join("_"));
 					}

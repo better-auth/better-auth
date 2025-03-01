@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { z } from "zod";
-import type { User } from "../../types";
+import type { AuthPluginSchema, Session, User } from "../../types";
 import { createAuthEndpoint } from "../../api/call";
 import { getSessionFromCtx } from "../../api/routes";
 import type { AuthContext } from "../../init";
@@ -32,12 +32,24 @@ import {
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
-import type { Invitation, Member, Organization } from "./schema";
+import {
+	createTeam,
+	listOrganizationTeams,
+	removeTeam,
+	updateTeam,
+} from "./routes/crud-team";
+import type { Invitation, Member, Organization, Team } from "./schema";
 import type { Prettify } from "../../types/helper";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
+type Schema<T> = {
+	modelName?: string;
+	fields?: {
+		[key in keyof Omit<T, "id">]?: string;
+	};
+};
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -71,7 +83,7 @@ export interface OrganizationOptions {
 	/**
 	 * The number of memberships a user can have in an organization.
 	 *
-	 * @default "unlimited"
+	 * @default 100
 	 */
 	membershipLimit?: number;
 	/**
@@ -84,6 +96,64 @@ export interface OrganizationOptions {
 	 */
 	roles?: {
 		[key in string]?: Role<any>;
+	};
+	/**
+	 * Support for team.
+	 */
+	teams?: {
+		/**
+		 * Enable team features.
+		 */
+		enabled: boolean;
+		/**
+		 * Default team configuration
+		 */
+		defaultTeam?: {
+			/**
+			 * Enable creating a default team when an organization is created
+			 *
+			 * @default true
+			 */
+			enabled: boolean;
+			/**
+			 * Pass a custom default team creator function
+			 */
+			customCreateDefaultTeam: (
+				organization: Organization & Record<string, any>,
+				request?: Request,
+			) => Promise<Team & Record<string, any>>;
+		};
+		/**
+		 * Maximum number of teams an organization can have.
+		 *
+		 * You can pass a number or a function that returns a number
+		 *
+		 * @default "unlimited"
+		 *
+		 * @param organization
+		 * @param request
+		 * @returns
+		 */
+		maximumTeams?:
+			| ((
+					data: {
+						organizationId: string;
+						session: {
+							user: User;
+							session: Session;
+						} | null;
+					},
+					request?: Request,
+			  ) => number | Promise<number>)
+			| number;
+		/**
+		 * By default, if an organization does only have one team, they'll not be able to remove it.
+		 *
+		 * You can disable this behavior by setting this to `false.
+		 *
+		 * @default false
+		 */
+		allowRemovingAllTeams?: boolean;
 	};
 	/**
 	 * The expiration time for the invitation link.
@@ -134,6 +204,10 @@ export interface OrganizationOptions {
 			 */
 			organization: Organization;
 			/**
+			 * the invitation object
+			 */
+			invitation: Invitation;
+			/**
 			 * the member who is inviting the user
 			 */
 			inviter: Member & {
@@ -145,6 +219,7 @@ export interface OrganizationOptions {
 		 */
 		request?: Request,
 	) => Promise<void>;
+
 	/**
 	 * The schema for the organization plugin.
 	 */
@@ -170,6 +245,13 @@ export interface OrganizationOptions {
 			modelName?: string;
 			fields?: {
 				[key in keyof Omit<Invitation, "id">]?: string;
+			};
+		};
+
+		team?: {
+			modelName?: string;
+			fields?: {
+				[key in keyof Omit<Team, "id">]?: string;
 			};
 		};
 	};
@@ -229,12 +311,12 @@ export interface OrganizationOptions {
  * ```
  */
 export const organization = <O extends OrganizationOptions>(options?: O) => {
-	const endpoints = {
+	let endpoints = {
 		createOrganization,
 		updateOrganization,
 		deleteOrganization,
-		setActiveOrganization,
-		getFullOrganization,
+		setActiveOrganization: setActiveOrganization<O>(),
+		getFullOrganization: getFullOrganization<O>(),
 		listOrganizations,
 		createInvitation: createInvitation(options as O),
 		cancelInvitation,
@@ -248,11 +330,57 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 		getActiveMember,
 		leaveOrganization,
 	};
-
+	const teamSupport = options?.teams?.enabled;
+	const teamEndpoints = {
+		createTeam: createTeam(options as O),
+		listOrganizationTeams,
+		removeTeam,
+		updateTeam,
+	};
+	if (teamSupport) {
+		endpoints = {
+			...endpoints,
+			...teamEndpoints,
+		};
+	}
 	const roles = {
 		...defaultRoles,
 		...options?.roles,
 	};
+
+	const teamSchema = teamSupport
+		? ({
+				team: {
+					modelName: options?.schema?.team?.modelName,
+					fields: {
+						name: {
+							type: "string",
+							required: true,
+							fieldName: options?.schema?.team?.fields?.name,
+						},
+						organizationId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "organization",
+								field: "id",
+							},
+							fieldName: options?.schema?.team?.fields?.organizationId,
+						},
+						createdAt: {
+							type: "date",
+							required: true,
+							fieldName: options?.schema?.team?.fields?.createdAt,
+						},
+						updatedAt: {
+							type: "date",
+							required: false,
+							fieldName: options?.schema?.team?.fields?.updatedAt,
+						},
+					},
+				},
+			} satisfies AuthPluginSchema)
+		: undefined;
 
 	const api = shimContext(endpoints, {
 		orgOptions: options || {},
@@ -270,8 +398,10 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 	return {
 		id: "organization",
 		endpoints: {
-			...api,
-			organizationHasPermission: createAuthEndpoint(
+			...(api as O["teams"] extends { enabled: true }
+				? typeof teamEndpoints & typeof endpoints
+				: typeof endpoints),
+			hasPermission: createAuthEndpoint(
 				"/organization/has-permission",
 				{
 					method: "POST",
@@ -369,7 +499,7 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					});
 					return ctx.json({
 						error: null,
-						success: true,
+						success: result,
 					});
 				},
 			),
@@ -444,6 +574,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
+					teamId: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.member?.fields?.teamId,
+					},
 					createdAt: {
 						type: "date",
 						required: true,
@@ -475,6 +611,12 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.role,
 					},
+					teamId: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: options?.schema?.invitation?.fields?.teamId,
+					},
 					status: {
 						type: "string",
 						required: true,
@@ -498,11 +640,13 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 					},
 				},
 			},
+			...(teamSupport ? teamSchema : {}),
 		},
 		$Infer: {
 			Organization: {} as Organization,
 			Invitation: {} as Invitation,
 			Member: {} as Member,
+			Team: teamSupport ? ({} as Team) : ({} as any),
 			ActiveOrganization: {} as Prettify<
 				Organization & {
 					members: Prettify<

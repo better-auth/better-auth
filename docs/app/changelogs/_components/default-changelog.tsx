@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { useId } from "react";
 import { cn } from "@/lib/utils";
-import { IconLink } from "./_components/changelog-layout";
-import { BookIcon, GitHubIcon, XIcon } from "./_components/icons";
+import { IconLink } from "./changelog-layout";
+import { BookIcon, GitHubIcon, XIcon } from "./icons";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
-import { StarField } from "./_components/stat-field";
+import { StarField } from "./stat-field";
 import { betterFetch } from "@better-fetch/fetch";
 import Markdown from "react-markdown";
 import defaultMdxComponents from "fumadocs-ui/mdx";
@@ -13,6 +13,31 @@ import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
 
+const title = "Changelogs";
+const description = "Latest changes , fixes and updates.";
+const ogImage = "https://better-auth.com/release-og/changelog-og.png";
+
+export const metadata = {
+	metadataBase: new URL("https://better-auth.com/changelogs"),
+	title,
+	description,
+	openGraph: {
+		title,
+		description,
+		images: [
+			{
+				url: ogImage,
+			},
+		],
+		url: "https://better-auth.com/changelogs",
+	},
+	twitter: {
+		card: "summary_large_image",
+		title,
+		description,
+		images: [ogImage],
+	},
+};
 const ChangelogPage = async () => {
 	const { data: releases } = await betterFetch<
 		{
@@ -141,10 +166,19 @@ const ChangelogPage = async () => {
 									</div>
 									<Link
 										href={
-											`#${props.children
+											props.children
 												?.toString()
 												.split("date=")[0]
-												.trim()}` || "#"
+												.trim()
+												.endsWith(".00")
+												? `/changelogs/${props.children
+														?.toString()
+														.split("date=")[0]
+														.trim()}`
+												: `#${props.children
+														?.toString()
+														.split("date=")[0]
+														.trim()}`
 										}
 									>
 										{props.children?.toString().split("date=")[0].trim()}
@@ -206,7 +240,7 @@ ${message.content}
 
 export default ChangelogPage;
 
-function Glow() {
+export function Glow() {
 	let id = useId();
 
 	return (

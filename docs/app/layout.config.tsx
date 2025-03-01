@@ -1,4 +1,4 @@
-import { source } from "@/app/source";
+import { source, changelogs } from "@/app/source";
 import {
 	DocsNavbarMobileBtn,
 	DocsNavbarMobileTitle,
@@ -26,4 +26,8 @@ export const baseOptions: BaseLayoutProps = {
 export const docsOptions = {
 	...baseOptions,
 	tree: source.pageTree,
+};
+export const changelogOptions = {
+	...baseOptions,
+	tree: changelogs.pageTree,
 };

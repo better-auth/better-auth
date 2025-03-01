@@ -16,14 +16,17 @@ export const addMember = <O extends OrganizationOptions>() =>
 		"/organization/add-member",
 		{
 			method: "POST",
-			body: z.object({
-				userId: z.string(),
-				role: z.string() as unknown as InferRolesFromOption<O>,
-				organizationId: z.string().optional(),
-			}),
+			body: z.record(z.string()),
 			use: [orgMiddleware],
 			metadata: {
 				SERVER_ONLY: true,
+				$Infer: {
+					body: {} as {
+						userId: string;
+						role: InferRolesFromOption<O>;
+						organizationId?: string;
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -61,10 +64,21 @@ export const addMember = <O extends OrganizationOptions>() =>
 				email: user.email,
 				organizationId: orgId,
 			});
+
 			if (alreadyMember) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+				});
+			}
+
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const members = await adapter.listMembers({ organizationId: orgId });
+
+			if (members.length >= membershipLimit) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				});
 			}
 
@@ -243,18 +257,19 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		"/organization/update-member-role",
 		{
 			method: "POST",
-			body: z.object({
-				role: z
-					.string()
-					.or(z.array(z.string())) as unknown as InferRolesFromOption<O>,
-				memberId: z.string(),
-				/**
-				 * If not provided, the active organization will be used
-				 */
-				organizationId: z.string().optional(),
-			}),
+			body: z.record(z.any()),
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as {
+						role: InferRolesFromOption<O> | InferRolesFromOption<O>[];
+						memberId: string;
+						/**
+						 * If not provided, the active organization will be used
+						 */
+						organizationId?: string;
+					},
+				},
 				openapi: {
 					description: "Update the role of a member in an organization",
 					responses: {

@@ -24,6 +24,8 @@ export const callbackOAuth = createAuthEndpoint(
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
+		const defaultErrorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -41,18 +43,32 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
+		if (error) {
+			throw c.redirect(
+				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
+			);
+		}
+
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw c.redirect(`${c.context.baseURL}/error?error=state_not_found`);
+			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
+		}
+		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
+			await parseState(c);
+
+		function redirectOnError(error: string) {
+			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			if (url.includes("?")) {
+				url = `${url}&error=${error}`;
+			} else {
+				url = `${url}?error=${error}`;
+			}
+			throw c.redirect(url);
 		}
 
 		if (!code) {
 			c.context.logger.error("Code not found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=${
-					error || "no_code"
-				}&error_description=${error_description}`,
-			);
+			throw redirectOnError("no_code");
 		}
 		const provider = c.context.socialProviders.find(
 			(p) => p.id === c.params.id,
@@ -64,9 +80,7 @@ export const callbackOAuth = createAuthEndpoint(
 				c.params.id,
 				"not found",
 			);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=oauth_provider_not_found`,
-			);
+			throw redirectOnError("oauth_provider_not_found");
 		}
 		const {
 			codeVerifier,
@@ -87,23 +101,12 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
+			throw redirectOnError("invalid_code");
 		}
 		const userInfo = await provider
 			.getUserInfo(tokens)
 			.then((res) => res?.user);
 
-		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
-			if (url.includes("?")) {
-				url = `${url}&error=${error}`;
-			} else {
-				url = `${url}?error=${error}`;
-			}
-			throw c.redirect(url);
-		}
 		if (!userInfo) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
@@ -118,9 +121,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=please_restart_the_process`,
-			);
+			throw redirectOnError("no_callback_url");
 		}
 		if (link) {
 			if (

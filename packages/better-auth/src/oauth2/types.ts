@@ -81,6 +81,11 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	redirectURI?: string;
 	/**
+	 * The client key of your application
+	 * Tiktok Social Provider uses this field instead of clientId
+	 */
+	clientKey?: string;
+	/**
 	 * Disable provider from allowing users to sign in
 	 * with this provider with an id token sent from the
 	 * client.

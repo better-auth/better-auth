@@ -95,7 +95,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			if (!ctx.context.options.emailAndPassword?.enabled) {
+			if (
+				!ctx.context.options.emailAndPassword?.enabled ||
+				ctx.context.options.emailAndPassword?.disableSignUp
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Email and password sign up is not enabled",
 				});

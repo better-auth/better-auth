@@ -6,6 +6,7 @@
     "packageManager": "pnpm@9.15.0",
     "scripts": {
         "build": "turbo --filter \"./packages/*\" build",
+        "build:docs": "turbo --filter \"./docs\" build",
         "dev": "turbo --filter \"./packages/*\" dev",
         "dev:dts": "turbo --filter \"./packages/*\" dev:dts",
         "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",

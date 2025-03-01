@@ -62,6 +62,13 @@ export interface PasskeyOptions {
 	 * pass this value.
 	 */
 	origin?: string | null;
+
+	/**
+	 * Allow customization of the authenticatorSelection options
+	 * during passkey registration.
+	 */
+	authenticatorSelection?: AuthenticatorSelectionCriteria;
+
 	/**
 	 * Advanced options
 	 */
@@ -120,6 +127,13 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [freshSessionMiddleware],
+					query: z
+						.object({
+							authenticatorAttachment: z
+								.enum(["platform", "cross-platform"])
+								.optional(),
+						})
+						.optional(),
 					metadata: {
 						client: false,
 						openapi: {
@@ -127,6 +141,16 @@ export const passkey = (options?: PasskeyOptions) => {
 							responses: {
 								200: {
 									description: "Success",
+									parameters: {
+										query: {
+											authenticatorAttachment: {
+												description: `Type of authenticator to use for registration. 
+                          "platform" for device-specific authenticators, 
+                          "cross-platform" for authenticators that can be used across devices.`,
+												required: false,
+											},
+										},
+									},
 									content: {
 										"application/json": {
 											schema: {
@@ -228,7 +252,7 @@ export const passkey = (options?: PasskeyOptions) => {
 					},
 				},
 				async (ctx) => {
-					const session = ctx.context.session;
+					const { session } = ctx.context;
 					const userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 						model: "passkey",
 						where: [
@@ -257,7 +281,12 @@ export const passkey = (options?: PasskeyOptions) => {
 						authenticatorSelection: {
 							residentKey: "preferred",
 							userVerification: "preferred",
-							authenticatorAttachment: "platform",
+							...(opts.authenticatorSelection || {}),
+							...(ctx.query?.authenticatorAttachment
+								? {
+										authenticatorAttachment: ctx.query.authenticatorAttachment,
+									}
+								: {}),
 						},
 					});
 					const id = generateId(32);
