@@ -287,6 +287,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -382,7 +388,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -419,6 +427,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
+						error_description: z
+							.string({
+								description: "The error description, if any",
+							})
+							.optional(),
 						state: z
 							.string({
 								description: "The state parameter from the OAuth2 request",
@@ -449,11 +462,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.options.baseURL}?error=${
+							`${defaultErrorURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
-							}`,
+							}&error_description=${ctx.query.error_description}`,
 						);
 					}
 					const provider = options.config.find(
@@ -471,6 +487,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const { callbackURL, codeVerifier, errorURL, newUserURL, link } =
 						parsedState;
 					const code = ctx.query.code;
+
+					function redirectOnError(error: string) {
+						throw ctx.redirect(
+							`${
+								errorURL || callbackURL || `${ctx.context.baseURL}/error`
+							}?error=${error}`,
+						);
+					}
 
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
@@ -510,9 +534,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: "",
 							e,
 						);
-						throw ctx.redirect(
-							`${errorURL}?error=oauth_code_verification_failed`,
-						);
+						throw redirectOnError("oauth_code_verification_failed");
 					}
 
 					if (!tokens) {
@@ -528,9 +550,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					if (!userInfo?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=email_is_missing`,
-						);
+						throw redirectOnError("email_is_missing");
 					}
 
 					const mapUser = provider.mapProfileToUser
@@ -549,6 +569,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userId: link.userId,
 							providerId: provider.providerId,
 							accountId: userInfo.id,
+							accessToken: tokens.accessToken,
+							refreshToken: tokens.refreshToken,
+							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+							scope: tokens.scopes?.join(","),
 						});
 						if (!newAccount) {
 							return redirectOnError("unable_to_link_account");
@@ -576,13 +601,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					});
 
-					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
-					}
 					if (result.error) {
 						return redirectOnError(result.error.split(" ").join("_"));
 					}

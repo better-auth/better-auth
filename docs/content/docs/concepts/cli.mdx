@@ -3,7 +3,38 @@ title: CLI
 description: Built in CLI for managing your project.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
+Better Auth comes with a built-in CLI to help you manage the database schemas or even create new applications with Better Auth!
+
+
+## Init
+
+The `init` command allows you to initialize Better Auth in your project.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest init
+```
+
+You can also pass a list of plugins separated by a comma to the `init` command.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest init admin, organization, two-factor
+```
+
+### Options
+
+- `--name` - The name of your application. (Defaults to your `package.json`'s `name` property.)
+- `--framework` - The framework your codebase is using. Currently, the only supported framework is `nextjs`.
+- `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
+- `--database` - The database you want to use. Currently, the only supported database is `sqlite`.
+- `--pacakge-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun`. (Defaults to the manager you used to initialize the CLI.)
+
+### How it works
+
+1. Checks if you have `package.json` file in your project.
+2. Checks if you have `lib` directory, or `src/lib` directory in your project.
+3. Checks if you have `better-auth.ts` file in your project. (If not, it will create one.)
+4. 
+
 
 ## Generate
 

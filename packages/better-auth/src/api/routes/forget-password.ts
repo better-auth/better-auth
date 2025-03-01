@@ -97,18 +97,9 @@ export const forgetPassword = createAuthEndpoint(
 		});
 		if (!user) {
 			ctx.context.logger.error("Reset Password: User not found", { email });
-			//only on the server status is false for the client it's always true
-			//to avoid leaking information
-			return ctx.json(
-				{
-					status: false,
-				},
-				{
-					body: {
-						status: true,
-					},
-				},
-			);
+			return ctx.json({
+				status: true,
+			});
 		}
 		const defaultExpiresIn = 60 * 60 * 1;
 		const expiresAt = getDate(
@@ -272,17 +263,24 @@ export const resetPassword = createAuthEndpoint(
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount({
-				userId,
-				providerId: "credential",
-				password: hashedPassword,
-				accountId: userId,
-			});
+			await ctx.context.internalAdapter.createAccount(
+				{
+					userId,
+					providerId: "credential",
+					password: hashedPassword,
+					accountId: userId,
+				},
+				ctx,
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
-		await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
+		await ctx.context.internalAdapter.updatePassword(
+			userId,
+			hashedPassword,
+			ctx,
+		);
 		return ctx.json({
 			status: true,
 		});

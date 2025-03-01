@@ -258,6 +258,11 @@ export const sso = (options?: SSOOptions) => {
 									"The URL to redirect to after login if the user is new",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								description: "Scopes to request from the provider.",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -377,7 +382,12 @@ export const sso = (options?: SSOOptions) => {
 						codeVerifier: provider.oidcConfig.pkce
 							? state.codeVerifier
 							: undefined,
-						scopes: ["openid", "email", "profile", "offline_access"],
+						scopes: ctx.body.scopes || [
+							"openid",
+							"email",
+							"profile",
+							"offline_access",
+						],
 						authorizationEndpoint: provider.oidcConfig.authorizationEndpoint,
 					});
 					return ctx.json({

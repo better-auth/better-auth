@@ -95,7 +95,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			if (!ctx.context.options.emailAndPassword?.enabled) {
+			if (
+				!ctx.context.options.emailAndPassword?.enabled ||
+				ctx.context.options.emailAndPassword?.disableSignUp
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Email and password sign up is not enabled",
 				});
@@ -145,13 +148,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			);
 			let createdUser: User;
 			try {
-				createdUser = await ctx.context.internalAdapter.createUser({
-					email: email.toLowerCase(),
-					name,
-					image,
-					...additionalData,
-					emailVerified: false,
-				});
+				createdUser = await ctx.context.internalAdapter.createUser(
+					{
+						email: email.toLowerCase(),
+						name,
+						image,
+						...additionalData,
+						emailVerified: false,
+					},
+					ctx,
+				);
 				if (!createdUser) {
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
@@ -175,12 +181,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			 * Link the account to the user
 			 */
 			const hash = await ctx.context.password.hash(password);
-			await ctx.context.internalAdapter.linkAccount({
-				userId: createdUser.id,
-				providerId: "credential",
-				accountId: createdUser.id,
-				password: hash,
-			});
+			await ctx.context.internalAdapter.linkAccount(
+				{
+					userId: createdUser.id,
+					providerId: "credential",
+					accountId: createdUser.id,
+					password: hash,
+				},
+				ctx,
+			);
 			if (
 				ctx.context.options.emailVerification?.sendOnSignUp ||
 				ctx.context.options.emailAndPassword.requireEmailVerification
