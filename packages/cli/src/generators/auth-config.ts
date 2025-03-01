@@ -369,7 +369,7 @@ export async function generateAuthConfig({
 						"drizzle:",
 						"",
 					)}",\n})`,
-					dependencies: [],
+					dependencies: [""],
 					envs: [],
 					imports: [
 						{
@@ -499,7 +499,7 @@ export async function generateAuthConfig({
 		for await (const plugin of plugins) {
 			const existingIndex = imports.findIndex((x) => x.path === plugin.path);
 			if (existingIndex !== -1) {
-				imports[existingIndex].variables.push({
+				imports[existingIndex]!.variables.push({
 					name: plugin.name,
 					asType: false,
 				});
@@ -655,12 +655,12 @@ function insertContent(params: {
 	const targetLineIndex = line - 1;
 
 	// Check if the specified character index is valid
-	if (character < 0 || character > lines[targetLineIndex].length) {
+	if (character < 0 || character > lines[targetLineIndex]!.length) {
 		throw new Error("Invalid character index");
 	}
 
 	// Insert the new content at the specified position
-	const targetLine = lines[targetLineIndex];
+	const targetLine = lines[targetLineIndex]!;
 	const updatedLine =
 		targetLine.slice(0, character) +
 		insert_content +
@@ -720,6 +720,6 @@ const getPosition = (str: string, index: number) => {
 	const lines = str.slice(0, index).split("\n");
 	return {
 		line: lines.length,
-		character: lines[lines.length - 1].length,
+		character: lines[lines.length - 1]!.length,
 	};
 };

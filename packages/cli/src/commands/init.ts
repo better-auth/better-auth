@@ -265,13 +265,11 @@ const getDefaultAuthClientConfig = async ({
 							(x) => x.path === import_.path,
 						);
 						if (existingIndex !== -1) {
-							if (Array.isArray(result[existingIndex].variables)) {
-								result[existingIndex].variables.push(variable);
+							const vars = result[existingIndex]!.variables;
+							if (Array.isArray(vars)) {
+								vars.push(variable);
 							} else {
-								result[existingIndex].variables = [
-									result[existingIndex].variables,
-									variable,
-								];
+								result[existingIndex]!.variables = [vars, variable];
 							}
 						} else {
 							result.push({
@@ -285,13 +283,11 @@ const getDefaultAuthClientConfig = async ({
 						(x) => x.path === import_.path,
 					);
 					if (existingIndex !== -1) {
-						if (Array.isArray(result[existingIndex].variables)) {
-							result[existingIndex].variables.push(import_.variables);
+						const vars = result[existingIndex]!.variables;
+						if (Array.isArray(vars)) {
+							vars.push(import_.variables);
 						} else {
-							result[existingIndex].variables = [
-								result[existingIndex].variables,
-								import_.variables,
-							];
+							result[existingIndex]!.variables = [vars, import_.variables];
 						}
 					} else {
 						result.push({
@@ -400,7 +396,7 @@ export async function initAction(opts: any) {
 	else if (envFiles.includes(".env.local")) targetEnvFile = ".env.local";
 	else if (envFiles.includes(".env.development"))
 		targetEnvFile = ".env.development";
-	else if (envFiles.length === 1) targetEnvFile = envFiles[0];
+	else if (envFiles.length === 1) targetEnvFile = envFiles[0]!;
 	else targetEnvFile = "none";
 
 	// ===== tsconfig.json =====
