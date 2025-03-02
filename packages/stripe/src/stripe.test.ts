@@ -370,6 +370,7 @@ describe("stripe", async () => {
 				stripeCustomerId: "cus_delete_test",
 				status: "active",
 				plan: "starter",
+				stripeSubscriptionId: "sub_delete_test",
 			},
 		});
 
@@ -387,7 +388,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_deleted",
+					id: "sub_delete_test",
 					customer: subscription?.stripeCustomerId,
 					status: "canceled",
 					metadata: {

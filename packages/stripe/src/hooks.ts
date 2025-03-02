@@ -182,13 +182,13 @@ export async function onSubscriptionDeleted(
 	}
 	try {
 		const subscriptionDeleted = event.data.object as Stripe.Subscription;
-		const subscriptionId = subscriptionDeleted.metadata?.subscriptionId;
+		const subscriptionId = subscriptionDeleted.id;
 		if (subscriptionDeleted.status === "canceled") {
 			const subscription = await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
 				where: [
 					{
-						field: "id",
+						field: "stripeSubscriptionId",
 						value: subscriptionId,
 					},
 				],
@@ -198,12 +198,13 @@ export async function onSubscriptionDeleted(
 					model: "subscription",
 					where: [
 						{
-							field: "id",
-							value: subscription.id,
+							field: "stripeSubscriptionId",
+							value: subscriptionId,
 						},
 					],
 					update: {
 						status: "canceled",
+						updatedAt: new Date(),
 					},
 				});
 				await options.subscription.onSubscriptionDeleted?.({
