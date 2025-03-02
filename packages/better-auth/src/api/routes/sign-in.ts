@@ -113,6 +113,25 @@ export const signInSocial = createAuthEndpoint(
 						"ID token from the provider to sign in the user with id token",
 				},
 			),
+			scopes: z
+				.array(z.string(), {
+					description:
+						"Array of scopes to request from the provider. This will override the default scopes passed.",
+				})
+				.optional(),
+			/**
+			 * Explicitly request sign-up
+			 *
+			 * Should be used to allow sign up when
+			 * disableImplicitSignUp for this provider is
+			 * true
+			 */
+			requestSignUp: z
+				.boolean({
+					description:
+						"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -219,6 +238,9 @@ export const signInSocial = createAuthEndpoint(
 					accountId: userInfo.user.id,
 					accessToken: c.body.idToken.accessToken,
 				},
+				disableSignUp:
+					(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
+					provider.disableSignUp,
 			});
 			if (data.error) {
 				throw new APIError("UNAUTHORIZED", {
@@ -247,6 +269,7 @@ export const signInSocial = createAuthEndpoint(
 			state,
 			codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.body.scopes,
 		});
 
 		return c.json({

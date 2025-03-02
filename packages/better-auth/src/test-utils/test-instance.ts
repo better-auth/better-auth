@@ -5,7 +5,7 @@ import { betterAuth } from "../auth";
 import { createAuthClient } from "../client/vanilla";
 import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
 import { getMigrations } from "../db/get-migration";
-import { parseSetCookieHeader } from "../cookies";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { getAdapter } from "../db/utils";
 import Database from "better-sqlite3";
@@ -15,7 +15,7 @@ import { Pool } from "pg";
 import { MongoClient } from "mongodb";
 import { mongodbAdapter } from "../adapters/mongodb-adapter";
 import { createPool } from "mysql2/promise";
-import { bearer } from "../../src/plugins";
+import { bearer } from "../plugins";
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -172,7 +172,6 @@ export async function getTestInstance<
 		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-
 			fetchOptions: {
 				//@ts-expect-error
 				onSuccess(context) {
@@ -233,39 +232,7 @@ export async function getTestInstance<
 			}
 		};
 	}
-	function cookieSetter(headers: Headers) {
-		return (context: {
-			response: Response;
-		}) => {
-			const setCookieHeader = context.response.headers.get("set-cookie");
-			if (!setCookieHeader) {
-				return;
-			}
 
-			const cookieMap = new Map<string, string>();
-
-			const existingCookiesHeader = headers.get("cookie") || "";
-			existingCookiesHeader.split(";").forEach((cookie) => {
-				const [name, ...rest] = cookie.trim().split("=");
-				if (name && rest.length > 0) {
-					cookieMap.set(name, rest.join("="));
-				}
-			});
-
-			const setCookieHeaders = setCookieHeader.split(",");
-			setCookieHeaders.forEach((header) => {
-				const cookies = parseSetCookieHeader(header);
-				cookies.forEach((value, name) => {
-					cookieMap.set(name, value.value);
-				});
-			});
-
-			const updatedCookies = Array.from(cookieMap.entries())
-				.map(([name, value]) => `${name}=${value}`)
-				.join("; ");
-			headers.set("cookie", updatedCookies);
-		};
-	}
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
 		baseURL: getBaseURL(
@@ -282,7 +249,7 @@ export async function getTestInstance<
 		testUser,
 		signInWithTestUser,
 		signInWithUser,
-		cookieSetter,
+		cookieSetter: setCookieToHeader,
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),

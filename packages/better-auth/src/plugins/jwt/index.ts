@@ -1,5 +1,6 @@
 import type {
 	BetterAuthPlugin,
+	GenericEndpointContext,
 	InferOptionSchema,
 	Session,
 	User,
@@ -7,7 +8,11 @@ import type {
 import { type Jwk, schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
-import { createAuthEndpoint, sessionMiddleware } from "../../api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+	sessionMiddleware,
+} from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
 
@@ -97,6 +102,83 @@ export interface JwtOptions {
 }
 
 export const jwt = (options?: JwtOptions) => {
+	async function getJwtToken(ctx: GenericEndpointContext) {
+		const adapter = getJwksAdapter(ctx.context.adapter);
+
+		let key = await adapter.getLatestKey();
+		const privateKeyEncryptionEnabled =
+			!options?.jwks?.disablePrivateKeyEncryption;
+
+		if (key === undefined) {
+			const { publicKey, privateKey } = await generateKeyPair(
+				options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+				options?.jwks?.keyPairConfig ?? {
+					crv: "Ed25519",
+					extractable: true,
+				},
+			);
+
+			const publicWebKey = await exportJWK(publicKey);
+			const privateWebKey = await exportJWK(privateKey);
+			const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
+
+			let jwk: Partial<Jwk> = {
+				id: ctx.context.generateId({
+					model: "jwks",
+				}),
+				publicKey: JSON.stringify(publicWebKey),
+				privateKey: privateKeyEncryptionEnabled
+					? JSON.stringify(
+							await symmetricEncrypt({
+								key: ctx.context.options.secret!,
+								data: stringifiedPrivateWebKey,
+							}),
+						)
+					: stringifiedPrivateWebKey,
+				createdAt: new Date(),
+			};
+
+			key = await adapter.createJwk(jwk as Jwk);
+		}
+
+		let privateWebKey = privateKeyEncryptionEnabled
+			? await symmetricDecrypt({
+					key: ctx.context.options.secret!,
+					data: JSON.parse(key.privateKey),
+				})
+			: key.privateKey;
+
+		const privateKey = await importJWK(
+			JSON.parse(privateWebKey),
+			options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+		);
+
+		const payload = !options?.jwt?.definePayload
+			? ctx.context.session!.user
+			: await options?.jwt.definePayload(ctx.context.session!);
+
+		const jwt = await new SignJWT({
+			...payload,
+			// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
+			...((ctx.context.session!.session as any).impersonatedBy!
+				? {
+						impersonatedBy: (ctx.context.session!.session as any)
+							.impersonatedBy,
+					}
+				: {}),
+		})
+			.setProtectedHeader({
+				alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+				kid: key.id,
+			})
+			.setIssuedAt()
+			.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
+			.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
+			.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
+			.setSubject(ctx.context.session!.user.id)
+			.sign(privateKey);
+		return jwt;
+	}
 	return {
 		id: "jwt",
 		endpoints: {
@@ -156,8 +238,9 @@ export const jwt = (options?: JwtOptions) => {
 					const keySets = await adapter.getAllKeys();
 
 					if (keySets.length === 0) {
+						const alg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 						const { publicKey, privateKey } = await generateKeyPair(
-							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+							alg,
 							options?.jwks?.keyPairConfig ?? {
 								crv: "Ed25519",
 								extractable: true,
@@ -173,7 +256,7 @@ export const jwt = (options?: JwtOptions) => {
 							id: ctx.context.generateId({
 								model: "jwks",
 							}),
-							publicKey: JSON.stringify(publicWebKey),
+							publicKey: JSON.stringify({ alg, ...publicWebKey }),
 							privateKey: privateKeyEncryptionEnabled
 								? JSON.stringify(
 										await symmetricEncrypt({
@@ -191,6 +274,7 @@ export const jwt = (options?: JwtOptions) => {
 							keys: [
 								{
 									...publicWebKey,
+									alg,
 									kid: jwk.id,
 								},
 							],
@@ -236,86 +320,29 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
-					const adapter = getJwksAdapter(ctx.context.adapter);
-
-					let key = await adapter.getLatestKey();
-					const privateKeyEncryptionEnabled =
-						!options?.jwks?.disablePrivateKeyEncryption;
-
-					if (key === undefined) {
-						const { publicKey, privateKey } = await generateKeyPair(
-							options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-							options?.jwks?.keyPairConfig ?? {
-								crv: "Ed25519",
-								extractable: true,
-							},
-						);
-
-						const publicWebKey = await exportJWK(publicKey);
-						const privateWebKey = await exportJWK(privateKey);
-						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-
-						let jwk: Partial<Jwk> = {
-							id: ctx.context.generateId({
-								model: "jwks",
-							}),
-							publicKey: JSON.stringify(publicWebKey),
-							privateKey: privateKeyEncryptionEnabled
-								? JSON.stringify(
-										await symmetricEncrypt({
-											key: ctx.context.options.secret!,
-											data: stringifiedPrivateWebKey,
-										}),
-									)
-								: stringifiedPrivateWebKey,
-							createdAt: new Date(),
-						};
-
-						key = await adapter.createJwk(jwk as Jwk);
-					}
-
-					let privateWebKey = privateKeyEncryptionEnabled
-						? await symmetricDecrypt({
-								key: ctx.context.options.secret!,
-								data: JSON.parse(key.privateKey),
-							})
-						: key.privateKey;
-
-					const privateKey = await importJWK(
-						JSON.parse(privateWebKey),
-						options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-					);
-
-					const payload = !options?.jwt?.definePayload
-						? ctx.context.session.user
-						: await options?.jwt.definePayload(ctx.context.session);
-
-					const jwt = await new SignJWT({
-						...payload,
-						// I am aware that this is not the best way to handle this, but this is the only way I know to get the impersonatedBy field
-						...((ctx.context.session.session as any).impersonatedBy!
-							? {
-									impersonatedBy: (ctx.context.session.session as any)
-										.impersonatedBy,
-								}
-							: {}),
-					})
-						.setProtectedHeader({
-							alg: options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
-							kid: key.id,
-						})
-						.setIssuedAt()
-						.setIssuer(options?.jwt?.issuer ?? ctx.context.options.baseURL!)
-						.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
-						.setExpirationTime(options?.jwt?.expirationTime ?? "15m")
-						.setSubject(ctx.context.session.user.id)
-						.sign(privateKey);
-
+					const jwt = await getJwtToken(ctx);
 					return ctx.json({
 						token: jwt,
 					});
 				},
 			),
+		},
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path === "/get-session";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = ctx.context.session;
+						if (session && session.session) {
+							const jwt = await getJwtToken(ctx);
+							ctx.setHeader("set-auth-jwt", jwt);
+							ctx.setHeader("Access-Control-Expose-Headers", "set-auth-jwt");
+						}
+					}),
+				},
+			],
 		},
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
