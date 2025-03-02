@@ -48,10 +48,7 @@
     "vitest": "^1.6.0"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*",
-    "expo-linking": "*",
-    "expo-secure-store": "*",
-    "expo-web-browser": "*"
+    "better-auth": "workspace:*"
   },
   "dependencies": {
     "better-call": "catalog:",
