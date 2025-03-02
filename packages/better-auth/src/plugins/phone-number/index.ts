@@ -19,6 +19,11 @@ export interface UserWithPhoneNumber extends User {
 	phoneNumberVerified: boolean;
 }
 
+export type CustomSendOTPOptions = {
+	generate? : boolean;
+	reason? : string;
+} | void
+
 function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
@@ -39,7 +44,7 @@ export interface PhoneNumberOptions {
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
 		request?: Request,
-	) => Promise<void> | void;
+	) => Promise<void> | void | CustomSendOTPOptions | Promise<CustomSendOTPOptions>;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
@@ -124,6 +129,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		OTP_NOT_FOUND: "OTP not found",
 		OTP_EXPIRED: "OTP expired",
 		INVALID_OTP: "Invalid OTP",
+		USER_CHOICE: "OTP generation set to false"
 	} as const;
 	return {
 		id: "phone-number",
@@ -322,18 +328,27 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 					}
 
 					const code = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: code,
-						identifier: ctx.body.phoneNumber,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
-					await options.sendOTP(
+
+					const sendOTPRes: CustomSendOTPOptions = await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
 						ctx.request,
 					);
+
+					if(!sendOTPRes?.generate) {
+						throw new APIError("UNAUTHORIZED", {
+							message: sendOTPRes?.reason ?? ERROR_CODES.USER_CHOICE,
+						});
+					}
+
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: code,
+						identifier: ctx.body.phoneNumber,
+						expiresAt: getDate(opts.expiresIn, "sec"),
+					});
+					
 					return ctx.json(
 						{ code },
 						{
