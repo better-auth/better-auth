@@ -9,6 +9,7 @@ import {
 	oAuthProxy,
 	openAPI,
 	oidcProvider,
+	customSession,
 } from "better-auth/plugins";
 import { reactInvitationEmail } from "./email/invitation";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -160,6 +161,15 @@ export const auth = betterAuth({
 			loginPage: "/sign-in",
 		}),
 		oneTap(),
+		customSession(async (session) => {
+			return {
+				...session,
+				user: {
+					...session.user,
+					dd: "test",
+				},
+			};
+		}),
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY!),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,

@@ -404,39 +404,18 @@ You can configure trial periods for your plans:
 
 The Stripe plugin adds the following tables to your database:
 
-### Customer
 
-Table Name: `customer`
+### User
+
+Table Name: `user`
 
 <DatabaseTable
   fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each customer",
-      isPrimaryKey: true
-    },
     { 
       name: "stripeCustomerId", 
       type: "string", 
       description: "The Stripe customer ID" 
     },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "The user ID this customer is associated with",
-      isForeignKey: true
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the customer was created" 
-    },
-    { 
-      name: "updatedAt", 
-      type: "Date", 
-      description: "Timestamp of when the customer was last updated" 
-    }
   ]}
 />
 
@@ -529,12 +508,6 @@ To change the schema table names or fields, you can pass a `schema` option to th
 stripe({
     // ... other options
     schema: {
-        customer: {
-            modelName: "stripeCustomers",  // map the customer table to stripeCustomers
-            fields: { 
-                stripeCustomerId: "externalId" // map the stripeCustomerId field to externalId
-            }
-        },
         subscription: {
             modelName: "stripeSubscriptions", // map the subscription table to stripeSubscriptions
             fields: {
