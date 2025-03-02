@@ -26,11 +26,13 @@ interface Content {
 	title: string;
 	href?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	isNew?: boolean;
 	list: {
 		title: string;
 		href: string;
 		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 		group?: boolean;
+		isNew?: boolean;
 	}[];
 }
 
@@ -726,6 +728,7 @@ export const contents: Content[] = [
 	},
 	{
 		title: "Databases",
+		isNew: true,
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -1207,6 +1210,7 @@ export const contents: Content[] = [
 			{
 				title: "API Key",
 				href: "/docs/plugins/api-key",
+				isNew: true,
 				icon: () => <KeyRound className="size-4" />,
 			},
 			{
@@ -1273,6 +1277,7 @@ export const contents: Content[] = [
 			{
 				title: "Captcha",
 				href: "/docs/plugins/captcha",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1385,6 +1390,7 @@ export const contents: Content[] = [
 			{
 				title: "Stripe",
 				href: "/docs/plugins/stripe",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
