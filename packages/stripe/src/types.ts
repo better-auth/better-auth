@@ -77,7 +77,10 @@ export type Plan = {
 		 * @param subscription - Subscription
 		 * @returns
 		 */
-		onTrialExpired?: (subscription: Subscription) => Promise<void>;
+		onTrialExpired?: (
+			subscription: Subscription,
+			request?: Request,
+		) => Promise<void>;
 	};
 };
 
