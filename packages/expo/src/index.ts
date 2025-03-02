@@ -49,7 +49,7 @@ export const expo = (options?: ExpoOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const headers = ctx.context.responseHeader;
+						const headers = ctx.context.responseHeaders;
 
 						const location = headers.get("location");
 						if (!location) {
