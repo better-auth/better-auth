@@ -50,8 +50,7 @@ export const expo = (options?: ExpoOptions) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;
-
-						const location = headers.get("location");
+						const location = headers?.get("location");
 						if (!location) {
 							return;
 						}
@@ -64,7 +63,7 @@ export const expo = (options?: ExpoOptions) => {
 						if (!isTrustedOrigin) {
 							return;
 						}
-						const cookie = headers.get("set-cookie");
+						const cookie = headers?.get("set-cookie");
 						if (!cookie) {
 							return;
 						}
