@@ -944,8 +944,7 @@ export const appInvite = <O extends AppInviteOptions>(opts?: O) => {
 		],
 		schema: {
 			appInvitation: {
-				modelName:
-					options?.schema?.appInvitation?.modelName || "app_invitation",
+				modelName: options?.schema?.appInvitation?.modelName,
 				fields: {
 					name: {
 						type: "string",
