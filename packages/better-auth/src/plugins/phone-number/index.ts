@@ -129,7 +129,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 		OTP_NOT_FOUND: "OTP not found",
 		OTP_EXPIRED: "OTP expired",
 		INVALID_OTP: "Invalid OTP",
-		USER_CHOICE: "OTP generation set to false"
+		USER_CHOICE: "OTP generation is disabled in sendOTP"
 	} as const;
 	return {
 		id: "phone-number",
