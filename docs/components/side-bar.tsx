@@ -199,10 +199,12 @@ export default function ArticleLayout() {
 																		href={listItem.href}
 																		startWith="/docs"
 																		title={listItem.title}
-																		className="break-words w-[--fd-sidebar-width] [&>div]:hover:!bg-fd-muted"
-																		activeClassName="[&>div]:!bg-fd-muted"
+																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
+																		activeClassName="[&>div>div]:!bg-fd-muted"
 																	>
-																		<listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
+																		<div className="min-w-4">
+																			<listItem.icon className="text-stone-950 dark:text-white" />
+																		</div>
 																		{listItem.title}
 																		{listItem.isNew && <NewBadge />}
 																	</AsideLink>
@@ -226,11 +228,13 @@ export default function ArticleLayout() {
 
 function NewBadge({ isSelected }: { isSelected?: boolean }) {
 	return (
-		<Badge
-			className=" pointer-events-none !no-underline decoration-transparent!"
-			variant={isSelected ? "default" : "outline"}
-		>
-			New
-		</Badge>
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className=" pointer-events-none !no-underline decoration-transparent!"
+				variant={isSelected ? "default" : "outline"}
+			>
+				New
+			</Badge>
+		</div>
 	);
 }

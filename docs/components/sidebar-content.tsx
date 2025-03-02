@@ -728,7 +728,6 @@ export const contents: Content[] = [
 	},
 	{
 		title: "Databases",
-		isNew: true,
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
