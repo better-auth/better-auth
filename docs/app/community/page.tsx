@@ -43,7 +43,7 @@ export default async function CommunityPage() {
 	return (
 		<Section
 			id="hero"
-			className="relative px-[3.4rem] pl-[3.9rem] max-w-7xl mx-auto overflow-hidden"
+			className="relative md:px-[3.4rem] md:pl-[3.9rem] md:max-w-7xl md:mx-auto overflow-hidden"
 			crosses={false}
 			crossesOffset=""
 			customPaddings
@@ -77,7 +77,7 @@ export default async function CommunityPage() {
 							</div>
 						</div>
 					</div>
-					<div className="w-full mx-auto overflow-hidden">
+					<div className="w-full md:mx-auto overflow-hidden">
 						<Stats npmDownloads={npmDownloads.downloads} />
 					</div>
 				</div>
