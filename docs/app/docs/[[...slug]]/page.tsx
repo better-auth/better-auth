@@ -47,7 +47,8 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				path: "/docs/content/docs",
+				sha: "main",
+				path: `/docs/content/docs/${page.file.path}`,
 			}}
 			tableOfContent={{
 				style: "clerk",

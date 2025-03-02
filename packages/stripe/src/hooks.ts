@@ -41,6 +41,7 @@ export async function onCheckoutSessionCompleted(
 							updatedAt: new Date(),
 							periodStart: new Date(subscription.current_period_start * 1000),
 							periodEnd: new Date(subscription.current_period_end * 1000),
+							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
 							...trial,
 						},
@@ -93,59 +94,75 @@ export async function onSubscriptionUpdated(
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
 		const priceId = subscriptionUpdated.items.data[0].price.id;
 		const plan = await getPlanByPriceId(options, priceId);
-		if (plan) {
-			const stripeId = subscriptionUpdated.id;
-			const subscription = await ctx.context.adapter.findOne<Subscription>({
+
+		const referenceId = subscriptionUpdated.metadata?.referenceId;
+		const subscriptionId = subscriptionUpdated.id;
+		const customerId = subscriptionUpdated.customer.toString();
+		let subscription = await ctx.context.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: referenceId
+				? [{ field: "referenceId", value: referenceId }]
+				: subscriptionId
+					? [{ field: "stripeSubscriptionId", value: subscriptionId }]
+					: [],
+		});
+		if (!subscription) {
+			const subs = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: stripeId,
-					},
-				],
+				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
-			if (!subscription) {
+			if (subs.length > 1) {
+				logger.warn(
+					`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no referenceId or subscriptionId is provided`,
+				);
 				return;
 			}
-			const seats = subscriptionUpdated.items.data[0].quantity;
-			await ctx.context.adapter.update({
-				model: "subscription",
-				update: {
-					plan: plan.name.toLowerCase(),
-					limits: plan.limits,
-					updatedAt: new Date(),
-					status: subscriptionUpdated.status,
-					periodStart: new Date(
-						subscriptionUpdated.current_period_start * 1000,
-					),
-					periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
-					cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
-					seats,
-				},
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionUpdated.id,
-					},
-				],
-			});
-			const subscriptionCanceled =
-				subscriptionUpdated.status === "active" &&
-				subscriptionUpdated.cancel_at_period_end;
-			if (subscriptionCanceled) {
-				await options.subscription.onSubscriptionCancel?.({
-					subscription,
-					cancellationDetails:
-						subscriptionUpdated.cancellation_details || undefined,
-					stripeSubscription: subscriptionUpdated,
-					event,
-				});
-			}
-			await options.subscription.onSubscriptionUpdate?.({
-				event,
-				subscription,
-			});
+			subscription = subs[0];
+		}
 
+		const seats = subscriptionUpdated.items.data[0].quantity;
+		await ctx.context.adapter.update({
+			model: "subscription",
+			update: {
+				...(plan
+					? {
+							plan: plan.name.toLowerCase(),
+							limits: plan.limits,
+						}
+					: {}),
+				updatedAt: new Date(),
+				status: subscriptionUpdated.status,
+				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
+				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
+				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				seats,
+				stripeSubscriptionId: subscriptionUpdated.id,
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: subscription.referenceId,
+				},
+			],
+		});
+		const subscriptionCanceled =
+			subscriptionUpdated.status === "active" &&
+			subscriptionUpdated.cancel_at_period_end &&
+			!subscription.cancelAtPeriodEnd; //if this is true, it means the subscription was canceled before the event was triggered
+		if (subscriptionCanceled) {
+			await options.subscription.onSubscriptionCancel?.({
+				subscription,
+				cancellationDetails:
+					subscriptionUpdated.cancellation_details || undefined,
+				stripeSubscription: subscriptionUpdated,
+				event,
+			});
+		}
+		await options.subscription.onSubscriptionUpdate?.({
+			event,
+			subscription,
+		});
+		if (plan) {
 			if (
 				subscriptionUpdated.status === "active" &&
 				subscription.status === "trialing" &&
@@ -168,7 +185,7 @@ export async function onSubscriptionUpdated(
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error.message}`);
+		logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
 
@@ -212,9 +229,13 @@ export async function onSubscriptionDeleted(
 					stripeSubscription: subscriptionDeleted,
 					subscription,
 				});
+			} else {
+				logger.warn(
+					`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
+				);
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error.message}`);
+		logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }

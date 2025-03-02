@@ -11,6 +11,7 @@ import type { OrganizationOptions } from "../organization";
 import type {
 	InferInvitation,
 	InferMember,
+	Member,
 	Organization,
 	Team,
 } from "../schema";
@@ -129,6 +130,30 @@ export const createOrganization = createAuthEndpoint(
 			});
 		}
 
+		let hookResponse:
+			| {
+					data: Omit<Organization, "id">;
+			  }
+			| undefined = undefined;
+		if (options.organizationCreation?.beforeCreate) {
+			const response = await options.organizationCreation.beforeCreate(
+				{
+					organization: {
+						slug: ctx.body.slug,
+						name: ctx.body.name,
+						logo: ctx.body.logo,
+						createdAt: new Date(),
+						metadata: ctx.body.metadata,
+					},
+					user,
+				},
+				ctx.request,
+			);
+			if (response && typeof response === "object" && "data" in response) {
+				hookResponse = response;
+			}
+		}
+
 		const organization = await adapter.createOrganization({
 			organization: {
 				id: generateId(),
@@ -137,9 +162,11 @@ export const createOrganization = createAuthEndpoint(
 				logo: ctx.body.logo,
 				createdAt: new Date(),
 				metadata: ctx.body.metadata,
+				...(hookResponse?.data || {}),
 			},
 			user,
 		});
+		let member: Member | undefined;
 		if (
 			options?.teams?.enabled &&
 			options.teams.defaultTeam?.enabled !== false
@@ -156,18 +183,29 @@ export const createOrganization = createAuthEndpoint(
 					createdAt: new Date(),
 				}));
 
-			await adapter.createMember({
+			member = await adapter.createMember({
 				teamId: defaultTeam.id,
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			});
 		} else {
-			await adapter.createMember({
+			member = await adapter.createMember({
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			});
+		}
+
+		if (options.organizationCreation?.afterCreate) {
+			await options.organizationCreation.afterCreate(
+				{
+					organization,
+					user,
+					member,
+				},
+				ctx.request,
+			);
 		}
 
 		if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {

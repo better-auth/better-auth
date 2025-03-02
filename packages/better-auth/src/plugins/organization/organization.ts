@@ -294,7 +294,28 @@ export interface OrganizationOptions {
 			request?: Request,
 		) => Promise<void>;
 	};
+	organizationCreation?: {
+		disabled?: boolean;
+		beforeCreate?: (
+			data: {
+				organization: Omit<Organization, "id">;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void | {
+			data: Omit<Organization, "id">;
+		}>;
+		afterCreate?: (
+			data: {
+				organization: Organization;
+				member: Member;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
+
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
  * and manage access control for your users.
@@ -574,12 +595,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
-					teamId: {
-						type: "string",
-						required: false,
-						sortable: true,
-						fieldName: options?.schema?.member?.fields?.teamId,
-					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.member?.fields?.teamId,
+								},
+							}
+						: {}),
 					createdAt: {
 						type: "date",
 						required: true,
@@ -611,12 +636,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.role,
 					},
-					teamId: {
-						type: "string",
-						required: false,
-						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.teamId,
-					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.invitation?.fields?.teamId,
+								},
+							}
+						: {}),
 					status: {
 						type: "string",
 						required: true,

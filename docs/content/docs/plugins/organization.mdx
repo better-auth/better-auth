@@ -115,6 +115,59 @@ await authClient.organization.checkSlug({
 });
 ```
 
+
+#### Organization Creation Hooks
+
+You can customize the organization creation process using hooks that run before and after an organization is created.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            organizationCreation: {
+                disabled: false, // Set to true to disable organization creation
+                beforeCreate: async ({ organization, user }, request) => {
+                    // Run custom logic before organization is created
+                    // Optionally modify the organization data
+                    return {
+                        data: {
+                            ...organization,
+                            metadata: {
+                                customField: "value"
+                            }
+                        }
+                    }
+                },
+                afterCreate: async ({ organization, member, user }, request) => {
+                    // Run custom logic after organization is created
+                    // e.g., create default resources, send notifications
+                    await setupDefaultResources(organization.id)
+                }
+            }
+        })
+    ]
+})
+```
+
+The `beforeCreate` hook runs before an organization is created. It receives:
+
+- `organization`: The organization data (without ID)
+- `user`: The user creating the organization
+- `request`: The HTTP request object (optional)
+
+Return an object with `data` property to modify the organization data that will be created.
+
+The `afterCreate` hook runs after an organization is successfully created. It receives:
+
+- `organization`: The created organization (with ID)
+- `member`: The member record for the creator
+- `user`: The user who created the organization
+- `request`: The HTTP request object (optional)
+
+
 ### List User's Organizations
 
 To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implements a reactive way to get the organizations that the user is a member of.
@@ -395,16 +448,20 @@ You can configure how organization deletion is handled through `organizationDele
 
 ```ts
 const auth = betterAuth({
-  organizationDeletion: {
-    disabled: true, //to disable it altogether
-    beforeDelete: async(data, request)=>{
-      // a callback to run before deleting org
-    },
-    afterDelete: async(data, request)=>{
-      // a callback to run after deleting org
-    }
-  }
-})
+  plugins: [
+    organization({
+      organizationDeletion: {
+        disabled: true, //to disable it altogether
+        beforeDelete: async (data, request) => {
+          // a callback to run before deleting org
+        },
+        afterDelete: async (data, request) => {
+          // a callback to run after deleting org
+        },
+      },
+    }),
+  ],
+});
 ```
 
 ## Invitations
@@ -650,10 +707,10 @@ the plugin providers easy way to define your own set of permission for each role
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
-    import { organization } from 'better-auth/plugins/organization'
+    import { defaultStatements, adminAc } from 'better-auth/plugins/organization/access'
 
     const statement = { 
-        ...organization.defaultStatements, // [!code highlight]
+        ...defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
     
@@ -661,7 +718,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...organization.adminAc.statements, // [!code highlight]
+        ...adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -710,7 +767,7 @@ the plugin providers easy way to define your own set of permission for each role
                         myCustomRole
                     }
                 })
-            ]
+          ]
         })
         ```
     </Step>
@@ -1151,4 +1208,3 @@ const auth = betterAuth({
 **sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
 
 **invitationExpiresIn** : `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
-

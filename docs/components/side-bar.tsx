@@ -17,6 +17,7 @@ import {
 } from "./ui/select";
 import { loglib } from "@loglib/tracker";
 import { cn } from "@/lib/utils";
+import { Badge } from "./ui/badge";
 
 export default function ArticleLayout() {
 	const [currentOpen, setCurrentOpen] = useState<number>(0);
@@ -151,6 +152,7 @@ export default function ArticleLayout() {
 									>
 										<item.Icon className="w-5 h-5" />
 										<span className="grow">{item.title}</span>
+										{item.isNew && <NewBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
 										>
@@ -197,10 +199,14 @@ export default function ArticleLayout() {
 																		href={listItem.href}
 																		startWith="/docs"
 																		title={listItem.title}
-																		className="break-words w-[--fd-sidebar-width]"
+																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
+																		activeClassName="[&>div>div]:!bg-fd-muted"
 																	>
-																		<listItem.icon className="w-4 h-4 text-stone-950 dark:text-white" />
+																		<div className="min-w-4">
+																			<listItem.icon className="text-stone-950 dark:text-white" />
+																		</div>
 																		{listItem.title}
+																		{listItem.isNew && <NewBadge />}
 																	</AsideLink>
 																)}
 															</Suspense>
@@ -216,6 +222,22 @@ export default function ArticleLayout() {
 					</MotionConfig>
 				</div>
 			</aside>
+		</div>
+	);
+}
+
+function NewBadge({ isSelected }: { isSelected?: boolean }) {
+	return (
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className={cn(
+					" pointer-events-none !no-underline border-dashed !decoration-transparent",
+					isSelected && "!border-solid",
+				)}
+				variant={isSelected ? "default" : "outline"}
+			>
+				New
+			</Badge>
 		</div>
 	);
 }

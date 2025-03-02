@@ -98,6 +98,7 @@ export default defineBuildConfig({
 		"./src/plugins/oidc-provider/index.ts",
 		"./src/plugins/oauth-proxy/index.ts",
 		"./src/plugins/organization/index.ts",
+		"./src/plugins/organization/access/index.ts",
 		"./src/plugins/passkey/index.ts",
 		"./src/plugins/phone-number/index.ts",
 		"./src/plugins/sso/index.ts",
