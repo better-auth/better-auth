@@ -519,7 +519,7 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
+        before: async (user, ctx) => {
           // Modify the user object before it is created
           return {
             data: {
@@ -550,7 +550,7 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
+        before: async (user, ctx) => {
           if (user.isAgreedToTerms === false) {
             // Your special condition.
             // Send the API error.
@@ -567,6 +567,9 @@ export const auth = betterAuth({
   },
 });
 ```
+#### Ctx
+
+Much like standard hooks, database hooks also provide a `ctx` object that offer a variety of useful properties. Learn more in the [Hooks Documentation](/docs/concepts/hooks#ctx).
 
 ## Plugins Schema
 
