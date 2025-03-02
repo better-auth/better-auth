@@ -108,8 +108,8 @@ vi.mock("../oauth2", async (importOriginal) => {
 	};
 });
 
-describe("Social Providers", async (c) => {
-	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
+describe("Social Providers", async () => {
+	const { auth, customFetchImpl, client, cookieSetter, sessionSetter } = await getTestInstance(
 		{
 			user: {
 				additionalFields: {
@@ -136,6 +136,7 @@ describe("Social Providers", async (c) => {
 							isOAuth: true,
 						};
 					},
+					verifyIdToken: async (token) => { return true; }
 				},
 				apple: {
 					clientId: "test",
@@ -275,8 +276,91 @@ describe("Social Providers", async (c) => {
 			});
 		});
 
-		it("should be able to map profile to user", async () => {
-			const signInRes = await client.signIn.social({
+	it("should be able to map profile to user", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+
+		const profile = await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError: (c) => {
+				//TODO: fix this
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user).toMatchObject({
+			isOAuth: true,
+			firstName: "First",
+			lastName: "Last",
+		});
+	});
+
+	it("should be able to map profile to user logging in via id token", async () => {
+		const headers = new Headers();
+
+		const data: GoogleProfile = {
+			email: "user2@email.com",
+			email_verified: true,
+			name: "First Last",
+			picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+			exp: 1234567890,
+			sub: "1234567890",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "First",
+			family_name: "Last",
+		};
+		const testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+		await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: testIdToken,
+				accessToken: "test"
+			}
+		}, {
+			onSuccess: sessionSetter(headers),
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user).toMatchObject({
+			isOAuth: true,
+			firstName: "First",
+			lastName: "Last",
+		});
+	});
+
+	it("should be protected from callback URL attacks", async () => {
+		const signInRes = await client.signIn.social(
+			{
 				provider: "google",
 				callbackURL: "/callback",
 			});
