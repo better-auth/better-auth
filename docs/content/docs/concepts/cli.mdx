@@ -14,12 +14,6 @@ The `init` command allows you to initialize Better Auth in your project.
 npx @better-auth/cli@latest init
 ```
 
-You can also pass a list of plugins separated by a comma to the `init` command.
-
-```bash title="Terminal"
-npx @better-auth/cli@latest init admin, organization, two-factor
-```
-
 ### Options
 
 - `--name` - The name of your application. (Defaults to your `package.json`'s `name` property.)
@@ -27,13 +21,6 @@ npx @better-auth/cli@latest init admin, organization, two-factor
 - `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
 - `--database` - The database you want to use. Currently, the only supported database is `sqlite`.
 - `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun`. (Defaults to the manager you used to initialize the CLI.)
-
-### How it works
-
-1. Checks if you have `package.json` file in your project.
-2. Checks if you have `lib` directory, or `src/lib` directory in your project.
-3. Checks if you have `better-auth.ts` file in your project. (If not, it will create one.)
-4. 
 
 
 ## Generate
@@ -47,7 +34,7 @@ npx @better-auth/cli@latest generate
 ### Options
 
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it’s an SQL file saved as schema.sql in your project root.
-- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and generate the schema directly.
 
 
@@ -61,7 +48,7 @@ npx @better-auth/cli@latest migrate
 
 ### Options
 
-- `--config` - The path to your Better Auth config file. By default, the CLI will search for a better-auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
+- `--config` - The path to your Better Auth config file. By default, the CLI will search for a auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under `src` directory.
 - `--y` - Skip the confirmation prompt and apply the schema directly.
 
 
