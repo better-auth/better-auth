@@ -335,6 +335,85 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				});
 			},
 		),
+		cancelSubscriptionCallback: createAuthEndpoint(
+			"/subscription/cancel/callback",
+			{
+				method: "GET",
+				query: z.record(z.string(), z.any()).optional(),
+			},
+			async (ctx) => {
+				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.reference) {
+					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
+				}
+				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
+					ctx,
+				);
+				if (!session) {
+					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
+				}
+				const { user } = session;
+				const { callbackURL, reference } = ctx.query;
+
+				if (user?.stripeCustomerId) {
+					try {
+						const subscription =
+							await ctx.context.adapter.findOne<Subscription>({
+								model: "subscription",
+								where: [
+									{
+										field: "referenceId",
+										value: reference,
+									},
+								],
+							});
+						console.log({ subscription });
+						if (
+							!subscription ||
+							subscription.cancelAtPeriodEnd ||
+							subscription.status === "canceled"
+						) {
+							throw ctx.redirect(getUrl(ctx, callbackURL));
+						}
+
+						const stripeSubscription = await client.subscriptions.list({
+							customer: user.stripeCustomerId,
+							status: "active",
+						});
+						const currentSubscription = stripeSubscription.data.find(
+							(sub) => sub.id === subscription.stripeSubscriptionId,
+						);
+						console.log({ currentSubscription });
+						if (currentSubscription?.cancel_at_period_end === true) {
+							await ctx.context.adapter.update({
+								model: "subscription",
+								update: {
+									status: currentSubscription?.status,
+									cancelAtPeriodEnd: true,
+								},
+								where: [
+									{
+										field: "referenceId",
+										value: reference,
+									},
+								],
+							});
+							await options.subscription?.onSubscriptionCancel?.({
+								subscription,
+								cancellationDetails: currentSubscription.cancellation_details,
+								stripeSubscription: currentSubscription,
+								event: undefined,
+							});
+						}
+					} catch (error) {
+						ctx.context.logger.error(
+							"Error checking subscription status from Stripe",
+							error,
+						);
+					}
+				}
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			},
+		),
 		cancelSubscription: createAuthEndpoint(
 			"/subscription/cancel",
 			{
@@ -377,16 +456,50 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				const { url } = await client.billingPortal.sessions.create({
-					customer: subscription.stripeCustomerId,
-					return_url: getUrl(ctx, ctx.body?.returnUrl || "/"),
-					flow_data: {
-						type: "subscription_cancel",
-						subscription_cancel: {
-							subscription: activeSubscription.id,
+				const { url } = await client.billingPortal.sessions
+					.create({
+						customer: subscription.stripeCustomerId,
+						return_url: getUrl(
+							ctx,
+							`${
+								ctx.context.baseURL
+							}/subscription/cancel/callback?callbackURL=${encodeURIComponent(
+								ctx.body?.returnUrl || "/",
+							)}&reference=${encodeURIComponent(referenceId)}`,
+						),
+						flow_data: {
+							type: "subscription_cancel",
+							subscription_cancel: {
+								subscription: activeSubscription.id,
+							},
 						},
-					},
-				});
+					})
+					.catch(async (e) => {
+						if (e.message.includes("already set to be cancel")) {
+							/**
+							 * incase we missed the event from stripe, we set it manually
+							 * this is a rare case and should not happen
+							 */
+							if (!subscription.cancelAtPeriodEnd) {
+								await ctx.context.adapter.update({
+									model: "subscription",
+									update: {
+										cancelAtPeriodEnd: true,
+									},
+									where: [
+										{
+											field: "referenceId",
+											value: referenceId,
+										},
+									],
+								});
+							}
+						}
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
 				return {
 					url,
 					redirect: true,
@@ -509,6 +622,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										status: stripeSubscription.status,
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
+										periodEnd: stripeSubscription.current_period_end,
+										periodStart: stripeSubscription.current_period_start,
+										stripeSubscriptionId: stripeSubscription.id,
 									},
 									where: [
 										{

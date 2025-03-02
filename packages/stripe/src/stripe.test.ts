@@ -600,6 +600,42 @@ describe("stripe", async () => {
 			}),
 		);
 
+		const userCancelEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_123",
+					customer: "cus_123",
+					status: "active",
+					cancel_at_period_end: true,
+					cancellation_details: {
+						reason: "cancellation_requested",
+						comment: "Customer canceled subscription",
+					},
+					items: {
+						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const userCancelRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(userCancelEvent),
+			},
+		);
+
+		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(
+			userCancelEvent,
+		);
+		await eventTestAuth.handler(userCancelRequest);
 		const cancelEvent = {
 			type: "customer.subscription.updated",
 			data: {

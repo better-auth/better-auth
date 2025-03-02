@@ -574,12 +574,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
-					teamId: {
-						type: "string",
-						required: false,
-						sortable: true,
-						fieldName: options?.schema?.member?.fields?.teamId,
-					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.member?.fields?.teamId,
+								},
+							}
+						: {}),
 					createdAt: {
 						type: "date",
 						required: true,
@@ -611,12 +615,16 @@ export const organization = <O extends OrganizationOptions>(options?: O) => {
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.role,
 					},
-					teamId: {
-						type: "string",
-						required: false,
-						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.teamId,
-					},
+					...(teamSupport
+						? {
+								teamId: {
+									type: "string",
+									required: false,
+									sortable: true,
+									fieldName: options?.schema?.invitation?.fields?.teamId,
+								},
+							}
+						: {}),
 					status: {
 						type: "string",
 						required: true,

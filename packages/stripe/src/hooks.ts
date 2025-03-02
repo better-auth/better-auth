@@ -93,59 +93,61 @@ export async function onSubscriptionUpdated(
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
 		const priceId = subscriptionUpdated.items.data[0].price.id;
 		const plan = await getPlanByPriceId(options, priceId);
-		if (plan) {
-			const stripeId = subscriptionUpdated.id;
-			const subscription = await ctx.context.adapter.findOne<Subscription>({
-				model: "subscription",
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: stripeId,
-					},
-				],
-			});
-			if (!subscription) {
-				return;
-			}
-			const seats = subscriptionUpdated.items.data[0].quantity;
-			await ctx.context.adapter.update({
-				model: "subscription",
-				update: {
-					plan: plan.name.toLowerCase(),
-					limits: plan.limits,
-					updatedAt: new Date(),
-					status: subscriptionUpdated.status,
-					periodStart: new Date(
-						subscriptionUpdated.current_period_start * 1000,
-					),
-					periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
-					cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
-					seats,
+		const stripeId = subscriptionUpdated.id;
+		const subscription = await ctx.context.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: stripeId,
 				},
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionUpdated.id,
-					},
-				],
-			});
-			const subscriptionCanceled =
-				subscriptionUpdated.status === "active" &&
-				subscriptionUpdated.cancel_at_period_end;
-			if (subscriptionCanceled) {
-				await options.subscription.onSubscriptionCancel?.({
-					subscription,
-					cancellationDetails:
-						subscriptionUpdated.cancellation_details || undefined,
-					stripeSubscription: subscriptionUpdated,
-					event,
-				});
-			}
-			await options.subscription.onSubscriptionUpdate?.({
-				event,
+			],
+		});
+		if (!subscription) {
+			return;
+		}
+		const seats = subscriptionUpdated.items.data[0].quantity;
+		await ctx.context.adapter.update({
+			model: "subscription",
+			update: {
+				...(plan
+					? {
+							plan: plan.name.toLowerCase(),
+							limits: plan.limits,
+						}
+					: {}),
+				updatedAt: new Date(),
+				status: subscriptionUpdated.status,
+				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
+				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
+				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				seats,
+			},
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: subscriptionUpdated.id,
+				},
+			],
+		});
+		const subscriptionCanceled =
+			subscriptionUpdated.status === "active" &&
+			subscriptionUpdated.cancel_at_period_end &&
+			!subscription.cancelAtPeriodEnd; //if this is true, it means the subscription was canceled before the event was triggered
+		if (subscriptionCanceled) {
+			await options.subscription.onSubscriptionCancel?.({
 				subscription,
+				cancellationDetails:
+					subscriptionUpdated.cancellation_details || undefined,
+				stripeSubscription: subscriptionUpdated,
+				event,
 			});
-
+		}
+		await options.subscription.onSubscriptionUpdate?.({
+			event,
+			subscription,
+		});
+		if (plan) {
 			if (
 				subscriptionUpdated.status === "active" &&
 				subscription.status === "trialing" &&
