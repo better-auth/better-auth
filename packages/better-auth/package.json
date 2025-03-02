@@ -413,6 +413,16 @@
         "default": "./dist/plugins/organization/index.cjs"
       }
     },
+    "./plugins/organization/access": {
+      "import": {
+        "types": "./dist/plugins/organization/access/index.d.ts",
+        "default": "./dist/plugins/organization/access/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/organization/access/index.d.cts",
+        "default": "./dist/plugins/organization/access/index.cjs"
+      }
+    },
     "./plugins/passkey": {
       "import": {
         "types": "./dist/plugins/passkey/index.d.ts",
@@ -563,6 +573,9 @@
       ],
       "plugins/organization": [
         "./dist/plugins/organization/index.d.ts"
+      ],
+      "plugins/organization/access": [
+        "./dist/plugins/organization/access/index.d.ts"
       ],
       "plugins/passkey": [
         "./dist/plugins/passkey/index.d.ts"

@@ -654,10 +654,10 @@ the plugin providers easy way to define your own set of permission for each role
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
-    import { organization } from 'better-auth/plugins/organization'
+    import { defaultStatements, adminAc } from 'better-auth/plugins/organization/access'
 
     const statement = { 
-        ...organization.defaultStatements, // [!code highlight]
+        ...defaultStatements, // [!code highlight]
         project: ["create", "share", "update", "delete"],
     } as const;
     
@@ -665,7 +665,7 @@ the plugin providers easy way to define your own set of permission for each role
 
     const admin = ac.newRole({
         project: ["create", "update"],
-        ...organization.adminAc.statements, // [!code highlight]
+        ...adminAc.statements, // [!code highlight]
     });
     ```
 
