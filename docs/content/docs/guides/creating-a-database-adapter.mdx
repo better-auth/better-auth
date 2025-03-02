@@ -5,14 +5,14 @@ description: A step-by-step guide to creating your first Better Auth database ad
 
 Database adapters are core to BetterAuth. They allow you to connect to any database and use it with BetterAuth.
 
-In this guide, we'll walk you through the steps of creating your first Better Auth database adapter, and publishing it to npm.
+In this guide, we'll walk you through the steps of creating your first Better Auth database adapter.
 
 <Steps>
     <Step>
         ## Prerequisites
 
         1. Make sure that there isn't already an adapter for the database you want to add. (Check [community adapters](/docs/database/community-adapters) or [official adapters](/docs/adapters/other-relational-databases))
-        2. Make sure the database of choice has enough support for BetterAuth's capabilities. For example, the database should support dynamic queries and mutations (Unlike Convex DB does - they must be predefined).
+        2. Make sure the database of choice has enough support for BetterAuth's capabilities. For example, the database should support dynamic queries and mutations
         3. Some delicious snacks. 🍿
     </Step>
 
@@ -1088,63 +1088,6 @@ Otherwise, head into your `package.json` file and add the following script:
 ```
 
 Then test away! 😎
-
-</Step>
-
-<Step>
-## Publishing your adapter
-
-Once you feel confident with your adapter, you can publish it to npm.
-
-<Callout>
- By now, we expect that you have already publish your code to a repository.
-
- If you haven't, you can follow the [GitHub guide](https://docs.github.com/en/get-started/quickstart/create-a-repo) to create a new repository.
-</Callout>
-
-First things first, you'll need to make sure your `package.json` file has the following:
-
-```json
-{
-    "name": "adapter-better-auth", // <- Make sure your name isn't already taken on npm!
-    "version": "1.0.0", // <- The version must be at minimum 1.0.0 before publishing on npm.
-    "description": "A description of your adapter.",
-    "main": "src/index.ts",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/<username>/<adapter-name>.git"
-    },
-    "keywords": ["a", "list", "of", "keywords"],
-    "exports": {
-        ".": {
-            "types": "./dist/src/index.d.ts",
-            "default": "./dist/src/index.js"
-        }
-    },
-    "author": "<author>",
-}
-```
-
-The above is the **bare minimum** required to publish your adapter to npm.
-
-### Publish away!
-
-Before publishing, make sure you've ran `npm run build` to build your code using `tsc`.
-
-Then, make sure your tests are all passing by running `npm run test`.
-
-Finally, you can publish your adapter to npm by running the following command:
-
-```bash
-pnpm publish
-```
-
-You may be prompted to log into your npm account, and you can follow the prompts to publish your package.
-
-<Callout>
-    The next time you want to update your adapter code, remember to update your `package.json` file's `version` field, run your build, and your tests, before running `pnpm publish`.
-</Callout>
 
 </Step>
 
