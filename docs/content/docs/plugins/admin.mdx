@@ -129,6 +129,7 @@ const users = await authClient.admin.listUsers({
 ```
 
 #### Pagination
+
 The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
 
 ```ts
@@ -138,6 +139,7 @@ The `listUsers` function supports pagination by returning metadata alongside the
   limit: number | undefined,   // The limit provided in the query
   offset: number | undefined   // The offset provided in the query
 }
+```
 
 ##### How to Implement Pagination  
 
