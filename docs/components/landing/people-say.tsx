@@ -9,8 +9,7 @@ const testimonials = [
 		link: "https://x.com/edgarasben/status/1856336936505590160",
 		description:
 			"This has been the best auth experience by a mileee, auto generated my drizzle schemas for users, sessions etc, full type safe and dead simple api, well done @better_auth 👏👏",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1620476753398452224/fcozbw1J_400x400.jpg",
+		avatar: "/people-say/dev-ed.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -20,8 +19,7 @@ const testimonials = [
 		link: "https://x.com/NikolovLazar/status/1888992999872331985",
 		description:
 			"I didn't know  @better_auth was THAT good. I'm implementing it in TanStack Start and I can't believe how good the DX is. This is my favorite stack now (along with  @DrizzleORM and @shadcn ui).",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1838045335282745344/sCjDaZ2-_400x400.jpg",
+		avatar: "/people-say/lazar-nikolov.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -30,8 +28,7 @@ const testimonials = [
 		profession: "CEO of t3.chat",
 		link: "https://x.com/theo/status/1879769267866120341",
 		description: "Very exciting project and a super easy rec",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1799982162831396865/Fnol01I1_400x400.jpg",
+		avatar: "/people-say/theo.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -40,8 +37,7 @@ const testimonials = [
 		profession: "Creator of Supastarter",
 		link: "https://x.com/jonathan_wilke/status/1853086900279562329",
 		description: "fuck, @better_auth is just so good",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1884529433979068416/AhfbeVEh_400x400.jpg",
+		avatar: "/people-say/jonathan-wilke.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -51,8 +47,7 @@ const testimonials = [
 		link: "https://x.com/Atinux/status/1853751424561336322",
 		description:
 			"When @better_auth meets @nuxt_hub to build full-stack Nuxt apps on Cloudflare (using D1 & KV).",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1862505215624142848/7tSrng8r_400x400.jpg",
+		avatar: "/people-say/sebastien-chopin.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -63,8 +58,7 @@ const testimonials = [
 		link: "https://x.com/thdxr/status/1866222656468705426",
 		description:
 			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1602333093485891584/mmVqjFNI_400x400.jpg",
+		avatar: "/people-say/dax.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -74,8 +68,7 @@ const testimonials = [
 		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
 		description:
 			"@better_auth exceeded all expectations, and it's just getting started",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1853424779392380928/NMpggRqG_400x400.jpg",
+		avatar: "/people-say/dagmawi-babi.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -85,8 +78,7 @@ const testimonials = [
 		link: "https://x.com/TechNerd556/status/1863523931614822784",
 		description:
 			"Using @better_auth with custom components feels like having someone hand you the remote while you're comfortably on the sofa. The ease I'm feeling rn is insane Auth done in under 5 minutes 🤌⚡️.",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1826246307326902273/Ee4nlPjH_400x400.jpg",
+		avatar: "/people-say/tech-nerd.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -96,8 +88,7 @@ const testimonials = [
 		link: "https://x.com/McPizza0/status/1879526862046839249",
 		description:
 			"if you're building a code project in 2025 use @better_auth. It has everything you need now and everything you'll need at scale. dont take this suggestion lightly..",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1893251014838415360/ekhTlUyz_400x400.jpg",
+		avatar: "/people-say/omar-mcadam.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -106,8 +97,7 @@ const testimonials = [
 		profession: "CEO of Vercel",
 		link: "https://x.com/rauchg/status/1871628287962906846",
 		description: "Great project & maintainer",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1783856060249595904/8TfcCN0r_400x400.jpg",
+		avatar: "/people-say/guillermo-rauch.png",
 		image: "",
 		social: <Icons.x />,
 	},
@@ -117,29 +107,26 @@ const testimonials = [
 		link: "https://x.com/NizzyABI/status/1889178812459422162",
 		description:
 			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1884987569961570304/TP3OWz64_400x400.jpg",
+		avatar: "/people-say/nizzy.png",
 		image: "",
 		social: <Icons.x />,
 	},
 
 	{
 		name: "Vybhav Bhargav",
-		description: "better-auth is a work of art.",
 		profession: "Founding engineer @glyfspace",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
 		link: "https://x.com/vybhavab/status/1891589126513684669",
+		description: "better-auth is a work of art.",
+		avatar: "/people-say/vybhav-bhargav.png",
 		social: <Icons.x />,
 	},
 	{
 		name: "Shreyas Mididoddi",
+		profession: "Senior Developer",
+		link: "https://x.com/Shreyassanthu77/status/1887544964881784927",
 		description:
 			"dang!! Didn't think I would but absolutely loving @better_auth",
-		profession: "Senior Developer",
-		avatar:
-			"https://pbs.twimg.com/profile_images/1690579403070451712/zs46gsPl_400x400.jpg",
-		link: "https://x.com/vybhavab/status/1891589126513684669",
+		avatar: "/people-say/shreyas-mididddi.png",
 		social: <Icons.x />,
 	},
 ];
@@ -153,7 +140,7 @@ const PeopleSay = ({
 }) => {
 	const animeSeconds = testimonials.length * 10;
 	return (
-		<div className="mx-auto  max-w-full">
+		<div className="max-w-full mx-auto">
 			<div
 				className={`[--anime-duration:${animeSeconds}s] px-10 mx-auto w-full`}
 			>
@@ -174,17 +161,17 @@ const PeopleSay = ({
 									"flex flex-col justify-between h-[220px] rounded-none border-[1.2px] border-black/20 shrink-0 grow-0 w-[450px] dark:border-white/10",
 								)}
 							>
-								<p className="py-5 px-5 text-md font-extralight tracking-tight sm:text-xl md:text-lg text-pretty text-text-primary dark:text-dark-text-primary">
+								<p className="px-5 py-5 tracking-tight text-md font-extralight sm:text-xl md:text-lg text-pretty text-text-primary dark:text-dark-text-primary">
 									&quot;{testimonial.description}.&quot;
 								</p>
 								<div className="flex overflow-hidden h-[28%] gap-1 w-full border-t-[1.2px]">
-									<div className="flex gap-3 items-center py-3 px-4 w-3/4">
+									<div className="flex items-center w-3/4 gap-3 px-4 py-3">
 										<img
 											src={testimonial.avatar}
-											className="w-10 rounded-full h-10"
+											className="w-10 h-10 rounded-full"
 											alt="avatar"
 										/>
-										<div className="flex flex-col flex-1 gap-0 justify-start items-start">
+										<div className="flex flex-col items-start justify-start flex-1 gap-0">
 											<h5 className="text-base font-medium md:text-md">
 												{testimonial.name}
 											</h5>
@@ -194,7 +181,7 @@ const PeopleSay = ({
 										</div>
 									</div>
 									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
-									<div className="flex justify-center items-center mx-auto max-w-full">
+									<div className="flex items-center justify-center max-w-full mx-auto">
 										<Link href={testimonial.link} target="_blank">
 											{testimonial.social}
 										</Link>
@@ -211,14 +198,14 @@ const PeopleSay = ({
 
 export const Testimonial = () => {
 	return (
-		<div className="mx-auto overflow-hidden py-5 max-w-full">
+		<div className="max-w-full py-5 mx-auto overflow-hidden">
 			<div className="flex flex-col gap-3">
 				<div
 					style={{
 						maskImage:
 							"linear-gradient(to left, transparent 0%, black 20%, black 80%, transparent 95%)",
 					}}
-					className="flex overflow-hidden relative gap-5 justify-around shrink-0"
+					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
 					<PeopleSay
 						reverse
@@ -232,7 +219,7 @@ export const Testimonial = () => {
 						maskImage:
 							"linear-gradient(to left, transparent 0%, black 20%, black 80%, transparent 95%)",
 					}}
-					className="flex overflow-hidden relative gap-5 justify-around shrink-0"
+					className="relative flex justify-around gap-5 overflow-hidden shrink-0"
 				>
 					<PeopleSay
 						testimonials={Array(10)

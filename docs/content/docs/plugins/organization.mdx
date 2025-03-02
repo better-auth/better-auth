@@ -395,16 +395,20 @@ You can configure how organization deletion is handled through `organizationDele
 
 ```ts
 const auth = betterAuth({
-  organizationDeletion: {
-    disabled: true, //to disable it altogether
-    beforeDelete: async(data, request)=>{
-      // a callback to run before deleting org
-    },
-    afterDelete: async(data, request)=>{
-      // a callback to run after deleting org
-    }
-  }
-})
+  plugins: [
+    organization({
+      organizationDeletion: {
+        disabled: true, //to disable it altogether
+        beforeDelete: async (data, request) => {
+          // a callback to run before deleting org
+        },
+        afterDelete: async (data, request) => {
+          // a callback to run after deleting org
+        },
+      },
+    }),
+  ],
+});
 ```
 
 ## Invitations

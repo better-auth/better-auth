@@ -172,9 +172,16 @@ function Component(props: {
 								variant="destructive"
 								className="w-full"
 								onClick={async () => {
-									await client.subscription.cancel({
-										returnUrl: "/dashboard",
-									});
+									await client.subscription.cancel(
+										{
+											returnUrl: "/dashboard",
+										},
+										{
+											onError: (ctx) => {
+												toast.error(ctx.error.message);
+											},
+										},
+									);
 								}}
 							>
 								Cancel Plan

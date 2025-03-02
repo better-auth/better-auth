@@ -370,6 +370,7 @@ describe("stripe", async () => {
 				stripeCustomerId: "cus_delete_test",
 				status: "active",
 				plan: "starter",
+				stripeSubscriptionId: "sub_delete_test",
 			},
 		});
 
@@ -387,7 +388,7 @@ describe("stripe", async () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_deleted",
+					id: "sub_delete_test",
 					customer: subscription?.stripeCustomerId,
 					status: "canceled",
 					metadata: {
@@ -452,5 +453,250 @@ describe("stripe", async () => {
 			});
 			expect(updatedSubscription?.status).toBe("canceled");
 		}
+	});
+
+	it("should execute subscription event handlers", async () => {
+		const onSubscriptionComplete = vi.fn();
+		const onSubscriptionUpdate = vi.fn();
+		const onSubscriptionCancel = vi.fn();
+		const onSubscriptionDeleted = vi.fn();
+
+		const testOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionComplete,
+				onSubscriptionUpdate,
+				onSubscriptionCancel,
+				onSubscriptionDeleted,
+			},
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const testAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [stripe(testOptions)],
+		});
+
+		// Test subscription complete handler
+		const completeEvent = {
+			type: "checkout.session.completed",
+			data: {
+				object: {
+					mode: "subscription",
+					subscription: "sub_123",
+					metadata: {
+						referenceId: "user_123",
+						subscriptionId: "sub_123",
+					},
+				},
+			},
+		};
+
+		const mockSubscription = {
+			id: "sub_123",
+			status: "active",
+			items: {
+				data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+			},
+			current_period_start: Math.floor(Date.now() / 1000),
+			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		};
+
+		const mockStripeForEvents = {
+			...testOptions.stripeClient,
+			subscriptions: {
+				retrieve: vi.fn().mockResolvedValue(mockSubscription),
+			},
+			webhooks: {
+				constructEvent: vi.fn().mockReturnValue(completeEvent),
+			},
+		};
+
+		const eventTestOptions = {
+			...testOptions,
+			stripeClient: mockStripeForEvents as unknown as Stripe,
+		};
+
+		const eventTestAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memory,
+			emailAndPassword: { enabled: true },
+			plugins: [stripe(eventTestOptions)],
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				id: "sub_123",
+				referenceId: "user_123",
+				stripeCustomerId: "cus_123",
+				stripeSubscriptionId: "sub_123",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+
+		const webhookRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(completeEvent),
+			},
+		);
+
+		await eventTestAuth.handler(webhookRequest);
+
+		expect(onSubscriptionComplete).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: expect.any(Object),
+				subscription: expect.any(Object),
+				stripeSubscription: expect.any(Object),
+				plan: expect.any(Object),
+			}),
+		);
+
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_123",
+					customer: "cus_123",
+					status: "active",
+					items: {
+						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const updateRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(updateEvent),
+			},
+		);
+
+		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(updateEvent);
+		await eventTestAuth.handler(updateRequest);
+		expect(onSubscriptionUpdate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: expect.any(Object),
+				subscription: expect.any(Object),
+			}),
+		);
+
+		const userCancelEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_123",
+					customer: "cus_123",
+					status: "active",
+					cancel_at_period_end: true,
+					cancellation_details: {
+						reason: "cancellation_requested",
+						comment: "Customer canceled subscription",
+					},
+					items: {
+						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const userCancelRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(userCancelEvent),
+			},
+		);
+
+		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(
+			userCancelEvent,
+		);
+		await eventTestAuth.handler(userCancelRequest);
+		const cancelEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_123",
+					customer: "cus_123",
+					status: "active",
+					cancel_at_period_end: true,
+					items: {
+						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const cancelRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(cancelEvent),
+			},
+		);
+
+		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(cancelEvent);
+		await eventTestAuth.handler(cancelRequest);
+
+		expect(onSubscriptionCancel).toHaveBeenCalled();
+
+		const deleteEvent = {
+			type: "customer.subscription.deleted",
+			data: {
+				object: {
+					id: "sub_123",
+					customer: "cus_123",
+					status: "canceled",
+					metadata: {
+						referenceId: "user_123",
+						subscriptionId: "sub_123",
+					},
+				},
+			},
+		};
+
+		const deleteRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(deleteEvent),
+			},
+		);
+
+		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(deleteEvent);
+		await eventTestAuth.handler(deleteRequest);
+
+		expect(onSubscriptionDeleted).toHaveBeenCalled();
 	});
 });
