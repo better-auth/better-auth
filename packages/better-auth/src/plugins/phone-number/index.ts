@@ -19,7 +19,7 @@ export interface UserWithPhoneNumber extends User {
 	phoneNumberVerified: boolean;
 }
 
-export type CustomSendOTPOptions = {
+export type SendOTPReturn = {
 	notGenerate? : boolean;
 	reason? : string;
 } | void
@@ -44,7 +44,7 @@ export interface PhoneNumberOptions {
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
 		request?: Request,
-	) => CustomSendOTPOptions | Promise<CustomSendOTPOptions>;
+	) => SendOTPReturn | Promise<SendOTPReturn>;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
@@ -329,7 +329,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 					const code = generateOTP(opts.otpLength);
 
-					const sendOTPRes: CustomSendOTPOptions = await options.sendOTP(
+					const sendOTPRes: SendOTPReturn = await options.sendOTP(
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							code,
