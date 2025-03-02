@@ -23,6 +23,7 @@ describe("api-key", async () => {
 			clientOptions: {
 				plugins: [apiKeyClient()],
 			},
+			testWith: "postgres",
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
