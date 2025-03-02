@@ -366,7 +366,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									},
 								],
 							});
-						console.log({ subscription });
 						if (
 							!subscription ||
 							subscription.cancelAtPeriodEnd ||
@@ -382,7 +381,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						const currentSubscription = stripeSubscription.data.find(
 							(sub) => sub.id === subscription.stripeSubscriptionId,
 						);
-						console.log({ currentSubscription });
 						if (currentSubscription?.cancel_at_period_end === true) {
 							await ctx.context.adapter.update({
 								model: "subscription",

@@ -93,19 +93,32 @@ export async function onSubscriptionUpdated(
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
 		const priceId = subscriptionUpdated.items.data[0].price.id;
 		const plan = await getPlanByPriceId(options, priceId);
-		const stripeId = subscriptionUpdated.id;
-		const subscription = await ctx.context.adapter.findOne<Subscription>({
+
+		const referenceId = subscriptionUpdated.metadata?.referenceId;
+		const subscriptionId = subscriptionUpdated.id;
+		const customerId = subscriptionUpdated.customer.toString();
+		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [
-				{
-					field: "stripeSubscriptionId",
-					value: stripeId,
-				},
-			],
+			where: referenceId
+				? [{ field: "referenceId", value: referenceId }]
+				: subscriptionId
+					? [{ field: "stripeSubscriptionId", value: subscriptionId }]
+					: [],
 		});
 		if (!subscription) {
-			return;
+			const subs = await ctx.context.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [{ field: "stripeCustomerId", value: customerId }],
+			});
+			if (subs.length > 1) {
+				logger.warn(
+					`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no referenceId or subscriptionId is provided`,
+				);
+				return;
+			}
+			subscription = subs[0];
 		}
+
 		const seats = subscriptionUpdated.items.data[0].quantity;
 		await ctx.context.adapter.update({
 			model: "subscription",
@@ -125,8 +138,8 @@ export async function onSubscriptionUpdated(
 			},
 			where: [
 				{
-					field: "stripeSubscriptionId",
-					value: subscriptionUpdated.id,
+					field: "referenceId",
+					value: subscription.referenceId,
 				},
 			],
 		});
@@ -170,7 +183,7 @@ export async function onSubscriptionUpdated(
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error.message}`);
+		logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
 
@@ -217,6 +230,6 @@ export async function onSubscriptionDeleted(
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error.message}`);
+		logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }

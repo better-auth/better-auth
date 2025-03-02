@@ -592,7 +592,6 @@ describe("stripe", async () => {
 
 		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(updateEvent);
 		await eventTestAuth.handler(updateRequest);
-
 		expect(onSubscriptionUpdate).toHaveBeenCalledWith(
 			expect.objectContaining({
 				event: expect.any(Object),
