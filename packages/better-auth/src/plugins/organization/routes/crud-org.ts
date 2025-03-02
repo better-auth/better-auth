@@ -215,8 +215,9 @@ export const createOrganization = createAuthEndpoint(
 		}
 
 		return ctx.json({
-			organization,
-			member,
+			...organization,
+			metadata: ctx.body.metadata,
+			members: [member],
 		});
 	},
 );
