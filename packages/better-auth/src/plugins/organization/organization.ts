@@ -294,7 +294,28 @@ export interface OrganizationOptions {
 			request?: Request,
 		) => Promise<void>;
 	};
+	organizationCreation?: {
+		disabled?: boolean;
+		beforeCreate?: (
+			data: {
+				organization: Omit<Organization, "id">;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void | {
+			data: Omit<Organization, "id">;
+		}>;
+		afterCreate?: (
+			data: {
+				organization: Organization;
+				member: Member;
+				user: User;
+			},
+			request?: Request,
+		) => Promise<void>;
+	};
 }
+
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
  * and manage access control for your users.

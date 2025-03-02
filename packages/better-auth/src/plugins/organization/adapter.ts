@@ -210,7 +210,7 @@ export const getOrgAdapter = (
 			};
 		},
 		createMember: async (data: MemberInput) => {
-			const member = await adapter.create<MemberInput>({
+			const member = await adapter.create<MemberInput, Member>({
 				model: "member",
 				data: {
 					...data,
