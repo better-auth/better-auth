@@ -68,6 +68,16 @@ export const otp2fa = (options?: OTPOptions) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
+			body: z
+				.object({
+					/**
+					 * if true, the device will be trusted
+					 * for 30 days. It'll be refreshed on
+					 * every sign in request within this time.
+					 */
+					trustDevice: z.boolean().optional(),
+				})
+				.optional(),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
 				openapi: {
@@ -136,6 +146,12 @@ export const otp2fa = (options?: OTPOptions) => {
 				code: z.string({
 					description: "The otp code to verify",
 				}),
+				/**
+				 * if true, the device will be trusted
+				 * for 30 days. It'll be refreshed on
+				 * every sign in request within this time.
+				 */
+				trustDevice: z.boolean().optional(),
 			}),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
@@ -204,12 +220,13 @@ export const otp2fa = (options?: OTPOptions) => {
 					await ctx.context.internalAdapter.deleteSession(
 						ctx.context.session.session.token,
 					);
+
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
 				}
-				return ctx.context.valid();
+				return ctx.context.valid(ctx);
 			} else {
 				return ctx.context.invalid();
 			}

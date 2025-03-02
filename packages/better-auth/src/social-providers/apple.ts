@@ -54,7 +54,7 @@ export interface AppleProfile {
 /**
  * This is the shape of the `user` query parameter that Apple sends the first
  * time the user consents to the app.
- * @see https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server#4066168
+ * @see https://developer.apple.com/documentation/signinwithapplerestapi/request-an-authorization-to-the-sign-in-with-apple-server./
  */
 export interface AppleNonConformUser {
 	name: {
@@ -74,8 +74,9 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scope = scopes || ["email", "name"];
+			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			options.scope && _scope.push(...options.scope);
+			scopes && _scope.push(...scopes);
 			return new URL(
 				`https://appleid.apple.com/auth/authorize?client_id=${
 					options.clientId

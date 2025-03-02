@@ -31,6 +31,9 @@ const createTransform = (
 	}
 
 	function transformValueToDB(value: any, model: string, field: string) {
+		if (field === "id") {
+			return value;
+		}
 		const { type = "sqlite" } = config || {};
 		const f = schema[model].fields[field];
 		if (
@@ -138,13 +141,14 @@ const createTransform = (
 			};
 
 			w.forEach((condition) => {
-				const {
+				let {
 					field: _field,
 					value,
 					operator = "=",
 					connector = "AND",
 				} = condition;
 				const field = getField(model, _field);
+				value = transformValueToDB(value, model, _field);
 				const expr = (eb: any) => {
 					if (operator.toLowerCase() === "in") {
 						return eb(field, "in", Array.isArray(value) ? value : [value]);
@@ -340,6 +344,22 @@ export const kyselyAdapter =
 				}
 				const res = await query.execute();
 				return res.length;
+			},
+			async count(data) {
+				const { model, where } = data;
+				const { and, or } = convertWhereClause(model, where);
+				let query = db
+					.selectFrom(getModelName(model))
+					// a temporal solution for counting other than "*" - see more - https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted
+					.select(db.fn.count("id").as("count"));
+				if (and) {
+					query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
+				}
+				if (or) {
+					query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
+				}
+				const res = await query.execute();
+				return res[0].count as number;
 			},
 			async delete(data) {
 				const { model, where } = data;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
 	APIError,
 	createAuthEndpoint,
+	createAuthMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "../../api";
@@ -20,6 +21,7 @@ import type {
 import { authorize } from "./authorize";
 import { parseSetCookieHeader } from "../../cookies";
 import { createHash } from "@better-auth/utils/hash";
+import { base64 } from "@better-auth/utils/base64";
 
 const getMetadata = (
 	ctx: GenericEndpointContext,
@@ -84,6 +86,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
+		allowPlainCodeChallengeMethod: true,
 		...options,
 		scopes: [
 			"openid",
@@ -102,14 +105,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 					matcher() {
 						return true;
 					},
-					handler: async (ctx) => {
+					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
 						const cookieName = ctx.context.authCookies.sessionToken.name;
 						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.responseHeader.get("set-cookie") || "",
+							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
 						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
 						if (!cookie || !hasSessionToken) {
@@ -129,11 +132,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						ctx.query = JSON.parse(cookie);
-						ctx.query.prompt = "consent";
+						ctx.query!.prompt = "consent";
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
-					},
+					}),
 				},
 			],
 		},
@@ -142,6 +145,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					metadata: {
+						isAction: false,
+					},
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);
@@ -187,9 +193,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verification.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Code expired",
 							error: "invalid_grant",
@@ -248,7 +251,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.any(),
+					body: z.record(z.any()),
 					metadata: {
 						isAction: false,
 					},
@@ -270,9 +273,41 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+					let { client_id, client_secret } = body;
+					const authorization =
+						ctx.request?.headers.get("authorization") || null;
+					if (
+						authorization &&
+						!client_id &&
+						!client_secret &&
+						authorization.startsWith("Basic ")
+					) {
+						try {
+							const encoded = authorization.replace("Basic ", "");
+							const decoded = new TextDecoder().decode(base64.decode(encoded));
+							if (!decoded.includes(":")) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							const [id, secret] = decoded.split(":");
+							if (!id || !secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid authorization header format",
+									error: "invalid_client",
+								});
+							}
+							client_id = id;
+							client_secret = secret;
+						} catch (error) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+					}
 					const {
-						client_id,
-						client_secret,
 						grant_type,
 						code,
 						redirect_uri,
@@ -373,9 +408,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "code expired",
 							error: "invalid_grant",

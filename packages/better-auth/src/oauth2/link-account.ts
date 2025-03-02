@@ -10,10 +10,12 @@ export async function handleOAuthUserInfo(
 		userInfo,
 		account,
 		callbackURL,
+		disableSignUp,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string;
+		disableSignUp?: boolean;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -59,17 +61,20 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
-					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
-					userId: dbUser.user.id,
-					accessToken: account.accessToken,
-					idToken: account.idToken,
-					refreshToken: account.refreshToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				});
+				await c.context.internalAdapter.linkAccount(
+					{
+						providerId: account.providerId,
+						accountId: userInfo.id.toString(),
+						userId: dbUser.user.id,
+						accessToken: account.accessToken,
+						idToken: account.idToken,
+						refreshToken: account.refreshToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					},
+					c,
+				);
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -93,10 +98,18 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.updateAccount(
 					hasBeenLinked.id,
 					updateData,
+					c,
 				);
 			}
 		}
 	} else {
+		if (disableSignUp) {
+			return {
+				error: "signup disabled",
+				data: null,
+				isRegister: false,
+			};
+		}
 		try {
 			user = await c.context.internalAdapter
 				.createOAuthUser(
@@ -115,6 +128,7 @@ export async function handleOAuthUserInfo(
 						providerId: account.providerId,
 						accountId: userInfo.id.toString(),
 					},
+					c,
 				)
 				.then((res) => res?.user);
 			if (

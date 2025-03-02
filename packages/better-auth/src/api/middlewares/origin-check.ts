@@ -47,7 +47,9 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		const isTrustedOrigin = trustedOrigins.some(
 			(origin) =>
 				matchesPattern(url, origin) ||
-				(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+				(url?.startsWith("/") &&
+					label !== "origin" &&
+					/^\/(?!\/|\\|%2f|%5c)[\w\-./]*(?:\?[\w\-./=&%]*)?$/.test(url)),
 		);
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -68,7 +70,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 export const originCheck = (
-	getValue: (ctx: GenericEndpointContext) => string,
+	getValue: (ctx: GenericEndpointContext) => string | string[],
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
@@ -102,7 +104,9 @@ export const originCheck = (
 			const isTrustedOrigin = trustedOrigins.some(
 				(origin) =>
 					matchesPattern(url, origin) ||
-					(url?.startsWith("/") && label !== "origin" && !url.includes(":")),
+					(url?.startsWith("/") &&
+						label !== "origin" &&
+						/^\/(?!\/|\\|%2f|%5c)[\w\-./]*(?:\?[\w\-./=&%]*)?$/.test(url)),
 			);
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -113,5 +117,8 @@ export const originCheck = (
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
 		};
-		callbackURL && validateURL(callbackURL, "callbackURL");
+		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];
+		for (const url of callbacks) {
+			validateURL(url, "callbackURL");
+		}
 	});

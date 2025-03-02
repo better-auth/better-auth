@@ -12,10 +12,10 @@ describe("adapter test", async () => {
 	});
 	const map = new Map();
 	let id = 1;
-	const pluginHookUserCreateBefore = vi.fn();
-	const pluginHookUserCreateAfter = vi.fn();
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const pluginHookUserCreateBefore = vi.fn();
+	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
 		database: {
 			dialect: sqliteDialect,
@@ -46,12 +46,12 @@ describe("adapter test", async () => {
 		databaseHooks: {
 			user: {
 				create: {
-					async before(user) {
-						hookUserCreateBefore(user);
+					async before(user, context) {
+						hookUserCreateBefore(user, context);
 						return { data: user };
 					},
-					async after(user) {
-						hookUserCreateAfter(user);
+					async after(user, context) {
+						hookUserCreateAfter(user, context);
 						return;
 					},
 				},
@@ -66,13 +66,12 @@ describe("adapter test", async () => {
 							databaseHooks: {
 								user: {
 									create: {
-										async before(user) {
-											pluginHookUserCreateBefore(user);
+										async before(user, context) {
+											pluginHookUserCreateBefore(user, context);
 											return { data: user };
 										},
-										async after(user) {
-											pluginHookUserCreateAfter(user);
-											return;
+										async after(user, context) {
+											pluginHookUserCreateAfter(user, context);
 										},
 									},
 								},
@@ -162,5 +161,32 @@ describe("adapter test", async () => {
 			},
 		});
 		expect(session.data?.session).toBeDefined();
+	});
+
+	it("should delete expired verification values on find", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		const value = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value).toMatchObject({
+			identifier: "test-id-1",
+		});
+		const value2 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value2).toBe(undefined);
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		const value3 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value3).toMatchObject({
+			identifier: "test-id-1",
+		});
+		const value4 = await internalAdapter.findVerificationValue("test-id-1");
+		expect(value4).toMatchObject({
+			identifier: "test-id-1",
+		});
 	});
 });

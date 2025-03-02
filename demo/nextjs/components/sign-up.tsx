@@ -1,48 +1,102 @@
 "use client";
-
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
-import { signIn, signUp } from "@/lib/auth-client";
-import Image from "next/image";
-import { Loader2, X } from "lucide-react";
-import { toast } from "sonner";
+import { signUp, signIn } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { useState, useEffect, ChangeEvent } from "react";
+import { z } from "zod";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { Loader2, X } from "lucide-react";
+const signUpSchema = z
+	.object({
+		firstName: z.string().min(1, "First name is required"),
+		lastName: z.string().min(1, "Last name is required"),
+		email: z.string().email("Invalid email address"),
+		image: z
+			.instanceof(File)
+			.optional()
+			.refine((file) => !file || file.type.startsWith("image/"), {
+				message: "Invalid file type. Only images are allowed.",
+				path: ["image"],
+			}),
+		password: z.string().min(6, "Password must be at least 6 characters"),
+		passwordConfirmation: z
+			.string()
+			.min(6, "Password must be at least 6 characters"),
+	})
+
+	.refine((data) => data.password === data.passwordConfirmation, {
+		message: "Passwords do not match",
+		path: ["passwordConfirmation"],
+	});
+
+type FormDataType = z.infer<typeof signUpSchema>;
+
+type ErrorsType = Partial<Record<keyof FormDataType, string>>;
+
+type TouchedType = Partial<Record<keyof FormDataType, boolean>>;
 
 export function SignUp() {
-	const [firstName, setFirstName] = useState("");
-	const [lastName, setLastName] = useState("");
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [passwordConfirmation, setPasswordConfirmation] = useState("");
+	const [formData, setFormData] = useState<FormDataType>({
+		firstName: "",
+		lastName: "",
+		email: "",
+		password: "",
+		image: undefined,
+		passwordConfirmation: "",
+	});
+	const [errors, setErrors] = useState<ErrorsType>({});
+	const [isValid, setIsValid] = useState(false);
+	const [touched, setTouched] = useState<TouchedType>({});
+	const [loading, setLoading] = useState(false);
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
 
-	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
+	useEffect(() => {
+		const validationResult = signUpSchema.safeParse(formData);
+		if (!validationResult.success) {
+			const newErrors: ErrorsType = {};
+			validationResult.error.errors.forEach((err) => {
+				if (err.path[0])
+					newErrors[err.path[0] as keyof FormDataType] = err.message;
+			});
+			setErrors(newErrors);
+			setIsValid(false);
+		} else {
+			setErrors({});
+			setIsValid(true);
+		}
+	}, [formData]);
+
+	const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+		const { id, value } = e.target;
+		setFormData((prev) => ({ ...prev, [id]: value }));
+		setTouched((prev) => ({ ...prev, [id]: true }));
+	};
+	const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0] || null;
+		setImage(file);
+		setFormData((prev) => ({ ...prev, image: file || undefined }));
 		if (file) {
-			setImage(file);
 			const reader = new FileReader();
-			reader.onloadend = () => {
-				setImagePreview(reader.result as string);
-			};
+			reader.onload = () => setImagePreview(reader.result as string);
 			reader.readAsDataURL(file);
+		} else {
+			setImagePreview(null);
 		}
 	};
-	const [loading, setLoading] = useState(false);
-
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
 			<CardHeader>
@@ -55,28 +109,28 @@ export function SignUp() {
 				<div className="grid gap-4">
 					<div className="grid grid-cols-2 gap-4">
 						<div className="grid gap-2">
-							<Label htmlFor="first-name">First name</Label>
+							<Label htmlFor="firstName">First name</Label>
 							<Input
-								id="first-name"
+								id="firstName"
 								placeholder="Max"
-								required
-								onChange={(e) => {
-									setFirstName(e.target.value);
-								}}
-								value={firstName}
+								value={formData.firstName}
+								onChange={handleChange}
 							/>
+							{touched.firstName && errors.firstName && (
+								<p className="text-red-500 text-sm">{errors.firstName}</p>
+							)}
 						</div>
 						<div className="grid gap-2">
-							<Label htmlFor="last-name">Last name</Label>
+							<Label htmlFor="lastName">Last name</Label>
 							<Input
-								id="last-name"
+								id="lastName"
 								placeholder="Robinson"
-								required
-								onChange={(e) => {
-									setLastName(e.target.value);
-								}}
-								value={lastName}
+								value={formData.lastName}
+								onChange={handleChange}
 							/>
+							{touched.lastName && errors.lastName && (
+								<p className="text-red-500 text-sm">{errors.lastName}</p>
+							)}
 						</div>
 					</div>
 					<div className="grid gap-2">
@@ -85,32 +139,38 @@ export function SignUp() {
 							id="email"
 							type="email"
 							placeholder="m@example.com"
-							required
-							onChange={(e) => {
-								setEmail(e.target.value);
-							}}
-							value={email}
+							value={formData.email}
+							onChange={handleChange}
 						/>
+						{touched.email && errors.email && (
+							<p className="text-red-500 text-sm">{errors.email}</p>
+						)}
 					</div>
 					<div className="grid gap-2">
 						<Label htmlFor="password">Password</Label>
 						<PasswordInput
 							id="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							autoComplete="new-password"
+							value={formData.password}
+							onChange={handleChange}
 							placeholder="Password"
 						/>
+						{touched.password && errors.password && (
+							<p className="text-red-500 text-sm">{errors.password}</p>
+						)}
 					</div>
 					<div className="grid gap-2">
-						<Label htmlFor="password">Confirm Password</Label>
+						<Label htmlFor="passwordConfirmation">Confirm Password</Label>
 						<PasswordInput
-							id="password_confirmation"
-							value={passwordConfirmation}
-							onChange={(e) => setPasswordConfirmation(e.target.value)}
-							autoComplete="new-password"
+							id="passwordConfirmation"
+							value={formData.passwordConfirmation}
+							onChange={handleChange}
 							placeholder="Confirm Password"
 						/>
+						{touched.passwordConfirmation && errors.passwordConfirmation && (
+							<p className="text-red-500 text-sm">
+								{errors.passwordConfirmation}
+							</p>
+						)}
 					</div>
 					<div className="grid gap-2">
 						<Label htmlFor="image">Profile Image (optional)</Label>
@@ -125,42 +185,36 @@ export function SignUp() {
 									/>
 								</div>
 							)}
-							<div className="flex items-center gap-2 w-full">
-								<Input
-									id="image"
-									type="file"
-									accept="image/*"
-									onChange={handleImageChange}
-									className="w-full"
+							<Input
+								id="image"
+								type="file"
+								accept="image/*"
+								onChange={handleImageChange}
+								className="w-full"
+							/>
+							{imagePreview && (
+								<X
+									className="cursor-pointer"
+									onClick={() => {
+										setImage(null);
+										setImagePreview(null);
+									}}
 								/>
-								{imagePreview && (
-									<X
-										className="cursor-pointer"
-										onClick={() => {
-											setImage(null);
-											setImagePreview(null);
-										}}
-									/>
-								)}
-							</div>
+							)}
 						</div>
 					</div>
 					<Button
-						type="submit"
 						className="w-full"
-						disabled={loading}
+						disabled={!isValid || loading}
 						onClick={async () => {
-							if (password !== passwordConfirmation) {
-								toast.error(
-									"Please ensure your password and confirm password match.",
-								);
-								return;
-							}
+							setLoading(true);
 							await signUp.email({
-								email,
-								password,
-								name: `${firstName} ${lastName}`,
-								image: image ? await convertImageToBase64(image) : "",
+								email: formData.email,
+								password: formData.password,
+								name: `${formData.firstName} ${formData.lastName}`,
+								image: formData.image
+									? await convertImageToBase64(formData.image)
+									: "",
 								callbackURL: "/dashboard",
 								fetchOptions: {
 									onResponse: () => {
@@ -177,6 +231,8 @@ export function SignUp() {
 									},
 								},
 							});
+							setLoading(false);
+							router.push("/dashboard");
 						}}
 					>
 						{loading ? (
@@ -269,17 +325,9 @@ export function SignUp() {
 					</div>
 				</div>
 			</CardContent>
-			<CardFooter>
-				<div className="flex justify-center w-full border-t py-4">
-					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
-					</p>
-				</div>
-			</CardFooter>
 		</Card>
 	);
 }
-
 async function convertImageToBase64(file: File): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();

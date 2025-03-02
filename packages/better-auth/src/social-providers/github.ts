@@ -56,8 +56,11 @@ export const github = (options: GithubOptions) => {
 		id: "github",
 		name: "GitHub",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			const _scopes = scopes || ["read:user", "user:email"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["read:user", "user:email"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "github",
 				options,

@@ -1,9 +1,10 @@
 "use client";
-import { alphabet, generateRandomString } from "oslo/crypto";
+import { createRandomStringGenerator } from "@better-auth/utils/random";
 import { useState } from "react";
 import { Button } from "./ui/button";
 export const GenerateSecret = () => {
 	const [generated, setGenerated] = useState(false);
+	const generateRandomString = createRandomStringGenerator("a-z", "0-9", "A-Z");
 	return (
 		<div className="my-2">
 			<Button
@@ -15,10 +16,7 @@ export const GenerateSecret = () => {
 					for (let i = 0; i < elements.length; i++) {
 						if (elements[i].textContent === "BETTER_AUTH_SECRET=") {
 							elements[i].textContent =
-								`BETTER_AUTH_SECRET=${generateRandomString(
-									32,
-									alphabet("A-Z", "a-z", "0-9"),
-								)}`;
+								`BETTER_AUTH_SECRET=${generateRandomString(32)}`;
 							setGenerated(true);
 							setTimeout(() => {
 								elements[i].textContent = "BETTER_AUTH_SECRET=";

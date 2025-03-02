@@ -107,6 +107,15 @@ interface GenericOAuthConfig {
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?: Record<string, string>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
 }
 
 interface GenericOAuthOptions {
@@ -287,6 +296,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "Disable redirect",
 							})
 							.optional(),
+						scopes: z
+							.array(z.string(), {
+								message:
+									"Scopes to be passed to the provider authorization request.",
+							})
+							.optional(),
+						requestSignUp: z
+							.boolean({
+								description:
+									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -382,7 +403,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationEndpoint: finalAuthUrl,
 						state,
 						codeVerifier: pkce ? codeVerifier : undefined,
-						scopes: scopes || [],
+						scopes: ctx.body.scopes
+							? [...ctx.body.scopes, ...(scopes || [])]
+							: scopes || [],
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 					});
 
@@ -419,6 +442,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								description: "The error message, if any",
 							})
 							.optional(),
+						error_description: z
+							.string({
+								description: "The error description, if any",
+							})
+							.optional(),
 						state: z
 							.string({
 								description: "The state parameter from the OAuth2 request",
@@ -449,11 +477,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx) => {
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
 						throw ctx.redirect(
-							`${ctx.context.options.baseURL}?error=${
+							`${defaultErrorURL}?error=${
 								ctx.query.error || "oAuth_code_missing"
-							}`,
+							}&error_description=${ctx.query.error_description}`,
 						);
 					}
 					const provider = options.config.find(
@@ -468,9 +499,23 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
-					const { callbackURL, codeVerifier, errorURL, newUserURL, link } =
-						parsedState;
+					const {
+						callbackURL,
+						codeVerifier,
+						errorURL,
+						requestSignUp,
+						newUserURL,
+						link,
+					} = parsedState;
 					const code = ctx.query.code;
+
+					function redirectOnError(error: string) {
+						throw ctx.redirect(
+							`${
+								errorURL || callbackURL || `${ctx.context.baseURL}/error`
+							}?error=${error}`,
+						);
+					}
 
 					let finalTokenUrl = provider.tokenUrl;
 					let finalUserInfoUrl = provider.userInfoUrl;
@@ -510,9 +555,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: "",
 							e,
 						);
-						throw ctx.redirect(
-							`${errorURL}?error=oauth_code_verification_failed`,
-						);
+						throw redirectOnError("oauth_code_verification_failed");
 					}
 
 					if (!tokens) {
@@ -528,9 +571,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					if (!userInfo?.email) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw ctx.redirect(
-							`${ctx.context.baseURL}/error?error=email_is_missing`,
-						);
+						throw redirectOnError("email_is_missing");
 					}
 
 					const mapUser = provider.mapProfileToUser
@@ -549,6 +590,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							userId: link.userId,
 							providerId: provider.providerId,
 							accountId: userInfo.id,
+							accessToken: tokens.accessToken,
+							refreshToken: tokens.refreshToken,
+							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+							scope: tokens.scopes?.join(","),
 						});
 						if (!newAccount) {
 							return redirectOnError("unable_to_link_account");
@@ -574,15 +620,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
+						disableSignUp:
+							(provider.disableImplicitSignUp && !requestSignUp) ||
+							provider.disableSignUp,
 					});
 
-					function redirectOnError(error: string) {
-						throw ctx.redirect(
-							`${
-								errorURL || callbackURL || `${ctx.context.baseURL}/error`
-							}?error=${error}`,
-						);
-					}
 					if (result.error) {
 						return redirectOnError(result.error.split(" ").join("_"));
 					}

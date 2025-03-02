@@ -5,14 +5,13 @@ import useMeasure from "react-use-measure";
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, CornerRightUp } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { Builder } from "../builder";
 import { Spotlight } from "./spotlight";
 import { GradientBG } from "./gradient-bg";
-
 const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
 	{
 		name: "auth.ts",
@@ -69,7 +68,25 @@ export default function Hero() {
 											d="M13 4V2c4.66.5 8.33 4.19 8.85 8.85c.6 5.49-3.35 10.43-8.85 11.03v-2c3.64-.45 6.5-3.32 6.96-6.96A7.994 7.994 0 0 0 13 4m-7.33.2A9.8 9.8 0 0 1 11 2v2.06c-1.43.2-2.78.78-3.9 1.68zM2.05 11a9.8 9.8 0 0 1 2.21-5.33L5.69 7.1A8 8 0 0 0 4.05 11zm2.22 7.33A10.04 10.04 0 0 1 2.06 13h2c.18 1.42.75 2.77 1.63 3.9zm1.4 1.41l1.39-1.37h.04c1.13.88 2.48 1.45 3.9 1.63v2c-1.96-.21-3.82-1-5.33-2.26M12 17l1.56-3.42L17 12l-3.44-1.56L12 7l-1.57 3.44L7 12l3.43 1.58z"
 										></path>
 									</svg>
-									<span className="text-xs text-opacity-75">Own Your Auth</span>
+									<span className="text-xs text-opacity-75">Own Your Auth</span>{" "}
+									<svg
+										width="8"
+										height="8"
+										viewBox="0 0 12 12"
+										fill="none"
+										className="mx-2"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<path d="M6 0L12 10.5H0L6 0Z" fill="currentColor" />
+									</svg>
+									<Link href={"/changelogs/1-2"}>
+										<span className="bg-gradient-to-tr from-stone-800 to-black  px-2 py-1 rounded-none mb-1">
+											<span className="text-xs text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
+												v1.2 is out
+											</span>
+											<CornerRightUp className="inline ml-1 mb-[0.8px] w-3 h-3" />
+										</span>
+									</Link>
 								</div>
 							</div>
 

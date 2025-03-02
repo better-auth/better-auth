@@ -6,9 +6,10 @@ import path from "path";
 import babelPresetTypescript from "@babel/preset-typescript";
 // @ts-ignore
 import babelPresetReact from "@babel/preset-react";
-import fs from "fs";
+import fs, { existsSync } from "fs";
 import { BetterAuthError } from "better-auth";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import { getTsconfigInfo } from "./get-tsconfig-info";
 
 let possiblePaths = [
 	"auth.ts",
@@ -32,25 +33,14 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function stripJsonComments(jsonString: string): string {
-	return jsonString
-		.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
-			g ? "" : m,
-		)
-		.replace(/,(?=\s*[}\]])/g, "");
-}
-
 function getPathAliases(cwd: string): Record<string, string> | null {
 	const tsConfigPath = path.join(cwd, "tsconfig.json");
 	if (!fs.existsSync(tsConfigPath)) {
 		return null;
 	}
 	try {
-		const tsConfigContent = fs.readFileSync(tsConfigPath, "utf8");
-		const strippedTsConfigContent = stripJsonComments(tsConfigContent);
-		const tsConfig = JSON.parse(strippedTsConfigContent);
+		const tsConfig = getTsconfigInfo(cwd);
 		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
-
 		const result: Record<string, string> = {};
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
@@ -99,14 +89,17 @@ const jitiOptions = (cwd: string) => {
 export async function getConfig({
 	cwd,
 	configPath,
+	shouldThrowOnError = false,
 }: {
 	cwd: string;
 	configPath?: string;
+	shouldThrowOnError?: boolean;
 }) {
 	try {
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
-			const resolvedPath = path.join(cwd, configPath);
+			let resolvedPath: string = path.join(cwd, configPath);
+			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
 			const { config } = await loadConfig<{
 				auth: {
 					options: BetterAuthOptions;
@@ -120,6 +113,11 @@ export async function getConfig({
 				jitiOptions: jitiOptions(cwd),
 			});
 			if (!config.auth && !config.default) {
+				if (shouldThrowOnError) {
+					throw new Error(
+						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+					);
+				}
 				logger.error(
 					`[#better-auth]: Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
@@ -147,6 +145,11 @@ export async function getConfig({
 						configFile =
 							config.auth?.options || config.default?.options || null;
 						if (!configFile) {
+							if (shouldThrowOnError) {
+								throw new Error(
+									"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+								);
+							}
 							logger.error("[#better-auth]: Couldn't read your auth config.");
 							console.log("");
 							logger.info(
@@ -166,10 +169,18 @@ export async function getConfig({
 							"This module cannot be imported from a Client Component module",
 						)
 					) {
+						if (shouldThrowOnError) {
+							throw new Error(
+								`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+							);
+						}
 						logger.error(
 							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 						);
 						process.exit(1);
+					}
+					if (shouldThrowOnError) {
+						throw e;
 					}
 					logger.error("[#better-auth]: Couldn't read your auth config.", e);
 					process.exit(1);
@@ -187,11 +198,20 @@ export async function getConfig({
 				"This module cannot be imported from a Client Component module",
 			)
 		) {
+			if (shouldThrowOnError) {
+				throw new Error(
+					`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
+				);
+			}
 			logger.error(
 				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
 			);
 			process.exit(1);
 		}
+		if (shouldThrowOnError) {
+			throw e;
+		}
+
 		logger.error("Couldn't read your auth config.", e);
 		process.exit(1);
 	}

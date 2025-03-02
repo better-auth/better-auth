@@ -1,4 +1,4 @@
-import { docs, meta } from "@/.source";
+import { changelogCollection, docs, meta } from "@/.source";
 import { createMDXSource } from "fumadocs-mdx";
 import { loader } from "fumadocs-core/source";
 import { createOpenAPI } from "fumadocs-openapi/server";
@@ -6,6 +6,10 @@ import { createOpenAPI } from "fumadocs-openapi/server";
 export const source = loader({
 	baseUrl: "/docs",
 	source: createMDXSource(docs, meta),
+});
+export const changelogs = loader({
+	baseUrl: "/changelogs",
+	source: createMDXSource(changelogCollection),
 });
 
 export const openapi = createOpenAPI({});
