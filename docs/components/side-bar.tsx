@@ -230,7 +230,7 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 	return (
 		<div className="flex items-center justify-end w-full">
 			<Badge
-				className=" pointer-events-none !no-underline !decoration-transparent !border-none"
+				className=" pointer-events-none !no-underline border-dashed !decoration-transparent"
 				variant={isSelected ? "default" : "outline"}
 			>
 				New
