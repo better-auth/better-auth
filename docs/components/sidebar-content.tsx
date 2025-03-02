@@ -543,6 +543,7 @@ export const contents: Content[] = [
 			{
 				title: "Tiktok",
 				href: "/docs/authentication/tiktok",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -630,6 +631,31 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "Roblox",
+				href: "/docs/authentication/roblox",
+				isNew: true,
+				icon: () => (
+					<svg
+						version="1.1"
+						id="svg10"
+						x="0px"
+						y="0px"
+						viewBox="0 0 302.7 302.7"
+						width={16}
+						height={16}
+						fill="currentColor"
+					>
+						<path
+							id="path20"
+							d="M120.5,271.7c-110.9-28.6-120-31-119.9-31.5
+C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,0.4,0.1,0.9c-0.2,1.5-61.5,239.3-61.7,239.5
+	C240.6,302.5,186.5,288.7,120.5,271.7z M174.9,158c3.2-12.6,5.9-23.1,6-23.4c0.1-0.5-2.3-1.2-23.2-6.6c-12.8-3.3-23.5-5.9-23.6-5.8
+	c-0.3,0.3-12.1,46.6-12,46.7c0.2,0.2,46.7,12.2,46.8,12.1C168.9,180.9,171.6,170.6,174.9,158L174.9,158z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "GitLab",
 				href: "/docs/authentication/gitlab",
 				icon: () => (
@@ -683,6 +709,7 @@ export const contents: Content[] = [
 			},
 			{
 				title: "VK",
+				isNew: true,
 				href: "/docs/authentication/vk",
 				icon: () => (
 					<svg
@@ -710,6 +737,7 @@ export const contents: Content[] = [
 			{
 				title: "Other Social Providers",
 				href: "/docs/authentication/other-social-providers",
+				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
