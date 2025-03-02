@@ -169,6 +169,12 @@ export type BetterAuthOptions = {
 		 */
 		enabled: boolean;
 		/**
+		 * Disable email and password sign up
+		 *
+		 * @default false
+		 */
+		disableSignUp?: boolean;
+		/**
 		 * Require email verification before a session
 		 * can be created for the user.
 		 *
@@ -244,6 +250,16 @@ export type BetterAuthOptions = {
 		 * The model name for the user. Defaults to "user".
 		 */
 		modelName?: string;
+		/**
+		 * Map fields
+		 *
+		 * @example
+		 * ```ts
+		 * {
+		 *  userId: "user_id"
+		 * }
+		 * ```
+		 */
 		fields?: Partial<Record<keyof OmitId<User>, string>>;
 		/**
 		 * Additional fields for the session
@@ -860,6 +876,15 @@ export type BetterAuthOptions = {
 		 * @param ctx - Auth context
 		 */
 		onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+		/**
+		 * The url to redirect to on error
+		 *
+		 * When errorURL is provided, the error will be added to the url as a query parameter
+		 * and the user will be redirected to the errorURL.
+		 *
+		 * @default - "/api/auth/error"
+		 */
+		errorURL?: string;
 	};
 	/**
 	 * Hooks

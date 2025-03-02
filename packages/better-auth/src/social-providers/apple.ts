@@ -54,7 +54,7 @@ export interface AppleProfile {
 /**
  * This is the shape of the `user` query parameter that Apple sends the first
  * time the user consents to the app.
- * @see https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server#4066168
+ * @see https://developer.apple.com/documentation/signinwithapplerestapi/request-an-authorization-to-the-sign-in-with-apple-server./
  */
 export interface AppleNonConformUser {
 	name: {

@@ -19,6 +19,8 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
+import { Endpoint } from "@/components/endpoint";
+import { DividerText } from "@/components/divider-text";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -45,7 +47,8 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				path: "/docs/content/docs",
+				sha: "main",
+				path: `/docs/content/docs/${page.file.path}`,
 			}}
 			tableOfContent={{
 				style: "clerk",
@@ -89,6 +92,8 @@ export default async function Page({
 						DatabaseTable,
 						Accordion,
 						Accordions,
+						Endpoint,
+						DividerText,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
@@ -143,7 +148,9 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
 	params,
-}: { params: Promise<{ slug?: string[] }> }) {
+}: {
+	params: Promise<{ slug?: string[] }>;
+}) {
 	const { slug } = await params;
 	const page = source.getPage(slug);
 	if (page == null) notFound();

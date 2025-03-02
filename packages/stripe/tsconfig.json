@@ -9,12 +9,12 @@
 		"noEmit": true,
 		"moduleResolution": "Bundler",
 		"moduleDetection": "force",
-		"isolatedModules": false,
+		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
 		"strict": true,
 		"noImplicitOverride": true,
 		"noFallthroughCasesInSwitch": true
 	},
-	"exclude": ["node_modules"],
-	"include": ["src", "test"]
+	"exclude": ["node_modules", "dist"],
+	"include": ["src"]
 }
