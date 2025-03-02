@@ -323,7 +323,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						ctx.request
 					);
 
-					if (!sendOTPRes?.generate) {
+					if (sendOTPRes?.generate) {
 						throw new APIError("UNAUTHORIZED", {
 							message: sendOTPRes?.reason ?? ERROR_CODES.USER_CHOICE
 						});
