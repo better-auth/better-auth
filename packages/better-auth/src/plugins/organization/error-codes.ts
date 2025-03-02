@@ -45,4 +45,10 @@ export const ORGANIZATION_ERROR_CODES = {
 		"You are not allowed to update this member",
 	ORGANIZATION_MEMBERSHIP_LIMIT_REACHED:
 		"Organization membership limit reached",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION:
+		"You are not allowed to create teams in this organization",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION:
+		"You are not allowed to delete teams in this organization",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM:
+		"You are not allowed to update this team",
 } as const;

@@ -7,6 +7,7 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import Loglib from "@loglib/tracker/react";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = createMetadata({
 	title: {
@@ -43,6 +44,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 						consent: "granted",
 					}}
 				/>
+				<Analytics />
 			</body>
 		</html>
 	);

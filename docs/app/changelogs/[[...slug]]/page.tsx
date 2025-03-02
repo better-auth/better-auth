@@ -23,6 +23,10 @@ import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "../_components/stat-field";
 import { CalendarClockIcon } from "lucide-react";
 
+const metaTitle = "Changelogs";
+const metaDescription = "Latest changes , fixes and updates.";
+const ogImage = "https://better-auth.com/release-og/changelog-og.png";
+
 export default async function Page({
 	params,
 }: {
@@ -41,8 +45,8 @@ export default async function Page({
 	const toc = page.data?.toc;
 	const { title, description, date } = page.data;
 	return (
-		<div className="grid md:grid-cols-2 items-start">
-			<div className="bg-gradient-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+		<div className="md:grid md:grid-cols-2 items-start">
+			<div className="bg-gradient-to-tr hidden md:block overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 
@@ -91,26 +95,6 @@ export default async function Page({
 			</div>
 			<div className="px-4 relative md:px-8 pb-12 md:py-12">
 				<div className="absolute top-0 left-0 h-full -translate-x-full w-px bg-gradient-to-b from-black/5 dark:from-white/10 via-black/3 dark:via-white/5 to-transparent"></div>
-				<Link
-					href="/changelogs"
-					className="mb-6 inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="16"
-						height="16"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="mr-2"
-					>
-						<path d="m15 18-6-6 6-6" />
-					</svg>
-					Back to Changelogs
-				</Link>
 				<DocsBody>
 					<MDX
 						components={{
@@ -159,22 +143,32 @@ export async function generateMetadata({
 	const { slug } = await params;
 	if (!slug) {
 		return {
-			title: "Changelogs",
-			description: "Changelogs",
+			metadataBase: new URL("https://better-auth.com/changelogs"),
+			title: metaTitle,
+			description: metaDescription,
+			openGraph: {
+				title: metaTitle,
+				description: metaDescription,
+				images: [
+					{
+						url: ogImage,
+					},
+				],
+				url: "https://better-auth.com/changelogs",
+			},
+			twitter: {
+				card: "summary_large_image",
+				title: metaTitle,
+				description: metaDescription,
+				images: [ogImage],
+			},
 		};
 	}
 	const page = changelogs.getPage(slug);
 	if (page == null) notFound();
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og-release`);
-	const { title, description, date } = page.data;
-	const dateString = formatDate(date);
-	const pageSlug = page.file.path;
-	url.searchParams.set("type", "Version Release");
-	url.searchParams.set("mode", "dark");
-	url.searchParams.set("heading", `${title}`);
-	url.searchParams.set("description", `${description}`);
-	url.searchParams.set("date", `${dateString}`);
+	const url = new URL(`${baseUrl}/release-og/${slug.join("")}.png`);
+	const { title, description } = page.data;
 
 	return {
 		title,
@@ -183,7 +177,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`v/${pageSlug}`),
+			url: absoluteUrl(`changelogs/${slug.join("")}`),
 			images: [
 				{
 					url: url.toString(),
@@ -205,24 +199,3 @@ export async function generateMetadata({
 export function generateStaticParams() {
 	return changelogs.generateParams();
 }
-
-const Icon = ({ className, ...rest }: any) => {
-	return (
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			fill="none"
-			viewBox="0 0 24 24"
-			width={24}
-			height={30}
-			strokeWidth="1"
-			stroke="currentColor"
-			{...rest}
-			className={cn(
-				"dark:text-white/50 text-black/50 size-6 absolute",
-				className,
-			)}
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m6-6H6" />
-		</svg>
-	);
-};

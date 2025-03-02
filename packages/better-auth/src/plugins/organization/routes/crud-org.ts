@@ -43,6 +43,12 @@ export const createOrganization = createAuthEndpoint(
 					description: "The metadata of the organization",
 				})
 				.optional(),
+			keepCurrentActiveOrganization: z
+				.boolean({
+					description:
+						"Whether to keep the current active organization active after creating a new one",
+				})
+				.optional(),
 		}),
 		use: [orgMiddleware],
 		metadata: {
@@ -138,7 +144,6 @@ export const createOrganization = createAuthEndpoint(
 			options?.teams?.enabled &&
 			options.teams.defaultTeam?.enabled !== false
 		) {
-			const teamStatus = "active";
 			const defaultTeam =
 				(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 					organization,
@@ -165,7 +170,7 @@ export const createOrganization = createAuthEndpoint(
 			});
 		}
 
-		if (ctx.context.session) {
+		if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
 			await adapter.setActiveOrganization(
 				ctx.context.session.session.token,
 				organization.id,

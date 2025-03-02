@@ -1,54 +1,141 @@
 ---
 title: 1.2 Release
 description: Stripe, Captcha, API Keys, Teams, Init CLI, and more.
-date: 2025-02-27
+date: 2025-03-01
 ---
 
 # Better Auth 1.2 – Stripe, Captcha, API Keys, Teams, Init CLI, and more
 
-```package-install 
+To upgrade, run:
+
+```package-install
 npm install better-auth@1.2.0
 ```
 
 ---
 
-
-## 🔌 New Plugins
-
 ### **Stripe Plugin (Beta)**
-Stripe integration for customer management, subscriptions, and webhooks. [Learn more](/docs/plugins/stripe)
+
+Stripe integration for customer management, subscriptions, and webhooks.
+
+```package-install
+npm install @better-auth/stripe
+```
+
+```ts title="auth.ts"
+import { stripe } from "@better-auth/stripe"; // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    stripe({
+      // [!code highlight]
+      createCustomerOnSignup: true, // [!code highlight]
+      subscription: {
+        // [!code highlight]
+        enabled: true, // [!code highlight]
+        plans: [
+          // [!code highlight]
+          {
+            // [!code highlight]
+            name: "pro", // [!code highlight]
+            priceId: "price_1234567890", // [!code highlight]
+          }, // [!code highlight]
+        ], // [!code highlight]
+      }, // [!code highlight]
+    }), // [!code highlight]
+  ],
+});
+```
+
+Read the [Stripe Plugin docs](/docs/plugins/stripe) for more information.
 
 ### **Captcha Plugin**
-Protect your authentication flows with Google reCAPTCHA and Cloudflare Turnstile. Works for signup, signin, and password resets. [Learn more](/docs/plugins/captcha)
+
+Protect your authentication flows with Google reCAPTCHA and Cloudflare Turnstile. Works for signup, signin, and password resets.
+
+```ts title="auth.ts"
+import { captcha } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    // [!code highlight]
+    captcha({
+      // [!code highlight]
+      provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
+      secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+    }), // [!code highlight]
+  ], // [!code highlight]
+});
+```
+
+Read the [Captcha Plugin docs](/docs/plugins/captcha) for more information.
 
 ### **API Key Plugin**
-Generate and manage API keys with rate limiting, expiration, and metadata. Supports session creation from API keys. [Learn more](/docs/plugins/api-keys)
 
----
+Generate and manage API keys with rate limiting, expiration, and metadata. Supports session creation from API keys.
 
-## 🔄 Plugin Enhancements
+```ts title="auth.ts"
+import { apiKey } from "better-auth/plugins";
 
-### **Username Plugin**
+const auth = betterAuth({
+  plugins: [apiKey()],
+});
+```
+
+Read the [API Key Plugin docs](/docs/plugins/api-key) for more information.
+
+### **Teams/Sub-Organizations**
+
+Organizations can now have teams or sub-organizations under them.
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [
+    organization({
+      teams: {
+        enabled: true,
+      },
+    }),
+  ],
+});
+```
+
+Read the [Organization Plugin docs](/docs/plugins/organization#teams) for more information.
+
+### **Init CLI**
+
+The CLI now includes an `init` command to add better auth to your project.
+
+```bash title="terminal"
+npx @better-auth/cli init
+```
+
+### **Username**
+
 - Added `displayName` for case-insensitive lookups while preserving original formatting.
 - Built-in validation.
 
 <Callout type="info">
-If you're using the Username plugin, make sure to add the `displayName` field to your schema.
+  If you're using the Username plugin, make sure to add the `displayName` field
+  to your schema.
 </Callout>
 
-### **Organization Plugin**
-- **Teams & Access Control** – Custom roles and permissions for org members, no extra work needed. [Learn more](/docs/plugins/organization)
+### **Organization**
+
 - **Multiple Roles per User** – Assign more than one role to a user.
 
 ### **Admin Plugin**
-- Manage roles and permissions directly within the admin panel. [Learn more](/docs/plugins/admin)
+
+- Manage roles and permissions within the admin plugin. [Learn more](/docs/plugins/admin)
 - `adminUserIds` option to grant specific users admin privileges. [Learn more](/docs/plugins/admin#usage)
+
 ---
 
 ## 🎭 New Social Providers
-- TikTok
-- Roblox
-- VK
+
+- [TikTok](/docs/authentication/tiktok)
+- [Roblox](/docs/authentication/roblox)
+- [VK](/docs/authentication/vk)
 
 ---
 
@@ -66,6 +153,7 @@ If you're using the Username plugin, make sure to add the `displayName` field to
 ---
 
 ## 🚀 Performance Boosts
+
 We rewrote **better-call** (the core library behind Better Auth) to fix TypeScript editor lag. Your IDE should now feel much snappier when working with Better Auth.
 
 ---
@@ -73,7 +161,9 @@ We rewrote **better-call** (the core library behind Better Auth) to fix TypeScri
 ## ⚡ CLI Enhancements
 
 ### **`init` Command**
+
 The CLI now includes an `init` command to speed up setup:
+
 - Scaffold new projects
 - Generate schemas
 - Run migrations
@@ -83,7 +173,8 @@ The CLI now includes an `init` command to speed up setup:
 ---
 
 ## 🛠 Bug Fixes & Stability Improvements
-A lot of fixes and refinements to make everything smoother, faster, and more reliable. Check out the [changelog](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/CHANGELOG.md) for more details.
+
+A lot of fixes and refinements to make everything smoother, faster, and more reliable. Check out the [changelog](https://github.com/better-auth/better-auth/releases/tag/v1.2.0) for more details.
 
 ---
 

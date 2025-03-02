@@ -50,7 +50,6 @@ export async function GET(req: Request) {
 							filter: "blur(35px)",
 							transform: "rotate(50deg)",
 							top: "18%",
-							// zIndex: 999,
 							left: "0%",
 						}}
 					/>
@@ -79,13 +78,14 @@ export async function GET(req: Request) {
 								position: "relative",
 								flexDirection: "column",
 								textAlign: "left",
+								paddingLeft: "170px",
 								gap: "14px",
 							}}
 						/>
 						<div
 							tw="flex text-6xl absolute bottom-56 isolate font-bold"
 							style={{
-								paddingLeft: "145px",
+								paddingLeft: "170px",
 								paddingTop: "200px",
 								background: "linear-gradient(45deg, #000000 4%, #fff, #000)",
 								backgroundClip: "text",
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
 						<div
 							tw="flex absolute bottom-44 z-[999] text-2xl"
 							style={{
-								paddingLeft: "145px",
+								paddingLeft: "170px",
 								background:
 									"linear-gradient(10deg, #d4d4d8, 04%, #fff, #d4d4d8)",
 								backgroundClip: "text",
@@ -112,7 +112,7 @@ export async function GET(req: Request) {
 						<div
 							tw="flex text-2xl absolute bottom-28 z-[999]"
 							style={{
-								paddingLeft: "145px",
+								paddingLeft: "170px",
 								background:
 									"linear-gradient(10deg, #d4d4d8, 04%, #fff, #d4d4d8)",
 								backgroundClip: "text",

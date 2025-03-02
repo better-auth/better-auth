@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.2.0-beta.18",
+  "version": "1.2.1-beta.3",
   "description": "The most comprehensive authentication library for TypeScript.",
   "type": "module",
   "repository": {
@@ -9,7 +9,7 @@
     "directory": "packages/better-auth"
   },
   "scripts": {
-    "build": "unbuild --clean && pnpm build:types",
+    "build": "unbuild --clean",
     "dev": "concurrently \"unbuild --watch\" \"npm run dev:types\"",
     "dev:types": "tsc --project tsconfig.declarations.json --watch",
     "build:types": "tsc --project tsconfig.declarations.json",
@@ -18,7 +18,7 @@
     "prisma:push": "prisma db push --schema src/adapters/prisma-adapter/test/schema.prisma",
     "test:adapters": "pnpm prisma:push && vitest adapters",
     "bump": "bumpp",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --project tsconfig.declarations.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -460,16 +460,16 @@
         "./dist/index.d.ts"
       ],
       "node": [
-        "./dist/node/index.d.ts"
+        "./dist/integrations/node.d.ts"
       ],
       "react": [
-        "./dist/react/index.d.ts"
+        "./dist/client/react/index.d.ts"
       ],
       "vue": [
-        "./dist/vue/index.d.ts"
+        "./dist/client/vue/index.d.ts"
       ],
       "svelte": [
-        "./dist/svelte/index.d.ts"
+        "./dist/client/svelte/index.d.ts"
       ],
       "social-providers": [
         "./dist/social-providers/index.d.ts"
@@ -479,9 +479,6 @@
       ],
       "client/plugins": [
         "./dist/client/plugins/index.d.ts"
-      ],
-      "expo": [
-        "./dist/expo/index.d.ts"
       ],
       "types": [
         "./dist/types/index.d.ts"
@@ -505,13 +502,13 @@
         "./dist/db/index.d.ts"
       ],
       "svelte-kit": [
-        "./dist/svelte-kit/index.d.ts"
+        "./dist/integrations/svelte-kit.d.ts"
       ],
       "solid-start": [
-        "./dist/solid-start/index.d.ts"
+        "./dist/integrations/solid-start.d.ts"
       ],
       "next-js": [
-        "./dist/next-js/index.d.ts"
+        "./dist/integrations/next-js.d.ts"
       ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"

@@ -760,34 +760,34 @@ const canCreateProject = client.organization.checkRolePermission({
 
 ## Teams
 
-Teams allow you to group members within an organization. You can enable teams by passing `teams.enabled` to the organization plugin.
+Teams allow you to group members within an organization. The teams feature provides additional organization structure and can be used to manage permissions at a more granular level.
 
 ### Enabling Teams
 
-#### Server Setup
-To enable teams on the server, update your authentication configuration:
+To enable teams, pass the `teams` configuration option to both server and client plugins:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
         organization({
             teams: {
-                enabled: true
+                enabled: true,
+                maximumTeams: 10, // Optional: limit teams per organization
+                allowRemovingAllTeams: false // Optional: prevent removing the last team
             }
         })
     ]
 })
 ```
 
-#### Client Setup
-For client-side support, pass `teams.enabled` to the client plugin:
-
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client"
+import { organizationClient } from "better-auth/client/plugins"
 
-export const authClient = createAuthClient({
+export const client = createAuthClient({
     plugins: [
         organizationClient({
             teams: {
@@ -798,56 +798,136 @@ export const authClient = createAuthClient({
 })
 ```
 
-### Database Migration
-Once teams are enabled, run the appropriate command to update your database schema.
+### Managing Teams
 
-For the built-in database:
-```bash
-npx @better-auth/cli migrate
-```
-
-For custom adapters:
-```bash
-npx @better-auth/cli generate
-```
-
-## Managing Teams
-
-### Creating a Team
-Use the `createTeam` function to add a new team to an organization:
-
-```ts title="auth-client.ts"
-await authClient.organization.createTeam({
-    name: "My Team"
-})
-```
-
-> **Note:** Once teams are enabled, `getFullOrganization` will return all teams within an organization.
-
-### Updating a Team
-Modify a team's details using `updateTeam`:
-
-```ts title="auth-client.ts"
-await authClient.organization.updateTeam({
-    name: "Updated Team Name"
-})
-```
-
-### Listing Teams
-Retrieve all teams within an organization using `listTeams`:
+#### Create Team
+Create a new team within an organization:
 
 ```ts
-await authClient.organization.listTeams()
-```
-
-To fetch teams for a specific organization, pass an `organizationId`:
-
-```ts
-await authClient.organization.listTeams({
-    organizationId: "org-id"
+const team = await client.organization.createTeam({
+    name: "Development Team",
+    organizationId: "org-id" // Optional: defaults to active organization
 })
 ```
 
+#### List Teams
+Get all teams in an organization:
+
+```ts
+const teams = await client.organization.listTeams({
+    organizationId: "org-id" // Optional: defaults to active organization
+})
+```
+
+#### Update Team
+Update a team's details:
+
+```ts
+const updatedTeam = await client.organization.updateTeam({
+    teamId: "team-id",
+    data: {
+        name: "Updated Team Name"
+    }
+})
+```
+
+#### Remove Team
+Delete a team from an organization:
+
+```ts
+await client.organization.removeTeam({
+    teamId: "team-id",
+    organizationId: "org-id" // Optional: defaults to active organization
+})
+```
+
+### Team Permissions
+
+Teams follow the organization's permission system. To manage teams, users need the following permissions:
+
+- `team:create` - Create new teams
+- `team:update` - Update team details
+- `team:delete` - Remove teams
+
+By default:
+- Organization owners and admins can manage teams
+- Regular members cannot create, update, or delete teams
+
+### Team Configuration Options
+
+The teams feature supports several configuration options:
+
+- `maximumTeams`: Limit the number of teams per organization
+  ```ts
+  teams: {
+    enabled: true,
+    maximumTeams: 10 // Fixed number
+    // OR
+    maximumTeams: async ({ organizationId, session }, request) => {
+      // Dynamic limit based on organization plan
+      const plan = await getPlan(organizationId)
+      return plan === 'pro' ? 20 : 5
+    }
+  }
+  ```
+
+- `allowRemovingAllTeams`: Control whether the last team can be removed
+  ```ts
+  teams: {
+    enabled: true,
+    allowRemovingAllTeams: false // Prevent removing the last team
+  }
+  ```
+
+### Team Members
+
+When inviting members to an organization, you can specify a team:
+
+```ts
+await client.organization.inviteMember({
+    email: "user@example.com",
+    role: "member",
+    teamId: "team-id"
+})
+```
+
+The invited member will be added to the specified team upon accepting the invitation.
+
+### Database Schema
+
+When teams are enabled, a new `team` table is added with the following structure:
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each team",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the team" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was created" 
+    },
+    { 
+      name: "updatedAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was last updated" 
+    }
+  ]}
+/>
 
 ## Schema
 

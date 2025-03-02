@@ -53,8 +53,14 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("State not found", error);
 			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
 		}
-		const { codeVerifier, callbackURL, link, errorURL, newUserURL } =
-			await parseState(c);
+		const {
+			codeVerifier,
+			callbackURL,
+			link,
+			errorURL,
+			newUserURL,
+			requestSignUp,
+		} = await parseState(c);
 
 		function redirectOnError(error: string) {
 			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
@@ -168,6 +174,9 @@ export const callbackOAuth = createAuthEndpoint(
 				scope: tokens.scopes?.join(","),
 			},
 			callbackURL,
+			disableSignUp:
+				(provider.disableImplicitSignUp && !requestSignUp) ||
+				provider.disableSignUp,
 		});
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));

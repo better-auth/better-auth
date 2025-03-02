@@ -12,7 +12,6 @@ import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
-
 const ChangelogPage = async () => {
 	const { data: releases } = await betterFetch<
 		{

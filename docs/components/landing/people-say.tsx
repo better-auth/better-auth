@@ -97,7 +97,7 @@ const testimonials = [
 		description:
 			"if you're building a code project in 2025 use @better_auth. It has everything you need now and everything you'll need at scale. dont take this suggestion lightly..",
 		avatar:
-			"https://pbs.twimg.com/profile_images/1889741029470801920/6J25rfKo_400x400.jpg",
+			"https://pbs.twimg.com/profile_images/1893251014838415360/ekhTlUyz_400x400.jpg",
 		image: "",
 		social: <Icons.x />,
 	},

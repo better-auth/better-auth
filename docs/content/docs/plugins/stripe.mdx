@@ -163,6 +163,7 @@ subscription: {
         {
             name: "basic", // the name of the plan, it'll be automatically lower cased when stored in the database
             priceId: "price_1234567890", // the price id from stripe
+            annualDiscountPriceId: "price_1234567890", // (optional) the price id for annual billing with a discount
             limits: {
                 projects: 5,
                 storage: 10
