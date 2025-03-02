@@ -70,7 +70,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 export const originCheck = (
-	getValue: (ctx: GenericEndpointContext) => string,
+	getValue: (ctx: GenericEndpointContext) => string | string[],
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
@@ -117,5 +117,8 @@ export const originCheck = (
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
 		};
-		callbackURL && validateURL(callbackURL, "callbackURL");
+		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];
+		for (const url of callbacks) {
+			validateURL(url, "callbackURL");
+		}
 	});

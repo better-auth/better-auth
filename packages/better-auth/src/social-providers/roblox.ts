@@ -33,8 +33,9 @@ export const roblox = (options: RobloxOptions) => {
 		id: "roblox",
 		name: "Roblox",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = scopes || ["openid", "profile"];
+			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
 			options.scope && _scopes.push(...options.scope);
+			scopes && _scopes.push(...scopes);
 			return new URL(
 				`https://apis.roblox.com/oauth/v1/authorize?scope=${_scopes.join(
 					"+",

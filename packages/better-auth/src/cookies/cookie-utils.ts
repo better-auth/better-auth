@@ -73,3 +73,37 @@ export function parseSetCookieHeader(
 
 	return cookies;
 }
+
+export function setCookieToHeader(headers: Headers) {
+	return (context: {
+		response: Response;
+	}) => {
+		const setCookieHeader = context.response.headers.get("set-cookie");
+		if (!setCookieHeader) {
+			return;
+		}
+
+		const cookieMap = new Map<string, string>();
+
+		const existingCookiesHeader = headers.get("cookie") || "";
+		existingCookiesHeader.split(";").forEach((cookie) => {
+			const [name, ...rest] = cookie.trim().split("=");
+			if (name && rest.length > 0) {
+				cookieMap.set(name, rest.join("="));
+			}
+		});
+
+		const setCookieHeaders = setCookieHeader.split(",");
+		setCookieHeaders.forEach((header) => {
+			const cookies = parseSetCookieHeader(header);
+			cookies.forEach((value, name) => {
+				cookieMap.set(name, value.value);
+			});
+		});
+
+		const updatedCookies = Array.from(cookieMap.entries())
+			.map(([name, value]) => `${name}=${value}`)
+			.join("; ");
+		headers.set("cookie", updatedCookies);
+	};
+}

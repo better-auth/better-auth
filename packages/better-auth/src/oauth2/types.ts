@@ -39,7 +39,22 @@ export interface OAuthProvider<
 	} | null>;
 	refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
 	revokeToken?: (token: string) => Promise<void>;
+	/**
+	 * Verify the id token
+	 * @param token - The id token
+	 * @param nonce - The nonce
+	 * @returns True if the id token is valid, false otherwise
+	 */
 	verifyIdToken?: (token: string, nonce?: string) => Promise<boolean>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
 }
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
@@ -65,6 +80,11 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string;
+	/**
+	 * The client key of your application
+	 * Tiktok Social Provider uses this field instead of clientId
+	 */
+	clientKey?: string;
 	/**
 	 * Disable provider from allowing users to sign in
 	 * with this provider with an id token sent from the
@@ -110,4 +130,13 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 				emailVerified?: boolean;
 				[key: string]: any;
 		  }>;
+	/**
+	 * Disable implicit sign up for new users. When set to true for the provider,
+	 * sign-in need to be called with with requestSignUp as true to create new users.
+	 */
+	disableImplicitSignUp?: boolean;
+	/**
+	 * Disable sign up for new users.
+	 */
+	disableSignUp?: boolean;
 };

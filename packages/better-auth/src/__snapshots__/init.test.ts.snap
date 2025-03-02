@@ -120,6 +120,7 @@ exports[`init > should match config 1`] = `
     "storage": "memory",
     "window": 10,
   },
+  "runMigrations": [Function],
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-123456789",
   "session": null,

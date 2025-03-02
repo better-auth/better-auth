@@ -11,6 +11,7 @@ type Props = {
 	startWith: string;
 	title?: string | null;
 	className?: ClassValue;
+	activeClassName?: ClassValue;
 } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
 
 export const AsideLink = ({
@@ -19,6 +20,7 @@ export const AsideLink = ({
 	startWith,
 	title,
 	className,
+	activeClassName,
 	...props
 }: Props) => {
 	const segment = useSelectedLayoutSegment();
@@ -30,7 +32,7 @@ export const AsideLink = ({
 			href={href}
 			className={cn(
 				isActive
-					? "text-foreground bg-primary/10"
+					? cn("text-foreground bg-primary/10", activeClassName)
 					: "text-muted-foreground hover:text-foreground hover:bg-primary/10",
 				"w-full transition-colors flex items-center gap-x-2.5 hover:bg-primary/10 px-5 py-1",
 				className,

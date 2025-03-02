@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { useId } from "react";
 import { cn } from "@/lib/utils";
-import { IconLink } from "./_components/changelog-layout";
-import { BookIcon, GitHubIcon, XIcon } from "./_components/icons";
+import { IconLink } from "./changelog-layout";
+import { BookIcon, GitHubIcon, XIcon } from "./icons";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
-import { StarField } from "./_components/stat-field";
+import { StarField } from "./stat-field";
 import { betterFetch } from "@better-fetch/fetch";
 import Markdown from "react-markdown";
 import defaultMdxComponents from "fumadocs-ui/mdx";
@@ -12,7 +12,6 @@ import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
-
 const ChangelogPage = async () => {
 	const { data: releases } = await betterFetch<
 		{
@@ -141,10 +140,19 @@ const ChangelogPage = async () => {
 									</div>
 									<Link
 										href={
-											`#${props.children
+											props.children
 												?.toString()
 												.split("date=")[0]
-												.trim()}` || "#"
+												.trim()
+												.endsWith(".00")
+												? `/changelogs/${props.children
+														?.toString()
+														.split("date=")[0]
+														.trim()}`
+												: `#${props.children
+														?.toString()
+														.split("date=")[0]
+														.trim()}`
 										}
 									>
 										{props.children?.toString().split("date=")[0].trim()}
@@ -206,7 +214,7 @@ ${message.content}
 
 export default ChangelogPage;
 
-function Glow() {
+export function Glow() {
 	let id = useId();
 
 	return (

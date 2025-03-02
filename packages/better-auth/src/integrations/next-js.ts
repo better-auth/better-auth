@@ -1,5 +1,4 @@
 import type { BetterAuthPlugin } from "../types";
-import { cookies } from "next/headers";
 import { parseSetCookieHeader } from "../cookies";
 import { createAuthMiddleware } from "../plugins";
 
@@ -37,6 +36,7 @@ export const nextCookies = () => {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
+							const { cookies } = await import("next/headers");
 							const cookieHelper = await cookies();
 							parsed.forEach((value, key) => {
 								if (!key) return;

@@ -141,6 +141,10 @@ export async function authorize(
 		);
 	}
 
+	if (!query.code_challenge_method) {
+		query.code_challenge_method = "plain";
+	}
+
 	if (
 		![
 			"s256",

@@ -14,8 +14,6 @@ import { parseUserInput } from "../../db";
 import { isDevelopment } from "../../utils/env";
 import { setSessionCookie } from "../../cookies";
 
-const x: AppInviteOptions = {};
-
 export interface AppInviteOptions {
 	/**
 	 * Define whether a user is allowed to send invitations.

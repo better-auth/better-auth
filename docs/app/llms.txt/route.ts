@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm";
 import { remarkInstall } from "fumadocs-docgen";
 import remarkStringify from "remark-stringify";
 import remarkMdx from "remark-mdx";
-import { remarkInclude } from "fumadocs-mdx/config";
 
 export const revalidate = false;
 
@@ -33,8 +32,6 @@ ${processed}`;
 async function processContent(content: string): Promise<string> {
 	const file = await remark()
 		.use(remarkMdx)
-		// https://fumadocs.vercel.app/docs/mdx/include
-		.use(remarkInclude)
 		// gfm styles
 		.use(remarkGfm)
 		// your remark plugins

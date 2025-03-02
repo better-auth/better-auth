@@ -86,6 +86,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
+		allowPlainCodeChallengeMethod: true,
 		...options,
 		scopes: [
 			"openid",
@@ -144,6 +145,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					metadata: {
+						isAction: false,
+					},
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);

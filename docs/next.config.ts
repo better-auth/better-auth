@@ -1,8 +1,6 @@
 import { createMDX } from "fumadocs-mdx/next";
 
-export const withMDX = createMDX({
-	configPath: "./source.config.ts",
-});
+export const withMDX = createMDX();
 
 export default withMDX({
 	reactStrictMode: true,
@@ -39,6 +37,9 @@ export default withMDX({
 			},
 			{
 				hostname: "github.com",
+			},
+			{
+				hostname: "hebbkx1anhila5yf.public.blob.vercel-storage.com",
 			},
 		],
 	},

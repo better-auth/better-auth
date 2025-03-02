@@ -23,7 +23,7 @@ describe("oauth2", async () => {
 						providerId,
 						discoveryUrl:
 							server.issuer.url ||
-							"http://localhost:8080/.well-known/openid-configuration",
+							"http://localhost:8081/.well-known/openid-configuration",
 						clientId: clientId,
 						clientSecret: clientSecret,
 						pkce: true,
@@ -51,12 +51,12 @@ describe("oauth2", async () => {
 
 		server.issuer.on;
 		// Start the server
-		await server.start(8080, "localhost");
-		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
+		await server.start(8081, "localhost");
+		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8081
 	});
 
 	afterAll(async () => {
-		await server.stop();
+		await server.stop().catch(() => {});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
@@ -107,7 +107,7 @@ describe("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8080/authorize"),
+			url: expect.stringContaining("http://localhost:8081/authorize"),
 			redirect: true,
 		});
 		const callbackURL = await simulateOAuthFlow(
@@ -136,7 +136,7 @@ describe("oauth2", async () => {
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
 		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("http://localhost:8080/authorize"),
+			url: expect.stringContaining("http://localhost:8081/authorize"),
 			redirect: true,
 		});
 		const callbackURL = await simulateOAuthFlow(
@@ -214,7 +214,7 @@ describe("oauth2", async () => {
 						{
 							providerId: "test2",
 							discoveryUrl:
-								"http://localhost:8080/.well-known/openid-configuration",
+								"http://localhost:8081/.well-known/openid-configuration",
 							clientId: clientId,
 							clientSecret: clientSecret,
 							redirectURI: "http://localhost:3000/api/auth/callback/test2",
@@ -238,7 +238,7 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
-		expect(res.data?.url).toContain("http://localhost:8080/authorize");
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
 		const headers = new Headers();
 		const callbackURL = await simulateOAuthFlow(
 			res.data?.url || "",
@@ -246,5 +246,114 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
+	});
+
+	it("should not create user when sign ups are disabled", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-signup-disabled@test.com",
+				name: "OAuth2 Test Signup Disabled",
+				sub: "oauth2-signup-disabled",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test2",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							disableImplicitSignUp: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test2",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+		});
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe(
+			"http://localhost:3000/error?error=signup_disabled",
+		);
+	});
+
+	it("should create user when sign ups are disabled and sign up is requested", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-signup-disabled-and-requested@test.com",
+				name: "OAuth2 Test Signup Disabled And Requested",
+				sub: "oauth2-signup-disabled-and-requested",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test2",
+							discoveryUrl:
+								"http://localhost:8081/.well-known/openid-configuration",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							disableImplicitSignUp: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test2",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+			requestSignUp: true,
+		});
+		expect(res.data?.url).toContain("http://localhost:8081/authorize");
+		const headers = new Headers();
+		const callbackURL = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 });

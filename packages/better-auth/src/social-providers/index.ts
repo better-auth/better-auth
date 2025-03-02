@@ -11,6 +11,7 @@ import { twitter } from "./twitter";
 import { dropbox } from "./dropbox";
 import { linkedin } from "./linkedin";
 import { gitlab } from "./gitlab";
+import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { z } from "zod";
@@ -28,6 +29,7 @@ export const socialProviders = {
 	dropbox,
 	linkedin,
 	gitlab,
+	tiktok,
 	reddit,
 	roblox,
 	vk,
@@ -37,8 +39,6 @@ export const socialProviderList = Object.keys(socialProviders) as [
 	"github",
 	...(keyof typeof socialProviders)[],
 ];
-
-export type SocialProviderList = typeof socialProviderList;
 
 export const SocialProviderListEnum = z.enum(socialProviderList, {
 	description: "OAuth2 provider to use",
@@ -66,6 +66,9 @@ export * from "./twitter";
 export * from "./dropbox";
 export * from "./linkedin";
 export * from "./gitlab";
+export * from "./tiktok";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./vk";
+
+export type SocialProviderList = typeof socialProviderList;
