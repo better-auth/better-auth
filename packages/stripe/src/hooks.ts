@@ -41,6 +41,7 @@ export async function onCheckoutSessionCompleted(
 							updatedAt: new Date(),
 							periodStart: new Date(subscription.current_period_start * 1000),
 							periodEnd: new Date(subscription.current_period_end * 1000),
+							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
 							...trial,
 						},
@@ -135,6 +136,7 @@ export async function onSubscriptionUpdated(
 				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
 				seats,
+				stripeSubscriptionId: subscriptionUpdated.id,
 			},
 			where: [
 				{
@@ -227,6 +229,10 @@ export async function onSubscriptionDeleted(
 					stripeSubscription: subscriptionDeleted,
 					subscription,
 				});
+			} else {
+				logger.warn(
+					`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
+				);
 			}
 		}
 	} catch (error: any) {
