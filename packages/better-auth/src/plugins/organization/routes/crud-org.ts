@@ -164,7 +164,6 @@ export const createOrganization = createAuthEndpoint(
 				metadata: ctx.body.metadata,
 				...(hookResponse?.data || {}),
 			},
-			user,
 		});
 		let member: Member | undefined;
 		if (
@@ -215,7 +214,10 @@ export const createOrganization = createAuthEndpoint(
 			);
 		}
 
-		return ctx.json(organization);
+		return ctx.json({
+			organization,
+			member,
+		});
 	},
 );
 
