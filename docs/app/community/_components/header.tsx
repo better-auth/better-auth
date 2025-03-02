@@ -5,7 +5,7 @@ export default function CommunityHeader() {
 		<div className="h-full flex flex-col justify-center items-center text-white">
 			<div className="max-w-6xl mx-auto px-4 py-16">
 				<div className="text-center mb-16">
-					<h1 className="text-4xl tracking-tighter md:text-5xl mt-3 font-normal mb-6">
+					<h1 className="text-4xl tracking-tighter md:text-5xl mt-3 font-normal mb-6 text-gray-500 dark:text-white">
 						Open Source Community
 					</h1>
 					<p className="text-gray-400 max-w-md mx-auto">
