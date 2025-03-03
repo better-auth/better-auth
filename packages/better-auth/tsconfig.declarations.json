@@ -16,7 +16,9 @@
 		"types": ["node"],
 		"isolatedModules": true,
 		"preserveSymlinks": true,
-		"noImplicitOverride": true
+		"noImplicitOverride": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true
 	},
 	"exclude": [
 		"node_modules",

@@ -1,8 +1,6 @@
 import {
 	createParamDecorator,
 	Inject,
-	Injectable,
-	Logger,
 	Module,
 	RequestMethod,
 	SetMetadata,
@@ -12,9 +10,15 @@ import {
 	type MiddlewareConsumer,
 	type NestModule,
 } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
+import {
+	Reflector,
+	DiscoveryService,
+	DiscoveryModule,
+	MetadataScanner,
+} from "@nestjs/core";
 import type { Auth } from "../auth";
 import { fromNodeHeaders, toNodeHandler } from "./node";
+import { createAuthMiddleware } from "../plugins";
 
 export const Public = () => SetMetadata("PUBLIC", true);
 export const Optional = () => SetMetadata("OPTIONAL", true);
@@ -26,7 +30,14 @@ export const Session = createParamDecorator(
 	},
 );
 
-@Injectable()
+const BEFORE_HOOK_KEY = Symbol("BEFORE_HOOK");
+const HOOK_KEY = Symbol("HOOK");
+
+export const BeforeHook = (path: `/${string}`) =>
+	SetMetadata(BEFORE_HOOK_KEY, path);
+
+export const Hook = () => SetMetadata(HOOK_KEY, true);
+
 export class AuthService {
 	constructor(
 		@Inject("AUTH_OPTIONS")
@@ -67,22 +78,65 @@ export class AuthGuard implements CanActivate {
 	}
 }
 
-@Module({})
+@Module({
+	imports: [DiscoveryModule],
+})
 export class AuthModule implements NestModule {
-	private logger = new Logger(AuthModule.name);
-
-	constructor(@Inject("AUTH_OPTIONS") private readonly auth: Auth) {}
+	constructor(
+		@Inject("AUTH_OPTIONS") private readonly auth: Auth,
+		@Inject(DiscoveryService)
+		private discoveryService: DiscoveryService,
+		@Inject(MetadataScanner)
+		private metadataScanner: MetadataScanner,
+	) {}
 
 	configure(consumer: MiddlewareConsumer) {
+		const providers = this.discoveryService
+			.getProviders()
+			.filter(
+				({ metatype }) => metatype && Reflect.getMetadata(HOOK_KEY, metatype),
+			);
+
+		for (const provider of providers) {
+			const providerPrototype = Object.getPrototypeOf(provider.instance);
+			const methods = this.metadataScanner.getAllMethodNames(providerPrototype);
+
+			for (const method of methods) {
+				const providerMethod = providerPrototype[method];
+				const beforeHookPath = Reflect.getMetadata(
+					BEFORE_HOOK_KEY,
+					providerMethod,
+				);
+
+				if (!this.auth.options.hooks) return;
+
+				const originalBeforeHook = this.auth.options.hooks.before;
+
+				this.auth.options.hooks.before = createAuthMiddleware(async (ctx) => {
+					if (originalBeforeHook) {
+						await originalBeforeHook(ctx);
+					}
+
+					if (beforeHookPath === ctx.path) {
+						await providerMethod(ctx);
+					}
+				});
+			}
+		}
+
 		const handler = toNodeHandler(this.auth);
 		consumer.apply(handler).forRoutes({
 			path: "/api/auth/*path",
 			method: RequestMethod.ALL,
 		});
-		this.logger.log("AuthModule initialized");
 	}
 
-	static forRoot(auth: Auth) {
+	static forRoot(auth: any) {
+		// Create auth with passthrough hooks that can be overridden in configure
+		auth.options.hooks = {
+			...auth.options.hooks,
+		};
+
 		return {
 			module: AuthModule,
 			providers: [

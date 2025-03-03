@@ -1,5 +1,9 @@
-import { Before } from "better-auth/nestjs";
+import { BeforeHook, Hook } from "better-auth/nestjs";
 
+@Hook()
 export class BeforeSignupHook {
-	@Before("")
+	@BeforeHook("/sign-up/email")
+	async beforeSignup() {
+		console.log("before signup");
+	}
 }
