@@ -43,7 +43,6 @@ export async function onCheckoutSessionCompleted(
 							periodEnd: new Date(subscription.current_period_end * 1000),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
-
 							...trial,
 						},
 						where: [

@@ -9,7 +9,6 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 	if (!session?.session) {
 		throw new APIError("UNAUTHORIZED");
 	}
-
 	return {
 		session,
 	} as {
