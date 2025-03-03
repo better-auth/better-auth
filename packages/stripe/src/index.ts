@@ -225,33 +225,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							},
 						})
 						.catch(async (e) => {
-							if (e.message.includes("no changes")) {
-								/**
-								 * If the subscription is already active on stripe, we need to
-								 * update the status to the new status.
-								 */
-								const plan = await getPlanByPriceId(
-									options,
-									activeSubscription.items.data[0]?.plan.id,
-								);
-								await ctx.context.adapter.update({
-									model: "subscription",
-									update: {
-										status: activeSubscription.status,
-										seats: activeSubscription.items.data[0]?.quantity,
-										plan: plan?.name.toLowerCase(),
-									},
-									where: [
-										{
-											field: "referenceId",
-											value: referenceId,
-										},
-									],
-								});
-								throw new APIError("BAD_REQUEST", {
-									message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-								});
-							}
 							throw ctx.error("BAD_REQUEST", {
 								message: e.message,
 								code: e.code,
