@@ -171,7 +171,7 @@ export const auth = betterAuth({
 			};
 		}),
 		stripe({
-			stripeClient: new Stripe(process.env.STRIPE_KEY!),
+			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
