@@ -89,7 +89,7 @@ export default defineBuildConfig({
 		"./src/integrations/solid-start.ts",
 		"./src/integrations/next-js.ts",
 		"./src/integrations/node.ts",
-		"./src/integrations/nestjs.ts",
+		"./src/integrations/nestjs/index.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",
 		"./src/plugins/anonymous/index.ts",

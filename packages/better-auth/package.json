@@ -215,12 +215,12 @@
     },
     "./nestjs": {
       "import": {
-        "types": "./dist/integrations/nestjs.d.ts",
-        "default": "./dist/integrations/nestjs.mjs"
+        "types": "./dist/integrations/nestjs/index.d.ts",
+        "default": "./dist/integrations/nestjs/index.mjs"
       },
       "require": {
-        "types": "./dist/integrations/nestjs.d.cts",
-        "default": "./dist/integrations/nestjs.cjs"
+        "types": "./dist/integrations/nestjs/index.d.cts",
+        "default": "./dist/integrations/nestjs/index.cjs"
       }
     },
     "./adapters/prisma": {
@@ -531,7 +531,7 @@
         "./dist/integrations/next-js.d.ts"
       ],
       "nestjs": [
-        "./dist/integrations/nestjs.d.ts"
+        "./dist/integrations/nestjs/index.d.ts"
       ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.ts"

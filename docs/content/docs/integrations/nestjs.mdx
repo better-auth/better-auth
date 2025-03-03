@@ -7,6 +7,27 @@ This guide will show you how to integrate Better Auth with [NestJS](https://nest
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
+## Disabling the Body Parser
+
+The first step when integrating Better Auth with NestJS is to disable the built-in body parser. Better Auth needs to handle the raw request body for proper authentication flow processing:
+
+```ts title="main.ts"
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
+  });
+  await app.listen(process.env.PORT ?? 3333);
+}
+bootstrap();
+```
+
+<Callout type="warn">
+Currently, Better Auth's NestJS integration **only supports Express** and does not work with Fastify.
+</Callout>
+
 ## Basic Setup
 
 The simplest way to integrate Better Auth with NestJS is to import the `AuthModule` in your root module:
