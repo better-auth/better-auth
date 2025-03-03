@@ -43,7 +43,7 @@ export async function onCheckoutSessionCompleted(
 							periodEnd: new Date(subscription.current_period_end * 1000),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
-							stripeCustomerId: subscription.customer.toString(),
+
 							...trial,
 						},
 						where: [
@@ -97,7 +97,7 @@ export async function onSubscriptionUpdated(
 		const plan = await getPlanByPriceId(options, priceId);
 
 		const referenceId = subscriptionUpdated.metadata?.referenceId;
-		const customerId = subscriptionUpdated.customer.toString();
+		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: referenceId
@@ -133,7 +133,6 @@ export async function onSubscriptionUpdated(
 				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
 				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
-				stripeCustomerId: subscriptionUpdated.customer.toString(),
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
