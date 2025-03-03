@@ -109,7 +109,7 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client, cookieSetter, sessionSetter } = await getTestInstance(
+	const { auth, customFetchImpl, client, cookieSetter } = await getTestInstance(
 		{
 			user: {
 				additionalFields: {
@@ -136,7 +136,6 @@ describe("Social Providers", async () => {
 							isOAuth: true,
 						};
 					},
-					verifyIdToken: async (token) => { return true; }
 				},
 				apple: {
 					clientId: "test",
@@ -335,15 +334,18 @@ describe("Social Providers", async () => {
 		};
 		const testIdToken = await signJWT(data, DEFAULT_SECRET);
 
-		await client.signIn.social({
-			provider: "google",
-			idToken: {
-				token: testIdToken,
-				accessToken: "test"
-			}
-		}, {
-			onSuccess: sessionSetter(headers),
-		});
+		await client.signIn.social(
+			{
+				provider: "google",
+				idToken: {
+					token: testIdToken,
+					accessToken: "test",
+				},
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
 
 		const session = await client.getSession({
 			fetchOptions: {

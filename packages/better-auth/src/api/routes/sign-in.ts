@@ -307,7 +307,7 @@ export const signInSocial = createAuthEndpoint(
 				token: data.data!.session.token,
 				url: undefined,
 				user: {
-					...data.data!.user,	
+					...data.data!.user,
 					id: data.data!.user.id,
 					email: data.data!.user.email,
 					name: data.data!.user.name,
