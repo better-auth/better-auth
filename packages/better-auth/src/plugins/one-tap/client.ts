@@ -176,7 +176,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							});
 						};
 
-						handlePrompt(0);
+						// handlePrompt(0);
 					});
 				} catch (error) {
 					console.error("Error during Google One Tap flow:", error);
