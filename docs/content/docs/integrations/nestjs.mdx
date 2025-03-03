@@ -54,6 +54,113 @@ This will automatically:
 - Set up proper CORS configuration
 - Configure session handling
 
+## Advanced Module Configuration with forRootAsync
+
+For more complex setups where you need to inject dependencies or load configuration asynchronously, use the `forRootAsync` method:
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { AuthModule } from 'better-auth/nestjs';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { auth } from './auth';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    AuthModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        auth: auth.withOptions({
+          basePath: configService.get('AUTH_BASE_PATH', '/api/auth'),
+          session: {
+            cookieName: configService.get('AUTH_COOKIE_NAME', 'auth-session'),
+            cookieOptions: {
+              secure: configService.get('NODE_ENV') === 'production',
+            },
+          },
+        }),
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### forRootAsync Options
+
+The `forRootAsync` method accepts the following options:
+
+- **imports**: An array of modules to import, whose providers can be injected into the `useFactory` function
+- **inject**: An array of providers to inject into the `useFactory` function
+- **useFactory**: A factory function that returns the auth configuration options
+
+### Use Cases for forRootAsync
+
+**1. Environment-specific Configuration**
+
+Load different configuration based on the environment:
+
+```ts
+AuthModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (configService: ConfigService) => {
+    const isDev = configService.get('NODE_ENV') !== 'production';
+    
+    return {
+      auth: auth.withOptions({
+        basePath: configService.get('AUTH_BASE_PATH', '/api/auth'),
+        session: {
+          cookieOptions: {
+            secure: !isDev,
+            sameSite: isDev ? 'lax' : 'none',
+          },
+        },
+      }),
+    };
+  },
+}),
+```
+
+**2. Database Integration**
+
+Configure Better Auth to use a database with proper dependency injection:
+
+```ts
+AuthModule.forRootAsync({
+  imports: [DatabaseModule],
+  inject: [DbService],
+  useFactory: (dbService: DbService) => ({
+    auth: auth.withAdapter({
+      adapter: createCustomAdapter(dbService),
+    }),
+  }),
+}),
+```
+
+**3. Multiple Service Dependencies**
+
+Inject multiple services for complex configuration:
+
+```ts
+AuthModule.forRootAsync({
+  imports: [ConfigModule, LoggerModule, CacheModule],
+  inject: [ConfigService, LoggerService, CacheService],
+  useFactory: (
+    configService: ConfigService, 
+    loggerService: LoggerService,
+    cacheService: CacheService
+  ) => ({
+    auth: auth.withOptions({
+      basePath: configService.get('AUTH_BASE_PATH'),
+      logger: loggerService,
+      cache: cacheService,
+    }),
+  }),
+}),
+```
+
 ## Route Protection
 
 Better Auth provides an `AuthGuard` to protect your routes. You can apply it in two ways:
@@ -199,6 +306,7 @@ import { auth } from './auth';
   imports: [
     PrismaModule,
     AuthModule.forRootAsync({
+      imports: [PrismaModule], // Import the module that provides PrismaService
       inject: [PrismaService],
       useFactory: (prisma: PrismaService) => ({
         auth: auth.withAdapter({
