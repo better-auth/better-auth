@@ -441,12 +441,36 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				const activeSubscription = await client.subscriptions
+				const activeSubscriptions = await client.subscriptions
 					.list({
 						customer: subscription.stripeCustomerId,
-						status: "active",
 					})
-					.then((res) => res.data[0]);
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+				if (!activeSubscriptions.length) {
+					/**
+					 * If the subscription is not found, we need to delete the subscription
+					 * from the database. This is a rare case and should not happen.
+					 */
+					await ctx.context.adapter.deleteMany({
+						model: "subscription",
+						where: [
+							{
+								field: "referenceId",
+								value: referenceId,
+							},
+						],
+					});
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				const activeSubscription = activeSubscriptions.find(
+					(sub) => sub.id === subscription.stripeSubscriptionId,
+				);
 				if (!activeSubscription) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,

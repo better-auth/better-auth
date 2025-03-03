@@ -43,6 +43,7 @@ export async function onCheckoutSessionCompleted(
 							periodEnd: new Date(subscription.current_period_end * 1000),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							seats,
+							stripeCustomerId: subscription.customer.toString(),
 							...trial,
 						},
 						where: [
@@ -132,6 +133,7 @@ export async function onSubscriptionUpdated(
 				periodStart: new Date(subscriptionUpdated.current_period_start * 1000),
 				periodEnd: new Date(subscriptionUpdated.current_period_end * 1000),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+				stripeCustomerId: subscriptionUpdated.customer.toString(),
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
@@ -197,8 +199,17 @@ export async function onSubscriptionDeleted(
 	try {
 		const subscriptionDeleted = event.data.object as Stripe.Subscription;
 		const subscriptionId = subscriptionDeleted.id;
-		if (subscriptionDeleted.status === "canceled") {
-			const subscription = await ctx.context.adapter.findOne<Subscription>({
+		const subscription = await ctx.context.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: subscriptionId,
+				},
+			],
+		});
+		if (subscription) {
+			await ctx.context.adapter.update({
 				model: "subscription",
 				where: [
 					{
@@ -206,31 +217,20 @@ export async function onSubscriptionDeleted(
 						value: subscriptionId,
 					},
 				],
+				update: {
+					status: "canceled",
+					updatedAt: new Date(),
+				},
 			});
-			if (subscription) {
-				await ctx.context.adapter.update({
-					model: "subscription",
-					where: [
-						{
-							field: "stripeSubscriptionId",
-							value: subscriptionId,
-						},
-					],
-					update: {
-						status: "canceled",
-						updatedAt: new Date(),
-					},
-				});
-				await options.subscription.onSubscriptionDeleted?.({
-					event,
-					stripeSubscription: subscriptionDeleted,
-					subscription,
-				});
-			} else {
-				logger.warn(
-					`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
-				);
-			}
+			await options.subscription.onSubscriptionDeleted?.({
+				event,
+				stripeSubscription: subscriptionDeleted,
+				subscription,
+			});
+		} else {
+			logger.warn(
+				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
+			);
 		}
 	} catch (error: any) {
 		logger.error(`Stripe webhook failed. Error: ${error}`);
