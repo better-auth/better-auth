@@ -1,8 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode } from "../oauth2";
+import { type OAuthProvider, type ProviderOptions, generateCodeChallenge, validateAuthorizationCode } from "../oauth2";
 
 /**
+ * See the full documentations below:
  * https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_using_userinfo_endpoint.htm
  */
 export interface SalesforceProfile extends Record<string, any> {
@@ -52,13 +52,9 @@ export interface SalesforceProfile extends Record<string, any> {
     picture: string;
     thumbnail: string;
   };
-  /**
-   * Undocumented, although this is similar to photos.picture
-   */
+  /** Undocumented, although this is similar to photos.picture */
   profile: string
-  /**
-   * Undocumented, although this is identical to photos.picture
-   */
+  /** Undocumented, although this is identical to photos.picture */
   picture: string
   /**
    * Address of the queried user, which can include the user’s street, city, state,
@@ -183,25 +179,44 @@ export interface SalesforceProfile extends Record<string, any> {
 
 export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
   prompt?: "none" | "consent" | "login" | "select_account";
-  // Using String instead of string for autocomplete
-  instanceUrl?: String | 'https://test.salesforce.com' | 'https://login.salesforce.com';
+  /**
+   * Your salesforce Base URL for authentication. Generally, use
+   * - https://login.salesforce.com for production
+   * - https://test.salesforce.com for sandbox
+   *
+   * @default "https://login.salesforce.com"
+   */
+  // Using String instead of string for IDE autocompletion.
+  instanceUrl?: String | 'https://login.salesforce.com' | 'https://test.salesforce.com';
+  /**
+   * Security -> "Proof Key for Code Exchange (PKCE)" is enabled by default
+   * when you create a Salesforce External Client App. You can disable this
+   * option if you've also disabled it on Salesforce.
+   *
+   * @default true
+   */
+  pkce?: boolean;
 }
 
-export const salesforce = (options: SalesforceOptions) => {
-  const instanceUrl = options.instanceUrl ?? 'https://login.salesforce.com';
-  if (!instanceUrl.startsWith('https://')) {
+export const salesforce = (userOptions: SalesforceOptions) => {
+  const options = {
+    instanceUrl: 'https://login.salesforce.com',
+    pkce: true,
+    ...userOptions,
+  }
+
+  if (!options.instanceUrl?.startsWith('https://')) {
     throw new Error(`Salesforce's options.instanceURL must start with https://. Given: ${options.instanceUrl}`)
   }
 
   return {
     id: "salesforce",
     name: "Salesforce",
-    createAuthorizationURL({ state, scopes, redirectURI }) {
+    createAuthorizationURL: async ({ state, scopes, redirectURI, codeVerifier }) => {
       const _scopes = options.disableDefaultScope ? [] : ["openid", "profile", "email"];
       options.scope && _scopes.push(...options.scope);
       scopes && _scopes.push(...scopes);
 
-      const url = new URL(`${instanceUrl}/services/oauth2/authorize`);
       const params = new URLSearchParams({
         scope: _scopes.join(" "),
         response_type: "code",
@@ -211,16 +226,24 @@ export const salesforce = (options: SalesforceOptions) => {
         prompt: options.prompt || "consent",
       });
 
+      if (options.pkce) {
+        const codeChallenge = await generateCodeChallenge(codeVerifier);
+        params.set("code_challenge_method", "S256");
+        params.set("code_challenge", codeChallenge);
+      }
+
+      const url = new URL(`${options.instanceUrl}/services/oauth2/authorize`);
       url.search = params.toString();
 
       return url;
     },
-    validateAuthorizationCode: async ({ code, redirectURI }) => {
+    validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
       return validateAuthorizationCode({
         code,
         redirectURI: options.redirectURI || redirectURI,
+        codeVerifier,
         options,
-        tokenEndpoint: `${instanceUrl}/services/oauth2/token`,
+        tokenEndpoint: `${options.instanceUrl}/services/oauth2/token`,
         authentication: "post",
       });
     },
@@ -229,7 +252,7 @@ export const salesforce = (options: SalesforceOptions) => {
         return options.getUserInfo(token);
       }
       const { data: profile, error } = await betterFetch<SalesforceProfile>(
-        `${instanceUrl}/services/oauth2/userinfo`,
+        `${options.instanceUrl}/services/oauth2/userinfo`,
         {
           headers: {
             authorization: `Bearer ${token.accessToken}`,
