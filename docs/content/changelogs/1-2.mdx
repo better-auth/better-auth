@@ -30,13 +30,10 @@ export const auth = betterAuth({
     stripe({
       // [!code highlight]
       createCustomerOnSignup: true, // [!code highlight]
-      subscription: {
-        // [!code highlight]
+      subscription: { // [!code highlight]
         enabled: true, // [!code highlight]
-        plans: [
-          // [!code highlight]
-          {
-            // [!code highlight]
+        plans: [// [!code highlight]
+          { // [!code highlight]
             name: "pro", // [!code highlight]
             priceId: "price_1234567890", // [!code highlight]
           }, // [!code highlight]

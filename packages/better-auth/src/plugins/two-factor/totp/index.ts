@@ -191,6 +191,17 @@ export const totp2fa = (options?: TOTPOptions) => {
 				code: z.string({
 					description: "The otp code to verify",
 				}),
+				/**
+				 * if true, the device will be trusted
+				 * for 30 days. It'll be refreshed on
+				 * every sign in request within this time.
+				 */
+				trustDevice: z
+					.boolean({
+						description:
+							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
+					})
+					.optional(),
 			}),
 			use: [verifyTwoFactorMiddleware],
 			metadata: {
