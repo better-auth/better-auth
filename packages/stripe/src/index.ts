@@ -269,6 +269,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx.request,
 				);
 
+				const freeTrail = plan.freeTrial
+					? {
+							trial_period_days: plan.freeTrial.days,
+						}
+					: undefined;
+
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
@@ -300,6 +306,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									quantity: ctx.body.seats || 1,
 								},
 							],
+							subscription_data: {
+								...freeTrail,
+							},
 							mode: "subscription",
 							client_reference_id: referenceId,
 							...params?.params,
