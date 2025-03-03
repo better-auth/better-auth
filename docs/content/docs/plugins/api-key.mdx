@@ -173,7 +173,6 @@ const { valid, error, key } = await auth.api.verifyApiKey({
 #### Properties
 
 - `key`: The API Key to validate
-- `userId`: The user id to check against the API key.
 - `permissions`?: The permissions to check against the API key.
 
 #### Result
@@ -196,7 +195,6 @@ type Result = {
 const key = await auth.api.getApiKey({
   body: {
     keyId: "your_api_key_id_here",
-    userId: "userId",
   },
 });
 ```
@@ -204,7 +202,6 @@ const key = await auth.api.getApiKey({
 #### Properties
 
 - `keyId`: The API Key id to get information on.
-- `userId`: The user id to check against the API key.
 
 #### Result
 
