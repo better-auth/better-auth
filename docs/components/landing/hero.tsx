@@ -52,7 +52,7 @@ export default function Hero() {
 		<section className="max-h-[40rem] w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] relative overflow-hidden px-8 md:min-h-[40rem]">
 			<Spotlight />
 			<div className="overflow-hidden bg-transparent md:px-10 dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem]">
-				<div className="lg:max-w-8xl mx-auto grid max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
+				<div className="grid items-center max-w-full grid-cols-1 px-4 py-2 mx-auto lg:max-w-8xl gap-x-8 gap-y-16 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-12">
 					<div className="relative z-10 md:text-center lg:text-left">
 						<div className="relative">
 							<div className="flex flex-col items-start gap-2">
@@ -74,38 +74,38 @@ export default function Hero() {
 										</span>
 									</div>
 									<Link href={"/changelogs/1-2"}>
-										<span className="bg-gradient-to-tr from-stone-800/50 to-black  px-2 rounded-none">
-											<span className="text-xs text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
+										<span className="px-2 rounded-none bg-gradient-to-tr from-fd-background/20 to-fd-background">
+											<span className="mb-0 font-mono text-xs tracking-tighter underline text-fd-foreground underline-offset-4">
 												v1.2 is out
 											</span>
-											<CornerRightUp className="inline ml-1 w-3 h-3" />
+											<CornerRightUp className="inline w-3 h-3 ml-1" />
 										</span>
 									</Link>
 								</div>
 							</div>
 
-							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight text-2xl md:text-3xl">
+							<p className="mt-3 text-2xl tracking-tight text-zinc-800 dark:text-zinc-300 md:text-3xl">
 								The most comprehensive authentication framework for TypeScript.
 							</p>
-							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden border border-white/5">
-								<GradientBG className="w-full flex items-center justify-between">
-									<div className="w-full flex items-center gap-2">
-										<p className="md:text-sm text-xs font-mono select-none">
+							<div className="relative items-center hidden w-10/12 gap-2 mt-2 border md:flex border-white/5">
+								<GradientBG className="flex items-center justify-between w-full">
+									<div className="flex items-center w-full gap-2">
+										<p className="font-mono text-xs select-none md:text-sm">
 											<span>
 												<span className="text-[#4498c8]">git:</span>
 												<span className="text-[#F07178]">(main) </span>
 											</span>
 											<span className="italic text-amber-600"> x</span>
 										</p>
-										<p className=" relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono text-black">
+										<p className="relative inline font-mono text-xs tracking-tight text-black opacity-90 md:text-sm dark:text-white">
 											npm add{" "}
 											<span className="relative dark:text-fuchsia-100 text-fuchsia-950">
 												better-auth
-												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
+												<span className="absolute top-0 w-full h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl left-2"></span>
 											</span>
 										</p>
 									</div>
-									<div className="flex gap-2 items-center">
+									<div className="flex items-center gap-2">
 										<Link
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
@@ -155,7 +155,7 @@ export default function Hero() {
 							</div>
 							{
 								<>
-									<div className="mt-8 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+									<div className="flex flex-col items-center gap-4 mt-8 font-sans w-fit md:flex-row md:justify-center lg:justify-start">
 										<Link
 											href="/docs"
 											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
@@ -172,8 +172,8 @@ export default function Hero() {
 
 					<div className="relative hidden md:block lg:static xl:pl-10">
 						<div className="relative">
-							<div className="from-sky-300 via-sky-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5 blur-lg" />
-							<div className="from-stone-300 via-stone-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5" />
+							<div className="absolute inset-0 rounded-none from-sky-300 via-sky-300/70 to-blue-300 bg-gradient-to-tr opacity-5 blur-lg" />
+							<div className="absolute inset-0 rounded-none from-stone-300 via-stone-300/70 to-blue-300 bg-gradient-to-tr opacity-5" />
 							<CodePreview />
 						</div>
 					</div>
@@ -215,15 +215,15 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="relative overflow-hidden rounded-sm from-stone-100 to-stone-200 dark:to-black/90 dark:via-stone-950/10 dark:from-stone-950/90 bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
 				>
 					<div ref={ref}>
-						<div className="absolute -top-px left-0 right-0 h-px" />
-						<div className="absolute -bottom-px left-11 right-20 h-px" />
-						<div className="pl-4 pt-4">
+						<div className="absolute left-0 right-0 h-px -top-px" />
+						<div className="absolute h-px -bottom-px left-11 right-20" />
+						<div className="pt-4 pl-4">
 							<TrafficLightsIcon className="stroke-slate-500/30 h-2.5 w-auto" />
 
-							<div className="mt-4 flex space-x-2 text-xs">
+							<div className="flex mt-4 space-x-2 text-xs">
 								{tabs.map((tab) => (
 									<button
 										key={tab.name}
@@ -239,25 +239,25 @@ function CodePreview() {
 										{tab.name === currentTab && (
 											<motion.div
 												layoutId="tab-code-preview"
-												className="bg-stone-800 absolute inset-0 -z-10 rounded-full"
+												className="absolute inset-0 rounded-full bg-stone-800 -z-10"
 											/>
 										)}
 									</button>
 								))}
 							</div>
 
-							<div className="mt-6 flex flex-col items-start px-1 text-sm">
+							<div className="flex flex-col items-start px-1 mt-6 text-sm">
 								<div className="absolute top-2 right-4">
 									<Button
 										variant="outline"
 										size="icon"
-										className="absolute w-5 border-none bg-transparent h-5 top-2 right-0"
+										className="absolute right-0 w-5 h-5 bg-transparent border-none top-2"
 										onClick={() => copyToClipboard(code)}
 									>
 										{copyState ? (
-											<Check className="h-3 w-3" />
+											<Check className="w-3 h-3" />
 										) : (
-											<Copy className="h-3 w-3" />
+											<Copy className="w-3 h-3" />
 										)}
 										<span className="sr-only">Copy code</span>
 									</Button>
@@ -271,7 +271,7 @@ function CodePreview() {
 								>
 									<div
 										aria-hidden="true"
-										className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono"
+										className="pr-4 font-mono border-r select-none border-slate-300/5 text-slate-600"
 									>
 										{Array.from({
 											length: code.split("\n").length,
@@ -324,7 +324,7 @@ function CodePreview() {
 									<Link
 										href="https://demo.better-auth.com"
 										target="_blank"
-										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+										className="flex items-center gap-2 px-3 py-1 mt-auto mb-4 ml-auto mr-4 transition-all ease-in-out border shadow-md cursor-pointer shadow-primary-foreground hover:opacity-70"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
