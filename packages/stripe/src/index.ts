@@ -182,9 +182,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 					],
 				});
+
 				const existingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
+
+				if (
+					existingSubscription &&
+					existingSubscription.status === "active" &&
+					existingSubscription.plan === ctx.body.plan
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+					});
+				}
+
 				if (activeSubscription && customerId) {
 					const { url } = await client.billingPortal.sessions
 						.create({
@@ -243,15 +255,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				if (
-					existingSubscription &&
-					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-					});
-				}
 				let subscription = existingSubscription;
 				if (!subscription) {
 					const newSubscription = await ctx.context.adapter.create<
@@ -286,43 +289,46 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				);
 
 				const checkoutSession = await client.checkout.sessions
-					.create({
-						...(customerId
-							? {
-									customer: customerId,
-									customer_update: {
-										name: "auto",
-										address: "auto",
-									},
-								}
-							: {
-									customer_email: session.user.email,
-								}),
-						success_url: getUrl(
-							ctx,
-							`${
-								ctx.context.baseURL
-							}/subscription/success?callbackURL=${encodeURIComponent(
-								ctx.body.successUrl,
-							)}&reference=${encodeURIComponent(referenceId)}`,
-						),
-						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
-						line_items: [
-							{
-								price: plan.priceId,
-								quantity: ctx.body.seats || 1,
+					.create(
+						{
+							...(customerId
+								? {
+										customer: customerId,
+										customer_update: {
+											name: "auto",
+											address: "auto",
+										},
+									}
+								: {
+										customer_email: session.user.email,
+									}),
+							success_url: getUrl(
+								ctx,
+								`${
+									ctx.context.baseURL
+								}/subscription/success?callbackURL=${encodeURIComponent(
+									ctx.body.successUrl,
+								)}&reference=${encodeURIComponent(referenceId)}`,
+							),
+							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+							line_items: [
+								{
+									price: plan.priceId,
+									quantity: ctx.body.seats || 1,
+								},
+							],
+							mode: "subscription",
+							client_reference_id: referenceId,
+							...params?.params,
+							metadata: {
+								userId: user.id,
+								subscriptionId: subscription.id,
+								referenceId,
+								...params?.params?.metadata,
 							},
-						],
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params,
-						metadata: {
-							userId: user.id,
-							subscriptionId: subscription.id,
-							referenceId,
-							...params?.params?.metadata,
 						},
-					})
+						params?.options,
+					)
 					.catch(async (e) => {
 						throw ctx.error("BAD_REQUEST", {
 							message: e.message,
