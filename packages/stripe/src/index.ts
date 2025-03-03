@@ -282,7 +282,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									}
 								: {
 										customer_email: session.user.email,
-									    allow_promotion_codes: options.subscription?.allowPromotionCodes,
+										allow_promotion_codes:
+											options.subscription?.allowPromotionCodes,
 									}),
 							success_url: getUrl(
 								ctx,
