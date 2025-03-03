@@ -77,7 +77,10 @@ export type Plan = {
 		 * @param subscription - Subscription
 		 * @returns
 		 */
-		onTrialExpired?: (subscription: Subscription) => Promise<void>;
+		onTrialExpired?: (
+			subscription: Subscription,
+			request?: Request,
+		) => Promise<void>;
 	};
 };
 
@@ -244,10 +247,10 @@ export interface StripeOptions {
 		 * @returns
 		 */
 		onSubscriptionCancel?: (data: {
-			event: Stripe.Event;
+			event?: Stripe.Event;
 			subscription: Subscription;
 			stripeSubscription: Stripe.Subscription;
-			cancellationDetails?: Stripe.Subscription.CancellationDetails;
+			cancellationDetails?: Stripe.Subscription.CancellationDetails | null;
 		}) => Promise<void>;
 		/**
 		 * A function to check if the reference id is valid
