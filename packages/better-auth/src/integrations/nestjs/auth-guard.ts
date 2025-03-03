@@ -3,6 +3,12 @@ import { Reflector } from "@nestjs/core";
 import type { CanActivate, ExecutionContext } from "@nestjs/common";
 import type { Auth } from "../../auth";
 import { fromNodeHeaders } from "../node";
+import type { getSession } from "../../api";
+
+export type UserSession = Exclude<
+	Awaited<ReturnType<ReturnType<typeof getSession>>>,
+	null | undefined
+>;
 
 export class AuthGuard implements CanActivate {
 	constructor(

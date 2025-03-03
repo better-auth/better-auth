@@ -3,13 +3,17 @@ title: NestJS Integration
 description: Integrate Better Auth with NestJS.
 ---
 
-This guide will show you how to integrate Better Auth with [NestJS](https://nestjs.com/).
+This guide shows you how to integrate Better Auth with [NestJS](https://nestjs.com/).
 
-Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+Before you start, make sure you have:
+- A working NestJS application
+- Better Auth installed and configured ([installation guide](/docs/installation))
 
-## Disabling the Body Parser
+## Basic Setup
 
-The first step when integrating Better Auth with NestJS is to disable the built-in body parser. Better Auth needs to handle the raw request body for proper authentication flow processing:
+**1. Disable Body Parser**
+
+Disable NestJS's built-in body parser to allow Better Auth to handle the raw request body:
 
 ```ts title="main.ts"
 import { NestFactory } from "@nestjs/core";
@@ -28,9 +32,9 @@ bootstrap();
 Currently, Better Auth's NestJS integration **only supports Express** and does not work with Fastify.
 </Callout>
 
-## Basic Setup
+**2. Import AuthModule**
 
-The simplest way to integrate Better Auth with NestJS is to import the `AuthModule` in your root module:
+Import the `AuthModule` in your root module:
 
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
@@ -50,13 +54,105 @@ This will automatically:
 - Set up proper CORS configuration
 - Configure session handling
 
+## Route Protection
+
+Better Auth provides an `AuthGuard` to protect your routes. You can apply it in two ways:
+
+**1. Controller or Route Level**
+
+Apply the guard to specific controllers or routes:
+
+```ts title="app.controller.ts"
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { AuthGuard, Session, UserSession, Public, Optional } from 'better-auth/nestjs';
+
+@Controller('users')
+@UseGuards(AuthGuard) // Apply to all routes in this controller
+export class UserController {
+  @Get('me')
+  async getProfile(@Session() session: UserSession) {
+    return session;
+  }
+
+  @Get('public')
+  @Public() // Mark this route as public (no authentication required)
+  async publicRoute() {
+    return { message: "This route is public" };
+  }
+
+  @Get('optional')
+  @Optional() // Authentication is optional for this route
+  async optionalRoute(@Session() session: UserSession) {
+    return { authenticated: !!session, session };
+  }
+}
+```
+
+**2. Global Registration**
+
+Register the guard globally using `APP_GUARD`:
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthModule, AuthGuard } from 'better-auth/nestjs';
+import { auth } from "./auth";
+
+@Module({
+  imports: [
+    AuthModule.forRoot(auth),
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+With global registration, all routes will require authentication by default. Use the `@Public()` decorator to mark routes that don't require authentication.
+
+## User Sessions
+
+Access the user session in your controllers using the `Session` decorator:
+
+```ts title="user.controller.ts"
+import { Controller, Get } from '@nestjs/common';
+import { Session, UserSession } from 'better-auth/nestjs';
+
+@Controller('users')
+export class UserController {
+  @Get('me')
+  async getProfile(@Session() session: UserSession) {
+    return session;
+  }
+}
+```
+
+You can also access the session through the request object:
+
+```ts
+import { Controller, Get, Request } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
+
+@Controller('users')
+export class UserController {
+  @Get('me')
+  async getProfile(@Request() req: ExpressRequest) {
+    return req.session; // Session is attached to the request
+  }
+}
+```
+
 ## Custom Hooks
 
-The NestJS integration provides decorators to easily create hooks that integrate with NestJS's dependency injection system:
+Create custom hooks that integrate with NestJS's dependency injection:
 
 ```ts title="hooks/sign-up.hook.ts"
 import { Injectable } from "@nestjs/common";
-import { BeforeHook, AuthContext } from "better-auth/nest";
+import { BeforeHook, AuthContext } from "better-auth/nestjs";
 import { SignUpService } from "./sign-up.service";
 
 @Injectable()
@@ -85,95 +181,53 @@ import { SignUpService } from './sign-up.service';
 export class AuthModule {}
 ```
 
-## Advanced Configuration
+## Database Adapters
 
-You can customize the AuthModule configuration using `forRoot`:
+### Using Prisma with Better Auth
+
+Use the `forRootAsync` method to integrate your PrismaService with Better Auth:
 
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
 import { AuthModule } from 'better-auth/nestjs';
-import { auth } from "./auth";
-
-@Module({
-  imports: [
-    AuthModule.forRoot(auth, {
-      path: '/custom/auth', // Custom mount path
-      cors: {
-        origin: ['http://localhost:3000'],
-        credentials: true,
-      },
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-## Getting the User Session
-
-You can access the user session in your controllers using the `Session` decorator:
-
-```ts title="user.controller.ts"
-import { Controller, Get } from '@nestjs/common';
-import { Session } from 'better-auth/nestjs';
-import type { UserSession } from 'better-auth';
-
-@Controller('users')
-export class UserController {
-  @Get('me')
-  async getProfile(@Session() session: UserSession) {
-    return session;
-  }
-}
-```
-
-## Using with Database Adapters
-
-If you're using a database adapter (like Prisma), you can configure it using NestJS's dependency injection:
-
-```ts title="auth/auth.module.ts"
-import { Module } from '@nestjs/common';
-import { AuthModule } from 'better-auth/nestjs';
-import { PrismaService } from './prisma.service';
+import { PrismaService } from './prisma/prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
+import { createPrismaAdapter } from 'better-auth/prisma';
 import { auth } from './auth';
 
 @Module({
   imports: [
+    PrismaModule,
     AuthModule.forRootAsync({
-      useFactory: (prisma: PrismaService) => {
-        return {
-          auth: auth.withAdapter({
-            // Your adapter configuration using prisma
-            adapter: createPrismaAdapter(prisma),
-          }),
-        };
-      },
       inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => ({
+        auth: auth.withAdapter({
+          adapter: createPrismaAdapter({
+            prisma,
+            // Additional adapter configuration options
+            userTable: 'user',
+            sessionTable: 'session',
+          }),
+        }),
+      }),
     }),
   ],
-  providers: [PrismaService],
 })
 export class AppModule {}
 ```
 
-## Error Handling
+Create a separate module for Prisma to ensure proper dependency management:
 
-Better Auth errors are automatically converted to NestJS HTTP exceptions. You can create a custom exception filter if you need to customize error handling:
+```ts title="prisma/prisma.module.ts"
+import { Module, Global } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
 
-```ts title="auth/auth-exception.filter.ts"
-import { ExceptionFilter, Catch, ArgumentsHost } from '@nestjs/common';
-import { APIError } from 'better-auth';
-
-@Catch(APIError)
-export class AuthExceptionFilter implements ExceptionFilter {
-  catch(exception: APIError, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
-
-    response.status(exception.status).json({
-      statusCode: exception.status,
-      message: exception.message,
-      code: exception.code,
-    });
-  }
-}
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule {}
 ```
+
+With this setup, Better Auth will automatically work with your Prisma database, handling all user authentication flows while maintaining type-safety and proper dependency injection according to NestJS best practices.

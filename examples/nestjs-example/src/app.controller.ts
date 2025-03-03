@@ -1,5 +1,10 @@
 import { Controller, Get, Request, UseGuards } from "@nestjs/common";
-import { AuthGuard, AuthService } from "better-auth/nestjs";
+import {
+	AuthGuard,
+	AuthService,
+	Session,
+	UserSession,
+} from "better-auth/nestjs";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Request as ExpressRequest } from "express";
 
@@ -9,9 +14,18 @@ export class AppController {
 	constructor(private auth: AuthService) {}
 
 	@Get()
-	async getHello(@Request() request: ExpressRequest) {
-		return await this.auth.api.listUserAccounts({
+	async getHello(
+		@Request() request: ExpressRequest,
+		@Session() { session, user }: UserSession,
+	) {
+		const accounts = await this.auth.api.listUserAccounts({
 			headers: fromNodeHeaders(request.headers),
 		});
+
+		return {
+			session,
+			user,
+			accounts,
+		};
 	}
 }
