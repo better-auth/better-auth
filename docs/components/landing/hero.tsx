@@ -74,8 +74,8 @@ export default function Hero() {
 										</span>
 									</div>
 									<Link href={"/changelogs/1-2"}>
-										<span className="px-2 rounded-none bg-gradient-to-tr from-fd-background/20 to-fd-background">
-											<span className="mb-0 font-mono text-xs tracking-tighter underline text-fd-foreground underline-offset-4">
+										<span className="bg-gradient-to-tr dark:from-stone-800/50 dark:to-black from-stone-200 to-white  px-2 rounded-none">
+											<span className="text-xs dark:text-zinc-200 tracking-tighter font-mono mb-0 underline underline-offset-4">
 												v1.2 is out
 											</span>
 											<CornerRightUp className="inline w-3 h-3 ml-1" />

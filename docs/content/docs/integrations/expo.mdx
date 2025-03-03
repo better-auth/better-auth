@@ -136,10 +136,10 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                         "module-resolver",
                         {
                             alias: {
-                                "better-auth/react": "path/to/node_modules/better-auth/dist/react.js"
-                                "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.js",
+                                "better-auth/react": "path/to/node_modules/better-auth/dist/client/react/index.cjs"
+                                "@better-auth/expo/client": "path/to/node_modules/@better-auth/expo/dist/client.cjs",
                             },
-                            extensions: [".js", ".jsx", ".ts", ".tsx"],
+                            extensions: [".cjs", ".js", ".jsx", ".ts", ".tsx"],
                         },
                     ],
                 ],
