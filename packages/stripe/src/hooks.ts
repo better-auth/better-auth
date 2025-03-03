@@ -109,12 +109,19 @@ export async function onSubscriptionUpdated(
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
 			if (subs.length > 1) {
-				logger.warn(
-					`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no referenceId or subscriptionId is provided`,
+				const activeSub = subs.find(
+					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
-				return;
+				if (!activeSub) {
+					logger.warn(
+						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+					);
+					return;
+				}
+				subscription = activeSub;
+			} else {
+				subscription = subs[0];
 			}
-			subscription = subs[0];
 		}
 
 		const seats = subscriptionUpdated.items.data[0].quantity;
@@ -137,8 +144,8 @@ export async function onSubscriptionUpdated(
 			},
 			where: [
 				{
-					field: "referenceId",
-					value: subscription.referenceId,
+					field: "id",
+					value: subscription.id,
 				},
 			],
 		});
