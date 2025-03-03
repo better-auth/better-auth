@@ -53,6 +53,14 @@ export interface SalesforceProfile extends Record<string, any> {
     thumbnail: string;
   };
   /**
+   * Undocumented, although this is similar to photos.picture
+   */
+  profile: string
+  /**
+   * Undocumented, although this is identical to photos.picture
+   */
+  picture: string
+  /**
    * Address of the queried user, which can include the user’s street, city, state,
    * country, and ZIP code.
    */
@@ -205,7 +213,6 @@ export const salesforce = (options: SalesforceOptions) => {
 
       url.search = params.toString();
 
-      console.log(params);
       return url;
     },
     validateAuthorizationCode: async ({ code, redirectURI }) => {
