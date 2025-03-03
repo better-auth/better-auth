@@ -582,6 +582,7 @@ await client.subscription.upgrade({
     plan: "team",
     referenceId: activeOrg.id,
     seats: 10,
+    annual: true, // upgrade to an annual plan (optional)
     successUrl: "/org/billing/success",
     cancelUrl: "/org/billing"
 });

@@ -77,7 +77,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					plan: z.string(),
+					plan: z.string({
+						description: "The name of the plan to upgrade to",
+					}),
+					annual: z
+						.boolean({
+							description: "Whether to upgrade to an annual plan",
+						})
+						.optional(),
 					referenceId: z.string().optional(),
 					metadata: z.record(z.string(), z.any()).optional(),
 					seats: z
@@ -99,7 +106,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default("/"),
 					returnUrl: z.string().optional(),
-					withoutTrial: z.boolean().optional(),
 					disableRedirect: z.boolean().default(false),
 				}),
 				use: [
@@ -210,7 +216,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										{
 											id: activeSubscription.items.data[0]?.id as string,
 											quantity: 1,
-											price: plan.priceId,
+											price: ctx.body.annual
+												? plan.annualDiscountPriceId
+												: plan.priceId,
 										},
 									],
 								},
@@ -313,7 +321,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
 								{
-									price: plan.priceId,
+									price: ctx.body.annual
+										? plan.annualDiscountPriceId
+										: plan.priceId,
 									quantity: ctx.body.seats || 1,
 								},
 							],
