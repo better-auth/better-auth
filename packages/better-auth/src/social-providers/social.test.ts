@@ -42,45 +42,48 @@ vi.mock("../oauth2", async (importOriginal) => {
 });
 
 describe("Social Providers", async () => {
-	const { auth, customFetchImpl, client, cookieSetter, sessionSetter } = await getTestInstance(
-		{
-			user: {
-				additionalFields: {
-					firstName: {
-						type: "string",
+	const { auth, customFetchImpl, client, cookieSetter, sessionSetter } =
+		await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						firstName: {
+							type: "string",
+						},
+						lastName: {
+							type: "string",
+						},
+						isOAuth: {
+							type: "boolean",
+						},
 					},
-					lastName: {
-						type: "string",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						mapProfileToUser(profile) {
+							return {
+								firstName: profile.given_name,
+								lastName: profile.family_name,
+								isOAuth: true,
+							};
+						},
+						verifyIdToken: async (token) => {
+							return true;
+						},
 					},
-					isOAuth: {
-						type: "boolean",
+					apple: {
+						clientId: "test",
+						clientSecret: "test",
 					},
 				},
 			},
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
-					mapProfileToUser(profile) {
-						return {
-							firstName: profile.given_name,
-							lastName: profile.family_name,
-							isOAuth: true,
-						};
-					},
-					verifyIdToken: async (token) => { return true; }
-				},
-				apple: {
-					clientId: "test",
-					clientSecret: "test",
-				},
+			{
+				disableTestUser: true,
 			},
-		},
-		{
-			disableTestUser: true,
-		},
-	);
+		);
 	let state = "";
 
 	const headers = new Headers();
@@ -209,15 +212,18 @@ describe("Social Providers", async () => {
 		};
 		const testIdToken = await signJWT(data, DEFAULT_SECRET);
 
-		await client.signIn.social({
-			provider: "google",
-			idToken: {
-				token: testIdToken,
-				accessToken: "test"
-			}
-		}, {
-			onSuccess: sessionSetter(headers),
-		});
+		await client.signIn.social(
+			{
+				provider: "google",
+				idToken: {
+					token: testIdToken,
+					accessToken: "test",
+				},
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
 
 		const session = await client.getSession({
 			fetchOptions: {
