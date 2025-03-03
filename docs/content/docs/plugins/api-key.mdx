@@ -156,7 +156,6 @@ Otherwise if it throws, it will throw an `APIError`.
 const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
-    userId: "userId",
   },
 });
 
@@ -164,7 +163,6 @@ const { valid, error, key } = await auth.api.verifyApiKey({
 const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
-    userId: "userId",
     permissions: {
       projects: ["read", "read-write"]
     }
