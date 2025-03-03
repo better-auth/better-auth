@@ -220,6 +220,12 @@ export interface StripeOptions {
 		 */
 		requireEmailVerification?: boolean;
 		/**
+		 * Allow promotion codes to be used in the checkout session
+		 *
+		 * @default false
+		 */
+		allowPromotionCodes?: boolean;
+		/**
 		 * A callback to run after a user has subscribed to a package
 		 * @param event - Stripe Event
 		 * @param subscription - Subscription Data
