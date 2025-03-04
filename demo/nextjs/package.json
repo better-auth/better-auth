@@ -92,8 +92,8 @@
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.17.9",
-    "@types/react": "^18.3.14",
-    "@types/react-dom": "^18.3.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@types/three": "^0.168.0",
     "@types/ua-parser-js": "^0.7.39",
     "dotenv": "^16.4.7",
