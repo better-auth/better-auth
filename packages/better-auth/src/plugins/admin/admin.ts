@@ -202,7 +202,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canSetRole = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["set-role"],
 						},
@@ -284,7 +284,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canCreateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["create"],
 						},
@@ -437,7 +437,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListUsers = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["list"],
 						},
@@ -536,7 +536,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListSessions = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["list"],
 						},
@@ -596,7 +596,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -676,7 +676,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -755,7 +755,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canImpersonateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["impersonate"],
 						},
@@ -905,7 +905,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -965,7 +965,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -1024,7 +1024,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canDeleteUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["delete"],
 						},
@@ -1082,7 +1082,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canSetUserPassword = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["set-password"],
 						},
