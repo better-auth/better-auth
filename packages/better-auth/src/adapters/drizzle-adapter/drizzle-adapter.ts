@@ -24,6 +24,40 @@ const createTransform = (
 		return f.fieldName || field;
 	}
 
+	function transformValueToDB(value: any, model: string, field: string) {
+		const { provider = "sqlite" } = config || {};
+		const f = schema[model].fields[field];
+		if (
+			f.type === "boolean" &&
+			(provider === "sqlite" ) &&
+			value !== null &&
+			value !== undefined
+		) {
+			return value ? 1 : 0;
+		}
+		if (f.type === "date" && value && value instanceof Date) {
+			return provider === "sqlite" ? value.toISOString() : value;
+		}
+		return value;
+	}
+
+	function transformValueFromDB(value: any, model: string, field: string) {
+		const { provider = "sqlite" } = config || {};
+
+		const f = schema[model].fields[field];
+		if (
+			f.type === "boolean" &&
+			(provider === "sqlite") &&
+			value !== null
+		) {
+			return value === 1;
+		}
+		if (f.type === "date" && value) {
+			return new Date(value);
+		}
+		return value;
+	}
+
 	function getSchema(modelName: string) {
 		const schema = config.schema || db._.fullSchema;
 		if (!schema) {
@@ -142,7 +176,7 @@ const createTransform = (
 					continue;
 				}
 				transformedData[fields[field].fieldName || field] = withApplyDefault(
-					value,
+					transformValueToDB(value, model, field),
 					fields[field],
 					action,
 				);
@@ -170,7 +204,11 @@ const createTransform = (
 				}
 				const field = tableSchema[key];
 				if (field) {
-					transformedData[key] = data[field.fieldName || key];
+					transformedData[key] = transformValueFromDB(
+						data[field.fieldName || key],
+						model,
+						key,
+					);
 				}
 			}
 			return transformedData as any;
