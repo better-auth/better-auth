@@ -1,11 +1,5 @@
 import { Inject, Module, RequestMethod } from "@nestjs/common";
-import type {
-	DynamicModule,
-	Provider,
-	MiddlewareConsumer,
-	NestModule,
-	Type,
-} from "@nestjs/common";
+import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 import {
 	DiscoveryModule,
 	DiscoveryService,
@@ -16,18 +10,6 @@ import { createAuthMiddleware } from "../../plugins";
 import { toNodeHandler } from "../node";
 import { AuthService } from "./auth-service";
 import { BEFORE_HOOK_KEY, AFTER_HOOK_KEY, HOOK_KEY } from "./metadata-symbols";
-
-export interface AuthModuleOptions {
-	auth: Auth;
-}
-
-export interface AuthModuleAsyncOptions {
-	imports?: any[];
-	useFactory: (
-		...args: any[]
-	) => Promise<AuthModuleOptions> | AuthModuleOptions;
-	inject?: any[];
-}
 
 @Module({
 	imports: [DiscoveryModule],
@@ -90,7 +72,9 @@ export class AuthModule implements NestModule {
 	}
 
 	static forRoot(auth: any) {
-		// Create auth with passthrough hooks that can be overridden in configure
+		// Initialize hooks with an empty object if undefined
+		// Without this initialization, the setupHook method won't be able to properly override hooks
+		// It won't throw an error, but any hook functions we try to add won't be called
 		auth.options.hooks = {
 			...auth.options.hooks,
 		};
@@ -112,47 +96,5 @@ export class AuthModule implements NestModule {
 				AuthService,
 			],
 		};
-	}
-
-	static forRootAsync(options: AuthModuleAsyncOptions): DynamicModule {
-		return {
-			module: AuthModule,
-			imports: options.imports || [],
-			providers: [...this.createAsyncProviders(options), AuthService],
-			exports: [
-				{
-					provide: "AUTH_OPTIONS",
-					useFactory: (options: AuthModuleOptions) => options.auth,
-					inject: ["AUTH_MODULE_OPTIONS"],
-				},
-				AuthService,
-			],
-		};
-	}
-
-	private static createAsyncProviders(
-		options: AuthModuleAsyncOptions,
-	): Provider[] {
-		const providers: Provider[] = [
-			{
-				provide: "AUTH_MODULE_OPTIONS",
-				useFactory: options.useFactory,
-				inject: options.inject || [],
-			},
-			{
-				provide: "AUTH_OPTIONS",
-				useFactory: (options: AuthModuleOptions) => {
-					const auth = options.auth;
-					// Create auth with passthrough hooks that can be overridden in configure
-					auth.options.hooks = {
-						...auth.options.hooks,
-					};
-					return auth;
-				},
-				inject: ["AUTH_MODULE_OPTIONS"],
-			},
-		];
-
-		return providers;
 	}
 }
