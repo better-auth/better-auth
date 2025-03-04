@@ -1,6 +1,7 @@
 import { Inject, Module, RequestMethod } from "@nestjs/common";
-import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
+import type { MiddlewareConsumer, NestModule, Provider } from "@nestjs/common";
 import {
+	APP_FILTER,
 	DiscoveryModule,
 	DiscoveryService,
 	MetadataScanner,
@@ -10,6 +11,7 @@ import { createAuthMiddleware } from "../../plugins";
 import { toNodeHandler } from "../node";
 import { AuthService } from "./auth-service";
 import { BEFORE_HOOK_KEY, AFTER_HOOK_KEY, HOOK_KEY } from "./metadata-symbols";
+import { APIErrorExceptionFilter } from "./api-error-exception-filter";
 
 @Module({
 	imports: [DiscoveryModule],
@@ -71,7 +73,10 @@ export class AuthModule implements NestModule {
 		});
 	}
 
-	static forRoot(auth: any) {
+	static forRoot(
+		auth: any,
+		{ disableExceptionFilter }: { disableExceptionFilter?: boolean } = {},
+	) {
 		// Initialize hooks with an empty object if undefined
 		// Without this initialization, the setupHook method won't be able to properly override hooks
 		// It won't throw an error, but any hook functions we try to add won't be called
@@ -79,15 +84,24 @@ export class AuthModule implements NestModule {
 			...auth.options.hooks,
 		};
 
+		const providers: Provider[] = [
+			{
+				provide: "AUTH_OPTIONS",
+				useValue: auth,
+			},
+			AuthService,
+		];
+
+		if (!disableExceptionFilter) {
+			providers.push({
+				provide: APP_FILTER,
+				useClass: APIErrorExceptionFilter,
+			});
+		}
+
 		return {
 			module: AuthModule,
-			providers: [
-				{
-					provide: "AUTH_OPTIONS",
-					useValue: auth,
-				},
-				AuthService,
-			],
+			providers,
 			exports: [
 				{
 					provide: "AUTH_OPTIONS",

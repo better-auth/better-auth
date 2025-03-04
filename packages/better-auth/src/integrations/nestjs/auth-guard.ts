@@ -1,17 +1,19 @@
-import { Inject, UnauthorizedException } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { CanActivate, ExecutionContext } from "@nestjs/common";
 import type { Auth } from "../../auth";
 import { fromNodeHeaders } from "../node";
-import type { getSession } from "../../api";
+import { APIError, type getSession } from "../../api";
 
 export type UserSession = Exclude<
 	Awaited<ReturnType<ReturnType<typeof getSession>>>,
 	null | undefined
 >;
 
+@Injectable()
 export class AuthGuard implements CanActivate {
 	constructor(
+		@Inject(Reflector)
 		private readonly reflector: Reflector,
 		@Inject("AUTH_OPTIONS")
 		private readonly auth: Auth,
@@ -34,7 +36,11 @@ export class AuthGuard implements CanActivate {
 
 		if (isOptional && !session) return true;
 
-		if (!session) throw new UnauthorizedException();
+		if (!session)
+			throw new APIError(401, {
+				code: "UNAUTHORIZED",
+				message: "Unauthorized",
+			});
 
 		return true;
 	}
