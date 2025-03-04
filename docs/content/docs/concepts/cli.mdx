@@ -68,3 +68,18 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 ```bash title="Terminal"
 npx @better-auth/cli@latest secret
 ```
+
+## Doctor
+
+The Better Auth doctor command will find common issues in your project.
+
+Common issues include:
+
+- `tsconfig.json` not having "compilerOptions.strict" set to `true`.
+- Better Auth version not being up-to-date.
+- Better Auth CLI version not being up-to-date.
+- ENV files missing the required variables.
+
+```bash title="Terminal"
+npx @better-auth/cli@latest doctor
+```
