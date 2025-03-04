@@ -99,7 +99,7 @@ export default function UserCard(props: {
 						<div className="flex items-center gap-4">
 							<Avatar className="hidden h-9 w-9 sm:flex ">
 								<AvatarImage
-									src={session?.user.image || "#"}
+									src={session?.user.image || undefined}
 									alt="Avatar"
 									className="object-cover"
 								/>
