@@ -1,7 +1,12 @@
 import { salesforce } from 'better-auth/social-providers';
 import { SVGProps } from "react";
 
-export const socialProviders = {
+interface SocialProvider {
+	Icon: React.FC<React.SVGProps<SVGSVGElement>>;
+	stringIcon: string;
+}
+
+export const socialProviders: Record<string, SocialProvider> = {
 	apple: {
 		Icon: (props: SVGProps<any>) => (
 			<svg
