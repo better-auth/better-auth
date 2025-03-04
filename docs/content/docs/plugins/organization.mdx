@@ -778,11 +778,11 @@ the plugin providers easy way to define your own set of permission for each role
 
 **Has Permission**:
 
-You can use the `organizationHasPermission` action provided by the `api` to check the permission of the user.
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
 
 ```ts title="api.ts"
 import { auth } from "@/auth";
-    auth.api.organizationHasPermission({
+    auth.api.hasPermission({
         headers: await headers(),
         body: {
             permission: {
