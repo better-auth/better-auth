@@ -14,6 +14,7 @@ import { gitlab } from "./gitlab";
 import { tiktok } from "./tiktok";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
+import { salesforce } from "./salesforce";
 import { z } from "zod";
 import { vk } from "./vk";
 export const socialProviders = {
@@ -32,6 +33,7 @@ export const socialProviders = {
 	tiktok,
 	reddit,
 	roblox,
+	salesforce,
 	vk,
 };
 
@@ -69,6 +71,7 @@ export * from "./gitlab";
 export * from "./tiktok";
 export * from "./reddit";
 export * from "./roblox";
+export * from "./salesforce";
 export * from "./vk";
 
 export type SocialProviderList = typeof socialProviderList;
