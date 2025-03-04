@@ -18,7 +18,6 @@ import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { mergeSchema } from "../../db/schema";
 import { type AccessControl, type Role } from "../access";
-import { adminMiddleware } from "./call";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
@@ -41,6 +40,15 @@ export interface AdminOptions {
 	 * @default "user"
 	 */
 	defaultRole?: string;
+	/**
+	 * Roles that are considered admin roles.
+	 *
+	 * Any user role that isn't in this list, even if they have the permission,
+	 * will not be considered an admin.
+	 *
+	 * @default ["admin"]
+	 */
+	adminRoles?: string | string[];
 	/**
 	 * A default ban reason
 	 *
@@ -85,12 +93,32 @@ export interface AdminOptions {
 export const admin = <O extends AdminOptions>(options?: O) => {
 	const opts = {
 		defaultRole: "user",
+		adminRoles: ["admin"],
 		...options,
 	};
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
 		: DefaultStatements;
+
+	const adminMiddleware = createAuthMiddleware(async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (
+			(!session?.session || !opts.adminRoles.includes(session.user.role)) &&
+			!opts.adminUserIds?.includes(session?.session?.user.id)
+		) {
+			throw new APIError("UNAUTHORIZED");
+		}
+		return {
+			session,
+		} as {
+			session: {
+				user: UserWithRole;
+				session: Session;
+			};
+		};
+	});
+
 	return {
 		id: "admin",
 		init(ctx) {
