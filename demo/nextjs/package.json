@@ -81,6 +81,7 @@
     "recharts": "^2.14.1",
     "resend": "^4.0.1",
     "server-only": "^0.0.1",
+    "shiki": "^1.24.0",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
