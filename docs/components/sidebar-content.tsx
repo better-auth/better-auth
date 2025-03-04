@@ -1206,6 +1206,29 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 
 			{
+				title: "App Invite",
+				href: "/docs/plugins/app-invite",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+						<path d="M3 6a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+						<path d="M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3" />
+						<path d="M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3" />
+						<path d="M15 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+					</svg>
+				),
+			},
+			{
 				title: "Authorization",
 				group: true,
 				href: "/docs/plugins/1st-party-plugins",
