@@ -165,7 +165,6 @@ export const zoom = (userOptions: ZoomOptions) => {
         params.set("code_challenge_method", "S256");
         params.set("code_challenge", codeChallenge);
       }
-      console.log(params);
 
       const url = new URL("https://zoom.us/oauth/authorize");
       url.search = params.toString();
