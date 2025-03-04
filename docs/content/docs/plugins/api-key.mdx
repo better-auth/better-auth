@@ -156,7 +156,6 @@ Otherwise if it throws, it will throw an `APIError`.
 const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
-    userId: "userId",
   },
 });
 
@@ -164,7 +163,6 @@ const { valid, error, key } = await auth.api.verifyApiKey({
 const { valid, error, key } = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
-    userId: "userId",
     permissions: {
       projects: ["read", "read-write"]
     }
@@ -175,7 +173,6 @@ const { valid, error, key } = await auth.api.verifyApiKey({
 #### Properties
 
 - `key`: The API Key to validate
-- `userId`: The user id to check against the API key.
 - `permissions`?: The permissions to check against the API key.
 
 #### Result
@@ -198,7 +195,6 @@ type Result = {
 const key = await auth.api.getApiKey({
   body: {
     keyId: "your_api_key_id_here",
-    userId: "userId",
   },
 });
 ```
@@ -206,7 +202,6 @@ const key = await auth.api.getApiKey({
 #### Properties
 
 - `keyId`: The API Key id to get information on.
-- `userId`: The user id to check against the API key.
 
 #### Result
 
@@ -401,7 +396,7 @@ export const auth = betterAuth({
 
 ## Rate Limiting
 
-Every API key can have its own rate limit settings, however, the built-in rate-limiting only applies to the veriification process for a given API key.
+Every API key can have its own rate limit settings, however, the built-in rate-limiting only applies to the verification process for a given API key.
 For every other endpoint/method, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).
 
 You can refer to the rate-limit default configurations below in the API Key plugin options.

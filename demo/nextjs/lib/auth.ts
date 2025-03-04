@@ -153,7 +153,9 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin(),
+		admin({
+			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
+		}),
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),
@@ -171,7 +173,7 @@ export const auth = betterAuth({
 			};
 		}),
 		stripe({
-			stripeClient: new Stripe(process.env.STRIPE_KEY!),
+			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,

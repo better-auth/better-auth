@@ -10,6 +10,7 @@ import { parseUserInput } from "../../db/schema";
 import { generateRandomString } from "../../crypto";
 import { BASE_ERROR_CODES } from "../../error/codes";
 import { originCheck } from "../middlewares";
+import type { Prettify } from "../../types/helper";
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -20,10 +21,14 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as AdditionalUserFieldsInput<O> & {
-						name?: string;
-						image?: string | null;
-					},
+					body: {} as Partial<
+						Prettify<
+							AdditionalUserFieldsInput<O> & {
+								name?: string;
+								image?: string | null;
+							}
+						>
+					>,
 				},
 				openapi: {
 					description: "Update the current user",

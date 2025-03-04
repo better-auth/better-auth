@@ -153,7 +153,7 @@ describe("organization", async (it) => {
 		const org = await auth.api.getFullOrganization({
 			headers,
 		});
-		expect(org?.members.length).toBe(2);
+		expect(org?.members.length).toBe(1);
 	});
 
 	it("should allow getting full org on server using slug", async () => {
@@ -163,7 +163,7 @@ describe("organization", async (it) => {
 				organizationSlug: "test",
 			},
 		});
-		expect(org?.members.length).toBe(2);
+		expect(org?.members.length).toBe(1);
 	});
 
 	it.each([
@@ -279,10 +279,10 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data?.members[4].role).toBe("member");
+		expect(org.data?.members[3].role).toBe("member");
 		const member = await client.organization.updateMemberRole({
 			organizationId: org.data.id,
-			memberId: org.data.members[4].id,
+			memberId: org.data.members[3].id,
 			role: "admin",
 			fetchOptions: {
 				headers,
@@ -403,7 +403,7 @@ describe("organization", async (it) => {
 			},
 		});
 
-		expect(orgBefore.data?.members.length).toBe(5);
+		expect(orgBefore.data?.members.length).toBe(4);
 		await client.organization.removeMember({
 			organizationId: organizationId,
 			memberIdOrEmail: adminUser.email,
@@ -419,7 +419,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect(org.data?.members.length).toBe(4);
+		expect(org.data?.members.length).toBe(3);
 	});
 
 	it("shouldn't allow removing last owner from organization", async () => {
@@ -433,23 +433,14 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		const owners = org.data.members.filter((m) => m.role === "owner");
-		const removedOwner1 = await client.organization.removeMember({
+		const removedOwner = await client.organization.removeMember({
 			organizationId: org.data.id,
-			memberIdOrEmail: owners[0].id,
+			memberIdOrEmail: org.data.members[0].id,
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(removedOwner1.error).toBe(null);
-		const removedOwner2 = await client.organization.removeMember({
-			organizationId: org.data.id,
-			memberIdOrEmail: owners[1].id,
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(removedOwner2.error?.status).toBe(400);
+		expect(removedOwner.error?.status).toBe(400);
 	});
 
 	it("should validate permissions", async () => {
@@ -571,6 +562,11 @@ describe("organization", async (it) => {
 			password: "password",
 			name: "name",
 		};
+		const userOverLimit2 = {
+			email: "shouldthrowerror2@email.com",
+			password: "password",
+			name: "name",
+		};
 
 		// test api method
 		const newUser = await auth.api.signUpEmail({
@@ -600,11 +596,9 @@ describe("organization", async (it) => {
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);
 			});
-
-		// test client method
 		const invite = await client.organization.inviteMember({
 			organizationId: org?.id,
-			email: userOverLimit.email,
+			email: userOverLimit2.email,
 			role: "member",
 			fetchOptions: {
 				headers,
@@ -617,8 +611,18 @@ describe("organization", async (it) => {
 			name: userOverLimit.name,
 		});
 		const { res, headers: headers2 } = await signInWithUser(
-			userOverLimit.email,
-			userOverLimit.password,
+			userOverLimit2.email,
+			userOverLimit2.password,
+		);
+		await client.signUp.email(
+			{
+				email: userOverLimit2.email,
+				password: userOverLimit2.password,
+				name: userOverLimit2.name,
+			},
+			{
+				onSuccess: cookieSetter(headers2),
+			},
 		);
 
 		const invitation = await client.organization.acceptInvitation({
@@ -627,6 +631,7 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
+		console.log(invitation);
 		expect(invitation.error?.message).toBe(
 			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 		);

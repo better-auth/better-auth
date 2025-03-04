@@ -129,6 +129,7 @@ const users = await authClient.admin.listUsers({
 ```
 
 #### Pagination
+
 The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
 
 ```ts
@@ -138,6 +139,7 @@ The `listUsers` function supports pagination by returning metadata alongside the
   limit: number | undefined,   // The limit provided in the query
   offset: number | undefined   // The offset provided in the query
 }
+```
 
 ##### How to Implement Pagination  
 
@@ -272,13 +274,13 @@ By default, there are two roles:
 
 ### Permissions
 
-By default, there is one resource with eight actions.
+By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete`
+  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
 
 **session**:
-  `list-sessions` `revoke-sessions`
+  `list` `revoke` `delete`
 
 The admin have full control over all the resources and actions. The user have no control over any of those actions.
 
@@ -512,6 +514,20 @@ admin({
   defaultRole: "regular",
 });
 ```
+### Admin Roles
+
+The roles that are considered admin roles. Defaults to `["admin"]`.
+
+```ts title="auth.ts"
+admin({
+  adminRoles: ["admin", "superadmin"],
+});
+```
+
+<Callout type="warning">
+  Any role that isn't in the `adminRoles` list, even if they have the permission,
+  will not be considered an admin.
+</Callout>
 
 ### Admin userIds
 
@@ -522,6 +538,8 @@ admin({
     adminUserIds: ["user_id_1", "user_id_2"]
 })
 ```
+
+If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
 
 ### impersonationSessionDuration
 

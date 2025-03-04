@@ -35,7 +35,6 @@ export const getOrgAdapter = (
 		},
 		createOrganization: async (data: {
 			organization: OrganizationInput;
-			user: User;
 		}) => {
 			const organization = await adapter.create<
 				OrganizationInput,
@@ -49,31 +48,12 @@ export const getOrgAdapter = (
 						: undefined,
 				},
 			});
-			const member = await adapter.create<MemberInput>({
-				model: "member",
-				data: {
-					organizationId: organization.id,
-					userId: data.user.id,
-					createdAt: new Date(),
-					role: options?.creatorRole || "owner",
-				},
-			});
+
 			return {
 				...organization,
 				metadata: organization.metadata
 					? JSON.parse(organization.metadata)
 					: undefined,
-				members: [
-					{
-						...member,
-						user: {
-							id: data.user.id,
-							name: data.user.name,
-							email: data.user.email,
-							image: data.user.image,
-						},
-					},
-				],
 			};
 		},
 		findMemberByEmail: async (data: {
@@ -210,7 +190,7 @@ export const getOrgAdapter = (
 			};
 		},
 		createMember: async (data: MemberInput) => {
-			const member = await adapter.create<MemberInput>({
+			const member = await adapter.create<MemberInput, Member>({
 				model: "member",
 				data: {
 					...data,

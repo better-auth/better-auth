@@ -290,7 +290,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 		//should reject cause the user is not admin
-		expect(impersonatedUserRes.error?.status).toBe(403);
+		expect(impersonatedUserRes.error?.status).toBe(401);
 		const res = await client.admin.stopImpersonating(
 			{},
 			{
@@ -369,6 +369,24 @@ describe("Admin plugin", async () => {
 		expect(response.data?.users.length).toBe(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
+	});
+
+	it("should allow admin to set user password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.status).toBe(true);
+		const res2 = await client.signIn.email({
+			email: newUser?.email || "",
+			password: "newPassword",
+		});
+		expect(res2.data?.user).toBeDefined();
 	});
 
 	it("should allow admin to delete user", async () => {

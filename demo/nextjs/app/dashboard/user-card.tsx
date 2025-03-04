@@ -36,6 +36,7 @@ import {
 	QrCode,
 	ShieldCheck,
 	ShieldOff,
+	StopCircle,
 	Trash,
 	X,
 } from "lucide-react";
@@ -99,7 +100,7 @@ export default function UserCard(props: {
 						<div className="flex items-center gap-4">
 							<Avatar className="hidden h-9 w-9 sm:flex ">
 								<AvatarImage
-									src={session?.user.image || "#"}
+									src={session?.user.image || undefined}
 									alt="Avatar"
 									className="object-cover"
 								/>
@@ -447,33 +448,59 @@ export default function UserCard(props: {
 			</CardContent>
 			<CardFooter className="gap-2 justify-between items-center">
 				<ChangePassword />
-				<Button
-					className="gap-2 z-10"
-					variant="secondary"
-					onClick={async () => {
-						setIsSignOut(true);
-						await signOut({
-							fetchOptions: {
-								onSuccess() {
-									router.push("/");
+				{session?.session.impersonatedBy ? (
+					<Button
+						className="gap-2 z-10"
+						variant="secondary"
+						onClick={async () => {
+							setIsSignOut(true);
+							await client.admin.stopImpersonating();
+							setIsSignOut(false);
+							toast.info("Impersonation stopped successfully");
+							router.push("/admin");
+						}}
+						disabled={isSignOut}
+					>
+						<span className="text-sm">
+							{isSignOut ? (
+								<Loader2 size={15} className="animate-spin" />
+							) : (
+								<div className="flex items-center gap-2">
+									<StopCircle size={16} color="red" />
+									Stop Impersonation
+								</div>
+							)}
+						</span>
+					</Button>
+				) : (
+					<Button
+						className="gap-2 z-10"
+						variant="secondary"
+						onClick={async () => {
+							setIsSignOut(true);
+							await signOut({
+								fetchOptions: {
+									onSuccess() {
+										router.push("/");
+									},
 								},
-							},
-						});
-						setIsSignOut(false);
-					}}
-					disabled={isSignOut}
-				>
-					<span className="text-sm">
-						{isSignOut ? (
-							<Loader2 size={15} className="animate-spin" />
-						) : (
-							<div className="flex items-center gap-2">
-								<LogOut size={16} />
-								Sign Out
-							</div>
-						)}
-					</span>
-				</Button>
+							});
+							setIsSignOut(false);
+						}}
+						disabled={isSignOut}
+					>
+						<span className="text-sm">
+							{isSignOut ? (
+								<Loader2 size={15} className="animate-spin" />
+							) : (
+								<div className="flex items-center gap-2">
+									<LogOut size={16} />
+									Sign Out
+								</div>
+							)}
+						</span>
+					</Button>
+				)}
 			</CardFooter>
 		</Card>
 	);
