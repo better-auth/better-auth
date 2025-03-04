@@ -26,6 +26,7 @@ import { formatMilliseconds } from "../utils/format-ms";
 import { generateSecretHash } from "./secret";
 import { generateAuthConfig } from "../generators/auth-config";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
+import { findAuthConfig } from "../utils/find-auth-config";
 
 /**
  * Should only use any database that is core DBs, and supports the BetterAuth CLI generate functionality.
@@ -366,12 +367,12 @@ export async function initAction(opts: any) {
 	let packageManagerPreference: "bun" | "pnpm" | "yarn" | "npm" | undefined =
 		undefined;
 
-	let config_path: string = "";
+	let config_path: string | null = null;
 	let framework: SupportedFrameworks = "vanilla";
 
 	const format = async (code: string) =>
 		await prettierFormat(code, {
-			filepath: config_path,
+			filepath: config_path || "",
 			...defaultFormatOptions,
 		});
 
@@ -571,30 +572,10 @@ export async function initAction(opts: any) {
 
 	// ===== config path =====
 
-	let possiblePaths = ["auth.ts", "auth.tsx", "auth.js", "auth.jsx"];
-	possiblePaths = [
-		...possiblePaths,
-		...possiblePaths.map((it) => `lib/server/${it}`),
-		...possiblePaths.map((it) => `server/${it}`),
-		...possiblePaths.map((it) => `lib/${it}`),
-		...possiblePaths.map((it) => `utils/${it}`),
-	];
-	possiblePaths = [
-		...possiblePaths,
-		...possiblePaths.map((it) => `src/${it}`),
-		...possiblePaths.map((it) => `app/${it}`),
-	];
-
 	if (options.config) {
 		config_path = path.join(cwd, options.config);
 	} else {
-		for (const possiblePath of possiblePaths) {
-			const doesExist = existsSync(path.join(cwd, possiblePath));
-			if (doesExist) {
-				config_path = path.join(cwd, possiblePath);
-				break;
-			}
-		}
+		config_path = await findAuthConfig(options.cwd);
 	}
 
 	// ===== create auth config =====
@@ -868,7 +849,7 @@ export async function initAction(opts: any) {
 			try {
 				let contents = await getDefaultAuthClientConfig({
 					auth_config_path: (
-						"./" + path.join(config_path.replace(cwd, ""))
+						"./" + path.join((config_path || "").replace(cwd, ""))
 					).replace(".//", "./"),
 					clientPlugins: add_plugins
 						.filter((x) => x.clientName)

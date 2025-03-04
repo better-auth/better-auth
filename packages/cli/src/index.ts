@@ -7,6 +7,7 @@ import "dotenv/config";
 import { generateSecret } from "./commands/secret";
 import { getPackageInfo } from "./utils/get-package-info";
 import { init } from "./commands/init";
+import { doctor } from "./commands/doctor";
 // handle exit
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
@@ -24,6 +25,7 @@ async function main() {
 		.addCommand(generate)
 		.addCommand(generateSecret)
 		.addCommand(init)
+		.addCommand(doctor)
 		.version(packageInfo.version || "1.1.2")
 		.description("Better Auth CLI");
 	program.parse();
