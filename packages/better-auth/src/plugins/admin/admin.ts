@@ -105,7 +105,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 		const session = await getSessionFromCtx(ctx);
 		if (
 			(!session?.session || !opts.adminRoles.includes(session.user.role)) &&
-			!opts.adminUserIds?.includes(session?.session?.user.id)
+			!opts.adminUserIds?.includes(session?.user.id || "")
 		) {
 			throw new APIError("UNAUTHORIZED");
 		}

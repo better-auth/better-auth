@@ -153,7 +153,9 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin(),
+		admin({
+			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
+		}),
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),
