@@ -3,6 +3,259 @@ title: Installation
 description: Learn how to configure Better Auth in your project.
 ---
 
+We provide two ways of installing and initializing Better Auth.
+
+* [Our `init` CLI to automatically](#automatic-installation):
+  * Install the required dependencies
+  * Update your ENV files for any required environment variables
+  * Prompt to install plugins and set up a database of your choice 
+  * Initialize your `auth.ts` and `auth-client.ts` files
+* Or the good old [manual installation](#manual-installation) if you prefer to do it yourself.
+
+## Automatic Installation
+
+Install and initialize Better Auth in your project using Better Auth's `init` CLI command:
+
+<Steps>
+
+<Step>
+### Run the Init CLI
+
+Make sure that you have an env file defined already, then run:
+
+```bash
+npx @better-auth/cli init
+```
+
+Read more about our init command [here](/docs/concepts/cli#init).
+
+</Step>
+
+<Step>
+    ### Create Database Tables
+
+    - **Generate**: This command generates an ORM schema or SQL migration file.
+
+    <Callout>
+    If you're using Kysely, you can apply the migration directly with `migrate` command below. Use `generate` only if you plan to apply the migration manually.
+    </Callout>
+
+    ```bash title="Terminal"
+    npx @better-auth/cli generate
+    ```
+
+    - **Migrate**: This command creates the required tables directly in the database. (Available only for the built-in Kysely adapter)
+
+    ```bash title="Terminal"
+    npx @better-auth/cli migrate
+    ```
+
+    see the [CLI documentation](/docs/concepts/cli) for more information.
+
+    <Callout>
+     If you instead want to create the schema manually, you can find the core schema required in the [database section](/docs/concepts/database#core-schema).
+    </Callout>
+</Step>
+
+<Step>
+
+### Authentication Methods
+Configure the authentication methods you want to use. Better Auth comes with built-in support for email/password, and social sign-on providers.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //...other options
+    emailAndPassword: {  // [!code highlight]
+        enabled: true // [!code highlight]
+    },// [!code highlight]
+    socialProviders: { // [!code highlight]
+       github: { // [!code highlight]
+        clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
+        clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
+       } // [!code highlight]
+    }, // [!code highlight]
+});
+```
+
+<Callout type="info">
+You can use even more authentication methods like [passkey](/docs/plugins/passkey), [username](/docs/plugins/username), [magic link](/docs/plugins/magic-link) and more through plugins.
+</Callout>
+</Step>
+
+<Step>
+### Mount Handler
+To handle api requests, you need to set up a route handler on your server.
+
+Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
+
+<Callout>
+Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
+</Callout>
+
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
+    <Tab value="next-js">
+        ```ts title="/app/api/auth/[...all]/route.ts"
+        import { auth } from "@/lib/auth"; // path to your auth file
+        import { toNextJsHandler } from "better-auth/next-js";
+
+        export const { POST, GET } = toNextJsHandler(auth);
+        ```
+    </Tab>
+    <Tab value="nuxt">
+    ```ts title="/server/api/auth/[...all].ts"
+    import { auth } from "~/utils/auth"; // path to your auth file
+
+    export default defineEventHandler((event) => {
+        return auth.handler(toWebRequest(event));
+    });
+    ```
+    </Tab>
+    <Tab value="svelte-kit">
+    ```ts title="hooks.server.ts"
+    import { auth } from "$lib/auth"; // path to your auth file
+    import { svelteKitHandler } from "better-auth/svelte-kit";
+
+    export async function handle({ event, resolve }) {
+        return svelteKitHandler({ event, resolve, auth });
+    }
+    ```
+    </Tab>
+    <Tab value="remix">
+    ```ts title="/app/routes/api.auth.$.ts"
+    import { auth } from '~/lib/auth.server' // Adjust the path as necessary
+    import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
+
+    export async function loader({ request }: LoaderFunctionArgs) {
+        return auth.handler(request)
+    }
+
+    export async function action({ request }: ActionFunctionArgs) {
+        return auth.handler(request)
+    }
+    ```
+    </Tab>
+    <Tab value="solid-start">
+    ```ts title="/routes/api/auth/*all.ts"
+    import { auth } from "~/lib/auth"; // path to your auth file
+    import { toSolidStartHandler } from "better-auth/solid-start";
+
+    export const { GET, POST } = toSolidStartHandler(auth);
+    ```
+    </Tab>
+    <Tab value="hono">
+    ```ts title="src/index.ts"
+    import { Hono } from "hono";
+    import { auth } from "./auth"; // path to your auth file
+    import { serve } from "@hono/node-server";
+    import { cors } from "hono/cors";
+
+    const app = new Hono();
+
+    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+
+    serve(app);
+    ```
+    </Tab>
+
+    <Tab value="express">
+    ```ts title="server.ts"
+    import express from "express";
+    import { toNodeHandler } from "better-auth/node";
+    import { auth } from "./auth";
+
+    const app = express();
+    const port = 8000;
+
+    app.all("/api/auth/*", toNodeHandler(auth));
+
+    // Mount express json middleware after Better Auth handler
+    // or only apply it to routes that don't interact with Better Auth
+    app.use(express.json());
+
+    app.listen(port, () => {
+        console.log(`Better Auth app listening on port ${port}`);
+    });
+    ```
+    This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
+    </Tab>
+    <Tab value="astro">
+    ```ts title="/pages/api/auth/[...all].ts"
+    import type { APIRoute } from "astro";
+    import { auth } from "@/auth"; // path to your auth file
+
+    export const GET: APIRoute = async (ctx) => {
+        return auth.handler(ctx.request);
+    };
+
+    export const POST: APIRoute = async (ctx) => {
+        return auth.handler(ctx.request);
+    };
+    ```
+    </Tab>
+    <Tab value="elysia">
+    ```ts
+    import { Elysia, Context } from "elysia";
+    import { auth } from "./auth";
+
+    const betterAuthView = (context: Context) => {
+        const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
+        // validate request method
+        if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
+            return auth.handler(context.request);
+        } else {
+            context.error(405)
+        }
+    }
+
+    const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
+
+    console.log(
+    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+    );
+    ```
+    </Tab>
+    <Tab value="tanstack-start">
+    ```ts title="app/routes/api/auth/$.ts"
+    import { auth } from '~/lib/server/auth'
+    import { createAPIFileRoute } from '@tanstack/start/api'
+
+    export const APIRoute = createAPIFileRoute('/api/auth/$')({
+        GET: ({ request }) => {
+            return auth.handler(request)
+        },
+        POST: ({ request }) => {
+            return auth.handler(request)
+        },
+    });
+    ```
+    </Tab>
+    <Tab value="expo">
+    ```ts title="app/api/auth/[..all]+api.ts"
+    import { auth } from '@/lib/server/auth'; // path to your auth file
+
+    const handler = auth.handler;
+    export { handler as GET, handler as POST };
+    ```
+    </Tab>
+</Tabs>
+</Step>
+
+
+<Step>
+### 🎉 That's it!
+That's it! You're now ready to use better-auth in your application. Continue to [basic usage](/docs/basic-usage) to learn how to use the auth instance to sign in users.
+</Step>
+
+</Steps>
+
+---
+
+## Manual Installation
+
+Install Better Auth in your project manually:
+
 <Steps>
 
 <Step>
