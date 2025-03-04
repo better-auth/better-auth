@@ -105,7 +105,9 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
-					const multiSessionCookieName = `${ctx.context.authCookies.sessionToken.name}_multi-${sessionToken}`;
+					const multiSessionCookieName = `${
+						ctx.context.authCookies.sessionToken.name
+					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
@@ -275,8 +277,8 @@ export const multiSession = (options?: MultiSessionConfig) => {
 										...ctx.context.authCookies.sessionToken.options,
 										maxAge: 0,
 									});
-									const id = key.split("_multi-")[1];
-									return id;
+									const token = cookies[key].split(".")[0];
+									return token;
 								}
 								return null;
 							})
