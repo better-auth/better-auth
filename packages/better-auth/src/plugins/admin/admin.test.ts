@@ -371,6 +371,24 @@ describe("Admin plugin", async () => {
 		expect(roles).not.toContain("user");
 	});
 
+	it("should allow admin to set user password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.status).toBe(true);
+		const res2 = await client.signIn.email({
+			email: newUser?.email || "",
+			password: "newPassword",
+		});
+		expect(res2.data?.user).toBeDefined();
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{

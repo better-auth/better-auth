@@ -96,15 +96,12 @@ export async function onSubscriptionUpdated(
 		const plan = await getPlanByPriceId(options, priceId);
 
 		const referenceId = subscriptionUpdated.metadata?.referenceId;
-		const subscriptionId = subscriptionUpdated.id;
-		const customerId = subscriptionUpdated.customer.toString();
+		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: referenceId
 				? [{ field: "referenceId", value: referenceId }]
-				: subscriptionId
-					? [{ field: "stripeSubscriptionId", value: subscriptionId }]
-					: [],
+				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
 		});
 		if (!subscription) {
 			const subs = await ctx.context.adapter.findMany<Subscription>({
@@ -112,12 +109,19 @@ export async function onSubscriptionUpdated(
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
 			if (subs.length > 1) {
-				logger.warn(
-					`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no referenceId or subscriptionId is provided`,
+				const activeSub = subs.find(
+					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
-				return;
+				if (!activeSub) {
+					logger.warn(
+						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+					);
+					return;
+				}
+				subscription = activeSub;
+			} else {
+				subscription = subs[0];
 			}
-			subscription = subs[0];
 		}
 
 		const seats = subscriptionUpdated.items.data[0].quantity;
@@ -140,8 +144,8 @@ export async function onSubscriptionUpdated(
 			},
 			where: [
 				{
-					field: "referenceId",
-					value: subscription.referenceId,
+					field: "id",
+					value: subscription.id,
 				},
 			],
 		});
@@ -200,8 +204,17 @@ export async function onSubscriptionDeleted(
 	try {
 		const subscriptionDeleted = event.data.object as Stripe.Subscription;
 		const subscriptionId = subscriptionDeleted.id;
-		if (subscriptionDeleted.status === "canceled") {
-			const subscription = await ctx.context.adapter.findOne<Subscription>({
+		const subscription = await ctx.context.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: subscriptionId,
+				},
+			],
+		});
+		if (subscription) {
+			await ctx.context.adapter.update({
 				model: "subscription",
 				where: [
 					{
@@ -209,31 +222,20 @@ export async function onSubscriptionDeleted(
 						value: subscriptionId,
 					},
 				],
+				update: {
+					status: "canceled",
+					updatedAt: new Date(),
+				},
 			});
-			if (subscription) {
-				await ctx.context.adapter.update({
-					model: "subscription",
-					where: [
-						{
-							field: "stripeSubscriptionId",
-							value: subscriptionId,
-						},
-					],
-					update: {
-						status: "canceled",
-						updatedAt: new Date(),
-					},
-				});
-				await options.subscription.onSubscriptionDeleted?.({
-					event,
-					stripeSubscription: subscriptionDeleted,
-					subscription,
-				});
-			} else {
-				logger.warn(
-					`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
-				);
-			}
+			await options.subscription.onSubscriptionDeleted?.({
+				event,
+				stripeSubscription: subscriptionDeleted,
+				subscription,
+			});
+		} else {
+			logger.warn(
+				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
+			);
 		}
 	} catch (error: any) {
 		logger.error(`Stripe webhook failed. Error: ${error}`);

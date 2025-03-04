@@ -178,7 +178,6 @@ subscription: {
             },
             freeTrial: {
                 days: 14,
-                forNewUsersOnly: true
             }
         }
     ]
@@ -383,7 +382,6 @@ You can configure trial periods for your plans:
     priceId: "price_0987654321",
     freeTrial: {
         days: 14,
-        forNewUsersOnly: true, // only new users can start a trial
         onTrialStart: async (subscription) => {
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
@@ -562,7 +560,6 @@ Each plan can have the following properties:
 
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
-  - **forNewUsersOnly**: `boolean` - Whether the trial is only for new users. Default: `true`.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
   - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
   - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
@@ -582,6 +579,7 @@ await client.subscription.upgrade({
     plan: "team",
     referenceId: activeOrg.id,
     seats: 10,
+    annual: true, // upgrade to an annual plan (optional)
     successUrl: "/org/billing/success",
     cancelUrl: "/org/billing"
 });

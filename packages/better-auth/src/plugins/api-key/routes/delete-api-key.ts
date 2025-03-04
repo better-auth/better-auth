@@ -44,14 +44,10 @@ export function deleteApiKey({
 						field: "id",
 						value: keyId,
 					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
 				],
 			});
 
-			if (!apiKey) {
+			if (!apiKey || apiKey.userId !== session.user.id) {
 				throw new APIError("NOT_FOUND", {
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
@@ -65,10 +61,6 @@ export function deleteApiKey({
 							field: "id",
 							value: apiKey.id,
 						},
-						{
-							field: "userId",
-							value: session.user.id,
-						},
 					],
 				});
 			} catch (error: any) {
@@ -76,9 +68,7 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
-
 			deleteAllExpiredApiKeys(ctx.context);
-
 			return ctx.json({
 				success: true,
 			});

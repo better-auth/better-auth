@@ -202,7 +202,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canSetRole = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["set-role"],
 						},
@@ -284,7 +284,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canCreateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["create"],
 						},
@@ -437,7 +437,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListUsers = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["list"],
 						},
@@ -536,7 +536,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canListSessions = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["list"],
 						},
@@ -596,7 +596,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -676,7 +676,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canBanUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["ban"],
 						},
@@ -755,7 +755,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canImpersonateUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: ctx.context.session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["impersonate"],
 						},
@@ -905,7 +905,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -965,7 +965,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canRevokeSession = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							session: ["revoke"],
 						},
@@ -1024,7 +1024,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 					const canDeleteUser = hasPermission({
 						userId: ctx.context.session.user.id,
 						role: session.user.role,
-						options: ctx.context.adminOptions,
+						options: opts,
 						permission: {
 							user: ["delete"],
 						},
@@ -1045,12 +1045,54 @@ export const admin = <O extends AdminOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						newPassword: z.string(),
-						userId: z.string(),
+						newPassword: z.string({
+							description: "The new password",
+						}),
+						userId: z.string({
+							description: "The user id",
+						}),
 					}),
 					use: [adminMiddleware],
+					metadata: {
+						openapi: {
+							operationId: "setUserPassword",
+							summary: "Set a user's password",
+							description: "Set a user's password",
+							responses: {
+								200: {
+									description: "Password set",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
+					const canSetUserPassword = hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permission: {
+							user: ["set-password"],
+						},
+					});
+					if (!canSetUserPassword) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
+						});
+					}
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.newPassword,
 					);

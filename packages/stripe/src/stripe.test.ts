@@ -341,6 +341,7 @@ describe("stripe", async () => {
 				},
 			],
 		});
+
 		expect(updatedSubscription).toMatchObject({
 			id: testSubscriptionId,
 			status: "active",

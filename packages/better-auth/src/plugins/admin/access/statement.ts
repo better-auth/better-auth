@@ -1,14 +1,30 @@
 import { createAccessControl } from "../../access";
 
 export const defaultStatements = {
-	user: ["create", "list", "set-role", "ban", "impersonate", "delete"],
+	user: [
+		"create",
+		"list",
+		"set-role",
+		"ban",
+		"impersonate",
+		"delete",
+		"set-password",
+	],
 	session: ["list", "revoke", "delete"],
 } as const;
 
 export const defaultAc = createAccessControl(defaultStatements);
 
 export const adminAc = defaultAc.newRole({
-	user: ["create", "list", "set-role", "ban", "impersonate", "delete"],
+	user: [
+		"create",
+		"list",
+		"set-role",
+		"ban",
+		"impersonate",
+		"delete",
+		"set-password",
+	],
 	session: ["list", "revoke", "delete"],
 });
 
