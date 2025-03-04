@@ -7,6 +7,11 @@
 	"organizeImports": {
 		"enabled": false
 	},
+	"javascript": {
+		"parser": {
+			"unsafeParameterDecoratorsEnabled": true
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
