@@ -4,7 +4,7 @@ description: Stripe, Captcha, API Keys, Teams, Init CLI, and more.
 date: 2025-03-01
 ---
 
-# Better Auth 1.2 – Stripe, Captcha, API Keys, Teams, Init CLI, and more
+## Better Auth 1.2 – Stripe, Captcha, API Keys, Teams, Init CLI, and more
 
 To upgrade, run:
 
@@ -30,10 +30,13 @@ export const auth = betterAuth({
     stripe({
       // [!code highlight]
       createCustomerOnSignup: true, // [!code highlight]
-      subscription: { // [!code highlight]
+      subscription: {
+        // [!code highlight]
         enabled: true, // [!code highlight]
-        plans: [// [!code highlight]
-          { // [!code highlight]
+        plans: [
+          // [!code highlight]
+          {
+            // [!code highlight]
             name: "pro", // [!code highlight]
             priceId: "price_1234567890", // [!code highlight]
           }, // [!code highlight]
