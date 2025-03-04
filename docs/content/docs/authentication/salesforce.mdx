@@ -1,0 +1,172 @@
+---
+title: Salesforce
+description: Salesforce provider setup and usage.
+---
+
+## Prerequisites
+
+This guide assumes that
+
+- you are a system administrator that can create external client apps in Salesforce
+- you have read Salesforce's [OAuth 2.0 Web Server Flow for Web App Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm)
+
+## Creating an External Client App
+
+<Steps>
+<Step> 
+  In your Salesforce home page, click the settings icon (⚙️) at the top right corner and select `Setup`
+</Step>
+
+<Step>
+  In the left sidebar, search for `External Client App Manager`. It should be
+  under `Platform Tools` -> `Apps` -> `External CLient Apps`. Click this menu
+  item.
+</Step>
+
+<Step>
+  In the left sidebar, search for `External Client App Manager`. It should be
+  under `Platform Tools` -> `Apps` -> `External CLient Apps`. Click this menu
+  item.
+</Step>
+
+<Step>
+  Click the `New External Client App` button at the top right corner and fill in
+  all required fields from the `Basic Information` section.
+</Step>
+
+<Step>
+  We will configure OAuth in the next section of this guide. For now, click
+  `Create`.
+</Step>
+
+</Steps>
+
+## Salesforce OAuth Configuration
+
+### Policies Tab
+
+You may optionally edit the `Policies` tab with custom `Oauth Start URL`, guest users, refresh
+token policy, and so on.
+
+However, the main option to note is `App Authorization` -> `IP Relaxation`, which you may need top
+modify to allow logins from IP addresses not configured by your organisations, if this is your
+use case.
+
+If unsure, keep all settings in this tab the same as the default.
+
+### Settings Tab
+
+This is the second tab within `Policies`, `Settings`, `Package Defaults`.
+
+<Steps>
+  <Step>Once you are in the `Settings` tab , click `Edit`</Step>
+  <Step>
+    Under the `OAuth Settings` accordion, tick the `Enable OAuth` checkbox
+  </Step>
+  <Step>
+    Under `App Settings` -> `Callback URL`, enter your better-auth callback.
+    For example,
+
+    ```text
+    http://localhost:3000/api/auth/callback/salesforce
+    ```
+
+  </Step>
+  <Step>
+    Under `OAuth Scopes`, ensure that at minimum, the following are present:
+    
+    1. Access the identity of URL service (id, profile, email, address, phone)
+    2. Access unique user identifiers (openid)
+
+  </Step>
+  <Step>
+    Under `Flow Enablement`, tick the options
+    <Callout>
+    Note: the second option will only apear after ticking the first option.
+    </Callout>
+
+    1. Enable Authorization Code and Credentials Flow
+    1. Require user credentials in the POST body for Authorization Code and Credentials Flow
+
+  </Step>
+
+  <Step>
+    Under `Security`, you can keep the defaults, which has the following enabled:
+
+    1. Require secret for Web Server Flow
+    1. Require secret for Refresh Token Flow
+    1. Require Proof Key for Code Exchange (PKCE) extension for Supported Authorization Flows
+
+  </Step>
+  <Step>
+    Click `Save`, then scroll back up to `Oauth Settings` -> `App Settings`. There
+    should now be a button for `Consumer Key and Secret` that you can click on.
+  </Step>
+  <Step>
+    Copy your `Consumer Key` and `Consumer Secret`, which will be used as environment
+    variables `SALESFORCE_CLIENT_ID` and `SALESFORCE_CLIENT_SECRET` respectively.
+  </Step>
+
+  </Steps>
+  
+## Usage with Better Auth
+
+<Steps>
+
+<Step>
+
+### Configure the provider
+
+To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    salesforce: {
+      clientId: process.env.SALESFORCE_CLIENT_ID as string, // Consumer Key [!code highlight]
+      clientSecret: process.env.SALESFORCE_CLIENT_SECRET as string, // Consumer Secret [!code highlight]
+
+      /*
+       * The default is https://login.salesforce.com for Production.
+       * If you are using a Sandbox Org, you can instead specify
+       * - https://test.salesforce.com
+       */
+      instanceUrl: "https://test.salesforce.com",
+
+      /*
+       * This option (default true) corresponds with Salesforce OAuth Security option:
+       * - Require Proof Key for Code Exchange (PKCE) extension for Supported Authorization Flows
+       *
+       * If you disable pkce, you will also need to modify your External Client App.
+       */
+      pkce: true,
+    },
+  },
+});
+```
+
+</Step>
+
+<Step>
+
+### Sign In with Salesforce
+
+To sign in with Salesforce, you can use the `signIn.social` function provided by the client.
+You will need to specify `salesforce` as the provider.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+const authClient = createAuthClient();
+
+const signIn = async () => {
+  const data = await authClient.signIn.social({
+    provider: "salesforce", // [!code highlight]
+  });
+};
+```
+
+</Step>
+
+</Steps>
