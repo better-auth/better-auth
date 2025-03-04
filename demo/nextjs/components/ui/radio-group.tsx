@@ -6,15 +6,13 @@ import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 
 import { cn } from "@/lib/utils";
 
-const RadioGroup = (
-    {
-        ref,
-        className,
-        ...props
-    }: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & {
-        ref: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Root>>;
-    }
-) => {
+const RadioGroup = ({
+	ref,
+	className,
+	...props
+}: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & {
+	ref: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Root>>;
+}) => {
 	return (
 		<RadioGroupPrimitive.Root
 			className={cn("grid gap-2", className)}
@@ -25,15 +23,13 @@ const RadioGroup = (
 };
 RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
-const RadioGroupItem = (
-    {
-        ref,
-        className,
-        ...props
-    }: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & {
-        ref: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Item>>;
-    }
-) => {
+const RadioGroupItem = ({
+	ref,
+	className,
+	...props
+}: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & {
+	ref: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Item>>;
+}) => {
 	return (
 		<RadioGroupPrimitive.Item
 			ref={ref}
