@@ -148,6 +148,8 @@ export const config = {
 };
 ```
 
+### For Next.js release `15.1.7` and below
+
 If you need the full session object, you'll have to fetch it from the `/get-session` API route. Since Next.js middleware doesn't support running Node.js APIs directly, you must make an HTTP request.
 
 <Callout>
@@ -178,5 +180,33 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
 	matcher: ["/dashboard"], // Apply middleware to specific routes
+};
+```
+
+### For Next.js release `15.2.0` and above
+
+From the version 15.2.0, Next.js allows you to use the `Node.js` runtime in middleware. This means you can use the `auth.api` object directly in middleware.
+
+<Callout type="warn">
+You may refer to the [Next.js documentation](https://nextjs.org/docs/app/building-your-application/routing/middleware#runtime) for more information about runtime configuration, and how to enable it.
+Be careful when using the new runtime. It's an experimental feature and it may be subject to breaking changes.
+</Callout>
+
+```ts
+export async function middleware(request: NextRequest) {
+    const session = await auth_server.api.getSession({
+        headers: await headers()
+    })
+
+    if(!session) {
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+    }
+
+    return NextResponse.next();
+}
+
+export const config = {
+  runtime: "nodejs",
+  matcher: ["/dashboard"], // Apply middleware to specific routes
 };
 ```
