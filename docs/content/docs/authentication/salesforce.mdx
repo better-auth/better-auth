@@ -7,7 +7,7 @@ description: Salesforce provider setup and usage.
 
 This guide assumes that
 
-- you are a system administrator that can create external client apps in Salesforce
+- you can create external client apps in Salesforce (e.g. System Administrator)
 - you have read Salesforce's [OAuth 2.0 Web Server Flow for Web App Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm)
 
 ## Creating an External Client App
@@ -24,19 +24,13 @@ This guide assumes that
 </Step>
 
 <Step>
-  In the left sidebar, search for `External Client App Manager`. It should be
-  under `Platform Tools` -> `Apps` -> `External CLient Apps`. Click this menu
-  item.
-</Step>
-
-<Step>
   Click the `New External Client App` button at the top right corner and fill in
   all required fields from the `Basic Information` section.
 </Step>
 
 <Step>
-  We will configure OAuth in the next section of this guide. For now, click
-  `Create`.
+  For now, click `Create`. We will configure OAuth in the next section of this
+  guide.
 </Step>
 
 </Steps>
@@ -45,8 +39,8 @@ This guide assumes that
 
 ### Policies Tab
 
-You may optionally edit the `Policies` tab with custom `Oauth Start URL`, guest users, refresh
-token policy, and so on.
+You may optionally edit the `Policies` tab based on your use case, e.g. custom `Oauth Start URL`,
+guest users, refresh token policy
 
 However, the main option to note is `App Authorization` -> `IP Relaxation`, which you may need top
 modify to allow logins from IP addresses not configured by your organisations, if this is your
@@ -64,7 +58,7 @@ This is the second tab within `Policies`, `Settings`, `Package Defaults`.
     Under the `OAuth Settings` accordion, tick the `Enable OAuth` checkbox
   </Step>
   <Step>
-    Under `App Settings` -> `Callback URL`, enter your better-auth callback.
+    Under `App Settings` -> `Callback URL`, enter your better-auth callback URL.
     For example,
 
     ```text
@@ -81,12 +75,13 @@ This is the second tab within `Policies`, `Settings`, `Package Defaults`.
   </Step>
   <Step>
     Under `Flow Enablement`, tick the options
-    <Callout>
-    Note: the second option will only apear after ticking the first option.
-    </Callout>
 
     1. Enable Authorization Code and Credentials Flow
     1. Require user credentials in the POST body for Authorization Code and Credentials Flow
+
+    <Callout>
+    Note: the second option will only apear after ticking the first option.
+    </Callout>
 
   </Step>
 
@@ -110,6 +105,11 @@ This is the second tab within `Policies`, `Settings`, `Package Defaults`.
   </Steps>
   
 ## Usage with Better Auth
+
+<Callout>
+  You may need to wait 2-10 minutes for your external client application to be
+  registered on Salesforce.
+</Callout>
 
 <Steps>
 
