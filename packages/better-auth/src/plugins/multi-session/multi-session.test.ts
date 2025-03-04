@@ -27,7 +27,7 @@ describe("multi-session", async () => {
 		name: "Name",
 	};
 
-	it.only("should set multi session when there is set-cookie header", async () => {
+	it("should set multi session when there is set-cookie header", async () => {
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -56,7 +56,7 @@ describe("multi-session", async () => {
 		});
 	});
 
-	it.only("should get active session", async () => {
+	it("should get active session", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -66,7 +66,7 @@ describe("multi-session", async () => {
 	});
 
 	let sessionToken = "";
-	it.only("should list all device sessions", async () => {
+	it("should list all device sessions", async () => {
 		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
 				headers,
@@ -80,7 +80,7 @@ describe("multi-session", async () => {
 		expect(res.data).toHaveLength(2);
 	});
 
-	it.only("should set active session", async () => {
+	it("should set active session", async () => {
 		const res = await client.multiSession.setActive({
 			sessionToken,
 			fetchOptions: {
@@ -90,7 +90,7 @@ describe("multi-session", async () => {
 		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
-	it.only("should revoke a session and set the next active", async () => {
+	it("should revoke a session and set the next active", async () => {
 		const testUser3 = {
 			email: "my-email@email.com",
 			password: "password",
@@ -129,7 +129,7 @@ describe("multi-session", async () => {
 		expect(res.data).toHaveLength(2);
 	});
 
-	it.only("should sign-out all sessions", async () => {
+	it("should sign-out all sessions", async () => {
 		const newHeaders = new Headers();
 		await client.signOut({
 			fetchOptions: {
