@@ -696,7 +696,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								message: "Stripe webhook secret not found",
 							});
 						}
-						event = await client.webhooks.constructEventAsync(buf, sig, webhookSecret);
+						event = await client.webhooks.constructEventAsync(
+							buf,
+							sig,
+							webhookSecret,
+						);
 					} catch (err: any) {
 						ctx.context.logger.error(`${err.message}`);
 						throw new APIError("BAD_REQUEST", {
