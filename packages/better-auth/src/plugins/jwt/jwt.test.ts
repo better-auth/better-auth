@@ -7,7 +7,11 @@ import { importJWK, jwtVerify } from "jose";
 
 describe("jwt", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [jwt()],
+		plugins: [
+			jwt({
+				includeJWTOnHeaders: true,
+			}),
+		],
 		logger: {
 			level: "error",
 		},
@@ -34,6 +38,7 @@ describe("jwt", async (it) => {
 				},
 			},
 		});
+
 		expect(token.length).toBeGreaterThan(10);
 	});
 
