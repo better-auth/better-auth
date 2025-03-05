@@ -597,7 +597,7 @@ export const createInternalAdapter = (
 				model: "user",
 				where: [
 					{
-						value: email.toLowerCase(),
+						value: email,
 						field: "email",
 					},
 				],

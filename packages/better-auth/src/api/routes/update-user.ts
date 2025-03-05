@@ -568,14 +568,16 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		if (ctx.body.newEmail === ctx.context.session.user.email) {
+		const newEmail = ctx.body.newEmail.toLowerCase();
+
+		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");
 			throw new APIError("BAD_REQUEST", {
 				message: "Email is the same",
 			});
 		}
 		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
-			ctx.body.newEmail,
+			newEmail,
 		);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
@@ -588,7 +590,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		if (ctx.context.session.user.emailVerified !== true) {
 			const existing = await ctx.context.internalAdapter.findUserByEmail(
-				ctx.body.newEmail,
+				newEmail,
 			);
 			if (existing) {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
@@ -598,7 +600,7 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
-					email: ctx.body.newEmail,
+					email: newEmail,
 				},
 				ctx,
 			);
@@ -606,14 +608,14 @@ export const changeEmail = createAuthEndpoint(
 				session: ctx.context.session.session,
 				user: {
 					...ctx.context.session.user,
-					email: ctx.body.newEmail,
+					email: newEmail,
 				},
 			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					ctx.context.session.user.email,
-					ctx.body.newEmail,
+					newEmail,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${
@@ -625,7 +627,7 @@ export const changeEmail = createAuthEndpoint(
 					{
 						user: {
 							...ctx.context.session.user,
-							email: ctx.body.newEmail,
+							email: newEmail,
 						},
 						url,
 						token,
@@ -652,7 +654,7 @@ export const changeEmail = createAuthEndpoint(
 		const token = await createEmailVerificationToken(
 			ctx.context.secret,
 			ctx.context.session.user.email,
-			ctx.body.newEmail,
+			newEmail,
 			ctx.context.options.emailVerification?.expiresIn,
 		);
 		const url = `${
@@ -661,7 +663,7 @@ export const changeEmail = createAuthEndpoint(
 		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
 			{
 				user: ctx.context.session.user,
-				newEmail: ctx.body.newEmail,
+				newEmail: newEmail,
 				url,
 				token,
 			},
