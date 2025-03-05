@@ -1,31 +1,53 @@
 import { Inject, Module, RequestMethod } from "@nestjs/common";
-import type { MiddlewareConsumer, NestModule, Provider } from "@nestjs/common";
+import type {
+	MiddlewareConsumer,
+	NestModule,
+	OnModuleInit,
+	Provider,
+} from "@nestjs/common";
 import {
 	APP_FILTER,
 	DiscoveryModule,
 	DiscoveryService,
+	HttpAdapterHost,
 	MetadataScanner,
 } from "@nestjs/core";
 import type { Auth } from "../../auth";
 import { createAuthMiddleware } from "../../plugins";
 import { toNodeHandler } from "../node";
 import { AuthService } from "./auth-service";
-import { BEFORE_HOOK_KEY, AFTER_HOOK_KEY, HOOK_KEY } from "./metadata-symbols";
+import {
+	BEFORE_HOOK_KEY,
+	AFTER_HOOK_KEY,
+	HOOK_KEY,
+	AUTH_INSTANCE_KEY,
+	AUTH_MODULE_OPTIONS_KEY,
+} from "./symbols";
 import { APIErrorExceptionFilter } from "./api-error-exception-filter";
+
+type AuthModuleOptions = {
+	disableExceptionFilter?: boolean;
+	disableTrustedOriginsCors?: boolean;
+};
 
 @Module({
 	imports: [DiscoveryModule],
 })
-export class AuthModule implements NestModule {
+export class AuthModule implements NestModule, OnModuleInit {
 	constructor(
-		@Inject("AUTH_OPTIONS") private readonly auth: Auth,
+		@Inject(AUTH_INSTANCE_KEY) private readonly auth: Auth,
 		@Inject(DiscoveryService)
 		private discoveryService: DiscoveryService,
 		@Inject(MetadataScanner)
 		private metadataScanner: MetadataScanner,
+		@Inject(HttpAdapterHost)
+		private readonly adapter: HttpAdapterHost,
+		@Inject(AUTH_MODULE_OPTIONS_KEY)
+		private readonly options: AuthModuleOptions,
 	) {}
 
-	configure(consumer: MiddlewareConsumer) {
+	onModuleInit() {
+		// Setup hooks
 		if (!this.auth.options.hooks) return;
 
 		const providers = this.discoveryService
@@ -45,6 +67,26 @@ export class AuthModule implements NestModule {
 				this.setupHook(AFTER_HOOK_KEY, "after", providerMethod);
 			}
 		}
+	}
+
+	configure(consumer: MiddlewareConsumer) {
+		const trustedOrigins = this.auth.options.trustedOrigins;
+		// function-based trustedOrigins requires a Request (from web-apis) object to evaluate, which is not available in NestJS (we only have a express Request object)
+		// if we ever need this, take a look at better-call which show an implementation for this
+		const isNotFunctionBased = trustedOrigins && Array.isArray(trustedOrigins);
+
+		if (!this.options.disableTrustedOriginsCors && isNotFunctionBased) {
+			for (const origin of trustedOrigins) {
+				this.adapter.httpAdapter.enableCors({
+					origin,
+					methods: ["GET", "POST", "PUT", "DELETE"],
+					credentials: true,
+				});
+			}
+		} else
+			throw new Error(
+				"Function-based trustedOrigins not supported in NestJS. Use string array or disable CORS with disableTrustedOriginsCors: true.",
+			);
 
 		const handler = toNodeHandler(this.auth);
 		consumer.apply(handler).forRoutes({
@@ -73,10 +115,7 @@ export class AuthModule implements NestModule {
 		});
 	}
 
-	static forRoot(
-		auth: any,
-		{ disableExceptionFilter }: { disableExceptionFilter?: boolean } = {},
-	) {
+	static forRoot(auth: any, options: AuthModuleOptions = {}) {
 		// Initialize hooks with an empty object if undefined
 		// Without this initialization, the setupHook method won't be able to properly override hooks
 		// It won't throw an error, but any hook functions we try to add won't be called
@@ -86,13 +125,17 @@ export class AuthModule implements NestModule {
 
 		const providers: Provider[] = [
 			{
-				provide: "AUTH_OPTIONS",
+				provide: AUTH_INSTANCE_KEY,
 				useValue: auth,
+			},
+			{
+				provide: AUTH_MODULE_OPTIONS_KEY,
+				useValue: options,
 			},
 			AuthService,
 		];
 
-		if (!disableExceptionFilter) {
+		if (!options.disableExceptionFilter) {
 			providers.push({
 				provide: APP_FILTER,
 				useClass: APIErrorExceptionFilter,
@@ -104,8 +147,12 @@ export class AuthModule implements NestModule {
 			providers,
 			exports: [
 				{
-					provide: "AUTH_OPTIONS",
+					provide: AUTH_INSTANCE_KEY,
 					useValue: auth,
+				},
+				{
+					provide: AUTH_MODULE_OPTIONS_KEY,
+					useValue: options,
 				},
 				AuthService,
 			],

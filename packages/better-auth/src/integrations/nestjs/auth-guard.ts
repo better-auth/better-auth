@@ -4,6 +4,7 @@ import type { CanActivate, ExecutionContext } from "@nestjs/common";
 import type { Auth } from "../../auth";
 import { fromNodeHeaders } from "../node";
 import { APIError, type getSession } from "../../api";
+import { AUTH_INSTANCE_KEY } from "./symbols";
 
 export type UserSession = Exclude<
 	Awaited<ReturnType<ReturnType<typeof getSession>>>,
@@ -15,7 +16,7 @@ export class AuthGuard implements CanActivate {
 	constructor(
 		@Inject(Reflector)
 		private readonly reflector: Reflector,
-		@Inject("AUTH_OPTIONS")
+		@Inject(AUTH_INSTANCE_KEY)
 		private readonly auth: Auth,
 	) {}
 

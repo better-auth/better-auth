@@ -1,6 +1,6 @@
 import { createParamDecorator, SetMetadata } from "@nestjs/common";
 import type { ExecutionContext } from "@nestjs/common";
-import { AFTER_HOOK_KEY, BEFORE_HOOK_KEY, HOOK_KEY } from "./metadata-symbols";
+import { AFTER_HOOK_KEY, BEFORE_HOOK_KEY, HOOK_KEY } from "./symbols";
 
 export const Public = () => SetMetadata("PUBLIC", true);
 export const Optional = () => SetMetadata("OPTIONAL", true);

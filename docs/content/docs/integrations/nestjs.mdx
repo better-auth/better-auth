@@ -190,7 +190,7 @@ import { auth } from "./auth";
 export class AppModule {}
 ```
 
-### Request Object Access
+## Request Object Access
 
 You can access the session and user through the request object:
 
@@ -243,3 +243,22 @@ export class CustomAPIErrorFilter implements ExceptionFilter {
 ```
 
 This allows you to customize error responses while still leveraging Better Auth's error system.
+
+## Module Options
+
+When configuring `AuthModule.forRoot()`, you can provide options to customize the behavior:
+
+```typescript
+AuthModule.forRoot(auth, {
+  disableExceptionFilter: false,
+  disableTrustedOriginsCors: false
+})
+```
+
+The available options are:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `disableExceptionFilter` | `false` | When set to `true`, disables the built-in exception filter for handling `APIError` instances. Use this if you want to implement your own custom exception filter. |
+| `disableTrustedOriginsCors` | `false` | When set to `true`, disables the automatic CORS configuration for the origins specified in `trustedOrigins`. Use this if you want to handle CORS configuration manually. |
+
