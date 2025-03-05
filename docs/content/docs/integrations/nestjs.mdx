@@ -190,6 +190,46 @@ import { auth } from "./auth";
 export class AppModule {}
 ```
 
+## AuthService
+
+The `AuthService` is automatically provided by the `AuthModule` and can be injected into your controllers to access the Better Auth instance and its API endpoints.
+
+```ts title="users.controller.ts"
+import { Controller, Get, Post, Request, Body, UseGuards } from '@nestjs/common';
+import { AuthGuard, AuthService } from 'better-auth/nestjs';
+import { fromNodeHeaders } from 'better-auth/node';
+import type { Request as ExpressRequest } from 'express';
+import { auth } from '../auth';
+
+@Controller('users')
+@UseGuards(AuthGuard)
+export class UsersController {
+  constructor(private authService: AuthService<typeof auth>) {}
+
+  @Get('accounts')
+  async getAccounts(@Request() req: ExpressRequest) {
+    // Pass the request headers to the auth API
+    const accounts = await this.authService.api.listUserAccounts({
+      headers: fromNodeHeaders(req.headers),
+    });
+    
+    return { accounts };
+  }
+
+  @Post('api-keys')
+  async createApiKey(@Request() req: ExpressRequest, @Body() body) {
+    // Access plugin-specific functionality with request headers
+    // createApiKey is a method added by a plugin, not part of the core API
+    return this.authService.api.createApiKey({
+      ...body,
+      headers: fromNodeHeaders(req.headers)
+    });
+  }
+}
+```
+
+When using plugins that extend the Auth type with additional functionality, use generics to access the extended features as shown above with `AuthService<typeof auth>`. This ensures type safety when using plugin-specific API methods like `createApiKey`.
+
 ## Request Object Access
 
 You can access the session and user through the request object:
