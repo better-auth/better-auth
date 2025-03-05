@@ -28,11 +28,17 @@ import { sendEmail } from './email'; // your email sending function
 export const auth = betterAuth({
     emailVerification: {
         sendVerificationEmail: async ({ user, url, token }, request) => {
-            await sendEmail({
+            const { error } = await sendEmail({
                 to: user.email,
                 subject: 'Verify your email address',
                 text: `Click the link to verify your email: ${url}`
             })
+
+            if (error) {
+                throw new APIError("FAILED_DEPENDENCY", {
+                    message: "Failed to send verification email"
+                }); // now you can catch this error in client with error.code == "FAILED_TO_SEND_VERIFICATION_EMAIL"
+            };
         }
     }
 })
