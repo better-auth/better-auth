@@ -92,7 +92,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							description: "Number of seats to upgrade to (if applicable)",
 						})
 						.optional(),
-					uiMode: z.enum(["embedded", "hosted"]).default("hosted"),
 					successUrl: z
 						.string({
 							description:
