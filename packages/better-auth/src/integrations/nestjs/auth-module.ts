@@ -25,11 +25,23 @@ import {
 } from "./symbols";
 import { APIErrorExceptionFilter } from "./api-error-exception-filter";
 
+/**
+ * Configuration options for the AuthModule
+ */
 type AuthModuleOptions = {
 	disableExceptionFilter?: boolean;
 	disableTrustedOriginsCors?: boolean;
 };
 
+const HOOKS = [
+	{ metadataKey: BEFORE_HOOK_KEY, hookType: "before" as const },
+	{ metadataKey: AFTER_HOOK_KEY, hookType: "after" as const },
+];
+
+/**
+ * NestJS module that integrates the Auth library with NestJS applications.
+ * Provides authentication middleware, hooks, and exception handling.
+ */
 @Module({
 	imports: [DiscoveryModule],
 })
@@ -62,9 +74,7 @@ export class AuthModule implements NestModule, OnModuleInit {
 
 			for (const method of methods) {
 				const providerMethod = providerPrototype[method];
-
-				this.setupHook(BEFORE_HOOK_KEY, "before", providerMethod);
-				this.setupHook(AFTER_HOOK_KEY, "after", providerMethod);
+				this.setupHooks(providerMethod);
 			}
 		}
 	}
@@ -95,26 +105,31 @@ export class AuthModule implements NestModule, OnModuleInit {
 		});
 	}
 
-	private setupHook(
-		metadataKey: symbol,
-		hookType: "before" | "after",
-		providerMethod: Function,
-	) {
-		const hookPath = Reflect.getMetadata(metadataKey, providerMethod);
-		if (!hookPath || !this.auth.options.hooks) return;
+	private setupHooks(providerMethod: Function) {
+		if (!this.auth.options.hooks) return;
 
-		const originalHook = this.auth.options.hooks[hookType];
-		this.auth.options.hooks[hookType] = createAuthMiddleware(async (ctx) => {
-			if (originalHook) {
-				await originalHook(ctx);
-			}
+		for (const { metadataKey, hookType } of HOOKS) {
+			const hookPath = Reflect.getMetadata(metadataKey, providerMethod);
+			if (!hookPath) continue;
 
-			if (hookPath === ctx.path) {
-				await providerMethod(ctx);
-			}
-		});
+			const originalHook = this.auth.options.hooks[hookType];
+			this.auth.options.hooks[hookType] = createAuthMiddleware(async (ctx) => {
+				if (originalHook) {
+					await originalHook(ctx);
+				}
+
+				if (hookPath === ctx.path) {
+					await providerMethod(ctx);
+				}
+			});
+		}
 	}
 
+	/**
+	 * Static factory method to create and configure the AuthModule.
+	 * @param auth - The Auth instance to use
+	 * @param options - Configuration options for the module
+	 */
 	static forRoot(auth: any, options: AuthModuleOptions = {}) {
 		// Initialize hooks with an empty object if undefined
 		// Without this initialization, the setupHook method won't be able to properly override hooks

@@ -6,11 +6,19 @@ import { fromNodeHeaders } from "../node";
 import { APIError, type getSession } from "../../api";
 import { AUTH_INSTANCE_KEY } from "./symbols";
 
+/**
+ * Type representing a valid user session after authentication
+ * Excludes null and undefined values from the session return type
+ */
 export type UserSession = Exclude<
 	Awaited<ReturnType<ReturnType<typeof getSession>>>,
 	null | undefined
 >;
 
+/**
+ * NestJS guard that handles authentication for protected routes
+ * Can be configured with @Public() or @Optional() decorators to modify authentication behavior
+ */
 @Injectable()
 export class AuthGuard implements CanActivate {
 	constructor(
@@ -20,6 +28,12 @@ export class AuthGuard implements CanActivate {
 		private readonly auth: Auth,
 	) {}
 
+	/**
+	 * Validates if the current request is authenticated
+	 * Attaches session and user information to the request object
+	 * @param context - The execution context of the current request
+	 * @returns True if the request is authorized to proceed, throws an error otherwise
+	 */
 	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const request = context.switchToHttp().getRequest();
 		const session = await this.auth.api.getSession({
