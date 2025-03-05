@@ -337,6 +337,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
+				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
 				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.reference) {
@@ -574,6 +575,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
+				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
 				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.reference) {
