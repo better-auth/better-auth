@@ -642,8 +642,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										status: stripeSubscription.status,
 										seats: stripeSubscription.items.data[0]?.quantity || 1,
 										plan: plan.name.toLowerCase(),
-										periodEnd: stripeSubscription.current_period_end,
-										periodStart: stripeSubscription.current_period_start,
+										periodEnd: new Date(
+											stripeSubscription.current_period_end * 1000,
+										),
+										periodStart: new Date(
+											stripeSubscription.current_period_start * 1000,
+										),
 										stripeSubscriptionId: stripeSubscription.id,
 									},
 									where: [
