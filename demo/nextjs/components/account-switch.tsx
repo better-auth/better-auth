@@ -40,7 +40,7 @@ export default function AccountSwitcher({
 				>
 					<Avatar className="mr-2 h-6 w-6">
 						<AvatarImage
-							src={currentUser?.user.image || ""}
+							src={currentUser?.user.image || undefined}
 							alt={currentUser?.user.name}
 						/>
 						<AvatarFallback>{currentUser?.user.name.charAt(0)}</AvatarFallback>
@@ -61,7 +61,7 @@ export default function AccountSwitcher({
 								<div className="flex items-center">
 									<Avatar className="mr-2 h-5 w-5">
 										<AvatarImage
-											src={currentUser?.user.image || ""}
+											src={currentUser?.user.image || undefined}
 											alt={currentUser?.user.name}
 										/>
 										<AvatarFallback>
@@ -88,7 +88,10 @@ export default function AccountSwitcher({
 										className="text-sm"
 									>
 										<Avatar className="mr-2 h-5 w-5">
-											<AvatarImage src={u.user.image || ""} alt={u.user.name} />
+											<AvatarImage
+												src={u.user.image || undefined}
+												alt={u.user.name}
+											/>
 											<AvatarFallback>{u.user.name.charAt(0)}</AvatarFallback>
 										</Avatar>
 										<div className="flex items-center justify-between w-full">

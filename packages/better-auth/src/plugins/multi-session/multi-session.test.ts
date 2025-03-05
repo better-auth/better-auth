@@ -41,7 +41,7 @@ describe("multi-session", async () => {
 						.get("better-auth.session_token")
 						?.value.split(".")[0];
 					const multiSession = setCookies.get(
-						`better-auth.session_token_multi-${sessionToken}`,
+						`better-auth.session_token_multi-${sessionToken?.toLowerCase()}`,
 					)?.value;
 					expect(sessionToken).not.toBe(null);
 					expect(multiSession).not.toBe(null);
@@ -130,9 +130,11 @@ describe("multi-session", async () => {
 	});
 
 	it("should sign-out all sessions", async () => {
+		const newHeaders = new Headers();
 		await client.signOut({
 			fetchOptions: {
 				headers,
+				onSuccess: cookieSetter(newHeaders),
 			},
 		});
 		const res = await client.multiSession.listDeviceSessions({
@@ -141,5 +143,11 @@ describe("multi-session", async () => {
 			},
 		});
 		expect(res.data).toHaveLength(0);
+		const res2 = await client.multiSession.listDeviceSessions({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(res2.data).toHaveLength(0);
 	});
 });

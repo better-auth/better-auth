@@ -277,7 +277,7 @@ By default, there are two roles:
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete`
+  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
 
 **session**:
   `list` `revoke` `delete`
@@ -514,6 +514,20 @@ admin({
   defaultRole: "regular",
 });
 ```
+### Admin Roles
+
+The roles that are considered admin roles. Defaults to `["admin"]`.
+
+```ts title="auth.ts"
+admin({
+  adminRoles: ["admin", "superadmin"],
+});
+```
+
+<Callout type="warning">
+  Any role that isn't in the `adminRoles` list, even if they have the permission,
+  will not be considered an admin.
+</Callout>
 
 ### Admin userIds
 
@@ -524,6 +538,8 @@ admin({
     adminUserIds: ["user_id_1", "user_id_2"]
 })
 ```
+
+If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
 
 ### impersonationSessionDuration
 

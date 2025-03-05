@@ -77,7 +77,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
-					plan: z.string(),
+					plan: z.string({
+						description: "The name of the plan to upgrade to",
+					}),
+					annual: z
+						.boolean({
+							description: "Whether to upgrade to an annual plan",
+						})
+						.optional(),
 					referenceId: z.string().optional(),
 					metadata: z.record(z.string(), z.any()).optional(),
 					seats: z
@@ -99,7 +106,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default("/"),
 					returnUrl: z.string().optional(),
-					withoutTrial: z.boolean().optional(),
 					disableRedirect: z.boolean().default(false),
 				}),
 				use: [
@@ -182,9 +188,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 					],
 				});
+
 				const existingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
 				);
+
+				if (
+					existingSubscription &&
+					existingSubscription.status === "active" &&
+					existingSubscription.plan === ctx.body.plan
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+					});
+				}
+
 				if (activeSubscription && customerId) {
 					const { url } = await client.billingPortal.sessions
 						.create({
@@ -198,40 +216,15 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										{
 											id: activeSubscription.items.data[0]?.id as string,
 											quantity: 1,
-											price: plan.priceId,
+											price: ctx.body.annual
+												? plan.annualDiscountPriceId
+												: plan.priceId,
 										},
 									],
 								},
 							},
 						})
 						.catch(async (e) => {
-							if (e.message.includes("no changes")) {
-								/**
-								 * If the subscription is already active on stripe, we need to
-								 * update the status to the new status.
-								 */
-								const plan = await getPlanByPriceId(
-									options,
-									activeSubscription.items.data[0]?.plan.id,
-								);
-								await ctx.context.adapter.update({
-									model: "subscription",
-									update: {
-										status: activeSubscription.status,
-										seats: activeSubscription.items.data[0]?.quantity,
-										plan: plan?.name.toLowerCase(),
-									},
-									where: [
-										{
-											field: "referenceId",
-											value: referenceId,
-										},
-									],
-								});
-								throw new APIError("BAD_REQUEST", {
-									message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-								});
-							}
 							throw ctx.error("BAD_REQUEST", {
 								message: e.message,
 								code: e.code,
@@ -243,15 +236,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					});
 				}
 
-				if (
-					existingSubscription &&
-					existingSubscription.status === "active" &&
-					existingSubscription.plan === ctx.body.plan
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-					});
-				}
 				let subscription = existingSubscription;
 				if (!subscription) {
 					const newSubscription = await ctx.context.adapter.create<
@@ -285,44 +269,58 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					ctx.request,
 				);
 
+				const freeTrail = plan.freeTrial
+					? {
+							trial_period_days: plan.freeTrial.days,
+						}
+					: undefined;
+
 				const checkoutSession = await client.checkout.sessions
-					.create({
-						...(customerId
-							? {
-									customer: customerId,
-									customer_update: {
-										name: "auto",
-										address: "auto",
-									},
-								}
-							: {
-									customer_email: session.user.email,
-								}),
-						success_url: getUrl(
-							ctx,
-							`${
-								ctx.context.baseURL
-							}/subscription/success?callbackURL=${encodeURIComponent(
-								ctx.body.successUrl,
-							)}&reference=${encodeURIComponent(referenceId)}`,
-						),
-						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
-						line_items: [
-							{
-								price: plan.priceId,
-								quantity: ctx.body.seats || 1,
+					.create(
+						{
+							...(customerId
+								? {
+										customer: customerId,
+										customer_update: {
+											name: "auto",
+											address: "auto",
+										},
+									}
+								: {
+										customer_email: session.user.email,
+									}),
+							success_url: getUrl(
+								ctx,
+								`${
+									ctx.context.baseURL
+								}/subscription/success?callbackURL=${encodeURIComponent(
+									ctx.body.successUrl,
+								)}&reference=${encodeURIComponent(referenceId)}`,
+							),
+							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+							line_items: [
+								{
+									price: ctx.body.annual
+										? plan.annualDiscountPriceId
+										: plan.priceId,
+									quantity: ctx.body.seats || 1,
+								},
+							],
+							subscription_data: {
+								...freeTrail,
 							},
-						],
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params,
-						metadata: {
-							userId: user.id,
-							subscriptionId: subscription.id,
-							referenceId,
-							...params?.params?.metadata,
+							mode: "subscription",
+							client_reference_id: referenceId,
+							...params?.params,
+							metadata: {
+								userId: user.id,
+								subscriptionId: subscription.id,
+								referenceId,
+								...params?.params?.metadata,
+							},
 						},
-					})
+						params?.options,
+					)
 					.catch(async (e) => {
 						throw ctx.error("BAD_REQUEST", {
 							message: e.message,
@@ -443,12 +441,36 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					});
 				}
-				const activeSubscription = await client.subscriptions
+				const activeSubscriptions = await client.subscriptions
 					.list({
 						customer: subscription.stripeCustomerId,
-						status: "active",
 					})
-					.then((res) => res.data[0]);
+					.then((res) =>
+						res.data.filter(
+							(sub) => sub.status === "active" || sub.status === "trialing",
+						),
+					);
+				if (!activeSubscriptions.length) {
+					/**
+					 * If the subscription is not found, we need to delete the subscription
+					 * from the database. This is a rare case and should not happen.
+					 */
+					await ctx.context.adapter.deleteMany({
+						model: "subscription",
+						where: [
+							{
+								field: "referenceId",
+								value: referenceId,
+							},
+						],
+					});
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				const activeSubscription = activeSubscriptions.find(
+					(sub) => sub.id === subscription.stripeSubscriptionId,
+				);
 				if (!activeSubscription) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,

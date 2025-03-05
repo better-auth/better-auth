@@ -44,12 +44,6 @@ export type Plan = {
 		 */
 		days: number;
 		/**
-		 * Only available for new users or users without existing subscription
-		 *
-		 * @default true
-		 */
-		forNewUsersOnly?: boolean;
-		/**
 		 * A function that will be called when the trial
 		 * starts.
 		 *
@@ -67,7 +61,6 @@ export type Plan = {
 		onTrialEnd?: (
 			data: {
 				subscription: Subscription;
-				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;

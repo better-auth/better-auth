@@ -13,11 +13,11 @@ Then, you can use the Drizzle adapter to connect to your database.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { DrizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
-  database: new DrizzleAdapter(db, {
+  database: drizzleAdapter(db, {
     // [!code highlight]
     provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
   }), // [!code highlight]
