@@ -44,12 +44,6 @@ import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { defaultRoles, defaultStatements } from "./access";
 import { hasPermission } from "./has-permission";
 
-type Schema<T> = {
-	modelName?: string;
-	fields?: {
-		[key in keyof Omit<T, "id">]?: string;
-	};
-};
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -118,7 +112,7 @@ export interface OrganizationOptions {
 			/**
 			 * Pass a custom default team creator function
 			 */
-			customCreateDefaultTeam: (
+			customCreateDefaultTeam?: (
 				organization: Organization & Record<string, any>,
 				request?: Request,
 			) => Promise<Team & Record<string, any>>;
