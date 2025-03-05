@@ -236,7 +236,7 @@ Create a new file or route in your framework's designated catch-all route handle
 Better Auth supports any backend framework with standard Request and Response objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
+<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo", "nestjs"]} defaultValue="react">
     <Tab value="next-js">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -379,6 +379,48 @@ Better Auth supports any backend framework with standard Request and Response ob
 
     const handler = auth.handler;
     export { handler as GET, handler as POST };
+    ```
+    </Tab>
+    <Tab value="nestjs">
+    ```ts title="main.ts"
+    import { NestFactory } from "@nestjs/core";
+    import { AppModule } from "./app.module";
+    
+    async function bootstrap() {
+      const app = await NestFactory.create(AppModule, {
+        bodyParser: false, // Disable NestJS body parser to let Better Auth handle raw requests
+      });
+      await app.listen(process.env.PORT ?? 3000);
+    }
+    bootstrap();
+    ```
+    
+    ```ts title="app.module.ts"
+    import { Module } from '@nestjs/common';
+    import { AuthModule } from 'better-auth/nestjs';
+    import { auth } from "./auth"; // path to your auth file
+    
+    @Module({
+      imports: [
+        AuthModule.forRoot(auth),
+      ],
+    })
+    export class AppModule {}
+    ```
+    
+    Protect routes using AuthGuard:
+    ```ts title="users.controller.ts"
+    import { Controller, Get, UseGuards } from '@nestjs/common';
+    import { AuthGuard, Session } from 'better-auth/nestjs';
+    
+    @Controller('users')
+    @UseGuards(AuthGuard) // Protect all routes in this controller
+    export class UsersController {
+      @Get('me')
+      getProfile(@Session() session) {
+        return session;
+      }
+    }
     ```
     </Tab>
 </Tabs>
