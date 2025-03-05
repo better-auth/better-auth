@@ -61,7 +61,6 @@ export type Plan = {
 		onTrialEnd?: (
 			data: {
 				subscription: Subscription;
-				user: User & Record<string, any>;
 			},
 			request?: Request,
 		) => Promise<void>;

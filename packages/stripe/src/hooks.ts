@@ -1,4 +1,4 @@
-import { logger, type GenericEndpointContext, type User } from "better-auth";
+import { logger, type GenericEndpointContext } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceId } from "./utils";
@@ -172,13 +172,7 @@ export async function onSubscriptionUpdated(
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
-				const user = await ctx.context.adapter.findOne<User>({
-					model: "user",
-					where: [{ field: "id", value: subscription.referenceId }],
-				});
-				if (user) {
-					await plan.freeTrial.onTrialEnd({ subscription, user }, ctx.request);
-				}
+				await plan.freeTrial.onTrialEnd({ subscription }, ctx.request);
 			}
 			if (
 				subscriptionUpdated.status === "incomplete_expired" &&
@@ -218,8 +212,8 @@ export async function onSubscriptionDeleted(
 				model: "subscription",
 				where: [
 					{
-						field: "stripeSubscriptionId",
-						value: subscriptionId,
+						field: "id",
+						value: subscription.id,
 					},
 				],
 				update: {

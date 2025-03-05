@@ -290,7 +290,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 		//should reject cause the user is not admin
-		expect(impersonatedUserRes.error?.status).toBe(403);
+		expect(impersonatedUserRes.error?.status).toBe(401);
 		const res = await client.admin.stopImpersonating(
 			{},
 			{

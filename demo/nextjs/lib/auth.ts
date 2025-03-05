@@ -21,7 +21,6 @@ import { nextCookies } from "better-auth/next-js";
 import { passkey } from "better-auth/plugins/passkey";
 import { stripe } from "@better-auth/stripe";
 import { Stripe } from "stripe";
-import Database from "better-sqlite3";
 
 const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const to = process.env.TEST_EMAIL || "";
@@ -52,7 +51,10 @@ const STARTER_PRICE_ID = {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	database: new Database("stripe.db"),
+	database: {
+		dialect,
+		type: process.env.USE_MYSQL ? "mysql" : "sqlite",
+	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
@@ -151,7 +153,9 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin(),
+		admin({
+			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
+		}),
 		multiSession(),
 		oAuthProxy(),
 		nextCookies(),

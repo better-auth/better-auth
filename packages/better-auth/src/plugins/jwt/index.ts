@@ -336,7 +336,7 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const session = ctx.context.session;
+						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
 							ctx.setHeader("set-auth-jwt", jwt);
