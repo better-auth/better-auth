@@ -1,4 +1,5 @@
-import { z, ZodLiteral } from "zod";
+import { z, ZodLiteral, ZodUnion, ZodArray } from "zod";
+
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./organization";
 
@@ -55,18 +56,19 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
+
 export type InferZodRolesFromOption<O extends OrganizationOptions | undefined> =
-	ZodLiteral<
-		O extends {
-			roles: {
-				[key: string]: any;
-			};
-		}
-			? keyof O["roles"] | (keyof O["roles"])[]
-			: "admin" | "member" | "owner" | ("admin" | "member" | "owner")[]
-	>;
+  O extends { roles: Record<string, any> }
+    ? ZodUnion<[ZodLiteral<keyof O["roles"]>, ZodArray<ZodLiteral<keyof O["roles"]>>]>
+    : ZodUnion<
+        [
+          ZodLiteral<"admin"> | ZodLiteral<"member"> | ZodLiteral<"owner">,
+          ZodArray<ZodLiteral<"admin" | "member" | "owner">>
+        ]
+      >;
+
 export type InferRolesFromOption<O extends OrganizationOptions | undefined> =
-	O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+  O extends { roles: infer R } ? keyof R : "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
