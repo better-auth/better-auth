@@ -30,7 +30,32 @@ export const listUserAccounts = createAuthEndpoint(
 											provider: {
 												type: "string",
 											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+											},
+											accountId: {
+												type: "string",
+											},
+											scopes: {
+												type: "array",
+												items: {
+													type: "string",
+												},
+											},
 										},
+										required: [
+											"id",
+											"provider",
+											"createdAt",
+											"updatedAt",
+											"accountId",
+											"scopes",
+										],
 									},
 								},
 							},
@@ -59,7 +84,6 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 	},
 );
-
 export const linkSocialAccount = createAuthEndpoint(
 	"/link-social",
 	{
@@ -75,7 +99,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				})
 				.optional(),
 			/**
-			 * OAuth2 provider to use`
+			 * OAuth2 provider to use
 			 */
 			provider: z.enum(socialProviderList, {
 				description: "The OAuth2 provider to use",
@@ -95,9 +119,13 @@ export const linkSocialAccount = createAuthEndpoint(
 									properties: {
 										url: {
 											type: "string",
+											description:
+												"The authorization URL to redirect the user to",
 										},
 										redirect: {
 											type: "boolean",
+											description:
+												"Indicates if the user should be redirected to the authorization URL",
 										},
 									},
 									required: ["url", "redirect"],
@@ -152,7 +180,6 @@ export const linkSocialAccount = createAuthEndpoint(
 		});
 	},
 );
-
 export const unlinkAccount = createAuthEndpoint(
 	"/unlink-account",
 	{
@@ -161,6 +188,28 @@ export const unlinkAccount = createAuthEndpoint(
 			providerId: z.string(),
 		}),
 		use: [freshSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Unlink an account",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -183,6 +232,7 @@ export const unlinkAccount = createAuthEndpoint(
 			ctx.body.providerId,
 			ctx.context.session.user.id,
 		);
+
 		return ctx.json({
 			status: true,
 		});

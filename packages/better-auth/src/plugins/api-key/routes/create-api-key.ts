@@ -98,6 +98,144 @@ export function createApiKey({
 					.optional(),
 				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
+			metadata: {
+				openapi: {
+					description: "Create a new API key for a user",
+					responses: {
+						"200": {
+							description: "API key created successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the API key",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Creation timestamp",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Last update timestamp",
+											},
+											name: {
+												type: "string",
+												nullable: true,
+												description: "Name of the API key",
+											},
+											prefix: {
+												type: "string",
+												nullable: true,
+												description: "Prefix of the API key",
+											},
+											start: {
+												type: "string",
+												nullable: true,
+												description:
+													"Starting characters of the key (if configured)",
+											},
+											key: {
+												type: "string",
+												description:
+													"The full API key (only returned on creation)",
+											},
+											enabled: {
+												type: "boolean",
+												description: "Whether the key is enabled",
+											},
+											expiresAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Expiration timestamp",
+											},
+											userId: {
+												type: "string",
+												description: "ID of the user owning the key",
+											},
+											lastRefillAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Last refill timestamp",
+											},
+											lastRequest: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description: "Last request timestamp",
+											},
+											metadata: {
+												type: "object",
+												nullable: true,
+												additionalProperties: true,
+												description: "Metadata associated with the key",
+											},
+											rateLimitMax: {
+												type: "number",
+												nullable: true,
+												description: "Maximum requests in time window",
+											},
+											rateLimitTimeWindow: {
+												type: "number",
+												nullable: true,
+												description: "Rate limit time window in milliseconds",
+											},
+											remaining: {
+												type: "number",
+												nullable: true,
+												description: "Remaining requests",
+											},
+											refillAmount: {
+												type: "number",
+												nullable: true,
+												description: "Amount to refill",
+											},
+											refillInterval: {
+												type: "number",
+												nullable: true,
+												description: "Refill interval in milliseconds",
+											},
+											rateLimitEnabled: {
+												type: "boolean",
+												description: "Whether rate limiting is enabled",
+											},
+											requestCount: {
+												type: "number",
+												description: "Current request count in window",
+											},
+											permissions: {
+												type: "object",
+												nullable: true,
+												additionalProperties: {
+													type: "array",
+													items: { type: "string" },
+												},
+												description: "Permissions associated with the key",
+											},
+										},
+										required: [
+											"id",
+											"createdAt",
+											"updatedAt",
+											"key",
+											"enabled",
+											"userId",
+											"rateLimitEnabled",
+											"requestCount",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const {

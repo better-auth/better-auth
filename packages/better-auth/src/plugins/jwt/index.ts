@@ -192,8 +192,8 @@ export const jwt = (options?: JwtOptions) => {
 						openapi: {
 							description: "Get the JSON Web Key Set",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description: "JSON Web Key Set retrieved successfully",
 									content: {
 										"application/json": {
 											schema: {
@@ -201,31 +201,68 @@ export const jwt = (options?: JwtOptions) => {
 												properties: {
 													keys: {
 														type: "array",
+														description: "Array of public JSON Web Keys",
 														items: {
 															type: "object",
 															properties: {
 																kid: {
 																	type: "string",
+																	description:
+																		"Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk",
 																},
 																kty: {
 																	type: "string",
-																},
-																use: {
-																	type: "string",
+																	description:
+																		"Key type (e.g., 'RSA', 'EC', 'OKP')",
 																},
 																alg: {
 																	type: "string",
+																	description:
+																		"Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')",
+																},
+																use: {
+																	type: "string",
+																	description:
+																		"Intended use of the public key (e.g., 'sig' for signature)",
+																	enum: ["sig"],
+																	nullable: true,
 																},
 																n: {
 																	type: "string",
+																	description:
+																		"Modulus for RSA keys (base64url-encoded)",
+																	nullable: true,
 																},
 																e: {
 																	type: "string",
+																	description:
+																		"Exponent for RSA keys (base64url-encoded)",
+																	nullable: true,
+																},
+																crv: {
+																	type: "string",
+																	description:
+																		"Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+																	nullable: true,
+																},
+																x: {
+																	type: "string",
+																	description:
+																		"X coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
+																},
+																y: {
+																	type: "string",
+																	description:
+																		"Y coordinate for elliptic curve keys (base64url-encoded)",
+																	nullable: true,
 																},
 															},
+															required: ["kid", "kty", "alg"],
 														},
 													},
 												},
+												required: ["keys"],
 											},
 										},
 									},

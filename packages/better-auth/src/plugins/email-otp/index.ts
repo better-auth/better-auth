@@ -227,8 +227,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						openapi: {
 							description: "Get verification OTP",
 							responses: {
-								200: {
-									description: "Success",
+								"200": {
+									description:
+										"OTP retrieved successfully or not found/expired",
 									content: {
 										"application/json": {
 											schema: {
@@ -236,15 +237,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 												properties: {
 													otp: {
 														type: "string",
+														nullable: true,
+														description:
+															"The stored OTP, or null if not found or expired",
 													},
 												},
+												required: ["otp"],
 											},
 										},
-									},
+
 								},
 							},
 						},
 					},
+				 },
 				},
 				async (ctx) => {
 					const email = ctx.query.email;
@@ -285,9 +291,22 @@ export const emailOTP = (options: EmailOTPOptions) => {
 											schema: {
 												type: "object",
 												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates if the verification was successful",
+														enum: [true],
+													},
+													token: {
+														type: "string",
+														nullable: true,
+														description:
+															"Session token if autoSignInAfterVerification is enabled, otherwise null",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
+													required: ["status", "token", "user"],
 												},
 											},
 										},
@@ -408,13 +427,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 											schema: {
 												type: "object",
 												properties: {
+													token: {
+														type: "string",
+														description:
+															"Session token for the authenticated session",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
-													session: {
-														$ref: "#/components/schemas/Session",
-													},
 												},
+												required: ["token", "user"],
 											},
 										},
 									},
@@ -539,6 +561,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 												properties: {
 													success: {
 														type: "boolean",
+														description:
+															"Indicates if the OTP was sent successfully",
 													},
 												},
 											},

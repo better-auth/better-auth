@@ -766,6 +766,35 @@ export const passkey = (options?: PasskeyOptions) => {
 				{
 					method: "GET",
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "List all passkeys for the authenticated user",
+							responses: {
+								"200": {
+									description: "Passkeys retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "array",
+												items: {
+													$ref: "#/components/schemas/Passkey",
+													required: [
+														"id",
+														"userId",
+														"publicKey",
+														"createdAt",
+														"updatedAt",
+													],
+												},
+												description:
+													"Array of passkey objects associated with the user",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const passkeys = await ctx.context.adapter.findMany<Passkey>({
@@ -785,6 +814,31 @@ export const passkey = (options?: PasskeyOptions) => {
 						id: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Delete a specific passkey",
+							responses: {
+								"200": {
+									description: "Passkey deleted successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													status: {
+														type: "boolean",
+														description:
+															"Indicates whether the deletion was successful",
+													},
+												},
+												required: ["status"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					await ctx.context.adapter.delete<Passkey>({
@@ -810,6 +864,29 @@ export const passkey = (options?: PasskeyOptions) => {
 						name: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Update a specific passkey's name",
+							responses: {
+								"200": {
+									description: "Passkey updated successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													passkey: {
+														$ref: "#/components/schemas/Passkey",
+													},
+												},
+												required: ["passkey"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const passkey = await ctx.context.adapter.findOne<Passkey>({

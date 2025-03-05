@@ -28,6 +28,47 @@ export function deleteApiKey({
 				}),
 			}),
 			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Delete an existing API key",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										keyId: {
+											type: "string",
+											description: "The id of the API key to delete",
+										},
+									},
+									required: ["keyId"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "API key deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+												description:
+													"Indicates if the API key was successfully deleted",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;
