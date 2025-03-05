@@ -18,6 +18,7 @@ model User {
   updatedAt        DateTime
   twoFactorEnabled Boolean?
   username         String?
+  displayUsername  String?
   sessions         Session[]
   accounts         Account[]
   twofactors       TwoFactor[]

@@ -159,6 +159,26 @@ const isVerified = await authClient.phoneNumber.verify({
 })
 ```
 
+### Forget Password
+
+To initiate a forget password flow using `phoneNumber`, you can start by calling `forgetPassword` on the client to send an OTP code to the user's phone number.
+
+```ts title="auth-client.ts"
+await authClient.phoneNumber.forgetPassword({
+    phoneNumber: "+1234567890"
+})
+```
+
+Then, you can reset the password by calling `restPassword` on the client with the OTP code and the new password.
+
+```ts title="auth-client.ts"
+const isVerified = await authClient.phoneNumber.restPassword({
+    otp: "123456", // OTP code sent to the user's phone number
+    phoneNumber: "+1234567890",
+    newPassword: "newPassword"
+})  
+```
+
 ## Options
 
 - `otpLength`: The length of the OTP code to be generated. Default is `6`.

@@ -19,6 +19,8 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Card, Cards } from "fumadocs-ui/components/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { contents } from "@/components/sidebar-content";
+import { Endpoint } from "@/components/endpoint";
+import { DividerText } from "@/components/divider-text";
 
 const { AutoTypeTable } = createTypeTable();
 
@@ -45,7 +47,8 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				path: "/docs/content/docs",
+				sha: "main",
+				path: `/docs/content/docs/${page.file.path}`,
 			}}
 			tableOfContent={{
 				style: "clerk",
@@ -89,6 +92,8 @@ export default async function Page({
 						DatabaseTable,
 						Accordion,
 						Accordions,
+						Endpoint,
+						DividerText,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
 						),
@@ -96,7 +101,7 @@ export default async function Page({
 				/>
 
 				<Cards className="mt-16">
-					{prevPage && (
+					{prevPage ? (
 						<Card
 							href={prevPage.url}
 							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
@@ -109,8 +114,10 @@ export default async function Page({
 								</div>
 							}
 						/>
+					) : (
+						<div></div>
 					)}
-					{nextPage && (
+					{nextPage ? (
 						<Card
 							href={nextPage.url}
 							description={<>{nextPage.data.description}</>}
@@ -123,6 +130,8 @@ export default async function Page({
 							}
 							className="flex flex-col items-end text-right [&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
 						/>
+					) : (
+						<div></div>
 					)}
 				</Cards>
 			</DocsBody>
@@ -139,7 +148,9 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
 	params,
-}: { params: Promise<{ slug?: string[] }> }) {
+}: {
+	params: Promise<{ slug?: string[] }>;
+}) {
 	const { slug } = await params;
 	const page = source.getPage(slug);
 	if (page == null) notFound();
@@ -224,7 +235,8 @@ function getPageLinks(path: string) {
 	}
 
 	const pages = source.getPages();
-	const next_page2 = pages.find((x) => x.url === next_page.href);
-	const prev_page2 = pages.find((x) => x.url === prev_page.href);
+	let next_page2 = pages.find((x) => x.url === next_page.href);
+	let prev_page2 = pages.find((x) => x.url === prev_page.href);
+	if (path === "/docs/introduction") prev_page2 = undefined;
 	return { nextPage: next_page2, prevPage: prev_page2 };
 }

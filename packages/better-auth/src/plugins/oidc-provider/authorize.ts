@@ -141,6 +141,10 @@ export async function authorize(
 		);
 	}
 
+	if (!query.code_challenge_method) {
+		query.code_challenge_method = "plain";
+	}
+
 	if (
 		![
 			"s256",
@@ -186,6 +190,7 @@ export async function authorize(
 				state: query.prompt === "consent" ? query.state : null,
 				codeChallenge: query.code_challenge,
 				codeChallengeMethod: query.code_challenge_method,
+				nonce: query.nonce,
 			}),
 			identifier: code,
 			expiresAt,

@@ -24,10 +24,12 @@ export async function generateState(
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
+
 		/**
 		 * This is the actual expiry time of the state
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
+		requestSignUp: c.body?.requestSignUp,
 	});
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
@@ -74,6 +76,7 @@ export async function parseState(c: GenericEndpointContext) {
 					userId: z.string(),
 				})
 				.optional(),
+			requestSignUp: z.boolean().optional(),
 		})
 		.parse(JSON.parse(data.value));
 
@@ -81,10 +84,6 @@ export async function parseState(c: GenericEndpointContext) {
 		parsedData.errorURL = `${c.context.baseURL}/error`;
 	}
 	if (parsedData.expiresAt < Date.now()) {
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
-		c.context.logger.error("State expired.", {
-			state,
-		});
 		throw c.redirect(
 			`${c.context.baseURL}/error?error=please_restart_the_process`,
 		);

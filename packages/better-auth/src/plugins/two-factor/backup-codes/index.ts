@@ -75,9 +75,11 @@ export async function verifyBackupCode(
 }
 
 export async function getBackupCodes(backupCodes: string, key: string) {
-	const secret = Buffer.from(
-		await symmetricDecrypt({ key, data: backupCodes }),
-	).toString("utf-8");
+	const secret = new TextDecoder("utf-8").decode(
+		new TextEncoder().encode(
+			await symmetricDecrypt({ key, data: backupCodes }),
+		),
+	);
 	const data = JSON.parse(secret);
 	const result = z.array(z.string()).safeParse(data);
 	if (result.success) {
@@ -101,7 +103,22 @@ export const backupCode2fa = (options?: BackupCodeOptions) => {
 						/**
 						 * Disable setting the session cookie
 						 */
-						disableSession: z.boolean().optional(),
+						disableSession: z
+							.boolean({
+								description: "If true, the session cookie will not be set.",
+							})
+							.optional(),
+						/**
+						 * if true, the device will be trusted
+						 * for 30 days. It'll be refreshed on
+						 * every sign in request within this time.
+						 */
+						trustDevice: z
+							.boolean({
+								description:
+									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time.",
+							})
+							.optional(),
 					}),
 					use: [verifyTwoFactorMiddleware],
 				},

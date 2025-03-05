@@ -6,7 +6,7 @@ import { kFormatter } from "@/lib/utils";
 export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 	return (
 		<div className="relative">
-			<div className="mx-auto w-full">
+			<div className="md:mx-auto w-full">
 				<div className="border border-input rounded-none overflow-hidden border-l-0 border-r-0">
 					<div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-input">
 						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
@@ -14,8 +14,8 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								<div className="inline-flex dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset] border rounded-full items-center justify-center p-1 w-[4.0em] h-[4.0em] mx-auto mb-4">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										width="2.3em"
-										height="2.3em"
+										width="4em"
+										height="4em"
 										viewBox="0 0 24 24"
 										className="my-2"
 									>
@@ -25,7 +25,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 										></path>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Discord
 								</span>
 							</div>
@@ -51,7 +51,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 
 						<div className="flex pt-5 w-full dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
 							<div className="relative p-3">
-								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									{parseInt(kFormatter(npmDownloads) as string)}k+
 								</span>
 							</div>
@@ -92,8 +92,8 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 								<div className="inline-flex dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset] border rounded-full items-center justify-center p-1 w-[4.0em] h-[4.0em] mx-auto mb-4">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										width="2.3em"
-										height="2.3em"
+										width="4em"
+										height="4em"
 										viewBox="0 0 24 24"
 										className="my-2"
 									>
@@ -107,7 +107,7 @@ export default function Stats({ npmDownloads }: { npmDownloads: number }) {
 										></path>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b from-stone-200 via-stone-400 to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Reddit
 								</span>
 							</div>
