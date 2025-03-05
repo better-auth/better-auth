@@ -50,7 +50,7 @@ export const kick = (options: KickOptions) => {
                 code,
                 redirectURI,
                 options,
-                tokenEndpoint: "https://id.kick.com/oauth2/token",
+                tokenEndpoint: "https://id.kick.com/oauth/token",
                 codeVerifier,
             });
         },
