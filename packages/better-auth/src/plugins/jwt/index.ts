@@ -15,6 +15,7 @@ import {
 } from "../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { mergeSchema } from "../../db/schema";
+import { BetterAuthError } from "../../error";
 
 type JWKOptions =
 	| {
@@ -147,6 +148,10 @@ export async function getJwtToken(
 		? await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: JSON.parse(key.privateKey),
+			}).catch(() => {
+				throw new BetterAuthError(
+					"Failed to decrypt private private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either cleanup your jwks or disable private key encryption.",
+				);
 			})
 		: key.privateKey;
 
