@@ -602,7 +602,13 @@ export const changeEmail = createAuthEndpoint(
 				},
 				ctx,
 			);
-
+			await setSessionCookie(ctx, {
+				session: ctx.context.session.session,
+				user: {
+					...ctx.context.session.user,
+					email: ctx.body.newEmail,
+				},
+			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,

@@ -103,8 +103,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     headers: event.request.headers
   });
   // Set session and user to locals 
-  event.locals.session = session?.data?.session;
-  event.locals.user = session?.data?.user;
+  event.locals.session = session?.session;
+  event.locals.user = session?.user;
 
   const response = await resolve(event);
   return response;

@@ -66,7 +66,16 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-					return ctx.json(validSessions);
+					const uniqueUserSessions = validSessions.reduce(
+						(acc, session) => {
+							if (!acc.find((s) => s.user.id === session.user.id)) {
+								acc.push(session);
+							}
+							return acc;
+						},
+						[] as typeof validSessions,
+					);
+					return ctx.json(uniqueUserSessions);
 				},
 			),
 			setActiveSession: createAuthEndpoint(
