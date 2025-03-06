@@ -18,44 +18,6 @@ import { BASE_ERROR_CODES } from "../../error/codes";
 import { createOTP } from "@better-auth/utils/otp";
 import { createHMAC } from "@better-auth/utils/hmac";
 
-export const twoFactorVerificationSchema = z.object({
-	verification: z.union(
-		[
-			z.object(
-				{
-					type: z.literal("password", {
-						description: "Use password verification method",
-					}),
-					password: z
-						.string({
-							description: "User's current password for verification",
-						})
-						.min(8),
-				},
-				{
-					description: "Password-based verification for 2FA changes",
-				},
-			),
-			z.object(
-				{
-					type: z.literal("email_otp", {
-						description: "Use email OTP verification method",
-					}),
-					otp: z.string({
-						description: "One-time verification code sent to user's email",
-					}),
-				},
-				{
-					description: "Email OTP-based verification for 2FA changes",
-				},
-			),
-		],
-		{
-			description: "Verification method for enabling/disabling 2FA",
-		},
-	),
-});
-
 export const twoFactor = (options?: TwoFactorOptions) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
@@ -74,7 +36,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
-					body: twoFactorVerificationSchema,
+					body: z.union([
+						z.object({
+							password: z.string({ description: "User password" }).min(8)
+						}),
+						z.object({
+							otp: z.string({ description: "Email verification code" })
+						})
+					]),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -129,12 +98,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { verification } = ctx.body;
 
 					// Verify user based on method
-					if (verification.type === "password") {
+					if ('password' in ctx.body) {
 						const isPasswordValid = await validatePassword(ctx, {
-							password: verification.password,
+							password: ctx.body.password,
 							userId: user.id,
 						});
 						if (!isPasswordValid) {
@@ -142,41 +110,33 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								message: BASE_ERROR_CODES.INVALID_PASSWORD,
 							});
 						}
-					} else {
+					} else if ('otp' in ctx.body) {
 						// Email OTP verification
 						const verificationValue =
 							await ctx.context.internalAdapter.findVerificationValue(
 								`2fa-otp-${user.id}`,
 							);
-							console.log('Verification attempt:', {
-								userId: user.id,
-								providedOTP: verification.otp,
-								foundValue: verificationValue?.value,
-								expiresAt: verificationValue?.expiresAt,
-								now: new Date(),
-								isExpired: verificationValue ? verificationValue.expiresAt < new Date() : null,
+						
+						if (!verificationValue) {
+							throw new APIError("BAD_REQUEST", {
+								message: "OTP not found",
 							});
+						}
 						
-							if (!verificationValue) {
-								throw new APIError("BAD_REQUEST", {
-									message: "OTP not found",
-								});
-							}
+						if (verificationValue.expiresAt < new Date()) {
+							await ctx.context.internalAdapter.deleteVerificationValue(
+								verificationValue.id,
+							);
+							throw new APIError("BAD_REQUEST", {
+								message: "OTP expired",
+							});
+						}
 						
-							if (verificationValue.expiresAt < new Date()) {
-								await ctx.context.internalAdapter.deleteVerificationValue(
-									verificationValue.id,
-								);
-								throw new APIError("BAD_REQUEST", {
-									message: "OTP expired",
-								});
-							}
-						
-							if (verificationValue.value !== verification.otp) {
-								throw new APIError("BAD_REQUEST", {
-									message: "Invalid OTP",
-								});
-							}
+						if (verificationValue.value !== ctx.body.otp) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OTP",
+							});
+						}
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							verificationValue.id,
 						);
@@ -251,7 +211,14 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: twoFactorVerificationSchema, // Using the same schema as enable
+					body: z.union([
+						z.object({
+							password: z.string({ description: "User password" }).min(8)
+						}),
+						z.object({
+							otp: z.string({ description: "Email verification code" })
+						})
+					]),
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -298,12 +265,11 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { verification } = ctx.body;
 
 					// Verify user based on method
-					if (verification.type === "password") {
+					if ('password' in ctx.body) {
 						const isPasswordValid = await validatePassword(ctx, {
-							password: verification.password,
+							password: ctx.body.password,
 							userId: user.id,
 						});
 						if (!isPasswordValid) {
@@ -311,7 +277,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								message: "Invalid password",
 							});
 						}
-					} else {
+					} else if ('otp' in ctx.body) {
 						// Email OTP verification
 						const verificationValue =
 							await ctx.context.internalAdapter.findVerificationValue(
@@ -320,7 +286,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (
 							!verificationValue ||
 							verificationValue.expiresAt < new Date() ||
-							verificationValue.value !== verification.otp
+							verificationValue.value !== ctx.body.otp
 						) {
 							throw new APIError("BAD_REQUEST", {
 								message: "Invalid OTP",
