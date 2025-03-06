@@ -15,7 +15,9 @@ interface CookieAttributes {
 	sameSite?: "Strict" | "Lax" | "None";
 }
 
-function parseSetCookieHeader(header: string): Map<string, CookieAttributes> {
+export function parseSetCookieHeader(
+	header: string,
+): Map<string, CookieAttributes> {
 	const cookieMap = new Map<string, CookieAttributes>();
 	const cookies = header.split(", ");
 	cookies.forEach((cookie) => {
@@ -50,7 +52,7 @@ interface StoredCookie {
 	expires: Date | null;
 }
 
-function getSetCookie(header: string, prevCookie?: string) {
+export function getSetCookie(header: string, prevCookie?: string) {
 	const parsed = parseSetCookieHeader(header);
 	let toSetCookie: Record<string, StoredCookie> = {};
 	parsed.forEach((cookie, key) => {

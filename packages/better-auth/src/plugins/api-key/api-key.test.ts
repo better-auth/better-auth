@@ -489,6 +489,18 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.metadata).toEqual(metadata);
+
+		const res = await auth.api.getApiKey({
+			query: {
+				id: apiKey.id,
+			},
+			headers,
+		});
+
+		expect(res).not.toBeNull();
+		if (res) {
+			expect(res.metadata).toEqual(metadata);
+		}
 	});
 
 	it("create API key's returned metadata should be an object", async () => {
