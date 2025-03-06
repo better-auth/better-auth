@@ -29,6 +29,9 @@ const STRIPE_ERROR_CODES = {
 	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
 	EMAIL_VERIFICATION_REQUIRED:
 		"Email verification is required before you can subscribe to a plan",
+	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
+	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
+		"Subscription is not scheduled for cancellation",
 } as const;
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
@@ -47,7 +50,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		action:
 			| "upgrade-subscription"
 			| "list-subscription"
-			| "cancel-subscription",
+			| "cancel-subscription"
+			| "restore-subscription",
 	) =>
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
@@ -504,6 +508,73 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				};
 			},
 		),
+		restoreSubscription: createAuthEndpoint(
+			"/subscription/restore",
+			{
+				method: "POST",
+				body: z.object({
+					referenceId: z.string().optional(),
+				}),
+				use: [
+					sessionMiddleware,
+					referenceMiddleware("restore-subscription"),
+				],
+			},
+			async (ctx) => {
+				console.log("calling restoreSubscription");
+				const referenceId =
+					ctx.body?.referenceId || ctx.context.session.user.id;
+				const subscription = await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "referenceId",
+							value: referenceId,
+						},
+					],
+				});
+				if (!subscription || !subscription.stripeCustomerId) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				if (subscription.status != "active") {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+					});
+				}
+				if (!subscription.cancelAtPeriodEnd) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					});
+				}
+				const activeSubscription = await client.subscriptions
+					.list({
+						customer: subscription.stripeCustomerId,
+						status: "active",
+					})
+					.then((res) => res.data[0]);
+				if (!activeSubscription) {
+					throw ctx.error("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+				try {
+					const newSub = await client.subscriptions.update(activeSubscription.id, {
+						cancel_at_period_end: false,
+					});
+					return ctx.json(newSub);
+				} catch (error) {
+					ctx.context.logger.error(
+						"Error restoring subscription",
+						error,
+					);
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+					});
+				}
+			},
+		),
 		listActiveSubscriptions: createAuthEndpoint(
 			"/subscription/list",
 			{
@@ -516,6 +587,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
+				console.log("calling listActiveSubscriptions");
 				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 					model: "subscription",
 					where: [
