@@ -81,7 +81,7 @@ export const roblox = (options: RobloxOptions) => {
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email
 					emailVerified: true,
-					...userMap
+					...userMap,
 				},
 				data: {
 					...profile,
