@@ -78,7 +78,7 @@ const redis = createClient();
 await redis.connect();
 
 export const auth = betterAuth({
-  // ... existing code ...
+  // ... other options
   secondaryStorage: {
     get: async (key) => {
       const value = await redis.get(key);
@@ -100,7 +100,6 @@ export const auth = betterAuth({
       await redis.del(key);
     },
   },
-  // ... existing code ...
 });
 
 ```
