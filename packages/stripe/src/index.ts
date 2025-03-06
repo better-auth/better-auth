@@ -1,6 +1,7 @@
 import {
 	type GenericEndpointContext,
 	type BetterAuthPlugin,
+	logger,
 } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/plugins";
 import Stripe from "stripe";
@@ -17,7 +18,12 @@ import {
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
-import type { InputSubscription, StripeOptions, Subscription } from "./types";
+import type {
+	Customer,
+	InputSubscription,
+	StripeOptions,
+	Subscription,
+} from "./types";
 import { getPlanByName, getPlanByPriceId, getPlans } from "./utils";
 import { getSchema } from "./schema";
 
@@ -760,18 +766,29 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												userId: user.id,
 											},
 										});
-										await ctx.context.adapter.update({
-											model: "user",
-											update: {
-												stripeCustomerId: stripeCustomer.id,
-											},
-											where: [
-												{
-													field: "id",
-													value: user.id,
+										const customer = await ctx.context.adapter.update<Customer>(
+											{
+												model: "user",
+												update: {
+													stripeCustomerId: stripeCustomer.id,
 												},
-											],
-										});
+												where: [
+													{
+														field: "id",
+														value: user.id,
+													},
+												],
+											},
+										);
+										if (!customer) {
+											logger.error("#BETTER_AUTH: Failed to create  customer");
+										} else {
+											await options.onCustomerCreate?.({
+												customer,
+												stripeCustomer,
+												user,
+											});
+										}
 									}
 								},
 							},
