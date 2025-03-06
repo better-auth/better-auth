@@ -41,7 +41,7 @@ export interface TwoFactorOptions {
 		data: {
 			email: string;
 			otp: string;
-			type: "2fa-enable" | "2fa-disable";
+			status: "enable" | "disable";
 		},
 		request?: Request,
 	) => Promise<void>;
