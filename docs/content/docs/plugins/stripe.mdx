@@ -208,6 +208,7 @@ await client.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
+    annual: true, // upgrade to an annual plan (optional)
     referenceId: "org_123" // Optional: defaults to the current logged in user id
     seats: 5 // Optional: for team plans
 });
