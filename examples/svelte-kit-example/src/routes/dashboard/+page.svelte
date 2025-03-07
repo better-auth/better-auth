@@ -1,6 +1,9 @@
 <script>
 import { goto } from "$app/navigation";
 import { client } from "$lib/auth-client";
+import * as Avatar from "$lib/components/ui/avatar";
+import { Button } from "$lib/components/ui/button";
+import * as Card from "$lib/components/ui/card";
 
 const session = client.useSession();
 </script>

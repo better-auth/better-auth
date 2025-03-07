@@ -1,6 +1,10 @@
 <script lang="ts">
 import { signIn } from "$lib/auth-client";
 import { writable } from "svelte/store";
+import { Button } from "$lib/components/ui/button";
+import * as Card from "$lib/components/ui/card";
+import { Input } from "$lib/components/ui/input";
+import { Label } from "$lib/components/ui/label";
 
 const email = writable("");
 const password = writable("");
