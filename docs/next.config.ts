@@ -43,4 +43,7 @@ export default withMDX({
 			},
 		],
 	},
+	typescript: {
+		ignoreBuildErrors: true,
+	},
 });

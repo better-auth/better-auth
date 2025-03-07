@@ -1,0 +1,78 @@
+---
+title: Apple
+description: Apple provider setup and usage.
+---
+
+<Steps>
+    <Step>
+        ### Get your OAuth credentials
+        To use Apple sign in, you need a client ID and client secret. You can get them from the [Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list).
+
+        Apple requires a little harder setup to get a client secret. You can use the guide below to get your client secret.
+        <Link href="https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret">
+           Creating a client secret
+        </Link>
+    </Step>
+    <Step>
+        ### Configure the provider
+        To configure the provider, you need to add it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts" 
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                apple: { // [!code highlight]
+                    clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.APPLE_CLIENT_SECRET as string, // [!code highlight]
+                    // Optional
+                    appBundleIdentifier: process.env.APPLE_APP_BUNDLE_IDENTIFIER as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+
+        On native iOS, it doesn't use the service id but the app id (bundle id) as client id, so if using the service id as clientId in signIn.social() with idToken, it throws an error: JWTClaimValidationFailed: unexpected "aud" claim value. So you need to provide the appBundleIdentifier when you want to sign in with Apple using the ID Token.
+    </Step>
+</Steps>
+
+
+## Usage
+
+### Sign In with Apple
+
+To sign in with Apple, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+- `provider`: The provider to use. It should be set to `apple`.
+
+```ts title="auth-client.ts"  /
+import { createAuthClient } from "better-auth/client"
+const authClient =  createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "apple"
+    })
+}
+```
+
+
+### Sign In with Apple With ID Token
+
+To sign in with Apple using the ID Token, you can use the `signIn.social` function to pass the ID Token. 
+
+This is useful when you have the ID Token from Apple on the client-side and want to use it to sign in on the server.
+
+<Callout>
+ If id token is provided no redirection will happen, and the user will be signed in directly.
+</Callout>
+
+```ts title="auth-client.ts"
+    await authClient.signIn.social({
+        provider: "apple",
+        idToken: {
+            token: // Apple ID Token,
+            nonce: // Nonce (optional)
+            accessToken: // Access Token (optional)
+        }
+    })
+```

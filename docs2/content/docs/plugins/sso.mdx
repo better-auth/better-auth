@@ -1,0 +1,260 @@
+---
+title: Single Sign-On (SSO)
+description: Integrate Single Sign-On (SSO) with your application.
+---
+
+`OIDC` `OAuth2` `SSO`
+
+Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC) and OAuth2 providers.
+
+<Callout>
+    SAML support is coming soon. Upvote the feature request on our [GitHub](https://github.com/better-auth/better-auth/issues/96)
+</Callout>
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { sso } from "better-auth/plugins/sso";
+
+        const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                sso() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { ssoClient } from "better-auth/client/plugins"
+
+        const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                ssoClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Register an OIDC Provider
+
+To register an OIDC provider, use the `createOIDCProvider` endpoint and provide the necessary configuration details for the provider.
+
+A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="register-provider.ts"
+import { authClient } from "@/lib/auth-client";
+
+// only with issuer if the provider supports discovery
+await authClient.sso.register({
+    issuer: "https://idp.example.com",
+    providerId: "example-provider",
+});
+
+// with all fields
+await authClient.sso.register({
+    issuer: "https://idp.example.com
+    domain: "example.com",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    authorizationEndpoint: "https://idp.example.com/authorize",
+    tokenEndpoint: "https://idp.example.com/token",
+    jwksEndpoint: "https://idp.example.com/jwks",
+    mapping: {
+        id: "sub",
+        email: "email",
+        emailVerified: "email_verified",
+        name: "name",
+        image: "picture",
+    },
+    providerId: "example-provider",
+});
+```
+    </Tab>
+
+    <Tab value="server">
+```ts title="register-provider.ts"
+const { headers } = await signInWithTestUser();
+await auth.api.createOIDCProvider({
+    body: {
+        issuer: "https://idp.example.com",
+        domain: "example.com",
+        clientId: "your-client-id",
+        clientSecret: "your-client-secret",
+        authorizationEndpoint: "https://idp.example.com/authorize",
+        tokenEndpoint: "https://idp.example.comtoken",
+        jwksEndpoint: "https://idp.example.com/jwks",
+        mapping: {
+            id: "sub",
+            email: "email",
+            emailVerified: "email_verified",
+            name: "name",
+            image: "picture",
+        },
+        providerId: "example-provider",
+    },
+    headers,
+});
+```
+    </Tab>
+</Tabs>
+
+### Sign In with SSO
+
+To sign in with an SSO provider, you can call `signIn.sso`
+
+You can sign in using the email with domain matching:
+
+```ts title="sign-in.ts"
+const res = await authClient.signIn.sso({
+    email: "user@example.com",
+    callbackURL: "/dashboard",
+});
+```
+
+or you can specify the domain:
+
+```ts title="sign-in-domain.ts"
+const res = await authClient.signIn.sso({
+    domain: "example.com",
+    callbackURL: "/dashboard",
+});
+```
+
+You can also sign in using the organization slug if a provider is associated with an organization:
+
+```ts title="sign-in-org.ts"
+const res = await authClient.signIn.sso({
+    organizationSlug: "example-org",
+    callbackURL: "/dashboard",
+});
+```
+
+Alternatively, you can sign in using the provider's ID:
+
+```ts title="sign-in-provider-id.ts"
+const res = await authClient.signIn.sso({
+    providerId: "example-provider-id",
+    callbackURL: "/dashboard",
+});
+```
+
+To use the server api you can use `signInSSO`
+
+```ts title="sign-in-org.ts"
+const res = await auth.api.signInSSO({
+    body: {
+        organizationSlug: "example-org",
+        callbackURL: "/dashboard",
+    }
+});
+```
+
+When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
+
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({
+            provisionUser: async (user) => {
+                // provision user
+            },
+            organizationProvisioning: {
+                disabled: false,
+                defaultRole: "member",
+                getRole: async (user) => {
+                    // get role if needed
+                },
+            },
+        }),
+    ],
+});
+```
+
+## Schema
+
+The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
+
+<DatabaseTable
+    fields={[
+        {
+            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+        },
+        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
+        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
+        { name: "oidcConfig", type: "string", description: "The OIDC configuration", isRequired: false },
+        { name: "userId", type: "string", description: "The user id", isRequired: true, references: { model: "user", field: "id" } },
+        { name: "providerId", type: "string", description: "The provider id. Used to identify a provider and to generate a redirect url.", isRequired: true, isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
+    ]}
+/>
+
+## Options
+
+### Server
+
+**provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
+
+**organizationProvisioning**: Options for provisioning users to an organization.
+
+<TypeTable
+  type={{
+    provisionUser: {
+        description: "A custom function to provision a user when they sign in with an SSO provider.",
+        type: "function",
+    },
+    organizationProvisioning: {
+        description: "Options for provisioning users to an organization.",
+        type: "object",
+        properties: {
+            disabled: {
+                description: "Disable organization provisioning.",
+                type: "boolean",
+                default: false,
+            },
+            defaultRole: {
+                description: "The default role for new users.",
+                type: "string",
+                enum: ["member", "admin"],
+                default: "member",
+            },
+            getRole: {
+                description: "A custom function to determine the role for new users.",
+                type: "function",
+            },
+        },
+    },
+  }}
+/>

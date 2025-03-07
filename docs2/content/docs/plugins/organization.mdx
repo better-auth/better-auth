@@ -1,0 +1,1210 @@
+---
+title: Organization
+description: The organization plugin allows you to manage your organization's members and teams.
+---
+
+Organizations simplifies user access and permissions management. Assign roles and permissions to streamline project management, team coordination, and partnerships.
+
+## Installation
+
+<Steps>
+<Step>
+### Add the plugin to your **auth** config
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [ // [!code highlight]
+        organization() // [!code highlight]
+    ] // [!code highlight]
+})
+```
+</Step>
+
+<Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+        <Tab value="migrate">
+        ```bash
+        npx @better-auth/cli migrate
+        ```
+        </Tab>
+        <Tab value="generate">
+        ```bash
+        npx @better-auth/cli generate
+        ```
+        </Tab>
+    </Tabs>
+    See the [Schema](#schema) section to add the fields manually.
+</Step>
+
+<Step>
+    ### Add the client plugin
+    
+    ```ts title="auth-client.ts" 
+    import { createAuthClient } from "better-auth/client"
+    import { organizationClient } from "better-auth/client/plugins"
+
+    const client = createAuthClient({
+        plugins: [ // [!code highlight]
+            organizationClient() // [!code highlight]
+        ] // [!code highlight]
+    })
+    ```
+</Step>
+</Steps>    
+
+
+## Usage
+
+Once you've installed the plugin, you can start using the organization plugin to manage your organization's members and teams. The client plugin will provide you methods under the `organization` namespace. And the server `api` will provide you with the necessary endpoints to manage your organization and gives you easier way to call the functions on your own backend.
+
+## Organization
+
+### Create an organization
+
+To create an organization, you need to provide:
+
+- `name`: The name of the organization.
+- `slug`: The slug of the organization.
+- `logo`: The logo of the organization. (Optional)
+
+```ts title="auth-client.ts"
+await authClient.organization.create({
+    name: "My Organization",
+    slug: "my-org",
+    logo: "https://example.com/logo.png"
+})
+```
+
+
+#### Restrict who can create an organization
+
+By default, any user can create an organization. To restrict this, set the `allowUserToCreateOrganization` option to a function that returns a boolean, or directly to `true` or `false`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+const auth = betterAuth({
+    //...
+    plugins: [
+        organization({
+            allowUserToCreateOrganization: async (user) => { // [!code highlight]
+                const subscription = await getSubscription(user.id) // [!code highlight]
+                return subscription.plan === "pro" // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+#### Check if organization slug is taken
+
+To check if an organization slug is taken or not you can use the `checkSlug` function provided by the client. The function takes an object with the following properties:
+
+- `slug`: The slug of the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.checkSlug({
+    slug: "my-org",
+});
+```
+
+
+#### Organization Creation Hooks
+
+You can customize the organization creation process using hooks that run before and after an organization is created.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            organizationCreation: {
+                disabled: false, // Set to true to disable organization creation
+                beforeCreate: async ({ organization, user }, request) => {
+                    // Run custom logic before organization is created
+                    // Optionally modify the organization data
+                    return {
+                        data: {
+                            ...organization,
+                            metadata: {
+                                customField: "value"
+                            }
+                        }
+                    }
+                },
+                afterCreate: async ({ organization, member, user }, request) => {
+                    // Run custom logic after organization is created
+                    // e.g., create default resources, send notifications
+                    await setupDefaultResources(organization.id)
+                }
+            }
+        })
+    ]
+})
+```
+
+The `beforeCreate` hook runs before an organization is created. It receives:
+
+- `organization`: The organization data (without ID)
+- `user`: The user creating the organization
+- `request`: The HTTP request object (optional)
+
+Return an object with `data` property to modify the organization data that will be created.
+
+The `afterCreate` hook runs after an organization is successfully created. It receives:
+
+- `organization`: The created organization (with ID)
+- `member`: The member record for the creator
+- `user`: The user who created the organization
+- `request`: The HTTP request object (optional)
+
+
+### List User's Organizations
+
+To list the organizations that a user is a member of, you can use `useListOrganizations` hook. It implements a reactive way to get the organizations that the user is a member of.
+
+<Tabs items={["React", "Vue", "Svelte"]} defaultValue="React">
+<Tab value="React">
+```tsx title="client.tsx"
+import { client } from "@/auth/client"
+
+function App(){
+    const { data: organizations } = client.useListOrganizations()
+    return (
+        <div>
+            {organizations.map(org => <p>{org.name}</p>)}
+        </div>
+    )
+} 
+```
+</Tab>
+
+<Tab value="Svelte">
+```svelte title="page.svelte"
+<script lang="ts">
+  import { client } from "$lib/client";
+  const organizations = client.useListOrganizations();
+</script>
+
+<h1>Organizations</h1>s
+
+{#if $organizations.isPending}
+  <p>Loading...</p>
+{:else if $organizations.data === null}
+  <p>No organizations found.</p>
+{:else}
+  <ul>
+    {#each $organizations.data as organization}
+      <li>{organization.name}</li>
+    {/each}
+  </ul>
+{/if}
+```
+</Tab>
+
+<Tab value="Vue">
+```vue title="organization.vue"
+<script lang="ts">;
+export default {
+    setup() {
+        const organizations = client.useListOrganizations()
+        return { organizations };
+    }
+};
+</script>
+
+<template>
+    <div>
+        <h1>Organizations</h1>
+        <div v-if="organizations.isPending">Loading...</div>
+        <div v-else-if="organizations.data === null">No organizations found.</div>
+        <ul v-else>
+            <li v-for="organization in organizations.data" :key="organization.id">
+                {{ organization.name }}
+            </li>
+        </ul>
+    </div>
+</template>
+```
+</Tab>
+</Tabs>
+
+
+### Active Organization
+
+Active organization is the workspace the user is currently working on. By default when the user is signed in the active organization is set to `null`. You can set the active organization to the user session.
+
+<Callout type="info">
+ It's not always you want to persist the active organization in the session. You can manage the active organization in the client side only. For example, multiple tabs can have different active organizations.
+</Callout>
+
+#### Set Active Organization
+
+You can set the active organization by calling the `organization.setActive` function. It'll set the active organization for the user session.
+<Tabs items={["client", "server"]} defaultValue="client">
+  <Tab value="client">
+  ```ts title="auth-client.ts"
+  import { client } from "@/lib/auth-client";
+
+  await authClient.organization.setActive({
+    organizationId: "organization-id"
+  })
+
+  // you can also use organizationSlug instead of organizationId
+  authClient.organization.setActive({
+    organizationSlug: "organization-slug"
+  })
+  ```
+  </Tab>
+
+  <Tab value="server">
+    ```ts title="api.ts"
+    import { auth } from "@/lib/auth";
+
+    auth.api.setActiveOrganization({
+      headers: // pass the headers,
+      body: {
+        organizationSlug: "organization-slug"
+      }
+    })
+
+    // you can also use organizationId instead of organizationSlug
+    auth.api.setActiveOrganization({
+      headers: // pass the headers,
+      body: {
+        organizationId: "organization-id"
+      }
+    })
+    ```
+  </Tab>
+</Tabs>
+
+To set active organization when a session is created you can use [database hooks](/docs/concepts/database#database-hooks).
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  databaseHooks: {
+      session: {
+          create: {
+              before: async(session)=>{
+                  const organization = await getActiveOrganization(session.userId)
+                  return {
+                    data: {
+                      ...session,
+                      activeOrganizationId: organization.id
+                    }
+                  }
+              }
+          }
+      }
+  }
+})
+```
+
+#### Use Active Organization
+
+To retrieve the active organization for the user, you can call the `useActiveOrganization` hook. It returns the active organization for the user. Whenever the active organization changes, the hook will re-evaluate and return the new active organization.
+
+<Tabs items={['React', 'Vue', 'Svelte']}>
+    <Tab value="React">   
+    ```tsx title="client.tsx" 
+    import { client } from "@/auth/client"
+
+    function App(){
+        const { data: activeOrganization } = client.useActiveOrganization()
+        return (
+            <div>
+                {activeOrganization ? <p>{activeOrganization.name}</p> : null}
+            </div>
+        )
+    } 
+    ``` 
+    </Tab>
+    <Tab value="Svelte">   
+    ```tsx title="client.tsx" 
+    <script lang="ts">
+    import { client } from "$lib/client";
+    const activeOrganization = client.useActiveOrganization();
+    </script>
+
+    <h2>Active Organization</h2>
+
+    {#if $activeOrganization.isPending}
+    <p>Loading...</p>
+    {:else if $activeOrganization.data === null}
+    <p>No active organization found.</p>
+    {:else}
+    <p>{$activeOrganization.data.name}</p>
+    {/if}
+    ``` 
+    </Tab>
+    <Tab value="Vue">   
+    ```vue title="organization.vue" 
+    <script lang="ts">;
+    export default {
+        setup() {
+            const activeOrganization = client.useActiveOrganization();
+            return { activeOrganization };
+        }
+    };
+    </script>
+
+    <template>
+        <div>
+            <h2>Active organization</h2>
+            <div v-if="activeOrganization.isPending">Loading...</div>
+            <div v-else-if="activeOrganization.data === null">No active organization.</div>
+            <div v-else>
+                {{ activeOrganization.data.name }}
+            </div>
+        </div>
+    </template>
+    ``` 
+    </Tab>
+</Tabs>
+
+### Get Full Organization
+
+To get the full details of an organization, you can use the `getFullOrganization` function provided by the client. The function takes an object with the following properties:
+
+- `organizationId`: The id of the organization. (Optional) – By default, it will use the active organization.
+- `organizationSlug`: The slug of the organization. (Optional) – To get the organization by slug.
+
+<Tabs items={["client", "server"]}>
+
+  <Tab value="client">
+  ```ts title="auth-client.ts"
+  const organization = await authClient.organization.getFullOrganization({
+      organizationId: "organization-id" // optional, by default it will use the active organization
+  })
+  //you can also use organizationSlug instead of organizationId
+  const organization = await authClient.organization.getFullOrganization({
+      organizationSlug: "organization-slug"
+  })
+  ```
+  </Tab>
+
+  <Tab value="server">
+    ```ts title="api.ts"
+    import { auth } from "@/auth";
+
+    auth.api.getFullOrganization({
+        headers: // pass the headers
+    })
+
+    //  you can also use organizationSlug instead of organizationId
+    auth.api.getFullOrganization({
+        headers: // pass the headers,
+        query: {
+            organizationSlug: "organization-slug"
+        }
+    })
+    ```
+  </Tab>
+</Tabs>
+
+
+### Update Organization
+
+To update organization info, you can use `organization.update`
+
+
+```ts 
+await client.organization.update({
+  data: {
+    name: "updated-name",
+    logo: "new-logo.url",
+    metadata: {
+      customerId: "test"
+    },
+    slug: "updated-slug"
+  },
+  organizationId: 'org-id' //defaults to the current active organization
+})
+```
+
+### Delete Organization
+
+To remove user owned organization, you can use `organization.delete`
+
+```ts title="org.ts"
+await authClient.organization.delete({
+  organizationId: "test"
+});
+```
+
+If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
+
+You can configure how organization deletion is handled through `organizationDeletion` option:
+
+```ts
+const auth = betterAuth({
+  plugins: [
+    organization({
+      organizationDeletion: {
+        disabled: true, //to disable it altogether
+        beforeDelete: async (data, request) => {
+          // a callback to run before deleting org
+        },
+        afterDelete: async (data, request) => {
+          // a callback to run after deleting org
+        },
+      },
+    }),
+  ],
+});
+```
+
+## Invitations
+
+To add a member to an organization, we first need to send an invitation to the user. The user will receive an email/sms with the invitation link. Once the user accepts the invitation, they will be added to the organization.
+
+### Setup Invitation Email
+
+For member invitation to work we first need to provider `sendInvitationEmail` to the `better-auth` instance. This function is responsible for sending the invitation email to the user.
+
+You'll need to construct and send the invitation link to the user. The link should include the invitation ID, which will be used with the acceptInvitation function when the user clicks on it.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+import { sendOrganizationInvitation } from "./email"
+export const auth = betterAuth({
+	plugins: [
+		organization({
+			async sendInvitationEmail(data) {
+                const inviteLink = `https://example.com/accept-invitation/${data.id}`
+				sendOrganizationInvitation({
+					    email: data.email,
+						invitedByUsername: data.inviter.user.name,
+						invitedByEmail: data.inviter.user.email,
+						teamName: data.organization.name,
+						inviteLink
+					})
+			},
+		}),
+	],
+});
+```
+
+### Send Invitation
+
+To invite users to an organization, you can use the `invite` function provided by the client. The `invite` function takes an object with the following properties:
+
+- `email`: The email address of the user.
+- `role`: The role of the user in the organization. It can be `admin`, `member`, or `guest`.
+- `organizationId`: The id of the organization. this is optional by default it will use the active organization. (Optional)
+
+```ts title="invitation.ts"
+await authClient.organization.inviteMember({
+    email: "test@email.com",
+    role: "admin", //this can also be an array for multiple roles (e.g. ["admin", "sale"])
+})
+```
+
+
+### Accept Invitation
+
+When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.
+
+Make sure to call the `acceptInvitation` function after the user is logged in. 
+
+```ts title="auth-client.ts"
+await authClient.organization.acceptInvitation({
+    invitationId: "invitation-id"
+})
+```
+
+### Update Invitation Status
+        
+To update the status of invitation you can use the `acceptInvitation`, `cancelInvitation`, `rejectInvitation` functions provided by the client. The functions take the invitation id as an argument.
+
+```ts title="auth-client.ts"
+//cancel invitation
+await authClient.organization.cancelInvitation({
+    invitationId: "invitation-id"
+})
+
+//reject invitation (needs to be called when the user who received the invitation is logged in)
+await authClient.organization.rejectInvitation({
+    invitationId: "invitation-id"
+})
+```
+
+
+### Get Invitation
+
+To get an invitation you can use the `getInvitation` function provided by the client. You need to provide the invitation id as a query parameter.
+
+```ts title="auth-client.ts"
+client.organization.getInvitation({
+    query: {
+        id: params.id
+    }
+})
+```
+
+## Members
+
+### Remove Member 
+
+To remove you can use `organization.removeMember`
+
+```ts title="auth-client.ts"
+//remove member
+await authClient.organization.removeMember({
+    memberIdOrEmail: "member-id", // this can also be the email of the member
+    organizationId: "organization-id" // optional, by default it will use the active organization
+})
+```
+
+### Update Member Role
+
+To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
+
+```ts title="auth-client.ts"
+await authClient.organization.updateMemberRole({
+    memberId: "member-id",
+    role: "admin" // this can also be an array for multiple roles (e.g. ["admin", "sale"])
+})
+```
+
+### Get Active Member
+
+To get the current member of the organization you can use the `organization.getActiveMember` function. This function will return the current active member.
+
+```ts title="auth-client.ts"
+const member = await authClient.organization.getActiveMember()
+```
+
+### Add Member
+
+If you want to add a member directly to an organization without sending an invitation, you can use the `addMember` function which can only be invoked on the server.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+
+auth.api.addMember({
+  body: {
+      userId: "user-id",
+      organizationId: "organization-id",
+      role: "admin"
+  }
+})
+```
+
+### Leave Organization
+
+To leave organization you can use `organization.leave` function. This function will remove the current user from the organization.
+
+```ts title="auth-client.ts"
+await authClient.organization.leave({
+    organizationId: "organization-id"
+})
+```    
+
+## Access Control
+
+The organization plugin providers a very flexible access control system. You can control the access of the user based on the role they have in the organization. You can define your own set of permissions based on the role of the user.
+
+### Roles
+
+By default, there are three roles in the organization:
+
+`owner`: The user who created the organization by default. The owner has full control over the organization and can perform any action.
+
+`admin`: Users with the admin role have full control over the organization except for deleting the organization or changing the owner.
+
+`member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
+
+<Callout>
+  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+</Callout>
+
+### Permissions
+
+By default, there are three resources, and these have two to three actions.
+
+**organization**: 
+
+    `update` `delete`
+
+**member**: 
+
+    `create` `update` `delete`
+
+**invitation**: 
+    
+    `create` `cancel`
+
+The owner have full control over all the resources and actions. The admin have full control over all the resources except for deleting the organization or changing the owner. The member have no control over any of those action other than reading the data.
+
+### Custom Permissions
+
+the plugin providers easy way to define your own set of permission for each role.
+
+<Steps>
+    <Step>
+    #### Create Access Control
+
+    You first need to create access controller by calling `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+
+    /**
+     * make sure to use `as const` so typescript can infer the type correctly
+     */
+    const statement = { // [!code highlight]
+        project: ["create", "share", "update", "delete"], // [!code highlight]
+    } as const; // [!code highlight]
+
+    const ac = createAccessControl(statement); // [!code highlight]
+    ```
+    </Step>
+
+    <Step>
+    #### Create Roles
+
+    Once you have created the access controller you can create roles with the permissions you have defined.
+
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+
+    const statement = { 
+        project: ["create", "share", "update", "delete"],
+    } as const; 
+
+    const ac = createAccessControl(statement); 
+
+    const member = ac.newRole({ // [!code highlight]
+        project: ["create"], // [!code highlight]
+    }); // [!code highlight]
+
+    const admin = ac.newRole({ // [!code highlight] 
+        project: ["create", "update"], // [!code highlight]
+    }); // [!code highlight]
+
+    const owner = ac.newRole({ // [!code highlight]
+        project: ["create", "update", "delete"], // [!code highlight]
+    }); // [!code highlight]
+
+    const myCustomRole = ac.newRole({ // [!code highlight]
+        project: ["create", "update", "delete"], // [!code highlight]
+        organization: ["update"], // [!code highlight]
+    }); // [!code highlight]
+    ```
+
+      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+
+    ```ts title="permissions.ts"
+    import { createAccessControl } from "better-auth/plugins/access";
+    import { defaultStatements, adminAc } from 'better-auth/plugins/organization/access'
+
+    const statement = { 
+        ...defaultStatements, // [!code highlight]
+        project: ["create", "share", "update", "delete"],
+    } as const;
+    
+    const ac = createAccessControl(statement);
+
+    const admin = ac.newRole({
+        project: ["create", "update"],
+        ...adminAc.statements, // [!code highlight]
+    });
+    ```
+
+    </Step>
+
+    <Step>
+        #### Pass Roles to the Plugin
+
+        Once you have created the roles you can pass them to the organization plugin both on the client and the server.
+
+        ```ts title="auth.ts"
+        import { ac, owner, admin, member } from "@/auth/permissions"
+        import { betterAuth } from "better-auth"
+        import { organization } from "better-auth/plugins"
+
+        export const auth = betterAuth({
+            plugins: [
+                organization({
+                    ac: ac,
+                    roles: {
+                        owner,
+                        admin,
+                        member,
+                        myCustomRole
+                    }
+                }),
+            ],
+        });
+        ```
+
+        You also need to pass the access controller and the roles to the client plugin.
+
+        ```ts title="auth-client"
+        import { createAuthClient } from "better-auth/client"
+        import { organizationClient } from "better-auth/client/plugins"
+        import { ac, owner, admin, member, myCustomRole } from "@/auth/permissions"
+
+        export const client = createAuthClient({
+            plugins: [
+                organizationClient({
+                    ac: ac,
+                    roles: {
+                        owner,
+                        admin,
+                        member,
+                        myCustomRole
+                    }
+                })
+          ]
+        })
+        ```
+    </Step>
+</Steps>
+
+
+### Access Control Usage
+
+**Has Permission**:
+
+You can use the `hasPermission` action provided by the `api` to check the permission of the user.
+
+```ts title="api.ts"
+import { auth } from "@/auth";
+    auth.api.hasPermission({
+        headers: await headers(),
+        body: {
+            permission: {
+                project: ["create"] // This must match the structure in your access control
+            }
+        }
+    });
+```
+
+If you want to check the permission of the user on the client from the server you can use the `hasPermission` function provided by the client. 
+
+```ts title="auth-client.ts"
+const canCreateProject = await authClient.organization.hasPermission({
+    permission: {
+        project: ["create"]
+    }
+})
+```
+
+**Check Role Permission**:
+
+Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
+
+```ts title="auth-client.ts"
+const canCreateProject = client.organization.checkRolePermission({
+	permission: {
+		organization: ["delete"],
+	},
+	role: "admin",
+});
+```
+
+## Teams
+
+Teams allow you to group members within an organization. The teams feature provides additional organization structure and can be used to manage permissions at a more granular level.
+
+### Enabling Teams
+
+To enable teams, pass the `teams` configuration option to both server and client plugins:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            teams: {
+                enabled: true,
+                maximumTeams: 10, // Optional: limit teams per organization
+                allowRemovingAllTeams: false // Optional: prevent removing the last team
+            }
+        })
+    ]
+})
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { organizationClient } from "better-auth/client/plugins"
+
+export const client = createAuthClient({
+    plugins: [
+        organizationClient({
+            teams: {
+                enabled: true
+            }
+        })
+    ]
+})
+```
+
+### Managing Teams
+
+#### Create Team
+Create a new team within an organization:
+
+```ts
+const team = await client.organization.createTeam({
+    name: "Development Team",
+    organizationId: "org-id" // Optional: defaults to active organization
+})
+```
+
+#### List Teams
+Get all teams in an organization:
+
+```ts
+const teams = await client.organization.listTeams({
+    organizationId: "org-id" // Optional: defaults to active organization
+})
+```
+
+#### Update Team
+Update a team's details:
+
+```ts
+const updatedTeam = await client.organization.updateTeam({
+    teamId: "team-id",
+    data: {
+        name: "Updated Team Name"
+    }
+})
+```
+
+#### Remove Team
+Delete a team from an organization:
+
+```ts
+await client.organization.removeTeam({
+    teamId: "team-id",
+    organizationId: "org-id" // Optional: defaults to active organization
+})
+```
+
+### Team Permissions
+
+Teams follow the organization's permission system. To manage teams, users need the following permissions:
+
+- `team:create` - Create new teams
+- `team:update` - Update team details
+- `team:delete` - Remove teams
+
+By default:
+- Organization owners and admins can manage teams
+- Regular members cannot create, update, or delete teams
+
+### Team Configuration Options
+
+The teams feature supports several configuration options:
+
+- `maximumTeams`: Limit the number of teams per organization
+  ```ts
+  teams: {
+    enabled: true,
+    maximumTeams: 10 // Fixed number
+    // OR
+    maximumTeams: async ({ organizationId, session }, request) => {
+      // Dynamic limit based on organization plan
+      const plan = await getPlan(organizationId)
+      return plan === 'pro' ? 20 : 5
+    }
+  }
+  ```
+
+- `allowRemovingAllTeams`: Control whether the last team can be removed
+  ```ts
+  teams: {
+    enabled: true,
+    allowRemovingAllTeams: false // Prevent removing the last team
+  }
+  ```
+
+### Team Members
+
+When inviting members to an organization, you can specify a team:
+
+```ts
+await client.organization.inviteMember({
+    email: "user@example.com",
+    role: "member",
+    teamId: "team-id"
+})
+```
+
+The invited member will be added to the specified team upon accepting the invitation.
+
+### Database Schema
+
+When teams are enabled, a new `team` table is added with the following structure:
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each team",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the team" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was created" 
+    },
+    { 
+      name: "updatedAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was last updated" 
+    }
+  ]}
+/>
+
+## Schema
+
+The organization plugin adds the following tables to the database:
+
+### Organization
+
+Table Name: `organization`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each organization",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the organization" 
+    },
+    { 
+      name: "slug", 
+      type: "string", 
+      description: "The slug of the organization" 
+    },
+    { 
+      name: "logo", 
+      type: "string", 
+      description: "The logo of the organization",
+      isOptional: true
+    },   
+    { 
+      name: "metadata", 
+      type: "string",
+      description: "Additional metadata for the organization",
+      isOptional: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the organization was created" 
+    },
+  ]}
+  />
+
+### Member
+
+Table Name: `member`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each member",
+      isPrimaryKey: true
+    },
+    { 
+      name: "userId", 
+      type: "string", 
+      description: "The id of the user",
+      isForeignKey: true
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "role", 
+      type: "string", 
+      description: "The role of the user in the organization" 
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the member was added to the organization" 
+    },
+  ]}
+  />
+
+### Invitation
+
+Table Name: `invitation`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each invitation",
+      isPrimaryKey: true
+    },
+    { 
+      name: "email", 
+      type: "string", 
+      description: "The email address of the user" 
+    },
+    { 
+      name: "inviterId", 
+      type: "string", 
+      description: "The id of the inviter",
+      isForeignKey: true
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "role", 
+      type: "string", 
+      description: "The role of the user in the organization" 
+    },
+    { 
+      name: "status", 
+      type: "string", 
+      description: "The status of the invitation" 
+    },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "Timestamp of when the invitation expires" 
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the invitation was created" 
+    },
+  ]}
+  />
+
+### Session
+
+Table Name: `session` 
+
+You need to add one more field to the session table to store the active organization id.
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "activeOrganizationId", 
+      type: "string", 
+      description: "The id of the active organization",
+      isOptional: true
+    },
+  ]}
+  />
+
+### Teams (optional)
+
+Table Name: `team`
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each team",
+      isPrimaryKey: true
+    },
+    { 
+      name: "name", 
+      type: "string", 
+      description: "The name of the team" 
+    },
+    { 
+      name: "organizationId", 
+      type: "string", 
+      description: "The id of the organization",
+      isForeignKey: true
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the team was created" 
+    },
+    { 
+      name: "updatedAt", 
+      type: "Date", 
+      isOptional: true,
+      description: "Timestamp of when the team was created" 
+    },
+  ]}
+  />
+/>
+
+### Customizing the Schema
+
+To change the schema table name or fields, you can pass `schema` option to the organization plugin. 
+
+```ts title="auth.ts"
+const auth = betterAuth({
+  plugins: [organization({
+    schema: {
+      organization: {
+        modelName: "organizations",  //map the organization table to organizations
+        fields: { 
+          name: "title" //map the name field to title
+        }
+      }
+    }
+  })]
+})
+```
+
+## Options
+
+**allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
+
+**organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `5`. You can set it to any number you want or a function that returns a boolean.
+
+**creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
+
+**membershipLimit**: `number` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want.
+
+**sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
+
+**invitationExpiresIn** : `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).

@@ -1,0 +1,151 @@
+---
+title: Email OTP
+description: Email OTP plugin for Better Auth.
+---
+
+The Email OTP plugin allows user to sign-in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
+
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    To enable email otp in your app, you need to add the `emailOTP` plugin to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { emailOTP } from "better-auth/plugins" // [!code highlight]
+    
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            emailOTP({ // [!code highlight]
+                    async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
+						// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
+					}, // [!code highlight]
+            }) // [!code highlight]
+        ]
+    })
+    ```
+    </Step>
+    <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { emailOTPClient } from "better-auth/client/plugins"
+    
+    const authClient =  createAuthClient({
+        plugins: [
+            emailOTPClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Send OTP
+
+First, send an OTP to the user's email address.
+
+```ts title="example.ts"
+const { data, error } = await authClient.emailOtp.sendVerificationOtp({
+    email: "user-email@email.com",
+    type: "sign-in" // or "email-verification", "forget-password"
+})
+```
+
+### SignIn with OTP
+
+Once the user provides the OTP, you can sign in the user using the `signIn.emailOTP()` method.
+
+```ts title="example.ts"
+const { data, error } = await authClient.signIn.emailOtp({
+    email: "user-email@email.com",
+    otp: "123456"
+})
+```
+
+If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the options.
+
+### Verify Email
+
+To verify the user's email address, use the `verifyEmail()` method.
+
+```ts title="example.ts"
+const { data, error } = await authClient.emailOtp.verifyEmail({
+    email: "user-email@email.com",
+    otp: "123456"
+})
+```
+
+### Reset Password
+
+To reset the user's password, use the `resetPassword()` method.
+
+```ts title="example.ts"
+const { data, error } = await authClient.emailOtp.resetPassword({
+    email: "user-email@email.com",
+    otp: "123456",
+    password: "password"
+})
+```
+
+## Options
+
+- `sendVerificationOTP`: A function that sends the OTP to the user's email address. The function receives an object with the following properties:
+  - `email`: The user's email address.
+  - `otp`: The OTP to send.
+  - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
+
+### Example
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            async sendVerificationOTP({
+                email,
+                otp,
+                type
+            }) {
+                if (type === "sign-in") {
+                    // Send the OTP for sign-in
+                } else if (type === "email-verification") {
+                    // Send the OTP for email verification
+                } else {
+                    // Send the OTP for password reset
+                }
+            },
+        })
+    ]
+})
+```
+
+- `otpLength`: The length of the OTP. Defaults to `6`.
+- `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            otpLength: 8,
+            expiresIn: 600
+        })
+    ]
+})
+```
+
+- `sendVerificationOnSignUp`: A boolean value that determines whether to send the OTP when a user signs up. Defaults to `false`.
+
+- `disableSignUp`: A boolean value that determines whether to prevent automatic sign-up when the user is not registered. Defaults to `false`.
+
+- `generateOTP`: A function that generates the OTP. Defaults to a random 6-digit number.

@@ -1,0 +1,73 @@
+---
+title: Google
+description: Google provider setup and usage.
+---
+
+<Steps>
+    <Step> 
+        ### Get your Google credentials
+        To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
+
+        In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
+
+        ```ts title="auth.ts"   
+        import { betterAuth } from "better-auth"
+        
+        export const auth = betterAuth({
+            socialProviders: {
+                google: { // [!code highlight]
+                    clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Sign In with Google
+
+To sign in with Google, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+- `provider`: The provider to use. It should be set to `google`.
+
+```ts title="auth-client.ts"  /
+import { createAuthClient } from "better-auth/client"
+const authClient =  createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "google"
+    })
+}
+```
+
+### Sign In with Google With ID Token
+
+To sign in with Google using the ID Token, you can use the `signIn.social` function to pass the ID Token.
+
+This is useful when you have the ID Token from Google on the client-side and want to use it to sign in on the server.
+
+<Callout>
+ If id token is provided no redirection will happen, and the user will be signed in directly.
+</Callout>
+
+```ts title="auth-client.ts"
+const data = await authClient.signIn.social({
+    provider: "google",
+    idToken: {
+        token: // Google ID Token,
+        accessToken: // Google Access Token
+    }
+})
+```
+
+<Callout>
+    If you want to use google one tap, you can use the [One Tap Plugin](/docs/plugins/one-tap) guide.
+</Callout>

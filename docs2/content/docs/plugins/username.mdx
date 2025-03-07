@@ -1,0 +1,175 @@
+---
+title: Username
+description: Username plugin
+---
+
+The username plugin wraps the email and password authenticator and adds username support. This allows users to sign in and sign up with their username instead of their email.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts" 
+        import { betterAuth } from "better-auth"
+        import { username } from "better-auth/plugins"
+
+        const auth = betterAuth({
+            plugins: [ // [!code highlight]
+                username() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+        
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { usernameClient } from "better-auth/client/plugins"
+        
+        const authClient = createAuthClient({
+            plugins: [ // [!code highlight]
+                usernameClient() // [!code highlight]
+            ] // [!code highlight]
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Signup with username
+
+To sign up a user with username, you can use the existing `signUp.email` function provided by the client. The `signUp` function should take a new `username` property in the object.
+
+```ts title="auth-client.ts"
+const data = await authClient.signUp.email({
+    email: "email@domain.com",
+    name: "Test User",
+    password: "password1234",
+    username: "test"
+})
+```
+
+### Signin with username
+
+To signin a user with username, you can use the `signIn.username` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `username`: The username of the user.
+- `password`: The password of the user.
+
+```ts title="auth-client.ts" 
+const data = await authClient.signIn.username({
+    username: "test",
+    password: "password1234",
+})
+```
+
+### Update username
+
+To update the username of a user, you can use the `updateUser` function provided by the client.
+
+```ts title="auth-client.ts"
+const data = await authClient.updateUser({
+    username: "new-username"
+})
+```
+
+## Schema
+
+The plugin requires 1 field to be added to the user table:
+
+<DatabaseTable
+    fields={[
+        { 
+            name: "username", 
+            type: "string", 
+            description: "The username of the user",
+            isUnique: true
+        },
+        { 
+            name: "displayUsername", 
+            type: "string", 
+            description: "Non normalized username of the user",
+            isUnique: true
+        },
+    ]}
+/>
+
+## Options
+
+### Min Username Length
+
+The minimum length of the username. Default is `3`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            minUsernameLength: 5
+        })
+    ]
+})
+```
+
+### Max Username Length
+
+The maximum length of the username. Default is `30`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            maxUsernameLength: 100
+        })
+    ]
+})
+```
+
+### Username Validator 
+
+A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters and underscores. 
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        username({
+            usernameValidator: (username) => {
+                if (username === "admin") {
+                    return false
+                }
+            }
+        })
+    ]
+})
+```

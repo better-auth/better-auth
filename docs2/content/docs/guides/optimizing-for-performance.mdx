@@ -1,0 +1,201 @@
+---
+title: Optimizing for Performance
+description: A guide to optimizing your Better Auth application for performance.
+---
+
+In this guide, we’ll go over some of the ways you can optimize your application for a more performant Better Auth app.
+
+## Caching
+
+Caching is a powerful technique that can significantly improve the performance of your Better Auth application by reducing the number of database queries and speeding up response times.
+
+### Cookie Cache
+
+Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
+
+To turn on cookie caching, just set `session.cookieCache` in your auth config:
+
+```ts title="auth.ts"
+const auth = new betterAuth({
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // Cache duration in seconds
+    },
+  },
+});
+```
+
+Read more about [cookie caching](/docs/concepts/session-management#cookie-cache).
+
+### Framework Caching
+
+Here are examples of how you can do caching in different frameworks and environments:
+
+<Tabs items={["NextJs", "Remix", "Solid Start", "React Query"]}>
+  <Tab value="NextJS">
+    Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
+
+    ```ts
+    export async function getUsers() {
+        'use cache' // [!code highlight]
+        const { users } = await auth.api.listUsers();
+        return users
+    }
+    ```
+
+    Learn more about NextJS use cache directive <Link href="https://nextjs.org/docs/app/api-reference/directives/use-cache">here</Link>.
+
+  </Tab>
+    <Tab value="Remix">
+    In Remix, you can use the `cache` option in the `loader` function to cache responses on the server. Here’s an example:
+
+    ```ts
+    import { json } from '@remix-run/node';
+
+    export const loader = async () => {
+    const { users } = await auth.api.listUsers();
+    return json(users, {
+        headers: {
+        'Cache-Control': 'max-age=3600', // Cache for 1 hour
+        },
+    });
+    };
+    ```
+
+
+    You can read a nice guide on Loader vs Route Cache Headers in Remix <Link href="https://sergiodxa.com/articles/loader-vs-route-cache-headers-in-remix">here</Link>.
+
+  </Tab>
+
+  <Tab value="Solid Start">
+    In Solid Start, you can use the `query` function to cache data. Here’s an example:
+
+    ```tsx
+    const getUsers = query(
+        async () => (await auth.api.listUsers()).users,
+        "getUsers"
+    );
+    ```
+
+    Learn more about Solid Start `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
+
+  </Tab>
+  <Tab value="React Query">
+    With React Query you can use the `useQuery` hook to cache data. Here’s an example:
+
+    ```ts
+    import { useQuery } from '@tanstack/react-query';
+
+    const fetchUsers = async () => {
+        const { users } = await auth.api.listUsers();
+        return users;
+    };
+
+    export default function Users() {
+        const { data: users, isLoading } = useQuery('users', fetchUsers, {
+            staleTime: 1000 * 60 * 15, // Cache for 15 minutes
+        });
+
+        if (isLoading) return <div>Loading...</div>;
+
+        return (
+            <ul>
+                {users.map(user => (
+                    <li key={user.id}>{user.name}</li>
+                ))}
+            </ul>
+        );
+    }
+    ```
+
+    Learn more about React Query use cache directive <Link href="https://react-query.tanstack.com/reference/useQuery#usecache">here</Link>.
+
+  </Tab>
+</Tabs>
+
+## SSR Optimizations
+
+Server-side rendering (SSR) is a powerful technique that allows you to render your application on the server and deliver fully rendered HTML to the client,
+significantly enhancing performance, especially for data-intensive or complex applications.
+To optimize SSR, minimize client-side data fetching by offloading data gathering to the server,
+which reduces initial load times. Implement caching strategies for frequently accessed data to decrease server load and improve response times.
+Additionally, simplify your rendering logic to ensure efficient server-side processing, consider using streaming to send parts of the rendered HTML as they become available,
+and prioritize critical data for the initial render while loading less essential data asynchronously afterward.
+
+## Database optimizations
+
+Optimizing database performance is essential for any authentication library, including Better Auth.
+Efficient database interactions can significantly enhance the speed and reliability of user authentication processes.
+Since Better Auth supports a wide variety of databases, we cannot cover each one in detail regarding optimization techniques.
+However, we can provide some general tips and strategies to improve your database performance.
+Below are two critical techniques specifically tailored for Better Auth: using indexes and employing connection pools.
+
+### Using indexes
+
+Indexes are powerful tools that can dramatically improve the performance of database queries, especially in an authentication context where speed is crucial.
+Here’s how to effectively utilize indexes in Better Auth:
+
+1. **Types of Indexes**: There are several types of indexes, including:
+
+   - B-tree Indexes: The most common type, suitable for a wide range of queries.
+   - Hash Indexes: Useful for equality comparisons but not for range queries.
+   - Full-text Indexes: Designed for searching text within large text fields.
+   - Spatial Indexes: Optimized for spatial data types, such as geographic coordinates.
+
+2. **When to Use Indexes**: Indexes are particularly beneficial for:
+
+   - Columns frequently used in WHERE clauses.
+   - Columns involved in JOIN operations.
+   - Columns used in ORDER BY and GROUP BY clauses.
+
+3. **Trade-offs**: While indexes can significantly speed up read operations, they can also introduce overhead during write operations (INSERT, UPDATE, DELETE) because the index must be updated.
+   Therefore, it's essential to strike a balance between read and write performance.
+
+4. **Monitoring and Maintenance**: Regularly monitor index usage and performance. Unused or rarely used indexes can be removed to reduce overhead. Additionally, consider rebuilding or reorganizing indexes periodically to maintain their efficiency.
+
+You can read more about indexes in the <Link href="https://en.wikipedia.org/wiki/Database_index">database index wikipedia page</Link>.
+
+#### Recommended fields to index
+
+| Table         | Fields                     | Plugin       |
+| ------------- | -------------------------- | ------------ |
+| users         | `email`                    |              |
+| accounts      | `userId`                   |              |
+| sessions      | `userId`, `token`          |              |
+| verifications | `identifier`               |              |
+| invitations   | `userId`, `organizationId` | organization |
+| members       | `userId`, `organizationId` | organization |
+| organizations | `slug`                     | organization |
+| passkey       | `userId`                   | passkey      |
+| twoFactor     | `secret`                   | twoFactor    |
+
+<Callout>
+  We intend to add indexing support in our schema generation tool in the future.
+</Callout>
+
+### Using a connection pool
+
+A connection pool is a critical component for optimizing database interactions in Better Auth, particularly in high-traffic scenarios where multiple authentication requests occur simultaneously.
+
+Here are some benefits of using a connection pool and some configuration options to consider:
+
+1. **Benefits of Connection Pools**:
+
+   - Reduced Latency: By reusing existing database connections, Better Auth can minimize the time spent establishing new connections, leading to faster authentication responses.
+   - Efficient Resource Management: Connection pools help manage database connections, preventing resource exhaustion and ensuring that the database can handle multiple authentication requests concurrently.
+   - Improved Scalability: Connection pools allow Better Auth to scale effectively, accommodating a growing number of users without a corresponding increase in database connection overhead.
+
+2. **Configuration Options**:
+
+   - Maximum Pool Size: Set this based on expected traffic. A higher limit allows more simultaneous connections but may strain the database if set too high.
+   - Minimum Pool Size: Keep a baseline number of connections open to handle initial requests quickly.
+   - Connection Timeout: Define how long to wait for a connection to become available before timing out, ensuring that users don’t experience long delays.
+   - Idle Timeout: Specify how long a connection can remain idle before being closed, helping to manage resources effectively.
+
+3. **Best Practices**:
+
+Always close connections when they are no longer needed to return them to the pool, preventing connection leaks.
+Monitor the performance of the connection pool and adjust configurations based on application load and usage patterns to optimize performance.
+
+You can read more about connection pools in the <Link href="https://en.wikipedia.org/wiki/Connection_pool">connection pool wikipedia page</Link>.

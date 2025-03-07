@@ -1,0 +1,139 @@
+---
+title: Bearer Token Authentication
+description: Authenticate API requests using Bearer tokens instead of browser cookies
+---
+
+The Bearer plugin enables authentication using Bearer tokens as an alternative to browser cookies. It intercepts requests, adding the Bearer token to the Authorization header before forwarding them to your API.
+
+<Callout type="warn">
+  Use this cautiously; it is intended only for APIs that don't support cookies or require Bearer tokens for authentication. Improper implementation could easily lead to security vulnerabilities.
+</Callout>
+
+## Installing the Bearer Plugin
+
+Add the Bearer plugin to your authentication setup:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [bearer()]
+});
+```
+
+## How to Use Bearer Tokens
+
+### 1. Obtain the Bearer Token
+
+After a successful sign-in, you'll receive a session token in the response headers. Store this token securely (e.g., in `localStorage`):
+
+```ts title="auth-client.ts"
+const { data } = await authClient.signIn.email({
+    email: "user@example.com",
+    password: "securepassword"
+}, {
+  onSuccess: (ctx)=>{
+    const authToken = ctx.response.headers.get("set-auth-token") // get the token from the response headers
+    // Store the token securely (e.g., in localStorage)
+    localStorage.setItem("bearer_token", authToken);
+  }
+});
+```
+
+You can also set this up globally in your auth client:
+
+```ts title="auth-client.ts"
+export const authClient = createAuthClient({
+    fetchOptions: {
+        onSuccess: (ctx) => {
+            const authToken = ctx.response.headers.get("set-auth-token") // get the token from the response headers
+            // Store the token securely (e.g., in localStorage)
+            if(authToken){
+              localStorage.setItem("bearer_token", authToken);
+            }
+        }
+    }
+});
+```
+
+
+You may want to clear the token based on the response status code or other conditions:
+
+### 2. Configure the Auth Client
+
+Set up your auth client to include the Bearer token in all requests:
+
+```ts title="auth-client.ts"
+export const authClient = createAuthClient({
+    fetchOptions: {
+        auth: {
+           type:"Bearer",
+           token: () => localStorage.getItem("bearer_token") || "" // get the token from localStorage
+        }
+    }
+});
+```
+
+### 3. Make Authenticated Requests
+
+Now you can make authenticated API calls:
+
+```ts title="auth-client.ts"
+// This request is automatically authenticated
+const { data } = await authClient.listSessions();
+```
+
+### 4. Per-Request Token (Optional)
+
+You can also provide the token for individual requests:
+
+```ts title="auth-client.ts"
+const { data } = await authClient.listSessions({
+    fetchOptions: {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    }
+});
+```
+
+### 5. Using Bearer Tokens Outside the Auth Client
+
+The Bearer token can be used to authenticate any request to your API, even when not using the auth client:
+
+```ts title="api-call.ts"
+const token = localStorage.getItem("bearer_token");
+
+const response = await fetch("https://api.example.com/data", {
+  headers: {
+    Authorization: `Bearer ${token}`
+  }
+});
+
+const data = await response.json();
+```
+
+And in the server, you can use the `auth.api.getSession` function to authenticate requests:
+
+```ts title="server.ts"
+import { auth } from "@/auth";
+
+export async function handler(req, res) {
+  const session = await auth.api.getSession({
+    headers: req.headers
+  });
+  
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  
+  // Process authenticated request
+  // ...
+}
+```
+
+
+## Options
+
+**requireSignature** (boolean): Require the token to be signed. Default: `false`.
