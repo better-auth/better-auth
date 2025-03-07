@@ -83,34 +83,78 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "POST",
 				body: z.object({
+					/**
+					 * The name of the plan to subscribe
+					 */
 					plan: z.string({
 						description: "The name of the plan to upgrade to",
 					}),
+					/**
+					 * If annual plan should be applied.
+					 */
 					annual: z
 						.boolean({
 							description: "Whether to upgrade to an annual plan",
 						})
 						.optional(),
-					referenceId: z.string().optional(),
+					/**
+					 * Reference id of the subscription to upgrade
+					 * This is used to identify the subscription to upgrade
+					 * If not provided, the user's id will be used
+					 */
+					referenceId: z
+						.string({
+							description: "Reference id of the subscription to upgrade",
+						})
+						.optional(),
+					/**
+					 * This is to allow a specific subscription to be upgrade.
+					 * If subscription id is provided, and subscription isn't found,
+					 * it'll throw an error.
+					 */
+					subscriptionId: z
+						.string({
+							description: "The id of the subscription to upgrade",
+						})
+						.optional(),
+					/**
+					 * Any additional data you want to store in your database
+					 * subscriptions
+					 */
 					metadata: z.record(z.string(), z.any()).optional(),
+					/**
+					 * If a subscription
+					 */
 					seats: z
 						.number({
 							description: "Number of seats to upgrade to (if applicable)",
 						})
 						.optional(),
+					/**
+					 * Success url to redirect back after successful subscription
+					 */
 					successUrl: z
 						.string({
 							description:
 								"callback url to redirect back after successful subscription",
 						})
 						.default("/"),
+					/**
+					 * Cancel URL
+					 */
 					cancelUrl: z
 						.string({
 							description:
 								"callback url to redirect back after successful subscription",
 						})
 						.default("/"),
+					/**
+					 * Return URL
+					 */
 					returnUrl: z.string().optional(),
+					/**
+					 * Disable Redirect
+					 */
 					disableRedirect: z.boolean().default(false),
 				}),
 				use: [
@@ -300,7 +344,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									ctx.context.baseURL
 								}/subscription/success?callbackURL=${encodeURIComponent(
 									ctx.body.successUrl,
-								)}&reference=${encodeURIComponent(referenceId)}`,
+								)}&id=${encodeURIComponent(subscription.id)}`,
 							),
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
@@ -346,7 +390,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
-				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.reference) {
+				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.id) {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
@@ -356,7 +400,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const { user } = session;
-				const { callbackURL, reference } = ctx.query;
+				const { callbackURL, id } = ctx.query;
 
 				if (user?.stripeCustomerId) {
 					try {
@@ -365,8 +409,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								model: "subscription",
 								where: [
 									{
-										field: "referenceId",
-										value: reference,
+										field: "id",
+										value: id,
 									},
 								],
 							});
@@ -394,8 +438,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 								where: [
 									{
-										field: "referenceId",
-										value: reference,
+										field: "id",
+										value: subscription.id,
 									},
 								],
 							});
@@ -491,7 +535,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								ctx.context.baseURL
 							}/subscription/cancel/callback?callbackURL=${encodeURIComponent(
 								ctx.body?.returnUrl || "/",
-							)}&reference=${encodeURIComponent(referenceId)}`,
+							)}&id=${encodeURIComponent(subscription.id)}`,
 						),
 						flow_data: {
 							type: "subscription_cancel",
@@ -584,7 +628,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
-				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.reference) {
+				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.id) {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
@@ -594,41 +638,27 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const { user } = session;
-				const { callbackURL, reference } = ctx.query;
+				const { callbackURL, id } = ctx.query;
 
-				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
+				const subscription = await ctx.context.adapter.findOne<Subscription>({
 					model: "subscription",
 					where: [
 						{
-							field: "referenceId",
-							value: reference,
+							field: "id",
+							value: id,
 						},
 					],
 				});
 
-				const activeSubscription = subscriptions.find(
-					(sub) => sub.status === "active" || sub.status === "trialing",
-				);
-
-				if (activeSubscription) {
+				if (
+					subscription?.status === "active" ||
+					subscription?.status === "trialing"
+				) {
 					return ctx.redirect(getUrl(ctx, callbackURL));
 				}
 
 				if (user?.stripeCustomerId) {
 					try {
-						const subscription =
-							await ctx.context.adapter.findOne<Subscription>({
-								model: "subscription",
-								where: [
-									{
-										field: "referenceId",
-										value: reference,
-									},
-								],
-							});
-						if (!subscription || subscription.status === "active") {
-							throw ctx.redirect(getUrl(ctx, callbackURL));
-						}
 						const stripeSubscription = await client.subscriptions
 							.list({
 								customer: user.stripeCustomerId,
@@ -642,7 +672,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								stripeSubscription.items.data[0]?.plan.id,
 							);
 
-							if (plan && subscriptions.length > 0) {
+							if (plan && subscription) {
 								await ctx.context.adapter.update({
 									model: "subscription",
 									update: {
@@ -656,11 +686,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											stripeSubscription.current_period_start * 1000,
 										),
 										stripeSubscriptionId: stripeSubscription.id,
+										...(stripeSubscription.trial_start &&
+										stripeSubscription.trial_end
+											? {
+													trialStart: new Date(
+														stripeSubscription.trial_start * 1000,
+													),
+													trialEnd: new Date(
+														stripeSubscription.trial_end * 1000,
+													),
+												}
+											: {}),
 									},
 									where: [
 										{
-											field: "referenceId",
-											value: reference,
+											field: "id",
+											value: subscription.id,
 										},
 									],
 								});
