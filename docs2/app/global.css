@@ -1,16 +1,17 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @plugin 'tailwindcss-animate';
 
 @custom-variant dark (&:is(.dark *));
-@import 'fumadocs-ui/css/neutral.css';
-@import 'fumadocs-ui/css/preset.css';
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@import "fumadocs-twoslash/twoslash.css";
+
 @config "../tailwind.config.js";
 
 @source '../../node_modules/fumadocs-ui/dist/**/*.js';
 
 :root {
-
   --background: oklch(1 0 0);
 
   --foreground: oklch(0.147 0.004 49.25);
@@ -79,7 +80,6 @@
 }
 
 .dark {
-
   --background: oklch(0.147 0.004 49.25);
 
   --foreground: oklch(0.985 0.001 106.423);
@@ -146,7 +146,6 @@
 }
 
 @theme inline {
-
   --color-background: var(--background);
 
   --color-foreground: var(--foreground);
