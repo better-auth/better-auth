@@ -193,8 +193,11 @@ Be careful when using the new runtime. It's an experimental feature and it may b
 </Callout>
 
 ```ts
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+
 export async function middleware(request: NextRequest) {
-    const session = await auth_server.api.getSession({
+    const session = await auth.api.getSession({
         headers: await headers()
     })
 
