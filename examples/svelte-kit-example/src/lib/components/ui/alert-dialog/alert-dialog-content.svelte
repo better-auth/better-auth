@@ -1,6 +1,8 @@
 <script lang="ts">
 import { AlertDialog as AlertDialogPrimitive } from "bits-ui";
-import { flyAndScale } from "$lib/utils.js";
+import { cn, flyAndScale } from "$lib/utils.js";
+import AlertDialogOverlay from "./alert-dialog-overlay.svelte";
+import AlertDialogPortal from "./alert-dialog-portal.svelte";
 
 type $$Props = AlertDialogPrimitive.ContentProps;
 
@@ -10,8 +12,8 @@ export let transitionConfig: $$Props["transitionConfig"] = undefined;
 export { className as class };
 </script>
 
-<AlertDialog.Portal>
-	<AlertDialog.Overlay />
+<AlertDialogPortal>
+	<AlertDialogOverlay />
 	<AlertDialogPrimitive.Content
 		{transition}
 		{transitionConfig}
@@ -23,4 +25,4 @@ export { className as class };
 	>
 		<slot />
 	</AlertDialogPrimitive.Content>
-</AlertDialog.Portal>
+</AlertDialogPortal>
