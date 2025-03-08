@@ -19,7 +19,7 @@ import { oneTap } from "better-auth/plugins";
 export const auth = betterAuth({
   plugins: [
     oneTap(), // Add the One Tap server plugin
-  ]
+  ],
 });
 ```
 
@@ -46,10 +46,10 @@ const authClient = createAuthClient({
       // Configure prompt behavior and exponential backoff:
       promptOptions: {
         baseDelay: 1000,   // Base delay in ms (default: 1000)
-        maxAttempts: 5     // Maximum number of attempts before triggering onPromptNotification (default: 5)
-      }
-    })
-  ]
+        maxAttempts: 5 ,    // Maximum number of attempts before triggering onPromptNotification (default: 5)
+      },
+    }),
+  ],
 });
 ```
 
@@ -75,8 +75,8 @@ authClient.oneTap({
     onSuccess: () => {
       // For example, use a router to navigate without a full reload:
       router.push("/dashboard");
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -86,7 +86,7 @@ To perform a hard redirect to a different page after login, use the callbackURL 
 
 ```ts
 authClient.oneTap({
-  callbackURL: "/dashboard"
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -101,7 +101,7 @@ authClient.oneTap({
   onPromptNotification: (notification) => {
     console.warn("Prompt was dismissed or skipped. Consider displaying an alternative sign-in option.", notification);
     // Render your alternative UI here
-  }
+  },
 });
 ```
 
