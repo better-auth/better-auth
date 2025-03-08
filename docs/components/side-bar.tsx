@@ -153,6 +153,7 @@ export default function ArticleLayout() {
 										<item.Icon className="w-5 h-5" />
 										<span className="grow">{item.title}</span>
 										{item.isNew && <NewBadge />}
+										{item.isUpdated && <UpdatedBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
 										>
@@ -199,14 +200,15 @@ export default function ArticleLayout() {
 																		href={listItem.href}
 																		startWith="/docs"
 																		title={listItem.title}
-																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
-																		activeClassName="[&>div>div]:!bg-fd-muted"
+																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted  [&>div>div]:hover:!opacity-100 [&>div>div]:hover:!border-solid"
+																		activeClassName="[&>div>div]:!bg-fd-muted [&>div>div]:!opacity-100 [&>div>div]:!border-solid"
 																	>
 																		<div className="min-w-4">
 																			<listItem.icon className="text-stone-950 dark:text-white" />
 																		</div>
 																		{listItem.title}
 																		{listItem.isNew && <NewBadge />}
+																		{listItem.isUpdated && <UpdatedBadge />}
 																	</AsideLink>
 																)}
 															</Suspense>
@@ -226,17 +228,31 @@ export default function ArticleLayout() {
 	);
 }
 
-function NewBadge({ isSelected }: { isSelected?: boolean }) {
+function NewBadge() {
 	return (
 		<div className="flex items-center justify-end w-full">
 			<Badge
 				className={cn(
 					" pointer-events-none !no-underline border-dashed !decoration-transparent",
-					isSelected && "!border-solid",
 				)}
-				variant={isSelected ? "default" : "outline"}
+				variant={"outline"}
 			>
 				New
+			</Badge>
+		</div>
+	);
+}
+
+function UpdatedBadge() {
+	return (
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className={cn(
+					"pointer-events-none !no-underline opacity-70 border-dashed !decoration-transparent text-fd-muted-foreground",
+				)}
+				variant={"outline"}
+			>
+				Updated
 			</Badge>
 		</div>
 	);
