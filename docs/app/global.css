@@ -2,7 +2,7 @@
 @config "../tailwind.config.js";
 @plugin 'tailwindcss-animate';
 @custom-variant dark (&:is(.dark *));
-@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/black.css";
 @import "fumadocs-ui/css/preset.css";
 @source '../../node_modules/fumadocs-ui/dist/**/*.js';
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
@@ -55,7 +55,7 @@
 
 	--chart-5: oklch(0.769 0.188 70.08);
 
-	--radius: 0.625rem;
+	--radius: 0.2rem;
 
 	--sidebar: oklch(0.985 0.001 106.423);
 
@@ -75,7 +75,7 @@
 }
 
 .dark {
-	--background: oklch(0.147 0.004 49.25);
+	--background: hsl(0 0% 2%);
 
 	--foreground: oklch(0.985 0.001 106.423);
 

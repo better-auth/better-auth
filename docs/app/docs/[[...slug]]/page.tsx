@@ -93,6 +93,20 @@ export default async function Page({
 						Accordion,
 						Accordions,
 						Endpoint,
+						Callout: ({ children, ...props }) => (
+							<defaultMdxComponents.Callout
+								{...props}
+								className={cn(
+									props,
+									"bg-none rounded-none border-dashed border-border",
+									props.type === "info" && "border-l-blue-500/50",
+									props.type === "warn" && "border-l-amber-700/50",
+									props.type === "error" && "border-l-red-500/50",
+								)}
+							>
+								{children}
+							</defaultMdxComponents.Callout>
+						),
 						DividerText,
 						iframe: (props) => (
 							<iframe {...props} className="w-full h-[500px]" />
@@ -106,7 +120,6 @@ export default async function Page({
 							href={prevPage.url}
 							className="[&>p]:ml-1 [&>p]:truncate [&>p]:w-full"
 							description={<>{prevPage.data.description}</>}
-							//@ts-expect-error - this works
 							title={
 								<div className="flex items-center gap-1">
 									<ChevronLeft className="size-4" />
@@ -121,7 +134,6 @@ export default async function Page({
 						<Card
 							href={nextPage.url}
 							description={<>{nextPage.data.description}</>}
-							//@ts-expect-error - this works
 							title={
 								<div className="flex items-center gap-1">
 									{nextPage.data.title}

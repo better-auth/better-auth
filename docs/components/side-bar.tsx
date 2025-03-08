@@ -54,7 +54,6 @@ export default function ArticleLayout() {
 						defaultValue="docs"
 						value={group}
 						onValueChange={(val) => {
-							loglib.track("sidebar-group-change", { group: val });
 							setGroup(val);
 							if (val === "docs") {
 								router.push("/docs");
@@ -179,21 +178,9 @@ export default function ArticleLayout() {
 												exit={{ opacity: 0, height: 0 }}
 												className="relative overflow-hidden"
 											>
-												<motion.div
-													// initial={{ opacity: 0, y: -20 }}
-													// animate={{ opacity: 1, y: 0 }}
-													className="text-sm"
-												>
+												<motion.div className="text-sm">
 													{item.list.map((listItem, j) => (
-														<div
-															key={listItem.title}
-															onClick={() => {
-																loglib.track("sidebar-link-click", {
-																	title: listItem.title,
-																	href: listItem.href,
-																});
-															}}
-														>
+														<div key={listItem.title}>
 															<Suspense fallback={<>Loading...</>}>
 																{listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
