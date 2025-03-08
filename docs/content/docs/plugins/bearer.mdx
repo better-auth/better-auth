@@ -18,7 +18,7 @@ import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    plugins: [bearer()]
+  plugins: [bearer()],
 });
 ```
 
@@ -30,14 +30,14 @@ After a successful sign-in, you'll receive a session token in the response heade
 
 ```ts title="auth-client.ts"
 const { data } = await authClient.signIn.email({
-    email: "user@example.com",
-    password: "securepassword"
+  email: "user@example.com",
+  password: "securepassword",
 }, {
-  onSuccess: (ctx)=>{
-    const authToken = ctx.response.headers.get("set-auth-token") // get the token from the response headers
+  onSuccess: (ctx) => {
+    const authToken = ctx.response.headers.get("set-auth-token"); // get the token from the response headers
     // Store the token securely (e.g., in localStorage)
     localStorage.setItem("bearer_token", authToken);
-  }
+  },
 });
 ```
 
@@ -45,15 +45,15 @@ You can also set this up globally in your auth client:
 
 ```ts title="auth-client.ts"
 export const authClient = createAuthClient({
-    fetchOptions: {
-        onSuccess: (ctx) => {
-            const authToken = ctx.response.headers.get("set-auth-token") // get the token from the response headers
-            // Store the token securely (e.g., in localStorage)
-            if(authToken){
-              localStorage.setItem("bearer_token", authToken);
-            }
-        }
-    }
+  fetchOptions: {
+    onSuccess: (ctx) => {
+      const authToken = ctx.response.headers.get("set-auth-token"); // get the token from the response headers
+      // Store the token securely (e.g., in localStorage)
+      if(authToken){
+        localStorage.setItem("bearer_token", authToken);
+      }
+    },
+  },
 });
 ```
 
@@ -66,12 +66,12 @@ Set up your auth client to include the Bearer token in all requests:
 
 ```ts title="auth-client.ts"
 export const authClient = createAuthClient({
-    fetchOptions: {
-        auth: {
-           type:"Bearer",
-           token: () => localStorage.getItem("bearer_token") || "" // get the token from localStorage
-        }
-    }
+  fetchOptions: {
+    auth: {
+      type: "Bearer",
+      token: () => localStorage.getItem("bearer_token") || "", // get the token from localStorage
+    },
+  },
 });
 ```
 
@@ -90,11 +90,11 @@ You can also provide the token for individual requests:
 
 ```ts title="auth-client.ts"
 const { data } = await authClient.listSessions({
-    fetchOptions: {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    }
+  fetchOptions: {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  },
 });
 ```
 
@@ -107,8 +107,8 @@ const token = localStorage.getItem("bearer_token");
 
 const response = await fetch("https://api.example.com/data", {
   headers: {
-    Authorization: `Bearer ${token}`
-  }
+    Authorization: `Bearer ${token}`,
+  },
 });
 
 const data = await response.json();
@@ -123,11 +123,11 @@ export async function handler(req, res) {
   const session = await auth.api.getSession({
     headers: req.headers
   });
-  
+
   if (!session) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  
+
   // Process authenticated request
   // ...
 }
