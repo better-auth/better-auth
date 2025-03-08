@@ -10,11 +10,7 @@ export default function Layout({ children }: { children: ReactNode | any }) {
 			{...docsOptions}
 			sidebar={{
 				component: (
-					<div
-						className={cn(
-							"md:mr-[var(--sidebar-width)] lg:mr-[var(--sidebar-width)] md:[--fd-sidebar-width:268px] lg:[--fd-sidebar-width:286px] xl:[--fd-toc-width:286px] xl:[--fd-tocnav-height:0px]",
-						)}
-					>
+					<div className={cn("mr-[var(--fd-sidebar-width)]")}>
 						<ArticleLayout />
 					</div>
 				),
