@@ -723,6 +723,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						policy_uri: z.string().optional(),
 						jwks_uri: z.string().optional(),
 						jwks: z.record(z.any()).optional(),
+						metadata: z.record(z.any()).optional(),
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
@@ -782,18 +783,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						data: {
 							name: body.client_name,
 							icon: body.logo_uri,
-							metadata: body.software_statement ? JSON.stringify({
-								software_statement: body.software_statement,
-								client_uri: body.client_uri,
-								tos_uri: body.tos_uri,
-								policy_uri: body.policy_uri,
-								jwks_uri: body.jwks_uri,
-								jwks: body.jwks,
-								software_id: body.software_id,
-								software_version: body.software_version,
-								scope: body.scope,
-								contacts: body.contacts
-							}) : null,
+							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: clientSecret,
 							redirectURLs: body.redirect_uris.join(","),
@@ -828,6 +818,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						software_id: body.software_id,
 						software_version: body.software_version,
 						software_statement: body.software_statement,
+						metadata: body.metadata
 						
 
 					}, {
