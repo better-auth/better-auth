@@ -14,15 +14,15 @@ The Admin plugin provides a set of administrative functions for user management 
     To use the Admin plugin, add it to your auth config.
 
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { admin } from "better-auth/plugins" // [!code highlight]
+    import { betterAuth } from "better-auth";
+    import { admin } from "better-auth/plugins"; // [!code highlight]
 
     export const auth = betterAuth({
-        // ... other config options
-        plugins: [
-            admin() // [!code highlight]
-        ]
-    })
+      // ... other config options
+      plugins: [
+        admin(), // [!code highlight]
+      ],
+    });
     ```
 
   </Step>
@@ -53,14 +53,14 @@ The Admin plugin provides a set of administrative functions for user management 
     Next, include the admin client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client"
-    import { adminClient } from "better-auth/client/plugins"
+    import { createAuthClient } from "better-auth/client";
+    import { adminClient } from "better-auth/client/plugins";
 
     const authClient = createAuthClient({
-        plugins: [
-            adminClient()
-        ]
-    })
+      plugins: [
+        adminClient(),
+      ],
+    });
     ```
 
   </Step>
@@ -113,24 +113,24 @@ By default, 100 users are returned. You can adjust the limit and offset using th
 
 ```ts title="admin.ts"
 const users = await authClient.admin.listUsers({
-    query: {
-        searchField: "email",
-        searchOperator: "contains",
-        searchValue: "@example.com",
-        limit: 10,
-        offset: 0,
-        sortBy: "createdAt",
-        sortDirection: "desc"
-        filterField: "role",
-        filterOperator: "eq",
-        filterValue: "admin"
-    }
+  query: {
+    searchField: "email",
+    searchOperator: "contains",
+    searchValue: "@example.com",
+    limit: 10,
+    offset: 0,
+    sortBy: "createdAt",
+    sortDirection: "desc"
+    filterField: "role",
+    filterOperator: "eq",
+    filterValue: "admin",
+  },
 });
 ```
 
 #### Pagination
 
-The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:  
+The `listUsers` function supports pagination by returning metadata alongside the user list. The response includes the following fields:
 
 ```ts
 {
@@ -141,32 +141,32 @@ The `listUsers` function supports pagination by returning metadata alongside the
 }
 ```
 
-##### How to Implement Pagination  
+##### How to Implement Pagination
 
-To paginate results, use the `total`, `limit`, and `offset` values to calculate:  
+To paginate results, use the `total`, `limit`, and `offset` values to calculate:
 
-- **Total pages:** `Math.ceil(total / limit)`  
-- **Current page:** `(offset / limit) + 1`  
+- **Total pages:** `Math.ceil(total / limit)`
+- **Current page:** `(offset / limit) + 1`
 - **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
 - **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
 
-##### Example Usage  
+##### Example Usage
 
-Fetching the second page with 10 users per page:  
+Fetching the second page with 10 users per page:
 
 ```ts title="admin.ts"
 const pageSize = 10;
 const currentPage = 2;
 
 const users = await authClient.admin.listUsers({
-    query: {
-        limit: pageSize,
-        offset: (currentPage - 1) * pageSize
-    }
+  query: {
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
+  }
 });
 
 const totalUsers = users.total;
-const totalPages = Math.ceil(totalUsers / limit)
+const totalPages = Math.ceil(totalUsers / limit);
 ```
 
 ### Set User Role
@@ -300,7 +300,7 @@ the plugin providers easy way to define your own set of permission for each role
      * make sure to use `as const` so typescript can infer the type correctly
      */
     const statement = { // [!code highlight]
-        project: ["create", "share", "update", "delete"], // [!code highlight]
+      project: ["create", "share", "update", "delete"], // [!code highlight]
     } as const; // [!code highlight]
 
     const ac = createAccessControl(statement); // [!code highlight]
@@ -316,41 +316,41 @@ the plugin providers easy way to define your own set of permission for each role
     import { createAccessControl } from "better-auth/plugins/access";
 
     const statement = {
-        project: ["create", "share", "update", "delete"],
+      project: ["create", "share", "update", "delete"],
     } as const;
 
     const ac = createAccessControl(statement);
 
     const user = ac.newRole({ // [!code highlight]
-        project: ["create"], // [!code highlight]
+      project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
     const admin = ac.newRole({ // [!code highlight]
-        project: ["create", "update"], // [!code highlight]
+      project: ["create", "update"], // [!code highlight]
     }); // [!code highlight]
 
     const myCustomRole = ac.newRole({ // [!code highlight]
-        project: ["create", "update", "delete"], // [!code highlight]
-        user: ["ban"], // [!code highlight]
+      project: ["create", "update", "delete"], // [!code highlight]
+      user: ["ban"], // [!code highlight]
     }); // [!code highlight]
     ```
 
-      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+    When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
     import { defaultStatements, adminAc } from "better-auth/plugins/admin/access";
 
     const statement = {
-        ...defaultStatements, // [!code highlight]
-        project: ["create", "share", "update", "delete"],
+      ...defaultStatements, // [!code highlight]
+      project: ["create", "share", "update", "delete"],
     } as const;
 
     const ac = createAccessControl(statement);
 
     const admin = ac.newRole({
-        project: ["create", "update"],
-        ...adminAc.statements, // [!code highlight]
+      project: ["create", "update"],
+      ...adminAc.statements, // [!code highlight]
     });
     ```
 
@@ -362,43 +362,43 @@ the plugin providers easy way to define your own set of permission for each role
         Once you have created the roles you can pass them to the organization plugin both on the client and the server.
 
         ```ts title="auth.ts"
-        import { ac, admin, user } from "@/auth/permissions"
-        import { betterAuth } from "better-auth"
-        import { admin } from "better-auth/plugins"
+        import { ac, admin, user } from "@/auth/permissions";
+        import { betterAuth } from "better-auth";
+        import { admin } from "better-auth/plugins";
 
         export const auth = betterAuth({
-            plugins: [
-                admin({
-                    ac: ac,
-                    roles: {
-                        admin,
-                        user,
-                        myCustomRole
-                    }
-                }),
-            ],
+          plugins: [
+            admin({
+              ac,
+              roles: {
+                admin,
+                user,
+                myCustomRole,
+              }
+            }),
+          ],
         });
         ```
 
         You also need to pass the access controller and the roles to the client plugin.
 
         ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { adminClient } from "better-auth/client/plugins"
-        import { ac, admin, user, myCustomRole } from "@/auth/permissions"
+        import { createAuthClient } from "better-auth/client";
+        import { adminClient } from "better-auth/client/plugins";
+        import { ac, admin, user, myCustomRole } from "@/auth/permissions";
 
         export const client = createAuthClient({
-            plugins: [
-                adminClient({
-                    ac: ac,
-                    roles: {
-                        admin,
-                        user,
-                        myCustomRole
-                    }
-                })
-            ]
-        })
+          plugins: [
+            adminClient({
+              ac,
+              roles: {
+                admin,
+                user,
+                myCustomRole,
+              }
+            })
+          ],
+        });
         ```
     </Step>
 
@@ -535,7 +535,7 @@ You can pass an array of userIds that should be considered as admin. Default to 
 
 ```ts title="auth.ts"
 admin({
-    adminUserIds: ["user_id_1", "user_id_2"]
+  adminUserIds: ["user_id_1", "user_id_2"],
 })
 ```
 
