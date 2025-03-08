@@ -656,6 +656,39 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						callbackURL: z.string(),
 					}),
 					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Link an OAuth2 account to the current user session",
+							responses: {
+								"200": {
+									description:
+										"Authorization URL generated successfully for linking an OAuth2 account",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+														format: "uri",
+														description:
+															"The authorization URL to redirect the user to for linking the OAuth2 account",
+													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Indicates that the client should redirect to the provided URL",
+														enum: [true],
+													},
+												},
+												required: ["url", "redirect"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (c) => {
 					const session = c.context.session;

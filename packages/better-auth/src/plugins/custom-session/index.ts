@@ -24,9 +24,6 @@ export const customSession = <
 				"/get-session",
 				{
 					method: "GET",
-					metadata: {
-						CUSTOM_SESSION: true,
-					},
 					query: z.optional(
 						z.object({
 							/**
@@ -48,6 +45,28 @@ export const customSession = <
 								.optional(),
 						}),
 					),
+					metadata: {
+						CUSTOM_SESSION: true,
+						openapi: {
+							description: "Get custom session data",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "array",
+												nullable: true,
+												items: {
+													$ref: "#/components/schemas/Session",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);

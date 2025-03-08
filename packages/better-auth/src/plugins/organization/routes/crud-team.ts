@@ -22,6 +22,55 @@ export const createTeam = <O extends OrganizationOptions | undefined>(
 				name: z.string(),
 			}),
 			use: [orgMiddleware],
+			metadata: {
+				openapi: {
+					description: "Create a new team within an organization",
+					responses: {
+						"200": {
+							description: "Team created successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the created team",
+											},
+											name: {
+												type: "string",
+												description: "Name of the team",
+											},
+											organizationId: {
+												type: "string",
+												description:
+													"ID of the organization the team belongs to",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was created",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was last updated",
+											},
+										},
+										required: [
+											"id",
+											"name",
+											"organizationId",
+											"createdAt",
+											"updatedAt",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
@@ -102,6 +151,32 @@ export const removeTeam = createAuthEndpoint(
 			organizationId: z.string().optional(),
 		}),
 		use: [orgMiddleware],
+		metadata: {
+			openapi: {
+				description: "Remove a team from an organization",
+				responses: {
+					"200": {
+						description: "Team removed successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+											description:
+												"Confirmation message indicating successful removal",
+											enum: ["Team removed successfully."],
+										},
+									},
+									required: ["message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
@@ -176,6 +251,54 @@ export const updateTeam = createAuthEndpoint(
 			data: teamSchema.partial(),
 		}),
 		use: [orgMiddleware, orgSessionMiddleware],
+		metadata: {
+			openapi: {
+				description: "Update an existing team in an organization",
+				responses: {
+					"200": {
+						description: "Team updated successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										id: {
+											type: "string",
+											description: "Unique identifier of the updated team",
+										},
+										name: {
+											type: "string",
+											description: "Updated name of the team",
+										},
+										organizationId: {
+											type: "string",
+											description: "ID of the organization the team belongs to",
+										},
+										createdAt: {
+											type: "string",
+											format: "date-time",
+											description: "Timestamp when the team was created",
+										},
+										updatedAt: {
+											type: "string",
+											format: "date-time",
+											description: "Timestamp when the team was last updated",
+										},
+									},
+									required: [
+										"id",
+										"name",
+										"organizationId",
+										"createdAt",
+										"updatedAt",
+									],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const session = ctx.context.session;
@@ -241,6 +364,59 @@ export const listOrganizationTeams = createAuthEndpoint(
 				organizationId: z.string().optional(),
 			}),
 		),
+		metadata: {
+			openapi: {
+				description: "List all teams in an organization",
+				responses: {
+					"200": {
+						description: "Teams retrieved successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											id: {
+												type: "string",
+												description: "Unique identifier of the team",
+											},
+											name: {
+												type: "string",
+												description: "Name of the team",
+											},
+											organizationId: {
+												type: "string",
+												description:
+													"ID of the organization the team belongs to",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was created",
+											},
+											updatedAt: {
+												type: "string",
+												format: "date-time",
+												description: "Timestamp when the team was last updated",
+											},
+										},
+										required: [
+											"id",
+											"name",
+											"organizationId",
+											"createdAt",
+											"updatedAt",
+										],
+									},
+									description: "Array of team objects within the organization",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		use: [orgMiddleware, orgSessionMiddleware],
 	},
 	async (ctx) => {
