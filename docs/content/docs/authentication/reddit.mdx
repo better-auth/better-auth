@@ -4,7 +4,7 @@ description: Reddit provider setup and usage.
 ---
 
 <Steps>
-    <Step> 
+    <Step>
         ### Get your Reddit Credentials
         To use Reddit sign in, you need a client ID and client secret. You can get them from the [Reddit Developer Portal](https://www.reddit.com/prefs/apps).
 
@@ -22,16 +22,16 @@ description: Reddit provider setup and usage.
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        
+        import { betterAuth } from "better-auth";
+
         export const auth = betterAuth({
-            socialProviders: {
-                reddit: {
-                    clientId: process.env.REDDIT_CLIENT_ID as string,
-                    clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
-                },
+          socialProviders: {
+            reddit: {
+              clientId: process.env.REDDIT_CLIENT_ID as string,
+              clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
             },
-        })
+          },
+        });
         ```
     </Step>
 
@@ -41,13 +41,13 @@ description: Reddit provider setup and usage.
         - `provider`: The provider to use. It should be set to `reddit`.
 
         ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        const authClient = createAuthClient()
-        
+        import { createAuthClient } from "better-auth/client";
+        const authClient = createAuthClient();
+
         const signIn = async () => {
-            const data = await authClient.signIn.social({
-                provider: "reddit"
-            })
+          const data = await authClient.signIn.social({
+            provider: "reddit",
+          });
         }
         ```
     </Step>
@@ -60,15 +60,15 @@ By default, Reddit provides basic user information. If you need additional permi
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    socialProviders: {
-        reddit: {
-            clientId: process.env.REDDIT_CLIENT_ID as string,
-            clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
-            duration: "permanent",
-            scopes: ["identity", "read", "submit"] // Add required scopes
-        },
+  socialProviders: {
+    reddit: {
+      clientId: process.env.REDDIT_CLIENT_ID as string,
+      clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
+      duration: "permanent",
+      scopes: ["identity", "read", "submit"], // Add required scopes
     },
-})
+  },
+});
 ```
 
 Common Reddit scopes include:
