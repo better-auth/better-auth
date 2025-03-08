@@ -56,7 +56,7 @@ And in this file, import Better Auth and create your auth instance. Make sure to
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    //...
+  //...
 })
 ```
 </Step>
@@ -73,7 +73,7 @@ Better Auth requires a database to store user data. You can easily configure Bet
     import Database from "better-sqlite3";
 
     export const auth = betterAuth({
-        database: new Database("./sqlite.db"),
+      database: new Database("./sqlite.db"),
     })
     ```
     </Tab>
@@ -83,10 +83,10 @@ Better Auth requires a database to store user data. You can easily configure Bet
     import { Pool } from "pg";
 
     export const auth = betterAuth({
-        database: new Pool({
-            // connection options
-        })
-    })
+      database: new Pool({
+        // connection options
+      })
+    });
     ```
     </Tab>
     <Tab value="mysql">
@@ -95,10 +95,10 @@ Better Auth requires a database to store user data. You can easily configure Bet
     import { createPool } from "mysql2/promise";
 
     export const auth = betterAuth({
-        database: createPool({
-            // connection options
-        })
-    })
+      database: createPool({
+        // connection options
+      }),
+    });
     ```
     </Tab>
 </Tabs>
@@ -112,15 +112,15 @@ import { betterAuth } from "better-auth";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 
 const dialect = new LibsqlDialect({
-    url: process.env.TURSO_DATABASE_URL || "",
-    authToken: process.env.TURSO_AUTH_TOKEN || "",
-})
+  url: process.env.TURSO_DATABASE_URL || "",
+  authToken: process.env.TURSO_AUTH_TOKEN || "",
+});
 
 export const auth = betterAuth({
   database: {
     dialect,
-    type: "sqlite"
-  }
+    type: "sqlite",
+  },
 });
 ```
 
@@ -137,9 +137,9 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
-            database: prismaAdapter(prisma, {
-                provider: "sqlite", // or "mysql", "postgresql", ...etc
-            }),
+          database: prismaAdapter(prisma, {
+            provider: "sqlite", // or "mysql", "postgresql", ...etc
+          }),
         });
     ```
     </Tab>
@@ -151,9 +151,9 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     import { db } from "@/db"; // your drizzle instance
 
     export const auth = betterAuth({
-        database: drizzleAdapter(db, {
-            provider: "pg", // or "mysql", "sqlite"
-        })
+      database: drizzleAdapter(db, {
+        provider: "pg", // or "mysql", "sqlite"
+      }),
     });
     ```
     </Tab>
@@ -165,7 +165,7 @@ If you prefer to use an ORM or if your database is not supported by Kysely, you 
     import { client } from "@/db"; // your mongodb client
 
     export const auth = betterAuth({
-        database: mongodbAdapter(client)
+      database: mongodbAdapter(client),
     });
     ```
     </Tab>
@@ -208,16 +208,16 @@ Configure the authentication methods you want to use. Better Auth comes with bui
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    //...other options
-    emailAndPassword: {  // [!code highlight]
-        enabled: true // [!code highlight]
-    },// [!code highlight]
-    socialProviders: { // [!code highlight]
-       github: { // [!code highlight]
-        clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
-        clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
-       } // [!code highlight]
+  //...other options
+  emailAndPassword: {  // [!code highlight]
+    enabled: true, // [!code highlight]
+  }, // [!code highlight]
+  socialProviders: { // [!code highlight]
+    github: { // [!code highlight]
+      clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
+      clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
     }, // [!code highlight]
+  }, // [!code highlight]
 });
 ```
 
@@ -250,7 +250,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { auth } from "~/utils/auth"; // path to your auth file
 
     export default defineEventHandler((event) => {
-        return auth.handler(toWebRequest(event));
+      return auth.handler(toWebRequest(event));
     });
     ```
     </Tab>
@@ -260,21 +260,21 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { svelteKitHandler } from "better-auth/svelte-kit";
 
     export async function handle({ event, resolve }) {
-        return svelteKitHandler({ event, resolve, auth });
+      return svelteKitHandler({ event, resolve, auth });
     }
     ```
     </Tab>
     <Tab value="remix">
     ```ts title="/app/routes/api.auth.$.ts"
-    import { auth } from '~/lib/auth.server' // Adjust the path as necessary
-    import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
+    import { auth } from "~/lib/auth.server"; // Adjust the path as necessary
+    import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 
     export async function loader({ request }: LoaderFunctionArgs) {
-        return auth.handler(request)
+      return auth.handler(request);
     }
 
     export async function action({ request }: ActionFunctionArgs) {
-        return auth.handler(request)
+      return auth.handler(request);
     }
     ```
     </Tab>
@@ -317,7 +317,7 @@ Better Auth supports any backend framework with standard Request and Response ob
     app.use(express.json());
 
     app.listen(port, () => {
-        console.log(`Better Auth app listening on port ${port}`);
+      console.log(`Better Auth app listening on port ${port}`);
     });
     ```
     This also works for any other node server framework like express, fastify, hapi, etc. Note that CommonJS (cjs) isn't supported.
@@ -328,11 +328,11 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { auth } from "@/auth"; // path to your auth file
 
     export const GET: APIRoute = async (ctx) => {
-        return auth.handler(ctx.request);
+      return auth.handler(ctx.request);
     };
 
     export const POST: APIRoute = async (ctx) => {
-        return auth.handler(ctx.request);
+      return auth.handler(ctx.request);
     };
     ```
     </Tab>
@@ -342,13 +342,13 @@ Better Auth supports any backend framework with standard Request and Response ob
     import { auth } from "./auth";
 
     const betterAuthView = (context: Context) => {
-        const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
-        // validate request method
-        if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
-            return auth.handler(context.request);
-        } else {
-            context.error(405)
-        }
+      const BETTER_AUTH_ACCEPT_METHODS = ["POST", "GET"]
+      // validate request method
+      if(BETTER_AUTH_ACCEPT_METHODS.includes(context.request.method)) {
+        return auth.handler(context.request);
+      } else {
+        context.error(405);
+      }
     }
 
     const app = new Elysia().all("/api/auth/*", betterAuthView).listen(3000);
@@ -360,22 +360,22 @@ Better Auth supports any backend framework with standard Request and Response ob
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="app/routes/api/auth/$.ts"
-    import { auth } from '~/lib/server/auth'
-    import { createAPIFileRoute } from '@tanstack/start/api'
+    import { auth } from "~/lib/server/auth";
+    import { createAPIFileRoute } from "@tanstack/start/api";
 
-    export const APIRoute = createAPIFileRoute('/api/auth/$')({
-        GET: ({ request }) => {
-            return auth.handler(request)
-        },
-        POST: ({ request }) => {
-            return auth.handler(request)
-        },
+    export const APIRoute = createAPIFileRoute("/api/auth/$")({
+      GET: ({ request }) => {
+        return auth.handler(request);
+      },
+      POST: ({ request }) => {
+        return auth.handler(request);
+      },
     });
     ```
     </Tab>
     <Tab value="expo">
     ```ts title="app/api/auth/[..all]+api.ts"
-    import { auth } from '@/lib/server/auth'; // path to your auth file
+    import { auth } from "@/lib/server/auth"; // path to your auth file
 
     const handler = auth.handler;
     export { handler as GET, handler as POST };
@@ -401,31 +401,31 @@ If you're using a different base path other than `/api/auth` make sure to pass t
   "vanilla"]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/client"
+            import { createAuthClient } from "better-auth/client";
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
+              baseURL: "http://localhost:3000", // the base url of your auth server // [!code highlight]
             })
             ```
     </Tab>
     <Tab value="react" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/react"
+            import { createAuthClient } from "better-auth/react";
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
-            })
+              baseURL: "http://localhost:3000", // the base url of your auth server // [!code highlight]
+            });
             ```
     </Tab>
     <Tab value="vue" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/vue"
+            import { createAuthClient } from "better-auth/vue";
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
-            })
+              baseURL: "http://localhost:3000", // the base url of your auth server // [!code highlight]
+            });
             ```
     </Tab>
     <Tab value="svelte" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/svelte"
+            import { createAuthClient } from "better-auth/svelte";
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
             })
@@ -433,10 +433,10 @@ If you're using a different base path other than `/api/auth` make sure to pass t
     </Tab>
     <Tab value="solid" title="lib/auth-client.ts">
             ```ts title="lib/auth-client.ts"
-            import { createAuthClient } from "better-auth/solid"
+            import { createAuthClient } from "better-auth/solid";
             export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // the base url of your auth server // [!code highlight]
-            })
+              baseURL: "http://localhost:3000", // the base url of your auth server // [!code highlight]
+            }),
             ```
     </Tab>
 </Tabs>
@@ -445,7 +445,7 @@ If you're using a different base path other than `/api/auth` make sure to pass t
 Tip: You can also export specific methods if you prefer:
 </Callout>
 ```ts
-export const { signIn, signUp, useSession } = createAuthClient()
+export const { signIn, signUp, useSession } = createAuthClient();
 ```
 </Step>
 
