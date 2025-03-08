@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-
 import { AsideLink } from "@/components/ui/aside-link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchContext } from "fumadocs-ui/provider";
@@ -15,7 +14,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "./ui/select";
-import { loglib } from "@loglib/tracker";
 import { cn } from "@/lib/utils";
 import { Badge } from "./ui/badge";
 
@@ -44,8 +42,13 @@ export default function ArticleLayout() {
 	const cts = group === "docs" ? contents : examples;
 
 	return (
-		<div className="fixed top-0">
-			<aside className="border-r border-lines md:flex hidden w-[--fd-sidebar-width] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between">
+		<div className={cn("fixed top-0")}>
+			<aside
+				className={cn(
+					"md:transition-all",
+					"border-r border-lines md:flex hidden  md:w-[268px] lg:w-[286px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between w-[var(--fd-sidebar-width)]",
+				)}
+			>
 				<div>
 					<Select
 						defaultValue="docs"
@@ -64,7 +67,10 @@ export default function ArticleLayout() {
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="docs" className="h-12">
+							<SelectItem
+								value="docs"
+								className="h-12 flex flex-col items-start gap-1"
+							>
 								<div className="flex items-center gap-1">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -88,7 +94,10 @@ export default function ArticleLayout() {
 									get started, concepts, and plugins
 								</p>
 							</SelectItem>
-							<SelectItem value="examples">
+							<SelectItem
+								value="examples"
+								className="h-12 flex flex-col items-start gap-1"
+							>
 								<div className="flex items-center gap-1">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -125,7 +134,6 @@ export default function ArticleLayout() {
 						className="flex items-center gap-2 p-2 px-4 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
 						onClick={() => {
 							setOpenSearch(true);
-							loglib.track("sidebar-search-open");
 						}}
 					>
 						<Search className="w-4 h-4" />
