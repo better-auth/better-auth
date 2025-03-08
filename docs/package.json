@@ -49,7 +49,7 @@
     "input-otp": "^1.4.1",
     "lucide-react": "^0.477.0",
     "next": "15.2.0",
-    "next-themes": "^0.2.1",
+    "next-themes": "^0.4.4",
     "react": "^19.0.0",
     "react-day-picker": "8.10.1",
     "react-dom": "^19.0.0",
