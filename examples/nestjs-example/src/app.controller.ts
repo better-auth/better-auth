@@ -1,4 +1,4 @@
-import { Controller, Get, Request, UseGuards } from "@nestjs/common";
+import { Body, Controller, Post, Request, UseGuards } from "@nestjs/common";
 import {
 	AuthGuard,
 	AuthService,
@@ -14,10 +14,11 @@ import { auth } from "./auth";
 export class AppController {
 	constructor(private authService: AuthService<typeof auth>) {}
 
-	@Get()
-	async getHello(
+	@Post()
+	async echo(
 		@Request() request: ExpressRequest,
 		@Session() { session, user }: UserSession,
+		@Body() body: unknown,
 	) {
 		const accounts = await this.authService.api.listUserAccounts({
 			headers: fromNodeHeaders(request.headers),
@@ -27,6 +28,7 @@ export class AppController {
 			session,
 			user,
 			accounts,
+			echo: body,
 		};
 	}
 }

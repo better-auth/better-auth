@@ -291,7 +291,8 @@ When configuring `AuthModule.forRoot()`, you can provide options to customize th
 ```typescript
 AuthModule.forRoot(auth, {
   disableExceptionFilter: false,
-  disableTrustedOriginsCors: false
+  disableTrustedOriginsCors: false,
+  disableBodyParser: false
 })
 ```
 
@@ -301,4 +302,5 @@ The available options are:
 |--------|---------|-------------|
 | `disableExceptionFilter` | `false` | When set to `true`, disables the built-in exception filter for handling `APIError` instances. Use this if you want to implement your own custom exception filter. |
 | `disableTrustedOriginsCors` | `false` | When set to `true`, disables the automatic CORS configuration for the origins specified in `trustedOrigins`. Use this if you want to handle CORS configuration manually. |
+| `disableBodyParser` | `false` | When set to `true`, disables the automatic body parser middleware. Use this if you want to handle request body parsing manually. |
 

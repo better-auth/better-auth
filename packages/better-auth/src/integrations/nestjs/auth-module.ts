@@ -24,6 +24,7 @@ import {
 	AUTH_MODULE_OPTIONS_KEY,
 } from "./symbols";
 import { APIErrorExceptionFilter } from "./api-error-exception-filter";
+import { SkipBodyParsingMiddleware } from "./middlewares";
 
 /**
  * Configuration options for the AuthModule
@@ -31,6 +32,7 @@ import { APIErrorExceptionFilter } from "./api-error-exception-filter";
 type AuthModuleOptions = {
 	disableExceptionFilter?: boolean;
 	disableTrustedOriginsCors?: boolean;
+	disableBodyParser?: boolean;
 };
 
 const HOOKS = [
@@ -97,6 +99,9 @@ export class AuthModule implements NestModule, OnModuleInit {
 			throw new Error(
 				"Function-based trustedOrigins not supported in NestJS. Use string array or disable CORS with disableTrustedOriginsCors: true.",
 			);
+
+		if (!this.options.disableBodyParser)
+			consumer.apply(SkipBodyParsingMiddleware).forRoutes("*");
 
 		const handler = toNodeHandler(this.auth);
 		consumer.apply(handler).forRoutes({
