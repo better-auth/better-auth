@@ -94,6 +94,28 @@ const application = await client.oauth2.register({
 
 Once the application is created, you will receive a `clientId` and `clientSecret` that you can display to the user.
 
+### UserInfo Endpoint
+
+The OIDC Provider includes a UserInfo endpoint that allows clients to retrieve information about the authenticated user. This endpoint is available at `/oauth2/userinfo` and requires a valid access token.
+
+```ts title="client-app.ts"
+// Example of how a client would use the UserInfo endpoint
+const response = await fetch('https://your-domain.com/api/auth/oauth2/userinfo', {
+  headers: {
+    'Authorization': 'Bearer ACCESS_TOKEN'
+  }
+});
+
+const userInfo = await response.json();
+// userInfo contains user details based on the scopes granted
+```
+
+The UserInfo endpoint returns different claims based on the scopes that were granted during authorization:
+
+- With `openid` scope: Returns the user's ID (`sub` claim)
+- With `profile` scope: Returns name, picture, given_name, family_name
+- With `email` scope: Returns email and email_verified
+
 ### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data. This is known as the consent screen. By default, Better Auth will display a sample consent screen. You can customize the consent screen by providing a `consentPage` option during initialization.

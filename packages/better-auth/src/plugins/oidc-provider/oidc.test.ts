@@ -65,7 +65,6 @@ describe("oidc", async () => {
 			client_name: application.name,
 			redirect_uris: application.redirectURLs,
 			logo_uri: application.icon,
-			
 		});
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
@@ -77,7 +76,7 @@ describe("oidc", async () => {
 			response_types: ["code"],
 			token_endpoint_auth_method: "client_secret_basic",
 			client_id_issued_at: expect.any(Number),
-			client_secret_expires_at: 0
+			client_secret_expires_at: 0,
 		});
 		if (createdClient.data) {
 			application = {
@@ -88,7 +87,7 @@ describe("oidc", async () => {
 				icon: createdClient.data.logo_uri || "",
 				type: "web",
 				disabled: false,
-				name: createdClient.data.client_name || ""
+				name: createdClient.data.client_name || "",
 			};
 		}
 	});
