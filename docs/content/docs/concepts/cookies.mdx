@@ -34,20 +34,20 @@ By default, Better Auth uses the following cookies:
 Plugins may also use cookies to store data. For example, the Two Factor Authentication plugin uses the `two_factor` cookie to store the two-factor authentication state.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    advanced: {
-        cookies: {
-            session_token: {
-                name: "custom_session_token",
-                attributes: {
-                    // Set custom cookie attributes
-                }
-            },
-        }
-    }
-})
+  advanced: {
+    cookies: {
+      session_token: {
+        name: "custom_session_token",
+        attributes: {
+          // Set custom cookie attributes
+        },
+      },
+    },
+  },
+});
 ```
 
 ### Cross Subdomain Cookies
@@ -62,23 +62,23 @@ By default, cookies are not shared between subdomains. However, if you need to a
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    advanced: {
-        crossSubDomainCookies: {
-            enabled: true,
-            domain: ".example.com", // Domain with a leading period
-        },
-        defaultCookieAttributes: {
-            secure: true,
-            httpOnly: true,
-            sameSite: "none",  // Allows CORS-based cookie sharing across subdomains
-            partitioned: true, // New browser standards will mandate this for foreign cookies
-        },
+  advanced: {
+    crossSubDomainCookies: {
+      enabled: true,
+      domain: ".example.com", // Domain with a leading period
     },
-    trustedOrigins: [
-        'https://example.com',
-        'https://app1.example.com',
-        'https://app2.example.com',
-    ],
+    defaultCookieAttributes: {
+      secure: true,
+      httpOnly: true,
+      sameSite: "none",  // Allows CORS-based cookie sharing across subdomains
+      partitioned: true, // New browser standards will mandate this for foreign cookies
+    },
+  },
+  trustedOrigins: [
+    "https://example.com",
+    "https://app1.example.com",
+    "https://app2.example.com",
+  ],
 })
 ```
 
@@ -89,11 +89,11 @@ export const auth = betterAuth({
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    advanced: {
-        useSecureCookies: true
-    }
-})
+  advanced: {
+    useSecureCookies: true,
+  },
+});
 ```
