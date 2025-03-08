@@ -17,28 +17,28 @@ This plugin is still in the early stages of development. We are working on addin
     <Step>
     ### Add the plugin to your **auth** config
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { openAPI } from "better-auth/plugins"
+    import { betterAuth } from "better-auth";
+    import { openAPI } from "better-auth/plugins";
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
-            openAPI(), // [!code highlight]
-        ] // [!code highlight]
-    })
+      plugins: [ // [!code highlight]
+        openAPI(), // [!code highlight]
+      ], // [!code highlight]
+    });
     ```
     </Step>
     <Step>
     ### Navigate to `/api/auth/reference` to view the Open API reference
-    
+
     Each plugin endpoints are grouped by the plugin name. The core endpoints are grouped under the `Default` group. And Model schemas are grouped under the `Models` group.
 
     ![Open API reference](/open-api-reference.png)
     </Step>
-</Steps>    
+</Steps>
 
 
 
-## Usage 
+## Usage
 
 The Open API reference is generated using the [OpenAPI 3.0](https://swagger.io/specification/) specification. You can use the reference to generate client libraries, documentation, and more.
 
@@ -51,10 +51,10 @@ The reference is generated using the [Scalar](https://scalar.com/) library. Scal
 To get the generated Open API schema directly as JSON, you can do `auth.api.generateOpenAPISchema()`. This will return the Open API schema as a JSON object.
 
 ```ts
-import { auth } from "~/lib/auth"
+import { auth } from "~/lib/auth";
 
-const openAPISchema = await auth.api.generateOpenAPISchema()
-console.log(openAPISchema)
+const openAPISchema = await auth.api.generateOpenAPISchema();
+console.log(openAPISchema);
 ```
 
 ## Configuration
