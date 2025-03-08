@@ -1,4 +1,4 @@
-import { changelogs } from "@/app/source";
+import { changelogs } from "@/lib/source";
 import { notFound } from "next/navigation";
 import { absoluteUrl, formatDate } from "@/lib/utils";
 import DatabaseTable from "@/components/mdx/database-tables";

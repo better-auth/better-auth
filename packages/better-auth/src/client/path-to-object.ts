@@ -57,7 +57,7 @@ export type InferCtx<
 	FetchOptions extends BetterFetchOption,
 > = C["body"] extends Record<string, any>
 	? C["body"] & {
-			fetchOptions?: BetterFetchOption<undefined, C["query"], C["params"]>;
+			fetchOptions?: FetchOptions;
 		}
 	: C["query"] extends Record<string, any>
 		? {
@@ -133,6 +133,7 @@ export type InferRoute<API, COpts extends ClientOptions> = API extends Record<
 										{
 											code?: string;
 											message?: string;
+											t?: FetchOptions["throw"];
 										},
 										FetchOptions["throw"] extends true
 											? true

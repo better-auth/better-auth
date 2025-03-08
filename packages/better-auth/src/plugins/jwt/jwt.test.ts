@@ -7,11 +7,7 @@ import { importJWK, jwtVerify } from "jose";
 
 describe("jwt", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [
-			jwt({
-				includeJWTOnHeaders: true,
-			}),
-		],
+		plugins: [jwt()],
 		logger: {
 			level: "error",
 		},
@@ -77,8 +73,10 @@ describe("jwt", async (it) => {
 
 		const jwks = await client.jwks();
 
-		const publicWebKey = await importJWK(jwks.data?.keys[0]);
-
+		const publicWebKey = await importJWK({
+			...jwks.data?.keys[0],
+			alg: "EdDSA",
+		});
 		const decoded = await jwtVerify(token.data?.token!, publicWebKey);
 
 		expect(decoded).toBeDefined();
