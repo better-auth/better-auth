@@ -18,6 +18,7 @@ import {
 	UserSquare2,
 	Database,
 	KeyRound,
+	Package,
 } from "lucide-react";
 import { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -1589,6 +1590,59 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Optimize for Performance",
 				href: "/docs/guides/optimizing-for-performance",
 				icon: () => <Gauge className="size-4" />,
+			},
+		],
+	},
+	{
+		title: "Libraries",
+		href: "/docs/libraries",
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="1.3em"
+				height="1.3em"
+				viewBox="0 0 24 24"
+			>
+				<path
+					fill="currentColor"
+					d="M11 21.725v-9.15L3 7.95v8.025q0 .55.263 1T4 17.7zm2 0l7-4.025q.475-.275.738-.725t.262-1V7.95l-8 4.625zm3.975-13.75l2.95-1.725L13 2.275Q12.525 2 12 2t-1 .275L9.025 3.4zM12 10.85l2.975-1.7l-7.925-4.6l-3 1.725z"
+				/>
+			</svg>
+		),
+		list: [
+			{
+				title: "better-auth-utils",
+				href: "/docs/libraries/better-auth-utils",
+				icon: () => <Package className="w-4 h-4 text-current" />,
+			},
+			{
+				group: true,
+				title: "Others",
+				href: "/docs/adapters/community-libraries",
+				icon: () => null,
+			},
+			{
+				title: "community libraries",
+				href: "/docs/libraries/community-libraries",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="lucide lucide-users"
+					>
+						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+						<circle cx="9" cy="7" r="4" />
+						<path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+						<path d="M16 3.13a4 4 0 0 1 0 7.75" />
+					</svg>
+				),
 			},
 		],
 	},
