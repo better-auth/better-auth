@@ -38,9 +38,9 @@ Here are examples of how you can do caching in different frameworks and environm
 
     ```ts
     export async function getUsers() {
-        'use cache' // [!code highlight]
-        const { users } = await auth.api.listUsers();
-        return users
+      "use cache" // [!code highlight]
+      const { users } = await auth.api.listUsers();
+      return users;
     }
     ```
 
@@ -51,15 +51,15 @@ Here are examples of how you can do caching in different frameworks and environm
     In Remix, you can use the `cache` option in the `loader` function to cache responses on the server. Here’s an example:
 
     ```ts
-    import { json } from '@remix-run/node';
+    import { json } from "@remix-run/node";
 
     export const loader = async () => {
-    const { users } = await auth.api.listUsers();
-    return json(users, {
+      const { users } = await auth.api.listUsers();
+      return json(users, {
         headers: {
-        'Cache-Control': 'max-age=3600', // Cache for 1 hour
+          "Cache-Control": "max-age=3600", // Cache for 1 hour
         },
-    });
+      });
     };
     ```
 
@@ -73,8 +73,8 @@ Here are examples of how you can do caching in different frameworks and environm
 
     ```tsx
     const getUsers = query(
-        async () => (await auth.api.listUsers()).users,
-        "getUsers"
+      async () => (await auth.api.listUsers()).users,
+      "getUsers",
     );
     ```
 
@@ -85,27 +85,27 @@ Here are examples of how you can do caching in different frameworks and environm
     With React Query you can use the `useQuery` hook to cache data. Here’s an example:
 
     ```ts
-    import { useQuery } from '@tanstack/react-query';
+    import { useQuery } from "@tanstack/react-query";
 
     const fetchUsers = async () => {
-        const { users } = await auth.api.listUsers();
-        return users;
+      const { users } = await auth.api.listUsers();
+      return users;
     };
 
     export default function Users() {
-        const { data: users, isLoading } = useQuery('users', fetchUsers, {
-            staleTime: 1000 * 60 * 15, // Cache for 15 minutes
-        });
+      const { data: users, isLoading } = useQuery("users", fetchUsers, {
+        staleTime: 1000 * 60 * 15, // Cache for 15 minutes
+      });
 
-        if (isLoading) return <div>Loading...</div>;
+      if (isLoading) return <div>Loading...</div>;
 
-        return (
-            <ul>
-                {users.map(user => (
-                    <li key={user.id}>{user.name}</li>
-                ))}
-            </ul>
-        );
+      return (
+        <ul>
+          {users.map(user => (
+            <li key={user.id}>{user.name}</li>
+          ))}
+        </ul>
+      );
     }
     ```
 
