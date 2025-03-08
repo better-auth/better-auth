@@ -16,26 +16,26 @@ To use a provider that is not supported out of the box, you can use the [Generic
     To use the Generic OAuth plugin, add it to your auth config.
 
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { genericOAuth } from "better-auth/plugins" // [!code highlight]
+    import { betterAuth } from "better-auth";
+    import { genericOAuth } from "better-auth/plugins"; // [!code highlight]
 
     export const auth = betterAuth({
-        // ... other config options
-        plugins: [
-            genericOAuth({ // [!code highlight]
-                config: [ // [!code highlight]
-                    { // [!code highlight]
-                        providerId: "provider-id", // [!code highlight]
-                        clientId: "test-client-id", // [!code highlight]
-                        clientSecret: "test-client-secret", // [!code highlight]
-                        discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
-                        // ... other config options // [!code highlight]
-                    }, // [!code highlight]
-                    // Add more providers as needed // [!code highlight]
-                ] // [!code highlight]
-            }) // [!code highlight]
-        ]
-    })
+      // ... other config options
+      plugins: [
+        genericOAuth({ // [!code highlight]
+          config: [ // [!code highlight]
+            { // [!code highlight]
+              providerId: "provider-id", // [!code highlight]
+              clientId: "test-client-id", // [!code highlight]
+              clientSecret: "test-client-secret", // [!code highlight]
+              discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
+              // ... other config options // [!code highlight]
+            }, // [!code highlight]
+            // Add more providers as needed // [!code highlight]
+          ], // [!code highlight]
+        }) // [!code highlight]
+      ],
+    });
     ```
 
   </Step>
@@ -46,14 +46,14 @@ To use a provider that is not supported out of the box, you can use the [Generic
     Include the Generic OAuth client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client"
-    import { genericOAuthClient } from "better-auth/client/plugins"
+    import { createAuthClient } from "better-auth/client";
+    import { genericOAuthClient } from "better-auth/client/plugins";
 
     const authClient = createAuthClient({
-        plugins: [
-            genericOAuthClient()
-        ]
-    })
+      plugins: [
+        genericOAuthClient(),
+      ],
+    });
     ```
 
   </Step>

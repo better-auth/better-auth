@@ -26,16 +26,16 @@ This plugin offers two main methods to do a second factor verification:
         Add the two-factor plugin to your auth configuration and specify your app name as the issuer.
 
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { twoFactor } from "better-auth/plugins" // [!code highlight]
+        import { betterAuth } from "better-auth";
+        import { twoFactor } from "better-auth/plugins"; // [!code highlight]
 
         export const auth = betterAuth({
-            // ... other config options
-            appName: "My App", // provide your app name. It'll be used as an issuer. // [!code highlight]
-            plugins: [
-                twoFactor() // [!code highlight]
-            ]
-        })
+          // ... other config options
+          appName: "My App", // provide your app name. It'll be used as an issuer. // [!code highlight]
+          plugins: [
+            twoFactor(), // [!code highlight]
+          ],
+        });
         ```
     </Step>
       <Step>
@@ -64,14 +64,14 @@ This plugin offers two main methods to do a second factor verification:
         Add the client plugin and Specify where the user should be redirected if they need to verify 2nd factor
 
         ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { twoFactorClient } from "better-auth/client/plugins"
+        import { createAuthClient } from "better-auth/client";
+        import { twoFactorClient } from "better-auth/client/plugins";
 
         const authClient = createAuthClient({
-            plugins: [
-                twoFactorClient()
-            ]
-        })
+          plugins: [
+            twoFactorClient(),
+          ],
+        });
         ```
         </Step>
 </Steps>
@@ -84,8 +84,8 @@ To enable two-factor authentication, call `twoFactor.enable` with the user's pas
 
 ```ts title="two-factor.ts"
 const { data } = await authClient.twoFactor.enable({
-    password: "password" // user password required
-})
+  password: "password", // user password required
+});
 ```
 
 When 2FA is enabled:
@@ -98,12 +98,12 @@ To verify, display the QR code for the user to scan with their authenticator app
 
 ```ts
 await authClient.twoFactor.verifyTotp({
-    code: "" // user input
-})
+  code: "", // user input
+});
 ```
 
 <Callout>
-You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
+  You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 </Callout>
 
 ### Sign In with 2FA
@@ -112,9 +112,9 @@ When a user with 2FA enabled tries to sign in via email, the response will conta
 
 ```ts title="sign-in.ts"
 await authClient.signIn.email({
-    email: "user@example.com",
-    password: "password123",
-})
+  email: "user@example.com",
+  password: "password123",
+});
 ```
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
@@ -124,27 +124,26 @@ import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
-    plugins: [twoFactorClient({
-        onTwoFactorRedirect(){
-            // Handle the 2FA verification globally
-        }
-    })]
-})
+  plugins: [twoFactorClient({
+    onTwoFactorRedirect() {
+      // Handle the 2FA verification globally
+    },
+  })],
+});
 ```
 
 Or you can handle it in place:
 
 ```ts
 await authClient.signIn.email({
-        email: "user@example.com",
-        password: "password123",
-    }, {
-        async onSuccess(context) {
-            if (context.data.twoFactorRedirect) {
-                // Handle the 2FA verification in place
-            }
-        }
+  email: "user@example.com",
+  password: "password123",
+}, {
+  async onSuccess(context) {
+    if (context.data.twoFactorRedirect) {
+      // Handle the 2FA verification in place
     }
+  }
 })
 ```
 
@@ -154,10 +153,10 @@ When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled
 
 ```ts
 const response = await auth.api.signInEmail({
-    email: "my-email@email.com",
-    password: "secure-password",
-    asResponse: true
-})
+  email: "my-email@email.com",
+  password: "secure-password",
+  asResponse: true,
+});
 ```
 
 ### TOTP
@@ -172,8 +171,8 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 
 ```ts
 const { data, error } = await authClient.twoFactor.getTotpUri({
-    password: "password" // user password required
-})
+  password: "password", // user password required
+});
 ```
 
 **Example: Using React**
@@ -181,19 +180,19 @@ const { data, error } = await authClient.twoFactor.getTotpUri({
 ```tsx title="user-card.tsx"
 import QRCode from "react-qr-code";
 
-export default function UserCard(){
-    const { data: session } = client.useSession();
-	const { data: qr } = useQuery({
-		queryKey: ["two-factor-qr"],
-		queryFn: async () => {
-			const res = await authClient.twoFactor.getTotpUri();
-			return res.data;
-		},
-		enabled: !!session?.user.twoFactorEnabled,
-	});
-    return (
-        <QRCode value={qr?.totpURI || ""} />
-   )
+export default function UserCard() {
+  const { data: session } = client.useSession();
+  const { data: qr } = useQuery({
+    queryKey: ["two-factor-qr"],
+    queryFn: async () => {
+      const res = await authClient.twoFactor.getTotpUri();
+      return res.data;
+    },
+    enabled: !!session?.user.twoFactorEnabled,
+  });
+  return (
+    <QRCode value={qr?.totpURI || ""} />
+  );
 }
 ```
 
@@ -207,7 +206,7 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
 
 ```ts
 const verifyTotp = async (code: string) => {
-    const { data, error } = await authClient.twoFactor.verifyTotp({ code })
+  const { data, error } = await authClient.twoFactor.verifyTotp({ code });
 }
 ```
 
@@ -218,20 +217,20 @@ OTP (One-Time Password) is similar to TOTP but a random code is generated and se
 Before using OTP to verify the second factor, you need to configure `sendOTP` in your Better Auth instance. This function is responsible for sending the OTP to the user's email, phone, or any other method supported by your application.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { twoFactor } from "better-auth/plugins"
+import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    plugins: [
-        twoFactor({
-          	otpOptions: {
-				async sendOTP({ user, otp }, request) {
-                    // send otp to user
-				},
-			},
-        })
-    ]
-})
+  plugins: [
+    twoFactor({
+      otpOptions: {
+        async sendOTP({ user, otp }, request) {
+          // send otp to user
+        },
+      },
+    }),
+  ],
+});
 ```
 
 #### Sending OTP
@@ -239,9 +238,9 @@ export const auth = betterAuth({
 Sending an OTP is done by calling the `twoFactor.sendOtp` function. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
 ```ts
-const { data, error } = await authClient.twoFactor.sendOtp()
+const { data, error } = await authClient.twoFactor.sendOtp();
 if (data) {
-    // redirect or show the user to enter the code
+  // redirect or show the user to enter the code
 }
 ```
 
@@ -251,14 +250,14 @@ After the user has entered their OTP code, you can verify it
 
 ```ts
 const verifyOtp = async (code: string) => {
-    await authClient.twoFactor.verifyOtp({ code }, {
-        onSuccess(){
-            //redirect the user on success
-        },
-        onError(ctx){
-            alert(ctx.error.message)
-        }
-    })
+  await authClient.twoFactor.verifyOtp({ code }, {
+    onSuccess(){
+      // redirect the user on success
+    },
+    onError(ctx){
+      alert(ctx.error.message);
+    },
+  });
 }
 ```
 
@@ -271,10 +270,10 @@ Generate backup codes for account recovery:
 
 ```ts
 const { data, error } = await authClient.twoFactor.generateBackupCodes({
-    password: "password" // user password required
-})
+  password: "password", // user password required
+});
 if (data) {
-    // Show the backup codes to the user
+  // Show the backup codes to the user
 }
 ```
 
@@ -283,13 +282,13 @@ if (data) {
 You can now allow users to provider backup code as account recover method.
 
 ```ts
-await authClient.twoFactor.verifyBackupCode({code: ""}, {
-    onSuccess(){
-        //redirect the user on success
-    },
-    onError(ctx){
-        alert(ctx.error.message)
-    }
+await authClient.twoFactor.verifyBackupCode({ code: "" }, {
+  onSuccess() {
+    // redirect the user on success
+  },
+  onError(ctx) {
+    alert(ctx.error.message);
+  },
 })
 ```
 
@@ -301,10 +300,10 @@ You can view the backup codes at any time by calling `viewBackupCodes`. This act
 
 ```ts
 await auth.api.viewBackupCodes({
-    body: {
-        userId: "user-id"
-    }
-})
+  body: {
+    userId: "user-id",
+  }
+});
 ```
 
 ### Trusted Devices
@@ -313,14 +312,14 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 
 ```ts
 const verify2FA = async (code: string) => {
-    const { data, error } = await authClient.twoFactor.verifyTotp({
-        code,
-        callbackURL: "/dashboard",
-        trustDevice: true // Mark this device as trusted
-    })
-    if (data) {
-        // 2FA verified and device trusted
-    }
+  const { data, error } = await authClient.twoFactor.verifyTotp({
+    code,
+    callbackURL: "/dashboard",
+    trustDevice: true, // Mark this device as trusted
+  });
+  if (data) {
+    // 2FA verified and device trusted
+  }
 }
 ```
 
@@ -334,7 +333,7 @@ For example, if your user uses Google Auth, the default appName will show up as 
 
 ```ts
 twoFactor({
-    issuer: "my-app-name" // [!code highlight]
+  issuer: "my-app-name", // [!code highlight]
 })
 ```
 ---
@@ -400,7 +399,7 @@ these are options for OTP.
         type: "function",
     },
     period: {
-        description: "The period for otp in seconds.", 
+        description: "The period for otp in seconds.",
         type: "number",
         default: 30,
     },
@@ -435,20 +434,19 @@ backup codes are generated and stored in the database when the user enabled two 
 To use the two factor plugin in the client, you need to add it on your plugins list.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { twoFactorClient } from "better-auth/client/plugins"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
 
 const authClient =  createAuthClient({
-    plugins: [
-        twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect(){
-                window.location.href = "/2fa" // Handle the 2FA verification redirect
-            }
-        }) // [!code highlight]
-    ]
-})
+  plugins: [
+    twoFactorClient({ // [!code highlight]
+      onTwoFactorRedirect() {
+        window.location.href = "/2fa", // Handle the 2FA verification redirect
+      },
+    }) // [!code highlight]
+  ],
+});
 ```
-
 
 **Options**
 

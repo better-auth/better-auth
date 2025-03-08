@@ -4,10 +4,10 @@ description: Facebook provider setup and usage.
 ---
 
 <Steps>
-    <Step> 
+    <Step>
         ### Get your Facebook credentials
         To use Facebook sign in, you need a client ID and client Secret. You can get them from the [Facebook Developer Portal](https://developers.facebook.com/).
-        Select your app, navigate to **App Settings > Basic**, locate the following:  
+        Select your app, navigate to **App Settings > Basic**, locate the following:
         - **App ID**: This is your `clientId`
         - **App Secret**: This is your `clientSecret`.
 
@@ -22,33 +22,33 @@ description: Facebook provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts"  
-        import { betterAuth } from "better-auth"
-        
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+
         export const auth = betterAuth({
-            socialProviders: {
-                facebook: { // [!code highlight]
-                    clientId: process.env.FACEBOOK_CLIENT_ID as string, // [!code highlight]
-                    clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string, // [!code highlight]
-                }, // [!code highlight]
-            },
-        })
+          socialProviders: {
+            facebook: { // [!code highlight]
+              clientId: process.env.FACEBOOK_CLIENT_ID as string, // [!code highlight]
+              clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+          },
+        });
         ```
     </Step>
        <Step>
-        ### Sign In with Facebook 
+        ### Sign In with Facebook
         To sign in with Facebook, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `facebook`.
 
         ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/auth-client"
-        const authClient = createAuthClient()
+        import { createAuthClient } from "better-auth/auth-client";
+        const authClient = createAuthClient();
 
         const signIn = async () => {
-            const data = await authClient.signIn.social({
-                provider: "facebook"
-            })
-        }
+          const data = await authClient.signIn.social({
+            provider: "facebook",
+          });
+        };
         ```
     </Step>
 </Steps>
@@ -60,15 +60,15 @@ By default, Facebook provides basic user information. If you need additional per
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    socialProviders: {
-        facebook: {
-            clientId: process.env.FACEBOOK_CLIENT_ID as string,
-            clientSecret: process.env.FACEBOOK_CLIENT_ID as string,
-            scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
-            fields: ["user_friends"], // Extending list of fields
-        },
+  socialProviders: {
+    facebook: {
+      clientId: process.env.FACEBOOK_CLIENT_ID as string,
+      clientSecret: process.env.FACEBOOK_CLIENT_ID as string,
+      scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
+      fields: ["user_friends"], // Extending list of fields
     },
-})
+  },
+});
 ```
 
 Additional options:
@@ -92,12 +92,12 @@ For limited login, you need to pass `idToken.token`, for only `accessToken` you 
 
 ```ts title="auth-client.ts"
 const data = await authClient.signIn.social({
-    provider: "facebook",
-    idToken: {  // [!code highlight]
-        ...(platform === 'ios' ?  // [!code highlight]
-            { token: idToken }  // [!code highlight]
-            : { token: accessToken, accessToken: accessToken }), // [!code highlight]
-    },
+  provider: "facebook",
+  idToken: {  // [!code highlight]
+    ...(platform === "ios" ?  // [!code highlight]
+        { token: idToken }  // [!code highlight]
+        : { token: accessToken, accessToken: accessToken }), // [!code highlight]
+  },
 })
 ```
 
