@@ -17,9 +17,9 @@ To add a plugin on the server, include it in the `plugins` array in your auth co
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        // Add your plugins here
-    ]
+  plugins: [
+    // Add your plugins here
+  ],
 });
 ```
 
@@ -30,9 +30,9 @@ The Better Auth auth client on the frontend uses the `createAuthClient` function
 import { createAuthClient } from "better-auth/client";
 
 const authClient =  createAuthClient({
-    plugins: [
-        // Add your client plugins here
-    ]
+  plugins: [
+    // Add your client plugins here
+  ],
 });
 ```
 
@@ -72,10 +72,10 @@ Both server and client plugins can use the same `id`.
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
 
-export const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-    } satisfies BetterAuthPlugin
+export const myPlugin = () => {
+  return {
+    id: "my-plugin",
+  } satisfies BetterAuthPlugin;
 }
 ```
 <Callout>
@@ -93,19 +93,19 @@ Better Auth uses wraps around another library called <Link href="https://github.
 ```ts title="plugin.ts"
 import { createAuthEndpoint } from "better-auth/api";
 
-const myPlugin = ()=> {
-    return {
-        id: "my-plugin",
-        endpoints: {
-            getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
-                method: "GET",
-            }, async(ctx) => {
-                return ctx.json({
-                    message: "Hello World"
-                })
-            })
-        }
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    endpoints: {
+      getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
+        method: "GET",
+      }, async (ctx) => {
+        return ctx.json({
+          message: "Hello World",
+        });
+      }),
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -145,20 +145,20 @@ You can define a database schema for your plugin by passing a `schema` object. T
 ```ts title="plugin.ts"
 import { BetterAuthPlugin } from "better-auth/plugins";
 
-const myPlugin = ()=> {
-    return {
-        id: "my-plugin",
-        schema: {
-            myTable: {
-                fields: {
-                    name: {
-                        type: "string"
-                    }
-                },
-                modelName: "myTable" // optional if you want to use a different name than the key
-            }
-        }
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    schema: {
+      myTable: {
+        fields: {
+          name: {
+            type: "string",
+          },
+        },
+        modelName: "myTable", // optional if you want to use a different name than the key
+      },
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -184,40 +184,39 @@ The key is the column name and the value is the column definition. The column de
 `disableMigration`: if the table should not be migrated. (default: `false`)
 
 ```ts title="plugin.ts"
-const myPlugin = (opts: PluginOptions)=>{
-    return {
-        id: "my-plugin",
-        schema: {
-            rateLimit: {
-                fields: {
-                    key: {
-                        type: "string",
-                    },
-                },
-                disableMigration: opts.storage.provider !== "database", // [!code highlight]
-            },
+const myPlugin = (opts: PluginOptions) => {
+  return {
+    id: "my-plugin",
+    schema: {
+      rateLimit: {
+        fields: {
+          key: {
+            type: "string",
+          },
         },
-    } satisfies BetterAuthPlugin
+        disableMigration: opts.storage.provider !== "database", // [!code highlight]
+      },
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
 if you add additional fields to a `user` or `session` table, the types will be inferred automatically on `getSession` and `signUpEmail` calls.
 
 ```ts title="plugin.ts"
-
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        schema: {
-            user: {
-                fields: {
-                    age: {
-                        type: "number",
-                    },
-                },
-            },
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    schema: {
+      user: {
+        fields: {
+          age: {
+            type: "number",
+          },
         },
-    } satisfies BetterAuthPlugin
+      },
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -232,35 +231,35 @@ Don't store sensitive information in `user` or `session` table. Crate a new tabl
 Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
 
 ```ts title="plugin.ts"
-import {  createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/plugins";
 
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        hooks: {
-            before: [{
-                    matcher: (context)=>{
-                        return context.headers.get("x-my-header") === "my-value"
-                    },
-                    handler: createAuthMiddleware(async(ctx)=>{
-                        //do something before the request
-                        return  {
-                            context: ctx // if you want to modify the context
-                        }
-                    })
-                }],
-            after: [{
-                matcher: (context)=>{
-                    return context.path === "/sign-up/email"
-                },
-                handler: async(ctx)=>{
-                    return ctx.json({
-                        message: "Hello World"
-                    }) // if you want to modify the response
-                }
-            }]
-        }
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    hooks: {
+      before: [{
+        matcher: (context) => {
+          return context.headers.get("x-my-header") === "my-value";
+        },
+        handler: createAuthMiddleware(async (ctx) => {
+          // do something before the request
+          return  {
+            context: ctx, // if you want to modify the context
+          };
+        }),
+      }],
+      after: [{
+        matcher: (context) => {
+          return context.path === "/sign-up/email";
+        },
+        handler: async (ctx) => {
+          return ctx.json({
+              message: "Hello World"
+          }); // if you want to modify the response
+        },
+      }],
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -273,18 +272,18 @@ The `path` can be either a string or a path matcher, using the same path-matchin
 If you throw an `APIError` from the middleware or returned a `Response` object, the request will be stopped and the response will be sent to the client.
 
 ```ts title="plugin.ts"
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        middleware: [
-            {
-                path: "/my-plugin/hello-world",
-                middleware: createAuthMiddleware(async(ctx)=>{
-                    //do something
-                })
-            }
-        ]
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    middleware: [
+      {
+        path: "/my-plugin/hello-world",
+        middleware: createAuthMiddleware(async (ctx) => {
+          // do something
+        }),
+      },
+    ],
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -304,13 +303,13 @@ Here’s how it works:
 - **Modify the Request**: You can also return a modified `request` object to change the request before it's sent.
 
 ```ts title="plugin.ts"
-const myPlugin = ()=> {
-    return  {
-        id: "my-plugin",
-        onRequest: async (request, context) => {
-            //do something
-        },
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return  {
+    id: "my-plugin",
+    onRequest: async (request, context) => {
+      // do something
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -324,13 +323,13 @@ Here’s how to use it:
 - **Continue Normally**: If you don’t return anything, the response will be sent as is.
 
 ```ts title="plugin.ts"
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        onResponse: async (response, context) => {
-            //do something
-        },
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    onResponse: async (response, context) => {
+      // do something
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -339,19 +338,19 @@ const myPlugin = ()=>{
 You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
 
 ```ts title="plugin.ts"
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        rateLimit: [
-            {
-                pathMatcher: (path)=>{
-                    return path === "/my-plugin/hello-world"
-                },
-                limit: 10,
-                window: 60,
-            }
-        ]
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    rateLimit: [
+      {
+        pathMatcher: (path) => {
+          return path === "/my-plugin/hello-world";
+        },
+        limit: 10,
+        window: 60,
+      },
+    ],
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -364,26 +363,26 @@ Some additional helper functions for creating server plugins.
 Allows you to get the client's session data by passing the auth middleware's `context`.
 
 ```ts title="plugin.ts"
-import {  createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/plugins";
 
 const myPlugin = {
-    id: "my-plugin",
-    hooks: {
-        before: [{
-                matcher: (context)=>{
-                    return context.headers.get("x-my-header") === "my-value"
-                },
-                handler: createAuthMiddleware(async (ctx) => {
-                    const session = await getSessionFromCtx(ctx);
-                    //do something with the client's session.
+  id: "my-plugin",
+  hooks: {
+    before: [{
+      matcher: (context) => {
+        return context.headers.get("x-my-header") === "my-value";
+      },
+      handler: createAuthMiddleware(async (ctx) => {
+        const session = await getSessionFromCtx(ctx);
+        // do something with the client's session.
 
-                    return  {
-                        context: ctx
-                    }
-                })
-            }],
-    }
-} satisfies BetterAuthPlugin
+        return  {
+          context: ctx,
+        };
+      }),
+    }],
+  },
+} satisfies BetterAuthPlugin;
 ```
 
 #### `sessionMiddleware`
@@ -394,21 +393,21 @@ A middleware that checks if the client has a valid session. If the client has a 
 import { createAuthMiddleware } from "better-auth/plugins";
 import { sessionMiddleware } from "better-auth/api";
 
-const myPlugin = ()=>{
-    return {
-        id: "my-plugin",
-        endpoints: {
-            getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
-                method: "GET",
-                use: [sessionMiddleware], // [!code highlight]
-            }, async(ctx) => {
-                const session = ctx.context.session;
-                return ctx.json({
-                    message: "Hello World"
-                })
-            })
-        }
-    } satisfies BetterAuthPlugin
+const myPlugin = () => {
+  return {
+    id: "my-plugin",
+    endpoints: {
+      getHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
+        method: "GET",
+        use: [sessionMiddleware], // [!code highlight]
+      }, async (ctx) => {
+        const session = ctx.context.session;
+        return ctx.json({
+          message: "Hello World",
+        });
+      }),
+    },
+  } satisfies BetterAuthPlugin;
 }
 ```
 
@@ -420,10 +419,10 @@ If your endpoints needs to be called from the client, you'll need to also create
 ```ts title="client-plugin.ts"
 import type { BetterAuthClientPlugin } from "better-auth";
 
-export const myPluginClient = ()=>{
-    return {
-        id: "my-plugin",
-    } satisfies BetterAuthClientPlugin
+export const myPluginClient = () => {
+  return {
+    id: "my-plugin",
+  } satisfies BetterAuthClientPlugin;
 }
 ```
 
@@ -437,11 +436,11 @@ The client infers the `path` as an object and converts kebab-case to camelCase. 
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from "./plugin";
 
-const myPluginClient = ()=> {
-    return  {
-        id: "my-plugin",
-        $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
-    } satisfies BetterAuthClientPlugin
+const myPluginClient = () => {
+  return  {
+    id: "my-plugin",
+    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+  } satisfies BetterAuthClientPlugin;
 }
 ```
 
@@ -457,25 +456,25 @@ import type { myPlugin } from "./plugin";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 
 const myPluginClient = {
-    id: "my-plugin",
-    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
-    getActions: ($fetch)=>{
-        return {
-            myCustomAction: async (data: {
-                foo: string,
-            }, fetchOptions?: BetterFetchOption)=>{
-                const res = $fetch("/custom/action", {
-                    method: "POST",
-                    body: {
-                        foo: data.foo
-                    },
-                    ...fetchOptions
-                })
-                return res
-            }
-        }
-    }
-} satisfies BetterAuthClientPlugin
+  id: "my-plugin",
+  $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+  getActions: ($fetch) => {
+    return {
+      myCustomAction: async (data: {
+        foo: string,
+      }, fetchOptions?: BetterFetchOption) => {
+        const res = $fetch("/custom/action", {
+          method: "POST",
+          body: {
+            foo: data.foo,
+          },
+          ...fetchOptions,
+        })
+        return res;
+      },
+    };
+  },
+} satisfies BetterAuthClientPlugin;
 ```
 
 <Callout>
@@ -495,15 +494,15 @@ import { atom } from "nanostores";
 import type { BetterAuthClientPlugin } from "better-auth/client";
 
 const myPluginClient = {
-    id: "my-plugin",
-    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
-    getAtoms: ($fetch)=>{
-        const myAtom = atom<null>()
-        return {
-            myAtom
-        }
-    }
-} satisfies BetterAuthClientPlugin
+  id: "my-plugin",
+  $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+  getAtoms: ($fetch) => {
+    const myAtom = atom<null>();
+    return {
+      myAtom,
+    };
+  },
+} satisfies BetterAuthClientPlugin;
 ```
 
 See built in plugins for examples of how to use atoms properly.
@@ -517,12 +516,12 @@ import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { myPlugin } from "./plugin";
 
 const myPluginClient = {
-    id: "my-plugin",
-    $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
-    pathMethods: {
-        "/my-plugin/hello-world": "POST"
-    }
-} satisfies BetterAuthClientPlugin
+  id: "my-plugin",
+  $InferServerPlugin: {} as ReturnType<typeof myPlugin>,
+  pathMethods: {
+    "/my-plugin/hello-world": "POST",
+  },
+} satisfies BetterAuthClientPlugin;
 ```
 
 ### Fetch plugins
