@@ -68,6 +68,9 @@ export const vk = (options: VkOption) => {
 			});
 		},
 		async getUserInfo(data) {
+			if (options.getUserInfo) {
+				return options.getUserInfo(data);
+			}
 			if (!data.accessToken) {
 				return null;
 			}
