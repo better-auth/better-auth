@@ -4,55 +4,45 @@ import { Slot } from "@radix-ui/react-slot";
 
 import { cn } from "@/lib/utils";
 
-const Breadcrumb = (
-    {
-        ref,
-        ...props
-    }
-) => <nav ref={ref} aria-label="breadcrumb" {...props} />;
+const Breadcrumb = ({ ref, ...props }) => (
+	<nav ref={ref} aria-label="breadcrumb" {...props} />
+);
 Breadcrumb.displayName = "Breadcrumb";
 
-const BreadcrumbList = (
-    {
-        ref,
-        className,
-        ...props
-    }: React.ComponentPropsWithoutRef<"ol"> & {
-        ref: React.RefObject<HTMLOListElement>;
-    }
-) => (<ol
-    ref={ref}
-    className={cn(
-        "flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5",
-        className,
-    )}
-    {...props}
-/>);
+const BreadcrumbList = ({
+	ref,
+	className,
+	...props
+}: React.ComponentPropsWithoutRef<"ol"> & {
+	ref: React.RefObject<HTMLOListElement>;
+}) => (
+	<ol
+		ref={ref}
+		className={cn(
+			"flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5",
+			className,
+		)}
+		{...props}
+	/>
+);
 BreadcrumbList.displayName = "BreadcrumbList";
 
-const BreadcrumbItem = (
-    {
-        ref,
-        className,
-        ...props
-    }: React.ComponentPropsWithoutRef<"li"> & {
-        ref: React.RefObject<HTMLLIElement>;
-    }
-) => (<li
-    ref={ref}
-    className={cn("inline-flex items-center gap-1.5", className)}
-    {...props}
-/>);
+const BreadcrumbItem = ({
+	ref,
+	className,
+	...props
+}: React.ComponentPropsWithoutRef<"li"> & {
+	ref: React.RefObject<HTMLLIElement>;
+}) => (
+	<li
+		ref={ref}
+		className={cn("inline-flex items-center gap-1.5", className)}
+		{...props}
+	/>
+);
 BreadcrumbItem.displayName = "BreadcrumbItem";
 
-const BreadcrumbLink = (
-    {
-        ref,
-        asChild,
-        className,
-        ...props
-    }
-) => {
+const BreadcrumbLink = ({ ref, asChild, className, ...props }) => {
 	const Comp = asChild ? Slot : "a";
 
 	return (
@@ -65,22 +55,22 @@ const BreadcrumbLink = (
 };
 BreadcrumbLink.displayName = "BreadcrumbLink";
 
-const BreadcrumbPage = (
-    {
-        ref,
-        className,
-        ...props
-    }: React.ComponentPropsWithoutRef<"span"> & {
-        ref: React.RefObject<HTMLSpanElement>;
-    }
-) => (<span
-    ref={ref}
-    role="link"
-    aria-disabled="true"
-    aria-current="page"
-    className={cn("font-normal text-foreground", className)}
-    {...props}
-/>);
+const BreadcrumbPage = ({
+	ref,
+	className,
+	...props
+}: React.ComponentPropsWithoutRef<"span"> & {
+	ref: React.RefObject<HTMLSpanElement>;
+}) => (
+	<span
+		ref={ref}
+		role="link"
+		aria-disabled="true"
+		aria-current="page"
+		className={cn("font-normal text-foreground", className)}
+		{...props}
+	/>
+);
 BreadcrumbPage.displayName = "BreadcrumbPage";
 
 const BreadcrumbSeparator = ({

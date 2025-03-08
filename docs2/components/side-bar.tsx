@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-
 import { AsideLink } from "@/components/ui/aside-link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchContext } from "fumadocs-ui/provider";
@@ -44,8 +43,13 @@ export default function ArticleLayout() {
   const cts = group === "docs" ? contents : examples;
 
   return (
-    <div className="fixed top-0">
-      <aside className="border-r border-lines md:flex hidden w-[231px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between">
+    <div className={cn("fixed top-0")}>
+      <aside
+        className={cn(
+          "md:transition-all",
+          "border-r border-lines md:flex hidden  md:w-[268px] lg:w-[286px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between w-[var(--fd-sidebar-width)]",
+        )}
+      >
         <div>
           <Select
             defaultValue="docs"

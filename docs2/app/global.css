@@ -1,16 +1,11 @@
 @import "tailwindcss";
-
+@config "../tailwind.config.js";
 @plugin 'tailwindcss-animate';
-
 @custom-variant dark (&:is(.dark *));
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
-@import "fumadocs-twoslash/twoslash.css";
-
-@config "../tailwind.config.js";
-
 @source '../../node_modules/fumadocs-ui/dist/**/*.js';
-
+@source '../node_modules/fumadocs-ui/dist/**/*.js';
 :root {
   --background: oklch(1 0 0);
 
@@ -246,4 +241,4 @@
   body {
     @apply bg-background text-foreground;
   }
-}
+} ;;;;;

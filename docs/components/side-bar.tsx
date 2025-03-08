@@ -64,7 +64,7 @@ export default function ArticleLayout() {
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="docs" className="h-12">
+							<SelectItem value="docs" className="h-12 flex justify-start">
 								<div className="flex items-center gap-1">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -88,7 +88,7 @@ export default function ArticleLayout() {
 									get started, concepts, and plugins
 								</p>
 							</SelectItem>
-							<SelectItem value="examples">
+							<SelectItem value="examples" className="flex justify-start">
 								<div className="flex items-center gap-1">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -115,7 +115,7 @@ export default function ArticleLayout() {
 											d="M22 12c0 4.714 0 7.071-1.465 8.535C19.072 22 16.714 22 12 22c-.819 0-2.316 0-3-.008V9.5h13l-.003.75Q22 11.066 22 12"
 										></path>
 									</svg>
-									Examples
+									Examples a
 								</div>
 								<p className="text-xs">examples and guides</p>
 							</SelectItem>
