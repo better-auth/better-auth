@@ -24,16 +24,30 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
     </Step>
     <Step>
-        ## Install Better Auth and Expo Plugin
+        ## Install Server Dependencies
 
-        Install both the expo plugin in your server and both the Better Auth package and the Expo plugin in your Expo app.
+        Install both the Better Auth package and expo plugin into your server application.
 
         ```package-install
-        @better-auth/expo
+        @better-auth/expo better-auth
         ```
 
+    </Step>
+
+    <Step>
+        ## Install Client Dependencies
+
+        You also need to install both the Better Auth package and Expo plugin into your Expo application.
+
         ```package-install
-        better-auth
+        better-auth @better-auth/expo 
+        ```
+
+        If you plan on using our social integrations (Google, Apple etc.) then there are a few more dependencies that are required in your Expo app. In the default Expo template these are already installed so you may be able to skip this step if you have these dependencies already.
+
+        ```package-install
+        expo-linking expo-web-browser expo-constants
+        
         ```
     </Step>
     
