@@ -31,7 +31,7 @@ export function useStore<SomeStore extends Store>(
 	store: SomeStore,
 	{ keys, deps = [store, keys] }: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
-	let snapshotRef = useRef();
+	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 	snapshotRef.current = store.get();
 
 	let subscribe = useCallback(
