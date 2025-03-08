@@ -134,7 +134,6 @@ export default function ArticleLayout() {
 						className="flex items-center gap-2 p-2 px-4 border-b bg-gradient-to-br dark:from-stone-900 dark:to-stone-950/80"
 						onClick={() => {
 							setOpenSearch(true);
-							
 						}}
 					>
 						<Search className="w-4 h-4" />
