@@ -95,12 +95,12 @@ export async function onSubscriptionUpdated(
 		const priceId = subscriptionUpdated.items.data[0].price.id;
 		const plan = await getPlanByPriceId(options, priceId);
 
-		const referenceId = subscriptionUpdated.metadata?.referenceId;
+		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
 		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: referenceId
-				? [{ field: "referenceId", value: referenceId }]
+			where: subscriptionId
+				? [{ field: "id", value: subscriptionId }]
 				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
 		});
 		if (!subscription) {
