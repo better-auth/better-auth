@@ -20,7 +20,7 @@ export const NavLink = ({ href, children, className, external }: Props) => {
 			<Link
 				href={href}
 				className={cn(
-					"w-full h-full block py-4 px-5 transition-colors",
+					"w-full h-full block py-4 md:px-3 lg:px-5 transition-colors",
 					"group-hover:text-foreground",
 					isActive ? "text-foreground" : "text-muted-foreground",
 				)}
