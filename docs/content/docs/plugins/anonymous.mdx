@@ -1,5 +1,5 @@
 ---
-title: Anonymous  
+title: Anonymous
 description: Anonymous plugin for Better Auth.
 ---
 
@@ -14,15 +14,15 @@ The Anonymous plugin allows users to have an authenticated experience without re
     To enable anonymous authentication, add the anonymous plugin to your authentication configuration.
 
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { anonymous } from "better-auth/plugins" // [!code highlight]
-    
+    import { betterAuth } from "better-auth";
+    import { anonymous } from "better-auth/plugins"; // [!code highlight]
+
     export const auth = betterAuth({
-        // ... other config options
-        plugins: [
-            anonymous() // [!code highlight]
-        ]
-    })
+      // ... other config options
+      plugins: [
+        anonymous(), // [!code highlight]
+      ],
+    });
     ```
   </Step>
 
@@ -52,14 +52,14 @@ The Anonymous plugin allows users to have an authenticated experience without re
     Next, include the anonymous client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client"
-    import { anonymousClient } from "better-auth/client/plugins"
-    
-    const authClient =  createAuthClient({
-        plugins: [
-            anonymousClient()
-        ]
-    })
+    import { createAuthClient } from "better-auth/client";
+    import { anonymousClient } from "better-auth/client/plugins";
+
+    const authClient = createAuthClient({
+      plugins: [
+        anonymousClient(),
+      ],
+    });
     ```
   </Step>
 </Steps>
@@ -71,7 +71,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
 To sign in a user anonymously, use the `signIn.anonymous()` method.
 
 ```ts title="example.ts"
-const user = await authClient.signIn.anonymous()
+const user = await authClient.signIn.anonymous();
 ```
 
 ### Link Account
@@ -81,24 +81,25 @@ If a user is already signed in anonymously and tries to `signIn` or `signUp` wit
 To do that you first need to provide `onLinkAccount` callback to the plugin.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        anonymous({
-            onLinkAccount: async ({ anonymousUser, newUser }) => {
-               // perform actions like moving the cart items from anonymous user to the new user
-            }
-        })
-    ]
+  plugins: [
+    anonymous({
+      onLinkAccount: async ({ anonymousUser, newUser }) => {
+        // perform actions like moving the cart items from anonymous user to the new user
+      },
+    }),
+  ],
+});
 ```
 
 Then when you call `signIn` or `signUp` with another method, the `onLinkAccount` callback will be called. And the `anonymousUser` will be deleted by default.
 
 ```ts title="example.ts"
 const user = await authClient.signIn.email({
-    email,
-})
+  email,
+});
 ```
 
 ## Options
@@ -106,15 +107,15 @@ const user = await authClient.signIn.email({
 - `emailDomainName`: The domain name to use when generating an email address for anonymous users. Defaults to the domain name of the current site.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [
-        anonymous({
-            emailDomainName: "example.com"
-        })
-    ]
-})
+  plugins: [
+    anonymous({
+      emailDomainName: "example.com",
+    }),
+  ],
+});
 ```
 
 - `onLinkAccount`: A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
