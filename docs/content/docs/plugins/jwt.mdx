@@ -6,7 +6,7 @@ description: Authenticate users with JWT tokens in services that can't use the s
 The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to verify the token.
 
 <Callout type="info">
-  This plugin is not meant as a replacement for the session. 
+  This plugin is not meant as a replacement for the session.
   It's meant to be used for services that can't use the session.
 </Callout>
 
@@ -16,14 +16,14 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
 <Step>
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { jwt } from "better-auth/plugins"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    plugins: [ // [!code highlight]
-        jwt(), // [!code highlight]
-    ] // [!code highlight]
-})
+  plugins: [ // [!code highlight]
+    jwt(), // [!code highlight]
+  ], // [!code highlight]
+});
 ```
 </Step>
 
@@ -46,7 +46,7 @@ export const auth = betterAuth({
     </Tabs>
     See the [Schema](#schema) section to add the fields manually.
 </Step>
-</Steps>    
+</Steps>
 
 
 ## Usage
@@ -60,11 +60,11 @@ Once you've installed the plugin, you can start using the JWT & JWKS plugin to g
 1. Using your session token
 
 To get the token, call the `/token`, this will return the following:
-  
+
 ```json
-  { 
-    "token": "ey..."
-  }
+{
+  "token": "ey..."
+}
 ```
 
 Make sure to include the token in the Authorization header of your requests. And `bearer` plugin is added in your auth configuration.
@@ -72,9 +72,9 @@ Make sure to include the token in the Authorization header of your requests. And
 ```ts
 await fetch("/api/auth/token", {
   headers: {
-    "Authorization": `Bearer ${token}`
+    "Authorization": `Bearer ${token}`,
   },
-})
+});
 ```
 
 2. From `set-auth-jwt` header
@@ -84,11 +84,11 @@ When you call `getSession` method a jwt is returned in `set-auth-jwt` header. Wh
 ```ts
 await authClient.getSession({
   fetchOptions: {
-    onSuccess: (ctx)=>{
-      const jwt = ctx.response.headers.get("set-auth-jwt")
-    }
-  }
-})
+    onSuccess: (ctx) => {
+      const jwt = ctx.response.headers.get("set-auth-jwt");
+    },
+  },
+});
 ```
 
 ### Verifying the token
@@ -100,16 +100,16 @@ The Key ID (kid) that was used to sign a JWT is included in the header of the to
 In the case a JWT with a different kid is received it is recommended to fetch the JWKS again.
 
 ```json
-  {
-    "keys": [
-        {
-            "crv": "Ed25519",
-            "x": "bDHiLTt7u-VIU7rfmcltcFhaHKLVvWFy-_csKZARUEU",
-            "kty": "OKP",
-            "kid": "c5c7995d-0037-4553-8aee-b5b620b89b23"
-        }
-    ]
-  }
+{
+  "keys": [
+    {
+      "crv": "Ed25519",
+      "x": "bDHiLTt7u-VIU7rfmcltcFhaHKLVvWFy-_csKZARUEU",
+      "kty": "OKP",
+      "kid": "c5c7995d-0037-4553-8aee-b5b620b89b23"
+    }
+  ]
+}
 ```
 
 
@@ -123,26 +123,26 @@ Table Name: `jwks`
 
 <DatabaseTable
   fields={[
-    { 
-      name: "id", 
-      type: "string", 
+    {
+      name: "id",
+      type: "string",
       description: "Unique identifier for each web key",
       isPrimaryKey: true
     },
-    { 
-      name: "publicKey", 
-      type: "string", 
-      description: "The public part of the web key" 
+    {
+      name: "publicKey",
+      type: "string",
+      description: "The public part of the web key"
     },
-    { 
-      name: "privateKey", 
-      type: "string", 
-      description: "The private part of the web key" 
+    {
+      name: "privateKey",
+      type: "string",
+      description: "The private part of the web key"
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the web key was created" 
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the web key was created"
     },
   ]}
   />
@@ -158,9 +158,9 @@ jwt({
   jwks: {
     keyPairConfig: {
       alg: "EdDSA",
-      crv: "Ed25519"
-    }
-  }
+      crv: "Ed25519",
+    },
+  },
 })
 ```
 
@@ -201,8 +201,8 @@ For security reasons, it's recommended to keep the private key encrypted.
 ```ts title="auth.ts"
 jwt({
   jwks: {
-    disablePrivateKeyEncryption: true
-  }
+    disablePrivateKeyEncryption: true,
+  },
 })
 ```
 
@@ -217,10 +217,10 @@ jwt({
       return {
         id: user.id,
         email: user.email,
-        role: user.role
-      }
-    }
-  }
+        role: user.role,
+      },
+    },
+  },
 })
 ```
 
@@ -232,7 +232,7 @@ jwt({
   jwt: {
     issuer: "https://example.com",
     audience: "https://example.com",
-    expirationTime: "1h"
-  }
+    expirationTime: "1h",
+  },
 })
 ```
