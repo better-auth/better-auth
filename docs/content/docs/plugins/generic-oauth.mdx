@@ -14,26 +14,26 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     To use the Generic OAuth plugin, add it to your auth config.
 
     ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { genericOAuth } from "better-auth/plugins" // [!code highlight]
-    
+    import { betterAuth } from "better-auth";
+    import { genericOAuth } from "better-auth/plugins"; // [!code highlight]
+
     export const auth = betterAuth({
-        // ... other config options
-        plugins: [ 
-            genericOAuth({ // [!code highlight]
-                config: [ // [!code highlight]
-                    { // [!code highlight] 
-                        providerId: "provider-id", // [!code highlight]
-                        clientId: "test-client-id", // [!code highlight]
-                        clientSecret: "test-client-secret", // [!code highlight]
-                        discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
-                        // ... other config options // [!code highlight]
-                    }, // [!code highlight]
-                    // Add more providers as needed // [!code highlight]
-                ] // [!code highlight]
-            }) // [!code highlight]
-        ]
-    })
+      // ... other config options
+      plugins: [
+        genericOAuth({ // [!code highlight]
+          config: [ // [!code highlight]
+            { // [!code highlight]
+              providerId: "provider-id", // [!code highlight]
+              clientId: "test-client-id", // [!code highlight]
+              clientSecret: "test-client-secret", // [!code highlight]
+              discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
+              // ... other config options // [!code highlight]
+            }, // [!code highlight]
+            // Add more providers as needed // [!code highlight]
+          ], // [!code highlight]
+        }), // [!code highlight]
+      ],
+    });
     ```
   </Step>
 
@@ -43,14 +43,14 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     Include the Generic OAuth client plugin in your authentication client instance.
 
     ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client"
-    import { genericOAuthClient } from "better-auth/client/plugins"
-    
+    import { createAuthClient } from "better-auth/client";
+    import { genericOAuthClient } from "better-auth/client/plugins";
+
     const authClient = createAuthClient({
-        plugins: [
-            genericOAuthClient()
-        ]
-    })
+      plugins: [
+        genericOAuthClient(),
+      ],
+    });
     ```
   </Step>
 </Steps>
@@ -66,7 +66,7 @@ To start the OAuth sign-in process:
 ```ts title="sign-in.ts"
 const response = await authClient.signIn.oauth2({
   providerId: "provider-id",
-  callbackURL: "/dashboard" // the path to redirect to after the user is authenticated
+  callbackURL: "/dashboard", // the path to redirect to after the user is authenticated
 });
 ```
 
@@ -77,7 +77,7 @@ To link an OAuth account to an existing user:
 ```ts title="link-account.ts"
 const response = await authClient.oauth2.link({
   providerId: "provider-id",
-  callbackURL: "/dashboard" // the path to redirect to after the account is linked
+  callbackURL: "/dashboard", // the path to redirect to after the account is linked
 });
 ```
 
@@ -145,10 +145,10 @@ genericOAuth({
           name: userInfo.name,
           // ... map other fields as needed
         };
-      }
-    }
-  ]
-})
+      },
+    },
+  ],
+});
 ```
 
 ### Map User Info Fields
@@ -166,10 +166,10 @@ genericOAuth({
           firstName: profile.given_name,
           // ... map other fields as needed
         };
-      }
-    }
-  ]
-})
+      },
+    },
+  ],
+});
 ```
 
 ### Error Handling
