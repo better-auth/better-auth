@@ -13,8 +13,8 @@ Then, you can connect it straight into Better Auth.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import * as Tedious from 'tedious'
-import * as Tarn from 'tarn'
+import * as Tedious from "tedious";
+import * as Tarn from "tarn";
 
 const dialect = new MssqlDialect({
   tarn: {
@@ -29,17 +29,17 @@ const dialect = new MssqlDialect({
     connectionFactory: () => new Tedious.Connection({
       authentication: {
         options: {
-          password: 'password',
-          userName: 'username',
+          password: "password",
+          userName: "username",
         },
-        type: 'default',
+        type: "default",
       },
       options: {
-        database: 'some_db',
+        database: "some_db",
         port: 1433,
         trustServerCertificate: true,
       },
-      server: 'localhost',
+      server: "localhost",
     }),
   },
 })
@@ -47,14 +47,14 @@ const dialect = new MssqlDialect({
 export const auth = betterAuth({
   database: {
     dialect,
-    type: "mssql"
-  }
+    type: "mssql",
+  },
 });
 
 
 ```
 <Callout>
-    For more information, read Kysely's documentation to the [MssqlDialect](https://kysely-org.github.io/kysely-apidoc/classes/MssqlDialect.html).
+  For more information, read Kysely's documentation to the [MssqlDialect](https://kysely-org.github.io/kysely-apidoc/classes/MssqlDialect.html).
 </Callout>
 
 ## Schema generation & migration
