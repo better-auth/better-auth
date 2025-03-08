@@ -1,4 +1,5 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { signUp } from "$lib/auth-client";
 import { writable } from "svelte/store";
 import { Button } from "$lib/components/ui/button";
@@ -26,6 +27,10 @@ const handleSignUp = async () => {
 		name: `${user.firstName} ${user.lastName}`,
 		callbackURL: "/",
 		fetchOptions: {
+			onSuccess() {
+				alert("Your account has been created.");
+				goto("/dashboard");
+			},
 			onError(context) {
 				alert(context.error.message);
 			},
