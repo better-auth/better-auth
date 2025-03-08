@@ -182,7 +182,22 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 					});
 				}
-				let customerId = user.stripeCustomerId;
+				const subscriptionToUpdate = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [{ field: "id", value: ctx.body.subscriptionId }],
+						})
+					: null;
+
+				if (ctx.body.subscriptionId && !subscriptionToUpdate) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					});
+				}
+
+				let customerId =
+					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
+
 				if (!customerId) {
 					try {
 						const stripeCustomer = await client.customers.create(
@@ -228,15 +243,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							.then((res) => res.data[0])
 							.catch((e) => null)
 					: null;
-				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
-					model: "subscription",
-					where: [
-						{
-							field: "referenceId",
-							value: ctx.body.referenceId || user.id,
-						},
-					],
-				});
+
+				const subscriptions = subscriptionToUpdate
+					? [subscriptionToUpdate]
+					: await ctx.context.adapter.findMany<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: ctx.body.referenceId || user.id,
+								},
+							],
+						});
 
 				const existingSubscription = subscriptions.find(
 					(sub) => sub.status === "active" || sub.status === "trialing",
@@ -344,7 +362,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									ctx.context.baseURL
 								}/subscription/success?callbackURL=${encodeURIComponent(
 									ctx.body.successUrl,
-								)}&id=${encodeURIComponent(subscription.id)}`,
+								)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
 							),
 							cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 							line_items: [
@@ -390,7 +408,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
-				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.id) {
+				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
@@ -400,7 +418,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const { user } = session;
-				const { callbackURL, id } = ctx.query;
+				const { callbackURL, subscriptionId } = ctx.query;
 
 				if (user?.stripeCustomerId) {
 					try {
@@ -410,7 +428,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								where: [
 									{
 										field: "id",
-										value: id,
+										value: subscriptionId,
 									},
 								],
 							});
@@ -466,6 +484,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				method: "POST",
 				body: z.object({
 					referenceId: z.string().optional(),
+					subscriptionId: z.string().optional(),
 					returnUrl: z.string(),
 				}),
 				use: [
@@ -477,15 +496,27 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			async (ctx) => {
 				const referenceId =
 					ctx.body?.referenceId || ctx.context.session.user.id;
-				const subscription = await ctx.context.adapter.findOne<Subscription>({
-					model: "subscription",
-					where: [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					],
-				});
+				const subscription = ctx.body.subscriptionId
+					? await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "id",
+									value: ctx.body.subscriptionId,
+								},
+							],
+						})
+					: await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) => sub.status === "active" || sub.status === "trialing",
+								),
+							);
+
 				if (!subscription || !subscription.stripeCustomerId) {
 					throw ctx.error("BAD_REQUEST", {
 						message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -535,7 +566,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								ctx.context.baseURL
 							}/subscription/cancel/callback?callbackURL=${encodeURIComponent(
 								ctx.body?.returnUrl || "/",
-							)}&id=${encodeURIComponent(subscription.id)}`,
+							)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
 						),
 						flow_data: {
 							type: "subscription_cancel",
@@ -628,7 +659,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
-				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.id) {
+				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
@@ -638,14 +669,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 				}
 				const { user } = session;
-				const { callbackURL, id } = ctx.query;
+				const { callbackURL, subscriptionId } = ctx.query;
 
 				const subscription = await ctx.context.adapter.findOne<Subscription>({
 					model: "subscription",
 					where: [
 						{
 							field: "id",
-							value: id,
+							value: subscriptionId,
 						},
 					],
 				});
