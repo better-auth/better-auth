@@ -2,6 +2,8 @@ name: Publish Approved Pull Requests
 on:
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [opened]
 
 jobs:
   check:
