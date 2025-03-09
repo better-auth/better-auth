@@ -115,7 +115,7 @@ const createTransform = (
 					condition = like(schemaModel[field], `%${value}`);
 					break;
 				default:
-					// will throw an error if unknown operator is provided not if operator is undefined
+					// throw an error if unknown operator is provided
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: Unsupported operator: ${operator}`,
 					);

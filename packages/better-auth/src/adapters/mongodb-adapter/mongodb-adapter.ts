@@ -1,5 +1,6 @@
 import { ObjectId, type Db } from "mongodb";
 import { getAuthTables } from "../../db";
+import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
 import { withApplyDefault } from "../utils";
 
@@ -10,7 +11,7 @@ const createTransform = (options: BetterAuthOptions) => {
 	 */
 	const customIdGen = options.advanced?.generateId;
 
-	function serializeID(field: string, value: any, model: string) {
+	function serializeID(field: string, value: Where["value"], model: string) {
 		if (customIdGen) {
 			return value;
 		}
@@ -24,7 +25,8 @@ const createTransform = (options: BetterAuthOptions) => {
 					return value;
 				}
 				if (Array.isArray(value)) {
-					return value.map((v) => {
+					// ObjectId is added here as type because it will only be there if the field is an id field
+					return value.map((v: string | number | ObjectId) => {
 						if (typeof v === "string") {
 							try {
 								return new ObjectId(v);
@@ -35,10 +37,10 @@ const createTransform = (options: BetterAuthOptions) => {
 						if (v instanceof ObjectId) {
 							return v;
 						}
-						throw new Error("Invalid id value");
+						throw new BetterAuthError("[# Mongodb Adapter]: Invalid id value");
 					});
 				}
-				throw new Error("Invalid id value");
+				throw new BetterAuthError("[# Mongodb Adapter]: Invalid id value");
 			}
 			try {
 				return new ObjectId(value);
@@ -49,7 +51,7 @@ const createTransform = (options: BetterAuthOptions) => {
 		return value;
 	}
 
-	function deserializeID(field: string, value: any, model: string) {
+	function deserializeID(field: string, value: Where["value"], model: string) {
 		if (customIdGen) {
 			return value;
 		}
@@ -61,7 +63,8 @@ const createTransform = (options: BetterAuthOptions) => {
 				return value.toHexString();
 			}
 			if (Array.isArray(value)) {
-				return value.map((v) => {
+				// ObjectId is added here as type because it will only be there if the field is an id field
+				return value.map((v: string | number | ObjectId) => {
 					if (v instanceof ObjectId) {
 						return v.toHexString();
 					}
@@ -150,13 +153,22 @@ const createTransform = (options: BetterAuthOptions) => {
 		convertWhereClause(model: string, where: Where[]) {
 			if (!where.length) return {};
 			const conditions = where.map((w) => {
+				// if no operator is provided, set it to "eq" by default
 				const { field: _field, value, operator = "eq", connector = "AND" } = w;
-				let condition: any;
+				let condition: {
+					[field: string]: {
+						[operator: string]:
+							| Where["value"]
+							// This is to satisfy the id properties in "eq" and "in" operators
+							| ObjectId
+							| (ObjectId | Where["value"] | (string | ObjectId)[])[];
+					};
+				};
 				const field = getField(_field, model);
 				switch (operator.toLowerCase()) {
 					case "eq":
 						condition = {
-							[field]: serializeID(_field, value, model),
+							[field]: { $eq: serializeID(_field, value, model) },
 						};
 						break;
 					case "in":
@@ -194,7 +206,10 @@ const createTransform = (options: BetterAuthOptions) => {
 						condition = { [field]: { $regex: `.*${value}` } };
 						break;
 					default:
-						throw new Error(`Unsupported operator: ${operator}`);
+						// throw an error if unknown operator is provided
+						throw new BetterAuthError(
+							`[# Mongodb Adapter]: Unsupported operator: ${operator}`,
+						);
 				}
 				return { condition, connector };
 			});
