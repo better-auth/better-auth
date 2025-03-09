@@ -214,12 +214,27 @@ export async function getTestInstance<
 		};
 	}
 
+	let customOptions: BetterAuthOptions = auth.options;
+	function updateOptions(options: BetterAuthOptions) {
+		customOptions = {
+			...customOptions,
+			...options,
+			plugins: [
+				...(customOptions.plugins?.filter(
+					(p) => !options.plugins?.find((op) => op.id === p.id),
+				) || []),
+				...(options.plugins || []),
+			], //union of plugins
+		};
+	}
+
 	const customFetchImpl = async (
 		url: string | URL | Request,
 		init?: RequestInit,
 	) => {
+		const reqAuth = betterAuth(customOptions);
 		const req = new Request(url.toString(), init);
-		return auth.handler(req);
+		return reqAuth.handler(req);
 	};
 
 	function sessionSetter(headers: Headers) {
@@ -253,5 +268,6 @@ export async function getTestInstance<
 		customFetchImpl,
 		sessionSetter,
 		db: await getAdapter(auth.options),
+		updateOptions,
 	};
 }

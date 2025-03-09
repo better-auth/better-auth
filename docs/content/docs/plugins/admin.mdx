@@ -570,3 +570,14 @@ admin({
   defaultBanExpiresIn: 60 * 60 * 24, // 1 day
 });
 ```
+
+### bannedUserMessage
+
+The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
+
+```ts title="auth.ts"
+admin({
+  bannedUserMessage: "Custom banned user message",
+});
+```
+
