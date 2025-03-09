@@ -5,6 +5,10 @@ import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 
 const session = client.useSession();
+
+if (!session) {
+	location.href = "/sign-in";
+}
 </script>
 
 <Card.Root class="w-[350px]">
