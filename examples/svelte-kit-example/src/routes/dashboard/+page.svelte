@@ -33,8 +33,8 @@ const session = client.useSession();
       on:click={() => {
         client.signOut({
           fetchOptions: {
-            body: {
-              callbackURL: "/",
+            onSuccess: () => {
+              location.href = "/";
             },
           },
         });
