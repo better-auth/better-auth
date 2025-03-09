@@ -64,7 +64,7 @@ const createTransform = (
 				: model;
 	};
 
-	function convertWhereClause(where: Where[], model: string): SQL[] {
+	function convertWhereClause(model: string, where: Where[]): SQL[] {
 		if (!where || !where.length) return [];
 		const schemaModel = getSchema(model);
 		// Map each where condition to a drizzle query condition
@@ -222,7 +222,7 @@ const createTransform = (
 			const schemaModel = getSchema(model);
 			const builderVal = builder.config?.values;
 			if (where?.length) {
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const res = await db
 					.select()
 					.from(schemaModel)
@@ -309,7 +309,7 @@ export const drizzleAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const res = await db
 					.select()
 					.from(schemaModel)
@@ -321,7 +321,7 @@ export const drizzleAdapter =
 			async findMany(data) {
 				const { model, where, sortBy, limit, offset } = data;
 				const schemaModel = getSchema(model);
-				const clause = where ? convertWhereClause(where, model) : [];
+				const clause = where ? convertWhereClause(model, where) : [];
 
 				const sortFn = sortBy?.direction === "desc" ? desc : asc;
 				const builder = db
@@ -338,7 +338,7 @@ export const drizzleAdapter =
 			async count(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = where ? convertWhereClause(where, model) : [];
+				const clause = where ? convertWhereClause(model, where) : [];
 				const res = await db
 					.select({ count: count() })
 					.from(schemaModel)
@@ -348,7 +348,7 @@ export const drizzleAdapter =
 			async update(data) {
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
@@ -365,7 +365,7 @@ export const drizzleAdapter =
 			async updateMany(data) {
 				const { model, where, update: values } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const transformed = transformInput(values, model, "update");
 				const builder = db
 					.update(schemaModel)
@@ -377,14 +377,14 @@ export const drizzleAdapter =
 			async delete(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model);
+				const clause = convertWhereClause(model, where);
 				const builder = db.delete(schemaModel).where(...clause);
 				await builder;
 			},
 			async deleteMany(data) {
 				const { model, where } = data;
 				const schemaModel = getSchema(model);
-				const clause = convertWhereClause(where, model); //con
+				const clause = convertWhereClause(model, where);
 				const builder = db.delete(schemaModel).where(...clause);
 				const res = await builder;
 				return res ? res.length : 0;

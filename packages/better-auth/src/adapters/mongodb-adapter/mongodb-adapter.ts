@@ -147,7 +147,7 @@ const createTransform = (options: BetterAuthOptions) => {
 			}
 			return transformedData as any;
 		},
-		convertWhereClause(where: Where[], model: string) {
+		convertWhereClause(model: string, where: Where[]) {
 			if (!where.length) return {};
 			const conditions = where.map((w) => {
 				const { field: _field, value, operator = "eq", connector = "AND" } = w;
@@ -246,7 +246,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async findOne(data) {
 			const { model, where, select } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOne(clause);
@@ -256,7 +256,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async findMany(data) {
 			const { model, where, limit, offset, sortBy } = data;
-			const clause = where ? transform.convertWhereClause(where, model) : {};
+			const clause = where ? transform.convertWhereClause(model, where) : {};
 			const cursor = db.collection(transform.getModelName(model)).find(clause);
 			if (limit) cursor.limit(limit);
 			if (offset) cursor.skip(offset);
@@ -277,7 +277,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async update(data) {
 			const { model, where, update: values } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 
 			const transformedData = transform.transformInput(values, model, "update");
 
@@ -295,7 +295,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async updateMany(data) {
 			const { model, where, update: values } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const transformedData = transform.transformInput(values, model, "update");
 			const res = await db
 				.collection(transform.getModelName(model))
@@ -304,7 +304,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async delete(data) {
 			const { model, where } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.findOneAndDelete(clause);
@@ -313,7 +313,7 @@ export const mongodbAdapter = (db: Db) => (options: BetterAuthOptions) => {
 		},
 		async deleteMany(data) {
 			const { model, where } = data;
-			const clause = transform.convertWhereClause(where, model);
+			const clause = transform.convertWhereClause(model, where);
 			const res = await db
 				.collection(transform.getModelName(model))
 				.deleteMany(clause);
