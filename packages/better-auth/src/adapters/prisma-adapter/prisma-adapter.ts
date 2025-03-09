@@ -180,16 +180,19 @@ export const prismaAdapter =
 			getModelName,
 			getField,
 		} = createTransform(config, options);
+		function checkModelExistsOrThrow(model: string): void {
+			if (!db[getModelName(model)]) {
+				throw new BetterAuthError(
+					`[# Prisma Adapter]: Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+				);
+			}
+		}
 		return {
 			id: "prisma",
 			async create(data) {
 				const { model, data: values, select } = data;
 				const transformed = transformInput(values, model, "create");
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].create({
 					data: transformed,
 					select: convertSelect(select, model),
@@ -199,11 +202,7 @@ export const prismaAdapter =
 			async findOne(data) {
 				const { model, where, select } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].findFirst({
 					where: whereClause,
 					select: convertSelect(select, model),
@@ -213,11 +212,7 @@ export const prismaAdapter =
 			async findMany(data) {
 				const { model, where, limit, offset, sortBy } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 
 				const result = (await db[getModelName(model)].findMany({
 					where: whereClause,
@@ -237,11 +232,7 @@ export const prismaAdapter =
 			async count(data) {
 				const { model, where } = data;
 				const whereClause = convertWhereClause(model, where);
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const result = await db[getModelName(model)].count({
 					where: whereClause,
 				});
@@ -249,11 +240,7 @@ export const prismaAdapter =
 			},
 			async update(data) {
 				const { model, where, update } = data;
-				if (!db[getModelName(model)]) {
-					throw new BetterAuthError(
-						`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
-					);
-				}
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].update({
@@ -264,6 +251,7 @@ export const prismaAdapter =
 			},
 			async updateMany(data) {
 				const { model, where, update } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const transformed = transformInput(update, model, "update");
 				const result = await db[getModelName(model)].updateMany({
@@ -274,6 +262,7 @@ export const prismaAdapter =
 			},
 			async delete(data) {
 				const { model, where } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				try {
 					await db[getModelName(model)].delete({
@@ -285,6 +274,7 @@ export const prismaAdapter =
 			},
 			async deleteMany(data) {
 				const { model, where } = data;
+				checkModelExistsOrThrow(model);
 				const whereClause = convertWhereClause(model, where);
 				const result = await db[getModelName(model)].deleteMany({
 					where: whereClause,
