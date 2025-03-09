@@ -261,7 +261,8 @@ export interface StripeOptions {
 				action:
 					| "upgrade-subscription"
 					| "list-subscription"
-					| "cancel-subscription";
+					| "cancel-subscription"
+					| "restore-subscription";
 			},
 			request?: Request,
 		) => Promise<boolean>;
