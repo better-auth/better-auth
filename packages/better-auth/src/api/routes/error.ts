@@ -93,7 +93,6 @@ const html = (errorCode: string = "Unknown") => `<!DOCTYPE html>
     </div>
 </body>
 </html>`;
-
 export const error = createAuthEndpoint(
 	"/error",
 	{
@@ -109,6 +108,7 @@ export const error = createAuthEndpoint(
 							"text/html": {
 								schema: {
 									type: "string",
+									description: "The HTML content of the error page",
 								},
 							},
 						},
