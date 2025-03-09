@@ -85,7 +85,8 @@ const createTransform = (options: BetterAuthOptions) => {
 		}) {
 			return table.filter((record) => {
 				return where.every((clause) => {
-					const { field: _field, value, operator } = clause;
+					// if no operator is provided, set it to "eq" by default
+					const { field: _field, value, operator = "eq" } = clause;
 					const field = getField(model, _field);
 					switch (operator) {
 						case "eq":
@@ -118,10 +119,6 @@ const createTransform = (options: BetterAuthOptions) => {
 						case "ends_with":
 							return record[field].endsWith(value);
 						default:
-							// if no operator is provided, default to equals
-							if (operator === undefined) {
-								return record[field] === value;
-							}
 							// throw an error if unknown operator is provided
 							throw new Error(
 								`[# Memory Adapter]: Unsupported operator: ${operator}`,

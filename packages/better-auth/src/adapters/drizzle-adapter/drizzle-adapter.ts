@@ -75,7 +75,7 @@ const createTransform = (
 					`[# Drizzle Adapter]: The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 				);
 			}
-			// if no operator is provided, set it to "eq"
+			// if no operator is provided, set it to "eq" by default
 			const { value, operator = "eq", connector } = w;
 			let condition: SQL;
 			switch (operator) {

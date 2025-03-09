@@ -41,20 +41,32 @@ const createTransform = (config: PrismaConfig, options: BetterAuthOptions) => {
 		return f.fieldName || field;
 	}
 
-	function operatorToPrismaOperator(operator: Where["operator"]): string {
+	function operatorToPrismaOperator(
+		// if no operator is provided, set it to "eq" by default
+		operator: Where["operator"] = "eq",
+	): string {
 		switch (operator) {
 			case "eq":
 				return "equals";
 			case "ne":
 				return "not";
+			// lt, lte, gt, gte, in, contains operators have same name
+			case "lt":
+			case "lte":
+			case "gt":
+			case "gte":
+			case "in":
+			case "contains":
+				return operator;
 			case "starts_with":
 				return "startsWith";
 			case "ends_with":
 				return "endsWith";
 			default:
-				// lt, lte, gt, gte, in, contains operators have same name
-				// if no operator is provided, default to equals
-				return operator ?? "equals";
+				// throw an error if unknown operator is provided
+				throw new BetterAuthError(
+					`[# Prisma Adapter]: Unsupported operator: ${operator}`,
+				);
 		}
 	}
 
