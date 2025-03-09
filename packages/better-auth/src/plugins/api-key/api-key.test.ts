@@ -1520,6 +1520,34 @@ describe("api-key", async () => {
 		});
 	});
 
+	it("should have valid metadata from key verification results", async () => {
+		const metadata = {
+			test: "hello-world-123",
+		};
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				metadata: metadata,
+			},
+			headers,
+		});
+
+		expect(apiKey).not.toBeNull();
+		if (apiKey) {
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: apiKey.key,
+					metadata: metadata,
+				},
+				headers,
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.error).toBeNull();
+			expect(result.key?.metadata).toEqual(metadata);
+		}
+	});
+
 	it("should verify an API key with matching permissions", async () => {
 		const permissions = {
 			files: ["read", "write"],

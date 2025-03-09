@@ -36,9 +36,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			throw c.redirect(
-				`${c.context.baseURL}/error?error=invalid_callback_request`,
-			);
+			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
@@ -63,7 +61,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} = await parseState(c);
 
 		function redirectOnError(error: string) {
-			let url = errorURL || callbackURL || `${c.context.baseURL}/error`;
+			let url = errorURL || callbackURL || defaultErrorURL;
 			if (url.includes("?")) {
 				url = `${url}&error=${error}`;
 			} else {

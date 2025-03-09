@@ -269,7 +269,7 @@ export function Builder() {
 
 				<div className="flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
 					<ScrollArea className="w-4/12">
-						<div className="overflow-scroll h-[580px] relate">
+						<div className="overflow-scroll h-[580px] relative">
 							{options.signUp ? (
 								<AuthTabs
 									tabs={[

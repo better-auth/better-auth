@@ -74,7 +74,7 @@ export const AuthTabs = ({
 							zIndex: -idx,
 							opacity: idx < 3 ? 1 - idx * 0.1 : 0,
 						}}
-						className={cn("w-50 h-full", isActive(tab) ? "" : "hidden")}
+						className={cn("h-full", isActive(tab) ? "" : "hidden")}
 					>
 						{tab.content}
 					</div>
