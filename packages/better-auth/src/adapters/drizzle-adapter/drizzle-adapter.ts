@@ -28,7 +28,7 @@ const createTransform = (
 		const schema = config.schema || db._.fullSchema;
 		if (!schema) {
 			throw new BetterAuthError(
-				"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+				"[# Drizzle Adapter]: Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 			);
 		}
 		const model = getModelName(modelName);
@@ -56,7 +56,7 @@ const createTransform = (
 			const field = getField(model, w.field);
 			if (!schemaModel[field]) {
 				throw new BetterAuthError(
-					`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+					`[# Drizzle Adapter]: The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 				);
 			}
 			const { value, operator, connector } = w;
@@ -65,7 +65,7 @@ const createTransform = (
 				case "in":
 					if (!Array.isArray(value)) {
 						throw new BetterAuthError(
-							`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+							`[# Drizzle Adapter]: The value for the field "${w.field}" must be an array when using the "in" operator.`,
 						);
 					}
 					condition = inArray(schemaModel[field], value);
@@ -98,7 +98,7 @@ const createTransform = (
 					condition = gte(schemaModel[field], value);
 					break;
 				default:
-					throw new BetterAuthError(`Unsupported operator: ${operator}`);
+					throw new BetterAuthError(`[# Drizzle Adapter]: Unsupported operator: ${operator}`);
 			}
 			return { condition, connector };
 		});
@@ -245,13 +245,13 @@ function checkMissingFields(
 ) {
 	if (!schema) {
 		throw new BetterAuthError(
-			"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+			"[# Drizzle Adapter]: Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 		);
 	}
 	for (const key in values) {
 		if (!schema[key]) {
 			throw new BetterAuthError(
-				`The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
+				`[# Drizzle Adapter]: The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
 			);
 		}
 	}
