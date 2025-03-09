@@ -1,4 +1,19 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, lte, ne, or, SQL } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gt,
+	gte,
+	inArray,
+	like,
+	lt,
+	lte,
+	ne,
+	or,
+	SQL,
+} from "drizzle-orm";
 import { getAuthTables } from "../../db";
 import { BetterAuthError } from "../../error";
 import type { Adapter, BetterAuthOptions, Where } from "../../types";
@@ -49,9 +64,10 @@ const createTransform = (
 				: model;
 	};
 
-	function convertWhereClause(where: Where[], model: string) {
-		if (!where) return [];
+	function convertWhereClause(where: Where[], model: string): SQL[] {
+		if (!where || !where.length) return [];
 		const schemaModel = getSchema(model);
+		// Map each where condition to a drizzle query condition
 		const conditions = where.map((w) => {
 			const field = getField(model, w.field);
 			if (!schemaModel[field]) {
@@ -60,7 +76,7 @@ const createTransform = (
 				);
 			}
 			const { value, operator, connector } = w;
-			let condition;
+			let condition: SQL;
 			switch (operator) {
 				case "in":
 					if (!Array.isArray(value)) {
@@ -98,13 +114,17 @@ const createTransform = (
 					condition = gte(schemaModel[field], value);
 					break;
 				default:
-					throw new BetterAuthError(`[# Drizzle Adapter]: Unsupported operator: ${operator}`);
+					throw new BetterAuthError(
+						`[# Drizzle Adapter]: Unsupported operator: ${operator}`,
+					);
 			}
 			return { condition, connector };
 		});
+		// If there is only one condition, return it as a single clause
 		if (conditions.length === 1) {
 			return [conditions[0].condition];
 		}
+		// Filter out conditions with a connector of "AND" and "OR"
 		const andConditions = conditions
 			.filter((c) => c.connector === "AND" || !c.connector)
 			.map((c) => c.condition);
@@ -112,12 +132,19 @@ const createTransform = (
 			.filter((c) => c.connector === "OR")
 			.map((c) => c.condition);
 
-		const clause: SQL<unknown>[] = [];
+		// combine "AND and "OR" conditions into a single clause
+		const clause: SQL[] = [];
 		if (andConditions.length) {
-			clause.push(and(...andConditions)!);
+			const andClause = and(...andConditions);
+			if (andClause) {
+				clause.push(andClause);
+			}
 		}
 		if (orConditions.length) {
-			clause.push(or(...orConditions)!);
+			const orClause = or(...orConditions);
+			if (orClause) {
+				clause.push(orClause);
+			}
 		}
 		return clause;
 	}
