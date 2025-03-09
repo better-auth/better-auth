@@ -75,26 +75,10 @@ const createTransform = (
 					`[# Drizzle Adapter]: The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 				);
 			}
-			const { value, operator, connector } = w;
+			// if no operator is provided, set it to "eq"
+			const { value, operator = "eq", connector } = w;
 			let condition: SQL;
 			switch (operator) {
-				case "in":
-					if (!Array.isArray(value)) {
-						throw new BetterAuthError(
-							`[# Drizzle Adapter]: The value for the field "${w.field}" must be an array when using the "in" operator.`,
-						);
-					}
-					condition = inArray(schemaModel[field], value);
-					break;
-				case "contains":
-					condition = like(schemaModel[field], `%${value}%`);
-					break;
-				case "starts_with":
-					condition = like(schemaModel[field], `${value}%`);
-					break;
-				case "ends_with":
-					condition = like(schemaModel[field], `%${value}`);
-					break;
 				case "eq":
 					condition = eq(schemaModel[field], value);
 					break;
@@ -113,7 +97,25 @@ const createTransform = (
 				case "gte":
 					condition = gte(schemaModel[field], value);
 					break;
+				case "in":
+					if (!Array.isArray(value)) {
+						throw new BetterAuthError(
+							`[# Drizzle Adapter]: The value for the field "${w.field}" must be an array when using the "in" operator.`,
+						);
+					}
+					condition = inArray(schemaModel[field], value);
+					break;
+				case "contains":
+					condition = like(schemaModel[field], `%${value}%`);
+					break;
+				case "starts_with":
+					condition = like(schemaModel[field], `${value}%`);
+					break;
+				case "ends_with":
+					condition = like(schemaModel[field], `%${value}`);
+					break;
 				default:
+					// will throw an error if unknown operator is provided not if operator is undefined
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: Unsupported operator: ${operator}`,
 					);
