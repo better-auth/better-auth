@@ -1,4 +1,5 @@
 <script>
+import { goto } from "$app/navigation";
 import { client } from "$lib/auth-client";
 
 const session = client.useSession();
@@ -33,9 +34,7 @@ const session = client.useSession();
       on:click={() => {
         client.signOut({
           fetchOptions: {
-            body: {
-              callbackURL: "/",
-            },
+            onSuccess: () => goto("/auth"),
           },
         });
       }}>Sign Out</Button
