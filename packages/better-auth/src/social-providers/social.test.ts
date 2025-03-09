@@ -277,7 +277,6 @@ describe("Social Providers", async () => {
 		const refreshResponse = await client.$fetch("/refresh-token", {
 			method: "POST",
 			body: {
-				refreshToken,
 				accountId: session!.data!.user.id,
 				providerId: "google",
 			},
