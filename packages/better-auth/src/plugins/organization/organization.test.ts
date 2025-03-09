@@ -646,6 +646,99 @@ describe("organization", async (it) => {
 		});
 		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
+
+	it.each([
+		{
+			newUser: {
+				email: "memberUser@test.com",
+				password: "test123456",
+				name: "memberUser",
+			},
+			role: "member",
+		},
+		{
+			newUser: {
+				email: "adminUser@test.com",
+				password: "test123456",
+				name: "adminUser",
+			},
+			role: "admin",
+		},
+	])("handles updating the org as $role", async ({ newUser, role }) => {
+		const updatedOrgName = `named by ${role}`;
+
+		console.log(updatedOrgName);
+
+		const headers = new Headers();
+		const res = await client.signUp.email(newUser, {
+			onSuccess: cookieSetter(headers),
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: res.data?.user.id!,
+				role: "member",
+			},
+		});
+
+		const updateOrgResult = await client.organization.update({
+			organizationId,
+			data: {
+				name: updatedOrgName,
+			},
+			fetchOptions: {
+				headers: headers,
+				onError: (error) => {
+					expect(error.error.message).toBe(
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+					);
+				},
+				onSuccess: (data) => {
+					expect(data.data.name).toBe(updatedOrgName);
+				},
+			},
+		});
+	});
+
+	it.each([
+		{
+			newUser: {
+				email: "nonexistinguser@test.com",
+				password: "test123456",
+				name: "i dont exist",
+			},
+			role: "admin",
+		},
+		{
+			newUser: {
+				email: "adminUser@test.com",
+				password: "test123456",
+				name: "adminUser",
+			},
+			role: "admin",
+		},
+	])("handles member lookup for $newUser.email", async ({ newUser, role }) => {
+		const updatedOrgName = `named by ${role}`;
+
+		const updateOrgResult = await client.organization.update({
+			organizationId,
+			data: {
+				name: updatedOrgName,
+			},
+			fetchOptions: {
+				headers: headers,
+				onError: (error) => {
+					expect(error.error.message).toBe(
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				},
+				onSuccess: (data) => {
+					expect(data.data.name).toBe(updatedOrgName);
+				},
+			},
+		});
+	});
 });
 
 describe("access control", async (it) => {
