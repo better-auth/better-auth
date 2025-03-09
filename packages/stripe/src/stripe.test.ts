@@ -298,7 +298,9 @@ describe("stripe", async () => {
 				retrieve: vi.fn().mockResolvedValue(mockSubscription),
 			},
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(mockCheckoutSessionEvent),
+				constructEventAsync: vi
+					.fn()
+					.mockResolvedValue(mockCheckoutSessionEvent),
 			},
 		};
 
@@ -403,7 +405,7 @@ describe("stripe", async () => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(mockDeleteEvent),
+				constructEventAsync: vi.fn().mockResolvedValue(mockDeleteEvent),
 			},
 			subscriptions: {
 				retrieve: vi.fn().mockResolvedValue({
@@ -514,7 +516,7 @@ describe("stripe", async () => {
 				retrieve: vi.fn().mockResolvedValue(mockSubscription),
 			},
 			webhooks: {
-				constructEvent: vi.fn().mockReturnValue(completeEvent),
+				constructEventAsync: vi.fn().mockResolvedValue(completeEvent),
 			},
 		};
 
@@ -591,7 +593,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(updateEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			updateEvent,
+		);
 		await eventTestAuth.handler(updateRequest);
 		expect(onSubscriptionUpdate).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -632,7 +636,7 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
 			userCancelEvent,
 		);
 		await eventTestAuth.handler(userCancelRequest);
@@ -664,7 +668,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(cancelEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			cancelEvent,
+		);
 		await eventTestAuth.handler(cancelRequest);
 
 		expect(onSubscriptionCancel).toHaveBeenCalled();
@@ -695,7 +701,9 @@ describe("stripe", async () => {
 			},
 		);
 
-		mockStripeForEvents.webhooks.constructEvent.mockReturnValue(deleteEvent);
+		mockStripeForEvents.webhooks.constructEventAsync.mockReturnValue(
+			deleteEvent,
+		);
 		await eventTestAuth.handler(deleteRequest);
 
 		expect(onSubscriptionDeleted).toHaveBeenCalled();

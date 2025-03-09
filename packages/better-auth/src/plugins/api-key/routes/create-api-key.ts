@@ -9,7 +9,6 @@ import type { AuthContext } from "../../../types";
 import { createHash } from "@better-auth/utils/hash";
 import { base64Url } from "@better-auth/utils/base64";
 import type { PredefinedApiKeyOptions } from ".";
-import { parseInputData } from "../../../db";
 import { safeJSONParse } from "../../../utils/json";
 
 export function createApiKey({
@@ -275,14 +274,8 @@ export function createApiKey({
 			};
 
 			if (metadata) {
-				const parseMetadata = parseInputData(
-					data,
-					apiKeySchema({
-						rateLimitMax: opts.rateLimit.maxRequests!,
-						timeWindow: opts.rateLimit.timeWindow!,
-					}).apikey,
-				);
-				data.metadata = parseMetadata.metadata ?? null;
+				//@ts-expect-error - we intentionally save the metadata as string on DB.
+				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
 			const apiKey = await ctx.context.adapter.create<ApiKey>({

@@ -119,6 +119,7 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 
 	const ERROR_CODES = {
 		INVALID_PHONE_NUMBER: "Invalid phone number",
+		PHONE_NUMBER_EXIST: "Phone number already exist",
 		INVALID_PHONE_NUMBER_OR_PASSWORD: "Invalid phone number or password",
 		UNEXPECTED_ERROR: "Unexpected error",
 		OTP_NOT_FOUND: "OTP not found",
@@ -440,6 +441,21 @@ export const phoneNumber = (options?: PhoneNumberOptions) => {
 						if (!session) {
 							throw new APIError("UNAUTHORIZED", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
+							});
+						}
+						const existingUser =
+							await ctx.context.adapter.findMany<UserWithPhoneNumber>({
+								model: "user",
+								where: [
+									{
+										field: "phoneNumber",
+										value: ctx.body.phoneNumber,
+									},
+								],
+							});
+						if (existingUser.length) {
+							throw ctx.error("BAD_REQUEST", {
+								message: ERROR_CODES.PHONE_NUMBER_EXIST,
 							});
 						}
 						let user = await ctx.context.internalAdapter.updateUser(

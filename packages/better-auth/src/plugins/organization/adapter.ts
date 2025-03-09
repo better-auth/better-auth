@@ -353,6 +353,7 @@ export const getOrgAdapter = (
 			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [{ field: "id", value: userIds, operator: "in" }],
+				limit: options?.membershipLimit || 100,
 			});
 
 			const userMap = new Map(users.map((user) => [user.id, user]));
@@ -436,6 +437,7 @@ export const getOrgAdapter = (
 						value: teamId,
 					},
 				],
+				limit: options?.membershipLimit || 100,
 			});
 			if (!team) {
 				return null;

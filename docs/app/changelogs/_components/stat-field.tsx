@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import clsx from "clsx";
-import { type TimelineSegment, animate, timeline } from "motion";
+import { animate, Segment } from "motion/react";
 
 type Star = [x: number, y: number, dim?: boolean, blur?: boolean];
 
@@ -93,10 +93,8 @@ function Star({
 					scale: dim ? [1, 1.2] : [1.2, 1],
 				},
 				{
+					duration: 10,
 					delay,
-					duration: Math.random() * 2 + 2,
-					direction: "alternate",
-					repeat: Infinity,
 				},
 			),
 		];
@@ -145,7 +143,7 @@ function Constellation({
 			return;
 		}
 
-		let sequence: Array<TimelineSegment> = [
+		let sequence: Array<Segment> = [
 			[
 				ref.current,
 				{ strokeDashoffset: 0, visibility: "visible" },
@@ -161,7 +159,7 @@ function Constellation({
 			]);
 		}
 
-		let animation = timeline(sequence);
+		let animation = animate(sequence);
 
 		return () => {
 			animation.cancel();
