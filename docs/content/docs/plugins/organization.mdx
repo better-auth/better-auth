@@ -871,9 +871,11 @@ const team = await client.organization.createTeam({
 Get all teams in an organization:
 
 ```ts
-const teams = await client.organization.listTeams({
-    organizationId: "org-id" // Optional: defaults to active organization
-})
+const teams = await authClient.organization.listTeams({
+  query: {
+    organizationId: org.id, // Optional: defaults to active organization
+  },
+});
 ```
 
 #### Update Team
