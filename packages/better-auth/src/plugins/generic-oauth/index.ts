@@ -14,6 +14,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import type { BetterAuthPlugin, User } from "../../types";
 import { decodeJwt } from "jose";
 import { BASE_ERROR_CODES } from "../../error/codes";
+import { refreshAccessToken } from "../../oauth2/refresh-access-token";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -116,6 +117,11 @@ interface GenericOAuthConfig {
 	 * Disable sign up for new users.
 	 */
 	disableSignUp?: boolean;
+	/**
+	 * Authentication method for token requests.
+	 * @default "post"
+	 */
+	authentication?: "basic" | "post";
 }
 
 interface GenericOAuthOptions {
@@ -236,6 +242,37 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
+					async refreshAccessToken(
+						refreshToken: string,
+					): Promise<OAuth2Tokens> {
+						let finalTokenUrl = c.tokenUrl;
+						if (c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								token_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+							});
+							if (discovery.data) {
+								finalTokenUrl = discovery.data.token_endpoint;
+							}
+						}
+						if (!finalTokenUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OAuth configuration. Token URL not found.",
+							});
+						}
+						return refreshAccessToken({
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							refreshToken,
+							providerConfig: {
+								tokenEndpoint: finalTokenUrl,
+							},
+						});
+					},
+
 					async getUserInfo(tokens) {
 						if (!finalUserInfoUrl) {
 							return null;

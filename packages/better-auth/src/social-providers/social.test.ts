@@ -38,6 +38,35 @@ vi.mock("../oauth2", async (importOriginal) => {
 				});
 				return tokens;
 			}),
+		refreshAccessToken: vi
+			.fn()
+			.mockImplementation(async (refreshToken: string) => {
+				const data: GoogleProfile = {
+					email: "user@email.com",
+					email_verified: true,
+					name: "First Last",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "Last",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				const tokens = getOAuth2Tokens({
+					access_token: "new-access-token",
+					refresh_token: "new-refresh-token",
+					id_token: testIdToken,
+					expires_in: 3600, // Token expires in 1 hour
+				});
+				return tokens;
+			}),
 	};
 });
 
@@ -173,7 +202,6 @@ describe("Social Providers", async () => {
 				cookieSetter(headers)(c as any);
 			},
 		});
-
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -207,6 +235,53 @@ describe("Social Providers", async () => {
 
 		expect(signInRes.error?.status).toBe(403);
 		expect(signInRes.error?.message).toBe("Invalid callbackURL");
+	});
+
+	it("should refresh the access token", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+		});
+		const headers = new Headers();
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				cookieSetter(headers)(context as any);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		// Refresh the access token
+		const refreshToken = "test-refresh-token";
+		const refreshResponse = await client.$fetch("/refresh-token", {
+			method: "POST",
+			body: {
+				refreshToken,
+				accountId: session!.data!.user.id,
+				providerId: "google",
+			},
+		});
 	});
 });
 
