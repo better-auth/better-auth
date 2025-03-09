@@ -331,7 +331,7 @@ export const drizzleAdapter =
 					.select({ count: count() })
 					.from(schemaModel)
 					.where(...clause);
-				return res.count;
+				return res[0].count;
 			},
 			async update(data) {
 				const { model, where, update: values } = data;
