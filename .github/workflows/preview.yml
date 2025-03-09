@@ -36,4 +36,4 @@ jobs:
           TURBO_REMOTE_ONLY: true
         run: pnpm build
           
-      - run: pnpm dlx pkg-pr-new publish ./packages/better-auth
+      - run: pnpm dlx pkg-pr-new publish
