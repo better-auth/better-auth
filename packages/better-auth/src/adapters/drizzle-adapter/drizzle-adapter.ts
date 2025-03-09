@@ -124,7 +124,7 @@ const createTransform = (
 		if (conditions.length === 1) {
 			return [conditions[0].condition];
 		}
-		// Filter out conditions with a connector of "AND" and "OR"
+		// Separate the conditions into "AND" and "OR" connector conditions
 		const andConditions = conditions
 			.filter((c) => c.connector === "AND" || !c.connector)
 			.map((c) => c.condition);
